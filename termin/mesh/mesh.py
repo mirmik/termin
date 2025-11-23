@@ -30,6 +30,27 @@ class Mesh:
             raise ValueError("Offset must be a 3-dimensional vector.")
         self.vertices += offset
 
+    @staticmethod
+    def from_assimp_mesh(assimp_mesh) -> "Mesh":
+            verts = np.asarray(assimp_mesh.vertices, dtype=float)
+            idx = np.asarray(assimp_mesh.indices, dtype=int).reshape(-1, 3)
+
+            if assimp_mesh.uvs is not None:
+                uvs = np.asarray(assimp_mesh.uvs, dtype=float)
+            else:
+                uvs = None
+
+            mesh = Mesh(vertices=verts, triangles=idx, uvs=uvs)
+
+            # если нормали есть – присвоим
+            if assimp_mesh.normals is not None:
+                mesh.vertex_normals = np.asarray(assimp_mesh.normals, dtype=float)
+            else:
+                mesh.compute_vertex_normals()
+
+            return mesh
+
+
     def scale(self, factor: float):
         """Uniformly scale vertex positions by ``factor``."""
         self.vertices *= factor

@@ -1,4 +1,6 @@
 import termin.loaders.fbx_loader as fbx_loader
+from termin.mesh.mesh import Mesh
+from termin.visualization.animation.clip import AnimationClip
 
 data = fbx_loader.load_fbx_file("examples/data/FBX/animcube.fbx")
 
@@ -15,3 +17,11 @@ for i, anim in enumerate(data.animations):
     for ch in anim.channels:
         print(f"  Channel for node: {ch.node_name}, pos keys: {len(ch.pos_keys)}, rot keys: {len(ch.rot_keys)}, scale keys: {len(ch.scale_keys)}")
 
+
+m = Mesh.from_assimp_mesh(data.meshes[0])
+print(f"Converted first mesh to Mesh object: vertices={len(m.vertices)}, indices={len(m.triangles)}")
+
+for raw_clip in data.animations:
+    conv = AnimationClip.from_assimp_clip(raw_clip)
+    print(f"Converted animation clip: {conv}")
+    print(f"Channels: {list(conv.channels.values())}")

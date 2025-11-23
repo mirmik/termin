@@ -1,7 +1,5 @@
 from __future__ import annotations
-
-from typing import Iterable, List, Optional
-
+from typing import List, Optional, Tuple
 import numpy as np
 
 from termin.util import qslerp
@@ -10,81 +8,104 @@ from .keyframe import AnimationKeyframe
 
 class AnimationChannel:
     """
-    Один канал анимации:
-      type == "translation" -> работает с keyframe.translation
-      type == "rotation"    -> работает с keyframe.rotation (кватернион)
-      type == "scale"       -> работает с keyframe.scale (float)
+    Канал одного узла FBX:
+        - translation_keys: ключи позиций (в тиках)
+        - rotation_keys: ключи вращения (кватернионы) (в тиках)
+        - scale_keys: ключи скейла (в тиках)
+
+    Всё хранится в ТИКАХ, без пересчёта в секунды.
     """
 
-    def __init__(self, channel_type: str, keyframes: Iterable[AnimationKeyframe]):
-        if channel_type not in ("translation", "rotation", "scale"):
-            raise ValueError(f"Unknown channel type: {channel_type}")
-        self.type = channel_type
-        self.keyframes: List[AnimationKeyframe] = sorted(
-            list(keyframes), key=lambda k: k.time
-        )
+    def __init__(self, translation_keys, rotation_keys, scale_keys):
+        self.translation_keys = sorted(translation_keys, key=lambda k: k.time)
+        self.rotation_keys = sorted(rotation_keys, key=lambda k: k.time)
+        self.scale_keys = sorted(scale_keys, key=lambda k: k.time)
 
-    def _value_from_key(self, kf: AnimationKeyframe):
-        if self.type == "translation":
-            return kf.translation
-        if self.type == "rotation":
-            return kf.rotation
-        return kf.scale
+        # duration в тиках
+        self.duration = 0.0
+        for arr in (self.translation_keys, self.rotation_keys, self.scale_keys):
+            if arr:
+                self.duration = max(self.duration, arr[-1].time)
 
-    def sample(self, t: float, duration: Optional[float] = None):
-        """
-        Вернуть значение канала в момент времени t.
-        Если duration задан и > 0, t берётся по модулю duration (loop).
-        """
-        if not self.keyframes:
+    # --------------------------------------------
+
+    @staticmethod
+    def _interp_linear(a, b, alpha):
+        return (1.0 - alpha) * np.asarray(a, float) + alpha * np.asarray(b, float)
+
+    @staticmethod
+    def _sample_keys(keys, t_ticks, interp):
+        if not keys:
             return None
 
-        if duration and duration > 0.0:
-            t = t % duration
+        first = keys[0]
+        last = keys[-1]
 
-        first = self.keyframes[0]
-        last = self.keyframes[-1]
+        if t_ticks <= first.time:
+            return interp(first, first, 0.0)
+        if t_ticks >= last.time:
+            return interp(last, last, 0.0)
 
-        # до первого / после последнего — clamp
-        if t <= first.time:
-            return self._value_from_key(first)
-        if t >= last.time:
-            return self._value_from_key(last)
+        for k1, k2 in zip(keys, keys[1:]):
+            if k1.time <= t_ticks <= k2.time:
+                dt = k2.time - k1.time
+                alpha = (t_ticks - k1.time) / dt if dt != 0 else 0.0
+                return interp(k1, k2, alpha)
 
-        # поиск отрезка
-        for k1, k2 in zip(self.keyframes, self.keyframes[1:]):
-            if k1.time <= t <= k2.time:
-                if k2.time == k1.time:
-                    return self._value_from_key(k1)
+        return interp(last, last, 0.0)
 
-                alpha = (t - k1.time) / (k2.time - k1.time)
-                v1 = self._value_from_key(k1)
-                v2 = self._value_from_key(k2)
+    # --------------------------------------------
 
-                # если один из ключей не задаёт этот канал — берём тот, что задаёт
-                if v1 is None and v2 is None:
-                    return None
-                if v1 is None:
-                    return v2
-                if v2 is None:
-                    return v1
+    def sample(self, t_ticks: float) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[float]]:
+        """
+        t_ticks — время в ТИКАХ.
+        """
 
-                if self.type == "translation":
-                    v1 = np.asarray(v1, dtype=float)
-                    v2 = np.asarray(v2, dtype=float)
-                    return (1.0 - alpha) * v1 + alpha * v2
+        tr = None
+        rot = None
+        sc = None
 
-                if self.type == "scale":
-                    return (1.0 - alpha) * float(v1) + alpha * float(v2)
+        if self.translation_keys:
+            tr = self._sample_keys(
+                self.translation_keys, t_ticks,
+                lambda a, b, alpha: self._interp_linear(a.translation, b.translation, alpha)
+            )
 
-                # rotation: slerp кватернионов
-                v1 = np.asarray(v1, dtype=float)
-                v2 = np.asarray(v2, dtype=float)
-                print("V1:", v1)
-                print("V2:", v2)
-                slerped = qslerp(v1, v2, alpha)
-                print("Slerped:", slerped)
-                return slerped
+        if self.rotation_keys:
+            rot = self._sample_keys(
+                self.rotation_keys, t_ticks,
+                lambda a, b, alpha: qslerp(a.rotation, b.rotation, alpha)
+            )
 
-        # теоретически не дойдём, но на всякий
-        return self._value_from_key(last)
+        if self.scale_keys:
+            sc = self._sample_keys(
+                self.scale_keys, t_ticks,
+                lambda a, b, alpha: float((1 - alpha) * a.scale + alpha * b.scale)
+            )
+
+        return tr, rot, sc
+
+    # --------------------------------------------
+
+    @staticmethod
+    def from_assimp_channel(ch):
+        """
+        Берёт pos_keys, rot_keys, scale_keys в ТИКАХ (как из fbx_loader)
+        и создаёт единый канал.
+        """
+
+        tr = [AnimationKeyframe(t, translation=np.array(v))
+              for (t, v) in getattr(ch, "pos_keys", [])]
+
+        rot = [AnimationKeyframe(t, rotation=np.array(v))
+               for (t, v) in getattr(ch, "rot_keys", [])]
+
+        sc = [AnimationKeyframe(t, scale=float(np.mean(v)))
+              for (t, v) in getattr(ch, "scale_keys", [])]
+
+        return AnimationChannel(tr, rot, sc)
+
+    # --------------------------------------------
+
+    def __repr__(self):
+        return f"<AnimationChannel ticks={self.duration:.2f} tr_keys={len(self.translation_keys)} rot_keys={len(self.rotation_keys)} scale_keys={len(self.scale_keys)}>"

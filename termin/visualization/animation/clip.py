@@ -1,49 +1,72 @@
 from __future__ import annotations
-
-from typing import Dict, Mapping, Optional, Tuple
-
+from typing import Dict
 from .channel import AnimationChannel
 
 
 class AnimationClip:
     """
-    Анимационный клип: содержит несколько каналов (translation/rotation/scale)
-    и умеет выдавать значение (tr, rot, scale) в момент времени t.
+    channels: { node_name : AnimationChannel }
+    duration: секунды
+    tps: ticks per second
     """
 
-    def __init__(self, name: str, channels: Mapping[str, AnimationChannel], loop: bool = True):
+    def __init__(self, name: str, channels: Dict[str, AnimationChannel], tps: float, loop=True):
         self.name = name
-        self.channels: Dict[str, AnimationChannel] = dict(channels)
+        self.channels = channels
         self.loop = loop
+        self.tps = tps
 
-        # длительность — максимум по всем каналам
-        self.duration: float = 0.0
-        for ch in self.channels.values():
-            if ch.keyframes:
-                self.duration = max(self.duration, ch.keyframes[-1].time)
+        # переводим тики → секунды
+        max_ticks = 0.0
+        for ch in channels.values():
+            max_ticks = max(max_ticks, ch.duration)
 
-    def sample(self, t: float) -> Tuple[Optional[object], Optional[object], Optional[object]]:
+        self.duration = max_ticks / tps if tps > 0 else 0.0
+
+    # --------------------------------------------
+
+    @staticmethod
+    def _to_str(x):
+        if isinstance(x, str): return x
+        if hasattr(x, "data"): return x.data
+        return str(x)
+
+    # --------------------------------------------
+
+    @staticmethod
+    def from_assimp_clip(assimp_clip):
+        tps = getattr(assimp_clip, "tickspersecond", 0.0) or 30.0
+
+        channels = {}
+        for ch in assimp_clip.channels:
+            node_name = AnimationClip._to_str(ch.node_name)
+            channels[node_name] = AnimationChannel.from_assimp_channel(ch)
+
+        return AnimationClip(
+            name=AnimationClip._to_str(assimp_clip.name),
+            channels=channels,
+            tps=tps,
+            loop=True
+        )
+
+    # --------------------------------------------
+
+    def sample(self, t_seconds: float):
         """
-        Вернуть (translation, rotation, scale) в момент времени t.
-        Любое из значений может быть None, если канал отсутствует.
+        sample в секундах (как в движке).
+        Возвращает dict:
+            { node_name : (tr, rot, sc) }
         """
-        tr = rot = sc = None
 
-        if not self.channels:
-            return tr, rot, sc
+        if self.loop and self.duration > 0:
+            t_seconds = t_seconds % self.duration
 
-        duration = self.duration if self.loop else None
+        # переводим секунды → тики
+        t_ticks = t_seconds * self.tps
 
-        for name, ch in self.channels.items():
-            value = ch.sample(t, duration)
-            if value is None:
-                continue
+        return { node: ch.sample(t_ticks) for node, ch in self.channels.items() }
 
-            if name == "translation":
-                tr = value
-            elif name == "rotation":
-                rot = value
-            elif name == "scale":
-                sc = value
+    # --------------------------------------------
 
-        return tr, rot, sc
+    def __repr__(self):
+        return f"<AnimationClip name={self.name} duration={self.duration:.2f}s channels={len(self.channels)}>"
