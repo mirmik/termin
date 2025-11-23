@@ -20,6 +20,10 @@ from .base import (
 from .nop_graphics import NOPGraphicsBackend
 from .nop_window import NOPWindowBackend
 
+from .qt import QtGLWindowHandle
+from .opengl import OpenGLGraphicsBackend
+from .qt import QtWindowBackend
+
 _default_graphics_backend: Optional[GraphicsBackend] = None
 _default_window_backend: Optional[WindowBackend] = None
 
@@ -60,4 +64,7 @@ __all__ = [
     "get_default_window_backend",
     "NOPGraphicsBackend",   # <-- экспортируем
     "NOPWindowBackend",     # <-- экспортируем
+    "QtWindowBackend",
+    "QtGLWindowHandle",
+    "OpenGLGraphicsBackend",
 ]

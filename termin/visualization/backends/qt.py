@@ -48,6 +48,7 @@ class _QtGLWidget(QtWidgets.QOpenGLWidget):
         super().__init__(parent)
         self._owner = owner
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.setUpdateBehavior(QtWidgets.QOpenGLWidget.PartialUpdate)
 
     # --- События мыши / клавиатуры --------------------------------------
 

@@ -39,8 +39,7 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
     controller.azimuth = 0
     controller.elevation = 0
     camera_entity.add_component(controller)
-    controller.prevent_moving()
-
+    
     scene.add(camera_entity)
 
     return scene, camera

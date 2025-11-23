@@ -214,7 +214,7 @@ class OrbitCameraController(CameraController):
         if viewport != self.camera_component.viewport:
             return
         state = self._state(viewport)
-        if button == MouseButton.LEFT:
+        if button == MouseButton.MIDDLE:
             state["orbit"] = action == Action.PRESS
         elif button == MouseButton.RIGHT:
             state["pan"] = action == Action.PRESS
