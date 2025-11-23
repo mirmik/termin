@@ -143,8 +143,13 @@ class Entity:
 
     def model_matrix(self) -> np.ndarray:
         """Construct homogeneous model matrix ``M = [R|t]`` with optional uniform scale."""
+        print("MMatrix: global:", self.transform.global_pose())
+        print("MMatrix: local:", self.transform.local_pose())
+
         matrix = self.transform.global_pose().as_matrix().copy()
         matrix[:3, :3] *= self.scale
+
+        print("MMatrix with scale:", matrix)
         return matrix
 
     def add_component(self, component: Component) -> Component:

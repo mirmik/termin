@@ -70,12 +70,12 @@ class MeshRenderer(Component):
             if hasattr(context.scene, "light_color"):
                 shader.set_uniform_vec3("u_light_color", context.scene.light_color)
 
-            cam_entity = context.camera.entity if context.camera else None
-            if cam_entity is not None:
-                shader.set_uniform_vec3(
-                    "u_view_pos",
-                    cam_entity.transform.global_pose().lin
-                )
+            # cam_entity = context.camera.entity if context.camera else None
+            # if cam_entity is not None:
+            #     shader.set_uniform_vec3(
+            #         "u_view_pos",
+            #         cam_entity.transform.global_pose().lin
+            #     )
 
             self.mesh.draw(context)
 

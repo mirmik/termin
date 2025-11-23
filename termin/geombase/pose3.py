@@ -7,11 +7,21 @@ class Pose3:
     """A 3D Pose represented by rotation quaternion and translation vector."""
 
     def __init__(self, ang: numpy.ndarray = numpy.array([0.0, 0.0, 0.0, 1.0]), lin: numpy.ndarray = numpy.array([0.0, 0.0, 0.0])):
-        self.ang = ang
-        self.lin = lin
+        self._ang = ang
+        self._lin = lin
         self._rot_matrix = None  # Lazy computation
         self._mat = None  # Lazy computation
         self._mat34 = None  # Lazy computation
+
+    @property
+    def ang(self) -> numpy.ndarray:
+        """Get the rotation quaternion."""
+        return self._ang
+
+    @property
+    def lin(self) -> numpy.ndarray:
+        """Get the translation vector."""
+        return self._lin
 
     @staticmethod
     def identity():
@@ -103,6 +113,11 @@ class Pose3:
         s = math.sin(angle / 2)
         c = math.cos(angle / 2)
         q = numpy.array([axis[0] * s, axis[1] * s, axis[2] * s, c])
+        print("Rotation axis:", axis)
+        print("Rotation angle (radians):", angle)
+        print("Rotation sin(angle/2):", s)
+        print("Rotation cos(angle/2):", c)
+        print("Rotation quaternion:", q)
         return Pose3(ang=q, lin=numpy.array([0.0, 0.0, 0.0]))
 
     @staticmethod

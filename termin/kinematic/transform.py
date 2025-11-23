@@ -25,6 +25,9 @@ class Transform:
             self.parent.children.remove(self)
             self.parent = None
 
+    def is_dirty(self):
+        return self._dirty
+
     def add_child(self, child: 'Transform'):
         child._unparent()
         self.children.append(child)
@@ -65,7 +68,8 @@ class Transform:
     def _mark_dirty(self):
         self._version_only_my = self.increment_version(self._version_only_my)
         self._spread_changes_to_proximal()
-        self._spread_changes_to_distal()
+        self._spread_changes_to_distal() 
+        # self._dirty = True # already done in _spread_changes_to_distal 
 
     def local_pose(self) -> Pose3:
         return self._local_pose

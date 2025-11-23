@@ -38,10 +38,9 @@ setup(
             "geomalgo/*",
             "linalg/*",
             "robot/*",
+            "loaders/*",
             "visualization/*",
-            "visualization/ui/*",
-            "visualization/backends/*",
-            "visualization/material_collection/*",
+            "visualization/**/*",
             "mesh/*",
         ]
     },
