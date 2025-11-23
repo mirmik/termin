@@ -1,18 +1,126 @@
 
 import numpy as np
+from enum import Enum
 
 # CubeMesh, UVSphereMesh, IcoSphereMesh, PlaneMesh, CylinderMesh, ConeMesh
 
+# GPU COMPATIBILITY
+
+class VertexAttribType(Enum):
+    FLOAT32 = "float32"
+    INT32 = "int32"
+    UINT32 = "uint32"
+
+class VertexAttribute:
+    def __init__(self, name, size, vtype: VertexAttribType, offset):
+        self.name = name
+        self.size = size
+        self.vtype = vtype
+        self.offset = offset
+
+
+
+class VertexLayout:
+    def __init__(self, stride, attributes):
+        self.stride = stride    # размер одной вершины в байтах
+        self.attributes = attributes  # список VertexAttribute
+
+
 class Mesh:
+    def __init__(self, vertices: np.ndarray, indices: np.ndarray):
+        self.vertices = np.asarray(vertices, dtype=np.float32)
+        self.indices  = np.asarray(indices,  dtype=np.uint32)
+        self.type = "triangles" if indices.shape[1] == 3 else "lines"
+        self._inter = None
+
+    def get_vertex_layout(self) -> VertexLayout:
+        raise NotImplementedError("get_vertex_layout must be implemented in subclasses.")
+
+
+
+class Mesh2(Mesh):
+    """Simple triangle mesh storing vertex positions and triangle indices."""
+
+    @staticmethod
+    def from_lists(vertices: list[tuple[float, float]], indices: list[tuple[int, int]]) -> "Mesh2":
+        verts = np.asarray(vertices, dtype=float)
+        idx = np.asarray(indices, dtype=int)
+        return Mesh2(verts, idx)
+
+    def __init__(self, vertices: np.ndarray, indices: np.ndarray):
+        super().__init__(vertices, indices)
+        self._validate_mesh()
+
+    def _validate_mesh(self):
+        """Ensure that the vertex/index arrays have correct shapes and bounds."""
+        if self.vertices.ndim != 2 or self.vertices.shape[1] != 3:
+            raise ValueError("Vertices must be a Nx3 array.")
+        if self.indices.ndim != 2 or self.indices.shape[1] != 2:
+            raise ValueError("Indices must be a Mx2 array.")
+
+    def interleaved_buffer(self):
+        return self.vertices.astype(np.float32)
+
+    def get_vertex_layout(self):
+        return VertexLayout(
+            stride=3*4,
+            attributes=[
+                VertexAttribute("position", 3, VertexAttribType.FLOAT32, 0)
+            ]
+        )
+
+
+class Mesh3(Mesh):
     """Simple triangle mesh storing vertex positions and triangle indices."""
 
     def __init__(self, vertices: np.ndarray, triangles: np.ndarray, uvs: np.ndarray | None = None):
-        self.vertices = np.asarray(vertices, dtype=float)
-        self.triangles = np.asarray(triangles, dtype=int)
+        super().__init__(vertices, triangles)
+
         self.uv = np.asarray(uvs, dtype=float) if uvs is not None else None
         self._validate_mesh()
         self.vertex_normals = None
         self.face_normals = None
+
+    def build_interleaved_buffer(self):
+        # позиции — всегда есть
+        pos = self.vertices.astype(np.float32)
+
+        # нормали — если нет, генерим нули
+        if self.vertex_normals is None:
+            normals = np.zeros_like(self.vertices, dtype=np.float32)
+        else:
+            normals = self.vertex_normals.astype(np.float32)
+
+        # uv — если нет, ставим (0,0)
+        if self.uv is None:
+            uvs = np.zeros((self.vertices.shape[0], 2), dtype=np.float32)
+        else:
+            uvs = self.uv.astype(np.float32)
+
+        return np.hstack([pos, normals, uvs])
+
+    def interleaved_buffer(self):
+        if self._inter == None:
+            self._inter = self.build_interleaved_buffer()
+        return self._inter
+
+    @property
+    def triangles(self):
+        return self.indices
+    
+    @triangles.setter
+    def triangles(self, value):
+        self.indices = value
+
+    def get_vertex_layout(self) -> VertexLayout:
+        return VertexLayout(
+            stride=8 * 4,  # всегда: pos(3) + normal(3) + uv(2)
+            attributes=[
+                VertexAttribute("position", 3, VertexAttribType.FLOAT32, 0),
+                VertexAttribute("normal",   3, VertexAttribType.FLOAT32, 12),
+                VertexAttribute("uv",       2, VertexAttribType.FLOAT32, 24),
+            ]
+        )
 
     def _validate_mesh(self):
         """Ensure that the vertex/index arrays have correct shapes and bounds."""
@@ -30,6 +138,11 @@ class Mesh:
             raise ValueError("Offset must be a 3-dimensional vector.")
         self.vertices += offset
 
+    def show(self):
+        """Show the mesh in a simple viewer application."""
+        from .mesh_viewer_miniapp import show_mesh_app
+        show_mesh_app(self)
+
     @staticmethod
     def from_assimp_mesh(assimp_mesh) -> "Mesh":
             verts = np.asarray(assimp_mesh.vertices, dtype=float)
@@ -40,7 +153,7 @@ class Mesh:
             else:
                 uvs = None
 
-            mesh = Mesh(vertices=verts, triangles=idx, uvs=uvs)
+            mesh = Mesh3(vertices=verts, triangles=idx, uvs=uvs)
 
             # если нормали есть – присвоим
             if assimp_mesh.normals is not None:
@@ -104,7 +217,7 @@ class Mesh:
 
         return Mesh(vertices=vertices, triangles=triangles)
 
-class CubeMesh(Mesh):
+class CubeMesh(Mesh3):
     def __init__(self, size: float = 1.0, y: float = None, z: float = None):
         x = size
         if y is None:
@@ -157,7 +270,7 @@ class CubeMesh(Mesh):
         super().__init__(vertices=vertices, triangles=triangles, uvs=uvs)
 
 
-class TexturedCubeMesh(Mesh):
+class TexturedCubeMesh(Mesh3):
     def __init__(self, size: float = 1.0, y: float = None, z: float = None):
         x = size
         if y is None:
@@ -272,7 +385,7 @@ class TexturedCubeMesh(Mesh):
         super().__init__(vertices=vertices, triangles=triangles, uvs=uvs)
 
 
-class UVSphereMesh(Mesh):
+class UVSphereMesh(Mesh3):
     def __init__(self, radius: float = 1.0, n_meridians: int = 16, n_parallels: int = 16):
         rings = n_parallels
         segments = n_meridians
@@ -297,7 +410,7 @@ class UVSphereMesh(Mesh):
                 triangles.append([r * segments + s, next_r * segments + next_s, r * segments + next_s])
         super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
-class IcoSphereMesh(Mesh):
+class IcoSphereMesh(Mesh3):
     def __init__(self, radius: float = 1.0, subdivisions: int = 2):
         t = (1.0 + np.sqrt(5.0)) / 2.0
         vertices = np.array(
@@ -377,7 +490,7 @@ class IcoSphereMesh(Mesh):
             new_triangles.append([a, b, c])
         self.triangles = np.array(new_triangles, dtype=int)
 
-class PlaneMesh(Mesh):
+class PlaneMesh(Mesh3):
     def __init__(self, width: float = 1.0, depth: float = 1.0, segments_w: int = 1, segments_d: int = 1):
         vertices = []
         triangles = []
@@ -396,7 +509,7 @@ class PlaneMesh(Mesh):
                 triangles.append([v1, v2, v3])
         super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
-class CylinderMesh(Mesh):
+class CylinderMesh(Mesh3):
     def __init__(self, radius: float = 1.0, height: float = 1.0, segments: int = 16):
         vertices = []
         triangles = []
@@ -417,7 +530,7 @@ class CylinderMesh(Mesh):
             triangles.append([bottom1, top0, top1])
         super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
-class ConeMesh(Mesh):
+class ConeMesh(Mesh3):
     def __init__(self, radius: float = 1.0, height: float = 1.0, segments: int = 16):
         vertices = []
         triangles = []

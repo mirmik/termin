@@ -9,7 +9,7 @@ import numpy as np
 from OpenGL import GL as gl
 from OpenGL.raw.GL.VERSION.GL_2_0 import glVertexAttribPointer as _gl_vertex_attrib_pointer
 
-from termin.mesh.mesh import Mesh
+from termin.mesh.mesh import Mesh, VertexAttribType
 
 from .base import (
     GraphicsBackend,
@@ -124,40 +124,55 @@ class OpenGLShaderHandle(ShaderHandle):
         gl.glUniform1i(self._uniform_location(name), int(value))
 
 
+GL_TYPE_MAP = {
+    VertexAttribType.FLOAT32: gl.GL_FLOAT,
+    VertexAttribType.INT32:   gl.GL_INT,
+    VertexAttribType.UINT32:  gl.GL_UNSIGNED_INT,
+}
+
 class OpenGLMeshHandle(MeshHandle):
     def __init__(self, mesh: Mesh):
         self._mesh = mesh
-        if self._mesh.vertex_normals is None:
-            self._mesh.compute_vertex_normals()
+        if self._mesh.type == "triangles":
+            if self._mesh.vertex_normals is None:
+                self._mesh.compute_vertex_normals()
         self._vao: int | None = None
         self._vbo: int | None = None
         self._ebo: int | None = None
-        self._index_count = self._mesh.triangles.size
+        self._index_count = self._mesh.indices.size
         self._upload()
 
     def _upload(self):
-        vertex_block = np.hstack((
-            self._mesh.vertices,
-            self._mesh.vertex_normals,
-            self._mesh.uv if self._mesh.uv is not None else np.zeros((self._mesh.vertices.shape[0], 2)),
-        )).astype(np.float32).ravel()
-        indices = self._mesh.triangles.astype(np.uint32).ravel()
+        buf = self._mesh.interleaved_buffer()
+        layout = self._mesh.get_vertex_layout()
+
         self._vao = gl.glGenVertexArrays(1)
         self._vbo = gl.glGenBuffers(1)
         self._ebo = gl.glGenBuffers(1)
+
         gl.glBindVertexArray(self._vao)
+
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self._vbo)
-        gl.glBufferData(gl.GL_ARRAY_BUFFER, vertex_block.nbytes, vertex_block, gl.GL_STATIC_DRAW)
+        gl.glBufferData(gl.GL_ARRAY_BUFFER, buf.nbytes, buf, gl.GL_STATIC_DRAW)
+
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self._ebo)
-        gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, gl.GL_STATIC_DRAW)
-        stride = 8 * 4
-        gl.glEnableVertexAttribArray(0)
-        _gl_vertex_attrib_pointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(0))
-        gl.glEnableVertexAttribArray(1)
-        _gl_vertex_attrib_pointer(1, 3, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(12))
-        gl.glEnableVertexAttribArray(2)
-        _gl_vertex_attrib_pointer(2, 2, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(24))
+        gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, self._mesh.indices.nbytes, self._mesh.indices, gl.GL_STATIC_DRAW)
+
+
+        for index, attr in enumerate(layout.attributes):
+            gl_type = GL_TYPE_MAP[attr.vtype]
+            gl.glEnableVertexAttribArray(index)
+            _gl_vertex_attrib_pointer(
+                index,
+                attr.size,
+                gl_type,
+                gl.GL_FALSE,
+                layout.stride,
+                ctypes.c_void_p(attr.offset),
+            )
+
         gl.glBindVertexArray(0)
+
 
     def draw(self):
         gl.glEnable(gl.GL_DEPTH_TEST)

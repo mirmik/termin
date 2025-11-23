@@ -5,7 +5,7 @@ import numpy as np
 
 from termin.geombase.pose3 import Pose3
 
-from termin.mesh.mesh import Mesh
+from termin.mesh.mesh import Mesh3
 from .entity import Entity
 from .mesh import MeshDrawable
 from .material import Material
@@ -79,7 +79,7 @@ class SkyBoxEntity(Entity):
 
     def __init__(self, size: float = 1.0):
         verts, tris = _skybox_cube()
-        mesh = MeshDrawable(Mesh(vertices=verts, triangles=tris))
+        mesh = MeshDrawable(Mesh3(vertices=verts, triangles=tris))
 
         shader = ShaderProgram(
             vertex_source=SKYBOX_VERTEX_SHADER,
