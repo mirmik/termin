@@ -36,33 +36,33 @@ void main() {
 # =============================
 #   Geometry Shader (line generation)
 # =============================
-geom = """
-#version 330 core
+# geom = """
+# #version 330 core
 
-layout(triangles) in;
-layout(line_strip, max_vertices = 6) out;
+# layout(triangles) in;
+# layout(line_strip, max_vertices = 6) out;
 
-in vec3 v_pos_world[];
+# in vec3 v_pos_world[];
 
-out vec3 g_pos_world;
+# out vec3 g_pos_world;
 
-void main() {
-    // три вершины входного треугольника
-    for (int i = 0; i < 3; i++) {
-        int j = (i + 1) % 3;
+# void main() {
+#     // три вершины входного треугольника
+#     for (int i = 0; i < 3; i++) {
+#         int j = (i + 1) % 3;
 
-        g_pos_world = v_pos_world[i];
-        gl_Position = gl_in[i].gl_Position;
-        EmitVertex();
+#         g_pos_world = v_pos_world[i];
+#         gl_Position = gl_in[i].gl_Position;
+#         EmitVertex();
 
-        g_pos_world = v_pos_world[j];
-        gl_Position = gl_in[j].gl_Position;
-        EmitVertex();
+#         g_pos_world = v_pos_world[j];
+#         gl_Position = gl_in[j].gl_Position;
+#         EmitVertex();
 
-        EndPrimitive();
-    }
-}
-"""
+#         EndPrimitive();
+#     }
+# }
+# """
 
 
 # =============================
@@ -92,7 +92,9 @@ class LineRenderer(Component):
         self.color = color
         self.width = width
         self.shader = ShaderProgram(
-            vertex_source=vert, geometry_source=geom, fragment_source=frag)
+            vertex_source=vert, 
+            #geometry_source=geom, 
+            fragment_source=frag)
         self.material = Material(shader=self.shader, color=self.color)
         
         self.mesh2 = Mesh2.from_lists(self.points, [[i, i + 1] for i in range(0, len(self.points) - 1)])
@@ -112,6 +114,8 @@ class LineRenderer(Component):
         proj  = context.projection
         gfx   = context.graphics
         key   = context.context_key
+
+        print("Drawing lines with color:", self.color, "and width:", self.width)
 
         self.material.apply(model, view, proj, graphics=gfx, context_key=key)
         self.drawable.draw(context)

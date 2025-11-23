@@ -153,30 +153,30 @@ class Transform3(Transform):
     def __init__(self, local_pose: Pose3 = Pose3.identity(), parent: 'Transform3' = None, name: str = ""):
         super().__init__(local_pose, parent, name)
 
-    def forward(self, distance: float) -> numpy.ndarray:
+    def forward(self, distance: float = 1.0) -> numpy.ndarray:
         """Get the forward direction vector in global coordinates."""
         local_forward = numpy.array([0.0, 0.0, distance])
         return self.transform_vector(local_forward)
 
-    def up(self, distance: float) -> numpy.ndarray:
+    def up(self, distance: float = 1.0) -> numpy.ndarray:
         """Get the up direction vector in global coordinates."""
         local_up = numpy.array([0.0, distance, 0.0])
         return self.transform_vector(local_up)
 
-    def right(self, distance: float) -> numpy.ndarray:
+    def right(self, distance: float = 1.0) -> numpy.ndarray:
         """Get the right direction vector in global coordinates."""
         local_right = numpy.array([distance, 0.0, 0.0])
         return self.transform_vector(local_right)
 
-    def backward(self, distance: float) -> numpy.ndarray:
+    def backward(self, distance: float = 1.0) -> numpy.ndarray:
         """Get the backward direction vector in global coordinates."""
         return -self.forward(distance)
 
-    def down(self, distance: float) -> numpy.ndarray:
+    def down(self, distance: float = 1.0) -> numpy.ndarray:
         """Get the down direction vector in global coordinates."""
         return -self.up(distance)
 
-    def left(self, distance: float) -> numpy.ndarray:
+    def left(self, distance: float = 1.0) -> numpy.ndarray:
         """Get the left direction vector in global coordinates."""
         return -self.right(distance)
 

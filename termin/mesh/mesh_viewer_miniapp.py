@@ -100,19 +100,22 @@ void main() {
 """
 
 def build_scene(world: VisualizationWorld, mesh: "Mesh") -> tuple[Scene, PerspectiveCameraComponent]:
+
+    scene = Scene()
+    
     drawable = MeshDrawable(mesh)
     shader_prog = ShaderProgram(vert, frag)
     material = Material(shader=shader_prog, color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
     entity = Entity(pose=Pose3.identity(), name="cube")
     entity.add_component(MeshRenderer(drawable, material))
-    scene = Scene()
+    
     scene.add(entity)
 
     skybox = SkyBoxEntity()
     scene.add(skybox)
     world.add_scene(scene)
 
-    T = 1000.0
+    T = 10000.0
     coord_lines = Entity(name="coord_lines")
     coord_lines.add_component(LineRenderer(points=[(0,0,-T), (0,0,T)], color=(1,0,0,1), width=2.0))  # Z - красная
     coord_lines.add_component(LineRenderer(points=[(0,-T,0), (0,T,0)], color=(0,1,0,1), width=2.0))  # Y - зелёная

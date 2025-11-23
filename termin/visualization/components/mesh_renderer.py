@@ -7,6 +7,7 @@ import numpy as np
 from ..entity import Component, RenderContext
 from ..material import Material
 from ..mesh import MeshDrawable
+from termin.mesh.mesh import Mesh3
 
 from termin.geombase.pose3 import Pose3
 from termin.visualization.renderpass import RenderState, RenderPass
@@ -21,6 +22,10 @@ class MeshRenderer(Component):
 
     def __init__(self, mesh: MeshDrawable, material: Material, passes=None):
         super().__init__(enabled=True)
+
+        if isinstance(mesh, Mesh3):
+            mesh = MeshDrawable(mesh)
+
         self.mesh = mesh
         self.material = material
 

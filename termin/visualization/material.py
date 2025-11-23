@@ -23,11 +23,14 @@ class Material:
 
     def __init__(
         self,
-        shader: ShaderProgram,
+        shader: ShaderProgram = None,
         color: np.ndarray | None = None,
         textures: Dict[str, Texture] | None = None,
         uniforms: Dict[str, Any] | None = None
     ):
+        if shader is None:
+            shader = ShaderProgram.default_shader()
+
         if color is None:
             color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         else:

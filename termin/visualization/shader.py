@@ -39,6 +39,28 @@ class ShaderProgram:
         self._handle = None
         self._backend = None
 
+    
+    def default_shader() -> ShaderProgram:
+        vert = """#version 330 core
+        layout(location = 0) in vec3 a_pos;
+        uniform mat4 u_model;
+        uniform mat4 u_view;
+        uniform mat4 u_projection;
+        void main() {
+            gl_Position = u_projection * u_view * u_model * vec4(a_pos,1.0);
+        }
+        """
+
+        frag = """#version 330 core
+        out vec4 FragColor;
+        uniform vec4 u_color;
+        void main() {
+            FragColor = u_color;
+        }
+        """
+
+        return ShaderProgram(vertex_source=vert, fragment_source=frag)
+
     def ensure_ready(self, graphics: GraphicsBackend | None = None):
         if self._compiled:
             return

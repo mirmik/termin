@@ -62,7 +62,7 @@ class Window:
         if not self.handle.drives_render():
             self.make_current()
         scene.ensure_ready(self.graphics)
-        viewport = Viewport(scene=scene, camera=camera, rect=rect, canvas=canvas)
+        viewport = Viewport(scene=scene, camera=camera, rect=rect, canvas=canvas, window=self)
         camera.viewport = viewport
         self.viewports.append(viewport)
         return viewport
@@ -139,6 +139,7 @@ class Window:
                 if cam is not None:
                     ray = cam.screen_point_to_ray(x, y, viewport_rect=self.viewport_rect_to_pixels(viewport))   # функция построения Ray3
                     hit = viewport.scene.raycast(ray)
+                    print("Raycast hit:", hit)  # --- DEBUG ---
                     if hit is not None:
                         # Диспатчим on_click в компоненты
                         entity = hit.entity

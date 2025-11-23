@@ -145,6 +145,7 @@ class OrbitCameraController(CameraController):
         elevation: float = 30.0,
         min_radius: float = 1.0,
         max_radius: float = 100.0,
+        prevent_moving: bool = False,
     ):
         super().__init__(enabled=True)
         self.target = np.array(target if target is not None else [0.0, 0.0, 0.0], dtype=np.float32)
@@ -157,12 +158,16 @@ class OrbitCameraController(CameraController):
         self._pan_speed = 0.005
         self._zoom_speed = 0.5
         self._states: Dict[int, dict] = {}
+        self._prevent_moving = prevent_moving
 
     def start(self, scene):
         if self.entity is None:
             raise RuntimeError("OrbitCameraController must be attached to an entity.")
         super().start(scene)
         self._update_pose()
+
+    def prevent_moving(self):
+        self._prevent_moving = True
 
     def _update_pose(self):
         entity = self.entity
@@ -217,6 +222,8 @@ class OrbitCameraController(CameraController):
             state["last"] = None
 
     def on_mouse_move(self, viewport, x: float, y: float, dx: float, dy: float):
+        if self._prevent_moving:
+            return
         if viewport != self.camera_component.viewport:
             return
         state = self._state(viewport)
@@ -230,6 +237,8 @@ class OrbitCameraController(CameraController):
             self.pan(-dx * self._pan_speed, dy * self._pan_speed)
 
     def on_scroll(self, viewport, xoffset: float, yoffset: float):
+        if self._prevent_moving:
+            return
         if viewport != self.camera_component.viewport:
             return
         self.zoom(-yoffset * self._zoom_speed)

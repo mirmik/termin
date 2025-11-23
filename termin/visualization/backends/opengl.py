@@ -177,7 +177,12 @@ class OpenGLMeshHandle(MeshHandle):
     def draw(self):
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glBindVertexArray(self._vao or 0)
-        gl.glDrawElements(gl.GL_TRIANGLES, self._index_count, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))
+
+        mode = gl.GL_TRIANGLES
+        if getattr(self._mesh, "type", "triangles") == "lines":
+            mode = gl.GL_LINES
+
+        gl.glDrawElements(mode, self._index_count, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))
         gl.glBindVertexArray(0)
 
     def delete(self):

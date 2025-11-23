@@ -18,15 +18,15 @@ from termin.visualization import (
 from termin.visualization.components import MeshRenderer
 from termin.visualization.shader import ShaderProgram
 from termin.visualization.skybox import SkyBoxEntity
+from termin.visualization.gizmos import GizmoEntity, GizmoMoveController
+from termin.visualization.scene import Scene
 
 def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComponent]:
-    cube_mesh = CubeMesh()
-    drawable = MeshDrawable(cube_mesh)
-    material = Material(color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
-    entity = Entity(pose=Pose3.identity(), name="cube")
-    entity.add_component(MeshRenderer(drawable, material))
     scene = Scene()
-    scene.add(entity)
+
+    gizmo = GizmoEntity(size=2.0)
+    gizmo.add_component(GizmoMoveController(gizmo, scene))
+    scene.add(gizmo)
 
     skybox = SkyBoxEntity()
     scene.add(skybox)
@@ -35,7 +35,12 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
     camera_entity = Entity(name="camera")
     camera = PerspectiveCameraComponent()
     camera_entity.add_component(camera)
-    camera_entity.add_component(OrbitCameraController())
+    controller = OrbitCameraController()
+    controller.azimuth = 0
+    controller.elevation = 0
+    camera_entity.add_component(controller)
+    controller.prevent_moving()
+
     scene.add(camera_entity)
 
     return scene, camera

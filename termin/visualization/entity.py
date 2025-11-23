@@ -129,6 +129,7 @@ class Entity:
 
     def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float = 1.0, priority: int = 0):
         self.transform = Transform3(pose)
+        self.transform.entity = self
         self.visible = True
         self.active = True
         self.name = name
@@ -143,13 +144,8 @@ class Entity:
 
     def model_matrix(self) -> np.ndarray:
         """Construct homogeneous model matrix ``M = [R|t]`` with optional uniform scale."""
-        print("MMatrix: global:", self.transform.global_pose())
-        print("MMatrix: local:", self.transform.local_pose())
-
         matrix = self.transform.global_pose().as_matrix().copy()
         matrix[:3, :3] *= self.scale
-
-        print("MMatrix with scale:", matrix)
         return matrix
 
     def add_component(self, component: Component) -> Component:
