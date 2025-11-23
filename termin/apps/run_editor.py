@@ -1,5 +1,6 @@
 import sys
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QPalette, QColor
 
 from termin.visualization.backends import QtWindowBackend, OpenGLGraphicsBackend, set_default_graphics_backend, set_default_window_backend
 from termin.visualization.world import VisualizationWorld
@@ -44,6 +45,40 @@ def build_scene(world):
     return scene, camera
 
 
+def apply_dark_palette(app: QApplication):
+    app.setStyle("Fusion")  # более аккуратный стиль, чем дефолтный
+
+    palette = QPalette()
+
+    # Базовые цвета
+    bg      = QColor(30, 30, 30)
+    window  = QColor(37, 37, 38)
+    base    = QColor(45, 45, 48)
+    text    = QColor(220, 220, 220)
+    disabled_text = QColor(128, 128, 128)
+    highlight = QColor(0, 120, 215)
+
+    palette.setColor(QPalette.Window, window)
+    palette.setColor(QPalette.WindowText, text)
+    palette.setColor(QPalette.Base, base)
+    palette.setColor(QPalette.AlternateBase, bg)
+    palette.setColor(QPalette.ToolTipBase, base)
+    palette.setColor(QPalette.ToolTipText, text)
+    palette.setColor(QPalette.Text, text)
+    palette.setColor(QPalette.Button, window)
+    palette.setColor(QPalette.ButtonText, text)
+    palette.setColor(QPalette.BrightText, QColor(255, 0, 0))
+
+    palette.setColor(QPalette.Highlight, highlight)
+    palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+
+    # Отключённые элементы
+    palette.setColor(QPalette.Disabled, QPalette.Text, disabled_text)
+    palette.setColor(QPalette.Disabled, QPalette.ButtonText, disabled_text)
+    palette.setColor(QPalette.Disabled, QPalette.WindowText, disabled_text)
+
+    app.setPalette(palette)
+
 
 def run_editor():
     set_default_graphics_backend(OpenGLGraphicsBackend())
@@ -53,6 +88,7 @@ def run_editor():
     scene, cam = build_scene(world)
 
     app = QApplication(sys.argv)
+    apply_dark_palette(app)
     win = EditorWindow(world, scene, cam)
     win.show()
     app.exec_()

@@ -21,3 +21,5 @@ class RenderState:
 class RenderPass:
     material: Material
     state: RenderState = RenderState()
+    phase: str = "main"
+    name: str = "unnamed_pass"

@@ -214,6 +214,11 @@ class GraphicsBackend(ABC):
             self.set_blend_func(state.blend_src, state.blend_dst)
 
     @abstractmethod
+    def read_pixel(self, framebuffer, x: int, y: int):
+        """Вернуть (r,g,b,a) в [0,1] из указанного FBO."""
+        ...
+
+    @abstractmethod
     def create_framebuffer(self, size: Tuple[int, int]) -> "FramebufferHandle":
         ...
 
@@ -291,6 +296,11 @@ class BackendWindow(ABC):
         """
         return False
 
+    
+    @abstractmethod
+    def request_update(self):
+        ...
+
 
 class WindowBackend(ABC):
     """Abstract window backend (GLFW, SDL, etc.)."""
@@ -306,3 +316,4 @@ class WindowBackend(ABC):
     @abstractmethod
     def terminate(self):
         ...
+

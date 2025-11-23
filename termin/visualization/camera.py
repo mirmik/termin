@@ -211,6 +211,7 @@ class OrbitCameraController(CameraController):
         return self._states[key]
 
     def on_mouse_button(self, viewport, button: int, action: int, mods: int):
+        #print(f"!!!!!!!!!!!!Mouse button event: button={button}, action={action}, mods={mods}")  # --- DEBUG ---
         if viewport != self.camera_component.viewport:
             return
         state = self._state(viewport)
@@ -222,6 +223,7 @@ class OrbitCameraController(CameraController):
             state["last"] = None
 
     def on_mouse_move(self, viewport, x: float, y: float, dx: float, dy: float):
+        #print(f"!!!!!!!!!!!!Mouse move event: x={x}, y={y}, dx={dx}, dy={dy}")  # --- DEBUG ---
         if self._prevent_moving:
             return
         if viewport != self.camera_component.viewport:
@@ -237,6 +239,7 @@ class OrbitCameraController(CameraController):
             self.pan(-dx * self._pan_speed, dy * self._pan_speed)
 
     def on_scroll(self, viewport, xoffset: float, yoffset: float):
+        print(f"!!!!!!!!!!!!Scroll event: xoffset={xoffset}, yoffset={yoffset}")  # --- DEBUG ---
         if self._prevent_moving:
             return
         if viewport != self.camera_component.viewport:

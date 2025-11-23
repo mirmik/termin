@@ -292,6 +292,20 @@ class OpenGLGraphicsBackend(GraphicsBackend):
         gl.glFrontFace(gl.GL_CCW)
         _OPENGL_INITED = True
 
+    def read_pixel(self, framebuffer, x: int, y: int):
+        # привязываем FBO, из которого читаем
+        self.bind_framebuffer(framebuffer)
+
+        data = GL.glReadPixels(x, y, 1, 1, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE)
+        # data = 4 байта
+        if isinstance(data, (bytes, bytearray)):
+            arr = np.frombuffer(data, dtype=np.uint8)
+        else:
+            arr = np.array(data, dtype=np.uint8)
+
+        r, g, b, a = arr
+        return r / 255.0, g / 255.0, b / 255.0, a / 255.0
+
     def set_viewport(self, x: int, y: int, w: int, h: int):
         gl.glViewport(x, y, w, h)
 

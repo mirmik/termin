@@ -92,6 +92,7 @@ class Window:
         return
 
     def _handle_mouse_button(self, window, button: MouseButton, action: Action, mods):
+        print(f"Mouse button event: button={button}, action={action}, mods={mods}")  # --- DEBUG ---
         if self.handle is None:
             return
         x, y = self.handle.get_cursor_pos()
@@ -112,12 +113,10 @@ class Window:
         if viewport and viewport.canvas:
             if action == Action.PRESS:
                 interrupt = viewport.canvas.mouse_down(x, y, self.viewport_rect_to_pixels(viewport))
-                print("UI mouse down at:", (x, y))
                 if interrupt:
                     return
             elif action == Action.RELEASE:
                 interrupt = viewport.canvas.mouse_up(x, y, self.viewport_rect_to_pixels(viewport))
-                print("UI mouse up at:", (x, y))
                 if interrupt:
                     return
 
@@ -147,9 +146,10 @@ class Window:
                             if hasattr(comp, "on_click"):  # или isinstance(comp, Clickable)
                                 comp.on_click(hit, button)
 
+        self._request_update()
+
 
     def _handle_cursor_pos(self, window, x, y):
-        
         if self.handle is None:
             return
         
@@ -168,6 +168,8 @@ class Window:
         if viewport is not None:
             viewport.scene.dispatch_input(viewport, "on_mouse_move", x=x, y=y, dx=dx, dy=dy)
 
+        self._request_update()
+
     def _handle_scroll(self, window, xoffset, yoffset):
         if self.handle is None:
             return
@@ -176,12 +178,16 @@ class Window:
         if viewport is not None:
             viewport.scene.dispatch_input(viewport, "on_scroll", xoffset=xoffset, yoffset=yoffset)
 
+        self._request_update()
+
     def _handle_key(self, window, key: Key, scancode: int, action: Action, mods):
         if key == Key.ESCAPE and action == Action.PRESS and self.handle is not None:
             self.handle.set_should_close(True)
         viewport = self._active_viewport or (self.viewports[0] if self.viewports else None)
         if viewport is not None:
             viewport.scene.dispatch_input(viewport, "on_key", key=key, scancode=scancode, action=action, mods=mods)
+
+        self._request_update()
 
     def _viewport_under_cursor(self, x: float, y: float) -> Optional[Viewport]:
         if self.handle is None or not self.viewports:
@@ -289,6 +295,10 @@ class Window:
         # Для окон, которые не рендерятся из бэкенда, свапаем буферы здесь
         if not from_backend:
             self.handle.swap_buffers()
+
+    def _request_update(self):
+        if self.handle is not None:
+            self.handle.request_update()
 
 
 

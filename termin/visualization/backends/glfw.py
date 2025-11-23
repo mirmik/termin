@@ -114,6 +114,11 @@ class GLFWWindowHandle(BackendWindow):
             callback(self, _translate_key(key), scancode, _translate_action(action), mods)
         glfw.set_key_callback(self._window, wrapper)
 
+    def request_update(self):
+        # GLFW не имеет встроенного механизма для запроса перерисовки окна,
+        # обычно это делается в основном цикле приложения.
+        pass
+
 
 class GLFWWindowBackend(WindowBackend):
     def __init__(self):

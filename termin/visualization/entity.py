@@ -31,6 +31,7 @@ class RenderContext:
     renderer: "Renderer"
     context_key: int
     graphics: GraphicsBackend
+    phase: str = "main"
 
 
 class Component:

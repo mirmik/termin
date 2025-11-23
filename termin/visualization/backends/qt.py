@@ -49,6 +49,7 @@ class _QtGLWidget(QtWidgets.QOpenGLWidget):
         self._owner = owner
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setUpdateBehavior(QtWidgets.QOpenGLWidget.PartialUpdate)
+        self.setMouseTracking(True)
 
     # --- События мыши / клавиатуры --------------------------------------
 
@@ -68,9 +69,9 @@ class _QtGLWidget(QtWidgets.QOpenGLWidget):
             cb(self._owner, float(event.x()), float(event.y()))
 
     def wheelEvent(self, event):
+        angle = event.angleDelta()
         cb = self._owner._scroll_callback
         if cb:
-            angle = event.angleDelta()
             cb(self._owner, angle.x() / 120.0, angle.y() / 120.0)
 
     def keyPressEvent(self, event):
@@ -102,7 +103,7 @@ class QtGLWindowHandle(BackendWindow):
         self.app = _qt_app()
 
         self._widget = _QtGLWidget(self, parent=parent)
-        self._widget.setMinimumSize(width, height)
+        self._widget.setMinimumSize(50, 50)
         self._widget.resize(width, height)
         self._widget.show()
 
@@ -179,6 +180,11 @@ class QtGLWindowHandle(BackendWindow):
     @property
     def widget(self):
         return self._widget
+
+
+    def request_update(self):
+        # Просим Qt перерисовать виджет (это вызовет paintGL)
+        self._widget.update()
 
 
 
