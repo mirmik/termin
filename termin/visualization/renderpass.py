@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from termin.visualization.material import Material
 
 
@@ -20,6 +20,6 @@ class RenderState:
 @dataclass
 class RenderPass:
     material: Material
-    state: RenderState = RenderState()
+    state: RenderState = field(default_factory=RenderState)
     phase: str = "main"
     name: str = "unnamed_pass"
