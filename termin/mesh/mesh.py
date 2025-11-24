@@ -199,7 +199,8 @@ class Mesh3(Mesh):
         self.vertex_normals = (normals.T / norms).T.astype(np.float32)
         return self.vertex_normals
 
-    def from_convex_hull(hull) -> "Mesh":
+    @staticmethod
+    def from_convex_hull(hull) -> "Mesh3":
         """Create a Mesh from a scipy.spatial.ConvexHull object."""
         vertices = hull.points
         triangles = hull.simplices
@@ -215,7 +216,7 @@ class Mesh3(Mesh):
             if np.dot(normal, to_center) > 0:
                 triangles[i, [1, 2]] = triangles[i, [2, 1]]
 
-        return Mesh(vertices=vertices, triangles=triangles)
+        return Mesh3(vertices=vertices, triangles=triangles)
 
 class CubeMesh(Mesh3):
     def __init__(self, size: float = 1.0, y: float = None, z: float = None):

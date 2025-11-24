@@ -105,10 +105,9 @@ def build_scene(world: VisualizationWorld):
 
     clip = AnimationClip(
         "move_rotate_scale",
+        tps = 1.0,  # тики в секунду
         channels={
-            "translation": AnimationChannel("translation", trs_keys),
-            "rotation": AnimationChannel("rotation", rot_keys),
-            "scale": AnimationChannel("scale", scale_keys),
+            "clip" :AnimationChannel(translation_keys=trs_keys, rotation_keys=rot_keys, scale_keys=scale_keys)
         },
         loop=True,
     )

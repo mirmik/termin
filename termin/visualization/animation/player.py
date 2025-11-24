@@ -48,16 +48,25 @@ class AnimationPlayer(Component):
 
         self.time += dt
 
-        tr, rot, sc = self.current.sample(self.time)
+        sample = self.current.sample(self.time)
 
         pose: Pose3 = self.entity.transform.local_pose()
 
-        if tr is not None and rot is None:
-            pose = Pose3(lin=np.asarray(tr, dtype=float), ang=pose.ang)
-        elif rot is not None and tr is None:
-            pose = Pose3(lin=pose.lin, ang=np.asarray(rot, dtype=float))
-        elif tr is not None and rot is not None:
-            pose = Pose3(lin=np.asarray(tr, dtype=float), ang=np.asarray(rot, dtype=float))
+        
+        sample = self.current.sample(self.time)
+        
+        # TODO: Разобраться с тем, как передать в плеер несколько каналов и к чему они должны применяться.
+        sample = sample["clip"]
+
+        tr = sample[0]
+        rot = sample[1]
+        sc = sample[2]
+
+        if tr is not None:
+            pose = pose.with_translation(tr)
+        if rot is not None:
+            pose = pose.with_rotation(rot)
+        sc = sample[2]
 
         # сначала обновляем позу
         self.entity.transform.relocate(pose)

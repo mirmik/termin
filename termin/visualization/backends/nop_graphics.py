@@ -207,3 +207,7 @@ class NOPGraphicsBackend(GraphicsBackend):
     def bind_framebuffer(self, framebuffer: FramebufferHandle | None):
         # Можно сохранить ссылку, если нужно для отладки
         self._state["bound_fbo"] = framebuffer
+
+    def read_pixel(self, x: int, y: int) -> Any:
+        # Возвращаем пустые данные
+        return None

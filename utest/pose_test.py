@@ -131,7 +131,7 @@ class TestPose3(unittest.TestCase):
             ang=numpy.array([1.0, 1.0, 1.0, 1.0]),
             lin=numpy.array([1.0, 2.0, 3.0])
         )
-        pose.normalize()
+        pose = pose.normalized()
         # Check that quaternion is now unit length
         norm = numpy.linalg.norm(pose.ang)
         self.assertAlmostEqual(norm, 1.0)

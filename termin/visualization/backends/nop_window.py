@@ -77,6 +77,14 @@ class NOPWindowHandle(BackendWindow):
     # то есть False: движок сам будет вызывать render().
     # Если хочешь симулировать push-модель, можно сделать здесь True.
 
+    def bind_window_framebuffer(self):
+        # Нет реального фреймбуфера, просто заглушка
+        pass
+
+    def request_update(self):
+        # Нечего обновлять
+        pass
+
 
 class NOPWindowBackend(WindowBackend):
     """Оконный бэкенд без настоящих окон (удобно для тестов)."""

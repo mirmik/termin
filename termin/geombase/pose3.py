@@ -106,6 +106,14 @@ class Pose3:
         """Compose this pose with another pose."""
         return self * other
 
+    def with_rotation(self, ang: numpy.ndarray) -> 'Pose3':
+        """Return a new Pose3 with the given rotation and the same translation."""
+        return Pose3(ang=ang, lin=self.lin)
+
+    def with_translation(self, lin: numpy.ndarray) -> 'Pose3':
+        """Return a new Pose3 with the given translation and the same rotation."""
+        return Pose3(ang=self.ang, lin=lin)
+
     @staticmethod
     def rotation(axis: numpy.ndarray, angle: float):
         """Create a rotation pose around a given axis by a given angle."""
@@ -177,14 +185,23 @@ class Pose3:
         lerped_lin = (1 - t) * pose1.lin + t * pose2.lin
         return Pose3(ang=lerped_ang, lin=lerped_lin)
 
-    def normalize(self):
-        """Normalize the quaternion to unit length."""
+    # def normalize(self):
+    #     """Normalize the quaternion to unit length."""
+    #     norm = numpy.linalg.norm(self.ang)
+    #     if norm > 0:
+    #         self.ang = self.ang / norm
+    #         self._rot_matrix = None
+    #         self._mat = None
+    #         self._mat34 = None
+
+    def normalized(self) -> 'Pose3':
+        """Return a new Pose3 with normalized quaternion."""
         norm = numpy.linalg.norm(self.ang)
         if norm > 0:
-            self.ang = self.ang / norm
-            self._rot_matrix = None
-            self._mat = None
-            self._mat34 = None
+            ang = self.ang / norm
+        else:
+            ang = self.ang
+        return Pose3(ang=ang, lin=self.lin)
 
     def distance(self, other: 'Pose3') -> float:
         """Calculate Euclidean distance between the translation parts of two poses."""
