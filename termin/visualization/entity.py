@@ -128,7 +128,7 @@ C = TypeVar("C", bound=Component)
 class Entity:
     """Container of components with transform data."""
 
-    def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float = 1.0, priority: int = 0):
+    def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float = 1.0, priority: int = 0, pickable: bool = True):
         self.transform = Transform3(pose)
         self.transform.entity = self
         self.visible = True
@@ -138,6 +138,7 @@ class Entity:
         self.priority = priority  # rendering priority, lower values drawn first
         self._components: List[Component] = []
         self.scene: Optional["Scene"] = None
+        self.pickable = pickable       # <--- и это
 
     def __post_init__(self):
         self.scene: Optional["Scene"] = None
@@ -148,6 +149,9 @@ class Entity:
         matrix = self.transform.global_pose().as_matrix().copy()
         matrix[:3, :3] *= self.scale
         return matrix
+
+    def is_pickable(self) -> bool:
+        return self.pickable and self.visible and self.active
 
     def add_component(self, component: Component) -> Component:
         component.entity = self

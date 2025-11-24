@@ -7,6 +7,7 @@ from typing import Dict, Tuple
 
 import numpy as np
 from OpenGL import GL as gl
+from OpenGL import GL as GL
 from OpenGL.raw.GL.VERSION.GL_2_0 import glVertexAttribPointer as _gl_vertex_attrib_pointer
 
 from termin.mesh.mesh import Mesh, VertexAttribType
@@ -295,6 +296,7 @@ class OpenGLGraphicsBackend(GraphicsBackend):
     def read_pixel(self, framebuffer, x: int, y: int):
         # привязываем FBO, из которого читаем
         self.bind_framebuffer(framebuffer)
+        print("Reading pixel at:", x, y, "from framebuffer:", framebuffer._fbo)  # --- DEBUG ---
 
         data = GL.glReadPixels(x, y, 1, 1, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE)
         # data = 4 байта

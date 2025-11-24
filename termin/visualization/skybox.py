@@ -93,5 +93,6 @@ class SkyBoxEntity(Entity):
             scale=size,
             name="skybox",
             priority=-100,  # рисуем в самом начале
+            pickable=False
         )
         self.renderer = self.add_component(SkyboxRenderer(mesh, material))

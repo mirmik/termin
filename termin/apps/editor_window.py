@@ -56,6 +56,15 @@ class EditorWindow(QMainWindow):
         self.topSplitter.setSizes([300, 1000, 300])
         self.verticalSplitter.setSizes([600, 200])
 
+    def on_entity_picked(self, entity):
+        print(f"Picked entity: {entity.name} {entity.name}")
+        # найти индекс в дереве по Entity (у тебя мы уже обсуждали мапу Entity -> NodeWrapper)
+        # index = self.scene_model.index_for_entity(entity)
+        # if index.isValid():
+        #     self.sceneTree.setCurrentIndex(index)
+        #     self.sceneTree.scrollTo(index)
+        #     self.update_inspector(entity)
+
     # ----------------------------------------------------
     def _init_viewport(self):
         layout = self.viewportContainer.layout()
@@ -66,8 +75,9 @@ class EditorWindow(QMainWindow):
             title="viewport",
             parent=self.viewportContainer
         )
-
         self.viewport_window.add_viewport(self.scene, self.camera)
+        self.viewport_window.set_world_mode("editor")
+        self.viewport_window.set_selection_handler(self.on_entity_picked)
 
         gl_widget = self.viewport_window.handle.widget
         gl_widget.setFocusPolicy(Qt.StrongFocus)

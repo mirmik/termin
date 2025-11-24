@@ -67,6 +67,12 @@ class CameraComponent(Component):
     def get_projection_matrix(self) -> np.ndarray:
         raise NotImplementedError
 
+    def projection_matrix(self) -> np.ndarray:
+        return self.get_projection_matrix()
+
+    def view_matrix(self) -> np.ndarray:
+        return self.get_view_matrix()
+
     def set_aspect(self, aspect: float):
         """Optional method for perspective cameras."""
         return

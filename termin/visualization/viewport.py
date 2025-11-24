@@ -9,7 +9,7 @@ class Viewport:
     scene: Scene
     camera: CameraComponent
     window: "Window"
-    rect: Tuple[float, float, float, float]
+    rect: Tuple[float, float, float, float] # x, y, width, height in normalized coords (0.0:1.0)
     canvas: Optional["Canvas"] = None
     postprocess: list["PostProcessEffect"] = field(default_factory=list)
 

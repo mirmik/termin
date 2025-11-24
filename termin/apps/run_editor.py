@@ -27,13 +27,21 @@ def build_scene(world):
     cube_mesh = CubeMesh()
     drawable = MeshDrawable(cube_mesh)
     material = Material(color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
-    entity = Entity(pose=Pose3.identity(), name="cube")
-    entity.add_component(MeshRenderer(drawable, material))
+   
     scene = Scene()
+
+    entity = Entity(pose=Pose3.identity(), name="cube1")
+    entity.add_component(MeshRenderer(drawable, material))
     scene.add(entity)
+
+    entity2 = Entity(pose=Pose3.identity(), name="cube2")
+    entity2.add_component(MeshRenderer(drawable, material))
+    entity2.transform.relocate(Pose3(lin=np.array([3.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
+    scene.add(entity2)
 
     skybox = SkyBoxEntity()
     scene.add(skybox)
+
     world.add_scene(scene)
 
     camera_entity = Entity(name="camera")
