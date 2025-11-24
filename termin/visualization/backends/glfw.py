@@ -8,6 +8,8 @@ import glfw
 
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 
+from OpenGL import GL as gl
+
 
 def _ensure_glfw():
     if not glfw.init():
@@ -118,6 +120,9 @@ class GLFWWindowHandle(BackendWindow):
         # GLFW не имеет встроенного механизма для запроса перерисовки окна,
         # обычно это делается в основном цикле приложения.
         pass
+
+    def bind_window_framebuffer(self):
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
 
 class GLFWWindowBackend(WindowBackend):

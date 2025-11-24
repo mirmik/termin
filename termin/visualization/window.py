@@ -261,6 +261,106 @@ class Window:
             fb.resize(size)
         return fb
 
+    def _render_main_pass(
+        self,
+        viewport,
+        px: int,
+        py: int,
+        pw: int,
+        ph: int,
+        context_key: int,
+        framebuffer=None,
+    ):
+        """
+        Рендерит обычную сцену (main pass) либо:
+        - прямо в окно (framebuffer=None),
+        - либо в заданный FBO (framebuffer != None).
+
+        rect, который мы передаём в Renderer, тоже меняется:
+        - для окна: (px, py, pw, ph)
+        - для FBO:  (0, 0, pw, ph)
+        """
+        gfx = self.graphics
+
+        if framebuffer is None:
+            # рисуем в окно
+            gfx.bind_framebuffer(None)
+            gfx.enable_scissor(px, py, pw, ph)
+            gfx.set_viewport(px, py, pw, ph)
+        else:
+            # рисуем в offscreen FBO
+            gfx.bind_framebuffer(framebuffer)
+            gfx.set_viewport(0, 0, pw, ph)
+
+        # очистка
+        gfx.clear_color_depth(viewport.scene.background_color)
+
+        # рендерим основную геометрию
+        if framebuffer is None:
+            rect = (px, py, pw, ph)
+        else:
+            rect = (0, 0, pw, ph)
+
+        self.renderer.render_viewport(
+            viewport.scene,
+            viewport.camera,
+            rect,
+            context_key,
+        )
+
+        # UI не рисуем внутри main-pass — он всегда поверх
+        if framebuffer is None:
+            gfx.disable_scissor()
+
+    def _render_main_pass(
+        self,
+        viewport,
+        px: int,
+        py: int,
+        pw: int,
+        ph: int,
+        context_key: int,
+        framebuffer=None,
+    ):
+        """
+        Рендерит обычную сцену (main pass) либо:
+        - прямо в окно (framebuffer=None),
+        - либо в заданный FBO (framebuffer != None).
+
+        rect, который мы передаём в Renderer, тоже меняется:
+        - для окна: (px, py, pw, ph)
+        - для FBO:  (0, 0, pw, ph)
+        """
+        gfx = self.graphics
+        scene = viewport.scene
+        camera = viewport.camera
+
+        if framebuffer is None:
+            # рисуем в окно
+            self.handle.bind_window_framebuffer()
+            gfx.enable_scissor(px, py, pw, ph)
+            gfx.set_viewport(px, py, pw, ph)
+            gfx.clear_color_depth(scene.background_color)
+            gfx.disable_scissor()
+
+            rect = (px, py, pw, ph)
+        else:
+            # рисуем в offscreen FBO
+            gfx.bind_framebuffer(framebuffer)
+            gfx.set_viewport(0, 0, pw, ph)
+            gfx.clear_color_depth(scene.background_color)
+
+            rect = (0, 0, pw, ph)
+
+        # рендерим основную геометрию
+        self.renderer.render_viewport(
+            scene,
+            camera,
+            rect,
+            context_key,
+        )
+
+
     def _render_core(self, from_backend: bool):
         if self.handle is None:
             return
@@ -285,35 +385,31 @@ class Window:
 
             # --- вариант без постпроцесса ---
             if not effects:
-                # рендерим прямо в экран
-                self.graphics.enable_scissor(px, py, pw, ph)
-                self.graphics.set_viewport(px, py, pw, ph)
-
-                self.graphics.clear_color_depth(viewport.scene.background_color)
-                self.graphics.disable_scissor()
-
-                self.renderer.render_viewport(
-                    viewport.scene, viewport.camera,
-                    (px, py, pw, ph),
-                    context_key
+                # основной pass
+                self._render_main_pass(
+                    viewport,
+                    px, py, pw, ph,
+                    context_key,
+                    framebuffer=None,
                 )
 
+                # UI поверх
                 if viewport.canvas:
                     viewport.canvas.render(self.graphics, context_key, (px, py, pw, ph))
+
 
             else:
                 # --- есть постпроцесс ---
                 # 1) рендерим сцену в FBO_A
                 fb_a = self.get_viewport_fbo(viewport, "A", (pw, ph))
-                self.graphics.bind_framebuffer(fb_a)
-                self.graphics.set_viewport(0, 0, pw, ph)
-                self.graphics.clear_color_depth(viewport.scene.background_color)
 
-                self.renderer.render_viewport(
-                    viewport.scene, viewport.camera,
-                    (0, 0, pw, ph),
-                    context_key
+                self._render_main_pass(
+                    viewport,
+                    0, 0, pw, ph,     # px, py здесь не используются, но можно передать для симметрии
+                    context_key,
+                    framebuffer=fb_a,
                 )
+
 
                 # 2) цепочка эффектов
                 fb_in = fb_a
@@ -330,7 +426,7 @@ class Window:
 
                 # 3) последний эффект пишет прямо в экран
                 last = effects[-1]
-                self.graphics.bind_framebuffer(None)
+                self.handle.bind_window_framebuffer()
                 self.graphics.set_viewport(px, py, pw, ph)
 
                 last.draw(self.graphics, context_key, fb_in.color_texture(), (pw, ph))

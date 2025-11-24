@@ -234,6 +234,10 @@ class BackendWindow(ABC):
     """Abstract window wrapper."""
 
     @abstractmethod
+    def bind_window_framebuffer(self):
+        ...
+
+    @abstractmethod
     def close(self):
         ...
 

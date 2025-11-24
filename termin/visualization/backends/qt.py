@@ -9,6 +9,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 
 from OpenGL import GL
+from OpenGL import GL as gl
+
 
 
 def _qt_app() -> QtWidgets.QApplication:
@@ -185,6 +187,12 @@ class QtGLWindowHandle(BackendWindow):
     def request_update(self):
         # Просим Qt перерисовать виджет (это вызовет paintGL)
         self._widget.update()
+
+    
+    def bind_window_framebuffer(self):        
+        fbo_id = int(self._widget.defaultFramebufferObject())
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, fbo_id)
+
 
 
 
