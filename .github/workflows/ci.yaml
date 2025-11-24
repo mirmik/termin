@@ -17,10 +17,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install package (setup.py install --user)
-        run: python setup.py install --user
+      - name: Install build deps
+        run: |
+          pip install --upgrade pip
+          pip install wheel setuptools
 
-      - name: Install pytest
+      - name: Build and install package
+        run: |
+          python setup.py bdist_wheel
+          pip install dist/*.whl
+
+      - name: Install test deps
         run: pip install pytest
 
       - name: Run tests

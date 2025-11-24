@@ -50,6 +50,7 @@ setup(
         "PyOpenGL>=3.1",
         "glfw>=2.5.0",
         "Pillow>=9.0",
+        "pyassimp"
     ],
     extras_require={
     },
