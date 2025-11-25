@@ -10,7 +10,7 @@ import numpy as np
 
 class GizmoArrow(Entity):
     def __init__(self, axis: str, length=1.0, color=(1.0, 0.0, 0.0, 1.0)):
-        super().__init__(Pose3.identity(), name=f"gizmo_axis_{axis}", pickable=False)
+        super().__init__(Pose3.identity(), name=f"gizmo_axis_{axis}", pickable=True, selectable=False)
 
         self.axis = axis
         shaft_len = length * 0.75
@@ -25,7 +25,8 @@ class GizmoArrow(Entity):
         shaft_ent = Entity(
             Pose3.translation(0, shaft_len * 0.5, 0),
             name=f"{axis}_shaft",
-            pickable=False
+            pickable=True,
+            selectable=False
         )
         shaft_ent.add_component(MeshRenderer(shaft, mat))
         self.shaft_ent = shaft_ent
@@ -35,7 +36,8 @@ class GizmoArrow(Entity):
         head_ent = Entity(
             Pose3.translation(0, shaft_len + head_len * 0.5, 0),
             name=f"{axis}_head",
-            pickable=False
+            pickable=True,
+            selectable=False
         )
         head_ent.add_component(MeshRenderer(head, mat))
         self.head_ent = head_ent
@@ -65,7 +67,7 @@ class GizmoArrow(Entity):
 
 class GizmoEntity(Entity):
     def __init__(self, size=1.0):
-        super().__init__(Pose3.identity(), name="gizmo", pickable=False)
+        super().__init__(Pose3.identity(), name="gizmo", pickable=True, selectable=False)
 
         self.x = GizmoArrow("x", length=size, color=(1,0,0,1))
         self.y = GizmoArrow("y", length=size, color=(0,1,0,1))

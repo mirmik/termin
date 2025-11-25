@@ -136,7 +136,9 @@ C = TypeVar("C", bound=Component)
 class Entity:
     """Container of components with transform data."""
 
-    def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float = 1.0, priority: int = 0, pickable: bool = True):
+    def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float = 1.0, priority: int = 0, 
+            pickable: bool = True,
+            selectable: bool = True):
         self.transform = Transform3(pose)
         self.transform.entity = self
         self.visible = True
@@ -147,6 +149,7 @@ class Entity:
         self._components: List[Component] = []
         self.scene: Optional["Scene"] = None
         self.pickable = pickable       # <--- и это
+        self.selectable = selectable       # <--- и это
 
     def __post_init__(self):
         self.scene: Optional["Scene"] = None

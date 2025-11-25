@@ -296,7 +296,7 @@ class Window:
             #print("Dispatching mouse button to scene")  # --- DEBUG ---
             viewport.scene.dispatch_input(viewport, "on_mouse_button", button=button, action=action, mods=mods)  
 
-        if self.on_mouse_button_event is not None:
+        if self.on_mouse_button_event is not None and action == Action.RELEASE:
             self.on_mouse_button_event(button, x, y, viewport)   
 
         self._request_update()

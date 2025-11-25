@@ -231,7 +231,6 @@ class EditorWindow(QMainWindow):
         if self.inspector is not None:
             self.inspector.set_target(None)
 
-        self.selected_entity_id = 0
         self.on_selection_changed(None)
 
         if hasattr(self.scene, "remove"):
@@ -326,19 +325,18 @@ class EditorWindow(QMainWindow):
         if self._pending_pick is None:
             return
 
+        print("PENDING PICK HANDLER")  # --- DEBUG ---
         x, y, viewport = self._pending_pick
         self._pending_pick = None
 
         picked_ent = window.pick_entity_at(x, y, viewport)
         if picked_ent is not None:
-            self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(picked_ent)
             self.on_selection_changed(picked_ent)
             self._select_object_in_tree(picked_ent)
             self.inspector.set_target(picked_ent)
         else:
-            self.selected_entity_id = 0
-            self.inspector.set_target(None)
             self.on_selection_changed(None)
+            self.inspector.set_target(None)
 
     def _select_object_in_tree(self, obj):
         model: SceneTreeModel = self.sceneTree.model()
@@ -386,20 +384,18 @@ class EditorWindow(QMainWindow):
         else:
             ent = None
 
-        if ent is not None:
-            self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(ent)
-        else:
-            self.selected_entity_id = 0
-
         self.on_selection_changed(ent)
 
         if self.viewport_window is not None:
             self.viewport_window._request_update()
 
     def on_selection_changed(self, selected_ent):
+        if selected_ent is not None and selected_ent.selectable is False:
+            # Мы пикнули что-то невыделяемое. Скорее всего гизмо.
+            return
+        
         self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(selected_ent) if selected_ent is not None else 0
-        if self.gizmo is not None:
-            self.gizmo.find_component(GizmoMoveController).set_target(selected_ent)
+        self.gizmo.find_component(GizmoMoveController).set_target(selected_ent)
 
     def make_pipeline(self) -> list["FramePass"]:
         from termin.visualization.framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass
