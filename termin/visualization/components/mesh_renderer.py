@@ -23,7 +23,7 @@ class MeshRenderer(Component):
             path="mesh",
             label="Mesh",
             kind="mesh",  # ресурс типа MeshDrawable
-            setter=lambda obj, value: obj.update_mesh(value),
+            # setter=lambda obj, value: obj.update_mesh(value),
         ),
         "material": InspectField(
             path="material",
@@ -67,8 +67,8 @@ class MeshRenderer(Component):
 
     # --- инспекторные апдейты ---
 
-    def update_mesh(self, mesh: MeshDrawable | None):
-        self.mesh = mesh
+    # def update_mesh(self, mesh: MeshDrawable | None):
+    #     self.mesh = mesh
 
     def update_material(self, material: Material | None):
         self.material = material

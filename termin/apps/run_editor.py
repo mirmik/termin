@@ -10,7 +10,7 @@ from editor_window import EditorWindow
 
 
 
-from termin.mesh.mesh import CubeMesh
+from termin.mesh.mesh import CubeMesh, CylinderMesh, Mesh3
 from termin.visualization.entity import Entity
 from termin.visualization.components import MeshRenderer
 from termin.visualization.world import VisualizationWorld
@@ -25,11 +25,20 @@ from termin.visualization.camera import PerspectiveCameraComponent, OrbitCameraC
 def build_scene(world):
 
     cube_mesh = CubeMesh()
+    cyl_mesh = CylinderMesh(radius=0.5, height=2.0)
     drawable = MeshDrawable(cube_mesh)
+    drawable_cyl = MeshDrawable(cyl_mesh)
     red_material = Material(color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
     blue_material = Material(color=np.array([0.3, 0.3, 0.8, 1.0], dtype=np.float32))
+    green_material = Material(color=np.array([0.3, 0.8, 0.3, 1.0], dtype=np.float32))
    
     scene = Scene()
+
+
+    entity_cyl = Entity(pose=Pose3.identity(), name="cylinder")
+    entity_cyl.add_component(MeshRenderer(drawable_cyl, green_material))
+    entity_cyl.transform.relocate(Pose3(lin=np.array([-2.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
+    scene.add(entity_cyl)
 
     entity = Entity(pose=Pose3.identity(), name="cube1")
     entity.add_component(MeshRenderer(drawable, red_material))

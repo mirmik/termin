@@ -79,13 +79,31 @@ class EditorWindow(QMainWindow):
 
     def _init_resources_from_scene(self):
         """
-        Складываем в ResourceManager материалы, использованные в сцене.
+        Складываем в ResourceManager материалы и меши, использованные в сцене.
         И даём им хоть какие-то имена, если их ещё нет.
         """
         for ent in self.scene.entities:
             mr = ent.get_component(MeshRenderer)
             if mr is None:
                 continue
+
+            # ------------ МЕШИ ------------
+            mesh = getattr(mr, "mesh", None)
+            if mesh is not None:
+                existing_mesh_name = self.resource_manager.find_mesh_name(mesh)
+                if existing_mesh_name is None:
+                    name = getattr(mesh, "name", None)
+                    if not name:
+                        base = f"{ent.name}_mesh" if getattr(ent, "name", None) else "Mesh"
+                        name = base
+                        i = 1
+                        while name in self.resource_manager.meshes:
+                            i += 1
+                            name = f"{base}_{i}"
+                    mesh.name = name
+                    self.resource_manager.register_mesh(name, mesh)
+
+            # ------------ МАТЕРИАЛЫ ------------
             mat = mr.material
             if mat is None:
                 continue
@@ -105,6 +123,7 @@ class EditorWindow(QMainWindow):
                 mat.name = name
 
             self.resource_manager.register_material(name, mat)
+
 
     # ----------- реакции инспектора -----------
 
@@ -234,8 +253,10 @@ class EditorWindow(QMainWindow):
 
     # ----------- синхронизация с пиками -----------
 
-    def mouse_button_clicked(self, x, y, viewport):
-        self._pending_pick = (x, y, viewport)
+    def mouse_button_clicked(self, button_type, x, y, viewport):
+        from termin.visualization.backends.base import MouseButton
+        if button_type == MouseButton.LEFT:
+            self._pending_pick = (x, y, viewport)
 
     def _after_render(self, window):
         if self._pending_pick is None:

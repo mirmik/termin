@@ -27,109 +27,7 @@ from termin.geombase.pose3 import Pose3
 from termin.visualization.inspect import InspectField
 from termin.visualization.resources import ResourceManager
 
-
-class TransformInspector(QWidget):
-    transform_changed = pyqtSignal()
-
-    def __init__(self, parent: Optional[QWidget] = None):
-        super().__init__(parent)
-
-        self._transform: Optional[Transform3] = None
-        self._updating_from_model = False
-
-        layout = QFormLayout(self)
-        layout.setLabelAlignment(Qt.AlignLeft)
-        layout.setFormAlignment(Qt.AlignTop)
-
-        def make_vec3_row():
-            row = QHBoxLayout()
-            sx = QDoubleSpinBox()
-            sy = QDoubleSpinBox()
-            sz = QDoubleSpinBox()
-            for sb in (sx, sy, sz):
-                sb.setRange(-1e6, 1e6)
-                sb.setDecimals(3)
-                sb.setSingleStep(0.1)
-                row.addWidget(sb)
-            return row, (sx, sy, sz)
-
-        pos_row, self._pos = make_vec3_row()
-        layout.addRow(QLabel("Position"), pos_row)
-
-        rot_row, self._rot = make_vec3_row()
-        layout.addRow(QLabel("Rotation (deg)"), rot_row)
-
-        scale_row, self._scale = make_vec3_row()
-        for sb in self._scale:
-            sb.setValue(1.0)
-        layout.addRow(QLabel("Scale"), scale_row)
-
-        for sb in (*self._pos, *self._rot, *self._scale):
-            sb.valueChanged.connect(self._on_value_changed)
-
-        self._set_enabled(False)
-
-    def set_target(self, obj: Optional[object]):
-        if isinstance(obj, Entity):
-            transform = obj.transform
-        elif isinstance(obj, Transform3):
-            transform = obj
-        else:
-            transform = None
-
-        self._transform = transform
-        self._update_from_transform()
-
-    def _set_enabled(self, flag: bool):
-        for sb in (*self._pos, *self._rot, *self._scale):
-            sb.setEnabled(flag)
-
-    def _update_from_transform(self):
-        self._updating_from_model = True
-        try:
-            if self._transform is None:
-                self._set_enabled(False)
-                for sb in (*self._pos, *self._rot, *self._scale):
-                    sb.setValue(0.0)
-                for sb in self._scale:
-                    sb.setValue(1.0)
-                return
-
-            self._set_enabled(True)
-            pose: Pose3 = self._transform.global_pose()
-
-            px, py, pz = pose.lin
-            self._pos[0].setValue(float(px))
-            self._pos[1].setValue(float(py))
-            self._pos[2].setValue(float(pz))
-
-            self._rot[0].setValue(0.0)
-            self._rot[1].setValue(0.0)
-            self._rot[2].setValue(0.0)
-
-            s = np.array([1.0, 1.0, 1.0], dtype=float)
-            self._scale[0].setValue(float(s[0]))
-            self._scale[1].setValue(float(s[1]))
-            self._scale[2].setValue(float(s[2]))
-        finally:
-            self._updating_from_model = False
-
-    def _on_value_changed(self, _value):
-        if self._updating_from_model:
-            return
-        if self._transform is None:
-            return
-
-        pose: Pose3 = self._transform.global_pose()
-
-        px = self._pos[0].value()
-        py = self._pos[1].value()
-        pz = self._pos[2].value()
-        new_lin = np.array([px, py, pz], dtype=float)
-
-        pose = Pose3(lin=new_lin, ang=pose.ang)
-        self._transform.relocate(pose)
-        self.transform_changed.emit()
+from termin.apps.transform_inspector import TransformInspector
 
 
 class ComponentsPanel(QWidget):
@@ -329,6 +227,13 @@ class ComponentInspectorPanel(QWidget):
                 combo.addItem(n)
             return combo
 
+        if kind == "mesh":
+            combo = QComboBox()
+            names = self._resources.list_mesh_names()
+            for n in names:
+                combo.addItem(n)
+            return combo
+
         le = QLineEdit()
         le.setReadOnly(True)
         return le
@@ -378,6 +283,31 @@ class ComponentInspectorPanel(QWidget):
                 w.setCurrentIndex(-1)
             return
 
+        if isinstance(w, QComboBox) and field.kind == "mesh":
+            mesh = value
+            if mesh is None:
+                w.setCurrentIndex(-1)
+                return
+
+            name = self._resources.find_mesh_name(mesh)
+            existing = [w.itemText(i) for i in range(w.count())]
+            all_names = self._resources.list_mesh_names()
+            if existing != all_names:
+                w.clear()
+                for n in all_names:
+                    w.addItem(n)
+
+            if name is None:
+                w.setCurrentIndex(-1)
+                return
+
+            idx = w.findText(name)
+            if idx >= 0:
+                w.setCurrentIndex(idx)
+            else:
+                w.setCurrentIndex(-1)
+            return
+
     def _connect_widget(self, w: QWidget, key: str, field: InspectField):
         def commit():
             if self._updating_from_model or self._component is None:
@@ -394,8 +324,8 @@ class ComponentInspectorPanel(QWidget):
             w.editingFinished.connect(commit)
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:
-                sb.valueChanged.connect(lambda _v: commit())
-        elif isinstance(w, QComboBox) and field.kind == "material":
+                sb.valueChanged.connect(lambda _v: commit())      
+        elif isinstance(w, QComboBox) and field.kind in ("material", "mesh"):
             w.currentIndexChanged.connect(lambda _i: commit())
 
     def _read_widget_value(self, w: QWidget, field: InspectField):
@@ -416,6 +346,12 @@ class ComponentInspectorPanel(QWidget):
             if not name:
                 return None
             return self._resources.get_material(name)
+
+        if isinstance(w, QComboBox) and field.kind == "mesh":
+            name = w.currentText()
+            if not name:
+                return None
+            return self._resources.get_mesh(name)
 
         return None
 

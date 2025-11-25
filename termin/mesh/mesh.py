@@ -529,6 +529,21 @@ class CylinderMesh(Mesh3):
             top1 = next_s + segments
             triangles.append([bottom0, top0, bottom1])
             triangles.append([bottom1, top0, top1])
+
+        # Add center vertices for bottom and top caps
+        bottom_center_idx = len(vertices)
+        vertices.append([0.0, -half_height, 0.0])
+        top_center_idx = len(vertices)
+        vertices.append([0.0, half_height, 0.0])
+        for s in range(segments):
+            next_s = (s + 1) % segments
+            bottom0 = s
+            bottom1 = next_s
+            top0 = s + segments
+            top1 = next_s + segments
+            triangles.append([bottom1, bottom_center_idx, bottom0])
+            triangles.append([top0, top_center_idx, top1])
+
         super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
 class ConeMesh(Mesh3):

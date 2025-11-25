@@ -11,6 +11,7 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from .entity import Component
 
 
+
 @dataclass
 class ResourceManager:
     """
@@ -35,6 +36,22 @@ class ResourceManager:
     def find_material_name(self, mat: "Material") -> Optional[str]:
         for n, m in self.materials.items():
             if m is mat:
+                return n
+        return None
+
+    # --------- Меши ---------
+    def register_mesh(self, name: str, mesh: "MeshDrawable"):
+        self.meshes[name] = mesh
+
+    def get_mesh(self, name: str) -> Optional["MeshDrawable"]:
+        return self.meshes.get(name)
+
+    def list_mesh_names(self) -> list[str]:
+        return sorted(self.meshes.keys())
+
+    def find_mesh_name(self, mesh: "MeshDrawable") -> Optional[str]:
+        for n, m in self.meshes.items():
+            if m is mesh:
                 return n
         return None
 
