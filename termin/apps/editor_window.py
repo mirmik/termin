@@ -13,10 +13,11 @@ from editor_inspector import EntityInspector
 from termin.visualization.picking import id_to_rgb
 from termin.visualization.resources import ResourceManager
 from termin.geombase.pose3 import Pose3
+from termin.visualization.gizmos.gizmo_axes import GizmoEntity, GizmoMoveController
 
 
 class EditorWindow(QMainWindow):
-    def __init__(self, world, scene, camera):
+    def __init__(self, world, scene):
         super().__init__()
         self.selected_entity_id = None
 
@@ -25,11 +26,16 @@ class EditorWindow(QMainWindow):
 
         self.world = world
         self.scene = scene
-        self.camera = camera
+
+        # будут созданы ниже
+        self.camera = None
+        self.editor_entities = None
+        self.gizmo: GizmoEntity | None = None
 
         # --- ресурс-менеджер редактора ---
         self.resource_manager = ResourceManager()
         self._init_resources_from_scene()
+
 
         # --- UI из .ui ---
         self.sceneTree: QTreeView = self.findChild(QTreeView, "sceneTree")
@@ -46,13 +52,6 @@ class EditorWindow(QMainWindow):
 
         self._fix_splitters()
 
-        # --- дерево сцены ---
-        self._tree_model = SceneTreeModel(scene)
-        self._setup_tree_model()
-
-        self.sceneTree.setModel(self._tree_model)
-        self.sceneTree.expandAll()
-        self.sceneTree.clicked.connect(self.on_tree_click)
 
         # --- инспектор ---
         self.inspector = EntityInspector(self.resource_manager, self.inspectorContainer)
@@ -72,8 +71,72 @@ class EditorWindow(QMainWindow):
         self.inspector.transform_changed.connect(self._on_inspector_transform_changed)
         self.inspector.component_changed.connect(self._on_inspector_component_changed)
 
+
+        # --- создаём редакторские сущности (root, камера, гизмо) ---
+        self._ensure_editor_entities_root()
+        self._ensure_editor_camera()
+        self._ensure_gizmo()
+
+        # --- дерево сцены ---
+        self._tree_model = SceneTreeModel(scene)
+        self._setup_tree_model()
+
+        self.sceneTree.setModel(self._tree_model)
+        self.sceneTree.expandAll()
+        self.sceneTree.clicked.connect(self.on_tree_click)
+
         # --- viewport ---
         self._init_viewport()
+
+
+    def _ensure_editor_entities_root(self):
+        """
+        Ищем/создаём корневую сущность для редакторских вещей:
+        камера, гизмо и т.п.
+        """
+        for ent in self.scene.entities:
+            if getattr(ent, "name", "") == "EditorEntities":
+                self.editor_entities = ent
+                return
+
+        editor_entities = Entity(name="EditorEntities")
+        self.scene.add(editor_entities)
+        self.editor_entities = editor_entities
+
+    def _ensure_editor_camera(self):
+        """
+        Создаём редакторскую камеру и вешаем её под EditorEntities (если он есть).
+        Никакого поиска по сцене – у редактора всегда своя камера.
+        """
+        camera_entity = Entity(name="camera", pose=Pose3.identity())
+        camera = PerspectiveCameraComponent()
+        camera_entity.add_component(camera)
+        camera_entity.add_component(OrbitCameraController())
+
+        self.editor_entities.transform.link(camera_entity.transform)
+        self.scene.add(camera_entity)
+        self.camera = camera
+
+    def _ensure_gizmo(self):
+        """
+        Ищем гизмо в сцене, если нет – создаём.
+        """
+        for ent in self.scene.entities:
+            if isinstance(ent, GizmoEntity) or getattr(ent, "name", "") == "gizmo":
+                self.gizmo = ent
+                return
+
+        gizmo = GizmoEntity(size=1.5)
+        gizmo_controller = GizmoMoveController(gizmo, self.scene)
+        gizmo.add_component(gizmo_controller)
+
+        if self.editor_entities is not None:
+            self.editor_entities.transform.add_child(gizmo.transform)
+
+        self.scene.add(gizmo)
+        self.gizmo = gizmo
+
+
 
     # ----------- ресурсы из сцены -----------
 
@@ -169,6 +232,7 @@ class EditorWindow(QMainWindow):
             self.inspector.set_target(None)
 
         self.selected_entity_id = 0
+        self.on_selection_changed(None)
 
         if hasattr(self.scene, "remove"):
             self.scene.remove(ent)
@@ -268,11 +332,13 @@ class EditorWindow(QMainWindow):
         picked_ent = window.pick_entity_at(x, y, viewport)
         if picked_ent is not None:
             self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(picked_ent)
+            self.on_selection_changed(picked_ent)
             self._select_object_in_tree(picked_ent)
             self.inspector.set_target(picked_ent)
         else:
             self.selected_entity_id = 0
             self.inspector.set_target(None)
+            self.on_selection_changed(None)
 
     def _select_object_in_tree(self, obj):
         model: SceneTreeModel = self.sceneTree.model()
@@ -292,6 +358,7 @@ class EditorWindow(QMainWindow):
             title="viewport",
             parent=self.viewportContainer
         )
+        # здесь self.camera уже создана в _ensure_editor_camera
         self.viewport = self.viewport_window.add_viewport(self.scene, self.camera)
         self.viewport_window.set_world_mode("editor")
 
@@ -324,8 +391,15 @@ class EditorWindow(QMainWindow):
         else:
             self.selected_entity_id = 0
 
+        self.on_selection_changed(ent)
+
         if self.viewport_window is not None:
             self.viewport_window._request_update()
+
+    def on_selection_changed(self, selected_ent):
+        self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(selected_ent) if selected_ent is not None else 0
+        if self.gizmo is not None:
+            self.gizmo.target = selected_ent
 
     def make_pipeline(self) -> list["FramePass"]:
         from termin.visualization.framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass

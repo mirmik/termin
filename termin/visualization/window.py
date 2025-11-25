@@ -167,31 +167,24 @@ class Window:
         используя id-карту, нарисованную IdPass в FBO с ключом 'id'.
         """
         if self.handle is None:
-            print("No window handle available")  # --- DEBUG ---
             return None
 
         # Определяем вьюпорт, если не передали явно
         if viewport is None:
             viewport = self._viewport_under_cursor(x, y)
             if viewport is None:
-                print("No viewport under cursor")  # --- DEBUG ---
                 return None
 
         win_w, win_h = self.handle.window_size()       # логические пиксели
         fb_w, fb_h = self.handle.framebuffer_size()    # физические пиксели (GL)
 
         if win_w <= 0 or win_h <= 0 or fb_w <= 0 or fb_h <= 0:
-            print("Invalid window/framebuffer size")  # --- DEBUG ---
             return None
 
         # --- 1) координаты viewport'а в физических пикселях (как при рендере) ---
         px, py, pw, ph = self.viewport_rect_to_pixels(viewport)
         # viewport_rect_to_pixels уже использует framebuffer_size()
 
-        print(f"Viewport pixel rect: px={px}, py={py}, pw={pw}, ph={ph}")  # --- DEBUG ---
-        print(f"Mouse position: x={x}, y={y}")  # --- DEBUG ---
-        print(f"Window size: win_w={win_w}, win_h={win_h}")  # --- DEBUG ---
-        print(f"Framebuffer size: fb_w={fb_w}, fb_h={fb_h}")
 
         # --- 2) переводим координаты мыши из логических в физические ---
         sx = fb_w / float(win_w)
@@ -199,16 +192,13 @@ class Window:
 
         x_phys = x * sx
         y_phys = y * sy
-        print (f"Mouse physical position: x_phys={x_phys}, y_phys={y_phys}")  # --- DEBUG ---
 
         # --- 3) локальные координаты внутри viewport'а ---
         vx = x_phys - px
         vy = y_phys - py
 
-        print(f"Local viewport coords: vx={vx}, vy={vy}")  # --- DEBUG ---
 
         if vx < 0 or vy < 0 or vx >= pw or vy >= ph:
-            print("Click outside viewport bounds")  # --- DEBUG ---
             return None
 
         # --- 4) перевод в координаты FBO (origin снизу-слева) ---
@@ -218,15 +208,12 @@ class Window:
         # Берём FBO с id-картой
         fbo_pool = getattr(viewport, "_fbo_pool", None)
         if not fbo_pool:
-            print("No FBO pool found for viewport")  # --- DEBUG ---
             return None
 
         fb_id = fbo_pool.get("id")
         if fb_id is None:
-            print("No FBO with key 'id' in pool")  # --- DEBUG ---
             return None
 
-        print(f"Reading pixel at: {read_x} {read_y} from framebuffer: {fb_id._fbo}")  # --- DEBUG ---
 
         r, g, b, a = self.graphics.read_pixel(fb_id, read_x, read_y)
         self.handle.bind_window_framebuffer()
@@ -234,19 +221,14 @@ class Window:
         pid = rgb_to_id(r, g, b)
 
         if pid == 0:
-            print("No entity found at pixel")  # --- DEBUG ---
             return None
 
-        print(f"Picked entity ID: {pid}")  # --- DEBUG ---
         entity = self._pick_entity_by_id.get(pid)
-        if entity is None:
-            print("ID not found in _pick_entity_by_id")  # --- DEBUG ---
 
         return entity
 
 
     def _handle_mouse_button_game_mode(self, window, button: MouseButton, action: Action, mods):
-        print(f"Mouse button event: button={button}, action={action}, mods={mods}")  # --- DEBUG ---
         if self.handle is None:
             return
         x, y = self.handle.get_cursor_pos()

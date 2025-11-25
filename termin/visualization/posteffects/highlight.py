@@ -105,11 +105,9 @@ class HighlightEffect(PostEffect):
     def draw(self, gfx, key, color_tex, extra_textures, size):
         w, h = size
         tex_id = extra_textures.get("id")
-        print(f"HighlightEffect: tex_id = {tex_id}")
 
         # id выделенного энтити
         selected_id = self._get_id() or 0
-        print(f"HighlightEffect: selected_id = {selected_id}")
 
         shader = self._get_shader()
         shader.ensure_ready(gfx)
@@ -129,7 +127,6 @@ class HighlightEffect(PostEffect):
             shader.set_uniform_int("u_id", 1)
 
             sel_color = id_to_rgb(selected_id)  # (r,g,b) того же формата, что в IdPass
-            print(f"HighlightEffect: sel_color = {sel_color}")
             shader.set_uniform_vec3("u_selected_color", sel_color)
 
         # размер текселя (для выборки соседей)

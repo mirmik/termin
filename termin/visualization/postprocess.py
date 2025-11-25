@@ -157,7 +157,6 @@ class PostProcessPass(RenderFramePass):
         gfx.set_depth_mask(False)
 
 
-        print(f"PostProcessPass '{self.pass_name}': applying {len(self.effects)} effects extra_textures={list(extra_textures.keys())}")
         try:
             if len(self.effects) == 1:
                 effect = self.effects[0]
