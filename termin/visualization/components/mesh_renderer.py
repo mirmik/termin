@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Optional
 
 import numpy as np
 
@@ -18,34 +18,42 @@ from termin.visualization.inspect import InspectField
 class MeshRenderer(Component):
     """Renderer component that draws MeshDrawable with one or multiple passes."""
 
-    # поле для инспектора: материал как ресурс
     inspect_fields = {
+        "mesh": InspectField(
+            path="mesh",
+            label="Mesh",
+            kind="mesh",  # ресурс типа MeshDrawable
+            setter=lambda obj, value: obj.update_mesh(value),
+        ),
         "material": InspectField(
             path="material",
             label="Material",
-            kind="material",  # спец. kind — инспектор понимает, что это выбор ресурса
+            kind="material",  # ресурс типа Material
+            setter=lambda obj, value: obj.update_material(value),
         ),
     }
 
     def __init__(
         self,
-        mesh: MeshDrawable = None,
-        material: Material = None,
+        mesh: MeshDrawable | Mesh3 | None = None,
+        material: Material | None = None,
         passes=None,
     ):
         super().__init__(enabled=True)
 
+        # допускаем голый Mesh3 для удобства, но внутри всегда MeshDrawable
         if isinstance(mesh, Mesh3):
             mesh = MeshDrawable(mesh)
 
-        self.mesh = mesh
+        self.mesh: Optional[MeshDrawable] = mesh
         self.material = material
 
         if passes is None:
-            # старый режим: один материал → один проход
-            self.passes: list[RenderPass] = [
-                RenderPass(material=material, state=RenderState())
-            ]
+            self.passes: list[RenderPass] = (
+                [RenderPass(material=material, state=RenderState())]
+                if material is not None
+                else []
+            )
         else:
             normalized: list[RenderPass] = []
             for p in passes:
@@ -57,10 +65,21 @@ class MeshRenderer(Component):
                     raise TypeError("passes must contain Material or RenderPass")
             self.passes = normalized
 
+    # --- инспекторные апдейты ---
+
+    def update_mesh(self, mesh: MeshDrawable | None):
+        self.mesh = mesh
+
+    def update_material(self, material: Material | None):
+        self.material = material
+        if len(self.passes) == 1:
+            self.passes[0].material = material
+
+    # --- рендеринг ---
+
     def required_shaders(self):
         if self.material is None:
             return
-
         for p in self.passes:
             yield p.material.shader
 
@@ -81,7 +100,6 @@ class MeshRenderer(Component):
         key = context.context_key
 
         for p in self.passes:
-            # применяем полное состояние прохода
             gfx.apply_render_state(p.state)
 
             mat = p.material
@@ -96,5 +114,4 @@ class MeshRenderer(Component):
 
             self.mesh.draw(context)
 
-        # после меша возвращаемся к дефолтному состоянию
         gfx.apply_render_state(RenderState())
