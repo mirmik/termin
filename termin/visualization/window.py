@@ -31,6 +31,7 @@ class Window:
     def __init__(self, width: int, height: int, title: str, renderer: Renderer, graphics: GraphicsBackend, window_backend: WindowBackend, share=None, **backend_kwargs):
         self.renderer = renderer
         self.graphics = graphics
+        self.generate_default_pipeline = True
         share_handle = None
         if isinstance(share, Window):
             share_handle = share.handle
@@ -100,27 +101,32 @@ class Window:
         camera.viewport = viewport
         self.viewports.append(viewport)
 
-        if viewport.frame_passes == []:
-            # Если никто не добавил пассы, добавим дефолтный main-pass + present
-            from .framegraph import ColorPass, PresentToScreenPass, CanvasPass
+        if self.generate_default_pipeline:
+            # собираем дефолтный пайплайн
+            pipeline = viewport.make_default_pipeline()
+            viewport.set_render_pipeline(pipeline)
 
-            viewport.frame_passes.append(ColorPass(input_res="empty",    output_res="color", pass_name="Color"))
-            viewport.frame_passes.append(IdPass   (input_res="empty_id", output_res="id",    pass_name="Id"))
+        # if viewport.frame_passes == []:
+        #     # Если никто не добавил пассы, добавим дефолтный main-pass + present
+        #     from .framegraph import ColorPass, PresentToScreenPass, CanvasPass
+
+            # viewport.frame_passes.append(ColorPass(input_res="empty",    output_res="color", pass_name="Color"))
+            # viewport.frame_passes.append(IdPass   (input_res="empty_id", output_res="id",    pass_name="Id"))
+            # # viewport.frame_passes.append(PostProcessPass(
+            # #     effects=[HighlightEffect(lambda: editor.selected_entity_id)],
+            # #     input_res="color",
+            # #     output_res="color_pp",
+            # #     pass_name="PostFX",
+            # # ))
             # viewport.frame_passes.append(PostProcessPass(
-            #     effects=[HighlightEffect(lambda: editor.selected_entity_id)],
+            #     effects=[GrayscaleEffect()],
             #     input_res="color",
             #     output_res="color_pp",
             #     pass_name="PostFX",
             # ))
-            viewport.frame_passes.append(PostProcessPass(
-                effects=[GrayscaleEffect()],
-                input_res="color",
-                output_res="color_pp",
-                pass_name="PostFX",
-            ))
             
-            viewport.frame_passes.append(CanvasPass(src="color_pp", dst="color+ui", pass_name="Canvas"))
-            viewport.frame_passes.append(PresentToScreenPass(input_res="color+ui", pass_name="Present"))
+            # viewport.frame_passes.append(CanvasPass(src="color_pp", dst="color+ui", pass_name="Canvas"))
+            # viewport.frame_passes.append(PresentToScreenPass(input_res="color+ui", pass_name="Present"))
 
             # viewport.frame_passes.append(PresentToScreenPass(input_res="id", pass_name="Present"))
             # viewport.frame_passes.append(IdPass(input_res="empty_id", output_res="id", pass_name="IdPass"))

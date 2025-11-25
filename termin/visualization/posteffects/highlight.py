@@ -1,5 +1,86 @@
+# termin/visualization/posteffects/highlight.py
+
+from __future__ import annotations
+
+import numpy as np
+
 from termin.visualization.postprocess import PostEffect
 from termin.visualization.shader import ShaderProgram
+from termin.visualization.picking import id_to_rgb
+
+
+HIGHLIGHT_VERT = """
+#version 330 core
+layout(location=0) in vec2 a_pos;
+layout(location=1) in vec2 a_uv;
+out vec2 v_uv;
+void main() {
+    v_uv = a_uv;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+"""
+
+HIGHLIGHT_FRAG = """
+#version 330 core
+in vec2 v_uv;
+
+uniform sampler2D u_color;        // обычный цветной рендер
+uniform sampler2D u_id;           // id-map
+uniform vec3      u_selected_color; // цвет, соответствующий выбранному id
+uniform vec2      u_texel_size;   // 1.0 / resolution
+uniform vec3      u_outline_color; // цвет рамки
+uniform float     u_enabled;      // 0.0 -> эффект выключен
+
+out vec4 FragColor;
+
+float is_selected(vec3 id_color)
+{
+    // сравниваем с небольшим допуском
+    float d = distance(id_color, u_selected_color);
+    return float(d < 0.001);
+}
+
+void main()
+{
+    vec4 base = texture(u_color, v_uv);
+
+    // если эффект выключен — просто пробрасываем цвет
+    if (u_enabled < 0.5) {
+        FragColor = base;
+        return;
+    }
+
+    vec3 id_center = texture(u_id, v_uv).rgb;
+
+    float center_sel = is_selected(id_center);
+
+    vec2 ts = u_texel_size;
+
+    // смотрим соседей — простой дифференциальный контур
+    float neigh_sel = 0.0;
+    neigh_sel = max(neigh_sel, is_selected(texture(u_id, v_uv + vec2( ts.x,  0.0)).rgb));
+    neigh_sel = max(neigh_sel, is_selected(texture(u_id, v_uv + vec2(-ts.x,  0.0)).rgb));
+    neigh_sel = max(neigh_sel, is_selected(texture(u_id, v_uv + vec2( 0.0,  ts.y)).rgb));
+    neigh_sel = max(neigh_sel, is_selected(texture(u_id, v_uv + vec2( 0.0, -ts.y)).rgb));
+
+    float outline = 0.0;
+
+    // внутренняя граница: центр выбран, а вокруг нет
+    outline = max(outline, center_sel * (1.0 - neigh_sel));
+    // внешняя граница: центр не выбран, а рядом есть выбранные
+    outline = max(outline, neigh_sel * (1.0 - center_sel));
+
+    if (outline > 0.0) {
+        // смешиваем базовый цвет и цвет рамки
+        float k = 0.8; // сила смешивания
+        vec3 col = mix(base.rgb, u_outline_color, k);
+        FragColor = vec4(col, base.a);
+    } else {
+        FragColor = base;
+    }
+}
+"""
+
 
 class HighlightEffect(PostEffect):
     name = "highlight"
@@ -13,43 +94,54 @@ class HighlightEffect(PostEffect):
         self._shader: ShaderProgram | None = None
 
     def required_resources(self) -> set[str]:
-        # Хочется иметь доступ к id-карте
+        # Нужна id-карта с именем "id" (её пишет IdPass)
         return {"id"}
 
     def _get_shader(self) -> ShaderProgram:
         if self._shader is None:
-            from termin.visualization.shader import ShaderProgram
             self._shader = ShaderProgram(HIGHLIGHT_VERT, HIGHLIGHT_FRAG)
         return self._shader
 
     def draw(self, gfx, key, color_tex, extra_textures, size):
         w, h = size
         tex_id = extra_textures.get("id")
+        print(f"HighlightEffect: tex_id = {tex_id}")
 
-        # если id-карты нет — просто пробрасываем color как есть
-        if tex_id is None:
-            # можно сделать через identity-шейдер, если нужно
-            color_tex.bind(0)
-            # ... отрисовка FSQ ...
-            return
-
+        # id выделенного энтити
         selected_id = self._get_id() or 0
+        print(f"HighlightEffect: selected_id = {selected_id}")
 
         shader = self._get_shader()
         shader.ensure_ready(gfx)
         shader.use()
 
-        # биндим цвет и id на разные юниты
+        # основной цвет
         color_tex.bind(0)
-        tex_id.bind(1)
-
         shader.set_uniform_int("u_color", 0)
-        shader.set_uniform_int("u_id", 1)
 
-        # на CPU ты можешь превратить selected_id в цвет через id_to_rgb
-        from .picking import id_to_rgb
-        sel_color = id_to_rgb(selected_id)
-        shader.set_uniform_vec3("u_selected_color", sel_color[:3])
-        # + любые параметры рамочки
+        # включён ли эффект?
+        enabled = (tex_id is not None) and (selected_id > 0)
+        shader.set_uniform_float("u_enabled", 1.0 if enabled else 0.0)
 
+        # если можем — биндим id-map и передаём цвет выбранного id
+        if enabled:
+            tex_id.bind(1)
+            shader.set_uniform_int("u_id", 1)
+
+            sel_color = id_to_rgb(selected_id)  # (r,g,b) того же формата, что в IdPass
+            print(f"HighlightEffect: sel_color = {sel_color}")
+            shader.set_uniform_vec3("u_selected_color", sel_color)
+
+        # размер текселя (для выборки соседей)
+        texel_size = np.array(
+            [1.0 / max(1, w), 1.0 / max(1, h)],
+            dtype=np.float32,
+        )
+        shader.set_uniform_vec2("u_texel_size", texel_size)
+
+        # цвет рамки (желтый, например)
+        outline_color = np.array([1.0, 1.0, 0.1], dtype=np.float32)
+        shader.set_uniform_vec3("u_outline_color", outline_color)
+
+        # остальное состояние depth/blend уже подготовил PostProcessPass
         gfx.draw_ui_textured_quad(key)

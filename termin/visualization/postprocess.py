@@ -75,9 +75,7 @@ class PostProcessPass(RenderFramePass):
         reads: set[str] = {input_res}
         for eff in self.effects:
             # даём шанс и "старым" объектам, если вдруг не наследуются от PostEffect
-            req = getattr(eff, "required_resources", None)
-            if callable(req):
-                reads |= set(req())
+            reads |= set(eff.required_resources())
 
         super().__init__(
             pass_name=pass_name,
@@ -104,10 +102,16 @@ class PostProcessPass(RenderFramePass):
         """
         reads: set[str] = {self.input_res}
         for eff in self.effects:
-            req = getattr(eff, "required_resources", None)
-            if callable(req):
-                reads |= set(req())
+            reads |= set(eff.required_resources())
         self.reads = reads
+
+    def add_effect(self, effect: PostEffect):
+        """
+        Добавляет эффект в конец цепочки.
+        После вызова нужно вызвать rebuild_reads().
+        """
+        self.effects.append(effect)
+        self.rebuild_reads()
 
     def execute(self, ctx: "FrameContext"):
         gfx      = ctx.graphics
@@ -152,6 +156,8 @@ class PostProcessPass(RenderFramePass):
         gfx.set_depth_test(False)
         gfx.set_depth_mask(False)
 
+
+        print(f"PostProcessPass '{self.pass_name}': applying {len(self.effects)} effects extra_textures={list(extra_textures.keys())}")
         try:
             if len(self.effects) == 1:
                 effect = self.effects[0]

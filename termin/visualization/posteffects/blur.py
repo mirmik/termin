@@ -1,11 +1,21 @@
 import numpy as np
 from ..shader import ShaderProgram
+from ..postprocess import PostEffect
 
 # ================================================================
 #          TWO-PASS GAUSSIAN BLUR (H + V)
 # ================================================================
 
-GAUSS_VERT = GRAY_VERT  # полностью годится
+GAUSS_VERT = """
+#version 330 core
+layout(location=0) in vec2 a_pos;
+layout(location=1) in vec2 a_uv;
+out vec2 v_uv;
+void main() {
+    v_uv = a_uv;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+"""
 
 GAUSS_FRAG = """
 #version 330 core
@@ -36,41 +46,27 @@ void main() {
 }
 """
 
-class GaussianBlurPass:
+class GaussianBlurPass(PostEffect):
     """Один проход: горизонтальный или вертикальный."""
 
     def __init__(self, direction):
         self.shader = ShaderProgram(GAUSS_VERT, GAUSS_FRAG)
         self.direction = np.array(direction, dtype=np.float32)
 
-    def draw(self, graphics, ctx, tex, viewport_size):
-        w, h = viewport_size
+    def draw(self, gfx, key, color_tex, extra_textures, size):
+        w, h = size
         texel_size = np.array([1.0/max(1,w), 1.0/max(1,h)], dtype=np.float32)
 
-        self.shader.ensure_ready(graphics)
+        self.shader.ensure_ready(gfx)
         self.shader.use()
 
-        tex.bind(0)
+        color_tex.bind(0)
         self.shader.set_uniform_int("u_texture", 0)
         self.shader.set_uniform_auto("u_texel_size", texel_size)
         self.shader.set_uniform_auto("u_direction", self.direction)
 
-        graphics.set_depth_test(False)
-        graphics.set_cull_face(False)
-        graphics.set_blend(False)
+        gfx.set_depth_test(False)
+        gfx.set_cull_face(False)
+        gfx.set_blend(False)
 
-        graphics.draw_ui_textured_quad(ctx)
-
-
-class GaussianBlurPostProcess:
-    """Двухпроходный blur (H + V)."""
-
-    def __init__(self):
-        self.pass_h = GaussianBlurPass((1.0, 0.0))
-        self.pass_v = GaussianBlurPass((0.0, 1.0))
-
-    def draw(self, graphics, ctx, tex, viewport_size):
-        # тут вызывается РОВНО ОДИН проход;
-        # второй будет выполняться в цепочке постпроцессов
-        self.shader = None  # не используется
-        raise RuntimeError("Этот класс – контейнер двух стадий, он не вызывается напрямую.")
+        gfx.draw_ui_textured_quad(key)

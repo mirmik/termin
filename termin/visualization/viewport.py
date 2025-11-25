@@ -11,7 +11,6 @@ class Viewport:
     window: "Window"
     rect: Tuple[float, float, float, float] # x, y, width, height in normalized coords (0.0:1.0)
     canvas: Optional["Canvas"] = None
-    postprocess: list["PostProcessEffect"] = field(default_factory=list)
     frame_passes: list["FramePass"] = field(default_factory=list)
 
 
@@ -22,5 +21,52 @@ class Viewport:
         # вызываем камеру
         return self.camera.screen_point_to_ray(x, y, viewport_rect=rect)
 
-    def add_postprocess(self, effect: "PostProcessEffect"):
-        self.postprocess.append(effect)
+    def set_render_pipeline(self, passes: list["FramePass"]):
+        """
+        Устанавливает конвейер рендера для этого вьюпорта.
+
+        passes – список FramePass.
+        """
+        self.frame_passes = passes
+
+    def find_render_pass(self, pass_name: str) -> Optional["FramePass"]:
+        """
+        Ищет в конвейере рендера пасс с заданным именем.
+
+        Возвращает FramePass или None.
+        """
+        for p in self.frame_passes:
+            if p.pass_name == pass_name:
+                return p
+        return None
+
+    # -------------------------------------------------------------
+    #     ДЕФОЛТНЫЙ ПАЙПЛАЙН ДЛЯ ВЬЮПОРТА
+    # -------------------------------------------------------------
+    @staticmethod
+    def make_default_pipeline() -> list["FramePass"]:
+        """
+        Собирает дефолтный конвейер рендера для этого вьюпорта.
+        """
+        from .framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass
+        from .postprocess import PostProcessPass
+
+        passes: List["FramePass"] = [
+            ColorPass(input_res="empty", output_res="color", pass_name="Color"),
+            PostProcessPass(
+                effects=[],  # можно заранее что-то положить сюда
+                input_res="color",
+                output_res="color_pp",
+                pass_name="PostFX",
+            ),
+            CanvasPass(
+                src="color_pp",
+                dst="color+ui",
+                pass_name="Canvas",
+            ),
+            PresentToScreenPass(
+                input_res="color+ui",
+                pass_name="Present",
+            )
+        ]
+        return passes

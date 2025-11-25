@@ -6,11 +6,13 @@ from PyQt5.QtCore import Qt
 from termin.visualization.entity import Entity
 from termin.kinematic.transform import Transform3
 from editor_tree import SceneTreeModel
+from termin.visualization.picking import id_to_rgb
 
 
 class EditorWindow(QMainWindow):
     def __init__(self, world, scene, camera):
         super().__init__()
+        self.selected_entity_id = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -72,13 +74,10 @@ class EditorWindow(QMainWindow):
         self._pending_pick = None
 
         picked_ent = window.pick_entity_at(x, y, viewport)
-
         if picked_ent is not None:
-            print(f"Picked entity: {picked_ent.name}")
-            # тут можно обновить инспектор:
-            # self.inspectorLabel.setText(f"Entity: {picked_ent.name}")
+            self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(picked_ent)
         else:
-            print("No entity picked")
+            self.selected_entity_id = 0
 
     # ----------------------------------------------------
     def _init_viewport(self):
@@ -91,7 +90,7 @@ class EditorWindow(QMainWindow):
             title="viewport",
             parent=self.viewportContainer
         )
-        self.viewport_window.add_viewport(self.scene, self.camera)
+        self.viewport = self.viewport_window.add_viewport(self.scene, self.camera)
         self.viewport_window.set_world_mode("editor")
         #self.viewport_window.set_selection_handler(self.on_entity_picked)
         
@@ -103,6 +102,8 @@ class EditorWindow(QMainWindow):
         gl_widget.setMinimumSize(50, 50)
 
         layout.addWidget(gl_widget)
+
+        self.viewport.set_render_pipeline(self.make_pipeline())
 
     # ----------------------------------------------------
     def on_tree_click(self, index):
@@ -118,3 +119,41 @@ class EditorWindow(QMainWindow):
             )
         else:
             self.inspectorLabel.setText(str(obj))
+
+
+    def make_pipeline(
+        self,
+    ) -> list["FramePass"]:
+        """
+        Собирает конвейер рендера.
+        """
+        from termin.visualization.framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass
+        from termin.visualization.postprocess import PostProcessPass
+        from termin.visualization.posteffects.highlight import HighlightEffect
+
+
+        postprocess = PostProcessPass(
+                effects=[],  # можно заранее что-то положить сюда
+                input_res="color",
+                output_res="color_pp",
+                pass_name="PostFX",
+            )
+
+        passes: List["FramePass"] = [
+            ColorPass(input_res="empty", output_res="color", pass_name="Color"),
+            IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
+            postprocess,
+            CanvasPass(
+                src="color_pp",
+                dst="color+ui",
+                pass_name="Canvas",
+            ),
+            PresentToScreenPass(
+                input_res="color+ui",
+                pass_name="Present",
+            )
+        ]
+
+        postprocess.add_effect(HighlightEffect(lambda: self.selected_entity_id))
+
+        return passes
