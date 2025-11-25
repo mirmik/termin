@@ -20,7 +20,10 @@ from .viewport import Viewport
 from .ui.canvas import Canvas
 from .picking import rgb_to_id
 from .components import MeshRenderer
-from .framegraph import FrameGraph, FrameContext, RenderFramePass, PostProcessPass, IdPass
+from .framegraph import FrameGraph, FrameContext, RenderFramePass, IdPass
+from .postprocess import PostProcessPass
+from .posteffects.highlight import HighlightEffect
+from .posteffects.gray import GrayscaleEffect
 
 class Window:
     """Manages a platform window and a set of viewports."""
@@ -101,11 +104,23 @@ class Window:
             # Если никто не добавил пассы, добавим дефолтный main-pass + present
             from .framegraph import ColorPass, PresentToScreenPass, CanvasPass
 
-            viewport.frame_passes.append(ColorPass(input_res="empty", output_res="color", pass_name="MainPass"))
-            viewport.frame_passes.append(PostProcessPass(effects=viewport.postprocess, input_res="color", output_res="color_pp", pass_name="MainPass"))
+            viewport.frame_passes.append(ColorPass(input_res="empty",    output_res="color", pass_name="Color"))
+            viewport.frame_passes.append(IdPass   (input_res="empty_id", output_res="id",    pass_name="Id"))
+            # viewport.frame_passes.append(PostProcessPass(
+            #     effects=[HighlightEffect(lambda: editor.selected_entity_id)],
+            #     input_res="color",
+            #     output_res="color_pp",
+            #     pass_name="PostFX",
+            # ))
+            viewport.frame_passes.append(PostProcessPass(
+                effects=[GrayscaleEffect()],
+                input_res="color",
+                output_res="color_pp",
+                pass_name="PostFX",
+            ))
+            
             viewport.frame_passes.append(CanvasPass(src="color_pp", dst="color+ui", pass_name="Canvas"))
             viewport.frame_passes.append(PresentToScreenPass(input_res="color+ui", pass_name="Present"))
-            viewport.frame_passes.append(IdPass(input_res="empty_id", output_res="id", pass_name="IdPass"))
 
             # viewport.frame_passes.append(PresentToScreenPass(input_res="id", pass_name="Present"))
             # viewport.frame_passes.append(IdPass(input_res="empty_id", output_res="id", pass_name="IdPass"))
