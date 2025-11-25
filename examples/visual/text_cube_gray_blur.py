@@ -246,11 +246,9 @@ def main():
     blur = GaussianBlurPostProcess()
 
     # цепочка: Grayscale → Blur Horizontal → Blur Vertical
-    vp.postprocess = [
-        GrayscalePostProcess(),
-        blur.pass_h,
-        blur.pass_v,
-    ]
+    vp.add_postprocess(GrayscalePostProcess())
+    vp.add_postprocess(blur.pass_h)
+    vp.add_postprocess(blur.pass_v)
 
     world.run()
 

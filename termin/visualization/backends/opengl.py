@@ -296,7 +296,7 @@ class OpenGLGraphicsBackend(GraphicsBackend):
     def read_pixel(self, framebuffer, x: int, y: int):
         # привязываем FBO, из которого читаем
         self.bind_framebuffer(framebuffer)
-        print("Reading pixel at:", x, y, "from framebuffer:", framebuffer._fbo)  # --- DEBUG ---
+        #print("Reading pixel at:", x, y, "from framebuffer:", framebuffer._fbo)  # --- DEBUG ---
 
         data = GL.glReadPixels(x, y, 1, 1, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE)
         # data = 4 байта

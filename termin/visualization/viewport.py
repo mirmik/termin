@@ -12,6 +12,7 @@ class Viewport:
     rect: Tuple[float, float, float, float] # x, y, width, height in normalized coords (0.0:1.0)
     canvas: Optional["Canvas"] = None
     postprocess: list["PostProcessEffect"] = field(default_factory=list)
+    frame_passes: list["FramePass"] = field(default_factory=list)
 
 
     def screen_point_to_ray(self, x, y):
@@ -20,3 +21,6 @@ class Viewport:
 
         # вызываем камеру
         return self.camera.screen_point_to_ray(x, y, viewport_rect=rect)
+
+    def add_postprocess(self, effect: "PostProcessEffect"):
+        self.postprocess.append(effect)

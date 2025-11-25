@@ -16,6 +16,9 @@ termin/visualization/materials/pick_material.py
 termin/visualization/renderer.py
 termin/visualization/viewport.py
 termin/visualization/window.py
+termin/visualization/framegraph.py
+termin/visualization/backends/glfw.py
+
 
 scat.txt
 

@@ -220,6 +220,7 @@ class OrbitCameraController(CameraController):
         #print(f"!!!!!!!!!!!!Mouse button event: button={button}, action={action}, mods={mods}")  # --- DEBUG ---
         if viewport != self.camera_component.viewport:
             return
+
         state = self._state(viewport)
         if button == MouseButton.MIDDLE:
             state["orbit"] = action == Action.PRESS
@@ -229,7 +230,6 @@ class OrbitCameraController(CameraController):
             state["last"] = None
 
     def on_mouse_move(self, viewport, x: float, y: float, dx: float, dy: float):
-        #print(f"!!!!!!!!!!!!Mouse move event: x={x}, y={y}, dx={dx}, dy={dy}")  # --- DEBUG ---
         if self._prevent_moving:
             return
         if viewport != self.camera_component.viewport:

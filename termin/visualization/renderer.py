@@ -85,7 +85,6 @@ class Renderer:
             color = id_to_rgb(pid)
             model = ent.model_matrix()
 
-            print("Pick color of entity:", color)  # --- DEBUG ---
             self.pick_material.apply_for_pick(
                 model=model,
                 view=view,
