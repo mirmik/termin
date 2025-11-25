@@ -95,4 +95,5 @@ class Renderer:
             )
 
             # берём меш прямо из MeshRenderer, не трогая его passes
-            mr.mesh.draw(ctx)
+            if mr.mesh is not None:
+                mr.mesh.draw(ctx)

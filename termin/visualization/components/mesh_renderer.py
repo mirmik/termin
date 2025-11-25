@@ -20,7 +20,10 @@ from termin.visualization.renderpass import RenderPass, RenderState
 class MeshRenderer(Component):
     """Renderer component that draws MeshDrawable with one or multiple passes."""
 
-    def __init__(self, mesh: MeshDrawable, material: Material, passes=None):
+    def __init__(self, 
+            mesh: MeshDrawable = None, 
+            material: Material = None, 
+            passes=None):
         super().__init__(enabled=True)
 
         if isinstance(mesh, Mesh3):
@@ -46,11 +49,20 @@ class MeshRenderer(Component):
             self.passes = normalized
 
     def required_shaders(self):
+        if self.material is None:
+            return
+
         for p in self.passes:
             yield p.material.shader
 
     def draw(self, context: RenderContext):
         if self.entity is None:
+            return
+
+        if self.mesh is None:
+            return
+        
+        if self.material is None:
             return
 
         model = self.entity.model_matrix()

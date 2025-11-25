@@ -15,7 +15,10 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QCheckBox,
     QLineEdit,
+    QMenu,
+    QAction,
 )
+
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from termin.kinematic.transform import Transform3
@@ -159,8 +162,10 @@ class TransformInspector(QWidget):
 
 class ComponentsPanel(QWidget):
     """
-    Просто список компонентов entity.
+    Просто список компонентов entity + контекстное меню (добавить/удалить).
     """
+    components_changed = pyqtSignal()
+
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
 
@@ -175,6 +180,11 @@ class ComponentsPanel(QWidget):
         layout.addWidget(self._list)
 
         self._entity: Optional[Entity] = None
+        self._component_library: list[tuple[str, type[Component]]] = []
+
+        # контекстное меню по правому клику
+        self._list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._list.customContextMenuRequested.connect(self._on_context_menu)
 
     def set_entity(self, ent: Optional[Entity]):
         self._entity = ent
@@ -186,6 +196,12 @@ class ComponentsPanel(QWidget):
             item = QListWidgetItem(name)
             self._list.addItem(item)
 
+    def set_component_library(self, library: list[tuple[str, type[Component]]]):
+        """
+        library: список (label, ComponentClass), которые можно добавить.
+        """
+        self._component_library = list(library)
+
     def current_component(self) -> Optional[Component]:
         if self._entity is None:
             return None
@@ -193,6 +209,69 @@ class ComponentsPanel(QWidget):
         if row < 0 or row >= len(self._entity.components):
             return None
         return self._entity.components[row]
+
+    # ---------------------------------------------------------
+    #   Контекстное меню
+    # ---------------------------------------------------------
+    def _on_context_menu(self, pos):
+        if self._entity is None:
+            return
+
+        global_pos = self._list.mapToGlobal(pos)
+        menu = QMenu(self)
+
+        # удалить компонент
+        comp = self.current_component()
+        remove_action = QAction("Удалить компонент", self)
+        remove_action.setEnabled(comp is not None)
+        remove_action.triggered.connect(self._remove_current_component)
+        menu.addAction(remove_action)
+
+        # добавить компонент
+        if self._component_library:
+            add_menu = menu.addMenu("Добавить компонент")
+            for label, cls in self._component_library:
+                act = QAction(label, self)
+                # нужно аккуратно захватить cls в замыкание
+                act.triggered.connect(
+                    lambda _checked=False, c=cls: self._add_component(c)
+                )
+                add_menu.addAction(act)
+
+        menu.exec_(global_pos)
+
+    def _remove_current_component(self):
+        if self._entity is None:
+            return
+        comp = self.current_component()
+        if comp is None:
+            return
+
+        # удаляем из entity
+        self._entity.remove_component(comp)
+        # обновляем список
+        self.set_entity(self._entity)
+        self.components_changed.emit()
+
+    def _add_component(self, comp_cls: type[Component]):
+        if self._entity is None:
+            return
+        try:
+            comp = comp_cls()  # предполагаем, что есть конструктор без аргументов
+        except TypeError as e:
+            print(f"Не удалось создать компонент {comp_cls}: {e}")
+            return
+
+        self._entity.add_component(comp)
+        self.set_entity(self._entity)
+
+        # выделяем добавленный компонент
+        row = len(self._entity.components) - 1
+        if row >= 0:
+            self._list.setCurrentRow(row)
+
+        self.components_changed.emit()
+
 
 
 class ComponentInspectorPanel(QWidget):
@@ -375,7 +454,7 @@ class EntityInspector(QWidget):
         layout.addWidget(self._component_inspector)
 
         self._entity: Optional[Entity] = None
-        
+
 
         self._transform_inspector.transform_changed.connect(
             self.transform_changed
@@ -388,6 +467,35 @@ class EntityInspector(QWidget):
         self._component_inspector.component_changed.connect(
             self._on_component_changed
         )
+
+        self._components_panel.components_changed.connect(
+            self._on_components_changed
+        )
+
+    def _on_components_changed(self):
+        """
+        Список компонентов изменился (добавили/удалили).
+        Обновляем список и инспектор, пробрасываем наружу сигнал component_changed.
+        """
+        ent = self._entity
+        self._components_panel.set_entity(ent)
+
+        if ent is not None:
+            row = self._components_panel._list.currentRow()
+            if 0 <= row < len(ent.components):
+                self._component_inspector.set_component(ent.components[row])
+            else:
+                self._component_inspector.set_component(None)
+        else:
+            self._component_inspector.set_component(None)
+
+        self.component_changed.emit()
+        
+    def set_component_library(self, library: list[tuple[str, type[Component]]]):
+        """
+        Передаём внутрь список типов компонентов, доступных для добавления.
+        """
+        self._components_panel.set_component_library(library)
 
     def _on_component_changed(self):
         self.component_changed.emit()

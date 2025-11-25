@@ -4,6 +4,8 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel
 from PyQt5.QtCore import Qt
 
+from termin.visualization.camera import PerspectiveCameraComponent, OrbitCameraController
+from termin.visualization.components.mesh_renderer import MeshRenderer
 from termin.visualization.entity import Entity
 from termin.kinematic.transform import Transform3
 from editor_tree import SceneTreeModel
@@ -47,7 +49,6 @@ class EditorWindow(QMainWindow):
         self._tree_model = SceneTreeModel(scene)
         self._setup_tree_model()
 
-
         self.sceneTree.setModel(self._tree_model)
         self.sceneTree.expandAll()
         self.sceneTree.clicked.connect(self.on_tree_click)
@@ -55,6 +56,13 @@ class EditorWindow(QMainWindow):
         # --- Inspector widget ---
         self.inspector = EntityInspector(self.inspectorContainer)
         self._init_inspector_widget()
+
+        component_library = [
+            ("PerspectiveCameraComponent", PerspectiveCameraComponent),
+            ("OrbitCameraController",      OrbitCameraController),
+            ("MeshRenderer",               MeshRenderer),
+        ]
+        self.inspector.set_component_library(component_library)
 
         self.inspector.transform_changed.connect(self._on_inspector_transform_changed)
         self.inspector.component_changed.connect(self._on_inspector_component_changed)
