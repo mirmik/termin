@@ -15,64 +15,87 @@ from termin.visualization.renderpass import RenderState, RenderPass
 from termin.visualization.inspect import InspectField
 
 
+from termin.visualization.material import Material
+from termin.visualization.renderpass import RenderState, RenderPass
+
 class MeshRenderer(Component):
     """Renderer component that draws MeshDrawable with one or multiple passes."""
 
     inspect_fields = {
+        # mesh-инспект мы уже добавляли раньше
         "mesh": InspectField(
             path="mesh",
             label="Mesh",
-            kind="mesh",  # ресурс типа MeshDrawable
-            # setter=lambda obj, value: obj.update_mesh(value),
+            kind="mesh",
+            # можно прямое присваивание, можно отдельный метод
+            setter=lambda obj, value: obj.update_mesh(value),
         ),
         "material": InspectField(
             path="material",
             label="Material",
-            kind="material",  # ресурс типа Material
+            kind="material",
             setter=lambda obj, value: obj.update_material(value),
         ),
     }
 
     def __init__(
         self,
-        mesh: MeshDrawable | Mesh3 | None = None,
+        mesh: MeshDrawable | None = None,
         material: Material | None = None,
-        passes=None,
+        passes: list[RenderPass] | None = None,
     ):
         super().__init__(enabled=True)
 
-        # допускаем голый Mesh3 для удобства, но внутри всегда MeshDrawable
         if isinstance(mesh, Mesh3):
             mesh = MeshDrawable(mesh)
 
-        self.mesh: Optional[MeshDrawable] = mesh
+        self.mesh = mesh
         self.material = material
 
-        if passes is None:
-            self.passes: list[RenderPass] = (
-                [RenderPass(material=material, state=RenderState())]
-                if material is not None
-                else []
-            )
-        else:
-            normalized: list[RenderPass] = []
+        self.passes: list[RenderPass] = []
+
+        if passes is not None:
+            # нормализация списка переданных проходов
             for p in passes:
                 if isinstance(p, RenderPass):
-                    normalized.append(p)
+                    self.passes.append(p)
                 elif isinstance(p, Material):
-                    normalized.append(RenderPass(material=p, state=RenderState()))
+                    self.passes.append(RenderPass(material=p, state=RenderState()))
                 else:
                     raise TypeError("passes must contain Material or RenderPass")
-            self.passes = normalized
+        elif material is not None:
+            # если материал задан в конструкторе — как раньше: один проход
+            self.passes.append(RenderPass(material=material, state=RenderState()))
 
-    # --- инспекторные апдейты ---
-
-    # def update_mesh(self, mesh: MeshDrawable | None):
-    #     self.mesh = mesh
+    def update_mesh(self, mesh: MeshDrawable | None):
+        self.mesh = mesh
 
     def update_material(self, material: Material | None):
+        """
+        Вызывается инспектором при смене материала (и конструктором — косвенно).
+        Гарантируем, что если появился материал, будет хотя бы один RenderPass.
+        """
         self.material = material
-        if len(self.passes) == 1:
+
+        if material is None:
+            # Можно:
+            #  - либо очищать материал у всех проходов,
+            #  - либо вообще ничего не делать (но draw тогда должен уметь жить с этим).
+            # Я бы для простоты просто обнулил материал в одиночном проходе.
+            if len(self.passes) == 1:
+                self.passes[0].material = None
+            return
+
+        if not self.passes:
+            # Новый компонент, до этого не было проходов —
+            # создаём дефолтный.
+            self.passes.append(RenderPass(material=material, state=RenderState()))
+        elif len(self.passes) == 1:
+            # старый режим: один проход → просто обновляем материал
+            self.passes[0].material = material
+        else:
+            # мультипасс — решай сам, как надо делать:
+            # можно менять только первый проход, можно все, можно вообще не трогать.
             self.passes[0].material = material
 
     # --- рендеринг ---

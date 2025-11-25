@@ -19,6 +19,7 @@ termin/visualization/viewport.py
 termin/visualization/window.py
 termin/visualization/framegraph.py
 termin/visualization/backends/glfw.py
+termin/visualization/resources.py
 
 
 scat.txt

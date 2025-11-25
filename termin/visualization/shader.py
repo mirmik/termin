@@ -39,25 +39,57 @@ class ShaderProgram:
         self._handle = None
         self._backend = None
 
-    
-    def default_shader() -> ShaderProgram:
+    @staticmethod
+    def default_shader() -> "ShaderProgram":
         vert = """#version 330 core
-        layout(location = 0) in vec3 a_pos;
-        uniform mat4 u_model;
-        uniform mat4 u_view;
-        uniform mat4 u_projection;
-        void main() {
-            gl_Position = u_projection * u_view * u_model * vec4(a_pos,1.0);
-        }
-        """
+
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+out vec3 v_normal;     // n_world = (M^{-1})^T * n_model
+out vec3 v_world_pos;  // p_world = M * p_model
+
+void main() {
+    vec4 world = u_model * vec4(a_position, 1.0);
+    v_world_pos = world.xyz;
+    v_normal = mat3(transpose(inverse(u_model))) * a_normal;
+
+    gl_Position = u_projection * u_view * world;
+}
+"""
 
         frag = """#version 330 core
-        out vec4 FragColor;
-        uniform vec4 u_color;
-        void main() {
-            FragColor = u_color;
-        }
-        """
+
+in vec3 v_normal;
+in vec3 v_world_pos;
+
+uniform vec4 u_color;        // base material color (RGBA)
+uniform vec3 u_light_dir;    // direction from light to object (world space)
+uniform vec3 u_light_color;  // light tint
+
+out vec4 FragColor;
+
+void main() {
+    vec3 N = normalize(v_normal);
+    vec3 L = normalize(-u_light_dir);
+
+    // Lambertian diffuse term: I_diffuse = max(dot(N, L), 0)
+    float ndotl = max(dot(N, L), 0.0);
+
+    const float ambient_strength = 0.2;
+    const float diffuse_strength = 0.8;
+
+    vec3 ambient = ambient_strength * u_color.rgb;
+    vec3 diffuse = diffuse_strength * ndotl * u_color.rgb;
+
+    vec3 color = (ambient + diffuse) * u_light_color;
+    FragColor = vec4(color, u_color.a);
+}
+"""
 
         return ShaderProgram(vertex_source=vert, fragment_source=frag)
 
