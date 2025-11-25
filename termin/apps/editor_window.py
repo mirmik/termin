@@ -57,10 +57,21 @@ class EditorWindow(QMainWindow):
         self._init_inspector_widget()
 
         self.inspector.transform_changed.connect(self._on_inspector_transform_changed)
-
+        self.inspector.component_changed.connect(self._on_inspector_component_changed)
 
         # --- Render viewport ---
         self._init_viewport()
+
+    def _on_inspector_transform_changed(self):
+        # трансформ поменялся — нужно перерисовать вьюпорт
+        if self.viewport_window is not None:
+            self.viewport_window._request_update()
+
+    def _on_inspector_component_changed(self):
+        # параметры компонента поменялись — тоже перерисуем
+        if self.viewport_window is not None:
+            self.viewport_window._request_update()
+
 
     def on_tree_context_menu(self, pos: QPoint):
         """

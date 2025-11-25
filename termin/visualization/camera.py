@@ -13,6 +13,8 @@ from termin.geombase.pose3 import Pose3
 from .entity import Component, InputComponent
 from .backends.base import Action, MouseButton
 
+from termin.visualization.inspect import InspectField, inspect
+
 
 class CameraComponent(Component):
     """Component that exposes view/projection matrices based on entity pose."""
@@ -79,6 +81,33 @@ class CameraComponent(Component):
 
 
 class PerspectiveCameraComponent(CameraComponent):
+    # поля для инспектора (fov в градусах, near/far как есть)
+    inspect_fields = {
+        "fov_deg": InspectField(
+            label="FOV (deg)",
+            kind="float",
+            min=5.0,
+            max=170.0,
+            step=1.0,
+            getter=lambda obj: math.degrees(obj.fov_y),
+            setter=lambda obj, value: setattr(obj, "fov_y", math.radians(float(value))),
+        ),
+        "near": InspectField(
+            path="near",
+            label="Near clip",
+            kind="float",
+            min=0.001,
+            step=0.01,
+        ),
+        "far": InspectField(
+            path="far",
+            label="Far clip",
+            kind="float",
+            min=0.01,
+            step=0.1,
+        ),
+    }
+
     def __init__(self, fov_y_degrees: float = 60.0, aspect: float = 1.0, near: float = 0.1, far: float = 100.0):
         super().__init__(near=near, far=far)
         self.fov_y = math.radians(fov_y_degrees)
@@ -143,6 +172,18 @@ class CameraController(InputComponent):
 class OrbitCameraController(CameraController):
     """Orbit controller similar to common DCC tools."""
 
+    # Эти поля можно редактировать прямо в инспекторе
+    radius = inspect(
+        5.0, label="Radius", kind="float",
+        min=0.1, max=100.0, step=0.1,
+    )
+    # target – vec3, редактируем как три спинбокса
+    target = inspect(
+        np.array([0.0, 0.0, 0.0], dtype=np.float32),
+        label="Target", kind="vec3",
+        setter=lambda obj, value: obj.inspect_target_update(value)
+    )
+
     def __init__(
         self,
         target: Optional[np.ndarray] = None,
@@ -165,6 +206,10 @@ class OrbitCameraController(CameraController):
         self._zoom_speed = 0.5
         self._states: Dict[int, dict] = {}
         self._prevent_moving = prevent_moving
+
+    def inspect_target_update(self, val):
+        self.target = val
+        self._update_pose()
 
     def start(self, scene):
         if self.entity is None:

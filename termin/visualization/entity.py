@@ -18,6 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .shader import ShaderProgram
 
 from termin.visualization.serialization import COMPONENT_REGISTRY
+from termin.visualization.inspect import InspectField
 
 
 @dataclass
@@ -41,6 +42,13 @@ class Component:
         self.enabled = enabled
         self.entity: Optional["Entity"] = None
         self._started = False
+
+    # Если None → компонент не сериализуется
+    serializable_fields = None
+
+    # Поля, которые инспектор может редактировать.
+    # Заполняется либо руками, либо через дескриптор InspectAttr.
+    inspect_fields: dict[str, InspectField] | None = None
 
     def required_shaders(self) -> Iterable["ShaderProgram"]:
         """Return shaders that must be compiled before rendering."""

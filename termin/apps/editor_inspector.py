@@ -13,45 +13,15 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QListWidget,
     QListWidgetItem,
+    QCheckBox,
+    QLineEdit,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtCore import pyqtSignal
-
 from termin.kinematic.transform import Transform3
-from termin.visualization.entity import Entity
+from termin.visualization.entity import Entity, Component
 from termin.geombase.pose3 import Pose3
-
-
-class ComponentsPanel(QWidget):
-    """
-    Простая панель компонентов:
-    снизу под трансформом показывает список Component'ов у Entity.
-    """
-    def __init__(self, parent: Optional[QWidget] = None):
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 8, 0, 0)
-        layout.setSpacing(4)
-
-        self._title = QLabel("Components")
-        layout.addWidget(self._title)
-
-        self._list = QListWidget()
-        layout.addWidget(self._list)
-
-        self._entity: Optional[Entity] = None
-
-    def set_entity(self, ent: Optional[Entity]):
-        self._entity = ent
-        self._list.clear()
-        if ent is None:
-            return
-        for comp in ent.components:
-            name = comp.__class__.__name__
-            item = QListWidgetItem(name)
-            self._list.addItem(item)
+from termin.visualization.inspect import InspectField
 
 
 class TransformInspector(QWidget):
@@ -62,7 +32,7 @@ class TransformInspector(QWidget):
     - scale (x, y, z) — опционально, если Transform3 это поддерживает
     """
 
-    transform_changed = pyqtSignal()   # <-- вот он
+    transform_changed = pyqtSignal()  # сообщаем наверх, что трансформ поменяли
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -91,7 +61,7 @@ class TransformInspector(QWidget):
         pos_row, self._pos = make_vec3_row()
         layout.addRow(QLabel("Position"), pos_row)
 
-        # rotation (Euler degrees, UX только; математику подставишь свою)
+        # rotation (Euler degrees – заглушка)
         rot_row, self._rot = make_vec3_row()
         layout.addRow(QLabel("Rotation (deg)"), rot_row)
 
@@ -155,17 +125,12 @@ class TransformInspector(QWidget):
             self._pos[2].setValue(float(pz))
 
             # --- rotation ---
-            # Здесь всё зависит от того, как ты хранишь ориентацию.
-            # Допустим, у Pose3 есть ang – кватернион.
-            # Ниже – заглушка: ставим 0,0,0.
-            # Ты можешь сюда вставить свои функции "кватернион → эйлеры".
+            # Здесь можно потом использовать Pose3.to_euler()
             self._rot[0].setValue(0.0)
             self._rot[1].setValue(0.0)
             self._rot[2].setValue(0.0)
 
             # --- scale ---
-            # Если в Transform3 есть масштаб – подставь сюда:
-            # s = getattr(self._transform, "scale", np.array([1.0, 1.0, 1.0]))
             s = np.array([1.0, 1.0, 1.0], dtype=float)
             self._scale[0].setValue(float(s[0]))
             self._scale[1].setValue(float(s[1]))
@@ -180,7 +145,6 @@ class TransformInspector(QWidget):
         if self._transform is None:
             return
 
-        # применяем только позицию (минимальный рабочий вариант)
         pose: Pose3 = self._transform.global_pose()
 
         px = self._pos[0].value()
@@ -188,35 +152,211 @@ class TransformInspector(QWidget):
         pz = self._pos[2].value()
         new_lin = np.array([px, py, pz], dtype=float)
 
-        # rotation и scale пока не трогаем, чтобы не городить конверсии
-        ax = self._rot[0].value()
-        ay = self._rot[1].value()
-        az = self._rot[2].value()
-
-        #euler zyx to quaternion
-        axis = np.array([ax, ay, az])
-        angle_deg = np.linalg.norm(axis)
-        axis_normalized = axis / angle_deg if angle_deg != 0 else np.array([0.0, 0.0, 1.0])
-        angle_rad = np.deg2rad(angle_deg)
-        qw = np.cos(angle_rad / 2)
-        qx = axis_normalized[0] * np.sin(angle_rad / 2)
-        qy = axis_normalized[1] * np.sin(angle_rad / 2)
-        qz = axis_normalized[2] * np.sin(angle_rad / 2)
-        new_ang = np.array([qw, qx, qy, qz], dtype=float)   
-
-        # scale пока пропускаем         
-
-        pose = Pose3(lin=new_lin, ang=new_ang)
+        pose = Pose3(lin=new_lin, ang=pose.ang)
         self._transform.relocate(pose)
-
         self.transform_changed.emit()
+
+
+class ComponentsPanel(QWidget):
+    """
+    Просто список компонентов entity.
+    """
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 8, 0, 0)
+        layout.setSpacing(4)
+
+        self._title = QLabel("Components")
+        layout.addWidget(self._title)
+
+        self._list = QListWidget()
+        layout.addWidget(self._list)
+
+        self._entity: Optional[Entity] = None
+
+    def set_entity(self, ent: Optional[Entity]):
+        self._entity = ent
+        self._list.clear()
+        if ent is None:
+            return
+        for comp in ent.components:
+            name = comp.__class__.__name__
+            item = QListWidgetItem(name)
+            self._list.addItem(item)
+
+    def current_component(self) -> Optional[Component]:
+        if self._entity is None:
+            return None
+        row = self._list.currentRow()
+        if row < 0 or row >= len(self._entity.components):
+            return None
+        return self._entity.components[row]
+
+
+class ComponentInspectorPanel(QWidget):
+    """
+    Рисует форму для одного компонента на основе component.inspect_fields.
+    """
+
+    component_changed = pyqtSignal()
+
+    def __init__(self, parent: Optional[Widget] = None):
+        super().__init__(parent)
+        self._component: Optional[Component] = None
+        self._fields: dict[str, InspectField] = {}
+        self._widgets: dict[str, QWidget] = {}
+        self._updating_from_model = False
+
+        layout = QFormLayout(self)
+        layout.setLabelAlignment(Qt.AlignLeft)
+        layout.setFormAlignment(Qt.AlignTop)
+        self._layout = layout
+
+    def set_component(self, comp: Optional[Component]):
+        # чистим старые виджеты
+        for i in reversed(range(self._layout.count())):
+            item = self._layout.itemAt(i)
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)
+
+        self._widgets.clear()
+        self._component = comp
+
+        if comp is None:
+            return
+
+        fields = getattr(comp.__class__, "inspect_fields", None)
+        if not fields:
+            return
+
+        self._fields = fields
+
+        self._updating_from_model = True
+        try:
+            for key, field in fields.items():
+                label = field.label or key
+                widget = self._create_widget_for_field(field)
+                self._widgets[key] = widget
+                self._layout.addRow(QLabel(label), widget)
+
+                value = field.get_value(comp)
+                self._set_widget_value(widget, value, field)
+                self._connect_widget(widget, key, field)
+        finally:
+            self._updating_from_model = False
+
+    # --- виджеты под разные kind ---
+
+    def _create_widget_for_field(self, field: InspectField) -> QWidget:
+        kind = field.kind
+
+        if kind in ("float", "int"):
+            sb = QDoubleSpinBox()
+            sb.setDecimals(4)
+            sb.setRange(
+                field.min if field.min is not None else -1e9,
+                field.max if field.max is not None else 1e9,
+            )
+            if field.step is not None:
+                sb.setSingleStep(field.step)
+            return sb
+
+        if kind == "bool":
+            return QCheckBox()
+
+        if kind == "string":
+            return QLineEdit()
+
+        if kind == "vec3":
+            row = QWidget()
+            hl = QHBoxLayout(row)
+            hl.setContentsMargins(0, 0, 0, 0)
+            hl.setSpacing(2)
+            boxes = []
+            for _ in range(3):
+                sb = QDoubleSpinBox()
+                sb.setDecimals(4)
+                sb.setRange(
+                    field.min if field.min is not None else -1e9,
+                    field.max if field.max is not None else 1e9,
+                )
+                if field.step is not None:
+                    sb.setSingleStep(field.step)
+                hl.addWidget(sb)
+                boxes.append(sb)
+            row._boxes = boxes  # небольшой хак
+            return row
+
+        # TODO: color / enum
+        le = QLineEdit()
+        le.setReadOnly(True)
+        return le
+
+    def _set_widget_value(self, w: QWidget, value, field: InspectField):
+        if isinstance(w, QDoubleSpinBox):
+            w.setValue(float(value))
+            return
+
+        if isinstance(w, QCheckBox):
+            w.setChecked(bool(value))
+            return
+
+        if isinstance(w, QLineEdit):
+            w.setText(str(value))
+            return
+
+        if hasattr(w, "_boxes"):
+            arr = np.asarray(value).reshape(-1)
+            for sb, v in zip(w._boxes, arr):
+                sb.setValue(float(v))
+            return
+
+    def _connect_widget(self, w: QWidget, key: str, field: InspectField):
+        def commit():
+            if self._updating_from_model or self._component is None:
+                return
+            val = self._read_widget_value(w, field)
+            field.set_value(self._component, val)
+
+            self.component_changed.emit()
+
+        if isinstance(w, QDoubleSpinBox):
+            w.valueChanged.connect(lambda _v: commit())
+        elif isinstance(w, QCheckBox):
+            w.stateChanged.connect(lambda _s: commit())
+        elif isinstance(w, QLineEdit):
+            w.editingFinished.connect(commit)
+        elif hasattr(w, "_boxes"):
+            for sb in w._boxes:
+                sb.valueChanged.connect(lambda _v: commit())
+
+    def _read_widget_value(self, w: QWidget, field: InspectField):
+        if isinstance(w, QDoubleSpinBox):
+            return float(w.value())
+
+        if isinstance(w, QCheckBox):
+            return bool(w.isChecked())
+
+        if isinstance(w, QLineEdit):
+            return w.text()
+
+        if hasattr(w, "_boxes"):
+            return np.array([sb.value() for sb in w._boxes], dtype=float)
+
+        return None
+
 
 class EntityInspector(QWidget):
     """
     Общий инспектор для Entity/Transform:
-    сверху TransformInspector, снизу список компонентов.
+    сверху TransformInspector, ниже список компонентов, ещё ниже – инспектор компонента.
     """
+
     transform_changed = pyqtSignal()
+    component_changed = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -231,20 +371,32 @@ class EntityInspector(QWidget):
         self._components_panel = ComponentsPanel(self)
         layout.addWidget(self._components_panel)
 
-        self._entity: Optional[Entity] = None
+        self._component_inspector = ComponentInspectorPanel(self)
+        layout.addWidget(self._component_inspector)
 
-        # пробрасываем сигнал наружу
+        self._entity: Optional[Entity] = None
+        
+
         self._transform_inspector.transform_changed.connect(
             self.transform_changed
         )
+
+        self._components_panel._list.currentRowChanged.connect(
+            self._on_component_selected
+        )
+
+        self._component_inspector.component_changed.connect(
+            self._on_component_changed
+        )
+
+    def _on_component_changed(self):
+        self.component_changed.emit()
+
 
     def set_target(self, obj: Optional[object]):
         """
         Принимает Entity, Transform3 или None.
         """
-        from termin.kinematic.transform import Transform3
-        from termin.visualization.entity import Entity
-
         if isinstance(obj, Entity):
             ent = obj
             trans = obj.transform
@@ -257,7 +409,13 @@ class EntityInspector(QWidget):
 
         self._entity = ent
 
-        # внутрь трансформ-инспектора можно передать либо Entity, либо Transform3 –
-        # он сам разберётся.
         self._transform_inspector.set_target(trans or ent)
         self._components_panel.set_entity(ent)
+        self._component_inspector.set_component(None)
+
+    def _on_component_selected(self, row: int):
+        if self._entity is None or row < 0:
+            self._component_inspector.set_component(None)
+            return
+        comp = self._entity.components[row]
+        self._component_inspector.set_component(comp)
