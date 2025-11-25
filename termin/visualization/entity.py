@@ -158,6 +158,13 @@ class Entity:
         matrix[:3, :3] *= self.scale
         return matrix
 
+    def set_visible(self, flag: bool):
+        self.visible = flag
+        for child in self.transform.children:
+            if child.entity is not None:
+                child.entity.set_visible(flag)
+
+
     def is_pickable(self) -> bool:
         return self.pickable and self.visible and self.active
 
@@ -184,6 +191,12 @@ class Entity:
             if isinstance(comp, component_type):
                 return comp
         return None
+
+    def find_component(self, component_type: Type[C]) -> C:
+        comp = self.get_component(component_type)
+        if comp is None:
+            raise ValueError(f"Component of type {component_type} not found in entity {self.name}")
+        return comp
 
     @property
     def components(self) -> List[Component]:

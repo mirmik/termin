@@ -10,7 +10,7 @@ import numpy as np
 
 class GizmoArrow(Entity):
     def __init__(self, axis: str, length=1.0, color=(1.0, 0.0, 0.0, 1.0)):
-        super().__init__(Pose3.identity(), name=f"gizmo_axis_{axis}")
+        super().__init__(Pose3.identity(), name=f"gizmo_axis_{axis}", pickable=False)
 
         self.axis = axis
         shaft_len = length * 0.75
@@ -24,19 +24,18 @@ class GizmoArrow(Entity):
         # цилиндр (ствол)
         shaft_ent = Entity(
             Pose3.translation(0, shaft_len * 0.5, 0),
-            name=f"{axis}_shaft"
+            name=f"{axis}_shaft",
+            pickable=False
         )
         shaft_ent.add_component(MeshRenderer(shaft, mat))
         self.shaft_ent = shaft_ent
         self.transform.add_child(shaft_ent.transform)
 
-        print(shaft_ent.transform.entity)  # --- DEBUG ---
-        print(self.transform.entity)        # --- DEBUG ---
-
         # конус (наконечник)
         head_ent = Entity(
             Pose3.translation(0, shaft_len + head_len * 0.5, 0),
-            name=f"{axis}_head"
+            name=f"{axis}_head",
+            pickable=False
         )
         head_ent.add_component(MeshRenderer(head, mat))
         self.head_ent = head_ent
@@ -66,7 +65,7 @@ class GizmoArrow(Entity):
 
 class GizmoEntity(Entity):
     def __init__(self, size=1.0):
-        super().__init__(Pose3.identity(), name="gizmo")
+        super().__init__(Pose3.identity(), name="gizmo", pickable=False)
 
         self.x = GizmoArrow("x", length=size, color=(1,0,0,1))
         self.y = GizmoArrow("y", length=size, color=(0,1,0,1))
@@ -75,20 +74,6 @@ class GizmoEntity(Entity):
         self.transform.add_child(self.x.transform)
         self.transform.add_child(self.y.transform)
         self.transform.add_child(self.z.transform)
-
-        self.target = None
-
-    def update(self, dt):
-        if self.target is None:
-            # можно скрывать гизмо
-            self.set_enabled(False)
-            return
-
-        self.set_enabled(True)
-
-        pose = self.target.transform.global_pose()
-        self.transform.relocate_global(Pose3(lin=pose.lin.copy()))
-
 
 
 def closest_point_on_axis_from_ray(axis_point, axis_dir, ray_origin, ray_dir):
@@ -111,7 +96,7 @@ def closest_point_on_axis_from_ray(axis_point, axis_dir, ray_origin, ray_dir):
     a_dot_d = np.dot(a, d)
     denom = 1.0 - a_dot_d * a_dot_d
 
-    if abs(denom) < 1e-6:
+    if float(np.abs(denom)) < 1e-6:
         t = -np.dot(w0, a)
         return t, p + a * t
 
@@ -143,9 +128,43 @@ class GizmoMoveController(InputComponent):
         self.axis_point = None
         self.grab_offset = None
 
-        self.obj = None
         self.start_target_pos = None
 
+        self.target = None
+        self.set_enabled(False)
+
+    # def update(self, dt):
+    #     print("GizmoMoveController update")  # --- DEBUG --- --- IGNORE ---
+    #     if self.target is None:
+    #         # можно скрывать гизмо
+    #         self.set_enabled(False)
+    #         return
+
+    #     self.set_enabled(True)
+
+    #     pose = self.target.transform.global_pose()
+    #     self.transform.relocate_global(Pose3(lin=pose.lin.copy()))
+
+    def set_target(self, target_entity):
+        print(f"GizmoMoveController set_target: {target_entity}")  # --- DEBUG ---
+
+        if target_entity is not None and target_entity.pickable is False:
+            target_entity = None
+
+        self.target = target_entity
+        if self.target is None:
+            self.set_enabled(False)
+            return
+        self.set_enabled(True)
+
+        self.gizmo.transform.relocate_global(
+            self.target.transform.global_pose()
+        )
+
+    def set_enabled(self, flag: bool):
+        print(f"GizmoMoveController set_enabled: {flag}")  # --- DEBUG ---
+        self.enabled = flag
+        self.gizmo.set_visible(flag)
 
     def on_mouse_button(self, viewport, button, action, mods):
         if button != 0:
@@ -169,18 +188,20 @@ class GizmoMoveController(InputComponent):
         else:
             self.dragging = False
             self.active_axis = None
-            self.obj = None
             self.axis_vec = None
             self.grab_offset = None
 
 
     def start_drag(self, axis, viewport, x, y):
+        print(f"GizmoMoveController start_drag on axis: {axis}")  # --- DEBUG ---
         self.dragging = True
         self.active_axis = axis
 
-        self.obj = self.gizmo.target if self.gizmo.target is not None else self.gizmo
 
-        pose = self.obj.transform.global_pose()
+        if self.target is None:
+            return
+
+        pose = self.target.transform.global_pose()
         self.start_target_pos = pose.lin.copy()
 
         # направление оси берём из transform гизмо
@@ -191,6 +212,13 @@ class GizmoMoveController(InputComponent):
 
         # вычисляем точку оси под курсором — здeсь мы "схватились"
         ray = viewport.screen_point_to_ray(x, y)
+
+        if ray is None:
+            return
+
+        if self.axis_vec is None:
+            print("GizmoMoveController start_drag: axis_vec is None (1)")  # --- DEBUG ---
+            return
 
         t0, axis_hit_point = closest_point_on_axis_from_ray(
             axis_point=self.axis_point,
@@ -204,11 +232,15 @@ class GizmoMoveController(InputComponent):
 
 
     def on_mouse_move(self, viewport, x, y, dx, dy):
-        if not self.dragging or self.obj is None:
+        if not self.dragging or self.target is None:
             return
 
         ray = viewport.screen_point_to_ray(x, y)
         if ray is None:
+            return
+
+        if self.axis_vec is None:
+            print("GizmoMoveController on_mouse_move: axis_vec is None (2)")  # --- DEBUG ---
             return
 
         t, axis_point_now = closest_point_on_axis_from_ray(
@@ -221,11 +253,15 @@ class GizmoMoveController(InputComponent):
         # возвращаем offset хватания
         new_pos = axis_point_now + self.grab_offset
 
-        self.obj.transform.relocate_global(
+        self.target.transform.relocate_global(
             Pose3(
                 lin=new_pos,
-                ang=self.obj.transform.global_pose().ang
+                ang=self.target.transform.global_pose().ang
             )
+        )
+
+        self.gizmo.transform.relocate_global(
+            self.target.transform.global_pose()
         )
 
 

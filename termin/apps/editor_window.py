@@ -399,7 +399,7 @@ class EditorWindow(QMainWindow):
     def on_selection_changed(self, selected_ent):
         self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(selected_ent) if selected_ent is not None else 0
         if self.gizmo is not None:
-            self.gizmo.target = selected_ent
+            self.gizmo.find_component(GizmoMoveController).set_target(selected_ent)
 
     def make_pipeline(self) -> list["FramePass"]:
         from termin.visualization.framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass
