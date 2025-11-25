@@ -37,7 +37,8 @@ class GrayscaleEffect(PostEffect):
         self._shader: ShaderProgram | None = None
 
     def required_resources(self) -> set[str]:
-        return {"color"}
+        # Ему не нужны доп. ресурсы, только входной color_tex
+        return set()
 
     def _get_shader(self) -> ShaderProgram:
         if self._shader is None:

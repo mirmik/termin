@@ -118,15 +118,13 @@ class PostProcessPass(RenderFramePass):
 
         size = (pw, ph)
 
-        # основной входной FBO (color)
         fb_in = ctx.fbos.get(self.input_res)
         if fb_in is None:
-            # ничего не рендерили в input_res — просто выходим
             return
 
         color_tex = fb_in.color_texture()
 
-        # --- собираем extra_textures по запросам эффектов ---
+        # --- extra textures ---
         required_resources: set[str] = set()
         for eff in self.effects:
             req = getattr(eff, "required_resources", None)
@@ -140,38 +138,45 @@ class PostProcessPass(RenderFramePass):
                 continue
             extra_textures[res_name] = fb.color_texture()
 
-        # финальный FBO для выходного ресурса
         fb_out_final = window.get_viewport_fbo(viewport, self.output_res, size)
         ctx.fbos[self.output_res] = fb_out_final
 
-        # --- кейс "нет эффектов" — просто блит и выходим ---
+        # --- нет эффектов -> блит и выходим ---
         if not self.effects:
             blit_fbo_to_fbo(gfx, fb_in, fb_out_final, size, key)
             return
 
         current_tex = color_tex
 
-        # --- один эффект без пинг-понга ---
-        if len(self.effects) == 1:
-            effect = self.effects[0]
-            gfx.bind_framebuffer(fb_out_final)
-            gfx.set_viewport(0, 0, pw, ph)
-            effect.draw(gfx, key, current_tex, extra_textures, size)
-            return
+        # <<< ВАЖНО: постпроцесс — чисто экранная штука, отключаем глубину >>>
+        gfx.set_depth_test(False)
+        gfx.set_depth_mask(False)
 
-        # --- несколько эффектов — пинг-понг ---
-        for i, effect in enumerate(self.effects):
-            is_last = (i == len(self.effects) - 1)
+        try:
+            if len(self.effects) == 1:
+                effect = self.effects[0]
+                gfx.bind_framebuffer(fb_out_final)
+                gfx.set_viewport(0, 0, pw, ph)
+                effect.draw(gfx, key, current_tex, extra_textures, size)
+                return
 
-            if is_last:
-                fb_target = fb_out_final
-            else:
-                fb_target = self._get_temp_fbo(ctx, i % 2, size)
+            # несколько эффектов — пинг-понг
+            for i, effect in enumerate(self.effects):
+                is_last = (i == len(self.effects) - 1)
 
-            gfx.bind_framebuffer(fb_target)
-            gfx.set_viewport(0, 0, pw, ph)
+                if is_last:
+                    fb_target = fb_out_final
+                else:
+                    fb_target = self._get_temp_fbo(ctx, i % 2, size)
 
-            effect.draw(gfx, key, current_tex, extra_textures, size)
+                gfx.bind_framebuffer(fb_target)
+                gfx.set_viewport(0, 0, pw, ph)
 
-            current_tex = fb_target.color_texture()
+                effect.draw(gfx, key, current_tex, extra_textures, size)
+
+                current_tex = fb_target.color_texture()
+        finally:
+            # восстанавливаем "нормальное" состояние для последующих пассов
+            gfx.set_depth_test(True)
+            gfx.set_depth_mask(True)
 
