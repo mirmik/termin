@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, List, Set, Any, Optional, Tuple
 from collections import deque
 from termin.visualization.shader import ShaderProgram
 from .picking import rgb_to_id

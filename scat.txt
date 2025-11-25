@@ -1,4 +1,5 @@
 
+termin/apps/*
 termin/visualization/entity.py
 termin/visualization/renderpass.py
 termin/kinematic/transform.py

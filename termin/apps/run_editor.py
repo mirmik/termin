@@ -39,16 +39,21 @@ def build_scene(world):
     entity2.transform.relocate(Pose3(lin=np.array([3.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
     scene.add(entity2)
 
+    editor_entities = Entity(name="EditorEntities")
+
     skybox = SkyBoxEntity()
     scene.add(skybox)
-
-    world.add_scene(scene)
 
     camera_entity = Entity(name="camera")
     camera = PerspectiveCameraComponent()
     camera_entity.add_component(camera)
     camera_entity.add_component(OrbitCameraController())
-    scene.add(camera_entity)
+    editor_entities.transform.link(camera_entity.transform)
+
+    scene.add(editor_entities)
+
+
+    world.add_scene(scene)
 
     return scene, camera
 

@@ -85,21 +85,43 @@
         </layout>
        </widget>
 
-       <!-- Right panel (Inspector) -->
-       <widget class="QLabel" name="inspectorLabel">
+       <!-- Right panel (Inspector container) -->
+<widget class="QWidget" name="inspectorContainer">
+  <property name="minimumSize">
+   <size>
+    <width>200</width>
+    <height>0</height>
+   </size>
+  </property>
+  <layout class="QVBoxLayout" name="inspectorLayout">
+    <property name="spacing">
+     <number>4</number>
+    </property>
+    <property name="leftMargin">
+     <number>4</number>
+    </property>
+    <property name="topMargin">
+     <number>4</number>
+    </property>
+    <property name="rightMargin">
+     <number>4</number>
+    </property>
+    <property name="bottomMargin">
+     <number>4</number>
+    </property>
+    <item>
+      <widget class="QLabel" name="inspectorTitle">
         <property name="text">
-         <string>Inspector</string>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>150</width>
-          <height>0</height>
-         </size>
+          <string>Inspector</string>
         </property>
         <property name="alignment">
-         <set>Qt::AlignTop</set>
+          <set>Qt::AlignTop</set>
         </property>
-       </widget>
+      </widget>
+    </item>
+  </layout>
+</widget>
+
 
       </widget>
 
