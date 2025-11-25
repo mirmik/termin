@@ -6,7 +6,7 @@ termin/kinematic/transform.py
 termin/geombase/pose3.py
 termin/visualization/shader.py
 termin/visualization/backends/opengl.py
-termin/visualization/components/line_renderer.py
+termin/visualization/components/mesh_renderer.py
 termin/visualization/renderer.py
 termin/visualization/material.py
 termin/visualization/picking.py

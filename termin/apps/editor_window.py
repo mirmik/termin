@@ -1,19 +1,17 @@
 # ===== termin/apps/editor_window.py =====
 import os
 from PyQt5 import uic
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu
+from PyQt5.QtCore import Qt, QPoint
 
 from termin.visualization.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.components.mesh_renderer import MeshRenderer
 from termin.visualization.entity import Entity
 from termin.kinematic.transform import Transform3
 from editor_tree import SceneTreeModel
-from editor_inspector import TransformInspector, EntityInspector, ComponentsPanel
+from editor_inspector import EntityInspector
 from termin.visualization.picking import id_to_rgb
-
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu
-from PyQt5.QtCore import Qt, QPoint
+from termin.visualization.resources import ResourceManager
 from termin.geombase.pose3 import Pose3
 
 
@@ -29,10 +27,13 @@ class EditorWindow(QMainWindow):
         self.scene = scene
         self.camera = camera
 
-        # --- UI элементы из .ui ---
+        # --- ресурс-менеджер редактора ---
+        self.resource_manager = ResourceManager()
+        self._init_resources_from_scene()
+
+        # --- UI из .ui ---
         self.sceneTree: QTreeView = self.findChild(QTreeView, "sceneTree")
 
-        # контекстное меню
         self.sceneTree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.sceneTree.customContextMenuRequested.connect(self.on_tree_context_menu)
 
@@ -45,7 +46,7 @@ class EditorWindow(QMainWindow):
 
         self._fix_splitters()
 
-        # --- Scene tree ---
+        # --- дерево сцены ---
         self._tree_model = SceneTreeModel(scene)
         self._setup_tree_model()
 
@@ -53,8 +54,8 @@ class EditorWindow(QMainWindow):
         self.sceneTree.expandAll()
         self.sceneTree.clicked.connect(self.on_tree_click)
 
-        # --- Inspector widget ---
-        self.inspector = EntityInspector(self.inspectorContainer)
+        # --- инспектор ---
+        self.inspector = EntityInspector(self.resource_manager, self.inspectorContainer)
         self._init_inspector_widget()
 
         component_library = [
@@ -64,27 +65,60 @@ class EditorWindow(QMainWindow):
         ]
         self.inspector.set_component_library(component_library)
 
+        # на всякий случай — зарегистрируем компоненты и в ресурс-менеджере
+        for label, cls in component_library:
+            self.resource_manager.register_component(label, cls)
+
         self.inspector.transform_changed.connect(self._on_inspector_transform_changed)
         self.inspector.component_changed.connect(self._on_inspector_component_changed)
 
-        # --- Render viewport ---
+        # --- viewport ---
         self._init_viewport()
 
+    # ----------- ресурсы из сцены -----------
+
+    def _init_resources_from_scene(self):
+        """
+        Складываем в ResourceManager материалы, использованные в сцене.
+        И даём им хоть какие-то имена, если их ещё нет.
+        """
+        for ent in self.scene.entities:
+            mr = ent.get_component(MeshRenderer)
+            if mr is None:
+                continue
+            mat = mr.material
+            if mat is None:
+                continue
+
+            existing_name = self.resource_manager.find_material_name(mat)
+            if existing_name is not None:
+                continue
+
+            name = getattr(mat, "name", None)
+            if not name:
+                base = f"{ent.name}_mat" if getattr(ent, "name", None) else "Material"
+                name = base
+                i = 1
+                while name in self.resource_manager.materials:
+                    i += 1
+                    name = f"{base}_{i}"
+                mat.name = name
+
+            self.resource_manager.register_material(name, mat)
+
+    # ----------- реакции инспектора -----------
+
     def _on_inspector_transform_changed(self):
-        # трансформ поменялся — нужно перерисовать вьюпорт
         if self.viewport_window is not None:
             self.viewport_window._request_update()
 
     def _on_inspector_component_changed(self):
-        # параметры компонента поменялись — тоже перерисуем
         if self.viewport_window is not None:
             self.viewport_window._request_update()
 
+    # ----------- контекстное меню дерева -----------
 
     def on_tree_context_menu(self, pos: QPoint):
-        """
-        Контекстное меню по правому клику в дереве.
-        """
         index = self.sceneTree.indexAt(pos)
         node = index.internalPointer() if index.isValid() else None
         target_obj = node.obj if node is not None else None
@@ -93,7 +127,6 @@ class EditorWindow(QMainWindow):
         action_add = menu.addAction("Add entity")
 
         action_delete = None
-        from termin.visualization.entity import Entity
         if isinstance(target_obj, Entity):
             action_delete = menu.addAction("Delete entity")
 
@@ -104,49 +137,33 @@ class EditorWindow(QMainWindow):
         elif action == action_delete:
             self._delete_entity_from_context(target_obj)
 
-
     def _delete_entity_from_context(self, ent: Entity):
-        """
-        Удаляет Entity из сцены и обновляет дерево / инспектор / хайлайт.
-        """
         if not isinstance(ent, Entity):
             return
 
-        # запомним родителя, чтобы после удаления выделить его
         parent_tf = getattr(ent.transform, "parent", None)
         parent_ent = getattr(parent_tf, "entity", None) if parent_tf is not None else None
         if not isinstance(parent_ent, Entity):
             parent_ent = None
 
-        # если удаляем то, что сейчас в инспекторе — почистим инспектор
         if self.inspector is not None:
-            # инспектор держит Transform3
-            t = getattr(self.inspector, "_transform", None)
-            if t is ent.transform:
-                self.inspector.set_target(None)
+            self.inspector.set_target(None)
 
-        # сброс хайлайта
         self.selected_entity_id = 0
 
-        # убрать из сцены
-        # предполагается, что у Scene есть метод remove
         if hasattr(self.scene, "remove"):
             self.scene.remove(ent)
         else:
-            # fallback: если вдруг remove нет, можно поправить руками
             try:
                 self.scene.entities.remove(ent)
                 ent.on_removed()
             except ValueError:
                 pass
 
-        # пересобираем дерево, выделяем родителя (если был)
         self._rebuild_tree_model(select_obj=parent_ent)
 
-        # перерисовка вьюпорта
         if self.viewport_window is not None:
             self.viewport_window._request_update()
-
 
     def _setup_tree_model(self):
         self.sceneTree.setModel(self._tree_model)
@@ -164,29 +181,17 @@ class EditorWindow(QMainWindow):
             self._select_object_in_tree(select_obj)
 
     def on_tree_current_changed(self, current, _previous):
-        """
-        Любая смена текущего элемента дерева (клавиатура, код, мышь)
-        → ведём себя так же, как при клике мышью.
-        """
         if not current.isValid():
             return
         self.on_tree_click(current)
 
-
     def _create_entity_from_context(self, target_obj):
-        """
-        Создаёт новый Entity.
-        Если в контекст щёлкнули по Entity или Transform3 – делаем их родителем,
-        иначе вешаем на корень сцены.
-        """
-        # --- решаем, к какому Transform3 цепляться ---
         parent_transform = None
         if isinstance(target_obj, Entity):
             parent_transform = target_obj.transform
         elif isinstance(target_obj, Transform3):
             parent_transform = target_obj
 
-        # --- придумываем уникальное имя ---
         existing = {e.name for e in self.scene.entities}
         base = "entity"
         i = 1
@@ -194,52 +199,29 @@ class EditorWindow(QMainWindow):
             i += 1
         name = f"{base}{i}"
 
-        # --- создаём сущность ---
         ent = Entity(pose=Pose3.identity(), name=name)
 
-        # если есть родительский трансформ – привязываем
         if parent_transform is not None:
             ent.transform.set_parent(parent_transform)
 
-        # добавляем в сцену
         self.scene.add(ent)
-
-        # пересобираем дерево и выделяем нового
         self._rebuild_tree_model(select_obj=ent)
 
-        # сразу обновим инспектор и рендер (через выделение всё само сделается,
-        # но на всякий случай дёрнем перерисовку)
         if self.viewport_window is not None:
-            self.viewport_window._request_update()
-
-
-    def _on_inspector_transform_changed(self):
-        # тут можно ещё мир/сцену обновить, если нужно
-        if self.viewport_window is not None:
-            # да, метод «приватный», но мы в том же модуле движка, можно :)
             self.viewport_window._request_update()
 
     def _init_inspector_widget(self):
-        """
-        Вкладываем TransformInspector в inspectorContainer (у которого уже есть лейаут из .ui).
-        """
-        from PyQt5.QtWidgets import QVBoxLayout
-
         parent = self.inspectorContainer
         layout = parent.layout()
         if layout is None:
             layout = QVBoxLayout(parent)
             parent.setLayout(layout)
-
         layout.addWidget(self.inspector)
 
-    # ----------------------------------------------------
     def _fix_splitters(self):
-        # сглаживание resize
         self.topSplitter.setOpaqueResize(False)
         self.verticalSplitter.setOpaqueResize(False)
 
-        # запрет схлопывания
         self.topSplitter.setCollapsible(0, False)
         self.topSplitter.setCollapsible(1, False)
         self.topSplitter.setCollapsible(2, False)
@@ -247,15 +229,12 @@ class EditorWindow(QMainWindow):
         self.verticalSplitter.setCollapsible(0, False)
         self.verticalSplitter.setCollapsible(1, False)
 
-        # стартовые размеры
         self.topSplitter.setSizes([300, 1000, 300])
         self.verticalSplitter.setSizes([600, 200])
 
-    # ----------------------------------------------------
-    #  СИНХРОНИЗАЦИЯ С ПИККИНГОМ
-    # ----------------------------------------------------
+    # ----------- синхронизация с пиками -----------
+
     def mouse_button_clicked(self, x, y, viewport):
-        # сюда подписан window.on_mouse_button_event
         self._pending_pick = (x, y, viewport)
 
     def _after_render(self, window):
@@ -268,7 +247,6 @@ class EditorWindow(QMainWindow):
         picked_ent = window.pick_entity_at(x, y, viewport)
         if picked_ent is not None:
             self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(picked_ent)
-            # синхронизируем дерево и инспектор
             self._select_object_in_tree(picked_ent)
             self.inspector.set_target(picked_ent)
         else:
@@ -276,9 +254,6 @@ class EditorWindow(QMainWindow):
             self.inspector.set_target(None)
 
     def _select_object_in_tree(self, obj):
-        """
-        Выделяет объект (Entity / Transform3) в дереве, если он там есть.
-        """
         model: SceneTreeModel = self.sceneTree.model()
         idx = model.index_for_object(obj)
         if not idx.isValid():
@@ -286,9 +261,8 @@ class EditorWindow(QMainWindow):
         self.sceneTree.setCurrentIndex(idx)
         self.sceneTree.scrollTo(idx)
 
-    # ----------------------------------------------------
     def _init_viewport(self):
-        self._pending_pick = None  # (x, y, viewport) или None
+        self._pending_pick = None
         layout = self.viewportContainer.layout()
 
         self.viewport_window = self.world.create_window(
@@ -299,7 +273,7 @@ class EditorWindow(QMainWindow):
         )
         self.viewport = self.viewport_window.add_viewport(self.scene, self.camera)
         self.viewport_window.set_world_mode("editor")
-        
+
         self.viewport_window.on_mouse_button_event = self.mouse_button_clicked
         self.viewport_window.after_render_handler = self._after_render
 
@@ -311,22 +285,15 @@ class EditorWindow(QMainWindow):
 
         self.viewport.set_render_pipeline(self.make_pipeline())
 
-    # ----------------------------------------------------
-    #  КЛИК ПО ДЕРЕВУ → ОБНОВИТЬ ИНСПЕКТОР И ВЫБОР В 3D
-    # ----------------------------------------------------
     def on_tree_click(self, index):
         node = index.internalPointer()
         obj = node.obj
 
-        # Инспектор
         self.inspector.set_target(obj)
 
-        # Если выбрали entity / transform – обновим selected_entity_id, чтобы хайлайт совпадал.
         if isinstance(obj, Entity):
             ent = obj
         elif isinstance(obj, Transform3):
-            # у Transform3 нет id, привяжемся к его владельцу Entity, если нужно
-            # упрощённо: ищем первый entity с таким transform
             ent = next((e for e in self.scene.entities if e.transform is obj), None)
         else:
             ent = None
@@ -336,15 +303,10 @@ class EditorWindow(QMainWindow):
         else:
             self.selected_entity_id = 0
 
-        # чтобы хайлайт обновился сразу
         if self.viewport_window is not None:
             self.viewport_window._request_update()
 
-    # ----------------------------------------------------
     def make_pipeline(self) -> list["FramePass"]:
-        """
-        Собирает конвейер рендера.
-        """
         from termin.visualization.framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass
         from termin.visualization.postprocess import PostProcessPass
         from termin.visualization.posteffects.highlight import HighlightEffect

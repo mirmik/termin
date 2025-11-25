@@ -17,37 +17,30 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMenu,
     QAction,
+    QComboBox,
 )
-
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from termin.kinematic.transform import Transform3
 from termin.visualization.entity import Entity, Component
 from termin.geombase.pose3 import Pose3
 from termin.visualization.inspect import InspectField
+from termin.visualization.resources import ResourceManager
 
 
 class TransformInspector(QWidget):
-    """
-    Мини-инспектор Transform:
-    - position (x, y, z)
-    - rotation (x, y, z) в градусах — пока только отображаем / заготовка
-    - scale (x, y, z) — опционально, если Transform3 это поддерживает
-    """
-
-    transform_changed = pyqtSignal()  # сообщаем наверх, что трансформ поменяли
+    transform_changed = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
 
         self._transform: Optional[Transform3] = None
-        self._updating_from_model = False  # защита от рекурсий
+        self._updating_from_model = False
 
         layout = QFormLayout(self)
         layout.setLabelAlignment(Qt.AlignLeft)
         layout.setFormAlignment(Qt.AlignTop)
 
-        # --- helpers для тройки спинбоксов ---
         def make_vec3_row():
             row = QHBoxLayout()
             sx = QDoubleSpinBox()
@@ -60,34 +53,23 @@ class TransformInspector(QWidget):
                 row.addWidget(sb)
             return row, (sx, sy, sz)
 
-        # position
         pos_row, self._pos = make_vec3_row()
         layout.addRow(QLabel("Position"), pos_row)
 
-        # rotation (Euler degrees – заглушка)
         rot_row, self._rot = make_vec3_row()
         layout.addRow(QLabel("Rotation (deg)"), rot_row)
 
-        # scale (по умолчанию 1,1,1)
         scale_row, self._scale = make_vec3_row()
         for sb in self._scale:
             sb.setValue(1.0)
         layout.addRow(QLabel("Scale"), scale_row)
 
-        # сигналы
         for sb in (*self._pos, *self._rot, *self._scale):
             sb.valueChanged.connect(self._on_value_changed)
 
         self._set_enabled(False)
 
-    # --------------------------------------------------------
-    #   Публичный API
-    # --------------------------------------------------------
-
     def set_target(self, obj: Optional[object]):
-        """
-        Принимает либо Entity, либо Transform3, либо None.
-        """
         if isinstance(obj, Entity):
             transform = obj.transform
         elif isinstance(obj, Transform3):
@@ -97,10 +79,6 @@ class TransformInspector(QWidget):
 
         self._transform = transform
         self._update_from_transform()
-
-    # --------------------------------------------------------
-    #   Внутреннее
-    # --------------------------------------------------------
 
     def _set_enabled(self, flag: bool):
         for sb in (*self._pos, *self._rot, *self._scale):
@@ -118,27 +96,21 @@ class TransformInspector(QWidget):
                 return
 
             self._set_enabled(True)
-
             pose: Pose3 = self._transform.global_pose()
 
-            # --- position ---
             px, py, pz = pose.lin
             self._pos[0].setValue(float(px))
             self._pos[1].setValue(float(py))
             self._pos[2].setValue(float(pz))
 
-            # --- rotation ---
-            # Здесь можно потом использовать Pose3.to_euler()
             self._rot[0].setValue(0.0)
             self._rot[1].setValue(0.0)
             self._rot[2].setValue(0.0)
 
-            # --- scale ---
             s = np.array([1.0, 1.0, 1.0], dtype=float)
             self._scale[0].setValue(float(s[0]))
             self._scale[1].setValue(float(s[1]))
             self._scale[2].setValue(float(s[2]))
-
         finally:
             self._updating_from_model = False
 
@@ -161,9 +133,6 @@ class TransformInspector(QWidget):
 
 
 class ComponentsPanel(QWidget):
-    """
-    Просто список компонентов entity + контекстное меню (добавить/удалить).
-    """
     components_changed = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -182,7 +151,6 @@ class ComponentsPanel(QWidget):
         self._entity: Optional[Entity] = None
         self._component_library: list[tuple[str, type[Component]]] = []
 
-        # контекстное меню по правому клику
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._on_context_menu)
 
@@ -197,9 +165,6 @@ class ComponentsPanel(QWidget):
             self._list.addItem(item)
 
     def set_component_library(self, library: list[tuple[str, type[Component]]]):
-        """
-        library: список (label, ComponentClass), которые можно добавить.
-        """
         self._component_library = list(library)
 
     def current_component(self) -> Optional[Component]:
@@ -210,9 +175,6 @@ class ComponentsPanel(QWidget):
             return None
         return self._entity.components[row]
 
-    # ---------------------------------------------------------
-    #   Контекстное меню
-    # ---------------------------------------------------------
     def _on_context_menu(self, pos):
         if self._entity is None:
             return
@@ -220,19 +182,16 @@ class ComponentsPanel(QWidget):
         global_pos = self._list.mapToGlobal(pos)
         menu = QMenu(self)
 
-        # удалить компонент
         comp = self.current_component()
         remove_action = QAction("Удалить компонент", self)
         remove_action.setEnabled(comp is not None)
         remove_action.triggered.connect(self._remove_current_component)
         menu.addAction(remove_action)
 
-        # добавить компонент
         if self._component_library:
             add_menu = menu.addMenu("Добавить компонент")
             for label, cls in self._component_library:
                 act = QAction(label, self)
-                # нужно аккуратно захватить cls в замыкание
                 act.triggered.connect(
                     lambda _checked=False, c=cls: self._add_component(c)
                 )
@@ -247,9 +206,7 @@ class ComponentsPanel(QWidget):
         if comp is None:
             return
 
-        # удаляем из entity
         self._entity.remove_component(comp)
-        # обновляем список
         self.set_entity(self._entity)
         self.components_changed.emit()
 
@@ -257,7 +214,7 @@ class ComponentsPanel(QWidget):
         if self._entity is None:
             return
         try:
-            comp = comp_cls()  # предполагаем, что есть конструктор без аргументов
+            comp = comp_cls()
         except TypeError as e:
             print(f"Не удалось создать компонент {comp_cls}: {e}")
             return
@@ -265,13 +222,11 @@ class ComponentsPanel(QWidget):
         self._entity.add_component(comp)
         self.set_entity(self._entity)
 
-        # выделяем добавленный компонент
         row = len(self._entity.components) - 1
         if row >= 0:
             self._list.setCurrentRow(row)
 
         self.components_changed.emit()
-
 
 
 class ComponentInspectorPanel(QWidget):
@@ -281,12 +236,13 @@ class ComponentInspectorPanel(QWidget):
 
     component_changed = pyqtSignal()
 
-    def __init__(self, parent: Optional[Widget] = None):
+    def __init__(self, resources: ResourceManager, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._component: Optional[Component] = None
         self._fields: dict[str, InspectField] = {}
         self._widgets: dict[str, QWidget] = {}
         self._updating_from_model = False
+        self._resources = resources
 
         layout = QFormLayout(self)
         layout.setLabelAlignment(Qt.AlignLeft)
@@ -294,7 +250,6 @@ class ComponentInspectorPanel(QWidget):
         self._layout = layout
 
     def set_component(self, comp: Optional[Component]):
-        # чистим старые виджеты
         for i in reversed(range(self._layout.count())):
             item = self._layout.itemAt(i)
             w = item.widget()
@@ -326,8 +281,6 @@ class ComponentInspectorPanel(QWidget):
                 self._connect_widget(widget, key, field)
         finally:
             self._updating_from_model = False
-
-    # --- виджеты под разные kind ---
 
     def _create_widget_for_field(self, field: InspectField) -> QWidget:
         kind = field.kind
@@ -369,7 +322,13 @@ class ComponentInspectorPanel(QWidget):
             row._boxes = boxes  # небольшой хак
             return row
 
-        # TODO: color / enum
+        if kind == "material":
+            combo = QComboBox()
+            names = self._resources.list_material_names()
+            for n in names:
+                combo.addItem(n)
+            return combo
+
         le = QLineEdit()
         le.setReadOnly(True)
         return le
@@ -383,7 +342,7 @@ class ComponentInspectorPanel(QWidget):
             w.setChecked(bool(value))
             return
 
-        if isinstance(w, QLineEdit):
+        if isinstance(w, QLineEdit) and field.kind != "material":
             w.setText(str(value))
             return
 
@@ -393,24 +352,51 @@ class ComponentInspectorPanel(QWidget):
                 sb.setValue(float(v))
             return
 
+        if isinstance(w, QComboBox) and field.kind == "material":
+            mat = value
+            if mat is None:
+                w.setCurrentIndex(-1)
+                return
+
+            name = self._resources.find_material_name(mat)
+            # обновим список на всякий случай
+            existing = [w.itemText(i) for i in range(w.count())]
+            all_names = self._resources.list_material_names()
+            if existing != all_names:
+                w.clear()
+                for n in all_names:
+                    w.addItem(n)
+
+            if name is None:
+                w.setCurrentIndex(-1)
+                return
+
+            idx = w.findText(name)
+            if idx >= 0:
+                w.setCurrentIndex(idx)
+            else:
+                w.setCurrentIndex(-1)
+            return
+
     def _connect_widget(self, w: QWidget, key: str, field: InspectField):
         def commit():
             if self._updating_from_model or self._component is None:
                 return
             val = self._read_widget_value(w, field)
             field.set_value(self._component, val)
-
             self.component_changed.emit()
 
         if isinstance(w, QDoubleSpinBox):
             w.valueChanged.connect(lambda _v: commit())
         elif isinstance(w, QCheckBox):
             w.stateChanged.connect(lambda _s: commit())
-        elif isinstance(w, QLineEdit):
+        elif isinstance(w, QLineEdit) and field.kind != "material":
             w.editingFinished.connect(commit)
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:
                 sb.valueChanged.connect(lambda _v: commit())
+        elif isinstance(w, QComboBox) and field.kind == "material":
+            w.currentIndexChanged.connect(lambda _i: commit())
 
     def _read_widget_value(self, w: QWidget, field: InspectField):
         if isinstance(w, QDoubleSpinBox):
@@ -419,11 +405,17 @@ class ComponentInspectorPanel(QWidget):
         if isinstance(w, QCheckBox):
             return bool(w.isChecked())
 
-        if isinstance(w, QLineEdit):
+        if isinstance(w, QLineEdit) and field.kind != "material":
             return w.text()
 
         if hasattr(w, "_boxes"):
             return np.array([sb.value() for sb in w._boxes], dtype=float)
+
+        if isinstance(w, QComboBox) and field.kind == "material":
+            name = w.currentText()
+            if not name:
+                return None
+            return self._resources.get_material(name)
 
         return None
 
@@ -437,8 +429,10 @@ class EntityInspector(QWidget):
     transform_changed = pyqtSignal()
     component_changed = pyqtSignal()
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, resources: ResourceManager, parent: Optional[QWidget] = None):
         super().__init__(parent)
+
+        self._resources = resources
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -450,33 +444,25 @@ class EntityInspector(QWidget):
         self._components_panel = ComponentsPanel(self)
         layout.addWidget(self._components_panel)
 
-        self._component_inspector = ComponentInspectorPanel(self)
+        self._component_inspector = ComponentInspectorPanel(resources, self)
         layout.addWidget(self._component_inspector)
 
         self._entity: Optional[Entity] = None
 
-
         self._transform_inspector.transform_changed.connect(
             self.transform_changed
         )
-
         self._components_panel._list.currentRowChanged.connect(
             self._on_component_selected
         )
-
         self._component_inspector.component_changed.connect(
             self._on_component_changed
         )
-
         self._components_panel.components_changed.connect(
             self._on_components_changed
         )
 
     def _on_components_changed(self):
-        """
-        Список компонентов изменился (добавили/удалили).
-        Обновляем список и инспектор, пробрасываем наружу сигнал component_changed.
-        """
         ent = self._entity
         self._components_panel.set_entity(ent)
 
@@ -490,21 +476,14 @@ class EntityInspector(QWidget):
             self._component_inspector.set_component(None)
 
         self.component_changed.emit()
-        
+
     def set_component_library(self, library: list[tuple[str, type[Component]]]):
-        """
-        Передаём внутрь список типов компонентов, доступных для добавления.
-        """
         self._components_panel.set_component_library(library)
 
     def _on_component_changed(self):
         self.component_changed.emit()
 
-
     def set_target(self, obj: Optional[object]):
-        """
-        Принимает Entity, Transform3 или None.
-        """
         if isinstance(obj, Entity):
             ent = obj
             trans = obj.transform

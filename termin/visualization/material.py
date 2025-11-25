@@ -26,7 +26,8 @@ class Material:
         shader: ShaderProgram = None,
         color: np.ndarray | None = None,
         textures: Dict[str, Texture] | None = None,
-        uniforms: Dict[str, Any] | None = None
+        uniforms: Dict[str, Any] | None = None,
+        name: str | None = None,
     ):
         if shader is None:
             shader = ShaderProgram.default_shader()
@@ -40,6 +41,7 @@ class Material:
         self.color = color
         self.textures = textures if textures is not None else {}
         self.uniforms = uniforms if uniforms is not None else {}
+        self.name = name
 
         if self.uniforms.get("u_color") is None:
             self.uniforms["u_color"] = color

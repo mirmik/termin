@@ -12,18 +12,27 @@ from termin.mesh.mesh import Mesh3
 from termin.geombase.pose3 import Pose3
 from termin.visualization.renderpass import RenderState, RenderPass
 
+from termin.visualization.inspect import InspectField
 
-# termin/visualization/components.py
-
-from termin.visualization.renderpass import RenderPass, RenderState
 
 class MeshRenderer(Component):
     """Renderer component that draws MeshDrawable with one or multiple passes."""
 
-    def __init__(self, 
-            mesh: MeshDrawable = None, 
-            material: Material = None, 
-            passes=None):
+    # поле для инспектора: материал как ресурс
+    inspect_fields = {
+        "material": InspectField(
+            path="material",
+            label="Material",
+            kind="material",  # спец. kind — инспектор понимает, что это выбор ресурса
+        ),
+    }
+
+    def __init__(
+        self,
+        mesh: MeshDrawable = None,
+        material: Material = None,
+        passes=None,
+    ):
         super().__init__(enabled=True)
 
         if isinstance(mesh, Mesh3):
@@ -33,7 +42,7 @@ class MeshRenderer(Component):
         self.material = material
 
         if passes is None:
-            # старый режим: один материал -> один проход
+            # старый режим: один материал → один проход
             self.passes: list[RenderPass] = [
                 RenderPass(material=material, state=RenderState())
             ]
@@ -61,18 +70,18 @@ class MeshRenderer(Component):
 
         if self.mesh is None:
             return
-        
+
         if self.material is None:
             return
 
         model = self.entity.model_matrix()
-        view  = context.view
-        proj  = context.projection
-        gfx   = context.graphics
-        key   = context.context_key
+        view = context.view
+        proj = context.projection
+        gfx = context.graphics
+        key = context.context_key
 
         for p in self.passes:
-            # Применяем полное состояние прохода
+            # применяем полное состояние прохода
             gfx.apply_render_state(p.state)
 
             mat = p.material
@@ -85,14 +94,7 @@ class MeshRenderer(Component):
             if hasattr(context.scene, "light_color"):
                 shader.set_uniform_vec3("u_light_color", context.scene.light_color)
 
-            # cam_entity = context.camera.entity if context.camera else None
-            # if cam_entity is not None:
-            #     shader.set_uniform_vec3(
-            #         "u_view_pos",
-            #         cam_entity.transform.global_pose().lin
-            #     )
-
             self.mesh.draw(context)
 
-        # после меша возвращаемся к "нормальному" дефолтному состоянию
+        # после меша возвращаемся к дефолтному состоянию
         gfx.apply_render_state(RenderState())
