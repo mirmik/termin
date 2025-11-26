@@ -2,12 +2,10 @@ import numpy as np
 
 from termin.mesh.mesh import CylinderMesh, ConeMesh, RingMesh
 from termin.visualization.material import Material
-from termin.visualization.entity import Entity
+from termin.visualization.entity import Entity, InputComponent
 from termin.visualization.components import MeshRenderer
 from termin.geombase.pose3 import Pose3
-from termin.colliders import CapsuleCollider
-from termin.colliders.collider_component import ColliderComponent
-from termin.visualization.entity import InputComponent
+from termin.util import qmul   # <-- вот это добавляем
 
 
 # ---------- ВСПОМОГАТЕЛЬНАЯ МАТЕМАТИКА ----------
@@ -50,7 +48,7 @@ def closest_point_on_axis_from_ray(axis_point, axis_dir, ray_origin, ray_dir):
 
 def rotation_matrix_from_axis_angle(axis_vec: np.ndarray, angle: float) -> np.ndarray:
     """
-    Строит матрицу поворота (три на три) вокруг произвольной оси.
+    Строит матрицу поворота (3×3) вокруг произвольной оси.
     Ось задаётся в мировых координатах.
     """
     axis = np.asarray(axis_vec, dtype=float)
@@ -80,6 +78,7 @@ class GizmoArrow(Entity):
     """
     Стрелка гизмо для перемещения вдоль одной оси.
     Состоит из цилиндра (ствол) и конуса (наконечник).
+    Базовая модель ориентирована вдоль +Y.
     """
 
     def __init__(self, axis: str, length=1.0, color=(1.0, 0.0, 0.0, 1.0)):
@@ -94,6 +93,7 @@ class GizmoArrow(Entity):
         shaft_len = length * 0.75
         head_len = length * 0.25
 
+        # тут же можно "утолщать" геометрию, чтобы легче было попадать мышкой
         shaft = CylinderMesh(radius=0.03, height=shaft_len, segments=24)
         head = ConeMesh(radius=0.06, height=head_len, segments=24)
 
@@ -132,17 +132,6 @@ class GizmoArrow(Entity):
             self.transform.relocate(Pose3.rotateX(np.pi / 2.0))
         # для оси Y поворот не нужен
 
-        # коллайдер вдоль оси (приблизительно)
-        self.add_component(
-            ColliderComponent(
-                collider=CapsuleCollider(
-                    a=(0, 0, 0),
-                    b=(0, length, 0),
-                    radius=0.07,
-                )
-            )
-        )
-
 
 class GizmoRing(Entity):
     """
@@ -161,6 +150,7 @@ class GizmoRing(Entity):
 
         self.axis = axis
 
+        # здесь толщина кольца и радиус — естественное место для "утолщённой" геометрии
         ring_mesh = RingMesh(radius=radius, thickness=thickness, segments=48)
         mat = Material(color=color)
 
@@ -183,9 +173,6 @@ class GizmoRing(Entity):
             # нормаль Y → Z
             self.transform.relocate(Pose3.rotateX(np.pi / 2.0))
         # для оси Y поворот не нужен
-
-        # коллайдер можно потом добавить более точный (тор)
-        # пока оставим только меш для визуального пика
 
 
 class GizmoEntity(Entity):
@@ -225,35 +212,56 @@ class GizmoEntity(Entity):
         self.transform.add_child(self.rz.transform)
 
 
-# ---------- КОНТРОЛЛЕР ПЕРЕМЕЩЕНИЯ ----------
+# ---------- ЕДИНЫЙ КОНТРОЛЛЕР ПЕРЕМЕЩЕНИЯ+ВРАЩЕНИЯ ----------
 
 class GizmoMoveController(InputComponent):
     """
-    Контроллер перемещения объекта вдоль осей гизмо.
-    Учитывает локальные оси гизмо, ближайшую точку на оси
-    и смещение хватания.
+    Единый контроллер:
+    - перемещение по стрелкам (gizmo_axis_x / y / z)
+    - вращение по кольцам   (gizmo_rot_x / y / z)
+
+    ВАЖНО:
+    - пиккинг (кто под мышью) делает EditorWindow через pick_entity_at
+    - сюда прилетает только "ось и режим" через start_*_from_pick
+    - никаких scene.closest_to_ray и коллайдеров
     """
 
-    def __init__(self, gizmo_entity: GizmoEntity, scene):
+    def __init__(self, gizmo_entity: GizmoEntity, scene, rotate_sensitivity: float = 0.01):
         super().__init__()
         self.gizmo = gizmo_entity
-        self.scene = scene
+        self.scene = scene  # сейчас не используем, но оставим про запас
 
-        self.dragging = False
-        self.active_axis = None
+        self.enabled = False
+        self.target: Entity | None = None
 
-        self.axis_vec = None
-        self.axis_point = None
-        self.grab_offset = None
+        # общее состояние драга
+        self.dragging: bool = False
+        self.drag_mode: str | None = None  # "move" или "rotate"
+        self.active_axis: str | None = None
 
-        self.start_target_pos = None
+        # --- состояние для перемещения ---
+        self.axis_vec: np.ndarray | None = None
+        self.axis_point: np.ndarray | None = None
+        self.grab_offset: np.ndarray | None = None
+        self.start_target_pos: np.ndarray | None = None
 
-        self.target = None
+        # --- состояние для вращения ---
+        self.rotate_sensitivity: float = rotate_sensitivity
+        self.start_target_ang: np.ndarray | None = None  # кватернион (x, y, z, w)
+        self.start_mouse_x: float = 0.0
+        self.start_mouse_y: float = 0.0
+
         self.set_enabled(False)
 
+    # ---------- привязка к целевому объекту ----------
+
     def set_target(self, target_entity: Entity | None):
+        # нельзя двигать/крутить то, что не пикэбл
         if target_entity is not None and target_entity.pickable is False:
             target_entity = None
+
+        # на всякий случай завершить текущий драг
+        self._end_drag()
 
         self.target = target_entity
         if self.target is None:
@@ -262,6 +270,7 @@ class GizmoMoveController(InputComponent):
 
         self.set_enabled(True)
 
+        # ставим гизмо в позицию объекта
         self.gizmo.transform.relocate_global(
             self.target.transform.global_pose()
         )
@@ -270,52 +279,85 @@ class GizmoMoveController(InputComponent):
         self.enabled = flag
         self.gizmo.set_visible(flag)
 
+    # ---------- публичные вызовы из EditorWindow ----------
+
+    def start_translate_from_pick(self, axis: str, viewport, x: float, y: float):
+        """
+        Вызывается EditorWindow из _after_render,
+        когда пик показал, что кликнули по стрелке гизмо.
+        """
+        print (f"start_translate_from_pick axis={axis} x={x} y={y}")
+        if not self.enabled or self.target is None:
+            return
+        self._start_move(axis, viewport, x, y)
+
+    def start_rotate_from_pick(self, axis: str, viewport, x: float, y: float):
+        """
+        Аналогично, но для кольца вращения.
+        """
+        if not self.enabled or self.target is None:
+            return
+        self._start_rotate(axis, x, y)
+
+    # ---------- события мыши от движка ----------
+
     def on_mouse_button(self, viewport, button, action, mods):
+        """
+        Сюда приходят press/release от движка для всех InputComponent.
+        Мы используем их только чтобы завершить драг по release.
+        Начало драга даёт EditorWindow через start_*_from_pick.
+        """
+        if not self.enabled:
+            return
         if button != 0:
             return
 
-        x, y = viewport.window.handle.get_cursor_pos()
+        # action == 1 -> press, action == 0 -> release (по твоему коду)
+        if action == 0:  # release
+            self._end_drag()
 
-        if action == 1:  # нажали
-            ray = viewport.screen_point_to_ray(x, y)
-            if ray is None:
-                return
-
-            hit = self.scene.closest_to_ray(ray)
-            if not hit:
-                return
-
-            name = hit.entity.name
-            if name.startswith("gizmo_axis_"):
-                axis = name.removeprefix("gizmo_axis_")
-                self.start_drag(axis, viewport, x, y)
-        else:
-            # отпустили
-            self.dragging = False
-            self.active_axis = None
-            self.axis_vec = None
-            self.grab_offset = None
-            self.start_target_pos = None
-
-    def start_drag(self, axis: str, viewport, x: float, y: float):
-        self.dragging = True
-        self.active_axis = axis
-
-        if self.target is None:
+    def on_mouse_move(self, viewport, x, y, dx, dy):
+        if not self.enabled or not self.dragging or self.target is None:
             return
+
+        if self.drag_mode == "move":
+            self._update_move(viewport, x, y)
+        elif self.drag_mode == "rotate":
+            self._update_rotate(x, y)
+
+    # ---------- внутренняя логика начала / конца драга ----------
+
+    def _end_drag(self):
+        self.dragging = False
+        self.drag_mode = None
+        self.active_axis = None
+
+        self.axis_vec = None
+        self.axis_point = None
+        self.grab_offset = None
+        self.start_target_pos = None
+
+        self.start_target_ang = None
+        self.start_mouse_x = 0.0
+        self.start_mouse_y = 0.0
+
+    # ---------- ПЕРЕМЕЩЕНИЕ ----------
+
+    def _start_move(self, axis: str, viewport, x: float, y: float):
+        self.dragging = True
+        self.drag_mode = "move"
+        self.active_axis = axis
 
         pose = self.target.transform.global_pose()
         self.start_target_pos = pose.lin.copy()
 
-        # направление оси берём из transform гизмо
-        self.axis_vec = self.get_axis_vector(axis)
-
-        # ось проходит через стартовую позицию объекта
+        # направление оси берём из transform гизмо (локальная ось в мировых координатах)
+        self.axis_vec = self._get_axis_vector(axis)
         self.axis_point = self.start_target_pos.copy()
 
-        # вычисляем точку оси под курсором — здесь мы "схватились"
         ray = viewport.screen_point_to_ray(x, y)
         if ray is None or self.axis_vec is None:
+            self._end_drag()
             return
 
         _, axis_hit_point = closest_point_on_axis_from_ray(
@@ -325,15 +367,20 @@ class GizmoMoveController(InputComponent):
             ray_dir=ray.direction
         )
 
-        # пользователь мог схватиться не за origin, учитываем смещение
+        # хватание может быть не в origin — запоминаем смещение
         self.grab_offset = self.start_target_pos - axis_hit_point
 
-    def on_mouse_move(self, viewport, x, y, dx, dy):
-        if not self.dragging or self.target is None:
+    def _update_move(self, viewport, x: float, y: float):
+        if (
+            self.axis_vec is None or
+            self.axis_point is None or
+            self.grab_offset is None or
+            self.start_target_pos is None
+        ):
             return
 
         ray = viewport.screen_point_to_ray(x, y)
-        if ray is None or self.axis_vec is None or self.axis_point is None:
+        if ray is None:
             return
 
         _, axis_point_now = closest_point_on_axis_from_ray(
@@ -343,24 +390,26 @@ class GizmoMoveController(InputComponent):
             ray_dir=ray.direction
         )
 
-        # возвращаем смещение хватания
         new_pos = axis_point_now + self.grab_offset
 
-        self.target.transform.relocate_global(
-            Pose3(
-                lin=new_pos,
-                ang=self.target.transform.global_pose().ang
-            )
+        # двигаем объект
+        old_pose = self.target.transform.global_pose()
+        new_pose = Pose3(
+            lin=new_pos,
+            ang=old_pose.ang
         )
+        self.target.transform.relocate_global(new_pose)
 
-        # гизмо держим на объекте
+        # и гизмо за ним
         self.gizmo.transform.relocate_global(
             self.target.transform.global_pose()
         )
 
-    def get_axis_vector(self, axis: str) -> np.ndarray:
+    def _get_axis_vector(self, axis: str) -> np.ndarray:
         """
-        Берёт мировое направление нужной оси гизмо (нормализованный вектор).
+        Берём мировое направление нужной оси гизмо (нормализованный вектор).
+        То есть вращение/движение идёт по ЛОКАЛЬНЫМ осям объекта,
+        потому что гизмо притянуто к его Pose3.
         """
         t = self.gizmo.transform
 
@@ -373,124 +422,52 @@ class GizmoMoveController(InputComponent):
 
         v = np.asarray(v, dtype=np.float32)
         n = np.linalg.norm(v)
-        return v if n == 0 else v / n
+        return v if n == 0.0 else (v / n)
 
+    # ---------- ВРАЩЕНИЕ ----------
 
-# ---------- КОНТРОЛЛЕР ВРАЩЕНИЯ ----------
-
-class GizmoRotateController(InputComponent):
-    """
-    Простейший контроллер вращения объекта вокруг мировых осей гизмо.
-    Для упрощения угол берётся из движения мыши (экранное пространство),
-    а не из точного пересечения луча с плоскостью кольца.
-
-    Это даёт достаточно предсказуемое управление и при этом не требует
-    знать внутренности класса Pose3 (матрица, кватернион и так далее).
-    """
-
-    def __init__(self, gizmo_entity: GizmoEntity, scene, sensitivity: float = 0.01):
-        super().__init__()
-        self.gizmo = gizmo_entity
-        self.scene = scene
-
-        self.sensitivity = sensitivity  # коэффициент перевода пикселей в радианы
-
-        self.dragging = False
-        self.active_axis = None
-
-        self.target = None
-
-        self.start_target_pos = None
-        self.start_target_ang = None
-
-        self.start_mouse_x = 0.0
-        self.start_mouse_y = 0.0
-
-        self.set_enabled(False)
-
-    def set_target(self, target_entity: Entity | None):
-        if target_entity is not None and target_entity.pickable is False:
-            target_entity = None
-
-        self.target = target_entity
-        if self.target is None:
-            self.set_enabled(False)
-            return
-
-        self.set_enabled(True)
-
-        self.gizmo.transform.relocate_global(
-            self.target.transform.global_pose()
-        )
-
-    def set_enabled(self, flag: bool):
-        self.enabled = flag
-        self.gizmo.set_visible(flag)
-
-    def on_mouse_button(self, viewport, button, action, mods):
-        if button != 0:
-            return
-
-        x, y = viewport.window.handle.get_cursor_pos()
-
-        if action == 1:  # нажали
-            ray = viewport.screen_point_to_ray(x, y)
-            if ray is None:
-                return
-
-            hit = self.scene.closest_to_ray(ray)
-            if not hit:
-                return
-
-            name = hit.entity.name
-            if name.startswith("gizmo_rot_"):
-                axis = name.removeprefix("gizmo_rot_")
-                self.start_drag(axis, x, y)
-        else:
-            # отпустили
-            self.dragging = False
-            self.active_axis = None
-            self.start_target_pos = None
-            self.start_target_ang = None
-
-    def start_drag(self, axis: str, x: float, y: float):
-        if self.target is None:
-            return
-
+    def _start_rotate(self, axis: str, x: float, y: float):
         self.dragging = True
+        self.drag_mode = "rotate"
         self.active_axis = axis
+
         self.start_mouse_x = x
         self.start_mouse_y = y
 
         pose = self.target.transform.global_pose()
         self.start_target_pos = pose.lin.copy()
-        # предполагаем, что pose.ang — это матрица три на три
+        # здесь кватернион (x, y, z, w)
         self.start_target_ang = pose.ang.copy()
 
-    def on_mouse_move(self, viewport, x, y, dx, dy):
-        if not self.dragging or self.target is None or self.start_target_ang is None:
+    def _update_rotate(self, x: float, y: float):
+        if (
+            self.start_target_ang is None or
+            self.start_target_pos is None or
+            self.active_axis is None
+        ):
             return
 
-        # относительно начального положения мыши считаем дельту
+        # дельта мыши от начала драга
         delta_x = x - self.start_mouse_x
         delta_y = y - self.start_mouse_y
 
-        # простая эвристика: чем дальше увели мышь, тем больше угол
-        delta_pixels = delta_x - delta_y  # чуть "косая" комбинация, чтобы было приятнее крутить
-        angle = float(delta_pixels) * self.sensitivity  # в радианах
+        # простая эвристика: движение мыши -> угол
+        delta_pixels = delta_x - delta_y
+        angle = float(delta_pixels) * self.rotate_sensitivity  # радианы
 
-        # выбираем мировую ось вращения
-        if self.active_axis == "x":
-            axis_vec = np.array([1.0, 0.0, 0.0], dtype=float)
-        elif self.active_axis == "y":
-            axis_vec = np.array([0.0, 1.0, 0.0], dtype=float)
-        else:
-            axis_vec = np.array([0.0, 0.0, 1.0], dtype=float)
+        # ось вращения в МИРОВЫХ координатах, но взята из локальных осей гизмо
+        axis_vec = self._get_axis_vector(self.active_axis)
 
-        R = rotation_matrix_from_axis_angle(axis_vec, angle)
+        # инкрементальный поворот вокруг этой оси (кватернион)
+        dq = Pose3.rotation(axis_vec, angle).ang
 
-        # применяем к исходной ориентации
-        new_ang = R @ self.start_target_ang
+        # new = dq * start -> вращение вокруг той самой мировой оси (локально ориентированной)
+        new_ang = qmul(dq, self.start_target_ang)
+
+        # нормализуем
+        norm = np.linalg.norm(new_ang)
+        if norm > 0.0:
+            new_ang = new_ang / norm
 
         new_pose = Pose3(
             lin=self.start_target_pos,
@@ -500,7 +477,7 @@ class GizmoRotateController(InputComponent):
         # ставим объект
         self.target.transform.relocate_global(new_pose)
 
-        # и гизмо вместе с ним
+        # и гизмо за ним
         self.gizmo.transform.relocate_global(
             self.target.transform.global_pose()
         )

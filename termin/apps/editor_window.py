@@ -14,6 +14,7 @@ from termin.visualization.picking import id_to_rgb
 from termin.visualization.resources import ResourceManager
 from termin.geombase.pose3 import Pose3
 from termin.visualization.gizmos.gizmo_axes import GizmoEntity, GizmoMoveController
+from termin.visualization.backends.base import Action, MouseButton
 
 
 class EditorWindow(QMainWindow):
@@ -317,35 +318,125 @@ class EditorWindow(QMainWindow):
 
     # ----------- синхронизация с пиками -----------
 
-    def mouse_button_clicked(self, button_type, x, y, viewport):
+    def mouse_button_event(self, button_type, action, x, y, viewport):
         from termin.visualization.backends.base import MouseButton
-        if button_type == MouseButton.LEFT:
-            self._pending_pick = (x, y, viewport)
+        if button_type == MouseButton.LEFT and action == Action.RELEASE:
+            self._pending_pick_release = (x, y, viewport)
+        if button_type == MouseButton.LEFT and action == Action.PRESS:
+            self._pending_pick_press = (x, y, viewport)
 
     def _after_render(self, window):
-        # --- обработка клика (selection) ---
-        if self._pending_pick is not None:
-            x, y, viewport = self._pending_pick
-            self._pending_pick = None
-
-            picked_ent = window.pick_entity_at(x, y, viewport)
-            if picked_ent is not None:
-                self.on_selection_changed(picked_ent)
-                self._select_object_in_tree(picked_ent)
-                self.inspector.set_target(picked_ent)
-            else:
-                self.on_selection_changed(None)
-                self.inspector.set_target(None)
-
-        # --- обработка hover ---
+        if self._pending_pick_press is not None:
+            self._process_pending_pick_press(self._pending_pick_press, window)
+        if self._pending_pick_release is not None:
+            self._process_pending_pick_release(self._pending_pick_release, window)
         if self._pending_hover is not None:
-            x, y, viewport = self._pending_hover
-            # можно сбрасывать, чтобы не репикать каждый кадр,
-            # либо оставить и обновлять каждый рендер – на твой вкус
-            self._pending_hover = None
+            self._process_pending_hover(self._pending_hover, window)
 
-            hovered_ent = window.pick_entity_at(x, y, viewport)
-            self._update_hover_entity(hovered_ent)
+    def _process_pending_hover(self, pending_hover, window):
+        x, y, viewport = pending_hover
+        self._pending_hover = None
+
+        hovered_ent = window.pick_entity_at(x, y, viewport)
+        self._update_hover_entity(hovered_ent)
+
+    def _process_pending_pick_release(self, pending_release, window):
+        x, y, viewport = pending_release
+        self._pending_pick_release = None
+
+        picked_ent = window.pick_entity_at(x, y, viewport)
+
+        # обычный selection (как у тебя было)
+        if picked_ent is not None:
+            self.on_selection_changed(picked_ent)
+            self._select_object_in_tree(picked_ent)
+            self.inspector.set_target(picked_ent)
+        else:
+            self.on_selection_changed(None)
+            self.inspector.set_target(None)
+
+    def _is_entity_part_of_gizmo(self, ent: Entity) -> bool:
+        """
+        Проверяет, является ли ent частью гизмо (стрелкой, кольцом и т.п.).
+        Ходит вверх по иерархии transform, пока не найдёт gizmo_axis_* или gizmo_rot_*.
+        """
+        if ent is None or self.gizmo is None:
+            return False
+
+        cur = ent
+        while cur is not None:
+            name = cur.name
+
+            if name.startswith("gizmo_axis_") or name.startswith("gizmo_rot_"):
+                return True
+
+            tf = cur.transform
+            parent_tf = tf.parent if tf is not None else None
+            cur = parent_tf.entity if parent_tf is not None else None
+
+        return False
+
+    def _process_pending_pick_press(self, pending_press, window):
+        x, y, viewport = pending_press
+        self._pending_pick_press = None
+
+        picked_ent = window.pick_entity_at(x, y, viewport)
+
+        gizmo_ctrl = None
+        if self.gizmo is not None:
+            gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
+
+        # сначала проверяем, не гизмо ли это
+        if picked_ent is not None and gizmo_ctrl is not None:
+            ent = picked_ent
+            is_gizmo_part = self._is_entity_part_of_gizmo(ent)
+
+            if is_gizmo_part:
+                print("Clicked on gizmo part")
+                name = picked_ent.name or ""
+                print(f"Clicked on gizmo part: {name}")
+
+                # перемещение по оси
+                if name.endswith("shaft") or name.endswith("head"):
+                    axis = name[0]
+                    gizmo_ctrl.start_translate_from_pick(axis, viewport, x, y)
+                    return
+
+                # вращение по оси (если уже подключишь кольца)
+                if name.endswith("ring"):
+                    print("Starting rotation from pick")
+                    axis = name[0]
+                    gizmo_ctrl.start_rotate_from_pick(axis, viewport, x, y)
+                    return
+
+
+    def _extract_gizmo_hit(self, ent: Entity | None):
+        """
+        Возвращает ("translate" | "rotate", axis) если кликнули по части гизмо,
+        иначе None.
+
+        Ходим вверх по иерархии transform, пока не найдём gizmo_axis_* или gizmo_rot_*.
+        """
+        if ent is None or self.gizmo is None:
+            return None
+
+        cur = ent
+        while cur is not None:
+            name = getattr(cur, "name", "")
+
+            if name.startswith("gizmo_axis_"):
+                axis = name.removeprefix("gizmo_axis_")
+                return ("translate", axis)
+
+            if name.startswith("gizmo_rot_"):
+                axis = name.removeprefix("gizmo_rot_")
+                return ("rotate", axis)
+
+            tf = getattr(cur, "transform", None)
+            parent_tf = getattr(tf, "parent", None) if tf is not None else None
+            cur = getattr(parent_tf, "entity", None) if parent_tf is not None else None
+
+        return None
 
     def _update_hover_entity(self, ent: Entity | None):
         # как и в selection – игнорим невыделяемое (гизмо и т.п.)
@@ -374,7 +465,8 @@ class EditorWindow(QMainWindow):
         self.sceneTree.scrollTo(idx)
 
     def _init_viewport(self):
-        self._pending_pick = None
+        self._pending_pick_press = None
+        self._pending_pick_release = None
         self._pending_hover = None   # <- новый буфер для hover-пика
         layout = self.viewportContainer.layout()
 
@@ -388,7 +480,7 @@ class EditorWindow(QMainWindow):
         self.viewport = self.viewport_window.add_viewport(self.scene, self.camera)
         self.viewport_window.set_world_mode("editor")
 
-        self.viewport_window.on_mouse_button_event = self.mouse_button_clicked
+        self.viewport_window.on_mouse_button_event = self.mouse_button_event
         self.viewport_window.after_render_handler = self._after_render
         self.viewport_window.on_mouse_move_event   = self.mouse_moved
 

@@ -52,7 +52,7 @@ class Window:
         self.handle.set_mouse_button_callback(self._handle_mouse_button)
         self.handle.set_key_callback(self._handle_key)
 
-        self.on_mouse_button_event : Optional[callable(MouseButton, x, y, Viewport)] = None
+        self.on_mouse_button_event : Optional[callable(MouseButton, MouseAction, x, y, Viewport)] = None
         self.on_mouse_move_event = None  # callable(x: float, y: float, viewport: Optional[Viewport])
         self.after_render_handler = None  # type: Optional[Callable[["Window"], None]]
 
@@ -297,8 +297,8 @@ class Window:
             #print("Dispatching mouse button to scene")  # --- DEBUG ---
             viewport.scene.dispatch_input(viewport, "on_mouse_button", button=button, action=action, mods=mods)  
 
-        if self.on_mouse_button_event is not None and action == Action.RELEASE:
-            self.on_mouse_button_event(button, x, y, viewport)   
+        if self.on_mouse_button_event:
+            self.on_mouse_button_event(button, action, x, y, viewport)   
 
         self._request_update()
 
