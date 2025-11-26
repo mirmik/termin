@@ -15,13 +15,13 @@ import numpy as np<br>
 from termin.geombase.pose3 import Pose3<br>
 from termin.mesh.mesh import UVSphereMesh, Mesh, Mesh3<br>
 from termin.visualization import (<br>
-    Entity,<br>
-    MeshDrawable,<br>
-    Scene,<br>
-    Material,<br>
-    VisualizationWorld,<br>
-    PerspectiveCameraComponent,<br>
-    OrbitCameraController,<br>
+&#9;Entity,<br>
+&#9;MeshDrawable,<br>
+&#9;Scene,<br>
+&#9;Material,<br>
+&#9;VisualizationWorld,<br>
+&#9;PerspectiveCameraComponent,<br>
+&#9;OrbitCameraController,<br>
 )<br>
 from termin.visualization.components import MeshRenderer<br>
 from termin.visualization.shader import ShaderProgram<br>
@@ -32,56 +32,56 @@ from termin.visualization.materials.simple import ColorMaterial<br>
 from scipy.spatial import ConvexHull<br>
 <br>
 def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent]:<br>
-    <br>
-    mesh = ConvexHull([<br>
-        [1, 1, 1],<br>
-        [1, 1, -1],<br>
-        [1, -1, 1],<br>
-        [1, -1, -1],<br>
-        [-1, 1, 1],<br>
-        [-1, 1, -1],<br>
-        [-1, -1, 1],<br>
-        [-1, -1, -1],<br>
+&#9;<br>
+&#9;mesh = ConvexHull([<br>
+&#9;&#9;[1, 1, 1],<br>
+&#9;&#9;[1, 1, -1],<br>
+&#9;&#9;[1, -1, 1],<br>
+&#9;&#9;[1, -1, -1],<br>
+&#9;&#9;[-1, 1, 1],<br>
+&#9;&#9;[-1, 1, -1],<br>
+&#9;&#9;[-1, -1, 1],<br>
+&#9;&#9;[-1, -1, -1],<br>
 <br>
 <br>
-        [-2, -2, -1],<br>
-        [2, -2, -1],<br>
-        [2, 2, -1],<br>
-        [-2, 2, -1],<br>
-    ])<br>
-    mesh = Mesh3.from_convex_hull(mesh)<br>
+&#9;&#9;[-2, -2, -1],<br>
+&#9;&#9;[2, -2, -1],<br>
+&#9;&#9;[2, 2, -1],<br>
+&#9;&#9;[-2, 2, -1],<br>
+&#9;])<br>
+&#9;mesh = Mesh3.from_convex_hull(mesh)<br>
 <br>
-    drawable = MeshDrawable(mesh)<br>
+&#9;drawable = MeshDrawable(mesh)<br>
 <br>
-    material = ColorMaterial((0.8, 0.3, 0.3, 1.0))<br>
-    entity = Entity(pose=Pose3.identity(), name=&quot;cube&quot;)<br>
-    entity.add_component(MeshRenderer(drawable, material))<br>
-    scene = Scene()<br>
-    scene.add(entity)<br>
+&#9;material = ColorMaterial((0.8, 0.3, 0.3, 1.0))<br>
+&#9;entity = Entity(pose=Pose3.identity(), name=&quot;cube&quot;)<br>
+&#9;entity.add_component(MeshRenderer(drawable, material))<br>
+&#9;scene = Scene()<br>
+&#9;scene.add(entity)<br>
 <br>
-    skybox = SkyBoxEntity()<br>
-    scene.add(skybox)<br>
-    world.add_scene(scene)<br>
+&#9;skybox = SkyBoxEntity()<br>
+&#9;scene.add(skybox)<br>
+&#9;world.add_scene(scene)<br>
 <br>
-    camera_entity = Entity(name=&quot;camera&quot;)<br>
-    camera = PerspectiveCameraComponent()<br>
-    camera_entity.add_component(camera)<br>
-    camera_entity.add_component(OrbitCameraController())<br>
-    scene.add(camera_entity)<br>
+&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
+&#9;camera = PerspectiveCameraComponent()<br>
+&#9;camera_entity.add_component(camera)<br>
+&#9;camera_entity.add_component(OrbitCameraController())<br>
+&#9;scene.add(camera_entity)<br>
 <br>
-    return scene, camera<br>
+&#9;return scene, camera<br>
 <br>
 <br>
 def main():<br>
-    world = VisualizationWorld()<br>
-    scene, camera = build_scene(world)<br>
-    window = world.create_window(title=&quot;termin cube demo&quot;)<br>
-    window.add_viewport(scene, camera)<br>
-    world.run()<br>
+&#9;world = VisualizationWorld()<br>
+&#9;scene, camera = build_scene(world)<br>
+&#9;window = world.create_window(title=&quot;termin cube demo&quot;)<br>
+&#9;window.add_viewport(scene, camera)<br>
+&#9;world.run()<br>
 <br>
 <br>
 if __name__ == &quot;__main__&quot;:<br>
-    main()<br>
+&#9;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

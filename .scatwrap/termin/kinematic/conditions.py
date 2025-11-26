@@ -11,46 +11,46 @@ import termin.linalg.subspaces<br>
 <br>
 <br>
 class SymCondition:<br>
-    def __init__(self, Ah, bh, weight=1.0):<br>
-        self.Ah = Ah<br>
-        self.bh = bh<br>
-        self.weight = weight<br>
+&#9;def __init__(self, Ah, bh, weight=1.0):<br>
+&#9;&#9;self.Ah = Ah<br>
+&#9;&#9;self.bh = bh<br>
+&#9;&#9;self.weight = weight<br>
 <br>
-    def A(self):<br>
-        return self.Ah.T.dot(self.Ah) * self.weight<br>
+&#9;def A(self):<br>
+&#9;&#9;return self.Ah.T.dot(self.Ah) * self.weight<br>
 <br>
-    def b(self):<br>
-        return self.Ah.T.dot(self.bh) * self.weight<br>
+&#9;def b(self):<br>
+&#9;&#9;return self.Ah.T.dot(self.bh) * self.weight<br>
 <br>
-    def NullProj(self):<br>
-        return termin.linalg.subspaces.nullspace_projector(self.Ah)<br>
+&#9;def NullProj(self):<br>
+&#9;&#9;return termin.linalg.subspaces.nullspace_projector(self.Ah)<br>
 <br>
 <br>
 class ConditionCollection:<br>
-    def __init__(self):<br>
-        self.rank = -1<br>
-        self.conds = []<br>
-        self.weights = []<br>
+&#9;def __init__(self):<br>
+&#9;&#9;self.rank = -1<br>
+&#9;&#9;self.conds = []<br>
+&#9;&#9;self.weights = []<br>
 <br>
-    def add(self, cond, weight=None):<br>
-        if weight is not None:<br>
-            cond.weight = weight<br>
-        if self.rank &lt; 0:<br>
-            self.rank = cond.A().shape[0]<br>
-        self.conds.append(cond)<br>
-        self.weights.append(cond.weight)<br>
+&#9;def add(self, cond, weight=None):<br>
+&#9;&#9;if weight is not None:<br>
+&#9;&#9;&#9;cond.weight = weight<br>
+&#9;&#9;if self.rank &lt; 0:<br>
+&#9;&#9;&#9;self.rank = cond.A().shape[0]<br>
+&#9;&#9;self.conds.append(cond)<br>
+&#9;&#9;self.weights.append(cond.weight)<br>
 <br>
-    def A(self):<br>
-        A_sum = numpy.zeros((self.rank, self.rank))<br>
-        for cond in self.conds:<br>
-            A_sum += cond.A()<br>
-        return A_sum<br>
+&#9;def A(self):<br>
+&#9;&#9;A_sum = numpy.zeros((self.rank, self.rank))<br>
+&#9;&#9;for cond in self.conds:<br>
+&#9;&#9;&#9;A_sum += cond.A()<br>
+&#9;&#9;return A_sum<br>
 <br>
-    def b(self):<br>
-        b_sum = numpy.zeros((self.rank,))<br>
-        for cond in self.conds:<br>
-            b_sum += cond.b()<br>
-        return b_sum<br>
+&#9;def b(self):<br>
+&#9;&#9;b_sum = numpy.zeros((self.rank,))<br>
+&#9;&#9;for cond in self.conds:<br>
+&#9;&#9;&#9;b_sum += cond.b()<br>
+&#9;&#9;return b_sum<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

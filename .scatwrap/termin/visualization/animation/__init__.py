@@ -13,10 +13,10 @@ from .player import AnimationPlayer<br>
 from .keyframe import AnimationKeyframe<br>
 <br>
 __all__ = [<br>
-    &quot;AnimationChannel&quot;,<br>
-    &quot;AnimationClip&quot;,<br>
-    &quot;AnimationPlayer&quot;,<br>
-    &quot;AnimationKeyframe&quot;,<br>
+&#9;&quot;AnimationChannel&quot;,<br>
+&#9;&quot;AnimationClip&quot;,<br>
+&#9;&quot;AnimationPlayer&quot;,<br>
+&#9;&quot;AnimationKeyframe&quot;,<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

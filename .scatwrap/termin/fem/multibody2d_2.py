@@ -56,7 +56,7 @@
 #             lin=self.pose_var.value[0:2].copy(),<br>
 #             ang=float(self.pose_var.value[2].copy())<br>
 #         )<br>
-        <br>
+&#9;&#9;<br>
 #     # ---------- ВКЛАД В СИСТЕМУ ----------<br>
 #     def contribute(self, matrices, index_maps):<br>
 #         self.contribute_to_mass_matrix(matrices, index_maps)<br>
@@ -80,7 +80,7 @@
 <br>
 #     def contribute_for_constraints_correction(self, matrices, index_maps):<br>
 #         self.contribute_to_mass_matrix(matrices, index_maps)<br>
-    <br>
+&#9;<br>
 #     def contribute_to_mass_matrix(self, matrices, index_maps):<br>
 #         A = matrices[&quot;mass&quot;]<br>
 #         amap = index_maps[&quot;acceleration&quot;]<br>
@@ -141,7 +141,7 @@
 # class FixedRotationJoint2D(Contribution):<br>
 #     &quot;&quot;&quot;<br>
 #     Вращательный шарнир с фиксацией в пространстве (ground revolute joint).<br>
-    <br>
+&#9;<br>
 #     Фиксирует точку на теле в пространстве, разрешая только вращение вокруг этой точки.<br>
 #     Эквивалентно присоединению тела к неподвижному основанию через шарнир.<br>
 <br>
@@ -159,7 +159,7 @@
 #         &quot;&quot;&quot;<br>
 #         self.body = body<br>
 #         self.internal_force = Variable(&quot;F_joint&quot;, size=2, tag=&quot;force&quot;)<br>
-        <br>
+&#9;&#9;<br>
 #         body_pose = self.body.pose()<br>
 <br>
 #         self.coords_of_joint = coords_of_joint.copy() if coords_of_joint is not None else body_pose.lin.copy()<br>
@@ -178,7 +178,7 @@
 #         &quot;&quot;&quot;<br>
 #         radius = self.radius()<br>
 #         omega = self.body.velocity_var.value[2]<br>
-        <br>
+&#9;&#9;<br>
 #         self.contribute_to_holonomic_matrix(matrices, index_maps)<br>
 <br>
 #         h = matrices[&quot;holonomic_rhs&quot;]<br>

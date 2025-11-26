@@ -24,12 +24,12 @@ from .attached import AttachedCollider<br>
 from .union_collider import UnionCollider<br>
 <br>
 __all__ = [<br>
-    'Collider',<br>
-    'SphereCollider',<br>
-    'BoxCollider',<br>
-    'CapsuleCollider',<br>
-    'AttachedCollider',<br>
-    'UnionCollider',<br>
+&#9;'Collider',<br>
+&#9;'SphereCollider',<br>
+&#9;'BoxCollider',<br>
+&#9;'CapsuleCollider',<br>
+&#9;'AttachedCollider',<br>
+&#9;'UnionCollider',<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

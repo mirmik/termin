@@ -22,8 +22,8 @@ uniform mat4 u_projection;<br>
 out vec3 v_normal;<br>
 <br>
 void main() {<br>
-    v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
+&#9;gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -36,20 +36,20 @@ uniform vec4 u_color;<br>
 out vec4 FragColor;<br>
 <br>
 void main() {<br>
-    vec3 n = normalize(v_normal);<br>
-    float ndotl = max(dot(n, vec3(0.2, 0.6, 0.5)), 0.0);<br>
-    vec3 color = u_color.rgb * (0.25 + 0.75 * ndotl);<br>
-    FragColor = vec4(color, u_color.a);<br>
+&#9;vec3 n = normalize(v_normal);<br>
+&#9;float ndotl = max(dot(n, vec3(0.2, 0.6, 0.5)), 0.0);<br>
+&#9;vec3 color = u_color.rgb * (0.25 + 0.75 * ndotl);<br>
+&#9;FragColor = vec4(color, u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 class ColorMaterial(Material):<br>
-    def __init__(self, color: tuple[float, float, float, float]):<br>
-        self.color = color<br>
-        self.shader = ShaderProgram(ColorMaterial_VERT, ColorMaterial_FRAG)<br>
-        super().__init__(shader=self.shader, color=color)<br>
+&#9;def __init__(self, color: tuple[float, float, float, float]):<br>
+&#9;&#9;self.color = color<br>
+&#9;&#9;self.shader = ShaderProgram(ColorMaterial_VERT, ColorMaterial_FRAG)<br>
+&#9;&#9;super().__init__(shader=self.shader, color=color)<br>
 <br>
-    <br>
+&#9;<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

@@ -10,24 +10,24 @@
 <br>
 <br>
 class Magnitude:<br>
-    def __init__(self, v, w):<br>
-        self.v = v<br>
-        self.w = w<br>
+&#9;def __init__(self, v, w):<br>
+&#9;&#9;self.v = v<br>
+&#9;&#9;self.w = w<br>
 <br>
-    def __str__(self):<br>
-        return str((self.v, self.w))<br>
+&#9;def __str__(self):<br>
+&#9;&#9;return str((self.v, self.w))<br>
 <br>
-    def unitize(self):<br>
-        return Magnitude(<br>
-            self.v / self.w,<br>
-            1<br>
-        )<br>
+&#9;def unitize(self):<br>
+&#9;&#9;return Magnitude(<br>
+&#9;&#9;&#9;self.v / self.w,<br>
+&#9;&#9;&#9;1<br>
+&#9;&#9;)<br>
 <br>
-    def to_float(self):<br>
-        return self.v / self.w<br>
+&#9;def to_float(self):<br>
+&#9;&#9;return self.v / self.w<br>
 <br>
-    def __abs__(self):<br>
-        return Magnitude(abs(self.v), abs(self.w))<br>
+&#9;def __abs__(self):<br>
+&#9;&#9;return Magnitude(abs(self.v), abs(self.w))<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

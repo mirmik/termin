@@ -15,13 +15,13 @@ import numpy as np<br>
 from termin.geombase.pose3 import Pose3<br>
 from termin.mesh.mesh import UVSphereMesh, Mesh, CubeMesh<br>
 from termin.visualization import (<br>
-    Entity,<br>
-    MeshDrawable,<br>
-    Scene,<br>
-    Material,<br>
-    VisualizationWorld,<br>
-    PerspectiveCameraComponent,<br>
-    OrbitCameraController,<br>
+&#9;Entity,<br>
+&#9;MeshDrawable,<br>
+&#9;Scene,<br>
+&#9;Material,<br>
+&#9;VisualizationWorld,<br>
+&#9;PerspectiveCameraComponent,<br>
+&#9;OrbitCameraController,<br>
 )<br>
 from termin.visualization.components import MeshRenderer<br>
 from termin.visualization.shader import ShaderProgram<br>
@@ -30,39 +30,39 @@ from termin.visualization.gizmos import GizmoEntity, GizmoMoveController<br>
 from termin.visualization.scene import Scene<br>
 <br>
 def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent]:<br>
-    scene = Scene()<br>
+&#9;scene = Scene()<br>
 <br>
-    gizmo = GizmoEntity(size=2.0)<br>
-    gizmo.add_component(GizmoMoveController(gizmo, scene))<br>
-    scene.add(gizmo)<br>
+&#9;gizmo = GizmoEntity(size=2.0)<br>
+&#9;gizmo.add_component(GizmoMoveController(gizmo, scene))<br>
+&#9;scene.add(gizmo)<br>
 <br>
-    skybox = SkyBoxEntity()<br>
-    scene.add(skybox)<br>
-    world.add_scene(scene)<br>
+&#9;skybox = SkyBoxEntity()<br>
+&#9;scene.add(skybox)<br>
+&#9;world.add_scene(scene)<br>
 <br>
-    camera_entity = Entity(name=&quot;camera&quot;)<br>
-    camera = PerspectiveCameraComponent()<br>
-    camera_entity.add_component(camera)<br>
-    controller = OrbitCameraController()<br>
-    controller.azimuth = 0<br>
-    controller.elevation = 0<br>
-    camera_entity.add_component(controller)<br>
-    <br>
-    scene.add(camera_entity)<br>
+&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
+&#9;camera = PerspectiveCameraComponent()<br>
+&#9;camera_entity.add_component(camera)<br>
+&#9;controller = OrbitCameraController()<br>
+&#9;controller.azimuth = 0<br>
+&#9;controller.elevation = 0<br>
+&#9;camera_entity.add_component(controller)<br>
+&#9;<br>
+&#9;scene.add(camera_entity)<br>
 <br>
-    return scene, camera<br>
+&#9;return scene, camera<br>
 <br>
 <br>
 def main():<br>
-    world = VisualizationWorld()<br>
-    scene, camera = build_scene(world)<br>
-    window = world.create_window(title=&quot;termin cube demo&quot;)<br>
-    window.add_viewport(scene, camera)<br>
-    world.run()<br>
+&#9;world = VisualizationWorld()<br>
+&#9;scene, camera = build_scene(world)<br>
+&#9;window = world.create_window(title=&quot;termin cube demo&quot;)<br>
+&#9;window.add_viewport(scene, camera)<br>
+&#9;world.run()<br>
 <br>
 <br>
 if __name__ == &quot;__main__&quot;:<br>
-    main()<br>
+&#9;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

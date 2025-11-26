@@ -15,13 +15,13 @@ import numpy as np<br>
 from termin.geombase.pose3 import Pose3<br>
 from termin.mesh.mesh import CubeMesh<br>
 from termin.visualization import (<br>
-    Entity,<br>
-    MeshDrawable,<br>
-    Scene,<br>
-    Material,<br>
-    VisualizationWorld,<br>
-    PerspectiveCameraComponent,<br>
-    OrbitCameraController,<br>
+&#9;Entity,<br>
+&#9;MeshDrawable,<br>
+&#9;Scene,<br>
+&#9;Material,<br>
+&#9;VisualizationWorld,<br>
+&#9;PerspectiveCameraComponent,<br>
+&#9;OrbitCameraController,<br>
 )<br>
 from termin.visualization.components import MeshRenderer<br>
 from termin.visualization.shader import ShaderProgram<br>
@@ -46,8 +46,8 @@ uniform mat4 u_projection;<br>
 out vec3 v_normal;<br>
 <br>
 void main() {<br>
-    v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
+&#9;gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -59,10 +59,10 @@ uniform vec3 u_light_dir;<br>
 out vec4 FragColor;<br>
 <br>
 void main(){<br>
-    vec3 N = normalize(v_normal);<br>
-    float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);<br>
-    vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);<br>
-    FragColor = vec4(color, u_color.a);<br>
+&#9;vec3 N = normalize(v_normal);<br>
+&#9;float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);<br>
+&#9;vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);<br>
+&#9;FragColor = vec4(color, u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -77,8 +77,8 @@ layout(location=1) in vec2 a_uv;<br>
 out vec2 v_uv;<br>
 <br>
 void main(){<br>
-    v_uv = a_uv;<br>
-    gl_Position = vec4(a_position, 0, 1);<br>
+&#9;v_uv = a_uv;<br>
+&#9;gl_Position = vec4(a_position, 0, 1);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -92,11 +92,11 @@ in vec2 v_uv;<br>
 out vec4 FragColor;<br>
 <br>
 void main(){<br>
-    float alpha = u_color.a;<br>
-    if (u_use_texture) {<br>
-        alpha *= texture(u_texture, v_uv).r;<br>
-    }<br>
-    FragColor = vec4(u_color.rgb, alpha);<br>
+&#9;float alpha = u_color.a;<br>
+&#9;if (u_use_texture) {<br>
+&#9;&#9;alpha *= texture(u_texture, v_uv).r;<br>
+&#9;}<br>
+&#9;FragColor = vec4(u_color.rgb, alpha);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -104,79 +104,79 @@ void main(){<br>
 # ----- BUILD SCENE ---------------------------------------------------<br>
 <br>
 def build_scene(world: VisualizationWorld):<br>
-    # 3D cube<br>
-    shader = ShaderProgram(VERT, FRAG)<br>
-    material = Material(shader=shader, color=np.array([0.6, 0.8, 0.9, 1.0], dtype=np.float32))<br>
-    cube_mesh = MeshDrawable(CubeMesh(size=1.0))<br>
+&#9;# 3D cube<br>
+&#9;shader = ShaderProgram(VERT, FRAG)<br>
+&#9;material = Material(shader=shader, color=np.array([0.6, 0.8, 0.9, 1.0], dtype=np.float32))<br>
+&#9;cube_mesh = MeshDrawable(CubeMesh(size=1.0))<br>
 <br>
-    cube = Entity(name=&quot;cube&quot;, pose=Pose3.identity())<br>
-    cube.add_component(MeshRenderer(cube_mesh, material))<br>
+&#9;cube = Entity(name=&quot;cube&quot;, pose=Pose3.identity())<br>
+&#9;cube.add_component(MeshRenderer(cube_mesh, material))<br>
 <br>
-    scene = Scene()<br>
-    scene.add(cube)<br>
-    scene.add(SkyBoxEntity())<br>
-    world.add_scene(scene)<br>
+&#9;scene = Scene()<br>
+&#9;scene.add(cube)<br>
+&#9;scene.add(SkyBoxEntity())<br>
+&#9;world.add_scene(scene)<br>
 <br>
-    # Camera + orbit controller<br>
-    cam_entity = Entity(name=&quot;camera&quot;)<br>
-    cam = PerspectiveCameraComponent()<br>
-    cam_entity.add_component(cam)<br>
-    cam_entity.add_component(OrbitCameraController(radius=5.0))<br>
-    scene.add(cam_entity)<br>
+&#9;# Camera + orbit controller<br>
+&#9;cam_entity = Entity(name=&quot;camera&quot;)<br>
+&#9;cam = PerspectiveCameraComponent()<br>
+&#9;cam_entity.add_component(cam)<br>
+&#9;cam_entity.add_component(OrbitCameraController(radius=5.0))<br>
+&#9;scene.add(cam_entity)<br>
 <br>
-    # ----- UI CANVAS -----<br>
-    canvas = Canvas()<br>
+&#9;# ----- UI CANVAS -----<br>
+&#9;canvas = Canvas()<br>
 <br>
-    # UI materials<br>
-    ui_shader = ShaderProgram(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER)<br>
-    ui_material_rect = Material(ui_shader, color=np.array([1, 1, 1, 1], dtype=np.float32),<br>
-                                uniforms={&quot;u_use_texture&quot;: False})<br>
-    ui_material_text = Material(ui_shader, color=np.array([1, 1, 1, 1], dtype=np.float32),<br>
-                                uniforms={&quot;u_use_texture&quot;: True})<br>
+&#9;# UI materials<br>
+&#9;ui_shader = ShaderProgram(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER)<br>
+&#9;ui_material_rect = Material(ui_shader, color=np.array([1, 1, 1, 1], dtype=np.float32),<br>
+&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;uniforms={&quot;u_use_texture&quot;: False})<br>
+&#9;ui_material_text = Material(ui_shader, color=np.array([1, 1, 1, 1], dtype=np.float32),<br>
+&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;uniforms={&quot;u_use_texture&quot;: True})<br>
 <br>
-    # Font for the button label<br>
-    canvas.font = FontTextureAtlas(&quot;examples/data/fonts/Roboto-Regular.ttf&quot;, size=32)<br>
+&#9;# Font for the button label<br>
+&#9;canvas.font = FontTextureAtlas(&quot;examples/data/fonts/Roboto-Regular.ttf&quot;, size=32)<br>
 <br>
-    # Background rectangle for style (optional)<br>
-    canvas.add(UIRectangle(<br>
-        position=(0.04, 0.04),<br>
-        size=(0.30, 0.12),<br>
-        color=(0, 0, 0, 0.4),<br>
-        material=ui_material_rect,<br>
-    ))<br>
+&#9;# Background rectangle for style (optional)<br>
+&#9;canvas.add(UIRectangle(<br>
+&#9;&#9;position=(0.04, 0.04),<br>
+&#9;&#9;size=(0.30, 0.12),<br>
+&#9;&#9;color=(0, 0, 0, 0.4),<br>
+&#9;&#9;material=ui_material_rect,<br>
+&#9;))<br>
 <br>
-    # ----- BUTTON -----<br>
-    button = UIButton(<br>
-        position=(0.05, 0.05),<br>
-        size=(0.28, 0.10),<br>
-        text=&quot;Click me!&quot;,<br>
-        material=ui_material_rect,       # фон<br>
-        text_material=ui_material_text,  # ← это новое поле<br>
-        on_click=lambda: print(&quot;&gt;&gt;&gt; BUTTON CLICKED!&quot;)<br>
-    )<br>
-    # Немного другой цвет фона — override в UIButton<br>
-    button.background_color = (0.2, 0.4, 0.85, 1.0)<br>
-    button.text_color = (1, 1, 1, 1)<br>
+&#9;# ----- BUTTON -----<br>
+&#9;button = UIButton(<br>
+&#9;&#9;position=(0.05, 0.05),<br>
+&#9;&#9;size=(0.28, 0.10),<br>
+&#9;&#9;text=&quot;Click me!&quot;,<br>
+&#9;&#9;material=ui_material_rect,       # фон<br>
+&#9;&#9;text_material=ui_material_text,  # ← это новое поле<br>
+&#9;&#9;on_click=lambda: print(&quot;&gt;&gt;&gt; BUTTON CLICKED!&quot;)<br>
+&#9;)<br>
+&#9;# Немного другой цвет фона — override в UIButton<br>
+&#9;button.background_color = (0.2, 0.4, 0.85, 1.0)<br>
+&#9;button.text_color = (1, 1, 1, 1)<br>
 <br>
-    canvas.add(button)<br>
+&#9;canvas.add(button)<br>
 <br>
-    return scene, cam, canvas<br>
+&#9;return scene, cam, canvas<br>
 <br>
 <br>
 # ----- MAIN -----------------------------------------------------------<br>
 <br>
 def main():<br>
-    world = VisualizationWorld()<br>
-    scene, cam, canvas = build_scene(world)<br>
+&#9;world = VisualizationWorld()<br>
+&#9;scene, cam, canvas = build_scene(world)<br>
 <br>
-    win = world.create_window(title=&quot;termin UI button&quot;)<br>
-    win.add_viewport(scene, cam, canvas=canvas)<br>
+&#9;win = world.create_window(title=&quot;termin UI button&quot;)<br>
+&#9;win.add_viewport(scene, cam, canvas=canvas)<br>
 <br>
-    world.run()<br>
+&#9;world.run()<br>
 <br>
 <br>
 if __name__ == &quot;__main__&quot;:<br>
-    main()<br>
+&#9;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

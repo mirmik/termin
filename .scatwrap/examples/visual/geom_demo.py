@@ -17,13 +17,13 @@ import numpy as np<br>
 from termin.geombase.pose3 import Pose3<br>
 from termin.mesh.mesh import CubeMesh<br>
 from termin.visualization import (<br>
-    Entity,<br>
-    MeshDrawable,<br>
-    Scene,<br>
-    Material,<br>
-    VisualizationWorld,<br>
-    PerspectiveCameraComponent,<br>
-    OrbitCameraController,<br>
+&#9;Entity,<br>
+&#9;MeshDrawable,<br>
+&#9;Scene,<br>
+&#9;Material,<br>
+&#9;VisualizationWorld,<br>
+&#9;PerspectiveCameraComponent,<br>
+&#9;OrbitCameraController,<br>
 )<br>
 from termin.visualization.components import MeshRenderer<br>
 from termin.visualization.shader import ShaderProgram<br>
@@ -45,10 +45,10 @@ uniform mat4 u_projection;<br>
 out vec3 v_pos_world;<br>
 <br>
 void main() {<br>
-    vec4 world = u_model * vec4(a_position, 1.0);<br>
-    v_pos_world = world.xyz;<br>
+&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
+&#9;v_pos_world = world.xyz;<br>
 <br>
-    gl_Position = u_projection * u_view * world;<br>
+&#9;gl_Position = u_projection * u_view * world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -67,20 +67,20 @@ in vec3 v_pos_world[];<br>
 out vec3 g_pos_world;<br>
 <br>
 void main() {<br>
-    // три вершины входного треугольника<br>
-    for (int i = 0; i &lt; 3; i++) {<br>
-        int j = (i + 1) % 3;<br>
+&#9;// три вершины входного треугольника<br>
+&#9;for (int i = 0; i &lt; 3; i++) {<br>
+&#9;&#9;int j = (i + 1) % 3;<br>
 <br>
-        g_pos_world = v_pos_world[i];<br>
-        gl_Position = gl_in[i].gl_Position;<br>
-        EmitVertex();<br>
+&#9;&#9;g_pos_world = v_pos_world[i];<br>
+&#9;&#9;gl_Position = gl_in[i].gl_Position;<br>
+&#9;&#9;EmitVertex();<br>
 <br>
-        g_pos_world = v_pos_world[j];<br>
-        gl_Position = gl_in[j].gl_Position;<br>
-        EmitVertex();<br>
+&#9;&#9;g_pos_world = v_pos_world[j];<br>
+&#9;&#9;gl_Position = gl_in[j].gl_Position;<br>
+&#9;&#9;EmitVertex();<br>
 <br>
-        EndPrimitive();<br>
-    }<br>
+&#9;&#9;EndPrimitive();<br>
+&#9;}<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -98,8 +98,8 @@ uniform vec4 u_color;<br>
 out vec4 FragColor;<br>
 <br>
 void main() {<br>
-    // просто цвет линий<br>
-    FragColor = vec4(u_color.rgb, u_color.a);<br>
+&#9;// просто цвет линий<br>
+&#9;FragColor = vec4(u_color.rgb, u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -108,57 +108,57 @@ void main() {<br>
 #   Scene builder<br>
 # =============================<br>
 def build_scene(world: VisualizationWorld):<br>
-    cube_mesh = CubeMesh()<br>
-    drawable = MeshDrawable(cube_mesh)<br>
+&#9;cube_mesh = CubeMesh()<br>
+&#9;drawable = MeshDrawable(cube_mesh)<br>
 <br>
-    # теперь прокидываем третий аргумент — geometry shader<br>
-    shader_prog = ShaderProgram(<br>
-        vertex_source=vert,<br>
-        fragment_source=frag,<br>
-        geometry_source=geom,<br>
-    )<br>
+&#9;# теперь прокидываем третий аргумент — geometry shader<br>
+&#9;shader_prog = ShaderProgram(<br>
+&#9;&#9;vertex_source=vert,<br>
+&#9;&#9;fragment_source=frag,<br>
+&#9;&#9;geometry_source=geom,<br>
+&#9;)<br>
 <br>
-    # красим линии (красный wireframe)<br>
-    material = Material(<br>
-        shader=shader_prog,<br>
-        color=np.array([1.0, 0.1, 0.1, 1.0], dtype=np.float32)<br>
-    )<br>
+&#9;# красим линии (красный wireframe)<br>
+&#9;material = Material(<br>
+&#9;&#9;shader=shader_prog,<br>
+&#9;&#9;color=np.array([1.0, 0.1, 0.1, 1.0], dtype=np.float32)<br>
+&#9;)<br>
 <br>
-    entity = Entity(pose=Pose3.identity(), name=&quot;wire_cube&quot;)<br>
-    entity.add_component(MeshRenderer(drawable, material))<br>
+&#9;entity = Entity(pose=Pose3.identity(), name=&quot;wire_cube&quot;)<br>
+&#9;entity.add_component(MeshRenderer(drawable, material))<br>
 <br>
-    scene = Scene()<br>
-    scene.add(entity)<br>
+&#9;scene = Scene()<br>
+&#9;scene.add(entity)<br>
 <br>
-    # оставляем небо для красоты<br>
-    skybox = SkyBoxEntity()<br>
-    scene.add(skybox)<br>
+&#9;# оставляем небо для красоты<br>
+&#9;skybox = SkyBoxEntity()<br>
+&#9;scene.add(skybox)<br>
 <br>
-    world.add_scene(scene)<br>
+&#9;world.add_scene(scene)<br>
 <br>
-    # камера как в базовом примере<br>
-    camera_entity = Entity(name=&quot;camera&quot;)<br>
-    camera = PerspectiveCameraComponent()<br>
-    camera_entity.add_component(camera)<br>
-    camera_entity.add_component(OrbitCameraController())<br>
-    scene.add(camera_entity)<br>
+&#9;# камера как в базовом примере<br>
+&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
+&#9;camera = PerspectiveCameraComponent()<br>
+&#9;camera_entity.add_component(camera)<br>
+&#9;camera_entity.add_component(OrbitCameraController())<br>
+&#9;scene.add(camera_entity)<br>
 <br>
-    return scene, camera<br>
+&#9;return scene, camera<br>
 <br>
 <br>
 # =============================<br>
 #   Main<br>
 # =============================<br>
 def main():<br>
-    world = VisualizationWorld()<br>
-    scene, camera = build_scene(world)<br>
-    window = world.create_window(title=&quot;termin geometry-shader wireframe demo&quot;)<br>
-    window.add_viewport(scene, camera)<br>
-    world.run()<br>
+&#9;world = VisualizationWorld()<br>
+&#9;scene, camera = build_scene(world)<br>
+&#9;window = world.create_window(title=&quot;termin geometry-shader wireframe demo&quot;)<br>
+&#9;window.add_viewport(scene, camera)<br>
+&#9;world.run()<br>
 <br>
 <br>
 if __name__ == &quot;__main__&quot;:<br>
-    main()<br>
+&#9;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

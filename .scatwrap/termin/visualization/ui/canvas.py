@@ -16,79 +16,79 @@ from ..backends.base import GraphicsBackend<br>
 <br>
 <br>
 class Canvas:<br>
-    &quot;&quot;&quot;2D overlay composed of UI elements rendered in viewport space.&quot;&quot;&quot;<br>
+&#9;&quot;&quot;&quot;2D overlay composed of UI elements rendered in viewport space.&quot;&quot;&quot;<br>
 <br>
-    def __init__(self):<br>
-        self.elements: List[&quot;UIElement&quot;] = []<br>
-        self.active_element = None  # захват мыши<br>
+&#9;def __init__(self):<br>
+&#9;&#9;self.elements: List[&quot;UIElement&quot;] = []<br>
+&#9;&#9;self.active_element = None  # захват мыши<br>
 <br>
-    def add(self, element: &quot;UIElement&quot;) -&gt; &quot;UIElement&quot;:<br>
-        self.elements.append(element)<br>
-        return element<br>
+&#9;def add(self, element: &quot;UIElement&quot;) -&gt; &quot;UIElement&quot;:<br>
+&#9;&#9;self.elements.append(element)<br>
+&#9;&#9;return element<br>
 <br>
-    def remove(self, element: &quot;UIElement&quot;):<br>
-        if element in self.elements:<br>
-            self.elements.remove(element)<br>
+&#9;def remove(self, element: &quot;UIElement&quot;):<br>
+&#9;&#9;if element in self.elements:<br>
+&#9;&#9;&#9;self.elements.remove(element)<br>
 <br>
-    def clear(self):<br>
-        self.elements.clear()<br>
+&#9;def clear(self):<br>
+&#9;&#9;self.elements.clear()<br>
 <br>
-    def render(self, graphics: GraphicsBackend, context_key: int, viewport_rect: Tuple[int, int, int, int]):<br>
-        if not self.elements:<br>
-            return<br>
-        graphics.set_cull_face(False)<br>
-        graphics.set_depth_test(False)<br>
-        graphics.set_blend(True)<br>
-        graphics.set_blend_func(&quot;src_alpha&quot;, &quot;one_minus_src_alpha&quot;)<br>
-        for element in self.elements:<br>
-            element.draw(self, graphics, context_key, viewport_rect)<br>
-        graphics.set_cull_face(True)<br>
-        graphics.set_blend(False)<br>
-        graphics.set_depth_test(True)<br>
+&#9;def render(self, graphics: GraphicsBackend, context_key: int, viewport_rect: Tuple[int, int, int, int]):<br>
+&#9;&#9;if not self.elements:<br>
+&#9;&#9;&#9;return<br>
+&#9;&#9;graphics.set_cull_face(False)<br>
+&#9;&#9;graphics.set_depth_test(False)<br>
+&#9;&#9;graphics.set_blend(True)<br>
+&#9;&#9;graphics.set_blend_func(&quot;src_alpha&quot;, &quot;one_minus_src_alpha&quot;)<br>
+&#9;&#9;for element in self.elements:<br>
+&#9;&#9;&#9;element.draw(self, graphics, context_key, viewport_rect)<br>
+&#9;&#9;graphics.set_cull_face(True)<br>
+&#9;&#9;graphics.set_blend(False)<br>
+&#9;&#9;graphics.set_depth_test(True)<br>
 <br>
-    def draw_vertices(self, graphics: GraphicsBackend, context_key: int, vertices):<br>
-        graphics.draw_ui_vertices(context_key, vertices)<br>
+&#9;def draw_vertices(self, graphics: GraphicsBackend, context_key: int, vertices):<br>
+&#9;&#9;graphics.draw_ui_vertices(context_key, vertices)<br>
 <br>
-    def draw_textured_quad(self, graphics: GraphicsBackend, context_key: int, vertices: np.ndarray):<br>
-        graphics.draw_ui_textured_quad(context_key, vertices)<br>
+&#9;def draw_textured_quad(self, graphics: GraphicsBackend, context_key: int, vertices: np.ndarray):<br>
+&#9;&#9;graphics.draw_ui_textured_quad(context_key, vertices)<br>
 <br>
-    def hit_test(self, x: float, y: float, viewport_rect_pixels: Tuple[int, int, int, int]) -&gt; &quot;UIElement | None&quot;:<br>
-        px, py, pw, ph = viewport_rect_pixels<br>
+&#9;def hit_test(self, x: float, y: float, viewport_rect_pixels: Tuple[int, int, int, int]) -&gt; &quot;UIElement | None&quot;:<br>
+&#9;&#9;px, py, pw, ph = viewport_rect_pixels<br>
 <br>
-        # координаты UIElement в нормализованном 0..1 пространстве<br>
-        nx = (x - px) / pw<br>
-        ny = (y - py) / ph<br>
+&#9;&#9;# координаты UIElement в нормализованном 0..1 пространстве<br>
+&#9;&#9;nx = (x - px) / pw<br>
+&#9;&#9;ny = (y - py) / ph<br>
 <br>
-        # проходим с конца (верхние слои имеют приоритет)<br>
-        for elem in reversed(self.elements):<br>
-            if hasattr(elem, &quot;contains&quot;):<br>
-                if elem.contains(nx, ny):<br>
-                    return elem<br>
-        return None<br>
+&#9;&#9;# проходим с конца (верхние слои имеют приоритет)<br>
+&#9;&#9;for elem in reversed(self.elements):<br>
+&#9;&#9;&#9;if hasattr(elem, &quot;contains&quot;):<br>
+&#9;&#9;&#9;&#9;if elem.contains(nx, ny):<br>
+&#9;&#9;&#9;&#9;&#9;return elem<br>
+&#9;&#9;return None<br>
 <br>
-    def mouse_down(self, x, y, viewport_rect):<br>
-        print(&quot;Canvas mouse down at:&quot;, (x, y))<br>
-        hit = self.hit_test(x, y, viewport_rect)<br>
-        if hit:<br>
-            self.active_element = hit<br>
-            hit.on_mouse_down(x, y)<br>
-            return True<br>
-        return False<br>
-    <br>
+&#9;def mouse_down(self, x, y, viewport_rect):<br>
+&#9;&#9;print(&quot;Canvas mouse down at:&quot;, (x, y))<br>
+&#9;&#9;hit = self.hit_test(x, y, viewport_rect)<br>
+&#9;&#9;if hit:<br>
+&#9;&#9;&#9;self.active_element = hit<br>
+&#9;&#9;&#9;hit.on_mouse_down(x, y)<br>
+&#9;&#9;&#9;return True<br>
+&#9;&#9;return False<br>
+&#9;<br>
 <br>
-    def mouse_move(self, x, y, viewport_rect):<br>
-        if self.active_element:<br>
-            self.active_element.on_mouse_move(x, y, viewport_rect)<br>
-            return True<br>
-        return False<br>
+&#9;def mouse_move(self, x, y, viewport_rect):<br>
+&#9;&#9;if self.active_element:<br>
+&#9;&#9;&#9;self.active_element.on_mouse_move(x, y, viewport_rect)<br>
+&#9;&#9;&#9;return True<br>
+&#9;&#9;return False<br>
 <br>
-    def mouse_up(self, x, y, viewport_rect):<br>
-        print(&quot;Canvas mouse up at:&quot;, (x, y))<br>
-        if self.active_element:<br>
-            self.active_element.on_mouse_up(x, y, viewport_rect)<br>
-            self.active_element = None<br>
-            return True<br>
-        return False<br>
+&#9;def mouse_up(self, x, y, viewport_rect):<br>
+&#9;&#9;print(&quot;Canvas mouse up at:&quot;, (x, y))<br>
+&#9;&#9;if self.active_element:<br>
+&#9;&#9;&#9;self.active_element.on_mouse_up(x, y, viewport_rect)<br>
+&#9;&#9;&#9;self.active_element = None<br>
+&#9;&#9;&#9;return True<br>
+&#9;&#9;return False<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

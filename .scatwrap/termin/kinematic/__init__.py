@@ -17,24 +17,24 @@
 <br>
 from .transform import Transform, Transform3<br>
 from .kinematic import (<br>
-    KinematicTransform3,<br>
-    KinematicTransform3OneScrew,<br>
-    Rotator3,<br>
-    Actuator3<br>
+&#9;KinematicTransform3,<br>
+&#9;KinematicTransform3OneScrew,<br>
+&#9;Rotator3,<br>
+&#9;Actuator3<br>
 )<br>
 from .kinchain import KinematicChain3<br>
 from .conditions import SymCondition, ConditionCollection<br>
 <br>
 __all__ = [<br>
-    'Transform',<br>
-    'Transform3',<br>
-    'KinematicTransform3',<br>
-    'KinematicTransform3OneScrew',<br>
-    'Rotator3',<br>
-    'Actuator3',<br>
-    'KinematicChain3',<br>
-    'SymCondition',<br>
-    'ConditionCollection'<br>
+&#9;'Transform',<br>
+&#9;'Transform3',<br>
+&#9;'KinematicTransform3',<br>
+&#9;'KinematicTransform3OneScrew',<br>
+&#9;'Rotator3',<br>
+&#9;'Actuator3',<br>
+&#9;'KinematicChain3',<br>
+&#9;'SymCondition',<br>
+&#9;'ConditionCollection'<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

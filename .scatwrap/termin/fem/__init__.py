@@ -19,45 +19,45 @@ FEM (Finite Element Method) модуль для мультифизическог
 <br>
 # Базовые классы для сборки систем<br>
 from .assembler import (<br>
-    Variable,<br>
-    Contribution,<br>
-    Constraint,<br>
-    MatrixAssembler,<br>
-    BilinearContribution,<br>
-    LoadContribution,<br>
-    ConstraintContribution,<br>
-    LagrangeConstraint,<br>
+&#9;Variable,<br>
+&#9;Contribution,<br>
+&#9;Constraint,<br>
+&#9;MatrixAssembler,<br>
+&#9;BilinearContribution,<br>
+&#9;LoadContribution,<br>
+&#9;ConstraintContribution,<br>
+&#9;LagrangeConstraint,<br>
 )<br>
 <br>
 # Механические элементы<br>
 from .mechanic import (<br>
-    BarElement,<br>
-    BeamElement2D,<br>
-    DistributedLoad,<br>
-    Triangle3Node,<br>
-    BodyForce,<br>
+&#9;BarElement,<br>
+&#9;BeamElement2D,<br>
+&#9;DistributedLoad,<br>
+&#9;Triangle3Node,<br>
+&#9;BodyForce,<br>
 )<br>
 <br>
 <br>
 <br>
 __all__ = [<br>
-    # Assembler<br>
-    'Variable',<br>
-    'Contribution',<br>
-    'MatrixAssembler',<br>
-    'BilinearContribution',<br>
-    'LoadContribution',<br>
-    'ConstraintContribution',<br>
-    <br>
-    # Mechanic<br>
-    'BarElement',<br>
-    'BeamElement2D',<br>
-    'DistributedLoad',<br>
-    'Triangle3Node',<br>
-    'BodyForce',<br>
-    <br>
-    # Electromechanical<br>
-    'DCMotor',<br>
+&#9;# Assembler<br>
+&#9;'Variable',<br>
+&#9;'Contribution',<br>
+&#9;'MatrixAssembler',<br>
+&#9;'BilinearContribution',<br>
+&#9;'LoadContribution',<br>
+&#9;'ConstraintContribution',<br>
+&#9;<br>
+&#9;# Mechanic<br>
+&#9;'BarElement',<br>
+&#9;'BeamElement2D',<br>
+&#9;'DistributedLoad',<br>
+&#9;'Triangle3Node',<br>
+&#9;'BodyForce',<br>
+&#9;<br>
+&#9;# Electromechanical<br>
+&#9;'DCMotor',<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

@@ -8,177 +8,177 @@
 <!-- BEGIN SCAT CODE -->
 &lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;<br>
 &lt;ui version=&quot;4.0&quot;&gt;<br>
- &lt;class&gt;EditorWindow&lt;/class&gt;<br>
- &lt;widget class=&quot;QMainWindow&quot; name=&quot;EditorWindow&quot;&gt;<br>
-  &lt;property name=&quot;geometry&quot;&gt;<br>
-   &lt;rect&gt;<br>
-    &lt;x&gt;0&lt;/x&gt;<br>
-    &lt;y&gt;0&lt;/y&gt;<br>
-    &lt;width&gt;1600&lt;/width&gt;<br>
-    &lt;height&gt;900&lt;/height&gt;<br>
-   &lt;/rect&gt;<br>
-  &lt;/property&gt;<br>
+&lt;class&gt;EditorWindow&lt;/class&gt;<br>
+&lt;widget class=&quot;QMainWindow&quot; name=&quot;EditorWindow&quot;&gt;<br>
+&lt;property name=&quot;geometry&quot;&gt;<br>
+&lt;rect&gt;<br>
+&#9;&lt;x&gt;0&lt;/x&gt;<br>
+&#9;&lt;y&gt;0&lt;/y&gt;<br>
+&#9;&lt;width&gt;1600&lt;/width&gt;<br>
+&#9;&lt;height&gt;900&lt;/height&gt;<br>
+&lt;/rect&gt;<br>
+&lt;/property&gt;<br>
 <br>
-  &lt;property name=&quot;windowTitle&quot;&gt;<br>
-   &lt;string&gt;Mini Unity Editor&lt;/string&gt;<br>
-  &lt;/property&gt;<br>
+&lt;property name=&quot;windowTitle&quot;&gt;<br>
+&lt;string&gt;Mini Unity Editor&lt;/string&gt;<br>
+&lt;/property&gt;<br>
 <br>
-  &lt;!-- Центральный виджет главного окна --&gt;<br>
-  &lt;widget class=&quot;QWidget&quot; name=&quot;centralwidget&quot;&gt;<br>
-   &lt;!-- Лейаут, который растягивает сплиттер на всё окно --&gt;<br>
-   &lt;layout class=&quot;QVBoxLayout&quot; name=&quot;centralLayout&quot;&gt;<br>
-    &lt;property name=&quot;spacing&quot;&gt;<br>
-     &lt;number&gt;0&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
-    &lt;property name=&quot;leftMargin&quot;&gt;<br>
-     &lt;number&gt;0&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
-    &lt;property name=&quot;topMargin&quot;&gt;<br>
-     &lt;number&gt;0&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
-    &lt;property name=&quot;rightMargin&quot;&gt;<br>
-     &lt;number&gt;0&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
-    &lt;property name=&quot;bottomMargin&quot;&gt;<br>
-     &lt;number&gt;0&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
+&lt;!-- Центральный виджет главного окна --&gt;<br>
+&lt;widget class=&quot;QWidget&quot; name=&quot;centralwidget&quot;&gt;<br>
+&lt;!-- Лейаут, который растягивает сплиттер на всё окно --&gt;<br>
+&lt;layout class=&quot;QVBoxLayout&quot; name=&quot;centralLayout&quot;&gt;<br>
+&#9;&lt;property name=&quot;spacing&quot;&gt;<br>
+&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;property name=&quot;leftMargin&quot;&gt;<br>
+&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;property name=&quot;topMargin&quot;&gt;<br>
+&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;property name=&quot;rightMargin&quot;&gt;<br>
+&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;property name=&quot;bottomMargin&quot;&gt;<br>
+&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
 <br>
-    &lt;item&gt;<br>
-     &lt;!-- Главный вертикальный сплиттер: верх (3 панели) / низ (консоль) --&gt;<br>
-     &lt;widget class=&quot;QSplitter&quot; name=&quot;verticalSplitter&quot;&gt;<br>
-      &lt;property name=&quot;orientation&quot;&gt;<br>
-       &lt;enum&gt;Qt::Vertical&lt;/enum&gt;<br>
-      &lt;/property&gt;<br>
+&#9;&lt;item&gt;<br>
+&#9;&lt;!-- Главный вертикальный сплиттер: верх (3 панели) / низ (консоль) --&gt;<br>
+&#9;&lt;widget class=&quot;QSplitter&quot; name=&quot;verticalSplitter&quot;&gt;<br>
+&#9;&lt;property name=&quot;orientation&quot;&gt;<br>
+&#9;&lt;enum&gt;Qt::Vertical&lt;/enum&gt;<br>
+&#9;&lt;/property&gt;<br>
 <br>
-      &lt;!-- Верхняя зона: слева Hierarchy, центр Viewport, справа Inspector --&gt;<br>
-      &lt;widget class=&quot;QSplitter&quot; name=&quot;topSplitter&quot;&gt;<br>
-       &lt;property name=&quot;orientation&quot;&gt;<br>
-        &lt;enum&gt;Qt::Horizontal&lt;/enum&gt;<br>
-       &lt;/property&gt;<br>
+&#9;&lt;!-- Верхняя зона: слева Hierarchy, центр Viewport, справа Inspector --&gt;<br>
+&#9;&lt;widget class=&quot;QSplitter&quot; name=&quot;topSplitter&quot;&gt;<br>
+&#9;&lt;property name=&quot;orientation&quot;&gt;<br>
+&#9;&#9;&lt;enum&gt;Qt::Horizontal&lt;/enum&gt;<br>
+&#9;&lt;/property&gt;<br>
 <br>
-       &lt;!-- Left panel (Hierarchy) --&gt;<br>
-       &lt;widget class=&quot;QTreeView&quot; name=&quot;sceneTree&quot;&gt;<br>
-        &lt;property name=&quot;minimumSize&quot;&gt;<br>
-         &lt;size&gt;<br>
-          &lt;width&gt;200&lt;/width&gt;<br>
-          &lt;height&gt;0&lt;/height&gt;<br>
-         &lt;/size&gt;<br>
-        &lt;/property&gt;<br>
-       &lt;/widget&gt;<br>
+&#9;&lt;!-- Left panel (Hierarchy) --&gt;<br>
+&#9;&lt;widget class=&quot;QTreeView&quot; name=&quot;sceneTree&quot;&gt;<br>
+&#9;&#9;&lt;property name=&quot;minimumSize&quot;&gt;<br>
+&#9;&#9;&lt;size&gt;<br>
+&#9;&#9;&lt;width&gt;200&lt;/width&gt;<br>
+&#9;&#9;&lt;height&gt;0&lt;/height&gt;<br>
+&#9;&#9;&lt;/size&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&lt;/widget&gt;<br>
 <br>
-       &lt;!-- Center viewport container --&gt;<br>
-       &lt;widget class=&quot;QWidget&quot; name=&quot;viewportContainer&quot;&gt;<br>
-        &lt;property name=&quot;minimumSize&quot;&gt;<br>
-         &lt;size&gt;<br>
-          &lt;width&gt;300&lt;/width&gt;<br>
-          &lt;height&gt;200&lt;/height&gt;<br>
-         &lt;/size&gt;<br>
-        &lt;/property&gt;<br>
-        &lt;layout class=&quot;QVBoxLayout&quot; name=&quot;viewportLayout&quot;&gt;<br>
-         &lt;property name=&quot;spacing&quot;&gt;<br>
-          &lt;number&gt;0&lt;/number&gt;<br>
-         &lt;/property&gt;<br>
-         &lt;property name=&quot;leftMargin&quot;&gt;<br>
-          &lt;number&gt;0&lt;/number&gt;<br>
-         &lt;/property&gt;<br>
-         &lt;property name=&quot;topMargin&quot;&gt;<br>
-          &lt;number&gt;0&lt;/number&gt;<br>
-         &lt;/property&gt;<br>
-         &lt;property name=&quot;rightMargin&quot;&gt;<br>
-          &lt;number&gt;0&lt;/number&gt;<br>
-         &lt;/property&gt;<br>
-         &lt;property name=&quot;bottomMargin&quot;&gt;<br>
-          &lt;number&gt;0&lt;/number&gt;<br>
-         &lt;/property&gt;<br>
-        &lt;/layout&gt;<br>
-       &lt;/widget&gt;<br>
+&#9;&lt;!-- Center viewport container --&gt;<br>
+&#9;&lt;widget class=&quot;QWidget&quot; name=&quot;viewportContainer&quot;&gt;<br>
+&#9;&#9;&lt;property name=&quot;minimumSize&quot;&gt;<br>
+&#9;&#9;&lt;size&gt;<br>
+&#9;&#9;&lt;width&gt;300&lt;/width&gt;<br>
+&#9;&#9;&lt;height&gt;200&lt;/height&gt;<br>
+&#9;&#9;&lt;/size&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;layout class=&quot;QVBoxLayout&quot; name=&quot;viewportLayout&quot;&gt;<br>
+&#9;&#9;&lt;property name=&quot;spacing&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;leftMargin&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;topMargin&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;rightMargin&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;bottomMargin&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;/layout&gt;<br>
+&#9;&lt;/widget&gt;<br>
 <br>
-       &lt;!-- Right panel (Inspector container) --&gt;<br>
+&#9;&lt;!-- Right panel (Inspector container) --&gt;<br>
 &lt;widget class=&quot;QWidget&quot; name=&quot;inspectorContainer&quot;&gt;<br>
-  &lt;property name=&quot;minimumSize&quot;&gt;<br>
-   &lt;size&gt;<br>
-    &lt;width&gt;200&lt;/width&gt;<br>
-    &lt;height&gt;0&lt;/height&gt;<br>
-   &lt;/size&gt;<br>
-  &lt;/property&gt;<br>
-  &lt;layout class=&quot;QVBoxLayout&quot; name=&quot;inspectorLayout&quot;&gt;<br>
-    &lt;property name=&quot;spacing&quot;&gt;<br>
-     &lt;number&gt;4&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
-    &lt;property name=&quot;leftMargin&quot;&gt;<br>
-     &lt;number&gt;4&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
-    &lt;property name=&quot;topMargin&quot;&gt;<br>
-     &lt;number&gt;4&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
-    &lt;property name=&quot;rightMargin&quot;&gt;<br>
-     &lt;number&gt;4&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
-    &lt;property name=&quot;bottomMargin&quot;&gt;<br>
-     &lt;number&gt;4&lt;/number&gt;<br>
-    &lt;/property&gt;<br>
-    &lt;item&gt;<br>
-      &lt;widget class=&quot;QLabel&quot; name=&quot;inspectorTitle&quot;&gt;<br>
-        &lt;property name=&quot;text&quot;&gt;<br>
-          &lt;string&gt;Inspector&lt;/string&gt;<br>
-        &lt;/property&gt;<br>
-        &lt;property name=&quot;alignment&quot;&gt;<br>
-          &lt;set&gt;Qt::AlignTop&lt;/set&gt;<br>
-        &lt;/property&gt;<br>
-      &lt;/widget&gt;<br>
-    &lt;/item&gt;<br>
-  &lt;/layout&gt;<br>
+&lt;property name=&quot;minimumSize&quot;&gt;<br>
+&lt;size&gt;<br>
+&#9;&lt;width&gt;200&lt;/width&gt;<br>
+&#9;&lt;height&gt;0&lt;/height&gt;<br>
+&lt;/size&gt;<br>
+&lt;/property&gt;<br>
+&lt;layout class=&quot;QVBoxLayout&quot; name=&quot;inspectorLayout&quot;&gt;<br>
+&#9;&lt;property name=&quot;spacing&quot;&gt;<br>
+&#9;&lt;number&gt;4&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;property name=&quot;leftMargin&quot;&gt;<br>
+&#9;&lt;number&gt;4&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;property name=&quot;topMargin&quot;&gt;<br>
+&#9;&lt;number&gt;4&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;property name=&quot;rightMargin&quot;&gt;<br>
+&#9;&lt;number&gt;4&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;property name=&quot;bottomMargin&quot;&gt;<br>
+&#9;&lt;number&gt;4&lt;/number&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;item&gt;<br>
+&#9;&lt;widget class=&quot;QLabel&quot; name=&quot;inspectorTitle&quot;&gt;<br>
+&#9;&#9;&lt;property name=&quot;text&quot;&gt;<br>
+&#9;&#9;&lt;string&gt;Inspector&lt;/string&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;alignment&quot;&gt;<br>
+&#9;&#9;&lt;set&gt;Qt::AlignTop&lt;/set&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&lt;/widget&gt;<br>
+&#9;&lt;/item&gt;<br>
+&lt;/layout&gt;<br>
 &lt;/widget&gt;<br>
 <br>
 <br>
-      &lt;/widget&gt;<br>
+&#9;&lt;/widget&gt;<br>
 <br>
-      &lt;!-- Нижняя панель (Console) --&gt;<br>
-      &lt;widget class=&quot;QWidget&quot; name=&quot;bottomPanel&quot;&gt;<br>
-       &lt;property name=&quot;minimumSize&quot;&gt;<br>
-        &lt;size&gt;<br>
-         &lt;width&gt;0&lt;/width&gt;<br>
-         &lt;height&gt;80&lt;/height&gt;<br>
-        &lt;/size&gt;<br>
-       &lt;/property&gt;<br>
-       &lt;layout class=&quot;QVBoxLayout&quot; name=&quot;bottomLayout&quot;&gt;<br>
-        &lt;property name=&quot;spacing&quot;&gt;<br>
-         &lt;number&gt;0&lt;/number&gt;<br>
-        &lt;/property&gt;<br>
-        &lt;property name=&quot;leftMargin&quot;&gt;<br>
-         &lt;number&gt;0&lt;/number&gt;<br>
-        &lt;/property&gt;<br>
-        &lt;property name=&quot;topMargin&quot;&gt;<br>
-         &lt;number&gt;0&lt;/number&gt;<br>
-        &lt;/property&gt;<br>
-        &lt;property name=&quot;rightMargin&quot;&gt;<br>
-         &lt;number&gt;0&lt;/number&gt;<br>
-        &lt;/property&gt;<br>
-        &lt;property name=&quot;bottomMargin&quot;&gt;<br>
-         &lt;number&gt;0&lt;/number&gt;<br>
-        &lt;/property&gt;<br>
+&#9;&lt;!-- Нижняя панель (Console) --&gt;<br>
+&#9;&lt;widget class=&quot;QWidget&quot; name=&quot;bottomPanel&quot;&gt;<br>
+&#9;&lt;property name=&quot;minimumSize&quot;&gt;<br>
+&#9;&#9;&lt;size&gt;<br>
+&#9;&#9;&lt;width&gt;0&lt;/width&gt;<br>
+&#9;&#9;&lt;height&gt;80&lt;/height&gt;<br>
+&#9;&#9;&lt;/size&gt;<br>
+&#9;&lt;/property&gt;<br>
+&#9;&lt;layout class=&quot;QVBoxLayout&quot; name=&quot;bottomLayout&quot;&gt;<br>
+&#9;&#9;&lt;property name=&quot;spacing&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;leftMargin&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;topMargin&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;rightMargin&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;bottomMargin&quot;&gt;<br>
+&#9;&#9;&lt;number&gt;0&lt;/number&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
 <br>
-        &lt;item&gt;<br>
-         &lt;widget class=&quot;QLabel&quot; name=&quot;consoleLabel&quot;&gt;<br>
-          &lt;property name=&quot;text&quot;&gt;<br>
-           &lt;string&gt;Console&lt;/string&gt;<br>
-          &lt;/property&gt;<br>
-          &lt;property name=&quot;alignment&quot;&gt;<br>
-           &lt;set&gt;Qt::AlignTop&lt;/set&gt;<br>
-          &lt;/property&gt;<br>
-         &lt;/widget&gt;<br>
-        &lt;/item&gt;<br>
-       &lt;/layout&gt;<br>
-      &lt;/widget&gt;<br>
+&#9;&#9;&lt;item&gt;<br>
+&#9;&#9;&lt;widget class=&quot;QLabel&quot; name=&quot;consoleLabel&quot;&gt;<br>
+&#9;&#9;&lt;property name=&quot;text&quot;&gt;<br>
+&#9;&#9;&lt;string&gt;Console&lt;/string&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;property name=&quot;alignment&quot;&gt;<br>
+&#9;&#9;&lt;set&gt;Qt::AlignTop&lt;/set&gt;<br>
+&#9;&#9;&lt;/property&gt;<br>
+&#9;&#9;&lt;/widget&gt;<br>
+&#9;&#9;&lt;/item&gt;<br>
+&#9;&lt;/layout&gt;<br>
+&#9;&lt;/widget&gt;<br>
 <br>
-     &lt;/widget&gt;<br>
-    &lt;/item&gt;<br>
-   &lt;/layout&gt;<br>
-  &lt;/widget&gt;<br>
+&#9;&lt;/widget&gt;<br>
+&#9;&lt;/item&gt;<br>
+&lt;/layout&gt;<br>
+&lt;/widget&gt;<br>
 <br>
- &lt;/widget&gt;<br>
- &lt;resources/&gt;<br>
- &lt;connections/&gt;<br>
+&lt;/widget&gt;<br>
+&lt;resources/&gt;<br>
+&lt;connections/&gt;<br>
 &lt;/ui&gt;<br>
 <!-- END SCAT CODE -->
 </body>

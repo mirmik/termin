@@ -23,115 +23,115 @@ import time<br>
 start_time = 0<br>
 <br>
 class ControlLink(VariableMultiForce):<br>
-    def __init__(self, position, child, parent, senses=[], stiffness=[1, 1]):<br>
-        super().__init__(position, child, parent, senses, stiffness)<br>
-        self._control = None<br>
-        self.curtime = 0<br>
-        self.target = numpy.array([0,0])<br>
-        self._filter = None<br>
+&#9;def __init__(self, position, child, parent, senses=[], stiffness=[1, 1]):<br>
+&#9;&#9;super().__init__(position, child, parent, senses, stiffness)<br>
+&#9;&#9;self._control = None<br>
+&#9;&#9;self.curtime = 0<br>
+&#9;&#9;self.target = numpy.array([0,0])<br>
+&#9;&#9;self._filter = None<br>
 <br>
-    def set_filter(self, filter):<br>
-        self._filter = filter<br>
+&#9;def set_filter(self, filter):<br>
+&#9;&#9;self._filter = filter<br>
 <br>
-    def set_control(self, control_vector):<br>
-        self._control = control_vector<br>
+&#9;def set_control(self, control_vector):<br>
+&#9;&#9;self._control = control_vector<br>
 <br>
-    def H_matrix_list(self):<br>
-        dQdl_child = self.derivative_by_frame(self._child).transpose()<br>
-        if self._parent is not None:<br>
-            dQdl_parent = -self.derivative_by_frame(self._parent).transpose()<br>
-            return [dQdl_child, dQdl_parent]<br>
-        else:<br>
-            return [dQdl_child]<br>
-    <br>
-    def Ksi_matrix_list(self, delta, allctrlinks):<br>
-        if self._control is None:<br>
-            return []<br>
+&#9;def H_matrix_list(self):<br>
+&#9;&#9;dQdl_child = self.derivative_by_frame(self._child).transpose()<br>
+&#9;&#9;if self._parent is not None:<br>
+&#9;&#9;&#9;dQdl_parent = -self.derivative_by_frame(self._parent).transpose()<br>
+&#9;&#9;&#9;return [dQdl_child, dQdl_parent]<br>
+&#9;&#9;else:<br>
+&#9;&#9;&#9;return [dQdl_child]<br>
+&#9;<br>
+&#9;def Ksi_matrix_list(self, delta, allctrlinks):<br>
+&#9;&#9;if self._control is None:<br>
+&#9;&#9;&#9;return []<br>
 <br>
-        myposition = allctrlinks.index(self)<br>
-        ctr = self._control.reshape((len(self._control), 1))<br>
-        #print(&quot;C1:&quot;, ctr)<br>
+&#9;&#9;myposition = allctrlinks.index(self)<br>
+&#9;&#9;ctr = self._control.reshape((len(self._control), 1))<br>
+&#9;&#9;#print(&quot;C1:&quot;, ctr)<br>
 <br>
-        # if self._filter is not None:<br>
-        #     mat = []<br>
-        #     counter = 0<br>
-        #     for link in allctrlinks:<br>
-        #         if link is not self:<br>
-        #             mat.append(numpy.zeros((1, 1)))<br>
-        #         else:<br>
-        #             mat.append(ctr)<br>
-        #         counter += 1<br>
-        #     ctr = numpy.concatenate(mat, axis=0)<br>
-        #     ctr = self._filter @ ctr<br>
-        #     print(ctr)<br>
+&#9;&#9;# if self._filter is not None:<br>
+&#9;&#9;#     mat = []<br>
+&#9;&#9;#     counter = 0<br>
+&#9;&#9;#     for link in allctrlinks:<br>
+&#9;&#9;#         if link is not self:<br>
+&#9;&#9;#             mat.append(numpy.zeros((1, 1)))<br>
+&#9;&#9;#         else:<br>
+&#9;&#9;#             mat.append(ctr)<br>
+&#9;&#9;#         counter += 1<br>
+&#9;&#9;#     ctr = numpy.concatenate(mat, axis=0)<br>
+&#9;&#9;#     ctr = self._filter @ ctr<br>
+&#9;&#9;#     print(ctr)<br>
 <br>
-        #     ctr = numpy.array([ctr[myposition]])<br>
-            <br>
-        ctr = ctr.reshape((len(self._control),))<br>
-        #print(&quot;C2:&quot;, ctr)<br>
-        #print(&quot;C3:&quot;, self.screw_commutator().indexes())<br>
-        return [<br>
-            IndexedVector(ctr, self.screw_commutator().indexes(), self.screw_commutator())<br>
-        ]<br>
+&#9;&#9;#     ctr = numpy.array([ctr[myposition]])<br>
+&#9;&#9;&#9;<br>
+&#9;&#9;ctr = ctr.reshape((len(self._control),))<br>
+&#9;&#9;#print(&quot;C2:&quot;, ctr)<br>
+&#9;&#9;#print(&quot;C3:&quot;, self.screw_commutator().indexes())<br>
+&#9;&#9;return [<br>
+&#9;&#9;&#9;IndexedVector(ctr, self.screw_commutator().indexes(), self.screw_commutator())<br>
+&#9;&#9;]<br>
 <br>
 <br>
 class ControlTaskFrame(ReferencedFrame):<br>
-    def __init__(self, linked_body, position_in_body):<br>
-        senses = [<br>
-            #Screw2(m=1),<br>
-            Screw2(v=[1,0]),<br>
-            Screw2(v=[0,1]),<br>
-        ]<br>
-        super().__init__(linked_body, position_in_body, senses)<br>
-        self.curtime = 0<br>
-        self._control_screw = Screw2()<br>
-        self._control_frames = []<br>
-        self._filter = None<br>
+&#9;def __init__(self, linked_body, position_in_body):<br>
+&#9;&#9;senses = [<br>
+&#9;&#9;&#9;#Screw2(m=1),<br>
+&#9;&#9;&#9;Screw2(v=[1,0]),<br>
+&#9;&#9;&#9;Screw2(v=[0,1]),<br>
+&#9;&#9;]<br>
+&#9;&#9;super().__init__(linked_body, position_in_body, senses)<br>
+&#9;&#9;self.curtime = 0<br>
+&#9;&#9;self._control_screw = Screw2()<br>
+&#9;&#9;self._control_frames = []<br>
+&#9;&#9;self._filter = None<br>
 <br>
-    def set_filter(self, filter):<br>
-        self._filter = filter<br>
+&#9;def set_filter(self, filter):<br>
+&#9;&#9;self._filter = filter<br>
 <br>
-    def add_control_frame(self, frame):<br>
-        self._control_frames.append(frame)<br>
+&#9;def add_control_frame(self, frame):<br>
+&#9;&#9;self._control_frames.append(frame)<br>
 <br>
-    def control_task(self, delta):<br>
-        return self._control_screw.vector()<br>
+&#9;def control_task(self, delta):<br>
+&#9;&#9;return self._control_screw.vector()<br>
 <br>
-    def set_control_screw(self, screw):<br>
-        rotated_to_local = screw.inverse_rotate_by(self.position())<br>
-        self._control_screw = rotated_to_local<br>
+&#9;def set_control_screw(self, screw):<br>
+&#9;&#9;rotated_to_local = screw.inverse_rotate_by(self.position())<br>
+&#9;&#9;self._control_screw = rotated_to_local<br>
 <br>
-    def Ksi_matrix_list(self, delta, allctrlinks):<br>
-        lst = []<br>
-        derivatives = []<br>
-        for link in allctrlinks:<br>
-            link_dim = len(link.screw_commutator().indexes())<br>
-            frame_dim = len(self.screw_commutator().indexes())<br>
-            if link not in self._control_frames:<br>
-                derivatives.append(numpy.zeros((frame_dim, link_dim)))<br>
-                continue                <br>
-            derivative = self.derivative_by_frame(link)<br>
-            derivatives.append(derivative.matrix)<br>
-            <br>
-        derivative = numpy.concatenate(derivatives, axis=1)<br>
-        pinv_derivative = numpy.linalg.pinv(derivative)<br>
-        res = pinv_derivative @ self.control_task(delta)<br>
+&#9;def Ksi_matrix_list(self, delta, allctrlinks):<br>
+&#9;&#9;lst = []<br>
+&#9;&#9;derivatives = []<br>
+&#9;&#9;for link in allctrlinks:<br>
+&#9;&#9;&#9;link_dim = len(link.screw_commutator().indexes())<br>
+&#9;&#9;&#9;frame_dim = len(self.screw_commutator().indexes())<br>
+&#9;&#9;&#9;if link not in self._control_frames:<br>
+&#9;&#9;&#9;&#9;derivatives.append(numpy.zeros((frame_dim, link_dim)))<br>
+&#9;&#9;&#9;&#9;continue                <br>
+&#9;&#9;&#9;derivative = self.derivative_by_frame(link)<br>
+&#9;&#9;&#9;derivatives.append(derivative.matrix)<br>
+&#9;&#9;&#9;<br>
+&#9;&#9;derivative = numpy.concatenate(derivatives, axis=1)<br>
+&#9;&#9;pinv_derivative = numpy.linalg.pinv(derivative)<br>
+&#9;&#9;res = pinv_derivative @ self.control_task(delta)<br>
 <br>
-        if self._filter is not None:<br>
-            res = self._filter @ res<br>
-        <br>
-        counter = 0<br>
-        for i in range(len(allctrlinks)):<br>
-            link = allctrlinks[i]<br>
-            link_dim = len(link.screw_commutator().indexes())<br>
-            lst.append(IndexedVector(<br>
-                res[counter:counter+link_dim],<br>
-                idxs=link.screw_commutator().indexes(), <br>
-                comm=link.screw_commutator())<br>
-            )<br>
-            counter += link_dim<br>
-        <br>
-        return lst<br>
+&#9;&#9;if self._filter is not None:<br>
+&#9;&#9;&#9;res = self._filter @ res<br>
+&#9;&#9;<br>
+&#9;&#9;counter = 0<br>
+&#9;&#9;for i in range(len(allctrlinks)):<br>
+&#9;&#9;&#9;link = allctrlinks[i]<br>
+&#9;&#9;&#9;link_dim = len(link.screw_commutator().indexes())<br>
+&#9;&#9;&#9;lst.append(IndexedVector(<br>
+&#9;&#9;&#9;&#9;res[counter:counter+link_dim],<br>
+&#9;&#9;&#9;&#9;idxs=link.screw_commutator().indexes(), <br>
+&#9;&#9;&#9;&#9;comm=link.screw_commutator())<br>
+&#9;&#9;&#9;)<br>
+&#9;&#9;&#9;counter += link_dim<br>
+&#9;&#9;<br>
+&#9;&#9;return lst<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

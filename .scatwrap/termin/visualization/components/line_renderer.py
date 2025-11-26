@@ -33,10 +33,10 @@ uniform mat4 u_projection;<br>
 out vec3 v_pos_world;<br>
 <br>
 void main() {<br>
-    vec4 world = u_model * vec4(a_position, 1.0);<br>
-    v_pos_world = world.xyz;<br>
+&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
+&#9;v_pos_world = world.xyz;<br>
 <br>
-    gl_Position = u_projection * u_view * world;<br>
+&#9;gl_Position = u_projection * u_view * world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -86,47 +86,47 @@ uniform vec4 u_color;<br>
 out vec4 FragColor;<br>
 <br>
 void main() {<br>
-    // просто цвет линий<br>
-    FragColor = vec4(u_color.rgb, u_color.a);<br>
+&#9;// просто цвет линий<br>
+&#9;FragColor = vec4(u_color.rgb, u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
 class LineRenderer(Component):<br>
 <br>
-    def __init__(self, points: Iterable[tuple[float, float, float]], color: tuple[float, float, float, float], width: float = 1.0):<br>
-        super().__init__(enabled=True)<br>
-        self.points = list(points)<br>
-        self.color = color<br>
-        self.width = width<br>
-        self.shader = ShaderProgram(<br>
-            vertex_source=vert, <br>
-            #geometry_source=geom, <br>
-            fragment_source=frag)<br>
-        self.material = Material(shader=self.shader, color=self.color)<br>
-        <br>
-        self.mesh2 = Mesh2.from_lists(self.points, [[i, i + 1] for i in range(0, len(self.points) - 1)])<br>
-        self.drawable = Mesh2Drawable(self.mesh2)<br>
-        <br>
-    def required_shaders(self):<br>
-        yield self.shader<br>
+&#9;def __init__(self, points: Iterable[tuple[float, float, float]], color: tuple[float, float, float, float], width: float = 1.0):<br>
+&#9;&#9;super().__init__(enabled=True)<br>
+&#9;&#9;self.points = list(points)<br>
+&#9;&#9;self.color = color<br>
+&#9;&#9;self.width = width<br>
+&#9;&#9;self.shader = ShaderProgram(<br>
+&#9;&#9;&#9;vertex_source=vert, <br>
+&#9;&#9;&#9;#geometry_source=geom, <br>
+&#9;&#9;&#9;fragment_source=frag)<br>
+&#9;&#9;self.material = Material(shader=self.shader, color=self.color)<br>
+&#9;&#9;<br>
+&#9;&#9;self.mesh2 = Mesh2.from_lists(self.points, [[i, i + 1] for i in range(0, len(self.points) - 1)])<br>
+&#9;&#9;self.drawable = Mesh2Drawable(self.mesh2)<br>
+&#9;&#9;<br>
+&#9;def required_shaders(self):<br>
+&#9;&#9;yield self.shader<br>
 <br>
-    def draw(self, context: RenderContext):<br>
-        if self.entity is None:<br>
-            return<br>
+&#9;def draw(self, context: RenderContext):<br>
+&#9;&#9;if self.entity is None:<br>
+&#9;&#9;&#9;return<br>
 <br>
 <br>
-        # Рендерим линии<br>
-        model = self.entity.model_matrix()<br>
-        view  = context.view<br>
-        proj  = context.projection<br>
-        gfx   = context.graphics<br>
-        key   = context.context_key<br>
+&#9;&#9;# Рендерим линии<br>
+&#9;&#9;model = self.entity.model_matrix()<br>
+&#9;&#9;view  = context.view<br>
+&#9;&#9;proj  = context.projection<br>
+&#9;&#9;gfx   = context.graphics<br>
+&#9;&#9;key   = context.context_key<br>
 <br>
-        print(&quot;Drawing lines with color:&quot;, self.color, &quot;and width:&quot;, self.width)<br>
+&#9;&#9;print(&quot;Drawing lines with color:&quot;, self.color, &quot;and width:&quot;, self.width)<br>
 <br>
-        self.material.apply(model, view, proj, graphics=gfx, context_key=key)<br>
-        self.drawable.draw(context)<br>
+&#9;&#9;self.material.apply(model, view, proj, graphics=gfx, context_key=key)<br>
+&#9;&#9;self.drawable.draw(context)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

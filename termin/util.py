@@ -57,3 +57,4 @@ def deg2rad(deg):
 def qinv(q: numpy.ndarray) -> numpy.ndarray:
     """Compute the inverse of a quaternion."""
     return numpy.array([-q[0], -q[1], -q[2], q[3]])
+    

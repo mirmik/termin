@@ -20,8 +20,8 @@ layout(location=0) in vec2 a_pos;<br>
 layout(location=1) in vec2 a_uv;<br>
 out vec2 v_uv;<br>
 void main() {<br>
-    v_uv = a_uv;<br>
-    gl_Position = vec4(a_pos, 0.0, 1.0);<br>
+&#9;v_uv = a_uv;<br>
+&#9;gl_Position = vec4(a_pos, 0.0, 1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -32,41 +32,41 @@ uniform sampler2D u_texture;<br>
 out vec4 FragColor;<br>
 <br>
 void main() {<br>
-    vec3 c = texture(u_texture, v_uv).rgb;<br>
-    float g = dot(c, vec3(0.299, 0.587, 0.114));<br>
-    FragColor = vec4(g, g, g, 1.0);<br>
+&#9;vec3 c = texture(u_texture, v_uv).rgb;<br>
+&#9;float g = dot(c, vec3(0.299, 0.587, 0.114));<br>
+&#9;FragColor = vec4(g, g, g, 1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 class GrayscaleEffect(PostEffect):<br>
-    name = &quot;grayscale&quot;<br>
+&#9;name = &quot;grayscale&quot;<br>
 <br>
-    def __init__(self):<br>
-        self._shader: ShaderProgram | None = None<br>
+&#9;def __init__(self):<br>
+&#9;&#9;self._shader: ShaderProgram | None = None<br>
 <br>
-    def required_resources(self) -&gt; set[str]:<br>
-        # Ему не нужны доп. ресурсы, только входной color_tex<br>
-        return set()<br>
+&#9;def required_resources(self) -&gt; set[str]:<br>
+&#9;&#9;# Ему не нужны доп. ресурсы, только входной color_tex<br>
+&#9;&#9;return set()<br>
 <br>
-    def _get_shader(self) -&gt; ShaderProgram:<br>
-        if self._shader is None:<br>
-            from termin.visualization.shader import ShaderProgram<br>
-            self._shader = ShaderProgram(GRAY_VERT, GRAY_FRAG)<br>
-        return self._shader<br>
+&#9;def _get_shader(self) -&gt; ShaderProgram:<br>
+&#9;&#9;if self._shader is None:<br>
+&#9;&#9;&#9;from termin.visualization.shader import ShaderProgram<br>
+&#9;&#9;&#9;self._shader = ShaderProgram(GRAY_VERT, GRAY_FRAG)<br>
+&#9;&#9;return self._shader<br>
 <br>
-    def draw(self, gfx, key, color_tex, extra_textures, size):<br>
-        w, h = size<br>
+&#9;def draw(self, gfx, key, color_tex, extra_textures, size):<br>
+&#9;&#9;w, h = size<br>
 <br>
-        shader = self._get_shader()<br>
-        shader.ensure_ready(gfx)<br>
-        shader.use()<br>
+&#9;&#9;shader = self._get_shader()<br>
+&#9;&#9;shader.ensure_ready(gfx)<br>
+&#9;&#9;shader.use()<br>
 <br>
-        # биндим цвет на юнит 0<br>
-        color_tex.bind(0)<br>
+&#9;&#9;# биндим цвет на юнит 0<br>
+&#9;&#9;color_tex.bind(0)<br>
 <br>
-        shader.set_uniform_int(&quot;u_texture&quot;, 0)<br>
+&#9;&#9;shader.set_uniform_int(&quot;u_texture&quot;, 0)<br>
 <br>
-        gfx.draw_ui_textured_quad(key)<br>
+&#9;&#9;gfx.draw_ui_textured_quad(key)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

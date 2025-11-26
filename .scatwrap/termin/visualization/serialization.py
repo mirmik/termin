@@ -11,11 +11,11 @@
 COMPONENT_REGISTRY = {}<br>
 <br>
 def serializable(fields):<br>
-    def wrapper(cls):<br>
-        cls._serializable_fields = fields<br>
-        COMPONENT_REGISTRY[cls.__name__] = cls<br>
-        return cls<br>
-    return wrapper<br>
+&#9;def wrapper(cls):<br>
+&#9;&#9;cls._serializable_fields = fields<br>
+&#9;&#9;COMPONENT_REGISTRY[cls.__name__] = cls<br>
+&#9;&#9;return cls<br>
+&#9;return wrapper<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

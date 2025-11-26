@@ -21,20 +21,20 @@ from .polyline import Polyline, PolylineDrawable<br>
 <br>
 <br>
 class LineEntity(Entity):<br>
-    &quot;&quot;&quot;Entity wrapping a :class:`PolylineDrawable` with a material.&quot;&quot;&quot;<br>
+&#9;&quot;&quot;&quot;Entity wrapping a :class:`PolylineDrawable` with a material.&quot;&quot;&quot;<br>
 <br>
-    def __init__(<br>
-        self,<br>
-        points: list[np.ndarray],<br>
-        material: Material,<br>
-        is_strip: bool = True,<br>
-        name: str = &quot;line&quot;,<br>
-        priority: int = 0,<br>
-    ):<br>
-        super().__init__(pose=Pose3.identity(), name=name, priority=priority)<br>
-        polyline = Polyline(vertices=np.array(points, dtype=np.float32), indices=None, is_strip=is_strip)<br>
-        drawable = PolylineDrawable(polyline)<br>
-        self.add_component(MeshRenderer(drawable, material))<br>
+&#9;def __init__(<br>
+&#9;&#9;self,<br>
+&#9;&#9;points: list[np.ndarray],<br>
+&#9;&#9;material: Material,<br>
+&#9;&#9;is_strip: bool = True,<br>
+&#9;&#9;name: str = &quot;line&quot;,<br>
+&#9;&#9;priority: int = 0,<br>
+&#9;):<br>
+&#9;&#9;super().__init__(pose=Pose3.identity(), name=name, priority=priority)<br>
+&#9;&#9;polyline = Polyline(vertices=np.array(points, dtype=np.float32), indices=None, is_strip=is_strip)<br>
+&#9;&#9;drawable = PolylineDrawable(polyline)<br>
+&#9;&#9;self.add_component(MeshRenderer(drawable, material))<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

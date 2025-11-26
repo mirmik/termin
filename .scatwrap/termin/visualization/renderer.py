@@ -19,92 +19,92 @@ from .picking import id_to_rgb<br>
 <br>
 <br>
 class Renderer:<br>
-    &quot;&quot;&quot;Responsible for viewport setup, uniforms and draw traversal.&quot;&quot;&quot;<br>
+&#9;&quot;&quot;&quot;Responsible for viewport setup, uniforms and draw traversal.&quot;&quot;&quot;<br>
 <br>
-    def __init__(self, graphics: GraphicsBackend):<br>
-        self.graphics = graphics<br>
-        self.pick_material = self.create_pick_material()<br>
+&#9;def __init__(self, graphics: GraphicsBackend):<br>
+&#9;&#9;self.graphics = graphics<br>
+&#9;&#9;self.pick_material = self.create_pick_material()<br>
 <br>
-    def create_pick_material(self) -&gt; PickMaterial:<br>
-        from termin.visualization.materials.pick_material import PickMaterial<br>
-        return PickMaterial()<br>
+&#9;def create_pick_material(self) -&gt; PickMaterial:<br>
+&#9;&#9;from termin.visualization.materials.pick_material import PickMaterial<br>
+&#9;&#9;return PickMaterial()<br>
 <br>
-    def render_viewport(self, scene: Scene, camera: CameraComponent, viewport_rect: tuple[int, int, int, int], context_key: int):<br>
-        self.graphics.ensure_ready()<br>
-        x, y, w, h = viewport_rect<br>
-        self.graphics.set_viewport(x, y, w, h)<br>
-        view = camera.get_view_matrix()<br>
-        projection = camera.get_projection_matrix()<br>
-        context = RenderContext(<br>
-            view=view,<br>
-            projection=projection,<br>
-            camera=camera,<br>
-            scene=scene,<br>
-            renderer=self,<br>
-            context_key=context_key,<br>
-            graphics=self.graphics,<br>
-        )<br>
+&#9;def render_viewport(self, scene: Scene, camera: CameraComponent, viewport_rect: tuple[int, int, int, int], context_key: int):<br>
+&#9;&#9;self.graphics.ensure_ready()<br>
+&#9;&#9;x, y, w, h = viewport_rect<br>
+&#9;&#9;self.graphics.set_viewport(x, y, w, h)<br>
+&#9;&#9;view = camera.get_view_matrix()<br>
+&#9;&#9;projection = camera.get_projection_matrix()<br>
+&#9;&#9;context = RenderContext(<br>
+&#9;&#9;&#9;view=view,<br>
+&#9;&#9;&#9;projection=projection,<br>
+&#9;&#9;&#9;camera=camera,<br>
+&#9;&#9;&#9;scene=scene,<br>
+&#9;&#9;&#9;renderer=self,<br>
+&#9;&#9;&#9;context_key=context_key,<br>
+&#9;&#9;&#9;graphics=self.graphics,<br>
+&#9;&#9;)<br>
 <br>
-        for entity in scene.entities:<br>
-            entity.draw(context)<br>
+&#9;&#9;for entity in scene.entities:<br>
+&#9;&#9;&#9;entity.draw(context)<br>
 <br>
-    def render_viewport_pick(<br>
-        self,<br>
-        scene: Scene,<br>
-        camera: CameraComponent,<br>
-        rect: Tuple[int, int, int, int],<br>
-        context_key: int,<br>
-        pick_ids: dict,<br>
-    ):<br>
-        x, y, w, h = rect<br>
-        view = camera.view_matrix()<br>
-        proj = camera.projection_matrix()<br>
+&#9;def render_viewport_pick(<br>
+&#9;&#9;self,<br>
+&#9;&#9;scene: Scene,<br>
+&#9;&#9;camera: CameraComponent,<br>
+&#9;&#9;rect: Tuple[int, int, int, int],<br>
+&#9;&#9;context_key: int,<br>
+&#9;&#9;pick_ids: dict,<br>
+&#9;):<br>
+&#9;&#9;x, y, w, h = rect<br>
+&#9;&#9;view = camera.view_matrix()<br>
+&#9;&#9;proj = camera.projection_matrix()<br>
 <br>
-        ctx = RenderContext(<br>
-            view=view,<br>
-            projection=proj,<br>
-            graphics=self.graphics,<br>
-            context_key=context_key,<br>
-            scene=scene,<br>
-            camera=camera,<br>
-            renderer=self,<br>
-            phase=&quot;pick&quot;,  # на будущее, но MeshRenderer тут не используем<br>
-        )<br>
+&#9;&#9;ctx = RenderContext(<br>
+&#9;&#9;&#9;view=view,<br>
+&#9;&#9;&#9;projection=proj,<br>
+&#9;&#9;&#9;graphics=self.graphics,<br>
+&#9;&#9;&#9;context_key=context_key,<br>
+&#9;&#9;&#9;scene=scene,<br>
+&#9;&#9;&#9;camera=camera,<br>
+&#9;&#9;&#9;renderer=self,<br>
+&#9;&#9;&#9;phase=&quot;pick&quot;,  # на будущее, но MeshRenderer тут не используем<br>
+&#9;&#9;)<br>
 <br>
-        gfx = self.graphics<br>
-        # Жёсткое состояние для picking-пасса<br>
-        from termin.visualization.renderpass import RenderState<br>
-        gfx.apply_render_state(RenderState(<br>
-            depth_test=True,<br>
-            depth_write=True,<br>
-            blend=False,<br>
-            cull=True,<br>
-        ))<br>
+&#9;&#9;gfx = self.graphics<br>
+&#9;&#9;# Жёсткое состояние для picking-пасса<br>
+&#9;&#9;from termin.visualization.renderpass import RenderState<br>
+&#9;&#9;gfx.apply_render_state(RenderState(<br>
+&#9;&#9;&#9;depth_test=True,<br>
+&#9;&#9;&#9;depth_write=True,<br>
+&#9;&#9;&#9;blend=False,<br>
+&#9;&#9;&#9;cull=True,<br>
+&#9;&#9;))<br>
 <br>
-        for ent in scene.entities:<br>
-            mr = ent.get_component(MeshRenderer)<br>
-            if mr is None:<br>
-                continue<br>
+&#9;&#9;for ent in scene.entities:<br>
+&#9;&#9;&#9;mr = ent.get_component(MeshRenderer)<br>
+&#9;&#9;&#9;if mr is None:<br>
+&#9;&#9;&#9;&#9;continue<br>
 <br>
-            pid = pick_ids.get(ent)<br>
-            if pid is None:<br>
-                continue<br>
+&#9;&#9;&#9;pid = pick_ids.get(ent)<br>
+&#9;&#9;&#9;if pid is None:<br>
+&#9;&#9;&#9;&#9;continue<br>
 <br>
-            color = id_to_rgb(pid)<br>
-            model = ent.model_matrix()<br>
+&#9;&#9;&#9;color = id_to_rgb(pid)<br>
+&#9;&#9;&#9;model = ent.model_matrix()<br>
 <br>
-            self.pick_material.apply_for_pick(<br>
-                model=model,<br>
-                view=view,<br>
-                proj=proj,<br>
-                pick_color=color,<br>
-                graphics=gfx,<br>
-                context_key=context_key,<br>
-            )<br>
+&#9;&#9;&#9;self.pick_material.apply_for_pick(<br>
+&#9;&#9;&#9;&#9;model=model,<br>
+&#9;&#9;&#9;&#9;view=view,<br>
+&#9;&#9;&#9;&#9;proj=proj,<br>
+&#9;&#9;&#9;&#9;pick_color=color,<br>
+&#9;&#9;&#9;&#9;graphics=gfx,<br>
+&#9;&#9;&#9;&#9;context_key=context_key,<br>
+&#9;&#9;&#9;)<br>
 <br>
-            # берём меш прямо из MeshRenderer, не трогая его passes<br>
-            if mr.mesh is not None:<br>
-                mr.mesh.draw(ctx)<br>
+&#9;&#9;&#9;# берём меш прямо из MeshRenderer, не трогая его passes<br>
+&#9;&#9;&#9;if mr.mesh is not None:<br>
+&#9;&#9;&#9;&#9;mr.mesh.draw(ctx)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

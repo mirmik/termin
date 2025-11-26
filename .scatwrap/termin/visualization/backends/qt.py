@@ -22,210 +22,210 @@ from OpenGL import GL as gl<br>
 <br>
 <br>
 def _qt_app() -&gt; QtWidgets.QApplication:<br>
-    app = QtWidgets.QApplication.instance()<br>
-    if app is None:<br>
-        app = QtWidgets.QApplication([])<br>
-    return app<br>
+&#9;app = QtWidgets.QApplication.instance()<br>
+&#9;if app is None:<br>
+&#9;&#9;app = QtWidgets.QApplication([])<br>
+&#9;return app<br>
 <br>
 <br>
 def _translate_mouse(button: QtCore.Qt.MouseButton) -&gt; MouseButton:<br>
-    if button == QtCore.Qt.LeftButton:<br>
-        return MouseButton.LEFT<br>
-    if button == QtCore.Qt.RightButton:<br>
-        return MouseButton.RIGHT<br>
-    if button == QtCore.Qt.MiddleButton:<br>
-        return MouseButton.MIDDLE<br>
-    return MouseButton.LEFT<br>
+&#9;if button == QtCore.Qt.LeftButton:<br>
+&#9;&#9;return MouseButton.LEFT<br>
+&#9;if button == QtCore.Qt.RightButton:<br>
+&#9;&#9;return MouseButton.RIGHT<br>
+&#9;if button == QtCore.Qt.MiddleButton:<br>
+&#9;&#9;return MouseButton.MIDDLE<br>
+&#9;return MouseButton.LEFT<br>
 <br>
 <br>
 def _translate_action(action: bool) -&gt; Action:<br>
-    return Action.PRESS if action else Action.RELEASE<br>
+&#9;return Action.PRESS if action else Action.RELEASE<br>
 <br>
 <br>
 def _translate_key(key: int) -&gt; Key:<br>
-    if key == QtCore.Qt.Key_Escape:<br>
-        return Key.ESCAPE<br>
-    if key == QtCore.Qt.Key_Space:<br>
-        return Key.SPACE<br>
-    try:<br>
-        return Key(key)<br>
-    except ValueError:<br>
-        return Key.UNKNOWN<br>
+&#9;if key == QtCore.Qt.Key_Escape:<br>
+&#9;&#9;return Key.ESCAPE<br>
+&#9;if key == QtCore.Qt.Key_Space:<br>
+&#9;&#9;return Key.SPACE<br>
+&#9;try:<br>
+&#9;&#9;return Key(key)<br>
+&#9;except ValueError:<br>
+&#9;&#9;return Key.UNKNOWN<br>
 <br>
 <br>
 class _QtGLWidget(QtWidgets.QOpenGLWidget):<br>
-    def __init__(self, owner: &quot;QtGLWindowHandle&quot;, parent=None):<br>
-        super().__init__(parent)<br>
-        self._owner = owner<br>
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)<br>
-        self.setUpdateBehavior(QtWidgets.QOpenGLWidget.PartialUpdate)<br>
-        self.setMouseTracking(True)<br>
+&#9;def __init__(self, owner: &quot;QtGLWindowHandle&quot;, parent=None):<br>
+&#9;&#9;super().__init__(parent)<br>
+&#9;&#9;self._owner = owner<br>
+&#9;&#9;self.setFocusPolicy(QtCore.Qt.StrongFocus)<br>
+&#9;&#9;self.setUpdateBehavior(QtWidgets.QOpenGLWidget.PartialUpdate)<br>
+&#9;&#9;self.setMouseTracking(True)<br>
 <br>
-    # --- События мыши / клавиатуры --------------------------------------<br>
+&#9;# --- События мыши / клавиатуры --------------------------------------<br>
 <br>
-    def mousePressEvent(self, event):<br>
-        cb = self._owner._mouse_callback<br>
-        if cb:<br>
-            cb(self._owner, _translate_mouse(event.button()), Action.PRESS, int(event.modifiers()))<br>
+&#9;def mousePressEvent(self, event):<br>
+&#9;&#9;cb = self._owner._mouse_callback<br>
+&#9;&#9;if cb:<br>
+&#9;&#9;&#9;cb(self._owner, _translate_mouse(event.button()), Action.PRESS, int(event.modifiers()))<br>
 <br>
-    def mouseReleaseEvent(self, event):<br>
-        cb = self._owner._mouse_callback<br>
-        if cb:<br>
-            cb(self._owner, _translate_mouse(event.button()), Action.RELEASE, int(event.modifiers()))<br>
+&#9;def mouseReleaseEvent(self, event):<br>
+&#9;&#9;cb = self._owner._mouse_callback<br>
+&#9;&#9;if cb:<br>
+&#9;&#9;&#9;cb(self._owner, _translate_mouse(event.button()), Action.RELEASE, int(event.modifiers()))<br>
 <br>
-    def mouseMoveEvent(self, event):<br>
-        cb = self._owner._cursor_callback<br>
-        if cb:<br>
-            cb(self._owner, float(event.x()), float(event.y()))<br>
+&#9;def mouseMoveEvent(self, event):<br>
+&#9;&#9;cb = self._owner._cursor_callback<br>
+&#9;&#9;if cb:<br>
+&#9;&#9;&#9;cb(self._owner, float(event.x()), float(event.y()))<br>
 <br>
-    def wheelEvent(self, event):<br>
-        angle = event.angleDelta()<br>
-        cb = self._owner._scroll_callback<br>
-        if cb:<br>
-            cb(self._owner, angle.x() / 120.0, angle.y() / 120.0)<br>
+&#9;def wheelEvent(self, event):<br>
+&#9;&#9;angle = event.angleDelta()<br>
+&#9;&#9;cb = self._owner._scroll_callback<br>
+&#9;&#9;if cb:<br>
+&#9;&#9;&#9;cb(self._owner, angle.x() / 120.0, angle.y() / 120.0)<br>
 <br>
-    def keyPressEvent(self, event):<br>
-        cb = self._owner._key_callback<br>
-        if cb:<br>
-            cb(self._owner, _translate_key(event.key()), event.nativeScanCode(), Action.PRESS, int(event.modifiers()))<br>
+&#9;def keyPressEvent(self, event):<br>
+&#9;&#9;cb = self._owner._key_callback<br>
+&#9;&#9;if cb:<br>
+&#9;&#9;&#9;cb(self._owner, _translate_key(event.key()), event.nativeScanCode(), Action.PRESS, int(event.modifiers()))<br>
 <br>
-    def keyReleaseEvent(self, event):<br>
-        cb = self._owner._key_callback<br>
-        if cb:<br>
-            cb(self._owner, _translate_key(event.key()), event.nativeScanCode(), Action.RELEASE, int(event.modifiers()))<br>
+&#9;def keyReleaseEvent(self, event):<br>
+&#9;&#9;cb = self._owner._key_callback<br>
+&#9;&#9;if cb:<br>
+&#9;&#9;&#9;cb(self._owner, _translate_key(event.key()), event.nativeScanCode(), Action.RELEASE, int(event.modifiers()))<br>
 <br>
-    # --- Рендер ----------------------------------------------------------<br>
+&#9;# --- Рендер ----------------------------------------------------------<br>
 <br>
-    def paintGL(self):<br>
-        # Тут есть активный GL-контекст — выполняем рендер движка<br>
-        window_obj = self._owner._user_ptr<br>
-        if window_obj is not None:<br>
-            window_obj._render_core(from_backend=True)<br>
+&#9;def paintGL(self):<br>
+&#9;&#9;# Тут есть активный GL-контекст — выполняем рендер движка<br>
+&#9;&#9;window_obj = self._owner._user_ptr<br>
+&#9;&#9;if window_obj is not None:<br>
+&#9;&#9;&#9;window_obj._render_core(from_backend=True)<br>
 <br>
-    def resizeGL(self, w, h):<br>
-        cb = self._owner._framebuffer_callback<br>
-        if cb:<br>
-            cb(self._owner, w, h)<br>
+&#9;def resizeGL(self, w, h):<br>
+&#9;&#9;cb = self._owner._framebuffer_callback<br>
+&#9;&#9;if cb:<br>
+&#9;&#9;&#9;cb(self._owner, w, h)<br>
 <br>
 <br>
 class QtGLWindowHandle(BackendWindow):<br>
-    def __init__(self, width, height, title, share=None, parent=None):<br>
-        self.app = _qt_app()<br>
+&#9;def __init__(self, width, height, title, share=None, parent=None):<br>
+&#9;&#9;self.app = _qt_app()<br>
 <br>
-        self._widget = _QtGLWidget(self, parent=parent)<br>
-        self._widget.setMinimumSize(50, 50)<br>
-        self._widget.resize(width, height)<br>
-        self._widget.show()<br>
+&#9;&#9;self._widget = _QtGLWidget(self, parent=parent)<br>
+&#9;&#9;self._widget.setMinimumSize(50, 50)<br>
+&#9;&#9;self._widget.resize(width, height)<br>
+&#9;&#9;self._widget.show()<br>
 <br>
-        self._closed = False<br>
-        self._user_ptr = None<br>
+&#9;&#9;self._closed = False<br>
+&#9;&#9;self._user_ptr = None<br>
 <br>
-        # Все callback-и окна (их вызывает Window)<br>
-        self._framebuffer_callback = None<br>
-        self._cursor_callback = None<br>
-        self._scroll_callback = None<br>
-        self._mouse_callback = None<br>
-        self._key_callback = None<br>
+&#9;&#9;# Все callback-и окна (их вызывает Window)<br>
+&#9;&#9;self._framebuffer_callback = None<br>
+&#9;&#9;self._cursor_callback = None<br>
+&#9;&#9;self._scroll_callback = None<br>
+&#9;&#9;self._mouse_callback = None<br>
+&#9;&#9;self._key_callback = None<br>
 <br>
-    # --- BackendWindow API ----------------------------------------------<br>
+&#9;# --- BackendWindow API ----------------------------------------------<br>
 <br>
-    def close(self):<br>
-        if self._closed:<br>
-            return<br>
-        self._closed = True<br>
-        self._widget.close()<br>
+&#9;def close(self):<br>
+&#9;&#9;if self._closed:<br>
+&#9;&#9;&#9;return<br>
+&#9;&#9;self._closed = True<br>
+&#9;&#9;self._widget.close()<br>
 <br>
-    def should_close(self) -&gt; bool:<br>
-        return self._closed or not self._widget.isVisible()<br>
+&#9;def should_close(self) -&gt; bool:<br>
+&#9;&#9;return self._closed or not self._widget.isVisible()<br>
 <br>
-    def make_current(self):<br>
-        # QOpenGLWidget сам делает makeCurrent() прямо перед paintGL<br>
-        # но движок может вызвать это — тогда просто делегируем<br>
-        self._widget.makeCurrent()<br>
+&#9;def make_current(self):<br>
+&#9;&#9;# QOpenGLWidget сам делает makeCurrent() прямо перед paintGL<br>
+&#9;&#9;# но движок может вызвать это — тогда просто делегируем<br>
+&#9;&#9;self._widget.makeCurrent()<br>
 <br>
-    def swap_buffers(self):<br>
-        # QOpenGLWidget сам вызывает swapBuffers<br>
-        pass<br>
+&#9;def swap_buffers(self):<br>
+&#9;&#9;# QOpenGLWidget сам вызывает swapBuffers<br>
+&#9;&#9;pass<br>
 <br>
-    def framebuffer_size(self):<br>
-        ratio = self._widget.devicePixelRatioF()<br>
-        return int(self._widget.width() * ratio), int(self._widget.height() * ratio)<br>
+&#9;def framebuffer_size(self):<br>
+&#9;&#9;ratio = self._widget.devicePixelRatioF()<br>
+&#9;&#9;return int(self._widget.width() * ratio), int(self._widget.height() * ratio)<br>
 <br>
-    def window_size(self):<br>
-        return self._widget.width(), self._widget.height()<br>
+&#9;def window_size(self):<br>
+&#9;&#9;return self._widget.width(), self._widget.height()<br>
 <br>
-    def get_cursor_pos(self):<br>
-        pos = self._widget.mapFromGlobal(QtGui.QCursor.pos())<br>
-        return float(pos.x()), float(pos.y())<br>
+&#9;def get_cursor_pos(self):<br>
+&#9;&#9;pos = self._widget.mapFromGlobal(QtGui.QCursor.pos())<br>
+&#9;&#9;return float(pos.x()), float(pos.y())<br>
 <br>
-    def set_should_close(self, flag: bool):<br>
-        if flag:<br>
-            self.close()<br>
+&#9;def set_should_close(self, flag: bool):<br>
+&#9;&#9;if flag:<br>
+&#9;&#9;&#9;self.close()<br>
 <br>
-    def set_user_pointer(self, ptr):<br>
-        self._user_ptr = ptr<br>
+&#9;def set_user_pointer(self, ptr):<br>
+&#9;&#9;self._user_ptr = ptr<br>
 <br>
-    # --- callback setters -----------------------------------------------<br>
+&#9;# --- callback setters -----------------------------------------------<br>
 <br>
-    def set_framebuffer_size_callback(self, cb):<br>
-        self._framebuffer_callback = cb<br>
+&#9;def set_framebuffer_size_callback(self, cb):<br>
+&#9;&#9;self._framebuffer_callback = cb<br>
 <br>
-    def set_cursor_pos_callback(self, cb):<br>
-        self._cursor_callback = cb<br>
+&#9;def set_cursor_pos_callback(self, cb):<br>
+&#9;&#9;self._cursor_callback = cb<br>
 <br>
-    def set_scroll_callback(self, cb):<br>
-        self._scroll_callback = cb<br>
+&#9;def set_scroll_callback(self, cb):<br>
+&#9;&#9;self._scroll_callback = cb<br>
 <br>
-    def set_mouse_button_callback(self, cb):<br>
-        self._mouse_callback = cb<br>
+&#9;def set_mouse_button_callback(self, cb):<br>
+&#9;&#9;self._mouse_callback = cb<br>
 <br>
-    def set_key_callback(self, cb):<br>
-        self._key_callback = cb<br>
+&#9;def set_key_callback(self, cb):<br>
+&#9;&#9;self._key_callback = cb<br>
 <br>
-    # --- Чтобы движок понимал push-модель Qt ----------------------------<br>
+&#9;# --- Чтобы движок понимал push-модель Qt ----------------------------<br>
 <br>
-    def drives_render(self) -&gt; bool:<br>
-        return True<br>
+&#9;def drives_render(self) -&gt; bool:<br>
+&#9;&#9;return True<br>
 <br>
-    @property<br>
-    def widget(self):<br>
-        return self._widget<br>
+&#9;@property<br>
+&#9;def widget(self):<br>
+&#9;&#9;return self._widget<br>
 <br>
 <br>
-    def request_update(self):<br>
-        # Просим Qt перерисовать виджет (это вызовет paintGL)<br>
-        self._widget.update()<br>
+&#9;def request_update(self):<br>
+&#9;&#9;# Просим Qt перерисовать виджет (это вызовет paintGL)<br>
+&#9;&#9;self._widget.update()<br>
 <br>
-    <br>
-    def bind_window_framebuffer(self):        <br>
-        fbo_id = int(self._widget.defaultFramebufferObject())<br>
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, fbo_id)<br>
+&#9;<br>
+&#9;def bind_window_framebuffer(self):        <br>
+&#9;&#9;fbo_id = int(self._widget.defaultFramebufferObject())<br>
+&#9;&#9;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, fbo_id)<br>
 <br>
 <br>
 <br>
 <br>
 class QtWindowBackend(WindowBackend):<br>
-    &quot;&quot;&quot;Window backend, использующий QOpenGLWindow и Qt event loop.&quot;&quot;&quot;<br>
+&#9;&quot;&quot;&quot;Window backend, использующий QOpenGLWindow и Qt event loop.&quot;&quot;&quot;<br>
 <br>
-    def __init__(self, app: Optional[QtWidgets.QApplication] = None):<br>
-        self.app = app or _qt_app()<br>
+&#9;def __init__(self, app: Optional[QtWidgets.QApplication] = None):<br>
+&#9;&#9;self.app = app or _qt_app()<br>
 <br>
-    def create_window(<br>
-        self,<br>
-        width: int,<br>
-        height: int,<br>
-        title: str,<br>
-        share: Optional[BackendWindow] = None,<br>
-        parent: Optional[QtWidgets.QWidget] = None,<br>
-    ) -&gt; QtGLWindowHandle:<br>
-        return QtGLWindowHandle(width, height, title, share=share, parent=parent)<br>
+&#9;def create_window(<br>
+&#9;&#9;self,<br>
+&#9;&#9;width: int,<br>
+&#9;&#9;height: int,<br>
+&#9;&#9;title: str,<br>
+&#9;&#9;share: Optional[BackendWindow] = None,<br>
+&#9;&#9;parent: Optional[QtWidgets.QWidget] = None,<br>
+&#9;) -&gt; QtGLWindowHandle:<br>
+&#9;&#9;return QtGLWindowHandle(width, height, title, share=share, parent=parent)<br>
 <br>
-    def poll_events(self):<br>
-        # Обрабатываем накопившиеся Qt-события<br>
-        self.app.processEvents()<br>
+&#9;def poll_events(self):<br>
+&#9;&#9;# Обрабатываем накопившиеся Qt-события<br>
+&#9;&#9;self.app.processEvents()<br>
 <br>
-    def terminate(self):<br>
-        self.app.quit()<br>
+&#9;def terminate(self):<br>
+&#9;&#9;self.app.quit()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

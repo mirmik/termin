@@ -17,14 +17,14 @@ import numpy as np<br>
 from termin.geombase.pose3 import Pose3<br>
 from termin.mesh.mesh import TexturedCubeMesh<br>
 from termin.visualization import (<br>
-    Entity,<br>
-    MeshDrawable,<br>
-    Scene,<br>
-    Material,<br>
-    Texture,<br>
-    VisualizationWorld,<br>
-    PerspectiveCameraComponent,<br>
-    OrbitCameraController,<br>
+&#9;Entity,<br>
+&#9;MeshDrawable,<br>
+&#9;Scene,<br>
+&#9;Material,<br>
+&#9;Texture,<br>
+&#9;VisualizationWorld,<br>
+&#9;PerspectiveCameraComponent,<br>
+&#9;OrbitCameraController,<br>
 )<br>
 from termin.visualization.components import MeshRenderer<br>
 from termin.visualization.shader import ShaderProgram<br>
@@ -51,11 +51,11 @@ out vec3 v_world_pos;<br>
 out vec2 v_texcoord;<br>
 <br>
 void main() {<br>
-    vec4 world = u_model * vec4(a_position, 1.0);<br>
-    v_world_pos = world.xyz;<br>
-    v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-    v_texcoord = a_texcoord;<br>
-    gl_Position = u_projection * u_view * world;<br>
+&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
+&#9;v_world_pos = world.xyz;<br>
+&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
+&#9;v_texcoord = a_texcoord;<br>
+&#9;gl_Position = u_projection * u_view * world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -73,52 +73,52 @@ uniform sampler2D u_diffuse_map;<br>
 out vec4 FragColor;<br>
 <br>
 void main() {<br>
-    vec3 N = normalize(v_normal);<br>
-    vec3 L = normalize(-u_light_dir);<br>
-    vec3 V = normalize(u_view_pos - v_world_pos);<br>
+&#9;vec3 N = normalize(v_normal);<br>
+&#9;vec3 L = normalize(-u_light_dir);<br>
+&#9;vec3 V = normalize(u_view_pos - v_world_pos);<br>
 <br>
-    vec3 texColor = texture(u_diffuse_map, v_texcoord).rgb;<br>
-    float ndotl = max(dot(N, L), 0.0);<br>
+&#9;vec3 texColor = texture(u_diffuse_map, v_texcoord).rgb;<br>
+&#9;float ndotl = max(dot(N, L), 0.0);<br>
 <br>
-    vec3 diffuse = texColor * ndotl;<br>
-    vec3 ambient = texColor * 0.2;<br>
-    vec3 H = normalize(L + V);<br>
-    float spec = pow(max(dot(N, H), 0.0), 32.0);<br>
-    vec3 specular = vec3(0.4) * spec;<br>
+&#9;vec3 diffuse = texColor * ndotl;<br>
+&#9;vec3 ambient = texColor * 0.2;<br>
+&#9;vec3 H = normalize(L + V);<br>
+&#9;float spec = pow(max(dot(N, H), 0.0), 32.0);<br>
+&#9;vec3 specular = vec3(0.4) * spec;<br>
 <br>
-    vec3 color = (ambient + diffuse) * u_light_color + specular;<br>
-    FragColor = vec4(color, 1.0);<br>
+&#9;vec3 color = (ambient + diffuse) * u_light_color + specular;<br>
+&#9;FragColor = vec4(color, 1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
 def build_scene(world):<br>
-    texture_path = &quot;examples/data/textures/crate_diffuse.png&quot;<br>
-    texture = Texture.from_file(texture_path)<br>
+&#9;texture_path = &quot;examples/data/textures/crate_diffuse.png&quot;<br>
+&#9;texture = Texture.from_file(texture_path)<br>
 <br>
-    mesh = TexturedCubeMesh()<br>
-    drawable = MeshDrawable(mesh)<br>
-    material = Material(<br>
-        shader=ShaderProgram(VERT, FRAG),<br>
-        color=None,<br>
-        textures={&quot;u_diffuse_map&quot;: texture},<br>
-    )<br>
+&#9;mesh = TexturedCubeMesh()<br>
+&#9;drawable = MeshDrawable(mesh)<br>
+&#9;material = Material(<br>
+&#9;&#9;shader=ShaderProgram(VERT, FRAG),<br>
+&#9;&#9;color=None,<br>
+&#9;&#9;textures={&quot;u_diffuse_map&quot;: texture},<br>
+&#9;)<br>
 <br>
-    cube = Entity(pose=Pose3.identity())<br>
-    cube.add_component(MeshRenderer(drawable, material))<br>
+&#9;cube = Entity(pose=Pose3.identity())<br>
+&#9;cube.add_component(MeshRenderer(drawable, material))<br>
 <br>
-    scene = Scene()<br>
-    scene.add(cube)<br>
-    scene.add(SkyBoxEntity())<br>
-    world.add_scene(scene)<br>
+&#9;scene = Scene()<br>
+&#9;scene.add(cube)<br>
+&#9;scene.add(SkyBoxEntity())<br>
+&#9;world.add_scene(scene)<br>
 <br>
-    cam_ent = Entity()<br>
-    cam = PerspectiveCameraComponent()<br>
-    cam_ent.add_component(cam)<br>
-    cam_ent.add_component(OrbitCameraController())<br>
-    scene.add(cam_ent)<br>
+&#9;cam_ent = Entity()<br>
+&#9;cam = PerspectiveCameraComponent()<br>
+&#9;cam_ent.add_component(cam)<br>
+&#9;cam_ent.add_component(OrbitCameraController())<br>
+&#9;scene.add(cam_ent)<br>
 <br>
-    return scene, cam<br>
+&#9;return scene, cam<br>
 <br>
 <br>
 # ================================================================<br>
@@ -126,25 +126,25 @@ def build_scene(world):<br>
 # ================================================================<br>
 <br>
 def main():<br>
-    world = VisualizationWorld()<br>
+&#9;world = VisualizationWorld()<br>
 <br>
-    scene, cam = build_scene(world)<br>
+&#9;scene, cam = build_scene(world)<br>
 <br>
-    win = world.create_window(title=&quot;Cube + Grayscale + Gaussian Blur&quot;)<br>
-    vp = win.add_viewport(scene, cam)<br>
+&#9;win = world.create_window(title=&quot;Cube + Grayscale + Gaussian Blur&quot;)<br>
+&#9;vp = win.add_viewport(scene, cam)<br>
 <br>
-    postprocess = vp.find_render_pass(&quot;PostFX&quot;)<br>
+&#9;postprocess = vp.find_render_pass(&quot;PostFX&quot;)<br>
 <br>
-    # цепочка: Grayscale → Blur Horizontal → Blur Vertical<br>
-    postprocess.add_effect(GrayscaleEffect())<br>
-    postprocess.add_effect(GaussianBlurPass(direction=(1.0, 0.0)))  # horizontal<br>
-    postprocess.add_effect(GaussianBlurPass(direction=(0.0, 1.0)))  # vertical<br>
+&#9;# цепочка: Grayscale → Blur Horizontal → Blur Vertical<br>
+&#9;postprocess.add_effect(GrayscaleEffect())<br>
+&#9;postprocess.add_effect(GaussianBlurPass(direction=(1.0, 0.0)))  # horizontal<br>
+&#9;postprocess.add_effect(GaussianBlurPass(direction=(0.0, 1.0)))  # vertical<br>
 <br>
-    world.run()<br>
+&#9;world.run()<br>
 <br>
 <br>
 if __name__ == &quot;__main__&quot;:<br>
-    main()<br>
+&#9;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

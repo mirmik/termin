@@ -9,11 +9,11 @@
 import numpy as np<br>
 <br>
 def outkernel_operator(matrix):<br>
-    return matrix @ numpy.linalg.pinv(matrix)<br>
+&#9;return matrix @ numpy.linalg.pinv(matrix)<br>
 <br>
 def kernel_operator(matrix):<br>
-    outkernel = outkernel_operator(matrix)<br>
-    return numpy.eye(matrix.shape[0]) - outkernel<br>
+&#9;outkernel = outkernel_operator(matrix)<br>
+&#9;return numpy.eye(matrix.shape[0]) - outkernel<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

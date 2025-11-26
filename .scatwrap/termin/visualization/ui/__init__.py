@@ -12,9 +12,9 @@ from .canvas import Canvas<br>
 from .elements import UIElement, UIRectangle<br>
 <br>
 __all__ = [<br>
-    &quot;Canvas&quot;,<br>
-    &quot;UIElement&quot;,<br>
-    &quot;UIRectangle&quot;<br>
+&#9;&quot;Canvas&quot;,<br>
+&#9;&quot;UIElement&quot;,<br>
+&#9;&quot;UIRectangle&quot;<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

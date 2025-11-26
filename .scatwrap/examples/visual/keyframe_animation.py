@@ -15,22 +15,22 @@ import numpy as np<br>
 from termin.geombase.pose3 import Pose3<br>
 from termin.mesh.mesh import CubeMesh<br>
 from termin.visualization import (<br>
-    Entity,<br>
-    MeshDrawable,<br>
-    Scene,<br>
-    Material,<br>
-    VisualizationWorld,<br>
-    PerspectiveCameraComponent,<br>
-    OrbitCameraController,<br>
+&#9;Entity,<br>
+&#9;MeshDrawable,<br>
+&#9;Scene,<br>
+&#9;Material,<br>
+&#9;VisualizationWorld,<br>
+&#9;PerspectiveCameraComponent,<br>
+&#9;OrbitCameraController,<br>
 )<br>
 from termin.visualization.components import MeshRenderer<br>
 from termin.visualization.shader import ShaderProgram<br>
 from termin.visualization.skybox import SkyBoxEntity<br>
 from termin.visualization.animation import (<br>
-    AnimationChannel,<br>
-    AnimationClip,<br>
-    AnimationPlayer,<br>
-    AnimationKeyframe,<br>
+&#9;AnimationChannel,<br>
+&#9;AnimationClip,<br>
+&#9;AnimationPlayer,<br>
+&#9;AnimationKeyframe,<br>
 )<br>
 <br>
 <br>
@@ -46,8 +46,8 @@ uniform mat4 u_projection;<br>
 out vec3 v_normal;<br>
 <br>
 void main() {<br>
-    v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
+&#9;gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -61,93 +61,93 @@ uniform vec3 u_light_dir;<br>
 out vec4 FragColor;<br>
 <br>
 void main() {<br>
-    vec3 N = normalize(v_normal);<br>
-    float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);<br>
-    vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);<br>
-    FragColor = vec4(color, u_color.a);<br>
+&#9;vec3 N = normalize(v_normal);<br>
+&#9;float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);<br>
+&#9;vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);<br>
+&#9;FragColor = vec4(color, u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
 def build_scene(world: VisualizationWorld):<br>
-    mesh = MeshDrawable(CubeMesh(size=1.0))<br>
-    shader = ShaderProgram(VERT, FRAG)<br>
-    material = Material(<br>
-        shader=shader,<br>
-        color=np.array([0.4, 0.9, 0.4, 1.0], dtype=np.float32),<br>
-    )<br>
+&#9;mesh = MeshDrawable(CubeMesh(size=1.0))<br>
+&#9;shader = ShaderProgram(VERT, FRAG)<br>
+&#9;material = Material(<br>
+&#9;&#9;shader=shader,<br>
+&#9;&#9;color=np.array([0.4, 0.9, 0.4, 1.0], dtype=np.float32),<br>
+&#9;)<br>
 <br>
-    cube = Entity(pose=Pose3.identity(), name=&quot;animated_cube&quot;)<br>
-    cube.add_component(MeshRenderer(mesh, material))<br>
+&#9;cube = Entity(pose=Pose3.identity(), name=&quot;animated_cube&quot;)<br>
+&#9;cube.add_component(MeshRenderer(mesh, material))<br>
 <br>
-    # ============<br>
-    # Keyframes<br>
-    # ============<br>
+&#9;# ============<br>
+&#9;# Keyframes<br>
+&#9;# ============<br>
 <br>
-    # движение по &quot;квадрату&quot;<br>
-    trs_keys = [<br>
-        AnimationKeyframe(0.0, translation=np.array([1.5, 0.0, 0.0])),<br>
-        AnimationKeyframe(1.0, translation=np.array([0.0, 1.5, 0.0])),<br>
-        AnimationKeyframe(2.0, translation=np.array([-1.5, 0.0, 0.0])),<br>
-        AnimationKeyframe(3.0, translation=np.array([0.0, -1.5, 0.0])),<br>
-        AnimationKeyframe(4.0, translation=np.array([1.5, 0.0, 0.0])),<br>
-    ]<br>
+&#9;# движение по &quot;квадрату&quot;<br>
+&#9;trs_keys = [<br>
+&#9;&#9;AnimationKeyframe(0.0, translation=np.array([1.5, 0.0, 0.0])),<br>
+&#9;&#9;AnimationKeyframe(1.0, translation=np.array([0.0, 1.5, 0.0])),<br>
+&#9;&#9;AnimationKeyframe(2.0, translation=np.array([-1.5, 0.0, 0.0])),<br>
+&#9;&#9;AnimationKeyframe(3.0, translation=np.array([0.0, -1.5, 0.0])),<br>
+&#9;&#9;AnimationKeyframe(4.0, translation=np.array([1.5, 0.0, 0.0])),<br>
+&#9;]<br>
 <br>
-    # полный оборот вокруг Y за 4 секунды<br>
-    rot_keys = [<br>
-        AnimationKeyframe(0.0, rotation=Pose3.rotateY(0.0).ang),<br>
-        AnimationKeyframe(1.0, rotation=Pose3.rotateY(np.pi/2).ang),<br>
-        AnimationKeyframe(2.0, rotation=Pose3.rotateY(np.pi).ang),<br>
-        AnimationKeyframe(3.0, rotation=Pose3.rotateY(1.5 * np.pi).ang),<br>
-        AnimationKeyframe(4.0, rotation=Pose3.rotateY(2.0 * np.pi).ang),<br>
-    ]<br>
+&#9;# полный оборот вокруг Y за 4 секунды<br>
+&#9;rot_keys = [<br>
+&#9;&#9;AnimationKeyframe(0.0, rotation=Pose3.rotateY(0.0).ang),<br>
+&#9;&#9;AnimationKeyframe(1.0, rotation=Pose3.rotateY(np.pi/2).ang),<br>
+&#9;&#9;AnimationKeyframe(2.0, rotation=Pose3.rotateY(np.pi).ang),<br>
+&#9;&#9;AnimationKeyframe(3.0, rotation=Pose3.rotateY(1.5 * np.pi).ang),<br>
+&#9;&#9;AnimationKeyframe(4.0, rotation=Pose3.rotateY(2.0 * np.pi).ang),<br>
+&#9;]<br>
 <br>
-    # пульсация масштаба<br>
-    scale_keys = [<br>
-        AnimationKeyframe(0.0, scale=1.0),<br>
-        AnimationKeyframe(1.0, scale=1.5),<br>
-        AnimationKeyframe(2.0, scale=1.0),<br>
-        AnimationKeyframe(3.0, scale=0.7),<br>
-        AnimationKeyframe(4.0, scale=1.0),<br>
-    ]<br>
+&#9;# пульсация масштаба<br>
+&#9;scale_keys = [<br>
+&#9;&#9;AnimationKeyframe(0.0, scale=1.0),<br>
+&#9;&#9;AnimationKeyframe(1.0, scale=1.5),<br>
+&#9;&#9;AnimationKeyframe(2.0, scale=1.0),<br>
+&#9;&#9;AnimationKeyframe(3.0, scale=0.7),<br>
+&#9;&#9;AnimationKeyframe(4.0, scale=1.0),<br>
+&#9;]<br>
 <br>
-    clip = AnimationClip(<br>
-        &quot;move_rotate_scale&quot;,<br>
-        tps = 1.0,  # тики в секунду<br>
-        channels={<br>
-            &quot;clip&quot; :AnimationChannel(translation_keys=trs_keys, rotation_keys=rot_keys, scale_keys=scale_keys)<br>
-        },<br>
-        loop=True,<br>
-    )<br>
+&#9;clip = AnimationClip(<br>
+&#9;&#9;&quot;move_rotate_scale&quot;,<br>
+&#9;&#9;tps = 1.0,  # тики в секунду<br>
+&#9;&#9;channels={<br>
+&#9;&#9;&#9;&quot;clip&quot; :AnimationChannel(translation_keys=trs_keys, rotation_keys=rot_keys, scale_keys=scale_keys)<br>
+&#9;&#9;},<br>
+&#9;&#9;loop=True,<br>
+&#9;)<br>
 <br>
-    player = cube.add_component(AnimationPlayer())<br>
-    player.add_clip(clip)<br>
-    player.play(&quot;move_rotate_scale&quot;)<br>
+&#9;player = cube.add_component(AnimationPlayer())<br>
+&#9;player.add_clip(clip)<br>
+&#9;player.play(&quot;move_rotate_scale&quot;)<br>
 <br>
-    scene = Scene()<br>
-    scene.add(cube)<br>
-    scene.add(SkyBoxEntity())<br>
-    world.add_scene(scene)<br>
+&#9;scene = Scene()<br>
+&#9;scene.add(cube)<br>
+&#9;scene.add(SkyBoxEntity())<br>
+&#9;world.add_scene(scene)<br>
 <br>
-    cam_entity = Entity(name=&quot;camera&quot;)<br>
-    cam = PerspectiveCameraComponent()<br>
-    cam_entity.add_component(cam)<br>
-    cam_entity.add_component(OrbitCameraController(radius=6.0, elevation=30.0))<br>
-    scene.add(cam_entity)<br>
+&#9;cam_entity = Entity(name=&quot;camera&quot;)<br>
+&#9;cam = PerspectiveCameraComponent()<br>
+&#9;cam_entity.add_component(cam)<br>
+&#9;cam_entity.add_component(OrbitCameraController(radius=6.0, elevation=30.0))<br>
+&#9;scene.add(cam_entity)<br>
 <br>
-    return scene, cam<br>
+&#9;return scene, cam<br>
 <br>
 <br>
 def main():<br>
-    world = VisualizationWorld()<br>
-    scene, cam = build_scene(world)<br>
-    window = world.create_window(title=&quot;termin keyframed cube&quot;)<br>
-    window.add_viewport(scene, cam)<br>
-    world.run()<br>
+&#9;world = VisualizationWorld()<br>
+&#9;scene, cam = build_scene(world)<br>
+&#9;window = world.create_window(title=&quot;termin keyframed cube&quot;)<br>
+&#9;window.add_viewport(scene, cam)<br>
+&#9;world.run()<br>
 <br>
 <br>
 if __name__ == &quot;__main__&quot;:<br>
-    main()<br>
+&#9;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

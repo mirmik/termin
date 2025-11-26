@@ -15,14 +15,14 @@ import numpy as np<br>
 from termin.geombase.pose3 import Pose3<br>
 from termin.mesh.mesh import CubeMesh<br>
 from termin.visualization import (<br>
-    Entity,<br>
-    MeshDrawable,<br>
-    Scene,<br>
-    Material,<br>
-    VisualizationWorld,<br>
-    PerspectiveCameraComponent,<br>
-    OrbitCameraController,<br>
-    Component,<br>
+&#9;Entity,<br>
+&#9;MeshDrawable,<br>
+&#9;Scene,<br>
+&#9;Material,<br>
+&#9;VisualizationWorld,<br>
+&#9;PerspectiveCameraComponent,<br>
+&#9;OrbitCameraController,<br>
+&#9;Component,<br>
 )<br>
 from termin.visualization.components import MeshRenderer<br>
 from termin.visualization.shader import ShaderProgram<br>
@@ -42,10 +42,10 @@ out vec3 v_normal;<br>
 out vec3 v_world_pos;<br>
 <br>
 void main() {<br>
-    vec4 world = u_model * vec4(a_position, 1.0);<br>
-    v_world_pos = world.xyz;<br>
-    v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-    gl_Position = u_projection * u_view * world;<br>
+&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
+&#9;v_world_pos = world.xyz;<br>
+&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
+&#9;gl_Position = u_projection * u_view * world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -59,67 +59,67 @@ uniform vec3 u_light_dir;<br>
 out vec4 FragColor;<br>
 <br>
 void main() {<br>
-    vec3 N = normalize(v_normal);<br>
-    float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);<br>
-    vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);<br>
-    FragColor = vec4(color, u_color.a);<br>
+&#9;vec3 N = normalize(v_normal);<br>
+&#9;float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);<br>
+&#9;vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);<br>
+&#9;FragColor = vec4(color, u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
 class RotateComponent(Component):<br>
-    &quot;&quot;&quot;Simple component that rotates its entity around a fixed axis.&quot;&quot;&quot;<br>
+&#9;&quot;&quot;&quot;Simple component that rotates its entity around a fixed axis.&quot;&quot;&quot;<br>
 <br>
-    def __init__(self, axis: np.ndarray = np.array([0.0, 1.0, 0.0]), speed: float = 1.0):<br>
-        super().__init__(enabled=True)<br>
-        axis = np.asarray(axis, dtype=float)<br>
-        norm = np.linalg.norm(axis)<br>
-        self.axis = axis / norm if norm &gt; 0 else np.array([0.0, 1.0, 0.0])<br>
-        self.speed = speed<br>
-        self.angle = 0.0<br>
+&#9;def __init__(self, axis: np.ndarray = np.array([0.0, 1.0, 0.0]), speed: float = 1.0):<br>
+&#9;&#9;super().__init__(enabled=True)<br>
+&#9;&#9;axis = np.asarray(axis, dtype=float)<br>
+&#9;&#9;norm = np.linalg.norm(axis)<br>
+&#9;&#9;self.axis = axis / norm if norm &gt; 0 else np.array([0.0, 1.0, 0.0])<br>
+&#9;&#9;self.speed = speed<br>
+&#9;&#9;self.angle = 0.0<br>
 <br>
-    def update(self, dt: float):<br>
-        if self.entity is None:<br>
-            return<br>
-        self.angle += self.speed * dt<br>
-        rot_pose = Pose3.rotation(self.axis, self.angle)<br>
-        translation = self.entity.transform.global_pose().lin.copy()<br>
-        self.entity.transform.relocate(Pose3(ang=rot_pose.ang.copy(), lin=translation))<br>
+&#9;def update(self, dt: float):<br>
+&#9;&#9;if self.entity is None:<br>
+&#9;&#9;&#9;return<br>
+&#9;&#9;self.angle += self.speed * dt<br>
+&#9;&#9;rot_pose = Pose3.rotation(self.axis, self.angle)<br>
+&#9;&#9;translation = self.entity.transform.global_pose().lin.copy()<br>
+&#9;&#9;self.entity.transform.relocate(Pose3(ang=rot_pose.ang.copy(), lin=translation))<br>
 <br>
 <br>
 def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent]:<br>
-    mesh = MeshDrawable(CubeMesh(size=1.0))<br>
-    shader = ShaderProgram(VERT, FRAG)<br>
-    material = Material(shader=shader, color=np.array([0.3, 0.7, 0.9, 1.0], dtype=np.float32))<br>
+&#9;mesh = MeshDrawable(CubeMesh(size=1.0))<br>
+&#9;shader = ShaderProgram(VERT, FRAG)<br>
+&#9;material = Material(shader=shader, color=np.array([0.3, 0.7, 0.9, 1.0], dtype=np.float32))<br>
 <br>
-    cube = Entity(pose=Pose3.identity(), name=&quot;cube&quot;)<br>
-    cube.add_component(MeshRenderer(mesh, material))<br>
-    cube.add_component(RotateComponent(axis=np.array([0.2, 1.0, 0.3]), speed=1.5))<br>
+&#9;cube = Entity(pose=Pose3.identity(), name=&quot;cube&quot;)<br>
+&#9;cube.add_component(MeshRenderer(mesh, material))<br>
+&#9;cube.add_component(RotateComponent(axis=np.array([0.2, 1.0, 0.3]), speed=1.5))<br>
 <br>
-    scene = Scene()<br>
-    scene.add(cube)<br>
-    scene.add(SkyBoxEntity())<br>
-    world.add_scene(scene)<br>
+&#9;scene = Scene()<br>
+&#9;scene.add(cube)<br>
+&#9;scene.add(SkyBoxEntity())<br>
+&#9;world.add_scene(scene)<br>
 <br>
-    camera_entity = Entity(name=&quot;camera&quot;)<br>
-    camera = PerspectiveCameraComponent()<br>
-    camera_entity.add_component(camera)<br>
-    camera_entity.add_component(OrbitCameraController(radius=5.0, elevation=30.0))<br>
-    scene.add(camera_entity)<br>
+&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
+&#9;camera = PerspectiveCameraComponent()<br>
+&#9;camera_entity.add_component(camera)<br>
+&#9;camera_entity.add_component(OrbitCameraController(radius=5.0, elevation=30.0))<br>
+&#9;scene.add(camera_entity)<br>
 <br>
-    return scene, camera<br>
+&#9;return scene, camera<br>
 <br>
 <br>
 def main():<br>
-    world = VisualizationWorld()<br>
-    scene, camera = build_scene(world)<br>
-    window = world.create_window(title=&quot;termin animated cube&quot;)<br>
-    window.add_viewport(scene, camera)<br>
-    world.run()<br>
+&#9;world = VisualizationWorld()<br>
+&#9;scene, camera = build_scene(world)<br>
+&#9;window = world.create_window(title=&quot;termin animated cube&quot;)<br>
+&#9;window.add_viewport(scene, camera)<br>
+&#9;world.run()<br>
 <br>
 <br>
 if __name__ == &quot;__main__&quot;:<br>
-    main()<br>
+&#9;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

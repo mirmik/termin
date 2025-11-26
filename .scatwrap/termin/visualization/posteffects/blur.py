@@ -20,8 +20,8 @@ layout(location=0) in vec2 a_pos;<br>
 layout(location=1) in vec2 a_uv;<br>
 out vec2 v_uv;<br>
 void main() {<br>
-    v_uv = a_uv;<br>
-    gl_Position = vec4(a_pos, 0.0, 1.0);<br>
+&#9;v_uv = a_uv;<br>
+&#9;gl_Position = vec4(a_pos, 0.0, 1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
@@ -41,43 +41,43 @@ const float w1 = 0.316216;<br>
 const float w2 = 0.070270;<br>
 <br>
 void main() {<br>
-    vec2 ts = u_texel_size;<br>
-    vec2 dir = u_direction;<br>
+&#9;vec2 ts = u_texel_size;<br>
+&#9;vec2 dir = u_direction;<br>
 <br>
-    vec3 c = texture(u_texture, v_uv).rgb * w0;<br>
-    c += texture(u_texture, v_uv + dir * ts * 1.0).rgb * w1;<br>
-    c += texture(u_texture, v_uv - dir * ts * 1.0).rgb * w1;<br>
-    c += texture(u_texture, v_uv + dir * ts * 2.0).rgb * w2;<br>
-    c += texture(u_texture, v_uv - dir * ts * 2.0).rgb * w2;<br>
+&#9;vec3 c = texture(u_texture, v_uv).rgb * w0;<br>
+&#9;c += texture(u_texture, v_uv + dir * ts * 1.0).rgb * w1;<br>
+&#9;c += texture(u_texture, v_uv - dir * ts * 1.0).rgb * w1;<br>
+&#9;c += texture(u_texture, v_uv + dir * ts * 2.0).rgb * w2;<br>
+&#9;c += texture(u_texture, v_uv - dir * ts * 2.0).rgb * w2;<br>
 <br>
-    FragColor = vec4(c, 1.0);<br>
+&#9;FragColor = vec4(c, 1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 class GaussianBlurPass(PostEffect):<br>
-    &quot;&quot;&quot;Один проход: горизонтальный или вертикальный.&quot;&quot;&quot;<br>
+&#9;&quot;&quot;&quot;Один проход: горизонтальный или вертикальный.&quot;&quot;&quot;<br>
 <br>
-    def __init__(self, direction):<br>
-        self.shader = ShaderProgram(GAUSS_VERT, GAUSS_FRAG)<br>
-        self.direction = np.array(direction, dtype=np.float32)<br>
+&#9;def __init__(self, direction):<br>
+&#9;&#9;self.shader = ShaderProgram(GAUSS_VERT, GAUSS_FRAG)<br>
+&#9;&#9;self.direction = np.array(direction, dtype=np.float32)<br>
 <br>
-    def draw(self, gfx, key, color_tex, extra_textures, size):<br>
-        w, h = size<br>
-        texel_size = np.array([1.0/max(1,w), 1.0/max(1,h)], dtype=np.float32)<br>
+&#9;def draw(self, gfx, key, color_tex, extra_textures, size):<br>
+&#9;&#9;w, h = size<br>
+&#9;&#9;texel_size = np.array([1.0/max(1,w), 1.0/max(1,h)], dtype=np.float32)<br>
 <br>
-        self.shader.ensure_ready(gfx)<br>
-        self.shader.use()<br>
+&#9;&#9;self.shader.ensure_ready(gfx)<br>
+&#9;&#9;self.shader.use()<br>
 <br>
-        color_tex.bind(0)<br>
-        self.shader.set_uniform_int(&quot;u_texture&quot;, 0)<br>
-        self.shader.set_uniform_auto(&quot;u_texel_size&quot;, texel_size)<br>
-        self.shader.set_uniform_auto(&quot;u_direction&quot;, self.direction)<br>
+&#9;&#9;color_tex.bind(0)<br>
+&#9;&#9;self.shader.set_uniform_int(&quot;u_texture&quot;, 0)<br>
+&#9;&#9;self.shader.set_uniform_auto(&quot;u_texel_size&quot;, texel_size)<br>
+&#9;&#9;self.shader.set_uniform_auto(&quot;u_direction&quot;, self.direction)<br>
 <br>
-        gfx.set_depth_test(False)<br>
-        gfx.set_cull_face(False)<br>
-        gfx.set_blend(False)<br>
+&#9;&#9;gfx.set_depth_test(False)<br>
+&#9;&#9;gfx.set_cull_face(False)<br>
+&#9;&#9;gfx.set_blend(False)<br>
 <br>
-        gfx.draw_ui_textured_quad(key)<br>
+&#9;&#9;gfx.draw_ui_textured_quad(key)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>
