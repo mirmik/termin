@@ -5,45 +5,45 @@
   <title>termin/visualization/materials/pick_material.py</title>
 </head>
 <body>
-<pre><code>
-# termin/visualization/materials/pick_material.py (или рядом)
-
-from termin.visualization.material import Material
-from termin.visualization.shader import ShaderProgram
-
-vert_shader = &quot;&quot;&quot;
-#version 330 core
-
-layout(location=0) in vec3 a_position;
-layout(location=1) in vec3 a_normal;
-layout(location=2) in vec2 a_texcoord;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-&quot;&quot;&quot;
-
-frag_shader = &quot;&quot;&quot;
-#version 330 core
-uniform vec3 u_pickColor;
-out vec4 fragColor;
-void main() {
-    fragColor = vec4(u_pickColor, 1.0);
-}
-&quot;&quot;&quot;
-
-class PickMaterial(Material):
-    def __init__(self):
-        shader = ShaderProgram(vert_shader, frag_shader)
-        super().__init__(shader=shader)
-
-    def apply_for_pick(self, model, view, proj, pick_color, graphics, context_key):
-        self.shader.ensure_ready(graphics)
-        self.apply(model, view, proj, graphics=graphics, context_key=context_key)
-        self.shader.set_uniform_vec3(&quot;u_pickColor&quot;, pick_color)
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+# termin/visualization/materials/pick_material.py (или рядом)<br>
+<br>
+from termin.visualization.material import Material<br>
+from termin.visualization.shader import ShaderProgram<br>
+<br>
+vert_shader = &quot;&quot;&quot;<br>
+#version 330 core<br>
+<br>
+layout(location=0) in vec3 a_position;<br>
+layout(location=1) in vec3 a_normal;<br>
+layout(location=2) in vec2 a_texcoord;<br>
+<br>
+uniform mat4 u_model;<br>
+uniform mat4 u_view;<br>
+uniform mat4 u_projection;<br>
+void main() {<br>
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+}<br>
+&quot;&quot;&quot;<br>
+<br>
+frag_shader = &quot;&quot;&quot;<br>
+#version 330 core<br>
+uniform vec3 u_pickColor;<br>
+out vec4 fragColor;<br>
+void main() {<br>
+    fragColor = vec4(u_pickColor, 1.0);<br>
+}<br>
+&quot;&quot;&quot;<br>
+<br>
+class PickMaterial(Material):<br>
+    def __init__(self):<br>
+        shader = ShaderProgram(vert_shader, frag_shader)<br>
+        super().__init__(shader=shader)<br>
+<br>
+    def apply_for_pick(self, model, view, proj, pick_color, graphics, context_key):<br>
+        self.shader.ensure_ready(graphics)<br>
+        self.apply(model, view, proj, graphics=graphics, context_key=context_key)<br>
+        self.shader.set_uniform_vec3(&quot;u_pickColor&quot;, pick_color)<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

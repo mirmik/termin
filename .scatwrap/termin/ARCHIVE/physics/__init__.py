@@ -5,9 +5,9 @@
   <title>termin/ARCHIVE/physics/__init__.py</title>
 </head>
 <body>
-<pre><code>
-
-from termin.ga201.screw import Screw2
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+<br>
+from termin.ga201.screw import Screw2<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

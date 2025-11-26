@@ -5,69 +5,68 @@
   <title>termin/visualization/__init__.py</title>
 </head>
 <body>
-<pre><code>
-&quot;&quot;&quot;
-Visualization package providing a minimal rendering stack with pluggable backends.
-
-The module exposes abstractions for window/context management, scene graphs,
-camera models and GPU resources such as meshes, shaders, materials and textures.
-&quot;&quot;&quot;
-
-from .window import Window, GLWindow
-from .renderer import Renderer
-from .scene import Scene
-from .entity import Entity, Component, InputComponent, RenderContext
-from .camera import (
-    CameraComponent,
-    PerspectiveCameraComponent,
-    OrthographicCameraComponent,
-    OrbitCameraController,
-)
-from .mesh import MeshDrawable
-from .material import Material
-from .shader import ShaderProgram
-from .texture import Texture
-from .components import MeshRenderer
-from .ui import Canvas, UIElement, UIRectangle
-from .world import VisualizationWorld
-from .backends.base import GraphicsBackend, WindowBackend, MouseButton, Key, Action
-from .backends.opengl import OpenGLGraphicsBackend
-from .backends.glfw import GLFWWindowBackend
-from .backends.qt import QtWindowBackend, QtGLWindowHandle
-
-__all__ = [
-    &quot;Window&quot;,
-    &quot;GLWindow&quot;,
-    &quot;Renderer&quot;,
-    &quot;Scene&quot;,
-    &quot;Entity&quot;,
-    &quot;Component&quot;,
-    &quot;InputComponent&quot;,
-    &quot;RenderContext&quot;,
-    &quot;CameraComponent&quot;,
-    &quot;PerspectiveCameraComponent&quot;,
-    &quot;OrthographicCameraComponent&quot;,
-    &quot;OrbitCameraController&quot;,
-    &quot;MeshDrawable&quot;,
-    &quot;MeshRenderer&quot;,
-    &quot;Canvas&quot;,
-    &quot;UIElement&quot;,
-    &quot;UIRectangle&quot;,
-    &quot;Material&quot;,
-    &quot;ShaderProgram&quot;,
-    &quot;Texture&quot;,
-    &quot;VisualizationWorld&quot;,
-    &quot;GraphicsBackend&quot;,
-    &quot;WindowBackend&quot;,
-    &quot;MouseButton&quot;,
-    &quot;Key&quot;,
-    &quot;Action&quot;,
-    &quot;OpenGLGraphicsBackend&quot;,
-    &quot;GLFWWindowBackend&quot;,
-    &quot;QtWindowBackend&quot;,
-    &quot;QtGLWindowHandle&quot;,
-]
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;<br>
+Visualization package providing a minimal rendering stack with pluggable backends.<br>
+<br>
+The module exposes abstractions for window/context management, scene graphs,<br>
+camera models and GPU resources such as meshes, shaders, materials and textures.<br>
+&quot;&quot;&quot;<br>
+<br>
+from .window import Window, GLWindow<br>
+from .renderer import Renderer<br>
+from .scene import Scene<br>
+from .entity import Entity, Component, InputComponent, RenderContext<br>
+from .camera import (<br>
+    CameraComponent,<br>
+    PerspectiveCameraComponent,<br>
+    OrthographicCameraComponent,<br>
+    OrbitCameraController,<br>
+)<br>
+from .mesh import MeshDrawable<br>
+from .material import Material<br>
+from .shader import ShaderProgram<br>
+from .texture import Texture<br>
+from .components import MeshRenderer<br>
+from .ui import Canvas, UIElement, UIRectangle<br>
+from .world import VisualizationWorld<br>
+from .backends.base import GraphicsBackend, WindowBackend, MouseButton, Key, Action<br>
+from .backends.opengl import OpenGLGraphicsBackend<br>
+from .backends.glfw import GLFWWindowBackend<br>
+from .backends.qt import QtWindowBackend, QtGLWindowHandle<br>
+<br>
+__all__ = [<br>
+    &quot;Window&quot;,<br>
+    &quot;GLWindow&quot;,<br>
+    &quot;Renderer&quot;,<br>
+    &quot;Scene&quot;,<br>
+    &quot;Entity&quot;,<br>
+    &quot;Component&quot;,<br>
+    &quot;InputComponent&quot;,<br>
+    &quot;RenderContext&quot;,<br>
+    &quot;CameraComponent&quot;,<br>
+    &quot;PerspectiveCameraComponent&quot;,<br>
+    &quot;OrthographicCameraComponent&quot;,<br>
+    &quot;OrbitCameraController&quot;,<br>
+    &quot;MeshDrawable&quot;,<br>
+    &quot;MeshRenderer&quot;,<br>
+    &quot;Canvas&quot;,<br>
+    &quot;UIElement&quot;,<br>
+    &quot;UIRectangle&quot;,<br>
+    &quot;Material&quot;,<br>
+    &quot;ShaderProgram&quot;,<br>
+    &quot;Texture&quot;,<br>
+    &quot;VisualizationWorld&quot;,<br>
+    &quot;GraphicsBackend&quot;,<br>
+    &quot;WindowBackend&quot;,<br>
+    &quot;MouseButton&quot;,<br>
+    &quot;Key&quot;,<br>
+    &quot;Action&quot;,<br>
+    &quot;OpenGLGraphicsBackend&quot;,<br>
+    &quot;GLFWWindowBackend&quot;,<br>
+    &quot;QtWindowBackend&quot;,<br>
+    &quot;QtGLWindowHandle&quot;,<br>
+]<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

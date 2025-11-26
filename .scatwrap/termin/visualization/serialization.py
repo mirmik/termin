@@ -5,17 +5,17 @@
   <title>termin/visualization/serialization.py</title>
 </head>
 <body>
-<pre><code>
-# serialization.py
-
-COMPONENT_REGISTRY = {}
-
-def serializable(fields):
-    def wrapper(cls):
-        cls._serializable_fields = fields
-        COMPONENT_REGISTRY[cls.__name__] = cls
-        return cls
-    return wrapper
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+# serialization.py<br>
+<br>
+COMPONENT_REGISTRY = {}<br>
+<br>
+def serializable(fields):<br>
+    def wrapper(cls):<br>
+        cls._serializable_fields = fields<br>
+        COMPONENT_REGISTRY[cls.__name__] = cls<br>
+        return cls<br>
+    return wrapper<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

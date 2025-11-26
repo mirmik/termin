@@ -5,67 +5,67 @@
   <title>termin/ga201/point.py</title>
 </head>
 <body>
-<pre><code>
-import math
-
-class Point2:
-    def __init__(self, x, y, z=1):
-        self.x = x
-        self.y = y
-        self.z = z
-
-    def __str__(self):
-        return str((self.x, self.y, self.z))
-
-    def __add__(self, other):
-        return Point2(
-            self.x + other.x,
-            self.y + other.y,
-            self.z + other.z
-        )
-
-    def __mul__(self, other):
-        return Point2(
-            self.x * other,
-            self.y * other,
-            self.z * other
-        )
-
-    def __sub__(self, other):
-        return Point2(
-            self.x - other.x,
-            self.y - other.y,
-            self.z - other.z
-        )
-
-    def __truediv__(self, a):
-        return Point2(
-            self.x / a,
-            self.y / a,
-            self.z / a
-        )
-
-    def bulk_norm(self):
-        return math.sqrt(self.x*self.x + self.y*self.y)
-
-    def __str__(self):
-        return str((self.x, self.y, self.z))
-
-    def __repr__(self):
-        return str(self)
-
-    def unitized(self):
-        return Point2(
-            self.x / self.z,
-            self.y / self.z,
-            1
-        )
-
-    def is_infinite(self):
-        return self.z == 0
-
-def origin():
-    return Point2(0, 0, 1)
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+import math<br>
+<br>
+class Point2:<br>
+    def __init__(self, x, y, z=1):<br>
+        self.x = x<br>
+        self.y = y<br>
+        self.z = z<br>
+<br>
+    def __str__(self):<br>
+        return str((self.x, self.y, self.z))<br>
+<br>
+    def __add__(self, other):<br>
+        return Point2(<br>
+            self.x + other.x,<br>
+            self.y + other.y,<br>
+            self.z + other.z<br>
+        )<br>
+<br>
+    def __mul__(self, other):<br>
+        return Point2(<br>
+            self.x * other,<br>
+            self.y * other,<br>
+            self.z * other<br>
+        )<br>
+<br>
+    def __sub__(self, other):<br>
+        return Point2(<br>
+            self.x - other.x,<br>
+            self.y - other.y,<br>
+            self.z - other.z<br>
+        )<br>
+<br>
+    def __truediv__(self, a):<br>
+        return Point2(<br>
+            self.x / a,<br>
+            self.y / a,<br>
+            self.z / a<br>
+        )<br>
+<br>
+    def bulk_norm(self):<br>
+        return math.sqrt(self.x*self.x + self.y*self.y)<br>
+<br>
+    def __str__(self):<br>
+        return str((self.x, self.y, self.z))<br>
+<br>
+    def __repr__(self):<br>
+        return str(self)<br>
+<br>
+    def unitized(self):<br>
+        return Point2(<br>
+            self.x / self.z,<br>
+            self.y / self.z,<br>
+            1<br>
+        )<br>
+<br>
+    def is_infinite(self):<br>
+        return self.z == 0<br>
+<br>
+def origin():<br>
+    return Point2(0, 0, 1)<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

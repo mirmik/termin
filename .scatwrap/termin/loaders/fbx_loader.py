@@ -5,174 +5,173 @@
   <title>termin/loaders/fbx_loader.py</title>
 </head>
 <body>
-<pre><code>
-# termin/mesh/loaders/fbx_loader.py
-
-import numpy as np
-import pyassimp
-
-
-# ---------- DATA CLASSES ----------
-
-class FBXMeshData:
-    def __init__(self, name, vertices, normals, uvs, indices, material_index):
-        self.name = name
-        self.vertices = vertices
-        self.normals = normals
-        self.uvs = uvs
-        self.indices = indices
-        self.material_index = material_index
-
-
-class FBXMaterialData:
-    def __init__(self, name, diffuse_color=None, diffuse_texture=None):
-        self.name = name
-        self.diffuse_color = diffuse_color
-        self.diffuse_texture = diffuse_texture
-
-
-class FBXNodeData:
-    def __init__(self, name, children=None, mesh_indices=None, transform=None):
-        self.name = name
-        self.children = children or []
-        self.mesh_indices = mesh_indices or []
-        self.transform = transform
-
-
-class FBXAnimationChannel:
-    def __init__(self, node_name, pos_keys, rot_keys, scale_keys):
-        self.node_name = node_name
-        self.pos_keys = pos_keys
-        self.rot_keys = rot_keys
-        self.scale_keys = scale_keys
-
-
-class FBXAnimationClip:
-    def __init__(self, name, duration, tps, channels):
-        self.name = name
-        self.duration = duration
-        self.ticks_per_second = tps
-        self.channels = channels
-
-
-class FBXSceneData:
-    def __init__(self):
-        self.meshes = []
-        self.materials = []
-        self.root = None
-        self.animations = []
-
-
-# ---------- PARSER HELPERS ----------
-
-def _parse_materials(scene, out):
-    for mat in scene.materials:
-        name = mat.properties.get(&quot;name&quot;, &quot;Material&quot;)
-        diffuse = mat.properties.get(&quot;diffuse&quot;, None)
-
-        tex = None
-        for key, value in mat.properties.items():
-            if isinstance(value, str) and value.lower().endswith((&quot;.jpg&quot;, &quot;.png&quot;, &quot;.jpeg&quot;, &quot;.tga&quot;)):
-                tex = value
-
-        out.materials.append(
-            FBXMaterialData(
-                name=name,
-                diffuse_color=np.array(diffuse) if diffuse is not None else None,
-                diffuse_texture=tex
-            )
-        )
-
-
-def _parse_meshes(scene, out):
-    for mesh in scene.meshes:
-        verts = np.array(mesh.vertices, dtype=np.float32)
-        norms = np.array(mesh.normals, dtype=np.float32) if mesh.normals is not None else None
-
-        # ---- FIXED UV CHECK ----
-        uvs = None
-        if (
-            mesh.texturecoords is not None
-            and len(mesh.texturecoords) &gt; 0
-            and mesh.texturecoords[0] is not None
-        ):
-            # Assimp дает UV как Nx3 массив (uv + padding), берём первые 2 колонки
-            uvs = np.array(mesh.texturecoords[0][:, :2], dtype=np.float32)
-
-        faces = []
-        for f in mesh.faces:
-            if len(f) == 3:
-                faces.extend(f)
-
-        indices = np.array(faces, dtype=np.uint32)
-
-        out.meshes.append(
-            FBXMeshData(
-                name=mesh.name,
-                vertices=verts,
-                normals=norms,
-                uvs=uvs,
-                indices=indices,
-                material_index=mesh.materialindex
-            )
-        )
-
-
-
-def _parse_nodes(node):
-    name = node.name
-    m = node.transformation.astype(np.float32)
-    children = [_parse_nodes(c) for c in node.children]
-    mesh_indices = list(node.meshes or [])
-    return FBXNodeData(name, children, mesh_indices, m)
-
-
-def _parse_animations(scene, out):
-    for anim in scene.animations:
-        name = anim.name if anim.name else &quot;Anim&quot;
-        tps = anim.tickspersecond if anim.tickspersecond &gt; 0 else 30.0
-
-        channels = []
-        for ch in anim.channels:
-            pos_keys = [(k.time, np.array(k.value)) for k in (ch.positionkeys or [])]
-            rot_keys = [(k.time, np.array(k.value)) for k in (ch.rotationkeys or [])]
-            scale_keys = [(k.time, np.array(k.value)) for k in (ch.scalingkeys or [])]
-
-            channels.append(
-                FBXAnimationChannel(
-                    node_name=ch.nodename,
-                    pos_keys=pos_keys,
-                    rot_keys=rot_keys,
-                    scale_keys=scale_keys
-                )
-            )
-
-        out.animations.append(
-            FBXAnimationClip(
-                name=name,
-                duration=anim.duration,
-                tps=tps,
-                channels=channels
-            )
-        )
-
-
-# ---------- PUBLIC API ----------
-
-def load_fbx_file(path):
-    scene_data = FBXSceneData()
-
-    with pyassimp.load(path) as scene:
-        if not scene:
-            raise RuntimeError(f&quot;Failed to load FBX: {path}&quot;)
-
-        _parse_materials(scene, scene_data)
-        _parse_meshes(scene, scene_data)
-        scene_data.root = _parse_nodes(scene.rootnode)
-        _parse_animations(scene, scene_data)
-
-        return scene_data
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+# termin/mesh/loaders/fbx_loader.py<br>
+<br>
+import numpy as np<br>
+import pyassimp<br>
+<br>
+<br>
+# ---------- DATA CLASSES ----------<br>
+<br>
+class FBXMeshData:<br>
+    def __init__(self, name, vertices, normals, uvs, indices, material_index):<br>
+        self.name = name<br>
+        self.vertices = vertices<br>
+        self.normals = normals<br>
+        self.uvs = uvs<br>
+        self.indices = indices<br>
+        self.material_index = material_index<br>
+<br>
+<br>
+class FBXMaterialData:<br>
+    def __init__(self, name, diffuse_color=None, diffuse_texture=None):<br>
+        self.name = name<br>
+        self.diffuse_color = diffuse_color<br>
+        self.diffuse_texture = diffuse_texture<br>
+<br>
+<br>
+class FBXNodeData:<br>
+    def __init__(self, name, children=None, mesh_indices=None, transform=None):<br>
+        self.name = name<br>
+        self.children = children or []<br>
+        self.mesh_indices = mesh_indices or []<br>
+        self.transform = transform<br>
+<br>
+<br>
+class FBXAnimationChannel:<br>
+    def __init__(self, node_name, pos_keys, rot_keys, scale_keys):<br>
+        self.node_name = node_name<br>
+        self.pos_keys = pos_keys<br>
+        self.rot_keys = rot_keys<br>
+        self.scale_keys = scale_keys<br>
+<br>
+<br>
+class FBXAnimationClip:<br>
+    def __init__(self, name, duration, tps, channels):<br>
+        self.name = name<br>
+        self.duration = duration<br>
+        self.ticks_per_second = tps<br>
+        self.channels = channels<br>
+<br>
+<br>
+class FBXSceneData:<br>
+    def __init__(self):<br>
+        self.meshes = []<br>
+        self.materials = []<br>
+        self.root = None<br>
+        self.animations = []<br>
+<br>
+<br>
+# ---------- PARSER HELPERS ----------<br>
+<br>
+def _parse_materials(scene, out):<br>
+    for mat in scene.materials:<br>
+        name = mat.properties.get(&quot;name&quot;, &quot;Material&quot;)<br>
+        diffuse = mat.properties.get(&quot;diffuse&quot;, None)<br>
+<br>
+        tex = None<br>
+        for key, value in mat.properties.items():<br>
+            if isinstance(value, str) and value.lower().endswith((&quot;.jpg&quot;, &quot;.png&quot;, &quot;.jpeg&quot;, &quot;.tga&quot;)):<br>
+                tex = value<br>
+<br>
+        out.materials.append(<br>
+            FBXMaterialData(<br>
+                name=name,<br>
+                diffuse_color=np.array(diffuse) if diffuse is not None else None,<br>
+                diffuse_texture=tex<br>
+            )<br>
+        )<br>
+<br>
+<br>
+def _parse_meshes(scene, out):<br>
+    for mesh in scene.meshes:<br>
+        verts = np.array(mesh.vertices, dtype=np.float32)<br>
+        norms = np.array(mesh.normals, dtype=np.float32) if mesh.normals is not None else None<br>
+<br>
+        # ---- FIXED UV CHECK ----<br>
+        uvs = None<br>
+        if (<br>
+            mesh.texturecoords is not None<br>
+            and len(mesh.texturecoords) &gt; 0<br>
+            and mesh.texturecoords[0] is not None<br>
+        ):<br>
+            # Assimp дает UV как Nx3 массив (uv + padding), берём первые 2 колонки<br>
+            uvs = np.array(mesh.texturecoords[0][:, :2], dtype=np.float32)<br>
+<br>
+        faces = []<br>
+        for f in mesh.faces:<br>
+            if len(f) == 3:<br>
+                faces.extend(f)<br>
+<br>
+        indices = np.array(faces, dtype=np.uint32)<br>
+<br>
+        out.meshes.append(<br>
+            FBXMeshData(<br>
+                name=mesh.name,<br>
+                vertices=verts,<br>
+                normals=norms,<br>
+                uvs=uvs,<br>
+                indices=indices,<br>
+                material_index=mesh.materialindex<br>
+            )<br>
+        )<br>
+<br>
+<br>
+<br>
+def _parse_nodes(node):<br>
+    name = node.name<br>
+    m = node.transformation.astype(np.float32)<br>
+    children = [_parse_nodes(c) for c in node.children]<br>
+    mesh_indices = list(node.meshes or [])<br>
+    return FBXNodeData(name, children, mesh_indices, m)<br>
+<br>
+<br>
+def _parse_animations(scene, out):<br>
+    for anim in scene.animations:<br>
+        name = anim.name if anim.name else &quot;Anim&quot;<br>
+        tps = anim.tickspersecond if anim.tickspersecond &gt; 0 else 30.0<br>
+<br>
+        channels = []<br>
+        for ch in anim.channels:<br>
+            pos_keys = [(k.time, np.array(k.value)) for k in (ch.positionkeys or [])]<br>
+            rot_keys = [(k.time, np.array(k.value)) for k in (ch.rotationkeys or [])]<br>
+            scale_keys = [(k.time, np.array(k.value)) for k in (ch.scalingkeys or [])]<br>
+<br>
+            channels.append(<br>
+                FBXAnimationChannel(<br>
+                    node_name=ch.nodename,<br>
+                    pos_keys=pos_keys,<br>
+                    rot_keys=rot_keys,<br>
+                    scale_keys=scale_keys<br>
+                )<br>
+            )<br>
+<br>
+        out.animations.append(<br>
+            FBXAnimationClip(<br>
+                name=name,<br>
+                duration=anim.duration,<br>
+                tps=tps,<br>
+                channels=channels<br>
+            )<br>
+        )<br>
+<br>
+<br>
+# ---------- PUBLIC API ----------<br>
+<br>
+def load_fbx_file(path):<br>
+    scene_data = FBXSceneData()<br>
+<br>
+    with pyassimp.load(path) as scene:<br>
+        if not scene:<br>
+            raise RuntimeError(f&quot;Failed to load FBX: {path}&quot;)<br>
+<br>
+        _parse_materials(scene, scene_data)<br>
+        _parse_meshes(scene, scene_data)<br>
+        scene_data.root = _parse_nodes(scene.rootnode)<br>
+        _parse_animations(scene, scene_data)<br>
+<br>
+        return scene_data<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

@@ -5,29 +5,29 @@
   <title>termin/ga201/magnitude.py</title>
 </head>
 <body>
-<pre><code>
-
-
-
-class Magnitude:
-    def __init__(self, v, w):
-        self.v = v
-        self.w = w
-
-    def __str__(self):
-        return str((self.v, self.w))
-
-    def unitize(self):
-        return Magnitude(
-            self.v / self.w,
-            1
-        )
-
-    def to_float(self):
-        return self.v / self.w
-
-    def __abs__(self):
-        return Magnitude(abs(self.v), abs(self.w))
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+<br>
+<br>
+<br>
+class Magnitude:<br>
+    def __init__(self, v, w):<br>
+        self.v = v<br>
+        self.w = w<br>
+<br>
+    def __str__(self):<br>
+        return str((self.v, self.w))<br>
+<br>
+    def unitize(self):<br>
+        return Magnitude(<br>
+            self.v / self.w,<br>
+            1<br>
+        )<br>
+<br>
+    def to_float(self):<br>
+        return self.v / self.w<br>
+<br>
+    def __abs__(self):<br>
+        return Magnitude(abs(self.v), abs(self.w))<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

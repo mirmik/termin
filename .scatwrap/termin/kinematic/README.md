@@ -5,46 +5,45 @@
   <title>termin/kinematic/README.md</title>
 </head>
 <body>
-<pre><code>
-# Kinematics Module
-
-Модуль кинематики и трансформаций для робототехнических приложений.
-
-## Содержание
-
-### `transform.py`
-Классы для представления трансформаций в 2D и 3D пространстве:
-- **Transform** - базовый класс для иерархии трансформаций
-- **Transform3** - трансформации в 3D пространстве с позой и иерархией
-
-### `kinematic.py`
-Кинематические преобразования:
-- **KinematicTransform3** - базовый класс кинематических трансформаций
-- **KinematicTransform3OneScrew** - кинематика на основе одного винта
-- **Rotator3** - вращательное сочленение (joint)
-- **Actuator3** - линейное сочленение (prismatic joint)
-
-### `kinchain.py`
-Кинематические цепи:
-- **KinematicChain3** - класс для работы с кинематическими цепями
-  - Построение цепей из звеньев
-  - Вычисление прямой кинематики
-  - Вычисление якобианов
-  - Анализ твистов чувствительности
-
-## Зависимости
-
-- `termin.pose3` - класс Pose3 для представления поз
-- `termin.screw` - классы Screw для винтовых преобразований
-- `numpy` - для матричных операций
-
-## Тесты
-
-Тесты находятся в `utest/kinematics/`:
-- `transform_test.py` - тесты Transform3
-- `kinematic_test.py` - тесты Rotator3
-- `kinematic_chain_test.py` - тесты KinematicChain3
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+# Kinematics Module<br>
+<br>
+Модуль кинематики и трансформаций для робототехнических приложений.<br>
+<br>
+## Содержание<br>
+<br>
+### `transform.py`<br>
+Классы для представления трансформаций в 2D и 3D пространстве:<br>
+- **Transform** - базовый класс для иерархии трансформаций<br>
+- **Transform3** - трансформации в 3D пространстве с позой и иерархией<br>
+<br>
+### `kinematic.py`<br>
+Кинематические преобразования:<br>
+- **KinematicTransform3** - базовый класс кинематических трансформаций<br>
+- **KinematicTransform3OneScrew** - кинематика на основе одного винта<br>
+- **Rotator3** - вращательное сочленение (joint)<br>
+- **Actuator3** - линейное сочленение (prismatic joint)<br>
+<br>
+### `kinchain.py`<br>
+Кинематические цепи:<br>
+- **KinematicChain3** - класс для работы с кинематическими цепями<br>
+  - Построение цепей из звеньев<br>
+  - Вычисление прямой кинематики<br>
+  - Вычисление якобианов<br>
+  - Анализ твистов чувствительности<br>
+<br>
+## Зависимости<br>
+<br>
+- `termin.pose3` - класс Pose3 для представления поз<br>
+- `termin.screw` - классы Screw для винтовых преобразований<br>
+- `numpy` - для матричных операций<br>
+<br>
+## Тесты<br>
+<br>
+Тесты находятся в `utest/kinematics/`:<br>
+- `transform_test.py` - тесты Transform3<br>
+- `kinematic_test.py` - тесты Rotator3<br>
+- `kinematic_chain_test.py` - тесты KinematicChain3<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

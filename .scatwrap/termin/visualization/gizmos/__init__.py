@@ -5,8 +5,8 @@
   <title>termin/visualization/gizmos/__init__.py</title>
 </head>
 <body>
-<pre><code>
-from .gizmo_axes import GizmoEntity, GizmoMoveController
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+from .gizmo_axes import GizmoEntity, GizmoMoveController<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

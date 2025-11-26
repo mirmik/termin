@@ -17,3 +17,4 @@ def linear_solve(A, b):
     # res = im.dot(b)
     # return res
     return numpy.linalg.lstsq(A, b, rcond=None)[0]
+

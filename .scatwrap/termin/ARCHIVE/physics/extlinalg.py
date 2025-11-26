@@ -5,16 +5,15 @@
   <title>termin/ARCHIVE/physics/extlinalg.py</title>
 </head>
 <body>
-<pre><code>
-import numpy as np
-
-def outkernel_operator(matrix):
-    return matrix @ numpy.linalg.pinv(matrix)
-
-def kernel_operator(matrix):
-    outkernel = outkernel_operator(matrix)
-    return numpy.eye(matrix.shape[0]) - outkernel
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+import numpy as np<br>
+<br>
+def outkernel_operator(matrix):<br>
+    return matrix @ numpy.linalg.pinv(matrix)<br>
+<br>
+def kernel_operator(matrix):<br>
+    outkernel = outkernel_operator(matrix)<br>
+    return numpy.eye(matrix.shape[0]) - outkernel<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

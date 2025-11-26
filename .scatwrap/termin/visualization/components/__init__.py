@@ -5,17 +5,17 @@
   <title>termin/visualization/components/__init__.py</title>
 </head>
 <body>
-<pre><code>
-
-from .mesh_renderer import MeshRenderer
-from .skybox_renderer import SkyboxRenderer
-from .line_renderer import LineRenderer
-
-__all__ = [
-    &quot;MeshRenderer&quot;,
-    &quot;SkyboxRenderer&quot;,
-    &quot;LineRenderer&quot;,
-]
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+<br>
+from .mesh_renderer import MeshRenderer<br>
+from .skybox_renderer import SkyboxRenderer<br>
+from .line_renderer import LineRenderer<br>
+<br>
+__all__ = [<br>
+    &quot;MeshRenderer&quot;,<br>
+    &quot;SkyboxRenderer&quot;,<br>
+    &quot;LineRenderer&quot;,<br>
+]<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

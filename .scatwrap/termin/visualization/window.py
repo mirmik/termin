@@ -5,510 +5,509 @@
   <title>termin/visualization/window.py</title>
 </head>
 <body>
-<pre><code>
-&quot;&quot;&quot;Window abstraction delegating platform details to a backend.&quot;&quot;&quot;
-
-from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
-
-from .camera import CameraComponent
-from .renderer import Renderer
-from .scene import Scene
-from .backends.base import (
-    Action,
-    GraphicsBackend,
-    Key,
-    MouseButton,
-    WindowBackend,
-    BackendWindow,
-)
-from .viewport import Viewport
-from .ui.canvas import Canvas
-from .picking import rgb_to_id
-from .components import MeshRenderer
-from .framegraph import FrameGraph, FrameContext, RenderFramePass, IdPass
-from .postprocess import PostProcessPass
-from .posteffects.highlight import HighlightEffect
-from .posteffects.gray import GrayscaleEffect
-
-class Window:
-    &quot;&quot;&quot;Manages a platform window and a set of viewports.&quot;&quot;&quot;
-
-    def __init__(self, width: int, height: int, title: str, renderer: Renderer, graphics: GraphicsBackend, window_backend: WindowBackend, share=None, **backend_kwargs):
-        self.renderer = renderer
-        self.graphics = graphics
-        self.generate_default_pipeline = True
-        share_handle = None
-        if isinstance(share, Window):
-            share_handle = share.handle
-        elif isinstance(share, BackendWindow):
-            share_handle = share
-
-        self.window_backend = window_backend
-        self.handle: BackendWindow = self.window_backend.create_window(width, height, title, share=share_handle, **backend_kwargs)
-
-        self.viewports: List[Viewport] = []
-        self._active_viewport: Optional[Viewport] = None
-        self._last_cursor: Optional[Tuple[float, float]] = None
-
-        self.handle.set_user_pointer(self)
-        self.handle.set_framebuffer_size_callback(self._handle_framebuffer_resize)
-        self.handle.set_cursor_pos_callback(self._handle_cursor_pos)
-        self.handle.set_scroll_callback(self._handle_scroll)
-        self.handle.set_mouse_button_callback(self._handle_mouse_button)
-        self.handle.set_key_callback(self._handle_key)
-
-        self.on_mouse_button_event : Optional[callable(MouseButton, MouseAction, x, y, Viewport)] = None
-        self.on_mouse_move_event = None  # callable(x: float, y: float, viewport: Optional[Viewport])
-        self.after_render_handler = None  # type: Optional[Callable[[&quot;Window&quot;], None]]
-
-        self._world_mode = &quot;game&quot;  # or &quot;editor&quot;
- 
-        # picking support
-        self.selection_handler = None    # редактор подпишется сюда
-        self._pick_requests = {}         # viewport -&gt; (mouse_x, mouse_y)
-        self._pick_id_counter = 1
-        self._pick_entity_by_id = {}
-        self._pick_id_by_entity = {}
-
-    def set_selection_handler(self, handler):
-        self.selection_handler = handler
-
-    def set_world_mode(self, mode: str):
-        self._world_mode = mode
-
-    def _get_pick_id_for_entity(self, entity):
-        pid = self._pick_id_by_entity.get(entity)
-        if pid is not None:
-            return pid
-        pid = self._pick_id_counter
-        self._pick_id_counter += 1
-        self._pick_id_by_entity[entity] = pid
-        self._pick_entity_by_id[pid] = entity
-        return pid     
-
-    def close(self):
-        if self.handle:
-            self.handle.close()
-            self.handle = None
-
-    @property
-    def should_close(self) -&gt; bool:
-        return self.handle is None or self.handle.should_close()
-
-    def make_current(self):
-        if self.handle is not None:
-            self.handle.make_current()
-
-    def add_viewport(self, scene: Scene, camera: CameraComponent, rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0), canvas: Optional[Canvas] = None) -&gt; Viewport:
-        if not self.handle.drives_render():
-            self.make_current()
-        scene.ensure_ready(self.graphics)
-        viewport = Viewport(scene=scene, camera=camera, rect=rect, canvas=canvas, window=self)
-        camera.viewport = viewport
-        self.viewports.append(viewport)
-
-        if self.generate_default_pipeline:
-            # собираем дефолтный пайплайн
-            pipeline = viewport.make_default_pipeline()
-            viewport.set_render_pipeline(pipeline)
-
-        # if viewport.frame_passes == []:
-        #     # Если никто не добавил пассы, добавим дефолтный main-pass + present
-        #     from .framegraph import ColorPass, PresentToScreenPass, CanvasPass
-
-            # viewport.frame_passes.append(ColorPass(input_res=&quot;empty&quot;,    output_res=&quot;color&quot;, pass_name=&quot;Color&quot;))
-            # viewport.frame_passes.append(IdPass   (input_res=&quot;empty_id&quot;, output_res=&quot;id&quot;,    pass_name=&quot;Id&quot;))
-            # # viewport.frame_passes.append(PostProcessPass(
-            # #     effects=[HighlightEffect(lambda: editor.selected_entity_id)],
-            # #     input_res=&quot;color&quot;,
-            # #     output_res=&quot;color_pp&quot;,
-            # #     pass_name=&quot;PostFX&quot;,
-            # # ))
-            # viewport.frame_passes.append(PostProcessPass(
-            #     effects=[GrayscaleEffect()],
-            #     input_res=&quot;color&quot;,
-            #     output_res=&quot;color_pp&quot;,
-            #     pass_name=&quot;PostFX&quot;,
-            # ))
-            
-            # viewport.frame_passes.append(CanvasPass(src=&quot;color_pp&quot;, dst=&quot;color+ui&quot;, pass_name=&quot;Canvas&quot;))
-            # viewport.frame_passes.append(PresentToScreenPass(input_res=&quot;color+ui&quot;, pass_name=&quot;Present&quot;))
-
-            # viewport.frame_passes.append(PresentToScreenPass(input_res=&quot;id&quot;, pass_name=&quot;Present&quot;))
-            # viewport.frame_passes.append(IdPass(input_res=&quot;empty_id&quot;, output_res=&quot;id&quot;, pass_name=&quot;IdPass&quot;))
-
-        return viewport
-
-    def update(self, dt: float):
-        # Reserved for future per-window updates.
-        return
-
-    def render(self):
-        self._render_core(from_backend=False)
-
-    def viewport_rect_to_pixels(self, viewport: Viewport) -&gt; Tuple[int, int, int, int]:
-        if self.handle is None:
-            return (0, 0, 0, 0)
-        width, height = self.handle.framebuffer_size()
-        vx, vy, vw, vh = viewport.rect
-        px = vx * width
-        py = vy * height
-        pw = vw * width
-        ph = vh * height
-        return px, py, pw, ph
-        
-
-    # Event handlers -----------------------------------------------------
-
-    def _handle_framebuffer_resize(self, window, width, height):
-        return
-
-
-    from typing import Optional
-    from termin.visualization.entity import Entity
-
-    def pick_entity_at(self, x: float, y: float, viewport: Viewport = None) -&gt; Optional[Entity]:
-        &quot;&quot;&quot;
-        Вернёт entity под пикселем (x, y) в координатах виджета (origin сверху-слева),
-        используя id-карту, нарисованную IdPass в FBO с ключом 'id'.
-        &quot;&quot;&quot;
-        if self.handle is None:
-            return None
-
-        # Определяем вьюпорт, если не передали явно
-        if viewport is None:
-            viewport = self._viewport_under_cursor(x, y)
-            if viewport is None:
-                return None
-
-        win_w, win_h = self.handle.window_size()       # логические пиксели
-        fb_w, fb_h = self.handle.framebuffer_size()    # физические пиксели (GL)
-
-        if win_w &lt;= 0 or win_h &lt;= 0 or fb_w &lt;= 0 or fb_h &lt;= 0:
-            return None
-
-        # --- 1) координаты viewport'а в физических пикселях (как при рендере) ---
-        px, py, pw, ph = self.viewport_rect_to_pixels(viewport)
-        # viewport_rect_to_pixels уже использует framebuffer_size()
-
-
-        # --- 2) переводим координаты мыши из логических в физические ---
-        sx = fb_w / float(win_w)
-        sy = fb_h / float(win_h)
-
-        x_phys = x * sx
-        y_phys = y * sy
-
-        # --- 3) локальные координаты внутри viewport'а ---
-        vx = x_phys - px
-        vy = y_phys - py
-
-
-        if vx &lt; 0 or vy &lt; 0 or vx &gt;= pw or vy &gt;= ph:
-            return None
-
-        # --- 4) перевод в координаты FBO (origin снизу-слева) ---
-        read_x = int(vx)
-        read_y = int(ph - vy - 1)   # инверсия Y, как в старом _do_pick_pass
-
-        # Берём FBO с id-картой
-        fbo_pool = getattr(viewport, &quot;_fbo_pool&quot;, None)
-        if not fbo_pool:
-            return None
-
-        fb_id = fbo_pool.get(&quot;id&quot;)
-        if fb_id is None:
-            return None
-
-
-        r, g, b, a = self.graphics.read_pixel(fb_id, read_x, read_y)
-        self.handle.bind_window_framebuffer()
-
-        pid = rgb_to_id(r, g, b)
-
-        if pid == 0:
-            return None
-
-        entity = self._pick_entity_by_id.get(pid)
-
-        return entity
-
-
-    def _handle_mouse_button_game_mode(self, window, button: MouseButton, action: Action, mods):
-        if self.handle is None:
-            return
-        x, y = self.handle.get_cursor_pos()
-        viewport = self._viewport_under_cursor(x, y)
-
-        # ---- UI click handling ----
-        if viewport and viewport.canvas:
-            if action == Action.PRESS:
-                interrupt = viewport.canvas.mouse_down(x, y, self.viewport_rect_to_pixels(viewport))
-                if interrupt:
-                    return
-            elif action == Action.RELEASE:
-                interrupt = viewport.canvas.mouse_up(x, y, self.viewport_rect_to_pixels(viewport))
-                if interrupt:
-                    return
-
-        # Обработка 3D сцены (сперва глобальная)
-        if action == Action.PRESS:
-            self._active_viewport = viewport
-        if action == Action.RELEASE:
-            self._last_cursor = None
-            if viewport is None:
-                viewport = self._active_viewport
-            self._active_viewport = None
-        if viewport is not None:
-            viewport.scene.dispatch_input(viewport, &quot;on_mouse_button&quot;, button=button, action=action, mods=mods)
-            
-        # Теперь обработка кликов по объектам сцены
-        if viewport is not None:
-            if action == Action.PRESS and button == MouseButton.LEFT:
-                cam = viewport.camera
-                if cam is not None:
-                    ray = cam.screen_point_to_ray(x, y, viewport_rect=self.viewport_rect_to_pixels(viewport))   # функция построения Ray3
-                    hit = viewport.scene.raycast(ray)
-                    print(&quot;Raycast hit:&quot;, hit)  # --- DEBUG ---
-                    if hit is not None:
-                        # Диспатчим on_click в компоненты
-                        entity = hit.entity
-                        for comp in entity.components:
-                            if hasattr(comp, &quot;on_click&quot;):  # или isinstance(comp, Clickable)
-                                comp.on_click(hit, button)
-
-        self._request_update()
-
-    def _handle_mouse_button_editor_mode(self, window, button: MouseButton, action: Action, mods):
-        if self.handle is None:
-            return
-        x, y = self.handle.get_cursor_pos()
-        viewport = self._viewport_under_cursor(x, y)
-
-        if viewport is not None:
-            if action == Action.PRESS and button == MouseButton.LEFT:
-                # запоминаем, где кликнули, для этого viewport
-                self._pick_requests[id(viewport)] = (x, y)   
-
-        # Обработка 3D сцены
-        if action == Action.PRESS:
-            self._active_viewport = viewport
-        if action == Action.RELEASE:
-            self._last_cursor = None
-            if viewport is None:
-                viewport = self._active_viewport
-            self._active_viewport = None
-        if viewport is not None:
-            #print(&quot;Dispatching mouse button to scene&quot;)  # --- DEBUG ---
-            viewport.scene.dispatch_input(viewport, &quot;on_mouse_button&quot;, button=button, action=action, mods=mods)  
-
-        if self.on_mouse_button_event:
-            self.on_mouse_button_event(button, action, x, y, viewport)   
-
-        self._request_update()
-
-    def _handle_mouse_button(self, window, button: MouseButton, action: Action, mods):
-        if self._world_mode == &quot;game&quot;:
-            self._handle_mouse_button_game_mode(window, button, action, mods)
-            return
-
-        elif self._world_mode == &quot;editor&quot;:
-            self._handle_mouse_button_editor_mode(window, button, action, mods)
-            return
-
-    def _handle_cursor_pos(self, window, x, y):
-        if self.handle is None:
-            return
-        
-        if self._last_cursor is None:
-            dx = dy = 0.0
-        else:
-            dx = x - self._last_cursor[0]
-            dy = y - self._last_cursor[1]
-        
-        self._last_cursor = (x, y)
-        viewport = self._active_viewport or self._viewport_under_cursor(x, y)
-
-        if viewport and viewport.canvas:
-            viewport.canvas.mouse_move(x, y, self.viewport_rect_to_pixels(viewport))
-
-        if viewport is not None:
-            viewport.scene.dispatch_input(viewport, &quot;on_mouse_move&quot;, x=x, y=y, dx=dx, dy=dy)
-
-        # пробрасываем инфу наверх (редактору), без знания про idmap и hover
-        if self.on_mouse_move_event is not None:
-            self.on_mouse_move_event(x, y, viewport)
-
-        self._request_update()
-
-    def _handle_scroll(self, window, xoffset, yoffset):
-        if self.handle is None:
-            return
-        x, y = self.handle.get_cursor_pos()
-        viewport = self._viewport_under_cursor(x, y) or self._active_viewport
-        if viewport is not None:
-            viewport.scene.dispatch_input(viewport, &quot;on_scroll&quot;, xoffset=xoffset, yoffset=yoffset)
-
-        self._request_update()
-
-    def _handle_key(self, window, key: Key, scancode: int, action: Action, mods):
-        if key == Key.ESCAPE and action == Action.PRESS and self.handle is not None:
-            self.handle.set_should_close(True)
-        viewport = self._active_viewport or (self.viewports[0] if self.viewports else None)
-        if viewport is not None:
-            viewport.scene.dispatch_input(viewport, &quot;on_key&quot;, key=key, scancode=scancode, action=action, mods=mods)
-
-        self._request_update()
-
-    def _viewport_under_cursor(self, x: float, y: float) -&gt; Optional[Viewport]:
-        if self.handle is None or not self.viewports:
-            return None
-        win_w, win_h = self.handle.window_size()
-        if win_w == 0 or win_h == 0:
-            return None
-        nx = x / win_w
-        ny = 1.0 - (y / win_h)
-        for viewport in self.viewports:
-            vx, vy, vw, vh = viewport.rect
-            if vx &lt;= nx &lt;= vx + vw and vy &lt;= ny &lt;= vy + vh:
-                return viewport
-        return None
-
-    def get_viewport_fbo(self, viewport, key, size):
-        d = viewport.__dict__.setdefault(&quot;_fbo_pool&quot;, {})
-        fb = d.get(key)
-        if fb is None:
-            fb = self.graphics.create_framebuffer(size)
-            d[key] = fb
-        else:
-            fb.resize(size)
-        return fb
-
-    def _render_core(self, from_backend: bool):
-        if self.handle is None:
-            return
-
-        self.graphics.ensure_ready()
-
-        if not from_backend:
-            self.make_current()
-
-        context_key = id(self)
-        width, height = self.handle.framebuffer_size()
-
-        for viewport in self.viewports:
-            vx, vy, vw, vh = viewport.rect
-            px = int(vx * width)
-            py = int(vy * height)
-            pw = max(1, int(vw * width))
-            ph = max(1, int(vh * height))
-
-            # Обновляем аспект камеры
-            viewport.camera.set_aspect(pw / float(max(1, ph)))
-
-            # Берём список пассов, который кто-то заранее повесил на viewport
-            frame_passes = viewport.frame_passes
-            if not frame_passes:
-                # Нечего рендерить — пропускаем
-                continue
-
-            # Контекст для пассов
-            ctx = FrameContext(
-                window=self,
-                viewport=viewport,
-                rect=(px, py, pw, ph),
-                size=(pw, ph),
-                context_key=context_key,
-                graphics=self.graphics,
-            )
-
-            # Строим и исполняем граф
-            graph = FrameGraph(frame_passes)
-            schedule = graph.build_schedule()
-
-            for p in schedule:
-                p.execute(ctx)
-
-        if self.after_render_handler is not None:
-            self.after_render_handler(self)
-
-        if not from_backend:
-            self.handle.swap_buffers()
-
-    def _request_update(self):
-        if self.handle is not None:
-            self.handle.request_update()
-
-    # def _do_pick_pass(self, viewport, px, py, pw, ph, mouse_x, mouse_y, context_key):
-    #     print(f&quot;Doing pick pass at mouse ({mouse_x}, {mouse_y}) in viewport rect px={px},py={py},pw={pw},ph={ph}&quot;)  # --- DEBUG ---
-
-    #     # 1) FBO для picking
-    #     fb_pick = self.get_viewport_fbo(viewport, &quot;PICK&quot;, (pw, ph))
-        
-    #     print(&quot;Picking FBO:&quot;, fb_pick._fbo)  # --- DEBUG ---
-    #     self.graphics.bind_framebuffer(fb_pick)
-    #     self.graphics.set_viewport(0, 0, pw, ph)
-    #     self.graphics.clear_color_depth((0.0, 0.0, 0.0, 0.0))
-
-    #     # 2) карта entity -&gt; id для этой сцены
-    #     pick_ids = {}
-    #     for ent in viewport.scene.entities:
-    #         if not ent.is_pickable():
-    #             continue
-
-    #         mr = ent.get_component(MeshRenderer)
-    #         if mr is None:
-    #             continue
-
-    #         # можешь фильтровать по наличию MeshRenderer
-    #         pick_ids[ent] = self._get_pick_id_for_entity(ent)
-
-    #     # 3) рендерим специальным пассом
-    #     self.renderer.render_viewport_pick(
-    #         viewport.scene,
-    #         viewport.camera,
-    #         (0, 0, pw, ph),
-    #         context_key,
-    #         pick_ids,
-    #     )
-
-    #     # 4) вычисляем координаты пикселя относительно FBO
-    #     win_w, win_h = self.handle.window_size()
-    #     if win_w == 0 or win_h == 0:
-    #         return
-
-    #     vx = mouse_x - px
-    #     vy = mouse_y - py
-    #     if vx &lt; 0 or vy &lt; 0 or vx &gt;= pw or vy &gt;= ph:
-    #         return
-
-    #     read_x = int(vx)
-    #     read_y = ph - int(vy) - 1  # инверсия по Y
-
-    #     print(&quot;Reading pixel at FBO coords:&quot;, read_x, read_y)  # --- DEBUG ---
-
-    #     r, g, b, a = self.graphics.read_pixel(fb_pick, read_x, read_y)
-    #     print(&quot;Picked color RGBA:&quot;, r, g, b, a)  # --- DEBUG ---
-    #     pid = rgb_to_id(r, g, b)
-    #     print(f&quot;Picked ID: {pid}&quot;)  # --- DEBUG ---
-    #     if pid == 0:
-    #         return
-
-    #     entity = self._pick_entity_by_id.get(pid)
-    #     if entity is not None and self.selection_handler is not None:
-    #         self.selection_handler(entity)
-
-    #     # вернёмся к обычному framebuffer'у
-    #     self.graphics.bind_framebuffer(None)
-
-
-
-# Backwards compatibility
-GLWindow = Window
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;Window abstraction delegating platform details to a backend.&quot;&quot;&quot;<br>
+<br>
+from __future__ import annotations<br>
+<br>
+from dataclasses import dataclass<br>
+from typing import List, Optional, Tuple<br>
+<br>
+from .camera import CameraComponent<br>
+from .renderer import Renderer<br>
+from .scene import Scene<br>
+from .backends.base import (<br>
+    Action,<br>
+    GraphicsBackend,<br>
+    Key,<br>
+    MouseButton,<br>
+    WindowBackend,<br>
+    BackendWindow,<br>
+)<br>
+from .viewport import Viewport<br>
+from .ui.canvas import Canvas<br>
+from .picking import rgb_to_id<br>
+from .components import MeshRenderer<br>
+from .framegraph import FrameGraph, FrameContext, RenderFramePass, IdPass<br>
+from .postprocess import PostProcessPass<br>
+from .posteffects.highlight import HighlightEffect<br>
+from .posteffects.gray import GrayscaleEffect<br>
+<br>
+class Window:<br>
+    &quot;&quot;&quot;Manages a platform window and a set of viewports.&quot;&quot;&quot;<br>
+<br>
+    def __init__(self, width: int, height: int, title: str, renderer: Renderer, graphics: GraphicsBackend, window_backend: WindowBackend, share=None, **backend_kwargs):<br>
+        self.renderer = renderer<br>
+        self.graphics = graphics<br>
+        self.generate_default_pipeline = True<br>
+        share_handle = None<br>
+        if isinstance(share, Window):<br>
+            share_handle = share.handle<br>
+        elif isinstance(share, BackendWindow):<br>
+            share_handle = share<br>
+<br>
+        self.window_backend = window_backend<br>
+        self.handle: BackendWindow = self.window_backend.create_window(width, height, title, share=share_handle, **backend_kwargs)<br>
+<br>
+        self.viewports: List[Viewport] = []<br>
+        self._active_viewport: Optional[Viewport] = None<br>
+        self._last_cursor: Optional[Tuple[float, float]] = None<br>
+<br>
+        self.handle.set_user_pointer(self)<br>
+        self.handle.set_framebuffer_size_callback(self._handle_framebuffer_resize)<br>
+        self.handle.set_cursor_pos_callback(self._handle_cursor_pos)<br>
+        self.handle.set_scroll_callback(self._handle_scroll)<br>
+        self.handle.set_mouse_button_callback(self._handle_mouse_button)<br>
+        self.handle.set_key_callback(self._handle_key)<br>
+<br>
+        self.on_mouse_button_event : Optional[callable(MouseButton, MouseAction, x, y, Viewport)] = None<br>
+        self.on_mouse_move_event = None  # callable(x: float, y: float, viewport: Optional[Viewport])<br>
+        self.after_render_handler = None  # type: Optional[Callable[[&quot;Window&quot;], None]]<br>
+<br>
+        self._world_mode = &quot;game&quot;  # or &quot;editor&quot;<br>
+ <br>
+        # picking support<br>
+        self.selection_handler = None    # редактор подпишется сюда<br>
+        self._pick_requests = {}         # viewport -&gt; (mouse_x, mouse_y)<br>
+        self._pick_id_counter = 1<br>
+        self._pick_entity_by_id = {}<br>
+        self._pick_id_by_entity = {}<br>
+<br>
+    def set_selection_handler(self, handler):<br>
+        self.selection_handler = handler<br>
+<br>
+    def set_world_mode(self, mode: str):<br>
+        self._world_mode = mode<br>
+<br>
+    def _get_pick_id_for_entity(self, entity):<br>
+        pid = self._pick_id_by_entity.get(entity)<br>
+        if pid is not None:<br>
+            return pid<br>
+        pid = self._pick_id_counter<br>
+        self._pick_id_counter += 1<br>
+        self._pick_id_by_entity[entity] = pid<br>
+        self._pick_entity_by_id[pid] = entity<br>
+        return pid     <br>
+<br>
+    def close(self):<br>
+        if self.handle:<br>
+            self.handle.close()<br>
+            self.handle = None<br>
+<br>
+    @property<br>
+    def should_close(self) -&gt; bool:<br>
+        return self.handle is None or self.handle.should_close()<br>
+<br>
+    def make_current(self):<br>
+        if self.handle is not None:<br>
+            self.handle.make_current()<br>
+<br>
+    def add_viewport(self, scene: Scene, camera: CameraComponent, rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0), canvas: Optional[Canvas] = None) -&gt; Viewport:<br>
+        if not self.handle.drives_render():<br>
+            self.make_current()<br>
+        scene.ensure_ready(self.graphics)<br>
+        viewport = Viewport(scene=scene, camera=camera, rect=rect, canvas=canvas, window=self)<br>
+        camera.viewport = viewport<br>
+        self.viewports.append(viewport)<br>
+<br>
+        if self.generate_default_pipeline:<br>
+            # собираем дефолтный пайплайн<br>
+            pipeline = viewport.make_default_pipeline()<br>
+            viewport.set_render_pipeline(pipeline)<br>
+<br>
+        # if viewport.frame_passes == []:<br>
+        #     # Если никто не добавил пассы, добавим дефолтный main-pass + present<br>
+        #     from .framegraph import ColorPass, PresentToScreenPass, CanvasPass<br>
+<br>
+            # viewport.frame_passes.append(ColorPass(input_res=&quot;empty&quot;,    output_res=&quot;color&quot;, pass_name=&quot;Color&quot;))<br>
+            # viewport.frame_passes.append(IdPass   (input_res=&quot;empty_id&quot;, output_res=&quot;id&quot;,    pass_name=&quot;Id&quot;))<br>
+            # # viewport.frame_passes.append(PostProcessPass(<br>
+            # #     effects=[HighlightEffect(lambda: editor.selected_entity_id)],<br>
+            # #     input_res=&quot;color&quot;,<br>
+            # #     output_res=&quot;color_pp&quot;,<br>
+            # #     pass_name=&quot;PostFX&quot;,<br>
+            # # ))<br>
+            # viewport.frame_passes.append(PostProcessPass(<br>
+            #     effects=[GrayscaleEffect()],<br>
+            #     input_res=&quot;color&quot;,<br>
+            #     output_res=&quot;color_pp&quot;,<br>
+            #     pass_name=&quot;PostFX&quot;,<br>
+            # ))<br>
+            <br>
+            # viewport.frame_passes.append(CanvasPass(src=&quot;color_pp&quot;, dst=&quot;color+ui&quot;, pass_name=&quot;Canvas&quot;))<br>
+            # viewport.frame_passes.append(PresentToScreenPass(input_res=&quot;color+ui&quot;, pass_name=&quot;Present&quot;))<br>
+<br>
+            # viewport.frame_passes.append(PresentToScreenPass(input_res=&quot;id&quot;, pass_name=&quot;Present&quot;))<br>
+            # viewport.frame_passes.append(IdPass(input_res=&quot;empty_id&quot;, output_res=&quot;id&quot;, pass_name=&quot;IdPass&quot;))<br>
+<br>
+        return viewport<br>
+<br>
+    def update(self, dt: float):<br>
+        # Reserved for future per-window updates.<br>
+        return<br>
+<br>
+    def render(self):<br>
+        self._render_core(from_backend=False)<br>
+<br>
+    def viewport_rect_to_pixels(self, viewport: Viewport) -&gt; Tuple[int, int, int, int]:<br>
+        if self.handle is None:<br>
+            return (0, 0, 0, 0)<br>
+        width, height = self.handle.framebuffer_size()<br>
+        vx, vy, vw, vh = viewport.rect<br>
+        px = vx * width<br>
+        py = vy * height<br>
+        pw = vw * width<br>
+        ph = vh * height<br>
+        return px, py, pw, ph<br>
+        <br>
+<br>
+    # Event handlers -----------------------------------------------------<br>
+<br>
+    def _handle_framebuffer_resize(self, window, width, height):<br>
+        return<br>
+<br>
+<br>
+    from typing import Optional<br>
+    from termin.visualization.entity import Entity<br>
+<br>
+    def pick_entity_at(self, x: float, y: float, viewport: Viewport = None) -&gt; Optional[Entity]:<br>
+        &quot;&quot;&quot;<br>
+        Вернёт entity под пикселем (x, y) в координатах виджета (origin сверху-слева),<br>
+        используя id-карту, нарисованную IdPass в FBO с ключом 'id'.<br>
+        &quot;&quot;&quot;<br>
+        if self.handle is None:<br>
+            return None<br>
+<br>
+        # Определяем вьюпорт, если не передали явно<br>
+        if viewport is None:<br>
+            viewport = self._viewport_under_cursor(x, y)<br>
+            if viewport is None:<br>
+                return None<br>
+<br>
+        win_w, win_h = self.handle.window_size()       # логические пиксели<br>
+        fb_w, fb_h = self.handle.framebuffer_size()    # физические пиксели (GL)<br>
+<br>
+        if win_w &lt;= 0 or win_h &lt;= 0 or fb_w &lt;= 0 or fb_h &lt;= 0:<br>
+            return None<br>
+<br>
+        # --- 1) координаты viewport'а в физических пикселях (как при рендере) ---<br>
+        px, py, pw, ph = self.viewport_rect_to_pixels(viewport)<br>
+        # viewport_rect_to_pixels уже использует framebuffer_size()<br>
+<br>
+<br>
+        # --- 2) переводим координаты мыши из логических в физические ---<br>
+        sx = fb_w / float(win_w)<br>
+        sy = fb_h / float(win_h)<br>
+<br>
+        x_phys = x * sx<br>
+        y_phys = y * sy<br>
+<br>
+        # --- 3) локальные координаты внутри viewport'а ---<br>
+        vx = x_phys - px<br>
+        vy = y_phys - py<br>
+<br>
+<br>
+        if vx &lt; 0 or vy &lt; 0 or vx &gt;= pw or vy &gt;= ph:<br>
+            return None<br>
+<br>
+        # --- 4) перевод в координаты FBO (origin снизу-слева) ---<br>
+        read_x = int(vx)<br>
+        read_y = int(ph - vy - 1)   # инверсия Y, как в старом _do_pick_pass<br>
+<br>
+        # Берём FBO с id-картой<br>
+        fbo_pool = getattr(viewport, &quot;_fbo_pool&quot;, None)<br>
+        if not fbo_pool:<br>
+            return None<br>
+<br>
+        fb_id = fbo_pool.get(&quot;id&quot;)<br>
+        if fb_id is None:<br>
+            return None<br>
+<br>
+<br>
+        r, g, b, a = self.graphics.read_pixel(fb_id, read_x, read_y)<br>
+        self.handle.bind_window_framebuffer()<br>
+<br>
+        pid = rgb_to_id(r, g, b)<br>
+<br>
+        if pid == 0:<br>
+            return None<br>
+<br>
+        entity = self._pick_entity_by_id.get(pid)<br>
+<br>
+        return entity<br>
+<br>
+<br>
+    def _handle_mouse_button_game_mode(self, window, button: MouseButton, action: Action, mods):<br>
+        if self.handle is None:<br>
+            return<br>
+        x, y = self.handle.get_cursor_pos()<br>
+        viewport = self._viewport_under_cursor(x, y)<br>
+<br>
+        # ---- UI click handling ----<br>
+        if viewport and viewport.canvas:<br>
+            if action == Action.PRESS:<br>
+                interrupt = viewport.canvas.mouse_down(x, y, self.viewport_rect_to_pixels(viewport))<br>
+                if interrupt:<br>
+                    return<br>
+            elif action == Action.RELEASE:<br>
+                interrupt = viewport.canvas.mouse_up(x, y, self.viewport_rect_to_pixels(viewport))<br>
+                if interrupt:<br>
+                    return<br>
+<br>
+        # Обработка 3D сцены (сперва глобальная)<br>
+        if action == Action.PRESS:<br>
+            self._active_viewport = viewport<br>
+        if action == Action.RELEASE:<br>
+            self._last_cursor = None<br>
+            if viewport is None:<br>
+                viewport = self._active_viewport<br>
+            self._active_viewport = None<br>
+        if viewport is not None:<br>
+            viewport.scene.dispatch_input(viewport, &quot;on_mouse_button&quot;, button=button, action=action, mods=mods)<br>
+            <br>
+        # Теперь обработка кликов по объектам сцены<br>
+        if viewport is not None:<br>
+            if action == Action.PRESS and button == MouseButton.LEFT:<br>
+                cam = viewport.camera<br>
+                if cam is not None:<br>
+                    ray = cam.screen_point_to_ray(x, y, viewport_rect=self.viewport_rect_to_pixels(viewport))   # функция построения Ray3<br>
+                    hit = viewport.scene.raycast(ray)<br>
+                    print(&quot;Raycast hit:&quot;, hit)  # --- DEBUG ---<br>
+                    if hit is not None:<br>
+                        # Диспатчим on_click в компоненты<br>
+                        entity = hit.entity<br>
+                        for comp in entity.components:<br>
+                            if hasattr(comp, &quot;on_click&quot;):  # или isinstance(comp, Clickable)<br>
+                                comp.on_click(hit, button)<br>
+<br>
+        self._request_update()<br>
+<br>
+    def _handle_mouse_button_editor_mode(self, window, button: MouseButton, action: Action, mods):<br>
+        if self.handle is None:<br>
+            return<br>
+        x, y = self.handle.get_cursor_pos()<br>
+        viewport = self._viewport_under_cursor(x, y)<br>
+<br>
+        if viewport is not None:<br>
+            if action == Action.PRESS and button == MouseButton.LEFT:<br>
+                # запоминаем, где кликнули, для этого viewport<br>
+                self._pick_requests[id(viewport)] = (x, y)   <br>
+<br>
+        # Обработка 3D сцены<br>
+        if action == Action.PRESS:<br>
+            self._active_viewport = viewport<br>
+        if action == Action.RELEASE:<br>
+            self._last_cursor = None<br>
+            if viewport is None:<br>
+                viewport = self._active_viewport<br>
+            self._active_viewport = None<br>
+        if viewport is not None:<br>
+            #print(&quot;Dispatching mouse button to scene&quot;)  # --- DEBUG ---<br>
+            viewport.scene.dispatch_input(viewport, &quot;on_mouse_button&quot;, button=button, action=action, mods=mods)  <br>
+<br>
+        if self.on_mouse_button_event:<br>
+            self.on_mouse_button_event(button, action, x, y, viewport)   <br>
+<br>
+        self._request_update()<br>
+<br>
+    def _handle_mouse_button(self, window, button: MouseButton, action: Action, mods):<br>
+        if self._world_mode == &quot;game&quot;:<br>
+            self._handle_mouse_button_game_mode(window, button, action, mods)<br>
+            return<br>
+<br>
+        elif self._world_mode == &quot;editor&quot;:<br>
+            self._handle_mouse_button_editor_mode(window, button, action, mods)<br>
+            return<br>
+<br>
+    def _handle_cursor_pos(self, window, x, y):<br>
+        if self.handle is None:<br>
+            return<br>
+        <br>
+        if self._last_cursor is None:<br>
+            dx = dy = 0.0<br>
+        else:<br>
+            dx = x - self._last_cursor[0]<br>
+            dy = y - self._last_cursor[1]<br>
+        <br>
+        self._last_cursor = (x, y)<br>
+        viewport = self._active_viewport or self._viewport_under_cursor(x, y)<br>
+<br>
+        if viewport and viewport.canvas:<br>
+            viewport.canvas.mouse_move(x, y, self.viewport_rect_to_pixels(viewport))<br>
+<br>
+        if viewport is not None:<br>
+            viewport.scene.dispatch_input(viewport, &quot;on_mouse_move&quot;, x=x, y=y, dx=dx, dy=dy)<br>
+<br>
+        # пробрасываем инфу наверх (редактору), без знания про idmap и hover<br>
+        if self.on_mouse_move_event is not None:<br>
+            self.on_mouse_move_event(x, y, viewport)<br>
+<br>
+        self._request_update()<br>
+<br>
+    def _handle_scroll(self, window, xoffset, yoffset):<br>
+        if self.handle is None:<br>
+            return<br>
+        x, y = self.handle.get_cursor_pos()<br>
+        viewport = self._viewport_under_cursor(x, y) or self._active_viewport<br>
+        if viewport is not None:<br>
+            viewport.scene.dispatch_input(viewport, &quot;on_scroll&quot;, xoffset=xoffset, yoffset=yoffset)<br>
+<br>
+        self._request_update()<br>
+<br>
+    def _handle_key(self, window, key: Key, scancode: int, action: Action, mods):<br>
+        if key == Key.ESCAPE and action == Action.PRESS and self.handle is not None:<br>
+            self.handle.set_should_close(True)<br>
+        viewport = self._active_viewport or (self.viewports[0] if self.viewports else None)<br>
+        if viewport is not None:<br>
+            viewport.scene.dispatch_input(viewport, &quot;on_key&quot;, key=key, scancode=scancode, action=action, mods=mods)<br>
+<br>
+        self._request_update()<br>
+<br>
+    def _viewport_under_cursor(self, x: float, y: float) -&gt; Optional[Viewport]:<br>
+        if self.handle is None or not self.viewports:<br>
+            return None<br>
+        win_w, win_h = self.handle.window_size()<br>
+        if win_w == 0 or win_h == 0:<br>
+            return None<br>
+        nx = x / win_w<br>
+        ny = 1.0 - (y / win_h)<br>
+        for viewport in self.viewports:<br>
+            vx, vy, vw, vh = viewport.rect<br>
+            if vx &lt;= nx &lt;= vx + vw and vy &lt;= ny &lt;= vy + vh:<br>
+                return viewport<br>
+        return None<br>
+<br>
+    def get_viewport_fbo(self, viewport, key, size):<br>
+        d = viewport.__dict__.setdefault(&quot;_fbo_pool&quot;, {})<br>
+        fb = d.get(key)<br>
+        if fb is None:<br>
+            fb = self.graphics.create_framebuffer(size)<br>
+            d[key] = fb<br>
+        else:<br>
+            fb.resize(size)<br>
+        return fb<br>
+<br>
+    def _render_core(self, from_backend: bool):<br>
+        if self.handle is None:<br>
+            return<br>
+<br>
+        self.graphics.ensure_ready()<br>
+<br>
+        if not from_backend:<br>
+            self.make_current()<br>
+<br>
+        context_key = id(self)<br>
+        width, height = self.handle.framebuffer_size()<br>
+<br>
+        for viewport in self.viewports:<br>
+            vx, vy, vw, vh = viewport.rect<br>
+            px = int(vx * width)<br>
+            py = int(vy * height)<br>
+            pw = max(1, int(vw * width))<br>
+            ph = max(1, int(vh * height))<br>
+<br>
+            # Обновляем аспект камеры<br>
+            viewport.camera.set_aspect(pw / float(max(1, ph)))<br>
+<br>
+            # Берём список пассов, который кто-то заранее повесил на viewport<br>
+            frame_passes = viewport.frame_passes<br>
+            if not frame_passes:<br>
+                # Нечего рендерить — пропускаем<br>
+                continue<br>
+<br>
+            # Контекст для пассов<br>
+            ctx = FrameContext(<br>
+                window=self,<br>
+                viewport=viewport,<br>
+                rect=(px, py, pw, ph),<br>
+                size=(pw, ph),<br>
+                context_key=context_key,<br>
+                graphics=self.graphics,<br>
+            )<br>
+<br>
+            # Строим и исполняем граф<br>
+            graph = FrameGraph(frame_passes)<br>
+            schedule = graph.build_schedule()<br>
+<br>
+            for p in schedule:<br>
+                p.execute(ctx)<br>
+<br>
+        if self.after_render_handler is not None:<br>
+            self.after_render_handler(self)<br>
+<br>
+        if not from_backend:<br>
+            self.handle.swap_buffers()<br>
+<br>
+    def _request_update(self):<br>
+        if self.handle is not None:<br>
+            self.handle.request_update()<br>
+<br>
+    # def _do_pick_pass(self, viewport, px, py, pw, ph, mouse_x, mouse_y, context_key):<br>
+    #     print(f&quot;Doing pick pass at mouse ({mouse_x}, {mouse_y}) in viewport rect px={px},py={py},pw={pw},ph={ph}&quot;)  # --- DEBUG ---<br>
+<br>
+    #     # 1) FBO для picking<br>
+    #     fb_pick = self.get_viewport_fbo(viewport, &quot;PICK&quot;, (pw, ph))<br>
+        <br>
+    #     print(&quot;Picking FBO:&quot;, fb_pick._fbo)  # --- DEBUG ---<br>
+    #     self.graphics.bind_framebuffer(fb_pick)<br>
+    #     self.graphics.set_viewport(0, 0, pw, ph)<br>
+    #     self.graphics.clear_color_depth((0.0, 0.0, 0.0, 0.0))<br>
+<br>
+    #     # 2) карта entity -&gt; id для этой сцены<br>
+    #     pick_ids = {}<br>
+    #     for ent in viewport.scene.entities:<br>
+    #         if not ent.is_pickable():<br>
+    #             continue<br>
+<br>
+    #         mr = ent.get_component(MeshRenderer)<br>
+    #         if mr is None:<br>
+    #             continue<br>
+<br>
+    #         # можешь фильтровать по наличию MeshRenderer<br>
+    #         pick_ids[ent] = self._get_pick_id_for_entity(ent)<br>
+<br>
+    #     # 3) рендерим специальным пассом<br>
+    #     self.renderer.render_viewport_pick(<br>
+    #         viewport.scene,<br>
+    #         viewport.camera,<br>
+    #         (0, 0, pw, ph),<br>
+    #         context_key,<br>
+    #         pick_ids,<br>
+    #     )<br>
+<br>
+    #     # 4) вычисляем координаты пикселя относительно FBO<br>
+    #     win_w, win_h = self.handle.window_size()<br>
+    #     if win_w == 0 or win_h == 0:<br>
+    #         return<br>
+<br>
+    #     vx = mouse_x - px<br>
+    #     vy = mouse_y - py<br>
+    #     if vx &lt; 0 or vy &lt; 0 or vx &gt;= pw or vy &gt;= ph:<br>
+    #         return<br>
+<br>
+    #     read_x = int(vx)<br>
+    #     read_y = ph - int(vy) - 1  # инверсия по Y<br>
+<br>
+    #     print(&quot;Reading pixel at FBO coords:&quot;, read_x, read_y)  # --- DEBUG ---<br>
+<br>
+    #     r, g, b, a = self.graphics.read_pixel(fb_pick, read_x, read_y)<br>
+    #     print(&quot;Picked color RGBA:&quot;, r, g, b, a)  # --- DEBUG ---<br>
+    #     pid = rgb_to_id(r, g, b)<br>
+    #     print(f&quot;Picked ID: {pid}&quot;)  # --- DEBUG ---<br>
+    #     if pid == 0:<br>
+    #         return<br>
+<br>
+    #     entity = self._pick_entity_by_id.get(pid)<br>
+    #     if entity is not None and self.selection_handler is not None:<br>
+    #         self.selection_handler(entity)<br>
+<br>
+    #     # вернёмся к обычному framebuffer'у<br>
+    #     self.graphics.bind_framebuffer(None)<br>
+<br>
+<br>
+<br>
+# Backwards compatibility<br>
+GLWindow = Window<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

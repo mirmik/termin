@@ -5,31 +5,31 @@
   <title>scat.txt</title>
 </head>
 <body>
-<pre><code>
-
-termin/apps/*
-termin/visualization/**
-termin/geombase/**
-termin/apps/**
-termin/**
-examples/visual/*
-scat.txt
-
-[TREE]
-termin/**
-utest/**
-examples/**
-termin/ga/**
-termin/fem/**
-
-[MAPFORMAT]
------------------
-Проект termin (Всякая математика, крутящаяся вокруг линейной алгебры, тензоров, 3д графики, а заодно 3д редактор)
-Актуальное состояние репы:
-{RAWMAP}
-В основном сейчас нас интересует редактор, тоесть termin/apps/*, termin/visualization/**, examples/visual/*
-Доступ к коду по ссылкам работает в тестовом режиме. Обязательно скажи, если код выглядет невалидно, так, как будто его проживал парсер, и что он не выполнится.
------------------
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+<br>
+termin/apps/*<br>
+termin/visualization/**<br>
+termin/geombase/**<br>
+termin/apps/**<br>
+termin/**<br>
+examples/visual/*<br>
+scat.txt<br>
+<br>
+[TREE]<br>
+termin/**<br>
+utest/**<br>
+examples/**<br>
+termin/ga/**<br>
+termin/fem/**<br>
+<br>
+[MAPFORMAT]<br>
+-----------------<br>
+Проект termin (Всякая математика, крутящаяся вокруг линейной алгебры, тензоров, 3д графики, а заодно 3д редактор)<br>
+Актуальное состояние репы:<br>
+{RAWMAP}<br>
+В основном сейчас нас интересует редактор, тоесть termin/apps/*, termin/visualization/**, examples/visual/*<br>
+Доступ к коду по ссылкам работает в тестовом режиме. Обязательно скажи, если код выглядет невалидно, так, как будто его проживал парсер, и что он не выполнится.<br>
+-----------------<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

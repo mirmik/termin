@@ -5,11 +5,10 @@
   <title>termin/ARCHIVE/physics/jacobian.py</title>
 </head>
 <body>
-<pre><code>
-#!/usr/bin/env python3
-
-import numpy
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+#!/usr/bin/env python3<br>
+<br>
+import numpy<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

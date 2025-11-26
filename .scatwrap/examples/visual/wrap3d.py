@@ -5,84 +5,83 @@
   <title>examples/visual/wrap3d.py</title>
 </head>
 <body>
-<pre><code>
-&quot;&quot;&quot;Minimal demo that renders a cube and allows orbiting camera controls.&quot;&quot;&quot;
-
-from __future__ import annotations
-
-import numpy as np
-
-from termin.geombase.pose3 import Pose3
-from termin.mesh.mesh import UVSphereMesh, Mesh, Mesh3
-from termin.visualization import (
-    Entity,
-    MeshDrawable,
-    Scene,
-    Material,
-    VisualizationWorld,
-    PerspectiveCameraComponent,
-    OrbitCameraController,
-)
-from termin.visualization.components import MeshRenderer
-from termin.visualization.shader import ShaderProgram
-from termin.visualization.skybox import SkyBoxEntity
-from termin.visualization.materials.simple import ColorMaterial
-
-# import convex hull
-from scipy.spatial import ConvexHull
-
-def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent]:
-    
-    mesh = ConvexHull([
-        [1, 1, 1],
-        [1, 1, -1],
-        [1, -1, 1],
-        [1, -1, -1],
-        [-1, 1, 1],
-        [-1, 1, -1],
-        [-1, -1, 1],
-        [-1, -1, -1],
-
-
-        [-2, -2, -1],
-        [2, -2, -1],
-        [2, 2, -1],
-        [-2, 2, -1],
-    ])
-    mesh = Mesh3.from_convex_hull(mesh)
-
-    drawable = MeshDrawable(mesh)
-
-    material = ColorMaterial((0.8, 0.3, 0.3, 1.0))
-    entity = Entity(pose=Pose3.identity(), name=&quot;cube&quot;)
-    entity.add_component(MeshRenderer(drawable, material))
-    scene = Scene()
-    scene.add(entity)
-
-    skybox = SkyBoxEntity()
-    scene.add(skybox)
-    world.add_scene(scene)
-
-    camera_entity = Entity(name=&quot;camera&quot;)
-    camera = PerspectiveCameraComponent()
-    camera_entity.add_component(camera)
-    camera_entity.add_component(OrbitCameraController())
-    scene.add(camera_entity)
-
-    return scene, camera
-
-
-def main():
-    world = VisualizationWorld()
-    scene, camera = build_scene(world)
-    window = world.create_window(title=&quot;termin cube demo&quot;)
-    window.add_viewport(scene, camera)
-    world.run()
-
-
-if __name__ == &quot;__main__&quot;:
-    main()
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;Minimal demo that renders a cube and allows orbiting camera controls.&quot;&quot;&quot;<br>
+<br>
+from __future__ import annotations<br>
+<br>
+import numpy as np<br>
+<br>
+from termin.geombase.pose3 import Pose3<br>
+from termin.mesh.mesh import UVSphereMesh, Mesh, Mesh3<br>
+from termin.visualization import (<br>
+    Entity,<br>
+    MeshDrawable,<br>
+    Scene,<br>
+    Material,<br>
+    VisualizationWorld,<br>
+    PerspectiveCameraComponent,<br>
+    OrbitCameraController,<br>
+)<br>
+from termin.visualization.components import MeshRenderer<br>
+from termin.visualization.shader import ShaderProgram<br>
+from termin.visualization.skybox import SkyBoxEntity<br>
+from termin.visualization.materials.simple import ColorMaterial<br>
+<br>
+# import convex hull<br>
+from scipy.spatial import ConvexHull<br>
+<br>
+def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent]:<br>
+    <br>
+    mesh = ConvexHull([<br>
+        [1, 1, 1],<br>
+        [1, 1, -1],<br>
+        [1, -1, 1],<br>
+        [1, -1, -1],<br>
+        [-1, 1, 1],<br>
+        [-1, 1, -1],<br>
+        [-1, -1, 1],<br>
+        [-1, -1, -1],<br>
+<br>
+<br>
+        [-2, -2, -1],<br>
+        [2, -2, -1],<br>
+        [2, 2, -1],<br>
+        [-2, 2, -1],<br>
+    ])<br>
+    mesh = Mesh3.from_convex_hull(mesh)<br>
+<br>
+    drawable = MeshDrawable(mesh)<br>
+<br>
+    material = ColorMaterial((0.8, 0.3, 0.3, 1.0))<br>
+    entity = Entity(pose=Pose3.identity(), name=&quot;cube&quot;)<br>
+    entity.add_component(MeshRenderer(drawable, material))<br>
+    scene = Scene()<br>
+    scene.add(entity)<br>
+<br>
+    skybox = SkyBoxEntity()<br>
+    scene.add(skybox)<br>
+    world.add_scene(scene)<br>
+<br>
+    camera_entity = Entity(name=&quot;camera&quot;)<br>
+    camera = PerspectiveCameraComponent()<br>
+    camera_entity.add_component(camera)<br>
+    camera_entity.add_component(OrbitCameraController())<br>
+    scene.add(camera_entity)<br>
+<br>
+    return scene, camera<br>
+<br>
+<br>
+def main():<br>
+    world = VisualizationWorld()<br>
+    scene, camera = build_scene(world)<br>
+    window = world.create_window(title=&quot;termin cube demo&quot;)<br>
+    window.add_viewport(scene, camera)<br>
+    world.run()<br>
+<br>
+<br>
+if __name__ == &quot;__main__&quot;:<br>
+    main()<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

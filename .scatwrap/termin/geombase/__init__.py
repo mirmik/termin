@@ -5,31 +5,30 @@
   <title>termin/geombase/__init__.py</title>
 </head>
 <body>
-<pre><code>
-&quot;&quot;&quot;
-Базовые геометрические классы (Geometric Base).
-
-Содержит фундаментальные классы для представления геометрии:
-- Pose2 - позы (положение + ориентация) в 2D пространстве
-- Pose3 - позы (положение + ориентация) в 3D пространстве
-- Screw, Screw2, Screw3 - винтовые преобразования
-&quot;&quot;&quot;
-
-from .pose2 import Pose2
-from .pose3 import Pose3
-from .screw import Screw, Screw2, Screw3
-from .aabb import AABB, TransformAABB
-
-__all__ = [
-    'Pose2',
-    'Pose3',
-    'Screw',
-    'Screw2',
-    'Screw3',
-    'AABB',
-    'TransformAABB'
-]
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;<br>
+Базовые геометрические классы (Geometric Base).<br>
+<br>
+Содержит фундаментальные классы для представления геометрии:<br>
+- Pose2 - позы (положение + ориентация) в 2D пространстве<br>
+- Pose3 - позы (положение + ориентация) в 3D пространстве<br>
+- Screw, Screw2, Screw3 - винтовые преобразования<br>
+&quot;&quot;&quot;<br>
+<br>
+from .pose2 import Pose2<br>
+from .pose3 import Pose3<br>
+from .screw import Screw, Screw2, Screw3<br>
+from .aabb import AABB, TransformAABB<br>
+<br>
+__all__ = [<br>
+    'Pose2',<br>
+    'Pose3',<br>
+    'Screw',<br>
+    'Screw2',<br>
+    'Screw3',<br>
+    'AABB',<br>
+    'TransformAABB'<br>
+]<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

@@ -5,34 +5,33 @@
   <title>termin/ARCHIVE/physics/inertia.py</title>
 </head>
 <body>
-<pre><code>
-#!/usr/bin/env python3
-
-import math
-import numpy
-
-
-class Inertia2:
-    def __init__(self, mass, inertia):
-        self._mass = mass
-        self._inertia = inertia
-
-    def mass(self):
-        return self._mass
-
-    def inertia(self):
-        return self._inertia
-
-    def mass_matrix(self):
-        A = self._inertia
-        B = numpy.zeros((1, 2))
-        C = numpy.zeros((2, 1))
-        D = numpy.diag((self.mass, self.mass))
-        return numpy.block([
-            [A, B],
-            [C, D]
-        ])
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+#!/usr/bin/env python3<br>
+<br>
+import math<br>
+import numpy<br>
+<br>
+<br>
+class Inertia2:<br>
+    def __init__(self, mass, inertia):<br>
+        self._mass = mass<br>
+        self._inertia = inertia<br>
+<br>
+    def mass(self):<br>
+        return self._mass<br>
+<br>
+    def inertia(self):<br>
+        return self._inertia<br>
+<br>
+    def mass_matrix(self):<br>
+        A = self._inertia<br>
+        B = numpy.zeros((1, 2))<br>
+        C = numpy.zeros((2, 1))<br>
+        D = numpy.diag((self.mass, self.mass))<br>
+        return numpy.block([<br>
+            [A, B],<br>
+            [C, D]<br>
+        ])<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

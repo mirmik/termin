@@ -5,513 +5,513 @@
   <title>termin/visualization/framegraph.py</title>
 </head>
 <body>
-<pre><code>
-# termin/visualization/framegraph.py
-
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Set, Any, Optional, Tuple
-from collections import deque
-from termin.visualization.shader import ShaderProgram
-from .picking import rgb_to_id
-from .components import MeshRenderer
-
-
-@dataclass
-class FramePass:
-    &quot;&quot;&quot;
-    Логический проход кадра.
-
-    reads  – какие ресурсы этот проход читает (по именам).
-    writes – какие ресурсы он пишет.
-    inplace – модифицирующий ли это проход (in-place по смыслу).
-    &quot;&quot;&quot;
-    pass_name: str
-    reads: Set[str] = field(default_factory=set)
-    writes: Set[str] = field(default_factory=set)
-    inplace: bool = False
-
-    def __repr__(self) -&gt; str:
-        return f&quot;FramePass({self.pass_name!r})&quot;
-
-
-class FrameGraphError(Exception):
-    &quot;&quot;&quot;Базовая ошибка графа кадра.&quot;&quot;&quot;
-
-
-class FrameGraphMultiWriterError(FrameGraphError):
-    &quot;&quot;&quot;Один и тот же ресурс пишут несколько пассов.&quot;&quot;&quot;
-
-
-class FrameGraphCycleError(FrameGraphError):
-    &quot;&quot;&quot;В графе зависимостей обнаружен цикл.&quot;&quot;&quot;
-
-
-class FrameGraph:
-    &quot;&quot;&quot;
-    Простейший frame graph: на вход – набор FramePass,
-    на выход – топологически отсортированный список пассов.
-    &quot;&quot;&quot;
-
-    def __init__(self, passes: Iterable[FramePass]):
-        self._passes: List[FramePass] = list(passes)
-        # карта &quot;ресурс -&gt; каноническое имя&quot; (на будущее — для дебага / инспекции)
-        self._canonical_resources: Dict[str, str] = {}
-
-    # ------------------------------------------------------------------ #
-    # ВНУТРЕННЕЕ ПРЕДСТАВЛЕНИЕ ГРАФА ЗАВИСИМОСТЕЙ
-    # ------------------------------------------------------------------ #
-    # Всё строим на ИНДЕКСАХ пассов (0..N-1), а не на самих объектах,
-    # чтобы вообще не зависеть от их hash/eq.
-    # ------------------------------------------------------------------ #
-
-    def _build_dependency_graph(self):
-        &quot;&quot;&quot;
-        Строит граф зависимостей между пассами.
-
-        Возвращает:
-            adjacency: dict[int, list[int]]
-                для каждого индекса пасса – список индексов пассов,
-                которые зависят от него (есть ребро writer -&gt; reader).
-            in_degree: dict[int, int]
-                количество входящих рёбер для каждого пасса.
-        &quot;&quot;&quot;
-        writer_for: Dict[str, int] = {}          # ресурс -&gt; индекс писателя
-        readers_for: Dict[str, List[int]] = {}   # ресурс -&gt; список индексов читателей
-
-        # для in-place логики
-        modified_inputs: Set[str] = set()        # какие имена уже были входом inplace-пасса
-        canonical: Dict[str, str] = {}           # локальная карта канонических имён
-
-        n = len(self._passes)
-
-        # 1) собираем writer-ов, reader-ов и валидируем inplace-пассы
-        for idx, p in enumerate(self._passes):
-            # --- валидация inplace-пассов ---
-            if p.inplace:
-                if len(p.reads) != 1 or len(p.writes) != 1:
-                    raise FrameGraphError(
-                        f&quot;Inplace pass {p.pass_name!r} must have exactly 1 read and 1 write, &quot;
-                        f&quot;got reads={p.reads}, writes={p.writes}&quot;
-                    )
-                (src,) = p.reads
-                if src in modified_inputs:
-                    # этот ресурс уже модифицировался другим inplace-пассом
-                    raise FrameGraphError(
-                        f&quot;Resource {src!r} is already modified by another inplace pass&quot;
-                    )
-                modified_inputs.add(src)
-
-            # --- writer-ы ---
-            for res in p.writes:
-                if res in writer_for:
-                    other_idx = writer_for[res]
-                    other = self._passes[other_idx]
-                    raise FrameGraphMultiWriterError(
-                        f&quot;Resource {res!r} is written by multiple passes: &quot;
-                        f&quot;{other.pass_name!r} and {p.pass_name!r}&quot;
-                    )
-                writer_for[res] = idx
-
-                # каноническое имя: первое появление ресурса как writer
-                canonical.setdefault(res, res)
-
-            # --- reader-ы ---
-            for res in p.reads:
-                lst = readers_for.setdefault(res, [])
-                if idx not in lst:
-                    lst.append(idx)
-                # если ресурс нигде не писали, но читают — считаем внешним входом
-                canonical.setdefault(res, res)
-
-        # 2) обработка алиасов для inplace-пассов
-        # (это чисто справочная штука, на граф зависимостей не влияет)
-        for p in self._passes:
-            if not p.inplace:
-                continue
-            (src,) = p.reads
-            (dst,) = p.writes
-
-            src_canon = canonical.get(src, src)
-            # выходу назначаем каноническое имя входа:
-            # даже если у dst уже было &quot;своё&quot;, переопределяем —
-            # мы сознательно объявляем их синонимами.
-            canonical[dst] = src_canon
-
-        # сохраним карту канонических имён (вдруг пригодится снаружи)
-        self._canonical_resources = canonical
-
-        # 3) adjacency и in_degree по индексам
-        adjacency: Dict[int, List[int]] = {i: [] for i in range(n)}
-        in_degree: Dict[int, int] = {i: 0 for i in range(n)}
-
-        # Для каждого ресурса: writer -&gt; все его reader-ы
-        for res, w_idx in writer_for.items():
-            for r_idx in readers_for.get(res, ()):
-                if r_idx == w_idx:
-                    continue  # на всякий случай, не создаём петли writer-&gt;writer
-                if r_idx not in adjacency[w_idx]:
-                    adjacency[w_idx].append(r_idx)
-                    in_degree[r_idx] += 1
-
-        return adjacency, in_degree
-
-    # ------------------------------------------------------------------ #
-    # ТОПОЛОГИЧЕСКАЯ СОРТИРОВКА (Kahn с приоритетом обычных пассов)
-    # ------------------------------------------------------------------ #
-
-    def build_schedule(self) -&gt; List[FramePass]:
-        &quot;&quot;&quot;
-        Возвращает список пассов в порядке выполнения,
-        учитывая зависимости read-after-write.
-
-        Бросает:
-            - FrameGraphMultiWriterError, если один ресурс пишут несколько пассов.
-            - FrameGraphCycleError, если обнаружен цикл.
-            - FrameGraphError, если нарушены правила inplace-пассов.
-        &quot;&quot;&quot;
-        adjacency, in_degree = self._build_dependency_graph()
-        n = len(self._passes)
-
-        is_inplace = [p.inplace for p in self._passes]
-
-        # две очереди:
-        #   обычные пассы — в ready_normal
-        #   inplace-пассы — в ready_inplace
-        ready_normal: deque[int] = deque()
-        ready_inplace: deque[int] = deque()
-
-        for i in range(n):
-            if in_degree[i] == 0:
-                if is_inplace[i]:
-                    ready_inplace.append(i)
-                else:
-                    ready_normal.append(i)
-
-        schedule_indices: List[int] = []
-
-        while ready_normal or ready_inplace:
-            # приоритет обычных пассов
-            if ready_normal:
-                idx = ready_normal.popleft()
-            else:
-                idx = ready_inplace.popleft()
-
-            schedule_indices.append(idx)
-
-            for dep in adjacency[idx]:
-                in_degree[dep] -= 1
-                if in_degree[dep] == 0:
-                    if is_inplace[dep]:
-                        ready_inplace.append(dep)
-                    else:
-                        ready_normal.append(dep)
-
-        if len(schedule_indices) != n:
-            # Остались вершины с in_degree &gt; 0 → цикл
-            problematic = [self._passes[i].pass_name for i, deg in in_degree.items() if deg &gt; 0]
-            raise FrameGraphCycleError(
-                &quot;Frame graph contains a dependency cycle involving passes: &quot;
-                + &quot;, &quot;.join(problematic)
-            )
-
-        # Конвертируем индексы обратно в реальные пассы
-        return [self._passes[i] for i in schedule_indices]
-
-    # опционально — геттер канонического имени ресурса (на будущее)
-    def canonical_resource(self, name: str) -&gt; str:
-        return self._canonical_resources.get(name, name)
-
-@dataclass
-class FrameExecutionContext:
-    graphics: GraphicsBackend
-    window: &quot;Window&quot;
-    viewport: &quot;Viewport&quot;
-    rect: Tuple[int, int, int, int]  # (px, py, pw, ph)
-    context_key: int
-
-    # карта ресурс -&gt; FBO (или None, если это swapchain/экран)
-    fbos: Dict[str, FramebufferHandle | None]
-
-class RenderFramePass(FramePass):
-    def execute(self, ctx: FrameExecutionContext):
-        raise NotImplementedError
-
-
-class ColorPass(RenderFramePass):
-    def __init__(
-        self,
-        input_res: str = &quot;empty&quot;,
-        output_res: str = &quot;color&quot;,
-        pass_name: str = &quot;Color&quot;,
-    ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-            inplace=True,  # логически — модификатор состояния ресурса
-        )
-        self.input_res = input_res
-        self.output_res = output_res
-
-    def execute(self, ctx: FrameContext):
-        gfx      = ctx.graphics
-        window   = ctx.window
-        viewport = ctx.viewport
-        scene    = viewport.scene
-        camera   = viewport.camera
-        px, py, pw, ph = ctx.rect
-        key      = ctx.context_key
-
-        fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
-        ctx.fbos[self.output_res] = fb
-
-        gfx.bind_framebuffer(fb)
-        gfx.set_viewport(0, 0, pw, ph)
-        gfx.clear_color_depth(scene.background_color)
-
-        window.renderer.render_viewport(
-            scene,
-            camera,
-            (0, 0, pw, ph),
-            key,
-        )
-
-
-
-def blit_fbo_to_fbo(
-    gfx: &quot;GraphicsBackend&quot;,
-    src_fb,
-    dst_fb,
-    size: tuple[int, int],
-    context_key: int,
-):
-    w, h = size
-
-    # целевой FBO
-    gfx.bind_framebuffer(dst_fb)
-    gfx.set_viewport(0, 0, w, h)
-
-    # глубина нам не нужна
-    gfx.set_depth_test(False)
-    gfx.set_depth_mask(False)
-
-    # берём ту же фуллскрин-квад-программу, что и PresentToScreenPass
-    shader = PresentToScreenPass._get_shader()
-    shader.ensure_ready(gfx)
-    shader.use()
-    shader.set_uniform_int(&quot;u_tex&quot;, 0)
-
-    tex = src_fb.color_texture()
-    tex.bind(0)
-
-    gfx.draw_ui_textured_quad(context_key)
-
-    gfx.set_depth_test(True)
-    gfx.set_depth_mask(True)
-
-
-
-
-
-FSQ_VERT = &quot;&quot;&quot;
-#version 330 core
-layout(location = 0) in vec2 a_pos;
-layout(location = 1) in vec2 a_uv;
-
-out vec2 v_uv;
-
-void main() {
-    v_uv = a_uv;
-    gl_Position = vec4(a_pos, 0.0, 1.0);
-}
-&quot;&quot;&quot;
-
-FSQ_FRAG = &quot;&quot;&quot;
-#version 330 core
-in vec2 v_uv;
-out vec4 FragColor;
-
-uniform sampler2D u_tex;
-
-void main() {
-    FragColor = texture(u_tex, v_uv);
-}
-&quot;&quot;&quot;
-
-
-class PresentToScreenPass(RenderFramePass):
-    &quot;&quot;&quot;
-    Берёт текстуру из ресурса input_res и выводит её на экран
-    фуллскрин-квадом.
-    &quot;&quot;&quot;
-    _shader: ShaderProgram | None = None
-
-    def __init__(self, input_res: str, pass_name: str = &quot;PresentToScreen&quot;):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes=set(),  # экран считаем внешним
-            inplace=False,
-        )
-        self.input_res = input_res
-
-    @classmethod
-    def _get_shader(cls) -&gt; ShaderProgram:
-        if cls._shader is None:
-            cls._shader = ShaderProgram(FSQ_VERT, FSQ_FRAG)
-        return cls._shader
-
-    def execute(self, ctx: FrameContext):
-        gfx = ctx.graphics
-        window = ctx.window
-        px, py, pw, ph = ctx.rect
-        key = ctx.context_key
-
-        fb_in = ctx.fbos.get(self.input_res)
-        if fb_in is None:
-            return
-
-        tex_in = fb_in.color_texture()
-
-        window.handle.bind_window_framebuffer()
-        gfx.set_viewport(px, py, pw, ph)
-
-        gfx.set_depth_test(False)
-        gfx.set_depth_mask(False)
-
-        shader = self._get_shader()
-        shader.ensure_ready(gfx)
-        shader.use()
-        shader.set_uniform_int(&quot;u_tex&quot;, 0)
-
-        tex_in.bind(0)
-
-        gfx.draw_ui_textured_quad(key)
-
-        gfx.set_depth_test(True)
-        gfx.set_depth_mask(True)
-
-
-class CanvasPass(RenderFramePass):
-    def __init__(
-        self,
-        src: str = &quot;screen&quot;,
-        dst: str = &quot;screen+ui&quot;,
-        pass_name: str = &quot;Canvas&quot;,
-    ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={src},
-            writes={dst},
-            inplace=True,  # &lt;- ключевое: модифицирующий пасс
-        )
-        self.src = src
-        self.dst = dst
-
-    def execute(self, ctx: FrameContext):
-        gfx = ctx.graphics
-        window = ctx.window
-        viewport = ctx.viewport
-        px, py, pw, ph = ctx.rect
-        key = ctx.context_key
-
-        # Пытаемся взять FBO исходного ресурса
-        fb_in = ctx.fbos.get(self.src)
-
-        if fb_in is not None:
-            # inplace по сути: переиспользуем тот же FBO
-            fb_out = fb_in
-        else:
-            # src – внешний ресурс / никем не создан:
-            # делаем новый FBO под dst
-            fb_out = window.get_viewport_fbo(viewport, self.dst, (pw, ph))
-
-        # публикуем его под именем dst
-        ctx.fbos[self.dst] = fb_out
-
-        gfx.bind_framebuffer(fb_out)
-        gfx.set_viewport(0, 0, pw, ph)
-
-        # Ничего не чистим, не копируем: если там уже есть картинка —
-        # рисуем UI поверх неё.
-        if viewport.canvas:
-            viewport.canvas.render(gfx, key, (0, 0, pw, ph))
-
-
-
-
-from .components import MeshRenderer
-from .picking import id_to_rgb
-
-class IdPass(RenderFramePass):
-    def __init__(
-        self,
-        input_res: str = &quot;empty&quot;,
-        output_res: str = &quot;id&quot;,
-        pass_name: str = &quot;IdPass&quot;,
-    ):
-        super().__init__(
-            pass_name=pass_name,
-            reads={input_res},
-            writes={output_res},
-            inplace=True,
-        )
-        self.input_res = input_res
-        self.output_res = output_res
-
-    def execute(self, ctx: FrameContext):
-        gfx      = ctx.graphics
-        window   = ctx.window
-        viewport = ctx.viewport
-        scene    = viewport.scene
-        camera   = viewport.camera
-        px, py, pw, ph = ctx.rect
-        key      = ctx.context_key
-
-        fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
-        ctx.fbos[self.output_res] = fb
-
-        gfx.bind_framebuffer(fb)
-        gfx.set_viewport(0, 0, pw, ph)
-        gfx.clear_color_depth((0.0, 0.0, 0.0, 0.0))
-
-        pick_ids = {}
-        for ent in scene.entities:
-            if not ent.is_pickable():
-                continue
-
-            mr = ent.get_component(MeshRenderer)
-            if mr is None:
-                continue
-
-            pid = window._get_pick_id_for_entity(ent)
-            pick_ids[ent] = pid
-
-        window.renderer.render_viewport_pick(
-            scene,
-            camera,
-            (0, 0, pw, ph),
-            key,
-            pick_ids,
-        )
-
-
-
-
-
-
-
-@dataclass
-class FrameContext:
-    window: &quot;Window&quot;
-    viewport: &quot;Viewport&quot;
-    rect: Tuple[int, int, int, int]
-    size: Tuple[int, int]
-    context_key: int
-    graphics: &quot;GraphicsBackend&quot;
-    fbos: Dict[str, Any] = field(default_factory=dict)
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+# termin/visualization/framegraph.py<br>
+<br>
+from __future__ import annotations<br>
+<br>
+from dataclasses import dataclass, field<br>
+from typing import Dict, Iterable, List, Set, Any, Optional, Tuple<br>
+from collections import deque<br>
+from termin.visualization.shader import ShaderProgram<br>
+from .picking import rgb_to_id<br>
+from .components import MeshRenderer<br>
+<br>
+<br>
+@dataclass<br>
+class FramePass:<br>
+    &quot;&quot;&quot;<br>
+    Логический проход кадра.<br>
+<br>
+    reads  – какие ресурсы этот проход читает (по именам).<br>
+    writes – какие ресурсы он пишет.<br>
+    inplace – модифицирующий ли это проход (in-place по смыслу).<br>
+    &quot;&quot;&quot;<br>
+    pass_name: str<br>
+    reads: Set[str] = field(default_factory=set)<br>
+    writes: Set[str] = field(default_factory=set)<br>
+    inplace: bool = False<br>
+<br>
+    def __repr__(self) -&gt; str:<br>
+        return f&quot;FramePass({self.pass_name!r})&quot;<br>
+<br>
+<br>
+class FrameGraphError(Exception):<br>
+    &quot;&quot;&quot;Базовая ошибка графа кадра.&quot;&quot;&quot;<br>
+<br>
+<br>
+class FrameGraphMultiWriterError(FrameGraphError):<br>
+    &quot;&quot;&quot;Один и тот же ресурс пишут несколько пассов.&quot;&quot;&quot;<br>
+<br>
+<br>
+class FrameGraphCycleError(FrameGraphError):<br>
+    &quot;&quot;&quot;В графе зависимостей обнаружен цикл.&quot;&quot;&quot;<br>
+<br>
+<br>
+class FrameGraph:<br>
+    &quot;&quot;&quot;<br>
+    Простейший frame graph: на вход – набор FramePass,<br>
+    на выход – топологически отсортированный список пассов.<br>
+    &quot;&quot;&quot;<br>
+<br>
+    def __init__(self, passes: Iterable[FramePass]):<br>
+        self._passes: List[FramePass] = list(passes)<br>
+        # карта &quot;ресурс -&gt; каноническое имя&quot; (на будущее — для дебага / инспекции)<br>
+        self._canonical_resources: Dict[str, str] = {}<br>
+<br>
+    # ------------------------------------------------------------------ #<br>
+    # ВНУТРЕННЕЕ ПРЕДСТАВЛЕНИЕ ГРАФА ЗАВИСИМОСТЕЙ<br>
+    # ------------------------------------------------------------------ #<br>
+    # Всё строим на ИНДЕКСАХ пассов (0..N-1), а не на самих объектах,<br>
+    # чтобы вообще не зависеть от их hash/eq.<br>
+    # ------------------------------------------------------------------ #<br>
+<br>
+    def _build_dependency_graph(self):<br>
+        &quot;&quot;&quot;<br>
+        Строит граф зависимостей между пассами.<br>
+<br>
+        Возвращает:<br>
+            adjacency: dict[int, list[int]]<br>
+                для каждого индекса пасса – список индексов пассов,<br>
+                которые зависят от него (есть ребро writer -&gt; reader).<br>
+            in_degree: dict[int, int]<br>
+                количество входящих рёбер для каждого пасса.<br>
+        &quot;&quot;&quot;<br>
+        writer_for: Dict[str, int] = {}          # ресурс -&gt; индекс писателя<br>
+        readers_for: Dict[str, List[int]] = {}   # ресурс -&gt; список индексов читателей<br>
+<br>
+        # для in-place логики<br>
+        modified_inputs: Set[str] = set()        # какие имена уже были входом inplace-пасса<br>
+        canonical: Dict[str, str] = {}           # локальная карта канонических имён<br>
+<br>
+        n = len(self._passes)<br>
+<br>
+        # 1) собираем writer-ов, reader-ов и валидируем inplace-пассы<br>
+        for idx, p in enumerate(self._passes):<br>
+            # --- валидация inplace-пассов ---<br>
+            if p.inplace:<br>
+                if len(p.reads) != 1 or len(p.writes) != 1:<br>
+                    raise FrameGraphError(<br>
+                        f&quot;Inplace pass {p.pass_name!r} must have exactly 1 read and 1 write, &quot;<br>
+                        f&quot;got reads={p.reads}, writes={p.writes}&quot;<br>
+                    )<br>
+                (src,) = p.reads<br>
+                if src in modified_inputs:<br>
+                    # этот ресурс уже модифицировался другим inplace-пассом<br>
+                    raise FrameGraphError(<br>
+                        f&quot;Resource {src!r} is already modified by another inplace pass&quot;<br>
+                    )<br>
+                modified_inputs.add(src)<br>
+<br>
+            # --- writer-ы ---<br>
+            for res in p.writes:<br>
+                if res in writer_for:<br>
+                    other_idx = writer_for[res]<br>
+                    other = self._passes[other_idx]<br>
+                    raise FrameGraphMultiWriterError(<br>
+                        f&quot;Resource {res!r} is written by multiple passes: &quot;<br>
+                        f&quot;{other.pass_name!r} and {p.pass_name!r}&quot;<br>
+                    )<br>
+                writer_for[res] = idx<br>
+<br>
+                # каноническое имя: первое появление ресурса как writer<br>
+                canonical.setdefault(res, res)<br>
+<br>
+            # --- reader-ы ---<br>
+            for res in p.reads:<br>
+                lst = readers_for.setdefault(res, [])<br>
+                if idx not in lst:<br>
+                    lst.append(idx)<br>
+                # если ресурс нигде не писали, но читают — считаем внешним входом<br>
+                canonical.setdefault(res, res)<br>
+<br>
+        # 2) обработка алиасов для inplace-пассов<br>
+        # (это чисто справочная штука, на граф зависимостей не влияет)<br>
+        for p in self._passes:<br>
+            if not p.inplace:<br>
+                continue<br>
+            (src,) = p.reads<br>
+            (dst,) = p.writes<br>
+<br>
+            src_canon = canonical.get(src, src)<br>
+            # выходу назначаем каноническое имя входа:<br>
+            # даже если у dst уже было &quot;своё&quot;, переопределяем —<br>
+            # мы сознательно объявляем их синонимами.<br>
+            canonical[dst] = src_canon<br>
+<br>
+        # сохраним карту канонических имён (вдруг пригодится снаружи)<br>
+        self._canonical_resources = canonical<br>
+<br>
+        # 3) adjacency и in_degree по индексам<br>
+        adjacency: Dict[int, List[int]] = {i: [] for i in range(n)}<br>
+        in_degree: Dict[int, int] = {i: 0 for i in range(n)}<br>
+<br>
+        # Для каждого ресурса: writer -&gt; все его reader-ы<br>
+        for res, w_idx in writer_for.items():<br>
+            for r_idx in readers_for.get(res, ()):<br>
+                if r_idx == w_idx:<br>
+                    continue  # на всякий случай, не создаём петли writer-&gt;writer<br>
+                if r_idx not in adjacency[w_idx]:<br>
+                    adjacency[w_idx].append(r_idx)<br>
+                    in_degree[r_idx] += 1<br>
+<br>
+        return adjacency, in_degree<br>
+<br>
+    # ------------------------------------------------------------------ #<br>
+    # ТОПОЛОГИЧЕСКАЯ СОРТИРОВКА (Kahn с приоритетом обычных пассов)<br>
+    # ------------------------------------------------------------------ #<br>
+<br>
+    def build_schedule(self) -&gt; List[FramePass]:<br>
+        &quot;&quot;&quot;<br>
+        Возвращает список пассов в порядке выполнения,<br>
+        учитывая зависимости read-after-write.<br>
+<br>
+        Бросает:<br>
+            - FrameGraphMultiWriterError, если один ресурс пишут несколько пассов.<br>
+            - FrameGraphCycleError, если обнаружен цикл.<br>
+            - FrameGraphError, если нарушены правила inplace-пассов.<br>
+        &quot;&quot;&quot;<br>
+        adjacency, in_degree = self._build_dependency_graph()<br>
+        n = len(self._passes)<br>
+<br>
+        is_inplace = [p.inplace for p in self._passes]<br>
+<br>
+        # две очереди:<br>
+        #   обычные пассы — в ready_normal<br>
+        #   inplace-пассы — в ready_inplace<br>
+        ready_normal: deque[int] = deque()<br>
+        ready_inplace: deque[int] = deque()<br>
+<br>
+        for i in range(n):<br>
+            if in_degree[i] == 0:<br>
+                if is_inplace[i]:<br>
+                    ready_inplace.append(i)<br>
+                else:<br>
+                    ready_normal.append(i)<br>
+<br>
+        schedule_indices: List[int] = []<br>
+<br>
+        while ready_normal or ready_inplace:<br>
+            # приоритет обычных пассов<br>
+            if ready_normal:<br>
+                idx = ready_normal.popleft()<br>
+            else:<br>
+                idx = ready_inplace.popleft()<br>
+<br>
+            schedule_indices.append(idx)<br>
+<br>
+            for dep in adjacency[idx]:<br>
+                in_degree[dep] -= 1<br>
+                if in_degree[dep] == 0:<br>
+                    if is_inplace[dep]:<br>
+                        ready_inplace.append(dep)<br>
+                    else:<br>
+                        ready_normal.append(dep)<br>
+<br>
+        if len(schedule_indices) != n:<br>
+            # Остались вершины с in_degree &gt; 0 → цикл<br>
+            problematic = [self._passes[i].pass_name for i, deg in in_degree.items() if deg &gt; 0]<br>
+            raise FrameGraphCycleError(<br>
+                &quot;Frame graph contains a dependency cycle involving passes: &quot;<br>
+                + &quot;, &quot;.join(problematic)<br>
+            )<br>
+<br>
+        # Конвертируем индексы обратно в реальные пассы<br>
+        return [self._passes[i] for i in schedule_indices]<br>
+<br>
+    # опционально — геттер канонического имени ресурса (на будущее)<br>
+    def canonical_resource(self, name: str) -&gt; str:<br>
+        return self._canonical_resources.get(name, name)<br>
+<br>
+@dataclass<br>
+class FrameExecutionContext:<br>
+    graphics: GraphicsBackend<br>
+    window: &quot;Window&quot;<br>
+    viewport: &quot;Viewport&quot;<br>
+    rect: Tuple[int, int, int, int]  # (px, py, pw, ph)<br>
+    context_key: int<br>
+<br>
+    # карта ресурс -&gt; FBO (или None, если это swapchain/экран)<br>
+    fbos: Dict[str, FramebufferHandle | None]<br>
+<br>
+class RenderFramePass(FramePass):<br>
+    def execute(self, ctx: FrameExecutionContext):<br>
+        raise NotImplementedError<br>
+<br>
+<br>
+class ColorPass(RenderFramePass):<br>
+    def __init__(<br>
+        self,<br>
+        input_res: str = &quot;empty&quot;,<br>
+        output_res: str = &quot;color&quot;,<br>
+        pass_name: str = &quot;Color&quot;,<br>
+    ):<br>
+        super().__init__(<br>
+            pass_name=pass_name,<br>
+            reads={input_res},<br>
+            writes={output_res},<br>
+            inplace=True,  # логически — модификатор состояния ресурса<br>
+        )<br>
+        self.input_res = input_res<br>
+        self.output_res = output_res<br>
+<br>
+    def execute(self, ctx: FrameContext):<br>
+        gfx      = ctx.graphics<br>
+        window   = ctx.window<br>
+        viewport = ctx.viewport<br>
+        scene    = viewport.scene<br>
+        camera   = viewport.camera<br>
+        px, py, pw, ph = ctx.rect<br>
+        key      = ctx.context_key<br>
+<br>
+        fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))<br>
+        ctx.fbos[self.output_res] = fb<br>
+<br>
+        gfx.bind_framebuffer(fb)<br>
+        gfx.set_viewport(0, 0, pw, ph)<br>
+        gfx.clear_color_depth(scene.background_color)<br>
+<br>
+        window.renderer.render_viewport(<br>
+            scene,<br>
+            camera,<br>
+            (0, 0, pw, ph),<br>
+            key,<br>
+        )<br>
+<br>
+<br>
+<br>
+def blit_fbo_to_fbo(<br>
+    gfx: &quot;GraphicsBackend&quot;,<br>
+    src_fb,<br>
+    dst_fb,<br>
+    size: tuple[int, int],<br>
+    context_key: int,<br>
+):<br>
+    w, h = size<br>
+<br>
+    # целевой FBO<br>
+    gfx.bind_framebuffer(dst_fb)<br>
+    gfx.set_viewport(0, 0, w, h)<br>
+<br>
+    # глубина нам не нужна<br>
+    gfx.set_depth_test(False)<br>
+    gfx.set_depth_mask(False)<br>
+<br>
+    # берём ту же фуллскрин-квад-программу, что и PresentToScreenPass<br>
+    shader = PresentToScreenPass._get_shader()<br>
+    shader.ensure_ready(gfx)<br>
+    shader.use()<br>
+    shader.set_uniform_int(&quot;u_tex&quot;, 0)<br>
+<br>
+    tex = src_fb.color_texture()<br>
+    tex.bind(0)<br>
+<br>
+    gfx.draw_ui_textured_quad(context_key)<br>
+<br>
+    gfx.set_depth_test(True)<br>
+    gfx.set_depth_mask(True)<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+FSQ_VERT = &quot;&quot;&quot;<br>
+#version 330 core<br>
+layout(location = 0) in vec2 a_pos;<br>
+layout(location = 1) in vec2 a_uv;<br>
+<br>
+out vec2 v_uv;<br>
+<br>
+void main() {<br>
+    v_uv = a_uv;<br>
+    gl_Position = vec4(a_pos, 0.0, 1.0);<br>
+}<br>
+&quot;&quot;&quot;<br>
+<br>
+FSQ_FRAG = &quot;&quot;&quot;<br>
+#version 330 core<br>
+in vec2 v_uv;<br>
+out vec4 FragColor;<br>
+<br>
+uniform sampler2D u_tex;<br>
+<br>
+void main() {<br>
+    FragColor = texture(u_tex, v_uv);<br>
+}<br>
+&quot;&quot;&quot;<br>
+<br>
+<br>
+class PresentToScreenPass(RenderFramePass):<br>
+    &quot;&quot;&quot;<br>
+    Берёт текстуру из ресурса input_res и выводит её на экран<br>
+    фуллскрин-квадом.<br>
+    &quot;&quot;&quot;<br>
+    _shader: ShaderProgram | None = None<br>
+<br>
+    def __init__(self, input_res: str, pass_name: str = &quot;PresentToScreen&quot;):<br>
+        super().__init__(<br>
+            pass_name=pass_name,<br>
+            reads={input_res},<br>
+            writes=set(),  # экран считаем внешним<br>
+            inplace=False,<br>
+        )<br>
+        self.input_res = input_res<br>
+<br>
+    @classmethod<br>
+    def _get_shader(cls) -&gt; ShaderProgram:<br>
+        if cls._shader is None:<br>
+            cls._shader = ShaderProgram(FSQ_VERT, FSQ_FRAG)<br>
+        return cls._shader<br>
+<br>
+    def execute(self, ctx: FrameContext):<br>
+        gfx = ctx.graphics<br>
+        window = ctx.window<br>
+        px, py, pw, ph = ctx.rect<br>
+        key = ctx.context_key<br>
+<br>
+        fb_in = ctx.fbos.get(self.input_res)<br>
+        if fb_in is None:<br>
+            return<br>
+<br>
+        tex_in = fb_in.color_texture()<br>
+<br>
+        window.handle.bind_window_framebuffer()<br>
+        gfx.set_viewport(px, py, pw, ph)<br>
+<br>
+        gfx.set_depth_test(False)<br>
+        gfx.set_depth_mask(False)<br>
+<br>
+        shader = self._get_shader()<br>
+        shader.ensure_ready(gfx)<br>
+        shader.use()<br>
+        shader.set_uniform_int(&quot;u_tex&quot;, 0)<br>
+<br>
+        tex_in.bind(0)<br>
+<br>
+        gfx.draw_ui_textured_quad(key)<br>
+<br>
+        gfx.set_depth_test(True)<br>
+        gfx.set_depth_mask(True)<br>
+<br>
+<br>
+class CanvasPass(RenderFramePass):<br>
+    def __init__(<br>
+        self,<br>
+        src: str = &quot;screen&quot;,<br>
+        dst: str = &quot;screen+ui&quot;,<br>
+        pass_name: str = &quot;Canvas&quot;,<br>
+    ):<br>
+        super().__init__(<br>
+            pass_name=pass_name,<br>
+            reads={src},<br>
+            writes={dst},<br>
+            inplace=True,  # &lt;- ключевое: модифицирующий пасс<br>
+        )<br>
+        self.src = src<br>
+        self.dst = dst<br>
+<br>
+    def execute(self, ctx: FrameContext):<br>
+        gfx = ctx.graphics<br>
+        window = ctx.window<br>
+        viewport = ctx.viewport<br>
+        px, py, pw, ph = ctx.rect<br>
+        key = ctx.context_key<br>
+<br>
+        # Пытаемся взять FBO исходного ресурса<br>
+        fb_in = ctx.fbos.get(self.src)<br>
+<br>
+        if fb_in is not None:<br>
+            # inplace по сути: переиспользуем тот же FBO<br>
+            fb_out = fb_in<br>
+        else:<br>
+            # src – внешний ресурс / никем не создан:<br>
+            # делаем новый FBO под dst<br>
+            fb_out = window.get_viewport_fbo(viewport, self.dst, (pw, ph))<br>
+<br>
+        # публикуем его под именем dst<br>
+        ctx.fbos[self.dst] = fb_out<br>
+<br>
+        gfx.bind_framebuffer(fb_out)<br>
+        gfx.set_viewport(0, 0, pw, ph)<br>
+<br>
+        # Ничего не чистим, не копируем: если там уже есть картинка —<br>
+        # рисуем UI поверх неё.<br>
+        if viewport.canvas:<br>
+            viewport.canvas.render(gfx, key, (0, 0, pw, ph))<br>
+<br>
+<br>
+<br>
+<br>
+from .components import MeshRenderer<br>
+from .picking import id_to_rgb<br>
+<br>
+class IdPass(RenderFramePass):<br>
+    def __init__(<br>
+        self,<br>
+        input_res: str = &quot;empty&quot;,<br>
+        output_res: str = &quot;id&quot;,<br>
+        pass_name: str = &quot;IdPass&quot;,<br>
+    ):<br>
+        super().__init__(<br>
+            pass_name=pass_name,<br>
+            reads={input_res},<br>
+            writes={output_res},<br>
+            inplace=True,<br>
+        )<br>
+        self.input_res = input_res<br>
+        self.output_res = output_res<br>
+<br>
+    def execute(self, ctx: FrameContext):<br>
+        gfx      = ctx.graphics<br>
+        window   = ctx.window<br>
+        viewport = ctx.viewport<br>
+        scene    = viewport.scene<br>
+        camera   = viewport.camera<br>
+        px, py, pw, ph = ctx.rect<br>
+        key      = ctx.context_key<br>
+<br>
+        fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))<br>
+        ctx.fbos[self.output_res] = fb<br>
+<br>
+        gfx.bind_framebuffer(fb)<br>
+        gfx.set_viewport(0, 0, pw, ph)<br>
+        gfx.clear_color_depth((0.0, 0.0, 0.0, 0.0))<br>
+<br>
+        pick_ids = {}<br>
+        for ent in scene.entities:<br>
+            if not ent.is_pickable():<br>
+                continue<br>
+<br>
+            mr = ent.get_component(MeshRenderer)<br>
+            if mr is None:<br>
+                continue<br>
+<br>
+            pid = window._get_pick_id_for_entity(ent)<br>
+            pick_ids[ent] = pid<br>
+<br>
+        window.renderer.render_viewport_pick(<br>
+            scene,<br>
+            camera,<br>
+            (0, 0, pw, ph),<br>
+            key,<br>
+            pick_ids,<br>
+        )<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+@dataclass<br>
+class FrameContext:<br>
+    window: &quot;Window&quot;<br>
+    viewport: &quot;Viewport&quot;<br>
+    rect: Tuple[int, int, int, int]<br>
+    size: Tuple[int, int]<br>
+    context_key: int<br>
+    graphics: &quot;GraphicsBackend&quot;<br>
+    fbos: Dict[str, Any] = field(default_factory=dict)<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

@@ -5,33 +5,32 @@
   <title>termin/colliders/__init__.py</title>
 </head>
 <body>
-<pre><code>
-&quot;&quot;&quot;
-Модуль коллайдеров для обнаружения столкновений и вычисления расстояний.
-
-Содержит:
-- Базовый класс Collider
-- Примитивные коллайдеры: Sphere, Box, Capsule
-- AttachedCollider - коллайдер, прикрепленный к трансформации
-- UnionCollider - объединение нескольких коллайдеров
-&quot;&quot;&quot;
-
-from .collider import Collider
-from .sphere import SphereCollider
-from .box import BoxCollider
-from .capsule import CapsuleCollider
-from .attached import AttachedCollider
-from .union_collider import UnionCollider
-
-__all__ = [
-    'Collider',
-    'SphereCollider',
-    'BoxCollider',
-    'CapsuleCollider',
-    'AttachedCollider',
-    'UnionCollider',
-]
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;<br>
+Модуль коллайдеров для обнаружения столкновений и вычисления расстояний.<br>
+<br>
+Содержит:<br>
+- Базовый класс Collider<br>
+- Примитивные коллайдеры: Sphere, Box, Capsule<br>
+- AttachedCollider - коллайдер, прикрепленный к трансформации<br>
+- UnionCollider - объединение нескольких коллайдеров<br>
+&quot;&quot;&quot;<br>
+<br>
+from .collider import Collider<br>
+from .sphere import SphereCollider<br>
+from .box import BoxCollider<br>
+from .capsule import CapsuleCollider<br>
+from .attached import AttachedCollider<br>
+from .union_collider import UnionCollider<br>
+<br>
+__all__ = [<br>
+    'Collider',<br>
+    'SphereCollider',<br>
+    'BoxCollider',<br>
+    'CapsuleCollider',<br>
+    'AttachedCollider',<br>
+    'UnionCollider',<br>
+]<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

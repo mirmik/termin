@@ -5,61 +5,60 @@
   <title>termin/fem/__init__.py</title>
 </head>
 <body>
-<pre><code>
-&quot;&quot;&quot;
-FEM (Finite Element Method) модуль для мультифизического моделирования.
-
-Содержит инструменты для:
-- Сборки и решения систем линейных уравнений методом конечных элементов
-- Моделирования механических систем (стержни, балки, треугольные элементы)
-- Моделирования электрических цепей (резисторы, конденсаторы, индуктивности)
-- Моделирования многотельной динамики (инерции, пружины, демпферы)
-- Моделирования электромеханических систем (двигатели постоянного тока)
-&quot;&quot;&quot;
-
-# Базовые классы для сборки систем
-from .assembler import (
-    Variable,
-    Contribution,
-    Constraint,
-    MatrixAssembler,
-    BilinearContribution,
-    LoadContribution,
-    ConstraintContribution,
-    LagrangeConstraint,
-)
-
-# Механические элементы
-from .mechanic import (
-    BarElement,
-    BeamElement2D,
-    DistributedLoad,
-    Triangle3Node,
-    BodyForce,
-)
-
-
-
-__all__ = [
-    # Assembler
-    'Variable',
-    'Contribution',
-    'MatrixAssembler',
-    'BilinearContribution',
-    'LoadContribution',
-    'ConstraintContribution',
-    
-    # Mechanic
-    'BarElement',
-    'BeamElement2D',
-    'DistributedLoad',
-    'Triangle3Node',
-    'BodyForce',
-    
-    # Electromechanical
-    'DCMotor',
-]
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;<br>
+FEM (Finite Element Method) модуль для мультифизического моделирования.<br>
+<br>
+Содержит инструменты для:<br>
+- Сборки и решения систем линейных уравнений методом конечных элементов<br>
+- Моделирования механических систем (стержни, балки, треугольные элементы)<br>
+- Моделирования электрических цепей (резисторы, конденсаторы, индуктивности)<br>
+- Моделирования многотельной динамики (инерции, пружины, демпферы)<br>
+- Моделирования электромеханических систем (двигатели постоянного тока)<br>
+&quot;&quot;&quot;<br>
+<br>
+# Базовые классы для сборки систем<br>
+from .assembler import (<br>
+    Variable,<br>
+    Contribution,<br>
+    Constraint,<br>
+    MatrixAssembler,<br>
+    BilinearContribution,<br>
+    LoadContribution,<br>
+    ConstraintContribution,<br>
+    LagrangeConstraint,<br>
+)<br>
+<br>
+# Механические элементы<br>
+from .mechanic import (<br>
+    BarElement,<br>
+    BeamElement2D,<br>
+    DistributedLoad,<br>
+    Triangle3Node,<br>
+    BodyForce,<br>
+)<br>
+<br>
+<br>
+<br>
+__all__ = [<br>
+    # Assembler<br>
+    'Variable',<br>
+    'Contribution',<br>
+    'MatrixAssembler',<br>
+    'BilinearContribution',<br>
+    'LoadContribution',<br>
+    'ConstraintContribution',<br>
+    <br>
+    # Mechanic<br>
+    'BarElement',<br>
+    'BeamElement2D',<br>
+    'DistributedLoad',<br>
+    'Triangle3Node',<br>
+    'BodyForce',<br>
+    <br>
+    # Electromechanical<br>
+    'DCMotor',<br>
+]<br>
+<!-- END SCAT CODE -->
 </body>
 </html>

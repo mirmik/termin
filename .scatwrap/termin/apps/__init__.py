@@ -5,8 +5,7 @@
   <title>termin/apps/__init__.py</title>
 </head>
 <body>
-<pre><code>
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+<!-- END SCAT CODE -->
 </body>
 </html>

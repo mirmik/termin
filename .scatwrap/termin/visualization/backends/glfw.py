@@ -5,147 +5,146 @@
   <title>termin/visualization/backends/glfw.py</title>
 </head>
 <body>
-<pre><code>
-&quot;&quot;&quot;GLFW-based window backend.&quot;&quot;&quot;
-
-from __future__ import annotations
-
-from typing import Callable, Optional
-
-import glfw
-
-from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
-
-from OpenGL import GL as gl
-
-
-def _ensure_glfw():
-    if not glfw.init():
-        raise RuntimeError(&quot;Failed to initialize GLFW&quot;)
-
-
-def _translate_mouse_button(button: int) -&gt; MouseButton:
-    mapping = {
-        glfw.MOUSE_BUTTON_LEFT: MouseButton.LEFT,
-        glfw.MOUSE_BUTTON_RIGHT: MouseButton.RIGHT,
-        glfw.MOUSE_BUTTON_MIDDLE: MouseButton.MIDDLE,
-    }
-    return mapping.get(button, MouseButton.LEFT)
-
-
-def _translate_action(action: int) -&gt; Action:
-    mapping = {
-        glfw.PRESS: Action.PRESS,
-        glfw.RELEASE: Action.RELEASE,
-        glfw.REPEAT: Action.REPEAT,
-    }
-    return mapping.get(action, Action.RELEASE)
-
-
-def _translate_key(key: int) -&gt; Key:
-    if key == glfw.KEY_ESCAPE:
-        return Key.ESCAPE
-    if key == glfw.KEY_SPACE:
-        return Key.SPACE
-    if key &lt; 0:
-        return Key.UNKNOWN
-    try:
-        return Key(key)
-    except ValueError:
-        return Key.UNKNOWN
-
-
-class GLFWWindowHandle(BackendWindow):
-    def __init__(self, width: int, height: int, title: str, share: Optional[BackendWindow] = None):
-        _ensure_glfw()
-        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-        glfw.window_hint(glfw.RESIZABLE, glfw.TRUE)
-
-        share_handle = share._window if isinstance(share, GLFWWindowHandle) else getattr(share, &quot;_window&quot;, None)
-        self._window = glfw.create_window(width, height, title, None, share_handle)
-        if not self._window:
-            raise RuntimeError(&quot;Failed to create GLFW window&quot;)
-        glfw.make_context_current(self._window)
-
-    def close(self):
-        if self._window:
-            glfw.destroy_window(self._window)
-            self._window = None
-
-    def should_close(self) -&gt; bool:
-        return self._window is None or glfw.window_should_close(self._window)
-
-    def make_current(self):
-        if self._window is not None:
-            glfw.make_context_current(self._window)
-
-    def swap_buffers(self):
-        if self._window is not None:
-            glfw.swap_buffers(self._window)
-
-    def framebuffer_size(self):
-        return glfw.get_framebuffer_size(self._window)
-
-    def window_size(self):
-        return glfw.get_window_size(self._window)
-
-    def get_cursor_pos(self):
-        return glfw.get_cursor_pos(self._window)
-
-    def set_should_close(self, flag: bool):
-        if self._window is not None:
-            glfw.set_window_should_close(self._window, flag)
-
-    def set_user_pointer(self, ptr):
-        glfw.set_window_user_pointer(self._window, ptr)
-
-    def set_framebuffer_size_callback(self, callback: Callable):
-        glfw.set_framebuffer_size_callback(self._window, lambda *_args: callback(self, *_args[1:]))
-
-    def set_cursor_pos_callback(self, callback: Callable):
-        def wrapper(_win, x, y):
-            callback(self, x, y)
-        glfw.set_cursor_pos_callback(self._window, wrapper)
-
-    def set_scroll_callback(self, callback: Callable):
-        def wrapper(_win, xoffset, yoffset):
-            callback(self, xoffset, yoffset)
-        glfw.set_scroll_callback(self._window, wrapper)
-
-    def set_mouse_button_callback(self, callback: Callable):
-        def wrapper(_win, button, action, mods):
-            callback(self, _translate_mouse_button(button), _translate_action(action), mods)
-        glfw.set_mouse_button_callback(self._window, wrapper)
-
-    def set_key_callback(self, callback: Callable):
-        def wrapper(_win, key, scancode, action, mods):
-            callback(self, _translate_key(key), scancode, _translate_action(action), mods)
-        glfw.set_key_callback(self._window, wrapper)
-
-    def request_update(self):
-        # GLFW не имеет встроенного механизма для запроса перерисовки окна,
-        # обычно это делается в основном цикле приложения.
-        pass
-
-    def bind_window_framebuffer(self):
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
-
-
-class GLFWWindowBackend(WindowBackend):
-    def __init__(self):
-        _ensure_glfw()
-
-    def create_window(self, width: int, height: int, title: str, share: Optional[BackendWindow] = None) -&gt; GLFWWindowHandle:
-        return GLFWWindowHandle(width, height, title, share=share)
-
-    def poll_events(self):
-        glfw.poll_events()
-
-    def terminate(self):
-        glfw.terminate()
-
-</code></pre>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;GLFW-based window backend.&quot;&quot;&quot;<br>
+<br>
+from __future__ import annotations<br>
+<br>
+from typing import Callable, Optional<br>
+<br>
+import glfw<br>
+<br>
+from .base import Action, BackendWindow, Key, MouseButton, WindowBackend<br>
+<br>
+from OpenGL import GL as gl<br>
+<br>
+<br>
+def _ensure_glfw():<br>
+    if not glfw.init():<br>
+        raise RuntimeError(&quot;Failed to initialize GLFW&quot;)<br>
+<br>
+<br>
+def _translate_mouse_button(button: int) -&gt; MouseButton:<br>
+    mapping = {<br>
+        glfw.MOUSE_BUTTON_LEFT: MouseButton.LEFT,<br>
+        glfw.MOUSE_BUTTON_RIGHT: MouseButton.RIGHT,<br>
+        glfw.MOUSE_BUTTON_MIDDLE: MouseButton.MIDDLE,<br>
+    }<br>
+    return mapping.get(button, MouseButton.LEFT)<br>
+<br>
+<br>
+def _translate_action(action: int) -&gt; Action:<br>
+    mapping = {<br>
+        glfw.PRESS: Action.PRESS,<br>
+        glfw.RELEASE: Action.RELEASE,<br>
+        glfw.REPEAT: Action.REPEAT,<br>
+    }<br>
+    return mapping.get(action, Action.RELEASE)<br>
+<br>
+<br>
+def _translate_key(key: int) -&gt; Key:<br>
+    if key == glfw.KEY_ESCAPE:<br>
+        return Key.ESCAPE<br>
+    if key == glfw.KEY_SPACE:<br>
+        return Key.SPACE<br>
+    if key &lt; 0:<br>
+        return Key.UNKNOWN<br>
+    try:<br>
+        return Key(key)<br>
+    except ValueError:<br>
+        return Key.UNKNOWN<br>
+<br>
+<br>
+class GLFWWindowHandle(BackendWindow):<br>
+    def __init__(self, width: int, height: int, title: str, share: Optional[BackendWindow] = None):<br>
+        _ensure_glfw()<br>
+        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)<br>
+        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)<br>
+        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)<br>
+        glfw.window_hint(glfw.RESIZABLE, glfw.TRUE)<br>
+<br>
+        share_handle = share._window if isinstance(share, GLFWWindowHandle) else getattr(share, &quot;_window&quot;, None)<br>
+        self._window = glfw.create_window(width, height, title, None, share_handle)<br>
+        if not self._window:<br>
+            raise RuntimeError(&quot;Failed to create GLFW window&quot;)<br>
+        glfw.make_context_current(self._window)<br>
+<br>
+    def close(self):<br>
+        if self._window:<br>
+            glfw.destroy_window(self._window)<br>
+            self._window = None<br>
+<br>
+    def should_close(self) -&gt; bool:<br>
+        return self._window is None or glfw.window_should_close(self._window)<br>
+<br>
+    def make_current(self):<br>
+        if self._window is not None:<br>
+            glfw.make_context_current(self._window)<br>
+<br>
+    def swap_buffers(self):<br>
+        if self._window is not None:<br>
+            glfw.swap_buffers(self._window)<br>
+<br>
+    def framebuffer_size(self):<br>
+        return glfw.get_framebuffer_size(self._window)<br>
+<br>
+    def window_size(self):<br>
+        return glfw.get_window_size(self._window)<br>
+<br>
+    def get_cursor_pos(self):<br>
+        return glfw.get_cursor_pos(self._window)<br>
+<br>
+    def set_should_close(self, flag: bool):<br>
+        if self._window is not None:<br>
+            glfw.set_window_should_close(self._window, flag)<br>
+<br>
+    def set_user_pointer(self, ptr):<br>
+        glfw.set_window_user_pointer(self._window, ptr)<br>
+<br>
+    def set_framebuffer_size_callback(self, callback: Callable):<br>
+        glfw.set_framebuffer_size_callback(self._window, lambda *_args: callback(self, *_args[1:]))<br>
+<br>
+    def set_cursor_pos_callback(self, callback: Callable):<br>
+        def wrapper(_win, x, y):<br>
+            callback(self, x, y)<br>
+        glfw.set_cursor_pos_callback(self._window, wrapper)<br>
+<br>
+    def set_scroll_callback(self, callback: Callable):<br>
+        def wrapper(_win, xoffset, yoffset):<br>
+            callback(self, xoffset, yoffset)<br>
+        glfw.set_scroll_callback(self._window, wrapper)<br>
+<br>
+    def set_mouse_button_callback(self, callback: Callable):<br>
+        def wrapper(_win, button, action, mods):<br>
+            callback(self, _translate_mouse_button(button), _translate_action(action), mods)<br>
+        glfw.set_mouse_button_callback(self._window, wrapper)<br>
+<br>
+    def set_key_callback(self, callback: Callable):<br>
+        def wrapper(_win, key, scancode, action, mods):<br>
+            callback(self, _translate_key(key), scancode, _translate_action(action), mods)<br>
+        glfw.set_key_callback(self._window, wrapper)<br>
+<br>
+    def request_update(self):<br>
+        # GLFW не имеет встроенного механизма для запроса перерисовки окна,<br>
+        # обычно это делается в основном цикле приложения.<br>
+        pass<br>
+<br>
+    def bind_window_framebuffer(self):<br>
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)<br>
+<br>
+<br>
+class GLFWWindowBackend(WindowBackend):<br>
+    def __init__(self):<br>
+        _ensure_glfw()<br>
+<br>
+    def create_window(self, width: int, height: int, title: str, share: Optional[BackendWindow] = None) -&gt; GLFWWindowHandle:<br>
+        return GLFWWindowHandle(width, height, title, share=share)<br>
+<br>
+    def poll_events(self):<br>
+        glfw.poll_events()<br>
+<br>
+    def terminate(self):<br>
+        glfw.terminate()<br>
+<!-- END SCAT CODE -->
 </body>
 </html>
