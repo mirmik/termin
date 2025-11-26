@@ -6,150 +6,150 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Embed termin visualization view inside a PyQt5 application.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Embed&nbsp;termin&nbsp;visualization&nbsp;view&nbsp;inside&nbsp;a&nbsp;PyQt5&nbsp;application.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
-from PyQt5 import QtWidgets<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;PyQt5&nbsp;import&nbsp;QtWidgets<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.mesh.mesh import UVSphereMesh<br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;MeshDrawable,<br>
-&#9;Scene,<br>
-&#9;Material,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;UVSphereMesh<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from termin.visualization.components import MeshRenderer<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
-from termin.visualization.backends.qt import QtWindowBackend<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.backends.qt&nbsp;import&nbsp;QtWindowBackend<br>
 <br>
 <br>
-VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location = 0) in vec3 a_position;<br>
-layout(location = 1) in vec3 a_normal;<br>
+VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_normal;<br>
+out&nbsp;vec3&nbsp;v_normal;<br>
 <br>
-void main() {<br>
-&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-&#9;gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-in vec3 v_normal;<br>
-uniform vec4 u_color;<br>
+FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;vec3 n = normalize(v_normal);<br>
-&#9;float ndotl = max(dot(n, vec3(0.2, 0.6, 0.5)), 0.0);<br>
-&#9;vec3 color = u_color.rgb * (0.25 + 0.75 * ndotl);<br>
-&#9;FragColor = vec4(color, u_color.a);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;n&nbsp;=&nbsp;normalize(v_normal);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(n,&nbsp;vec3(0.2,&nbsp;0.6,&nbsp;0.5)),&nbsp;0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;color&nbsp;=&nbsp;u_color.rgb&nbsp;*&nbsp;(0.25&nbsp;+&nbsp;0.75&nbsp;*&nbsp;ndotl);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(color,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent]:<br>
-&#9;&quot;&quot;&quot;Создаём простую сцену с шаром и skybox.&quot;&quot;&quot;<br>
-&#9;shader = ShaderProgram(VERT, FRAG)<br>
-&#9;material = Material(<br>
-&#9;&#9;shader=shader,<br>
-&#9;&#9;color=np.array([0.3, 0.7, 0.9, 1.0], dtype=np.float32),<br>
-&#9;)<br>
-&#9;mesh = MeshDrawable(UVSphereMesh(radius=1.0, n_meridians=32, n_parallels=16))<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld)&nbsp;-&gt;&nbsp;tuple[Scene,&nbsp;PerspectiveCameraComponent]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Создаём&nbsp;простую&nbsp;сцену&nbsp;с&nbsp;шаром&nbsp;и&nbsp;skybox.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;ShaderProgram(VERT,&nbsp;FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;Material(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader=shader,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=np.array([0.3,&nbsp;0.7,&nbsp;0.9,&nbsp;1.0],&nbsp;dtype=np.float32),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;MeshDrawable(UVSphereMesh(radius=1.0,&nbsp;n_meridians=32,&nbsp;n_parallels=16))<br>
 <br>
-&#9;sphere = Entity(pose=Pose3.identity(), name=&quot;sphere&quot;)<br>
-&#9;sphere.add_component(MeshRenderer(mesh, material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sphere&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;sphere&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sphere.add_component(MeshRenderer(mesh,&nbsp;material))<br>
 <br>
-&#9;scene = Scene()<br>
-&#9;scene.add(sphere)<br>
-&#9;scene.add(SkyBoxEntity())<br>
-&#9;world.add_scene(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(sphere)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(SkyBoxEntity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
-&#9;cam_entity = Entity(name=&quot;camera&quot;)<br>
-&#9;camera = PerspectiveCameraComponent()<br>
-&#9;cam_entity.add_component(camera)<br>
-&#9;cam_entity.add_component(OrbitCameraController(radius=4.0))<br>
-&#9;scene.add(cam_entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_entity.add_component(OrbitCameraController(radius=4.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(cam_entity)<br>
 <br>
-&#9;return scene, camera<br>
-<br>
-<br>
-def main():<br>
-&#9;# 1) Создаём Qt backend — внутри поднимется QApplication,<br>
-&#9;#    поэтому до этого нельзя создавать QtWidgets.QWidget().<br>
-&#9;qt_backend = QtWindowBackend()<br>
-<br>
-&#9;# 2) Создаём мир визуализации с Qt окном.<br>
-&#9;world = VisualizationWorld(window_backend=qt_backend)<br>
-&#9;scene, camera = build_scene(world)<br>
-<br>
-&#9;# 3) Дальше обычный Qt-интерфейс.<br>
-&#9;main_window = QtWidgets.QMainWindow()<br>
-&#9;central = QtWidgets.QWidget()<br>
-&#9;layout = QtWidgets.QVBoxLayout(central)<br>
-&#9;layout.setContentsMargins(0, 0, 0, 0)<br>
-&#9;layout.setSpacing(6)<br>
-<br>
-&#9;# 4) Создаём окно визуализации как &quot;дочернее&quot; к central.<br>
-&#9;#    QtWindowBackend внутри:<br>
-&#9;#      - создаст QOpenGLWindow,<br>
-&#9;#      - обернёт его в QWidget.createWindowContainer(parent),<br>
-&#9;#      - вернёт handle, у которого .widget — это либо контейнер, либо само окно.<br>
-&#9;vis_window = world.create_window(<br>
-&#9;&#9;width=800,<br>
-&#9;&#9;height=600,<br>
-&#9;&#9;title=&quot;termin Qt embed&quot;,<br>
-&#9;&#9;parent=central,  # ключевой момент — передаём parent<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;camera<br>
 <br>
 <br>
-&#9;vis_window.add_viewport(scene, camera)<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;1)&nbsp;Создаём&nbsp;Qt&nbsp;backend&nbsp;—&nbsp;внутри&nbsp;поднимется&nbsp;QApplication,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;поэтому&nbsp;до&nbsp;этого&nbsp;нельзя&nbsp;создавать&nbsp;QtWidgets.QWidget().<br>
+&nbsp;&nbsp;&nbsp;&nbsp;qt_backend&nbsp;=&nbsp;QtWindowBackend()<br>
 <br>
-&#9;# handle.widget должен вернуть Qt-вский виджет (container), который можно добавить в layout<br>
-&#9;layout.addWidget(vis_window.handle.widget)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;2)&nbsp;Создаём&nbsp;мир&nbsp;визуализации&nbsp;с&nbsp;Qt&nbsp;окном.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld(window_backend=qt_backend)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;camera&nbsp;=&nbsp;build_scene(world)<br>
 <br>
-&#9;quit_btn = QtWidgets.QPushButton(&quot;Закрыть&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;3)&nbsp;Дальше&nbsp;обычный&nbsp;Qt-интерфейс.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main_window&nbsp;=&nbsp;QtWidgets.QMainWindow()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;central&nbsp;=&nbsp;QtWidgets.QWidget()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;QtWidgets.QVBoxLayout(central)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;layout.setContentsMargins(0,&nbsp;0,&nbsp;0,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;layout.setSpacing(6)<br>
 <br>
-&#9;def close_all():<br>
-&#9;&#9;vis_window.close()<br>
-&#9;&#9;main_window.close()<br>
-<br>
-&#9;quit_btn.clicked.connect(close_all)<br>
-&#9;layout.addWidget(quit_btn)<br>
-<br>
-&#9;main_window.setCentralWidget(central)<br>
-&#9;main_window.resize(900, 700)<br>
-&#9;main_window.setWindowTitle(&quot;Qt + termin visualization&quot;)<br>
-&#9;main_window.show()<br>
-<br>
-&#9;# 5) Главный цикл: внутри будет<br>
-&#9;#    - world.run() → while windows:<br>
-&#9;#        - window.render()<br>
-&#9;#        - window_backend.poll_events()<br>
-&#9;#<br>
-&#9;#    В Qt backend poll_events() делает app.processEvents(),<br>
-&#9;#    так что отдельного app.exec_() вызывать не надо.<br>
-&#9;world.run()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;4)&nbsp;Создаём&nbsp;окно&nbsp;визуализации&nbsp;как&nbsp;&quot;дочернее&quot;&nbsp;к&nbsp;central.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;QtWindowBackend&nbsp;внутри:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;создаст&nbsp;QOpenGLWindow,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;обернёт&nbsp;его&nbsp;в&nbsp;QWidget.createWindowContainer(parent),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;вернёт&nbsp;handle,&nbsp;у&nbsp;которого&nbsp;.widget&nbsp;—&nbsp;это&nbsp;либо&nbsp;контейнер,&nbsp;либо&nbsp;само&nbsp;окно.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vis_window&nbsp;=&nbsp;world.create_window(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width=800,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;height=600,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;title=&quot;termin&nbsp;Qt&nbsp;embed&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent=central,&nbsp;&nbsp;#&nbsp;ключевой&nbsp;момент&nbsp;—&nbsp;передаём&nbsp;parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vis_window.add_viewport(scene,&nbsp;camera)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;handle.widget&nbsp;должен&nbsp;вернуть&nbsp;Qt-вский&nbsp;виджет&nbsp;(container),&nbsp;который&nbsp;можно&nbsp;добавить&nbsp;в&nbsp;layout<br>
+&nbsp;&nbsp;&nbsp;&nbsp;layout.addWidget(vis_window.handle.widget)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;quit_btn&nbsp;=&nbsp;QtWidgets.QPushButton(&quot;Закрыть&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;close_all():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vis_window.close()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;main_window.close()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;quit_btn.clicked.connect(close_all)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;layout.addWidget(quit_btn)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main_window.setCentralWidget(central)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main_window.resize(900,&nbsp;700)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main_window.setWindowTitle(&quot;Qt&nbsp;+&nbsp;termin&nbsp;visualization&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main_window.show()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;5)&nbsp;Главный&nbsp;цикл:&nbsp;внутри&nbsp;будет<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;world.run()&nbsp;→&nbsp;while&nbsp;windows:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;window.render()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;window_backend.poll_events()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;В&nbsp;Qt&nbsp;backend&nbsp;poll_events()&nbsp;делает&nbsp;app.processEvents(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;так&nbsp;что&nbsp;отдельного&nbsp;app.exec_()&nbsp;вызывать&nbsp;не&nbsp;надо.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

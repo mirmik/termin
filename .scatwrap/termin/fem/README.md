@@ -6,209 +6,209 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# FEM Module<br>
+#&nbsp;FEM&nbsp;Module<br>
 <br>
-Модуль метода конечных элементов (Finite Element Method) для мультифизического моделирования.<br>
+Модуль&nbsp;метода&nbsp;конечных&nbsp;элементов&nbsp;(Finite&nbsp;Element&nbsp;Method)&nbsp;для&nbsp;мультифизического&nbsp;моделирования.<br>
 <br>
-## Обзор<br>
+##&nbsp;Обзор<br>
 <br>
-Модуль предоставляет единую платформу для решения различных физических задач через сборку и решение систем линейных уравнений вида **A·x = b**. Поддерживает как статический, так и динамический анализ с использованием неявной схемы Эйлера.<br>
+Модуль&nbsp;предоставляет&nbsp;единую&nbsp;платформу&nbsp;для&nbsp;решения&nbsp;различных&nbsp;физических&nbsp;задач&nbsp;через&nbsp;сборку&nbsp;и&nbsp;решение&nbsp;систем&nbsp;линейных&nbsp;уравнений&nbsp;вида&nbsp;**A·x&nbsp;=&nbsp;b**.&nbsp;Поддерживает&nbsp;как&nbsp;статический,&nbsp;так&nbsp;и&nbsp;динамический&nbsp;анализ&nbsp;с&nbsp;использованием&nbsp;неявной&nbsp;схемы&nbsp;Эйлера.<br>
 <br>
-## Архитектура<br>
+##&nbsp;Архитектура<br>
 <br>
-### Базовые классы (`assembler.py`)<br>
+###&nbsp;Базовые&nbsp;классы&nbsp;(`assembler.py`)<br>
 <br>
-- **Variable** - представляет степени свободы системы (DOF)<br>
-- **Contribution** - базовый класс для элементов, вносящих вклад в систему<br>
-- **MatrixAssembler** - сборщик глобальной матрицы из вкладов элементов<br>
+-&nbsp;**Variable**&nbsp;-&nbsp;представляет&nbsp;степени&nbsp;свободы&nbsp;системы&nbsp;(DOF)<br>
+-&nbsp;**Contribution**&nbsp;-&nbsp;базовый&nbsp;класс&nbsp;для&nbsp;элементов,&nbsp;вносящих&nbsp;вклад&nbsp;в&nbsp;систему<br>
+-&nbsp;**MatrixAssembler**&nbsp;-&nbsp;сборщик&nbsp;глобальной&nbsp;матрицы&nbsp;из&nbsp;вкладов&nbsp;элементов<br>
 <br>
-Каждый элемент наследуется от `Contribution` и реализует методы:<br>
-- `get_variables()` - возвращает список используемых переменных<br>
-- `contribute_to_mass(A, index_map)` - добавляет вклад в матрицу жесткости<br>
-- `contribute_to_b(b, index_map)` - добавляет вклад в вектор нагрузки<br>
+Каждый&nbsp;элемент&nbsp;наследуется&nbsp;от&nbsp;`Contribution`&nbsp;и&nbsp;реализует&nbsp;методы:<br>
+-&nbsp;`get_variables()`&nbsp;-&nbsp;возвращает&nbsp;список&nbsp;используемых&nbsp;переменных<br>
+-&nbsp;`contribute_to_mass(A,&nbsp;index_map)`&nbsp;-&nbsp;добавляет&nbsp;вклад&nbsp;в&nbsp;матрицу&nbsp;жесткости<br>
+-&nbsp;`contribute_to_b(b,&nbsp;index_map)`&nbsp;-&nbsp;добавляет&nbsp;вклад&nbsp;в&nbsp;вектор&nbsp;нагрузки<br>
 <br>
-## Модули<br>
+##&nbsp;Модули<br>
 <br>
-### 1. Механика (`mechanic.py`)<br>
+###&nbsp;1.&nbsp;Механика&nbsp;(`mechanic.py`)<br>
 <br>
-Конечные элементы для структурной механики:<br>
+Конечные&nbsp;элементы&nbsp;для&nbsp;структурной&nbsp;механики:<br>
 <br>
-#### BarElement<br>
-Стержневой элемент (ферма) для 1D и 2D задач.<br>
+####&nbsp;BarElement<br>
+Стержневой&nbsp;элемент&nbsp;(ферма)&nbsp;для&nbsp;1D&nbsp;и&nbsp;2D&nbsp;задач.<br>
 ```python<br>
-from termin.fem import Variable, BarElement, MatrixAssembler<br>
+from&nbsp;termin.fem&nbsp;import&nbsp;Variable,&nbsp;BarElement,&nbsp;MatrixAssembler<br>
 <br>
-u1 = Variable(&quot;u1&quot;, 2)  # перемещение узла 1 (x, y)<br>
-u2 = Variable(&quot;u2&quot;, 2)  # перемещение узла 2 (x, y)<br>
+u1&nbsp;=&nbsp;Variable(&quot;u1&quot;,&nbsp;2)&nbsp;&nbsp;#&nbsp;перемещение&nbsp;узла&nbsp;1&nbsp;(x,&nbsp;y)<br>
+u2&nbsp;=&nbsp;Variable(&quot;u2&quot;,&nbsp;2)&nbsp;&nbsp;#&nbsp;перемещение&nbsp;узла&nbsp;2&nbsp;(x,&nbsp;y)<br>
 <br>
-bar = BarElement(<br>
-&#9;u1, u2,<br>
-&#9;E=200e9,           # модуль Юнга [Па]<br>
-&#9;A=0.01,            # площадь сечения [м²]<br>
-&#9;L=1.0,             # длина [м]<br>
-&#9;angle=0.0          # угол наклона [рад]<br>
+bar&nbsp;=&nbsp;BarElement(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u1,&nbsp;u2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;E=200e9,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;модуль&nbsp;Юнга&nbsp;[Па]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A=0.01,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;площадь&nbsp;сечения&nbsp;[м²]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;L=1.0,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;длина&nbsp;[м]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;angle=0.0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;угол&nbsp;наклона&nbsp;[рад]<br>
 )<br>
 ```<br>
 <br>
-#### BeamElement2D<br>
-Балочный элемент Эйлера-Бернулли для изгиба.<br>
+####&nbsp;BeamElement2D<br>
+Балочный&nbsp;элемент&nbsp;Эйлера-Бернулли&nbsp;для&nbsp;изгиба.<br>
 ```python<br>
-beam = BeamElement2D(<br>
-&#9;u1, u2,<br>
-&#9;E=200e9,    # модуль Юнга<br>
-&#9;I=1e-4,     # момент инерции<br>
-&#9;L=2.0       # длина<br>
+beam&nbsp;=&nbsp;BeamElement2D(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u1,&nbsp;u2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;E=200e9,&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;модуль&nbsp;Юнга<br>
+&nbsp;&nbsp;&nbsp;&nbsp;I=1e-4,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;момент&nbsp;инерции<br>
+&nbsp;&nbsp;&nbsp;&nbsp;L=2.0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;длина<br>
 )<br>
 ```<br>
 <br>
-#### Triangle3Node<br>
-Треугольный элемент для плоского напряженного состояния.<br>
+####&nbsp;Triangle3Node<br>
+Треугольный&nbsp;элемент&nbsp;для&nbsp;плоского&nbsp;напряженного&nbsp;состояния.<br>
 ```python<br>
-triangle = Triangle3Node(<br>
-&#9;u1, u2, u3,<br>
-&#9;E=200e9,        # модуль Юнга<br>
-&#9;nu=0.3,         # коэффициент Пуассона<br>
-&#9;thickness=0.01  # толщина<br>
+triangle&nbsp;=&nbsp;Triangle3Node(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u1,&nbsp;u2,&nbsp;u3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;E=200e9,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;модуль&nbsp;Юнга<br>
+&nbsp;&nbsp;&nbsp;&nbsp;nu=0.3,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;коэффициент&nbsp;Пуассона<br>
+&nbsp;&nbsp;&nbsp;&nbsp;thickness=0.01&nbsp;&nbsp;#&nbsp;толщина<br>
 )<br>
 ```<br>
 <br>
-### 2. Электрические цепи (`electrical.py`)<br>
+###&nbsp;2.&nbsp;Электрические&nbsp;цепи&nbsp;(`electrical.py`)<br>
 <br>
-Элементы для анализа электрических цепей:<br>
+Элементы&nbsp;для&nbsp;анализа&nbsp;электрических&nbsp;цепей:<br>
 <br>
-#### Resistor<br>
-Резистор с проводимостью G = 1/R.<br>
+####&nbsp;Resistor<br>
+Резистор&nbsp;с&nbsp;проводимостью&nbsp;G&nbsp;=&nbsp;1/R.<br>
 ```python<br>
-from termin.fem import Resistor, VoltageSource, Ground<br>
+from&nbsp;termin.fem&nbsp;import&nbsp;Resistor,&nbsp;VoltageSource,&nbsp;Ground<br>
 <br>
-v_plus = Variable(&quot;V+&quot;, 1)<br>
-v_gnd = Variable(&quot;GND&quot;, 1)<br>
+v_plus&nbsp;=&nbsp;Variable(&quot;V+&quot;,&nbsp;1)<br>
+v_gnd&nbsp;=&nbsp;Variable(&quot;GND&quot;,&nbsp;1)<br>
 <br>
-resistor = Resistor(v_plus, v_gnd, R=1000.0)  # 1 кОм<br>
-source = VoltageSource(v_plus, v_gnd, V=5.0)  # 5В<br>
-ground = Ground(v_gnd)<br>
+resistor&nbsp;=&nbsp;Resistor(v_plus,&nbsp;v_gnd,&nbsp;R=1000.0)&nbsp;&nbsp;#&nbsp;1&nbsp;кОм<br>
+source&nbsp;=&nbsp;VoltageSource(v_plus,&nbsp;v_gnd,&nbsp;V=5.0)&nbsp;&nbsp;#&nbsp;5В<br>
+ground&nbsp;=&nbsp;Ground(v_gnd)<br>
 ```<br>
 <br>
-#### Capacitor / Inductor<br>
-Динамические элементы с неявным интегрированием.<br>
+####&nbsp;Capacitor&nbsp;/&nbsp;Inductor<br>
+Динамические&nbsp;элементы&nbsp;с&nbsp;неявным&nbsp;интегрированием.<br>
 ```python<br>
-capacitor = Capacitor(<br>
-&#9;v_plus, v_minus,<br>
-&#9;C=1e-6,           # ёмкость [Ф]<br>
-&#9;dt=0.001,         # шаг времени [с]<br>
-&#9;V_old=0.0         # напряжение на предыдущем шаге<br>
+capacitor&nbsp;=&nbsp;Capacitor(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_plus,&nbsp;v_minus,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;C=1e-6,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;ёмкость&nbsp;[Ф]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dt=0.001,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;шаг&nbsp;времени&nbsp;[с]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;V_old=0.0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;напряжение&nbsp;на&nbsp;предыдущем&nbsp;шаге<br>
 )<br>
 <br>
-inductor = Inductor(<br>
-&#9;v_plus, v_minus,<br>
-&#9;L=1e-3,           # индуктивность [Гн]<br>
-&#9;dt=0.001,<br>
-&#9;I_old=0.0         # ток на предыдущем шаге<br>
-)<br>
-```<br>
-<br>
-### 3. Многотельная динамика (`multibody.py`)<br>
-<br>
-Элементы для моделирования вращательного и поступательного движения:<br>
-<br>
-#### RotationalInertia<br>
-Вращательная инерция с демпфированием: J·dω/dt = Σ τ - B·ω<br>
-```python<br>
-from termin.fem import RotationalInertia, TorqueSource<br>
-<br>
-omega = Variable(&quot;omega&quot;, 1)  # угловая скорость<br>
-<br>
-inertia = RotationalInertia(<br>
-&#9;omega,<br>
-&#9;J=0.1,              # момент инерции [кг·м²]<br>
-&#9;B=0.05,             # демпфирование [Н·м·с]<br>
-&#9;dt=0.001,           # шаг времени<br>
-&#9;omega_old=0.0       # предыдущая скорость<br>
-)<br>
-<br>
-torque = TorqueSource(omega, torque=10.0)  # приложенный момент<br>
-```<br>
-<br>
-#### RotationalSpring / RotationalDamper<br>
-Упругие и демпфирующие связи между вращающимися телами.<br>
-```python<br>
-spring = RotationalSpring(omega1, omega2, K=100.0)  # жесткость<br>
-damper = RotationalDamper(omega1, omega2, B=1.0)    # демпфирование<br>
-```<br>
-<br>
-#### LinearMass<br>
-Поступательное движение: m·dv/dt = Σ F - B·v<br>
-```python<br>
-velocity = Variable(&quot;v&quot;, 1)<br>
-<br>
-mass = LinearMass(<br>
-&#9;velocity,<br>
-&#9;m=1.0,              # масса [кг]<br>
-&#9;B=0.1,              # сопротивление [Н·с/м]<br>
-&#9;dt=0.001,<br>
-&#9;v_old=0.0<br>
+inductor&nbsp;=&nbsp;Inductor(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_plus,&nbsp;v_minus,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;L=1e-3,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;индуктивность&nbsp;[Гн]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dt=0.001,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;I_old=0.0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;ток&nbsp;на&nbsp;предыдущем&nbsp;шаге<br>
 )<br>
 ```<br>
 <br>
-### 4. Электромеханика (`electromechanical.py`)<br>
+###&nbsp;3.&nbsp;Многотельная&nbsp;динамика&nbsp;(`multibody.py`)<br>
 <br>
-Элементы, связывающие электрическую и механическую подсистемы:<br>
+Элементы&nbsp;для&nbsp;моделирования&nbsp;вращательного&nbsp;и&nbsp;поступательного&nbsp;движения:<br>
 <br>
-#### DCMotor<br>
-Двигатель постоянного тока с электромеханической связью.<br>
+####&nbsp;RotationalInertia<br>
+Вращательная&nbsp;инерция&nbsp;с&nbsp;демпфированием:&nbsp;J·dω/dt&nbsp;=&nbsp;Σ&nbsp;τ&nbsp;-&nbsp;B·ω<br>
 ```python<br>
-from termin.fem import DCMotor<br>
+from&nbsp;termin.fem&nbsp;import&nbsp;RotationalInertia,&nbsp;TorqueSource<br>
 <br>
-v_plus = Variable(&quot;V+&quot;, 1)     # напряжение питания<br>
-v_gnd = Variable(&quot;GND&quot;, 1)<br>
-omega = Variable(&quot;omega&quot;, 1)   # угловая скорость вала<br>
+omega&nbsp;=&nbsp;Variable(&quot;omega&quot;,&nbsp;1)&nbsp;&nbsp;#&nbsp;угловая&nbsp;скорость<br>
 <br>
-motor = DCMotor(<br>
-&#9;v_plus, v_gnd, omega,<br>
-&#9;R=1.0,              # сопротивление обмотки [Ом]<br>
-&#9;L=0.01,             # индуктивность обмотки [Гн]<br>
-&#9;K_e=0.1,            # константа ЭДС [В/(рад/с)]<br>
-&#9;K_t=0.1,            # константа момента [Н·м/А]<br>
-&#9;dt=0.001            # шаг времени (для динамики)<br>
+inertia&nbsp;=&nbsp;RotationalInertia(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;omega,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;J=0.1,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;момент&nbsp;инерции&nbsp;[кг·м²]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;B=0.05,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;демпфирование&nbsp;[Н·м·с]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dt=0.001,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;шаг&nbsp;времени<br>
+&nbsp;&nbsp;&nbsp;&nbsp;omega_old=0.0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;предыдущая&nbsp;скорость<br>
+)<br>
+<br>
+torque&nbsp;=&nbsp;TorqueSource(omega,&nbsp;torque=10.0)&nbsp;&nbsp;#&nbsp;приложенный&nbsp;момент<br>
+```<br>
+<br>
+####&nbsp;RotationalSpring&nbsp;/&nbsp;RotationalDamper<br>
+Упругие&nbsp;и&nbsp;демпфирующие&nbsp;связи&nbsp;между&nbsp;вращающимися&nbsp;телами.<br>
+```python<br>
+spring&nbsp;=&nbsp;RotationalSpring(omega1,&nbsp;omega2,&nbsp;K=100.0)&nbsp;&nbsp;#&nbsp;жесткость<br>
+damper&nbsp;=&nbsp;RotationalDamper(omega1,&nbsp;omega2,&nbsp;B=1.0)&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;демпфирование<br>
+```<br>
+<br>
+####&nbsp;LinearMass<br>
+Поступательное&nbsp;движение:&nbsp;m·dv/dt&nbsp;=&nbsp;Σ&nbsp;F&nbsp;-&nbsp;B·v<br>
+```python<br>
+velocity&nbsp;=&nbsp;Variable(&quot;v&quot;,&nbsp;1)<br>
+<br>
+mass&nbsp;=&nbsp;LinearMass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;velocity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;m=1.0,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;масса&nbsp;[кг]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;B=0.1,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;сопротивление&nbsp;[Н·с/м]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dt=0.001,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_old=0.0<br>
 )<br>
 ```<br>
 <br>
-Уравнения двигателя:<br>
-- Электрическое: V = R·I + L·dI/dt + K_e·ω<br>
-- Механическое: τ_motor = K_t·I<br>
+###&nbsp;4.&nbsp;Электромеханика&nbsp;(`electromechanical.py`)<br>
 <br>
-## Динамический анализ<br>
+Элементы,&nbsp;связывающие&nbsp;электрическую&nbsp;и&nbsp;механическую&nbsp;подсистемы:<br>
 <br>
-Для задач с производными по времени используется неявная схема Эйлера.<br>
+####&nbsp;DCMotor<br>
+Двигатель&nbsp;постоянного&nbsp;тока&nbsp;с&nbsp;электромеханической&nbsp;связью.<br>
+```python<br>
+from&nbsp;termin.fem&nbsp;import&nbsp;DCMotor<br>
 <br>
-**Типичный цикл:**<br>
-1. Решение системы на текущем шаге<br>
-2. Обновление состояний элементов<br>
-3. Переход к следующему шагу времени<br>
+v_plus&nbsp;=&nbsp;Variable(&quot;V+&quot;,&nbsp;1)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;напряжение&nbsp;питания<br>
+v_gnd&nbsp;=&nbsp;Variable(&quot;GND&quot;,&nbsp;1)<br>
+omega&nbsp;=&nbsp;Variable(&quot;omega&quot;,&nbsp;1)&nbsp;&nbsp;&nbsp;#&nbsp;угловая&nbsp;скорость&nbsp;вала<br>
 <br>
-## Численные методы<br>
+motor&nbsp;=&nbsp;DCMotor(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_plus,&nbsp;v_gnd,&nbsp;omega,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;R=1.0,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;сопротивление&nbsp;обмотки&nbsp;[Ом]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;L=0.01,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;индуктивность&nbsp;обмотки&nbsp;[Гн]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;K_e=0.1,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;константа&nbsp;ЭДС&nbsp;[В/(рад/с)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;K_t=0.1,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;константа&nbsp;момента&nbsp;[Н·м/А]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dt=0.001&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;шаг&nbsp;времени&nbsp;(для&nbsp;динамики)<br>
+)<br>
+```<br>
 <br>
-- **Метод штрафов** (penalty method) с коэффициентом 1e10 для граничных условий<br>
-- **Неявная схема Эйлера** для интегрирования по времени<br>
-- **Эффективные коэффициенты**:<br>
-- Конденсатор: G_eff = C/dt<br>
-- Индуктивность: G_eff = dt/L<br>
-- Инерция: C_eff = J/dt + B<br>
+Уравнения&nbsp;двигателя:<br>
+-&nbsp;Электрическое:&nbsp;V&nbsp;=&nbsp;R·I&nbsp;+&nbsp;L·dI/dt&nbsp;+&nbsp;K_e·ω<br>
+-&nbsp;Механическое:&nbsp;τ_motor&nbsp;=&nbsp;K_t·I<br>
 <br>
-## Тесты<br>
+##&nbsp;Динамический&nbsp;анализ<br>
 <br>
-Тесты находятся в `utest/fem/`:<br>
-- `fem_test.py` - тесты базового assembler (20 тестов)<br>
-- `mechanic_test.py` - тесты механических элементов (10 тестов)<br>
-- `electrical_test.py` - тесты электрических цепей (15 тестов)<br>
-- `multibody_test.py` - тесты многотельной динамики (4 теста)<br>
-- `electromechanical_test.py` - тесты электромеханики (4 теста)<br>
+Для&nbsp;задач&nbsp;с&nbsp;производными&nbsp;по&nbsp;времени&nbsp;используется&nbsp;неявная&nbsp;схема&nbsp;Эйлера.<br>
 <br>
-Всего: **53 теста**<br>
+**Типичный&nbsp;цикл:**<br>
+1.&nbsp;Решение&nbsp;системы&nbsp;на&nbsp;текущем&nbsp;шаге<br>
+2.&nbsp;Обновление&nbsp;состояний&nbsp;элементов<br>
+3.&nbsp;Переход&nbsp;к&nbsp;следующему&nbsp;шагу&nbsp;времени<br>
 <br>
-## Зависимости<br>
+##&nbsp;Численные&nbsp;методы<br>
 <br>
-- **numpy** - матричные операции и линейная алгебра<br>
+-&nbsp;**Метод&nbsp;штрафов**&nbsp;(penalty&nbsp;method)&nbsp;с&nbsp;коэффициентом&nbsp;1e10&nbsp;для&nbsp;граничных&nbsp;условий<br>
+-&nbsp;**Неявная&nbsp;схема&nbsp;Эйлера**&nbsp;для&nbsp;интегрирования&nbsp;по&nbsp;времени<br>
+-&nbsp;**Эффективные&nbsp;коэффициенты**:<br>
+&nbsp;&nbsp;-&nbsp;Конденсатор:&nbsp;G_eff&nbsp;=&nbsp;C/dt<br>
+&nbsp;&nbsp;-&nbsp;Индуктивность:&nbsp;G_eff&nbsp;=&nbsp;dt/L<br>
+&nbsp;&nbsp;-&nbsp;Инерция:&nbsp;C_eff&nbsp;=&nbsp;J/dt&nbsp;+&nbsp;B<br>
+<br>
+##&nbsp;Тесты<br>
+<br>
+Тесты&nbsp;находятся&nbsp;в&nbsp;`utest/fem/`:<br>
+-&nbsp;`fem_test.py`&nbsp;-&nbsp;тесты&nbsp;базового&nbsp;assembler&nbsp;(20&nbsp;тестов)<br>
+-&nbsp;`mechanic_test.py`&nbsp;-&nbsp;тесты&nbsp;механических&nbsp;элементов&nbsp;(10&nbsp;тестов)<br>
+-&nbsp;`electrical_test.py`&nbsp;-&nbsp;тесты&nbsp;электрических&nbsp;цепей&nbsp;(15&nbsp;тестов)<br>
+-&nbsp;`multibody_test.py`&nbsp;-&nbsp;тесты&nbsp;многотельной&nbsp;динамики&nbsp;(4&nbsp;теста)<br>
+-&nbsp;`electromechanical_test.py`&nbsp;-&nbsp;тесты&nbsp;электромеханики&nbsp;(4&nbsp;теста)<br>
+<br>
+Всего:&nbsp;**53&nbsp;теста**<br>
+<br>
+##&nbsp;Зависимости<br>
+<br>
+-&nbsp;**numpy**&nbsp;-&nbsp;матричные&nbsp;операции&nbsp;и&nbsp;линейная&nbsp;алгебра<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

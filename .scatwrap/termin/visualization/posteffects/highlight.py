@@ -6,151 +6,151 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# termin/visualization/posteffects/highlight.py<br>
+#&nbsp;termin/visualization/posteffects/highlight.py<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.visualization.postprocess import PostEffect<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.picking import id_to_rgb<br>
+from&nbsp;termin.visualization.postprocess&nbsp;import&nbsp;PostEffect<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.picking&nbsp;import&nbsp;id_to_rgb<br>
 <br>
 <br>
-HIGHLIGHT_VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location=0) in vec2 a_pos;<br>
-layout(location=1) in vec2 a_uv;<br>
-out vec2 v_uv;<br>
-void main() {<br>
-&#9;v_uv = a_uv;<br>
-&#9;gl_Position = vec4(a_pos, 0.0, 1.0);<br>
+HIGHLIGHT_VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location=0)&nbsp;in&nbsp;vec2&nbsp;a_pos;<br>
+layout(location=1)&nbsp;in&nbsp;vec2&nbsp;a_uv;<br>
+out&nbsp;vec2&nbsp;v_uv;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_uv&nbsp;=&nbsp;a_uv;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;vec4(a_pos,&nbsp;0.0,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-HIGHLIGHT_FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-in vec2 v_uv;<br>
+HIGHLIGHT_FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+in&nbsp;vec2&nbsp;v_uv;<br>
 <br>
-uniform sampler2D u_color;        // обычный цветной рендер<br>
-uniform sampler2D u_id;           // id-map<br>
-uniform vec3      u_selected_color; // цвет, соответствующий выбранному id<br>
-uniform vec2      u_texel_size;   // 1.0 / resolution<br>
-uniform vec3      u_outline_color; // цвет рамки<br>
-uniform float     u_enabled;      // 0.0 -&gt; эффект выключен<br>
+uniform&nbsp;sampler2D&nbsp;u_color;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;обычный&nbsp;цветной&nbsp;рендер<br>
+uniform&nbsp;sampler2D&nbsp;u_id;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;id-map<br>
+uniform&nbsp;vec3&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u_selected_color;&nbsp;//&nbsp;цвет,&nbsp;соответствующий&nbsp;выбранному&nbsp;id<br>
+uniform&nbsp;vec2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u_texel_size;&nbsp;&nbsp;&nbsp;//&nbsp;1.0&nbsp;/&nbsp;resolution<br>
+uniform&nbsp;vec3&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u_outline_color;&nbsp;//&nbsp;цвет&nbsp;рамки<br>
+uniform&nbsp;float&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u_enabled;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;0.0&nbsp;-&gt;&nbsp;эффект&nbsp;выключен<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-float is_selected(vec3 id_color)<br>
+float&nbsp;is_selected(vec3&nbsp;id_color)<br>
 {<br>
-&#9;// сравниваем с небольшим допуском<br>
-&#9;float d = distance(id_color, u_selected_color);<br>
-&#9;return float(d &lt; 0.001);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;сравниваем&nbsp;с&nbsp;небольшим&nbsp;допуском<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;d&nbsp;=&nbsp;distance(id_color,&nbsp;u_selected_color);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;float(d&nbsp;&lt;&nbsp;0.001);<br>
 }<br>
 <br>
-void main()<br>
+void&nbsp;main()<br>
 {<br>
-&#9;vec4 base = texture(u_color, v_uv);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;base&nbsp;=&nbsp;texture(u_color,&nbsp;v_uv);<br>
 <br>
-&#9;// если эффект выключен — просто пробрасываем цвет<br>
-&#9;if (u_enabled &lt; 0.5) {<br>
-&#9;&#9;FragColor = base;<br>
-&#9;&#9;return;<br>
-&#9;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;если&nbsp;эффект&nbsp;выключен&nbsp;—&nbsp;просто&nbsp;пробрасываем&nbsp;цвет<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(u_enabled&nbsp;&lt;&nbsp;0.5)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;base;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
 <br>
-&#9;vec3 id_center = texture(u_id, v_uv).rgb;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;id_center&nbsp;=&nbsp;texture(u_id,&nbsp;v_uv).rgb;<br>
 <br>
-&#9;float center_sel = is_selected(id_center);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;center_sel&nbsp;=&nbsp;is_selected(id_center);<br>
 <br>
-&#9;vec2 ts = u_texel_size;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;ts&nbsp;=&nbsp;u_texel_size;<br>
 <br>
-&#9;// смотрим соседей — простой дифференциальный контур<br>
-&#9;float neigh_sel = 0.0;<br>
-&#9;neigh_sel = max(neigh_sel, is_selected(texture(u_id, v_uv + vec2( ts.x,  0.0)).rgb));<br>
-&#9;neigh_sel = max(neigh_sel, is_selected(texture(u_id, v_uv + vec2(-ts.x,  0.0)).rgb));<br>
-&#9;neigh_sel = max(neigh_sel, is_selected(texture(u_id, v_uv + vec2( 0.0,  ts.y)).rgb));<br>
-&#9;neigh_sel = max(neigh_sel, is_selected(texture(u_id, v_uv + vec2( 0.0, -ts.y)).rgb));<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;смотрим&nbsp;соседей&nbsp;—&nbsp;простой&nbsp;дифференциальный&nbsp;контур<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;neigh_sel&nbsp;=&nbsp;0.0;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;neigh_sel&nbsp;=&nbsp;max(neigh_sel,&nbsp;is_selected(texture(u_id,&nbsp;v_uv&nbsp;+&nbsp;vec2(&nbsp;ts.x,&nbsp;&nbsp;0.0)).rgb));<br>
+&nbsp;&nbsp;&nbsp;&nbsp;neigh_sel&nbsp;=&nbsp;max(neigh_sel,&nbsp;is_selected(texture(u_id,&nbsp;v_uv&nbsp;+&nbsp;vec2(-ts.x,&nbsp;&nbsp;0.0)).rgb));<br>
+&nbsp;&nbsp;&nbsp;&nbsp;neigh_sel&nbsp;=&nbsp;max(neigh_sel,&nbsp;is_selected(texture(u_id,&nbsp;v_uv&nbsp;+&nbsp;vec2(&nbsp;0.0,&nbsp;&nbsp;ts.y)).rgb));<br>
+&nbsp;&nbsp;&nbsp;&nbsp;neigh_sel&nbsp;=&nbsp;max(neigh_sel,&nbsp;is_selected(texture(u_id,&nbsp;v_uv&nbsp;+&nbsp;vec2(&nbsp;0.0,&nbsp;-ts.y)).rgb));<br>
 <br>
-&#9;float outline = 0.0;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;outline&nbsp;=&nbsp;0.0;<br>
 <br>
-&#9;// внутренняя граница: центр выбран, а вокруг нет<br>
-&#9;outline = max(outline, center_sel * (1.0 - neigh_sel));<br>
-&#9;// внешняя граница: центр не выбран, а рядом есть выбранные<br>
-&#9;outline = max(outline, neigh_sel * (1.0 - center_sel));<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;внутренняя&nbsp;граница:&nbsp;центр&nbsp;выбран,&nbsp;а&nbsp;вокруг&nbsp;нет<br>
+&nbsp;&nbsp;&nbsp;&nbsp;outline&nbsp;=&nbsp;max(outline,&nbsp;center_sel&nbsp;*&nbsp;(1.0&nbsp;-&nbsp;neigh_sel));<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;внешняя&nbsp;граница:&nbsp;центр&nbsp;не&nbsp;выбран,&nbsp;а&nbsp;рядом&nbsp;есть&nbsp;выбранные<br>
+&nbsp;&nbsp;&nbsp;&nbsp;outline&nbsp;=&nbsp;max(outline,&nbsp;neigh_sel&nbsp;*&nbsp;(1.0&nbsp;-&nbsp;center_sel));<br>
 <br>
-&#9;if (outline &gt; 0.0) {<br>
-&#9;&#9;// смешиваем базовый цвет и цвет рамки<br>
-&#9;&#9;float k = 0.8; // сила смешивания<br>
-&#9;&#9;vec3 col = mix(base.rgb, u_outline_color, k);<br>
-&#9;&#9;FragColor = vec4(col, base.a);<br>
-&#9;} else {<br>
-&#9;&#9;FragColor = base;<br>
-&#9;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(outline&nbsp;&gt;&nbsp;0.0)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;смешиваем&nbsp;базовый&nbsp;цвет&nbsp;и&nbsp;цвет&nbsp;рамки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;k&nbsp;=&nbsp;0.8;&nbsp;//&nbsp;сила&nbsp;смешивания<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;col&nbsp;=&nbsp;mix(base.rgb,&nbsp;u_outline_color,&nbsp;k);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(col,&nbsp;base.a);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;else&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;base;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-class HighlightEffect(PostEffect):<br>
-&#9;name = &quot;highlight&quot;<br>
+class&nbsp;HighlightEffect(PostEffect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;&quot;highlight&quot;<br>
 <br>
-&#9;def __init__(self, selected_id_getter, color=(0.0, 0.0, 0.0, 1.0)):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;selected_id_getter: callable -&gt; int | None<br>
-&#9;&#9;(например, лямбда, которая читает selected_entity_id из редактора)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self._get_id = selected_id_getter<br>
-&#9;&#9;self._color = color<br>
-&#9;&#9;self._shader: ShaderProgram | None = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;selected_id_getter,&nbsp;color=(0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selected_id_getter:&nbsp;callable&nbsp;-&gt;&nbsp;int&nbsp;|&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(например,&nbsp;лямбда,&nbsp;которая&nbsp;читает&nbsp;selected_entity_id&nbsp;из&nbsp;редактора)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._get_id&nbsp;=&nbsp;selected_id_getter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._color&nbsp;=&nbsp;color<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._shader:&nbsp;ShaderProgram&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
-&#9;def required_resources(self) -&gt; set[str]:<br>
-&#9;&#9;# Нужна id-карта с именем &quot;id&quot; (её пишет IdPass)<br>
-&#9;&#9;return {&quot;id&quot;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;required_resources(self)&nbsp;-&gt;&nbsp;set[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нужна&nbsp;id-карта&nbsp;с&nbsp;именем&nbsp;&quot;id&quot;&nbsp;(её&nbsp;пишет&nbsp;IdPass)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{&quot;id&quot;}<br>
 <br>
-&#9;def _get_shader(self) -&gt; ShaderProgram:<br>
-&#9;&#9;if self._shader is None:<br>
-&#9;&#9;&#9;self._shader = ShaderProgram(HIGHLIGHT_VERT, HIGHLIGHT_FRAG)<br>
-&#9;&#9;return self._shader<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_get_shader(self)&nbsp;-&gt;&nbsp;ShaderProgram:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._shader&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._shader&nbsp;=&nbsp;ShaderProgram(HIGHLIGHT_VERT,&nbsp;HIGHLIGHT_FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._shader<br>
 <br>
-&#9;def draw(self, gfx, key, color_tex, extra_textures, size):<br>
-&#9;&#9;w, h = size<br>
-&#9;&#9;tex_id = extra_textures.get(&quot;id&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;gfx,&nbsp;key,&nbsp;color_tex,&nbsp;extra_textures,&nbsp;size):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tex_id&nbsp;=&nbsp;extra_textures.get(&quot;id&quot;)<br>
 <br>
-&#9;&#9;# id выделенного энтити<br>
-&#9;&#9;selected_id = self._get_id() or 0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;id&nbsp;выделенного&nbsp;энтити<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selected_id&nbsp;=&nbsp;self._get_id()&nbsp;or&nbsp;0<br>
 <br>
-&#9;&#9;shader = self._get_shader()<br>
-&#9;&#9;shader.ensure_ready(gfx)<br>
-&#9;&#9;shader.use()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;self._get_shader()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.ensure_ready(gfx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.use()<br>
 <br>
-&#9;&#9;# основной цвет<br>
-&#9;&#9;color_tex.bind(0)<br>
-&#9;&#9;shader.set_uniform_int(&quot;u_color&quot;, 0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;основной&nbsp;цвет<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_tex.bind(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_color&quot;,&nbsp;0)<br>
 <br>
-&#9;&#9;# включён ли эффект?<br>
-&#9;&#9;enabled = (tex_id is not None) and (selected_id &gt; 0)<br>
-&#9;&#9;shader.set_uniform_float(&quot;u_enabled&quot;, 1.0 if enabled else 0.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;включён&nbsp;ли&nbsp;эффект?<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enabled&nbsp;=&nbsp;(tex_id&nbsp;is&nbsp;not&nbsp;None)&nbsp;and&nbsp;(selected_id&nbsp;&gt;&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_float(&quot;u_enabled&quot;,&nbsp;1.0&nbsp;if&nbsp;enabled&nbsp;else&nbsp;0.0)<br>
 <br>
-&#9;&#9;# если можем — биндим id-map и передаём цвет выбранного id<br>
-&#9;&#9;if enabled:<br>
-&#9;&#9;&#9;tex_id.bind(1)<br>
-&#9;&#9;&#9;shader.set_uniform_int(&quot;u_id&quot;, 1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;можем&nbsp;—&nbsp;биндим&nbsp;id-map&nbsp;и&nbsp;передаём&nbsp;цвет&nbsp;выбранного&nbsp;id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;enabled:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tex_id.bind(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_id&quot;,&nbsp;1)<br>
 <br>
-&#9;&#9;&#9;sel_color = id_to_rgb(selected_id)  # (r,g,b) того же формата, что в IdPass<br>
-&#9;&#9;&#9;shader.set_uniform_vec3(&quot;u_selected_color&quot;, sel_color)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sel_color&nbsp;=&nbsp;id_to_rgb(selected_id)&nbsp;&nbsp;#&nbsp;(r,g,b)&nbsp;того&nbsp;же&nbsp;формата,&nbsp;что&nbsp;в&nbsp;IdPass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec3(&quot;u_selected_color&quot;,&nbsp;sel_color)<br>
 <br>
-&#9;&#9;# размер текселя (для выборки соседей)<br>
-&#9;&#9;texel_size = np.array(<br>
-&#9;&#9;&#9;[1.0 / max(1, w), 1.0 / max(1, h)],<br>
-&#9;&#9;&#9;dtype=np.float32,<br>
-&#9;&#9;)<br>
-&#9;&#9;shader.set_uniform_vec2(&quot;u_texel_size&quot;, texel_size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;размер&nbsp;текселя&nbsp;(для&nbsp;выборки&nbsp;соседей)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;texel_size&nbsp;=&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0&nbsp;/&nbsp;max(1,&nbsp;w),&nbsp;1.0&nbsp;/&nbsp;max(1,&nbsp;h)],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dtype=np.float32,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec2(&quot;u_texel_size&quot;,&nbsp;texel_size)<br>
 <br>
-&#9;&#9;# цвет рамки (желтый, например)<br>
-&#9;&#9;outline_color = np.array(self._color[0:3], dtype=np.float32)<br>
-&#9;&#9;shader.set_uniform_vec3(&quot;u_outline_color&quot;, outline_color)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;цвет&nbsp;рамки&nbsp;(желтый,&nbsp;например)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outline_color&nbsp;=&nbsp;np.array(self._color[0:3],&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec3(&quot;u_outline_color&quot;,&nbsp;outline_color)<br>
 <br>
-&#9;&#9;# остальное состояние depth/blend уже подготовил PostProcessPass<br>
-&#9;&#9;gfx.draw_ui_textured_quad(key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;остальное&nbsp;состояние&nbsp;depth/blend&nbsp;уже&nbsp;подготовил&nbsp;PostProcessPass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.draw_ui_textured_quad(key)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

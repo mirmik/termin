@@ -6,255 +6,255 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy as np<br>
-from typing import Optional<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional<br>
 <br>
-from .hqsolver import QuadraticTask, EqualityConstraint, InequalityConstraint<br>
-<br>
-<br>
-def _prepare_weight(weight: Optional[np.ndarray], rows: int) -&gt; Optional[np.ndarray]:<br>
-&#9;if weight is None:<br>
-&#9;&#9;return None<br>
-&#9;W = np.asarray(weight, dtype=float)<br>
-&#9;if W.ndim == 1:<br>
-&#9;&#9;if W.size != rows:<br>
-&#9;&#9;&#9;raise ValueError(&quot;Weight vector size must match the task dimension.&quot;)<br>
-&#9;&#9;return np.diag(W)<br>
-&#9;if W.shape != (rows, rows):<br>
-&#9;&#9;raise ValueError(&quot;Weight matrix must be square with size equal to the task dimension.&quot;)<br>
-&#9;return W<br>
+from&nbsp;.hqsolver&nbsp;import&nbsp;QuadraticTask,&nbsp;EqualityConstraint,&nbsp;InequalityConstraint<br>
 <br>
 <br>
-class JointTrackingTask(QuadraticTask):<br>
-&#9;&quot;&quot;&quot;Следит за желаемыми суставными координатами.<br>
-<br>
-&#9;Минимизируется функционал<br>
-&#9;&#9;min_x || S x - S q_ref ||_W^2,<br>
-&#9;где x — искомые обобщённые скорости/приращения, q_ref — желаемый вектор,<br>
-&#9;а S — матрица выбора (по умолчанию S = I). При W = diag(w) это простая<br>
-&#9;взвешенная подстройка отдельных координат.<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;q_ref: np.ndarray,<br>
-&#9;&#9;selection: Optional[np.ndarray] = None,<br>
-&#9;&#9;weight: Optional[np.ndarray] = None,<br>
-&#9;):<br>
-&#9;&#9;q_ref = np.asarray(q_ref, dtype=float)<br>
-&#9;&#9;n = q_ref.size<br>
-&#9;&#9;if selection is None:<br>
-&#9;&#9;&#9;J = np.eye(n)<br>
-&#9;&#9;&#9;target = q_ref<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;selection = np.asarray(selection, dtype=float)<br>
-&#9;&#9;&#9;if selection.shape[1] != n:<br>
-&#9;&#9;&#9;&#9;raise ValueError(&quot;Selection matrix must have the same number of columns as len(q_ref).&quot;)<br>
-&#9;&#9;&#9;J = selection<br>
-&#9;&#9;&#9;target = selection @ q_ref<br>
-<br>
-&#9;&#9;W = _prepare_weight(weight, J.shape[0])<br>
-&#9;&#9;super().__init__(J, target, W)<br>
+def&nbsp;_prepare_weight(weight:&nbsp;Optional[np.ndarray],&nbsp;rows:&nbsp;int)&nbsp;-&gt;&nbsp;Optional[np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;weight&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;W&nbsp;=&nbsp;np.asarray(weight,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;W.ndim&nbsp;==&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;W.size&nbsp;!=&nbsp;rows:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Weight&nbsp;vector&nbsp;size&nbsp;must&nbsp;match&nbsp;the&nbsp;task&nbsp;dimension.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.diag(W)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;W.shape&nbsp;!=&nbsp;(rows,&nbsp;rows):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Weight&nbsp;matrix&nbsp;must&nbsp;be&nbsp;square&nbsp;with&nbsp;size&nbsp;equal&nbsp;to&nbsp;the&nbsp;task&nbsp;dimension.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;W<br>
 <br>
 <br>
-class CartesianTrackingTask(QuadraticTask):<br>
-&#9;&quot;&quot;&quot;Типовая задача: совместить линейную/угловую скорость с целью.<br>
+class&nbsp;JointTrackingTask(QuadraticTask):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Следит&nbsp;за&nbsp;желаемыми&nbsp;суставными&nbsp;координатами.<br>
 <br>
-&#9;Функционал:<br>
-&#9;&#9;min_x || J_cart x - v_des ||_W^2,<br>
-&#9;где J_cart — пространственный Якобиан, v_des = v_ref + K e — желаемая<br>
-&#9;скорость/скользящий вектор. Вызов принимает уже сформированные (J_cart, v_des).<br>
-&#9;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Минимизируется&nbsp;функционал<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_x&nbsp;||&nbsp;S&nbsp;x&nbsp;-&nbsp;S&nbsp;q_ref&nbsp;||_W^2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;x&nbsp;—&nbsp;искомые&nbsp;обобщённые&nbsp;скорости/приращения,&nbsp;q_ref&nbsp;—&nbsp;желаемый&nbsp;вектор,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;а&nbsp;S&nbsp;—&nbsp;матрица&nbsp;выбора&nbsp;(по&nbsp;умолчанию&nbsp;S&nbsp;=&nbsp;I).&nbsp;При&nbsp;W&nbsp;=&nbsp;diag(w)&nbsp;это&nbsp;простая<br>
+&nbsp;&nbsp;&nbsp;&nbsp;взвешенная&nbsp;подстройка&nbsp;отдельных&nbsp;координат.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;jacobian: np.ndarray,<br>
-&#9;&#9;desired_twist: np.ndarray,<br>
-&#9;&#9;weight: Optional[np.ndarray] = None,<br>
-&#9;):<br>
-&#9;&#9;jacobian = np.asarray(jacobian, dtype=float)<br>
-&#9;&#9;desired_twist = np.asarray(desired_twist, dtype=float)<br>
-&#9;&#9;if jacobian.shape[0] != desired_twist.size:<br>
-&#9;&#9;&#9;raise ValueError(&quot;Jacobian rows must match the size of desired_twist.&quot;)<br>
-&#9;&#9;W = _prepare_weight(weight, jacobian.shape[0])<br>
-&#9;&#9;super().__init__(jacobian, desired_twist, W)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_ref:&nbsp;np.ndarray,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selection:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;weight:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_ref&nbsp;=&nbsp;np.asarray(q_ref,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;q_ref.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;selection&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J&nbsp;=&nbsp;np.eye(n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;target&nbsp;=&nbsp;q_ref<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selection&nbsp;=&nbsp;np.asarray(selection,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;selection.shape[1]&nbsp;!=&nbsp;n:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Selection&nbsp;matrix&nbsp;must&nbsp;have&nbsp;the&nbsp;same&nbsp;number&nbsp;of&nbsp;columns&nbsp;as&nbsp;len(q_ref).&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J&nbsp;=&nbsp;selection<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;target&nbsp;=&nbsp;selection&nbsp;@&nbsp;q_ref<br>
 <br>
-<br>
-class JointEqualityConstraint(EqualityConstraint):<br>
-&#9;&quot;&quot;&quot;Фиксирует отдельные суставы: S x = S q_target.<br>
-<br>
-&#9;Это линейное равенство с матрицей S (по умолчанию I).<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self, q_target: np.ndarray, selection: Optional[np.ndarray] = None):<br>
-&#9;&#9;q_target = np.asarray(q_target, dtype=float)<br>
-&#9;&#9;n = q_target.size<br>
-&#9;&#9;if selection is None:<br>
-&#9;&#9;&#9;A = np.eye(n)<br>
-&#9;&#9;&#9;b = q_target<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;selection = np.asarray(selection, dtype=float)<br>
-&#9;&#9;&#9;if selection.shape[1] != n:<br>
-&#9;&#9;&#9;&#9;raise ValueError(&quot;Selection matrix must have the same number of columns as len(q_target).&quot;)<br>
-&#9;&#9;&#9;A = selection<br>
-&#9;&#9;&#9;b = selection @ q_target<br>
-<br>
-&#9;&#9;super().__init__(A, b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;W&nbsp;=&nbsp;_prepare_weight(weight,&nbsp;J.shape[0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(J,&nbsp;target,&nbsp;W)<br>
 <br>
 <br>
-class CartesianEqualityConstraint(EqualityConstraint):<br>
-&#9;&quot;&quot;&quot;Жёсткая задача J x = rhs для контактов или привязки инструмента.&quot;&quot;&quot;<br>
+class&nbsp;CartesianTrackingTask(QuadraticTask):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Типовая&nbsp;задача:&nbsp;совместить&nbsp;линейную/угловую&nbsp;скорость&nbsp;с&nbsp;целью.<br>
 <br>
-&#9;def __init__(self, jacobian: np.ndarray, rhs: np.ndarray):<br>
-&#9;&#9;super().__init__(jacobian, rhs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Функционал:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_x&nbsp;||&nbsp;J_cart&nbsp;x&nbsp;-&nbsp;v_des&nbsp;||_W^2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;J_cart&nbsp;—&nbsp;пространственный&nbsp;Якобиан,&nbsp;v_des&nbsp;=&nbsp;v_ref&nbsp;+&nbsp;K&nbsp;e&nbsp;—&nbsp;желаемая<br>
+&nbsp;&nbsp;&nbsp;&nbsp;скорость/скользящий&nbsp;вектор.&nbsp;Вызов&nbsp;принимает&nbsp;уже&nbsp;сформированные&nbsp;(J_cart,&nbsp;v_des).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-<br>
-class JointBoundsConstraint(InequalityConstraint):<br>
-&#9;&quot;&quot;&quot;Задаёт ограничения вида lower ≤ x ≤ upper (возможно односторонние).<br>
-<br>
-&#9;Преобразуется к стандартной форме C x ≤ d:<br>
-&#9;&#9;x ≤ upper  →  [ I] x ≤ upper<br>
-&#9;-x ≤ -lower → [-I] x ≤ -lower.<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self, lower: Optional[np.ndarray] = None, upper: Optional[np.ndarray] = None):<br>
-&#9;&#9;if lower is None and upper is None:<br>
-&#9;&#9;&#9;raise ValueError(&quot;At least one of lower/upper bounds must be provided.&quot;)<br>
-<br>
-&#9;&#9;rows = []<br>
-&#9;&#9;rhs_parts = []<br>
-<br>
-&#9;&#9;n: Optional[int] = None<br>
-<br>
-&#9;&#9;if upper is not None:<br>
-&#9;&#9;&#9;upper = np.asarray(upper, dtype=float)<br>
-&#9;&#9;&#9;n = upper.size<br>
-&#9;&#9;&#9;rows.append(np.eye(n))<br>
-&#9;&#9;&#9;rhs_parts.append(upper)<br>
-<br>
-&#9;&#9;if lower is not None:<br>
-&#9;&#9;&#9;lower = np.asarray(lower, dtype=float)<br>
-&#9;&#9;&#9;if n is None:<br>
-&#9;&#9;&#9;&#9;n = lower.size<br>
-&#9;&#9;&#9;if lower.size != n:<br>
-&#9;&#9;&#9;&#9;raise ValueError(&quot;Lower/upper bounds must have the same length.&quot;)<br>
-&#9;&#9;&#9;rows.append(-np.eye(n))<br>
-&#9;&#9;&#9;rhs_parts.append(-lower)<br>
-<br>
-&#9;&#9;assert n is not None<br>
-&#9;&#9;C = np.vstack(rows)<br>
-&#9;&#9;d = np.concatenate(rhs_parts)<br>
-&#9;&#9;super().__init__(C, d)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;jacobian:&nbsp;np.ndarray,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;desired_twist:&nbsp;np.ndarray,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;weight:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;jacobian&nbsp;=&nbsp;np.asarray(jacobian,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;desired_twist&nbsp;=&nbsp;np.asarray(desired_twist,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;jacobian.shape[0]&nbsp;!=&nbsp;desired_twist.size:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Jacobian&nbsp;rows&nbsp;must&nbsp;match&nbsp;the&nbsp;size&nbsp;of&nbsp;desired_twist.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;W&nbsp;=&nbsp;_prepare_weight(weight,&nbsp;jacobian.shape[0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(jacobian,&nbsp;desired_twist,&nbsp;W)<br>
 <br>
 <br>
-class JointVelocityDampingTask(QuadraticTask):<br>
-&#9;&quot;&quot;&quot;Сглаживает управление, минимизируя норму суставных скоростей.&quot;&quot;&quot;<br>
+class&nbsp;JointEqualityConstraint(EqualityConstraint):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Фиксирует&nbsp;отдельные&nbsp;суставы:&nbsp;S&nbsp;x&nbsp;=&nbsp;S&nbsp;q_target.<br>
 <br>
-&#9;def __init__(self, n_dofs: int, weight: Optional[np.ndarray] = None):<br>
-&#9;&#9;if n_dofs &lt;= 0:<br>
-&#9;&#9;&#9;raise ValueError(&quot;n_dofs must be positive.&quot;)<br>
-&#9;&#9;J = np.eye(n_dofs)<br>
-&#9;&#9;v = np.zeros(n_dofs)<br>
-&#9;&#9;W = _prepare_weight(weight, n_dofs)<br>
-&#9;&#9;super().__init__(J, v, W)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Это&nbsp;линейное&nbsp;равенство&nbsp;с&nbsp;матрицей&nbsp;S&nbsp;(по&nbsp;умолчанию&nbsp;I).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;q_target:&nbsp;np.ndarray,&nbsp;selection:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_target&nbsp;=&nbsp;np.asarray(q_target,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;q_target.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;selection&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;np.eye(n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;q_target<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selection&nbsp;=&nbsp;np.asarray(selection,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;selection.shape[1]&nbsp;!=&nbsp;n:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Selection&nbsp;matrix&nbsp;must&nbsp;have&nbsp;the&nbsp;same&nbsp;number&nbsp;of&nbsp;columns&nbsp;as&nbsp;len(q_target).&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;selection<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;selection&nbsp;@&nbsp;q_target<br>
 <br>
-class JointPositionBoundsConstraint(InequalityConstraint):<br>
-&#9;&quot;&quot;&quot;Гарантирует, что q + dt * dq останется в [lower, upper].&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;q_current: np.ndarray,<br>
-&#9;&#9;lower: Optional[np.ndarray] = None,<br>
-&#9;&#9;upper: Optional[np.ndarray] = None,<br>
-&#9;&#9;dt: float = 1.0,<br>
-&#9;):<br>
-<br>
-&#9;&#9;if dt &lt;= 0.0:<br>
-&#9;&#9;&#9;raise ValueError(&quot;dt must be positive.&quot;)<br>
-&#9;&#9;q_current = np.asarray(q_current, dtype=float)<br>
-&#9;&#9;n = q_current.size<br>
-&#9;&#9;if lower is None and upper is None:<br>
-&#9;&#9;&#9;raise ValueError(&quot;At least one of lower/upper bounds must be provided.&quot;)<br>
-<br>
-&#9;&#9;rows = []<br>
-&#9;&#9;rhs = []<br>
-<br>
-&#9;&#9;if upper is not None:<br>
-&#9;&#9;&#9;upper = np.asarray(upper, dtype=float)<br>
-&#9;&#9;&#9;if upper.size != n:<br>
-&#9;&#9;&#9;&#9;raise ValueError(&quot;upper must have same length as q_current.&quot;)<br>
-&#9;&#9;&#9;rows.append(np.eye(n) * dt)<br>
-&#9;&#9;&#9;rhs.append(upper - q_current)<br>
-<br>
-&#9;&#9;if lower is not None:<br>
-&#9;&#9;&#9;lower = np.asarray(lower, dtype=float)<br>
-&#9;&#9;&#9;if lower.size != n:<br>
-&#9;&#9;&#9;&#9;raise ValueError(&quot;lower must have same length as q_current.&quot;)<br>
-&#9;&#9;&#9;rows.append(-np.eye(n) * dt)<br>
-&#9;&#9;&#9;rhs.append(q_current - lower)<br>
-<br>
-&#9;&#9;C = np.vstack(rows)<br>
-&#9;&#9;d = np.concatenate(rhs)<br>
-&#9;&#9;super().__init__(C, d)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(A,&nbsp;b)<br>
 <br>
 <br>
-def build_joint_soft_limit_task(<br>
-&#9;q_current: np.ndarray,<br>
-&#9;lower: Optional[np.ndarray],<br>
-&#9;upper: Optional[np.ndarray],<br>
-&#9;margin: float,<br>
-&#9;gain: float,<br>
-) -&gt; Optional[QuadraticTask]:<br>
-&#9;&quot;&quot;&quot;Возвращает QuadraticTask, отталкивающий суставы от мягких зон.&quot;&quot;&quot;<br>
+class&nbsp;CartesianEqualityConstraint(EqualityConstraint):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Жёсткая&nbsp;задача&nbsp;J&nbsp;x&nbsp;=&nbsp;rhs&nbsp;для&nbsp;контактов&nbsp;или&nbsp;привязки&nbsp;инструмента.&quot;&quot;&quot;<br>
 <br>
-&#9;if margin &lt;= 0 or gain &lt;= 0:<br>
-&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;jacobian:&nbsp;np.ndarray,&nbsp;rhs:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(jacobian,&nbsp;rhs)<br>
 <br>
-&#9;q_current = np.asarray(q_current, dtype=float)<br>
-&#9;n = q_current.size<br>
 <br>
-&#9;upper_arr = np.asarray(upper, dtype=float) if upper is not None else None<br>
-&#9;lower_arr = np.asarray(lower, dtype=float) if lower is not None else None<br>
+class&nbsp;JointBoundsConstraint(InequalityConstraint):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Задаёт&nbsp;ограничения&nbsp;вида&nbsp;lower&nbsp;≤&nbsp;x&nbsp;≤&nbsp;upper&nbsp;(возможно&nbsp;односторонние).<br>
 <br>
-&#9;rows = []<br>
-&#9;targets = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Преобразуется&nbsp;к&nbsp;стандартной&nbsp;форме&nbsp;C&nbsp;x&nbsp;≤&nbsp;d:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;≤&nbsp;upper&nbsp;&nbsp;→&nbsp;&nbsp;[&nbsp;I]&nbsp;x&nbsp;≤&nbsp;upper<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-x&nbsp;≤&nbsp;-lower&nbsp;→&nbsp;[-I]&nbsp;x&nbsp;≤&nbsp;-lower.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def _push(amount: float) -&gt; float:<br>
-&#9;&#9;phase = min(max(amount / margin, 0.0), 1.0)<br>
-&#9;&#9;return gain * phase<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;lower:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None,&nbsp;upper:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lower&nbsp;is&nbsp;None&nbsp;and&nbsp;upper&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;At&nbsp;least&nbsp;one&nbsp;of&nbsp;lower/upper&nbsp;bounds&nbsp;must&nbsp;be&nbsp;provided.&quot;)<br>
 <br>
-&#9;for idx in range(n):<br>
-&#9;&#9;coord = q_current[idx]<br>
-&#9;&#9;desired = 0.0<br>
-&#9;&#9;active = False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rows&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rhs_parts&nbsp;=&nbsp;[]<br>
 <br>
-&#9;&#9;if upper_arr is not None:<br>
-&#9;&#9;&#9;boundary = upper_arr[idx]<br>
-&#9;&#9;&#9;trigger = boundary - margin<br>
-&#9;&#9;&#9;if coord &gt; trigger:<br>
-&#9;&#9;&#9;&#9;desired -= _push(coord - trigger)<br>
-&#9;&#9;&#9;&#9;active = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n:&nbsp;Optional[int]&nbsp;=&nbsp;None<br>
 <br>
-&#9;&#9;if lower_arr is not None:<br>
-&#9;&#9;&#9;boundary = lower_arr[idx]<br>
-&#9;&#9;&#9;trigger = boundary + margin<br>
-&#9;&#9;&#9;if coord &lt; trigger:<br>
-&#9;&#9;&#9;&#9;desired += _push(trigger - coord)<br>
-&#9;&#9;&#9;&#9;active = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;upper&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;upper&nbsp;=&nbsp;np.asarray(upper,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;upper.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rows.append(np.eye(n))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rhs_parts.append(upper)<br>
 <br>
-&#9;&#9;if active:<br>
-&#9;&#9;&#9;row = np.zeros(n)<br>
-&#9;&#9;&#9;row[idx] = 1.0<br>
-&#9;&#9;&#9;rows.append(row)<br>
-&#9;&#9;&#9;targets.append(desired)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lower&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lower&nbsp;=&nbsp;np.asarray(lower,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;lower.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lower.size&nbsp;!=&nbsp;n:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Lower/upper&nbsp;bounds&nbsp;must&nbsp;have&nbsp;the&nbsp;same&nbsp;length.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rows.append(-np.eye(n))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rhs_parts.append(-lower)<br>
 <br>
-&#9;if not rows:<br>
-&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert&nbsp;n&nbsp;is&nbsp;not&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;=&nbsp;np.vstack(rows)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;np.concatenate(rhs_parts)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(C,&nbsp;d)<br>
 <br>
-&#9;J = np.vstack(rows)<br>
-&#9;v = np.array(targets, dtype=float)<br>
-&#9;return QuadraticTask(J, v)<br>
+<br>
+class&nbsp;JointVelocityDampingTask(QuadraticTask):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Сглаживает&nbsp;управление,&nbsp;минимизируя&nbsp;норму&nbsp;суставных&nbsp;скоростей.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;n_dofs:&nbsp;int,&nbsp;weight:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n_dofs&nbsp;&lt;=&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;n_dofs&nbsp;must&nbsp;be&nbsp;positive.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J&nbsp;=&nbsp;np.eye(n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;np.zeros(n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;W&nbsp;=&nbsp;_prepare_weight(weight,&nbsp;n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(J,&nbsp;v,&nbsp;W)<br>
+<br>
+<br>
+class&nbsp;JointPositionBoundsConstraint(InequalityConstraint):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Гарантирует,&nbsp;что&nbsp;q&nbsp;+&nbsp;dt&nbsp;*&nbsp;dq&nbsp;останется&nbsp;в&nbsp;[lower,&nbsp;upper].&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_current:&nbsp;np.ndarray,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lower:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;upper:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dt:&nbsp;float&nbsp;=&nbsp;1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dt&nbsp;&lt;=&nbsp;0.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;dt&nbsp;must&nbsp;be&nbsp;positive.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_current&nbsp;=&nbsp;np.asarray(q_current,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;q_current.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lower&nbsp;is&nbsp;None&nbsp;and&nbsp;upper&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;At&nbsp;least&nbsp;one&nbsp;of&nbsp;lower/upper&nbsp;bounds&nbsp;must&nbsp;be&nbsp;provided.&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rows&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rhs&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;upper&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;upper&nbsp;=&nbsp;np.asarray(upper,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;upper.size&nbsp;!=&nbsp;n:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;upper&nbsp;must&nbsp;have&nbsp;same&nbsp;length&nbsp;as&nbsp;q_current.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rows.append(np.eye(n)&nbsp;*&nbsp;dt)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rhs.append(upper&nbsp;-&nbsp;q_current)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lower&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lower&nbsp;=&nbsp;np.asarray(lower,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lower.size&nbsp;!=&nbsp;n:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;lower&nbsp;must&nbsp;have&nbsp;same&nbsp;length&nbsp;as&nbsp;q_current.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rows.append(-np.eye(n)&nbsp;*&nbsp;dt)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rhs.append(q_current&nbsp;-&nbsp;lower)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;=&nbsp;np.vstack(rows)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;np.concatenate(rhs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(C,&nbsp;d)<br>
+<br>
+<br>
+def&nbsp;build_joint_soft_limit_task(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;q_current:&nbsp;np.ndarray,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;lower:&nbsp;Optional[np.ndarray],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;upper:&nbsp;Optional[np.ndarray],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;margin:&nbsp;float,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gain:&nbsp;float,<br>
+)&nbsp;-&gt;&nbsp;Optional[QuadraticTask]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;QuadraticTask,&nbsp;отталкивающий&nbsp;суставы&nbsp;от&nbsp;мягких&nbsp;зон.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;margin&nbsp;&lt;=&nbsp;0&nbsp;or&nbsp;gain&nbsp;&lt;=&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;q_current&nbsp;=&nbsp;np.asarray(q_current,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;q_current.size<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;upper_arr&nbsp;=&nbsp;np.asarray(upper,&nbsp;dtype=float)&nbsp;if&nbsp;upper&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;lower_arr&nbsp;=&nbsp;np.asarray(lower,&nbsp;dtype=float)&nbsp;if&nbsp;lower&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rows&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;targets&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_push(amount:&nbsp;float)&nbsp;-&gt;&nbsp;float:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;phase&nbsp;=&nbsp;min(max(amount&nbsp;/&nbsp;margin,&nbsp;0.0),&nbsp;1.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;gain&nbsp;*&nbsp;phase<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;idx&nbsp;in&nbsp;range(n):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coord&nbsp;=&nbsp;q_current[idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;desired&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;active&nbsp;=&nbsp;False<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;upper_arr&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boundary&nbsp;=&nbsp;upper_arr[idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;trigger&nbsp;=&nbsp;boundary&nbsp;-&nbsp;margin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;coord&nbsp;&gt;&nbsp;trigger:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;desired&nbsp;-=&nbsp;_push(coord&nbsp;-&nbsp;trigger)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;active&nbsp;=&nbsp;True<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lower_arr&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boundary&nbsp;=&nbsp;lower_arr[idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;trigger&nbsp;=&nbsp;boundary&nbsp;+&nbsp;margin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;coord&nbsp;&lt;&nbsp;trigger:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;desired&nbsp;+=&nbsp;_push(trigger&nbsp;-&nbsp;coord)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;active&nbsp;=&nbsp;True<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;active:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row&nbsp;=&nbsp;np.zeros(n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row[idx]&nbsp;=&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rows.append(row)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;targets.append(desired)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;rows:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;J&nbsp;=&nbsp;np.vstack(rows)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;np.array(targets,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;QuadraticTask(J,&nbsp;v)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

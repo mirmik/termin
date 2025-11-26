@@ -6,189 +6,189 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import math<br>
-import numpy<br>
-from termin.geombase import Pose3<br>
+import&nbsp;math<br>
+import&nbsp;numpy<br>
+from&nbsp;termin.geombase&nbsp;import&nbsp;Pose3<br>
 <br>
-class Transform:<br>
-&#9;&quot;&quot;&quot;A class for 3D transformations tree using Pose3.&quot;&quot;&quot;<br>
+class&nbsp;Transform:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;class&nbsp;for&nbsp;3D&nbsp;transformations&nbsp;tree&nbsp;using&nbsp;Pose3.&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, local_pose, parent: 'Transform' = None, name: str = &quot;&quot;):<br>
-&#9;&#9;self._local_pose = local_pose<br>
-&#9;&#9;self.name = name<br>
-&#9;&#9;self.parent = None<br>
-&#9;&#9;self.children = []<br>
-&#9;&#9;self._global_pose = None<br>
-&#9;&#9;self._dirty = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;local_pose,&nbsp;parent:&nbsp;'Transform'&nbsp;=&nbsp;None,&nbsp;name:&nbsp;str&nbsp;=&nbsp;&quot;&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._local_pose&nbsp;=&nbsp;local_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.parent&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.children&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._global_pose&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dirty&nbsp;=&nbsp;True<br>
 <br>
-&#9;&#9;self._version_for_walking_to_proximal = 0<br>
-&#9;&#9;self._version_for_walking_to_distal = 0<br>
-&#9;&#9;self._version_only_my = 0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._version_for_walking_to_proximal&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._version_for_walking_to_distal&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._version_only_my&nbsp;=&nbsp;0<br>
 <br>
-&#9;&#9;if parent:<br>
-&#9;&#9;&#9;parent.add_child(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;parent:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent.add_child(self)<br>
 <br>
-&#9;def _unparent(self):<br>
-&#9;&#9;if self.parent:<br>
-&#9;&#9;&#9;self.parent.children.remove(self)<br>
-&#9;&#9;&#9;self.parent = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_unparent(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.parent:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.parent.children.remove(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.parent&nbsp;=&nbsp;None<br>
 <br>
-&#9;def is_dirty(self):<br>
-&#9;&#9;return self._dirty<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;is_dirty(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._dirty<br>
 <br>
-&#9;def add_child(self, child: 'Transform'):<br>
-&#9;&#9;child._unparent()<br>
-&#9;&#9;self.children.append(child)<br>
-&#9;&#9;child.parent = self<br>
-&#9;&#9;child._mark_dirty()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_child(self,&nbsp;child:&nbsp;'Transform'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child._unparent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.children.append(child)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child.parent&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child._mark_dirty()<br>
 <br>
-&#9;def link(self, child: 'Transform'):<br>
-&#9;&#9;&quot;&quot;&quot;Can be overridden to link child transforms differently.&quot;&quot;&quot;<br>
-&#9;&#9;self.add_child(child)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;link(self,&nbsp;child:&nbsp;'Transform'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Can&nbsp;be&nbsp;overridden&nbsp;to&nbsp;link&nbsp;child&nbsp;transforms&nbsp;differently.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.add_child(child)<br>
 <br>
-&#9;def relocate(self, pose: Pose3):<br>
-&#9;&#9;self._local_pose = pose<br>
-&#9;&#9;self._mark_dirty()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;relocate(self,&nbsp;pose:&nbsp;Pose3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._local_pose&nbsp;=&nbsp;pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mark_dirty()<br>
 <br>
-&#9;def relocate_global(self, global_pose):<br>
-&#9;&#9;if self.parent:<br>
-&#9;&#9;&#9;parent_global = self.parent.global_pose()<br>
-&#9;&#9;&#9;inv_parent_global = parent_global.inverse()<br>
-&#9;&#9;&#9;self._local_pose = inv_parent_global * global_pose<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self._local_pose = global_pose<br>
-&#9;&#9;self._mark_dirty()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;relocate_global(self,&nbsp;global_pose):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.parent:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_global&nbsp;=&nbsp;self.parent.global_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inv_parent_global&nbsp;=&nbsp;parent_global.inverse()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._local_pose&nbsp;=&nbsp;inv_parent_global&nbsp;*&nbsp;global_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._local_pose&nbsp;=&nbsp;global_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mark_dirty()<br>
 <br>
-&#9;def increment_version(self, version):<br>
-&#9;&#9;return (version + 1) % (2**31 - 1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;increment_version(self,&nbsp;version):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(version&nbsp;+&nbsp;1)&nbsp;%&nbsp;(2**31&nbsp;-&nbsp;1)<br>
 <br>
-&#9;def _spread_changes_to_distal(self):<br>
-&#9;&#9;self._version_for_walking_to_proximal = self.increment_version(self._version_for_walking_to_proximal)<br>
-&#9;&#9;self._dirty = True<br>
-&#9;&#9;for child in self.children:<br>
-&#9;&#9;&#9;child._spread_changes_to_distal()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_spread_changes_to_distal(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._version_for_walking_to_proximal&nbsp;=&nbsp;self.increment_version(self._version_for_walking_to_proximal)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dirty&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child&nbsp;in&nbsp;self.children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child._spread_changes_to_distal()<br>
 <br>
-&#9;def _spread_changes_to_proximal(self):<br>
-&#9;&#9;self._version_for_walking_to_distal = self.increment_version(self._version_for_walking_to_distal)<br>
-&#9;&#9;if self.parent:<br>
-&#9;&#9;&#9;self.parent._spread_changes_to_proximal()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_spread_changes_to_proximal(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._version_for_walking_to_distal&nbsp;=&nbsp;self.increment_version(self._version_for_walking_to_distal)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.parent:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.parent._spread_changes_to_proximal()<br>
 <br>
-&#9;def _mark_dirty(self):<br>
-&#9;&#9;self._version_only_my = self.increment_version(self._version_only_my)<br>
-&#9;&#9;self._spread_changes_to_proximal()<br>
-&#9;&#9;self._spread_changes_to_distal() <br>
-&#9;&#9;# self._dirty = True # already done in _spread_changes_to_distal <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_mark_dirty(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._version_only_my&nbsp;=&nbsp;self.increment_version(self._version_only_my)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._spread_changes_to_proximal()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._spread_changes_to_distal()&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;self._dirty&nbsp;=&nbsp;True&nbsp;#&nbsp;already&nbsp;done&nbsp;in&nbsp;_spread_changes_to_distal&nbsp;<br>
 <br>
-&#9;def local_pose(self) -&gt; Pose3:<br>
-&#9;&#9;return self._local_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;local_pose(self)&nbsp;-&gt;&nbsp;Pose3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._local_pose<br>
 <br>
-&#9;def global_pose(self) -&gt; Pose3:<br>
-&#9;&#9;if self._dirty:<br>
-&#9;&#9;&#9;if self.parent:<br>
-&#9;&#9;&#9;&#9;self._global_pose = self.parent.global_pose() * self._local_pose<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;self._global_pose = self._local_pose<br>
-&#9;&#9;&#9;self._dirty = False<br>
-&#9;&#9;return self._global_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;global_pose(self)&nbsp;-&gt;&nbsp;Pose3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._dirty:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.parent:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._global_pose&nbsp;=&nbsp;self.parent.global_pose()&nbsp;*&nbsp;self._local_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._global_pose&nbsp;=&nbsp;self._local_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dirty&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._global_pose<br>
 <br>
-&#9;def _has_ancestor(self, possible_ancestor):<br>
-&#9;&#9;current = self.parent<br>
-&#9;&#9;while current:<br>
-&#9;&#9;&#9;if current == possible_ancestor:<br>
-&#9;&#9;&#9;&#9;return True<br>
-&#9;&#9;&#9;current = current.parent<br>
-&#9;&#9;return False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_has_ancestor(self,&nbsp;possible_ancestor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current&nbsp;=&nbsp;self.parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;current:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;current&nbsp;==&nbsp;possible_ancestor:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current&nbsp;=&nbsp;current.parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
 <br>
-&#9;def set_parent(self, parent: 'Transform'):<br>
-&#9;&#9;if self._has_ancestor(parent):<br>
-&#9;&#9;&#9;raise ValueError(&quot;Cycle detected in Transform hierarchy&quot;)<br>
-&#9;&#9;self._unparent()<br>
-&#9;&#9;parent.children.append(self)<br>
-&#9;&#9;self.parent = parent<br>
-&#9;&#9;self._mark_dirty()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_parent(self,&nbsp;parent:&nbsp;'Transform'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._has_ancestor(parent):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Cycle&nbsp;detected&nbsp;in&nbsp;Transform&nbsp;hierarchy&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._unparent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent.children.append(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.parent&nbsp;=&nbsp;parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mark_dirty()<br>
 <br>
-&#9;def transform_point(self, point: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a point from local to global coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;global_pose = self.global_pose()<br>
-&#9;&#9;return global_pose.transform_point(point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_point(self,&nbsp;point:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;point&nbsp;from&nbsp;local&nbsp;to&nbsp;global&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;global_pose&nbsp;=&nbsp;self.global_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;global_pose.transform_point(point)<br>
 <br>
-&#9;def transform_point_inverse(self, point: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a point from global to local coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;global_pose = self.global_pose()<br>
-&#9;&#9;inv_global_pose = global_pose.inverse()<br>
-&#9;&#9;return inv_global_pose.transform_point(point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_point_inverse(self,&nbsp;point:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;point&nbsp;from&nbsp;global&nbsp;to&nbsp;local&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;global_pose&nbsp;=&nbsp;self.global_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inv_global_pose&nbsp;=&nbsp;global_pose.inverse()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;inv_global_pose.transform_point(point)<br>
 <br>
-&#9;def transform_vector(self, vector: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a vector from local to global coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;global_pose = self.global_pose()<br>
-&#9;&#9;return global_pose.transform_vector(vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_vector(self,&nbsp;vector:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;vector&nbsp;from&nbsp;local&nbsp;to&nbsp;global&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;global_pose&nbsp;=&nbsp;self.global_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;global_pose.transform_vector(vector)<br>
 <br>
-&#9;def transform_vector_inverse(self, vector: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a vector from global to local coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;global_pose = self.global_pose()<br>
-&#9;&#9;inv_global_pose = global_pose.inverse()<br>
-&#9;&#9;return inv_global_pose.transform_vector(vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_vector_inverse(self,&nbsp;vector:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;vector&nbsp;from&nbsp;global&nbsp;to&nbsp;local&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;global_pose&nbsp;=&nbsp;self.global_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inv_global_pose&nbsp;=&nbsp;global_pose.inverse()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;inv_global_pose.transform_vector(vector)<br>
 <br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return f&quot;Transform({self.name}, local_pose={self._local_pose})&quot;<br>
-&#9;<br>
-&#9;def to_trent_with_children(self, top_without_pose=False) -&gt; str:<br>
-&#9;&#9;dct = {<br>
-&#9;&#9;&#9;&quot;type&quot; : &quot;transform&quot;,<br>
-&#9;&#9;&#9;&quot;name&quot;: self.name,<br>
-&#9;&#9;&#9;&quot;children&quot;: [child.to_trent_with_children() for child in self.children]<br>
-&#9;&#9;}<br>
-&#9;&#9;if not top_without_pose:<br>
-&#9;&#9;&#9;dct[&quot;pose&quot;] = {<br>
-&#9;&#9;&#9;&#9;&quot;position&quot;: self._local_pose.lin.tolist(),<br>
-&#9;&#9;&#9;&#9;&quot;orientation&quot;: self._local_pose.ang.tolist()<br>
-&#9;&#9;&#9;}<br>
-&#9;&#9;return dct<br>
-<br>
-<br>
-def inspect_tree(transform: 'Transform', level: int = 0, name_only: bool = False):<br>
-&#9;indent = &quot;  &quot; * level<br>
-&#9;if name_only:<br>
-&#9;&#9;print(f&quot;{indent}{transform.name}&quot;)<br>
-&#9;else:<br>
-&#9;&#9;print(f&quot;{indent}{transform}&quot;)<br>
-&#9;for child in transform.children:<br>
-&#9;&#9;inspect_tree(child, level + 1, name_only=name_only)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;Transform({self.name},&nbsp;local_pose={self._local_pose})&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_trent_with_children(self,&nbsp;top_without_pose=False)&nbsp;-&gt;&nbsp;str:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dct&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;type&quot;&nbsp;:&nbsp;&quot;transform&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;name&quot;:&nbsp;self.name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;children&quot;:&nbsp;[child.to_trent_with_children()&nbsp;for&nbsp;child&nbsp;in&nbsp;self.children]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;top_without_pose:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dct[&quot;pose&quot;]&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;position&quot;:&nbsp;self._local_pose.lin.tolist(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;orientation&quot;:&nbsp;self._local_pose.ang.tolist()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;dct<br>
 <br>
 <br>
-class Transform3(Transform):<br>
-&#9;&quot;&quot;&quot;A 3D Transform with directional helpers.&quot;&quot;&quot;<br>
-&#9;def __init__(self, local_pose: Pose3 = None, parent: 'Transform3' = None, name: str = &quot;&quot;):<br>
-&#9;&#9;if local_pose is None:<br>
-&#9;&#9;&#9;local_pose = Pose3()<br>
-&#9;&#9;super().__init__(local_pose, parent, name)<br>
+def&nbsp;inspect_tree(transform:&nbsp;'Transform',&nbsp;level:&nbsp;int&nbsp;=&nbsp;0,&nbsp;name_only:&nbsp;bool&nbsp;=&nbsp;False):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;indent&nbsp;=&nbsp;&quot;&nbsp;&nbsp;&quot;&nbsp;*&nbsp;level<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;name_only:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;{indent}{transform.name}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;{indent}{transform}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child&nbsp;in&nbsp;transform.children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inspect_tree(child,&nbsp;level&nbsp;+&nbsp;1,&nbsp;name_only=name_only)<br>
 <br>
-&#9;def forward(self, distance: float = 1.0) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Get the forward direction vector in global coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;local_forward = numpy.array([0.0, 0.0, distance])<br>
-&#9;&#9;return self.transform_vector(local_forward)<br>
 <br>
-&#9;def up(self, distance: float = 1.0) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Get the up direction vector in global coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;local_up = numpy.array([0.0, distance, 0.0])<br>
-&#9;&#9;return self.transform_vector(local_up)<br>
+class&nbsp;Transform3(Transform):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;3D&nbsp;Transform&nbsp;with&nbsp;directional&nbsp;helpers.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;local_pose:&nbsp;Pose3&nbsp;=&nbsp;None,&nbsp;parent:&nbsp;'Transform3'&nbsp;=&nbsp;None,&nbsp;name:&nbsp;str&nbsp;=&nbsp;&quot;&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;local_pose&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local_pose&nbsp;=&nbsp;Pose3()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(local_pose,&nbsp;parent,&nbsp;name)<br>
 <br>
-&#9;def right(self, distance: float = 1.0) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Get the right direction vector in global coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;local_right = numpy.array([distance, 0.0, 0.0])<br>
-&#9;&#9;return self.transform_vector(local_right)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;forward(self,&nbsp;distance:&nbsp;float&nbsp;=&nbsp;1.0)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;forward&nbsp;direction&nbsp;vector&nbsp;in&nbsp;global&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local_forward&nbsp;=&nbsp;numpy.array([0.0,&nbsp;0.0,&nbsp;distance])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.transform_vector(local_forward)<br>
 <br>
-&#9;def backward(self, distance: float = 1.0) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Get the backward direction vector in global coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;return -self.forward(distance)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;up(self,&nbsp;distance:&nbsp;float&nbsp;=&nbsp;1.0)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;up&nbsp;direction&nbsp;vector&nbsp;in&nbsp;global&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local_up&nbsp;=&nbsp;numpy.array([0.0,&nbsp;distance,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.transform_vector(local_up)<br>
 <br>
-&#9;def down(self, distance: float = 1.0) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Get the down direction vector in global coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;return -self.up(distance)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;right(self,&nbsp;distance:&nbsp;float&nbsp;=&nbsp;1.0)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;right&nbsp;direction&nbsp;vector&nbsp;in&nbsp;global&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local_right&nbsp;=&nbsp;numpy.array([distance,&nbsp;0.0,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.transform_vector(local_right)<br>
 <br>
-&#9;def left(self, distance: float = 1.0) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Get the left direction vector in global coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;return -self.right(distance)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;backward(self,&nbsp;distance:&nbsp;float&nbsp;=&nbsp;1.0)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;backward&nbsp;direction&nbsp;vector&nbsp;in&nbsp;global&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;-self.forward(distance)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;down(self,&nbsp;distance:&nbsp;float&nbsp;=&nbsp;1.0)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;down&nbsp;direction&nbsp;vector&nbsp;in&nbsp;global&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;-self.up(distance)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;left(self,&nbsp;distance:&nbsp;float&nbsp;=&nbsp;1.0)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;left&nbsp;direction&nbsp;vector&nbsp;in&nbsp;global&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;-self.right(distance)<br>
 <br>
 <br>
 <!-- END SCAT CODE -->

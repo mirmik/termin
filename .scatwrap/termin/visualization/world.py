@@ -6,98 +6,98 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Visualization world orchestrating scenes, windows and main loop.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Visualization&nbsp;world&nbsp;orchestrating&nbsp;scenes,&nbsp;windows&nbsp;and&nbsp;main&nbsp;loop.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import time<br>
-from typing import List, Optional<br>
+import&nbsp;time<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Optional<br>
 <br>
-from .renderer import Renderer<br>
-from .scene import Scene<br>
-from .window import Window<br>
-from .backends.glfw import GLFWWindowBackend<br>
-from .backends.opengl import OpenGLGraphicsBackend<br>
-from .backends.base import GraphicsBackend, WindowBackend<br>
-from .backends import set_default_graphics_backend, set_default_window_backend, get_default_graphics_backend, get_default_window_backend<br>
+from&nbsp;.renderer&nbsp;import&nbsp;Renderer<br>
+from&nbsp;.scene&nbsp;import&nbsp;Scene<br>
+from&nbsp;.window&nbsp;import&nbsp;Window<br>
+from&nbsp;.backends.glfw&nbsp;import&nbsp;GLFWWindowBackend<br>
+from&nbsp;.backends.opengl&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
+from&nbsp;.backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;WindowBackend<br>
+from&nbsp;.backends&nbsp;import&nbsp;set_default_graphics_backend,&nbsp;set_default_window_backend,&nbsp;get_default_graphics_backend,&nbsp;get_default_window_backend<br>
 <br>
-# For testing purposes, set this to True to close the world after the first frame.<br>
-CLOSE_AFTER_FIRST_FRAME = False<br>
+#&nbsp;For&nbsp;testing&nbsp;purposes,&nbsp;set&nbsp;this&nbsp;to&nbsp;True&nbsp;to&nbsp;close&nbsp;the&nbsp;world&nbsp;after&nbsp;the&nbsp;first&nbsp;frame.<br>
+CLOSE_AFTER_FIRST_FRAME&nbsp;=&nbsp;False<br>
 <br>
-class VisualizationWorld:<br>
-&#9;&quot;&quot;&quot;High-level application controller.&quot;&quot;&quot;<br>
+class&nbsp;VisualizationWorld:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;High-level&nbsp;application&nbsp;controller.&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, graphics_backend: GraphicsBackend | None = None, window_backend: WindowBackend | None = None):<br>
-&#9;&#9;self.graphics = graphics_backend or get_default_graphics_backend() or OpenGLGraphicsBackend()<br>
-&#9;&#9;self.window_backend = window_backend or get_default_window_backend() or GLFWWindowBackend()<br>
-&#9;&#9;set_default_graphics_backend(self.graphics)<br>
-&#9;&#9;set_default_window_backend(self.window_backend)<br>
-&#9;&#9;self.renderer = Renderer(self.graphics)<br>
-&#9;&#9;self.scenes: List[Scene] = []<br>
-&#9;&#9;self.windows: List[Window] = []<br>
-&#9;&#9;self._running = False<br>
-&#9;&#9;<br>
-&#9;&#9;self.fps = 0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;graphics_backend:&nbsp;GraphicsBackend&nbsp;|&nbsp;None&nbsp;=&nbsp;None,&nbsp;window_backend:&nbsp;WindowBackend&nbsp;|&nbsp;None&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics&nbsp;=&nbsp;graphics_backend&nbsp;or&nbsp;get_default_graphics_backend()&nbsp;or&nbsp;OpenGLGraphicsBackend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.window_backend&nbsp;=&nbsp;window_backend&nbsp;or&nbsp;get_default_window_backend()&nbsp;or&nbsp;GLFWWindowBackend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;set_default_graphics_backend(self.graphics)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;set_default_window_backend(self.window_backend)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.renderer&nbsp;=&nbsp;Renderer(self.graphics)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scenes:&nbsp;List[Scene]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.windows:&nbsp;List[Window]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._running&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.fps&nbsp;=&nbsp;0<br>
 <br>
-&#9;def add_scene(self, scene: Scene) -&gt; Scene:<br>
-&#9;&#9;self.scenes.append(scene)<br>
-&#9;&#9;return scene<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_scene(self,&nbsp;scene:&nbsp;Scene)&nbsp;-&gt;&nbsp;Scene:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scenes.append(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene<br>
 <br>
-&#9;def remove_scene(self, scene: Scene):<br>
-&#9;&#9;if scene in self.scenes:<br>
-&#9;&#9;&#9;self.scenes.remove(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;remove_scene(self,&nbsp;scene:&nbsp;Scene):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;scene&nbsp;in&nbsp;self.scenes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scenes.remove(scene)<br>
 <br>
-&#9;def create_window(self, width: int = 1280, height: int = 720, title: str = &quot;termin viewer&quot;, **backend_kwargs) -&gt; Window:<br>
-&#9;&#9;share = self.windows[0] if self.windows else None<br>
-&#9;&#9;window = Window(width=width, height=height, title=title, renderer=self.renderer, graphics=self.graphics, window_backend=self.window_backend, share=share, **backend_kwargs)<br>
-&#9;&#9;self.windows.append(window)<br>
-&#9;&#9;return window<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_window(self,&nbsp;width:&nbsp;int&nbsp;=&nbsp;1280,&nbsp;height:&nbsp;int&nbsp;=&nbsp;720,&nbsp;title:&nbsp;str&nbsp;=&nbsp;&quot;termin&nbsp;viewer&quot;,&nbsp;**backend_kwargs)&nbsp;-&gt;&nbsp;Window:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;share&nbsp;=&nbsp;self.windows[0]&nbsp;if&nbsp;self.windows&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;Window(width=width,&nbsp;height=height,&nbsp;title=title,&nbsp;renderer=self.renderer,&nbsp;graphics=self.graphics,&nbsp;window_backend=self.window_backend,&nbsp;share=share,&nbsp;**backend_kwargs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.windows.append(window)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;window<br>
 <br>
-&#9;def add_window(self, window: Window):<br>
-&#9;&#9;self.windows.append(window)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_window(self,&nbsp;window:&nbsp;Window):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.windows.append(window)<br>
 <br>
-&#9;def update_fps(self, dt):<br>
-&#9;&#9;if dt &gt; 0:<br>
-&#9;&#9;&#9;self.fps = int(1.0 / dt)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self.fps = 0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_fps(self,&nbsp;dt):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dt&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.fps&nbsp;=&nbsp;int(1.0&nbsp;/&nbsp;dt)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.fps&nbsp;=&nbsp;0<br>
 <br>
-&#9;def run(self):<br>
-&#9;&#9;if self._running:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;self._running = True<br>
-&#9;&#9;last = time.perf_counter()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;run(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._running:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._running&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;last&nbsp;=&nbsp;time.perf_counter()<br>
 <br>
-&#9;&#9;while self.windows:<br>
-&#9;&#9;&#9;now = time.perf_counter()<br>
-&#9;&#9;&#9;dt = now - last<br>
-&#9;&#9;&#9;last = now<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;self.windows:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;now&nbsp;=&nbsp;time.perf_counter()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dt&nbsp;=&nbsp;now&nbsp;-&nbsp;last<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;last&nbsp;=&nbsp;now<br>
 <br>
-&#9;&#9;&#9;for scene in list(self.scenes):<br>
-&#9;&#9;&#9;&#9;scene.update(dt)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;scene&nbsp;in&nbsp;list(self.scenes):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene.update(dt)<br>
 <br>
-&#9;&#9;&#9;alive = []<br>
-&#9;&#9;&#9;for window in list(self.windows):<br>
-&#9;&#9;&#9;&#9;if window.should_close:<br>
-&#9;&#9;&#9;&#9;&#9;window.close()<br>
-&#9;&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;&#9;window.update(dt)<br>
-&#9;&#9;&#9;&#9;if window.handle.drives_render():<br>
-&#9;&#9;&#9;&#9;&#9;window.handle.widget.update()<br>
-&#9;&#9;&#9;&#9;if not window.handle.drives_render():<br>
-&#9;&#9;&#9;&#9;&#9;window.render()<br>
-&#9;&#9;&#9;&#9;alive.append(window)<br>
-&#9;&#9;&#9;self.windows = alive<br>
-&#9;&#9;&#9;self.window_backend.poll_events()<br>
-&#9;&#9;&#9;self.update_fps(dt)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alive&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;window&nbsp;in&nbsp;list(self.windows):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;window.should_close:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.close()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.update(dt)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;window.handle.drives_render():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.handle.widget.update()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;window.handle.drives_render():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.render()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alive.append(window)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.windows&nbsp;=&nbsp;alive<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.window_backend.poll_events()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_fps(dt)<br>
 <br>
-&#9;&#9;&#9;if CLOSE_AFTER_FIRST_FRAME:<br>
-&#9;&#9;&#9;&#9;break<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;for window in self.windows:<br>
-&#9;&#9;&#9;window.close()<br>
-&#9;&#9;self.window_backend.terminate()<br>
-&#9;&#9;self._running = False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;CLOSE_AFTER_FIRST_FRAME:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;window&nbsp;in&nbsp;self.windows:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.close()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.window_backend.terminate()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._running&nbsp;=&nbsp;False<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

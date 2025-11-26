@@ -6,150 +6,150 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# termin/visualization/inspect.py<br>
+#&nbsp;termin/visualization/inspect.py<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from dataclasses import dataclass<br>
-from typing import Any, Callable, Optional<br>
+from&nbsp;dataclasses&nbsp;import&nbsp;dataclass<br>
+from&nbsp;typing&nbsp;import&nbsp;Any,&nbsp;Callable,&nbsp;Optional<br>
 <br>
 <br>
 @dataclass<br>
-class InspectField:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Описание одного поля для инспектора.<br>
+class&nbsp;InspectField:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Описание&nbsp;одного&nbsp;поля&nbsp;для&nbsp;инспектора.<br>
 <br>
-&#9;path      – путь к полю (&quot;enabled&quot;, &quot;material.color&quot; и т.п.)<br>
-&#9;label     – подпись в UI<br>
-&#9;kind      – тип виджета: 'float', 'int', 'bool', 'vec3', 'color', 'string', 'enum', ...<br>
-&#9;min, max  – ограничения<br>
-&#9;step      – шаг (для спинбоксов)<br>
-&#9;choices   – для enum: список (value, label)<br>
-&#9;getter, setter – если нужно обращаться к полю вручную.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;path: str | None = None<br>
-&#9;label: str | None = None<br>
-&#9;kind: str = &quot;float&quot;<br>
-&#9;min: float | None = None<br>
-&#9;max: float | None = None<br>
-&#9;step: float | None = None<br>
-&#9;choices: list[tuple[Any, str]] | None = None<br>
-&#9;getter: Optional[Callable[[Any], Any]] = None<br>
-&#9;setter: Optional[Callable[[Any, Any], None]] = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;path&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;–&nbsp;путь&nbsp;к&nbsp;полю&nbsp;(&quot;enabled&quot;,&nbsp;&quot;material.color&quot;&nbsp;и&nbsp;т.п.)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;label&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;–&nbsp;подпись&nbsp;в&nbsp;UI<br>
+&nbsp;&nbsp;&nbsp;&nbsp;kind&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;–&nbsp;тип&nbsp;виджета:&nbsp;'float',&nbsp;'int',&nbsp;'bool',&nbsp;'vec3',&nbsp;'color',&nbsp;'string',&nbsp;'enum',&nbsp;...<br>
+&nbsp;&nbsp;&nbsp;&nbsp;min,&nbsp;max&nbsp;&nbsp;–&nbsp;ограничения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;step&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;–&nbsp;шаг&nbsp;(для&nbsp;спинбоксов)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;choices&nbsp;&nbsp;&nbsp;–&nbsp;для&nbsp;enum:&nbsp;список&nbsp;(value,&nbsp;label)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;getter,&nbsp;setter&nbsp;–&nbsp;если&nbsp;нужно&nbsp;обращаться&nbsp;к&nbsp;полю&nbsp;вручную.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;path:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;label:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;kind:&nbsp;str&nbsp;=&nbsp;&quot;float&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;min:&nbsp;float&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;max:&nbsp;float&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;step:&nbsp;float&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;choices:&nbsp;list[tuple[Any,&nbsp;str]]&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;getter:&nbsp;Optional[Callable[[Any],&nbsp;Any]]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;setter:&nbsp;Optional[Callable[[Any,&nbsp;Any],&nbsp;None]]&nbsp;=&nbsp;None<br>
 <br>
-&#9;def get_value(self, obj):<br>
-&#9;&#9;if self.getter:<br>
-&#9;&#9;&#9;return self.getter(obj)<br>
-&#9;&#9;if self.path is None:<br>
-&#9;&#9;&#9;raise ValueError(&quot;InspectField: path or getter must be set&quot;)<br>
-&#9;&#9;return _resolve_path_get(obj, self.path)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_value(self,&nbsp;obj):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.getter:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.getter(obj)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.path&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;InspectField:&nbsp;path&nbsp;or&nbsp;getter&nbsp;must&nbsp;be&nbsp;set&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;_resolve_path_get(obj,&nbsp;self.path)<br>
 <br>
-&#9;def set_value(self, obj, value):<br>
-&#9;&#9;if self.setter:<br>
-&#9;&#9;&#9;self.setter(obj, value)<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;if self.path is None:<br>
-&#9;&#9;&#9;raise ValueError(&quot;InspectField: path or setter must be set&quot;)<br>
-&#9;&#9;_resolve_path_set(obj, self.path, value)<br>
-<br>
-<br>
-def _resolve_path_get(obj, path: str):<br>
-&#9;cur = obj<br>
-&#9;for part in path.split(&quot;.&quot;):<br>
-&#9;&#9;cur = getattr(cur, part)<br>
-&#9;return cur<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_value(self,&nbsp;obj,&nbsp;value):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.setter:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.setter(obj,&nbsp;value)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.path&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;InspectField:&nbsp;path&nbsp;or&nbsp;setter&nbsp;must&nbsp;be&nbsp;set&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_resolve_path_set(obj,&nbsp;self.path,&nbsp;value)<br>
 <br>
 <br>
-def _resolve_path_set(obj, path: str, value):<br>
-&#9;parts = path.split(&quot;.&quot;)<br>
-&#9;cur = obj<br>
-&#9;for part in parts[:-1]:<br>
-&#9;&#9;cur = getattr(cur, part)<br>
-&#9;last = parts[-1]<br>
-<br>
-&#9;# небольшой хак: если там numpy-вектор, обновляем по месту<br>
-&#9;try:<br>
-&#9;&#9;import numpy as np<br>
-&#9;&#9;arr = getattr(cur, last)<br>
-&#9;&#9;if isinstance(arr, np.ndarray):<br>
-&#9;&#9;&#9;arr[...] = value<br>
-&#9;&#9;&#9;return<br>
-&#9;except Exception:<br>
-&#9;&#9;pass<br>
-<br>
-&#9;setattr(cur, last, value)<br>
+def&nbsp;_resolve_path_get(obj,&nbsp;path:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;obj<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;part&nbsp;in&nbsp;path.split(&quot;.&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;getattr(cur,&nbsp;part)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;cur<br>
 <br>
 <br>
-class InspectAttr:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Дескриптор: хранит значение на инстансе и регистрирует себя как InspectField<br>
-&#9;в классе компонента.<br>
+def&nbsp;_resolve_path_set(obj,&nbsp;path:&nbsp;str,&nbsp;value):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;parts&nbsp;=&nbsp;path.split(&quot;.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;obj<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;part&nbsp;in&nbsp;parts[:-1]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;getattr(cur,&nbsp;part)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;last&nbsp;=&nbsp;parts[-1]<br>
 <br>
-&#9;Использование:<br>
-&#9;&#9;class Foo(Component):<br>
-&#9;&#9;&#9;bar = inspect(42, label=&quot;Bar&quot;, kind=&quot;int&quot;)<br>
-&#9;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;небольшой&nbsp;хак:&nbsp;если&nbsp;там&nbsp;numpy-вектор,&nbsp;обновляем&nbsp;по&nbsp;месту<br>
+&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import&nbsp;numpy&nbsp;as&nbsp;np<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr&nbsp;=&nbsp;getattr(cur,&nbsp;last)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(arr,&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr[...]&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;Exception:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;default: Any = None,<br>
-&#9;&#9;*,<br>
-&#9;&#9;label: str | None = None,<br>
-&#9;&#9;kind: str = &quot;float&quot;,<br>
-&#9;&#9;min: float | None = None,<br>
-&#9;&#9;max: float | None = None,<br>
-&#9;&#9;step: float | None = None,<br>
-&#9;&#9;choices: list[tuple[Any, str]] | None = None,<br>
-&#9;&#9;getter: Optional[Callable[[Any], Any]] = None,<br>
-&#9;&#9;setter: Optional[Callable[[Any, Any], None]] = None,<br>
-&#9;):<br>
-&#9;&#9;self.default = default<br>
-&#9;&#9;self._field = InspectField(<br>
-&#9;&#9;&#9;path=None,      # узнаем позже, в __set_name__<br>
-&#9;&#9;&#9;label=label,<br>
-&#9;&#9;&#9;kind=kind,<br>
-&#9;&#9;&#9;min=min,<br>
-&#9;&#9;&#9;max=max,<br>
-&#9;&#9;&#9;step=step,<br>
-&#9;&#9;&#9;choices=choices,<br>
-&#9;&#9;&#9;getter=getter,<br>
-&#9;&#9;&#9;setter=setter,<br>
-&#9;&#9;)<br>
-&#9;&#9;self._name: str | None = None<br>
-<br>
-&#9;def __set_name__(self, owner, name: str):<br>
-&#9;&#9;self._name = name<br>
-<br>
-&#9;&#9;# если путь не задан — считаем, что поле лежит прямо на компоненте<br>
-&#9;&#9;if self._field.path is None:<br>
-&#9;&#9;&#9;self._field.path = name<br>
-&#9;&#9;# если label не задан – используем имя<br>
-&#9;&#9;if self._field.label is None:<br>
-&#9;&#9;&#9;self._field.label = name<br>
-<br>
-&#9;&#9;# регистрируем поле в owner.inspect_fields<br>
-&#9;&#9;fields = getattr(owner, &quot;inspect_fields&quot;, None)<br>
-&#9;&#9;if fields is None:<br>
-&#9;&#9;&#9;fields = {}<br>
-&#9;&#9;&#9;setattr(owner, &quot;inspect_fields&quot;, fields)<br>
-&#9;&#9;fields[name] = self._field<br>
-<br>
-&#9;def __get__(self, instance, owner=None):<br>
-&#9;&#9;if instance is None:<br>
-&#9;&#9;&#9;return self<br>
-&#9;&#9;return instance.__dict__.get(self._name, self.default)<br>
-<br>
-&#9;def __set__(self, instance, value):<br>
-&#9;&#9;instance.__dict__[self._name] = value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;setattr(cur,&nbsp;last,&nbsp;value)<br>
 <br>
 <br>
-def inspect(default: Any = None, **meta) -&gt; InspectAttr:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Сахар: aaa = inspect(42, label=&quot;AAA&quot;, kind=&quot;int&quot;).<br>
+class&nbsp;InspectAttr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Дескриптор:&nbsp;хранит&nbsp;значение&nbsp;на&nbsp;инстансе&nbsp;и&nbsp;регистрирует&nbsp;себя&nbsp;как&nbsp;InspectField<br>
+&nbsp;&nbsp;&nbsp;&nbsp;в&nbsp;классе&nbsp;компонента.<br>
 <br>
-&#9;meta → параметры для InspectField (label, kind, min, max, step, ...)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;return InspectAttr(default, **meta)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Использование:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class&nbsp;Foo(Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bar&nbsp;=&nbsp;inspect(42,&nbsp;label=&quot;Bar&quot;,&nbsp;kind=&quot;int&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;default:&nbsp;Any&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind:&nbsp;str&nbsp;=&nbsp;&quot;float&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min:&nbsp;float&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max:&nbsp;float&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;step:&nbsp;float&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;choices:&nbsp;list[tuple[Any,&nbsp;str]]&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;getter:&nbsp;Optional[Callable[[Any],&nbsp;Any]]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setter:&nbsp;Optional[Callable[[Any,&nbsp;Any],&nbsp;None]]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.default&nbsp;=&nbsp;default<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._field&nbsp;=&nbsp;InspectField(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path=None,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;узнаем&nbsp;позже,&nbsp;в&nbsp;__set_name__<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label=label,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind=kind,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min=min,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max=max,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;step=step,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;choices=choices,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;getter=getter,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setter=setter,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._name:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__set_name__(self,&nbsp;owner,&nbsp;name:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._name&nbsp;=&nbsp;name<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;путь&nbsp;не&nbsp;задан&nbsp;—&nbsp;считаем,&nbsp;что&nbsp;поле&nbsp;лежит&nbsp;прямо&nbsp;на&nbsp;компоненте<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._field.path&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._field.path&nbsp;=&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;label&nbsp;не&nbsp;задан&nbsp;–&nbsp;используем&nbsp;имя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._field.label&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._field.label&nbsp;=&nbsp;name<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;регистрируем&nbsp;поле&nbsp;в&nbsp;owner.inspect_fields<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fields&nbsp;=&nbsp;getattr(owner,&nbsp;&quot;inspect_fields&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fields&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fields&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setattr(owner,&nbsp;&quot;inspect_fields&quot;,&nbsp;fields)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fields[name]&nbsp;=&nbsp;self._field<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__get__(self,&nbsp;instance,&nbsp;owner=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;instance&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;instance.__dict__.get(self._name,&nbsp;self.default)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__set__(self,&nbsp;instance,&nbsp;value):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;instance.__dict__[self._name]&nbsp;=&nbsp;value<br>
+<br>
+<br>
+def&nbsp;inspect(default:&nbsp;Any&nbsp;=&nbsp;None,&nbsp;**meta)&nbsp;-&gt;&nbsp;InspectAttr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Сахар:&nbsp;aaa&nbsp;=&nbsp;inspect(42,&nbsp;label=&quot;AAA&quot;,&nbsp;kind=&quot;int&quot;).<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;meta&nbsp;→&nbsp;параметры&nbsp;для&nbsp;InspectField&nbsp;(label,&nbsp;kind,&nbsp;min,&nbsp;max,&nbsp;step,&nbsp;...)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;InspectAttr(default,&nbsp;**meta)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

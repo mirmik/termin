@@ -6,202 +6,202 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import math<br>
-import numpy<br>
+import&nbsp;math<br>
+import&nbsp;numpy<br>
 <br>
 <br>
-class Pose2:<br>
-&#9;&quot;&quot;&quot;A 2D Pose represented by rotation angle and translation vector.&quot;&quot;&quot;<br>
+class&nbsp;Pose2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;2D&nbsp;Pose&nbsp;represented&nbsp;by&nbsp;rotation&nbsp;angle&nbsp;and&nbsp;translation&nbsp;vector.&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, ang: float = 0.0, lin: numpy.ndarray = numpy.array([0.0, 0.0])):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;ang: Rotation angle in radians<br>
-&#9;&#9;&#9;lin: Translation vector [x, y]<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.ang = ang<br>
-&#9;&#9;self.lin = numpy.asarray(lin)<br>
-&#9;&#9;if self.lin.shape != (2,):<br>
-&#9;&#9;&#9;raise ValueError(&quot;lin must be a 2D vector&quot;)<br>
-&#9;&#9;self._rot_matrix = None  # Lazy computation<br>
-&#9;&#9;self._mat = None  # Lazy computation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;ang:&nbsp;float&nbsp;=&nbsp;0.0,&nbsp;lin:&nbsp;numpy.ndarray&nbsp;=&nbsp;numpy.array([0.0,&nbsp;0.0])):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang:&nbsp;Rotation&nbsp;angle&nbsp;in&nbsp;radians<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin:&nbsp;Translation&nbsp;vector&nbsp;[x,&nbsp;y]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.ang&nbsp;=&nbsp;ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lin&nbsp;=&nbsp;numpy.asarray(lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.lin.shape&nbsp;!=&nbsp;(2,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;lin&nbsp;must&nbsp;be&nbsp;a&nbsp;2D&nbsp;vector&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot_matrix&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Lazy&nbsp;computation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Lazy&nbsp;computation<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def identity():<br>
-&#9;&#9;&quot;&quot;&quot;Create an identity pose (no rotation, no translation).&quot;&quot;&quot;<br>
-&#9;&#9;return Pose2(ang=0.0, lin=numpy.array([0.0, 0.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;identity():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;an&nbsp;identity&nbsp;pose&nbsp;(no&nbsp;rotation,&nbsp;no&nbsp;translation).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2(ang=0.0,&nbsp;lin=numpy.array([0.0,&nbsp;0.0]))<br>
 <br>
-&#9;def rotation_matrix(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get the 2x2 rotation matrix corresponding to the pose's orientation.&quot;&quot;&quot;<br>
-&#9;&#9;if self._rot_matrix is None:<br>
-&#9;&#9;&#9;c = math.cos(self.ang)<br>
-&#9;&#9;&#9;s = math.sin(self.ang)<br>
-&#9;&#9;&#9;self._rot_matrix = numpy.array([<br>
-&#9;&#9;&#9;&#9;[c, -s],<br>
-&#9;&#9;&#9;&#9;[s,  c]<br>
-&#9;&#9;&#9;])<br>
-&#9;&#9;return self._rot_matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotation_matrix(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;2x2&nbsp;rotation&nbsp;matrix&nbsp;corresponding&nbsp;to&nbsp;the&nbsp;pose's&nbsp;orientation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._rot_matrix&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;math.cos(self.ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;math.sin(self.ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot_matrix&nbsp;=&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[c,&nbsp;-s],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[s,&nbsp;&nbsp;c]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._rot_matrix<br>
 <br>
-&#9;def as_matrix(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get the 3x3 transformation matrix corresponding to the pose.&quot;&quot;&quot;<br>
-&#9;&#9;if self._mat is None:<br>
-&#9;&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;&#9;t = self.lin<br>
-&#9;&#9;&#9;self._mat = numpy.eye(3)<br>
-&#9;&#9;&#9;self._mat[:2, :2] = R<br>
-&#9;&#9;&#9;self._mat[:2, 2] = t<br>
-&#9;&#9;return self._mat<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;as_matrix(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;3x3&nbsp;transformation&nbsp;matrix&nbsp;corresponding&nbsp;to&nbsp;the&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._mat&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;numpy.eye(3)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat[:2,&nbsp;:2]&nbsp;=&nbsp;R<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat[:2,&nbsp;2]&nbsp;=&nbsp;t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._mat<br>
 <br>
-&#9;def inverse(self):<br>
-&#9;&#9;&quot;&quot;&quot;Compute the inverse of the pose.&quot;&quot;&quot;<br>
-&#9;&#9;inv_ang = -self.ang<br>
-&#9;&#9;c = math.cos(inv_ang)<br>
-&#9;&#9;s = math.sin(inv_ang)<br>
-&#9;&#9;# Rotate translation by inverse rotation<br>
-&#9;&#9;inv_lin = numpy.array([<br>
-&#9;&#9;&#9;c * (-self.lin[0]) - s * (-self.lin[1]),<br>
-&#9;&#9;&#9;s * (-self.lin[0]) + c * (-self.lin[1])<br>
-&#9;&#9;])<br>
-&#9;&#9;return Pose2(inv_ang, inv_lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compute&nbsp;the&nbsp;inverse&nbsp;of&nbsp;the&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inv_ang&nbsp;=&nbsp;-self.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;math.cos(inv_ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;math.sin(inv_ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Rotate&nbsp;translation&nbsp;by&nbsp;inverse&nbsp;rotation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inv_lin&nbsp;=&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;*&nbsp;(-self.lin[0])&nbsp;-&nbsp;s&nbsp;*&nbsp;(-self.lin[1]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;*&nbsp;(-self.lin[0])&nbsp;+&nbsp;c&nbsp;*&nbsp;(-self.lin[1])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2(inv_ang,&nbsp;inv_lin)<br>
 <br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return f&quot;Pose2(ang={self.ang}, lin={self.lin})&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;Pose2(ang={self.ang},&nbsp;lin={self.lin})&quot;<br>
 <br>
-&#9;def transform_point(self, point: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a 2D point using the pose.&quot;&quot;&quot;<br>
-&#9;&#9;point = numpy.asarray(point)<br>
-&#9;&#9;if point.shape != (2,):<br>
-&#9;&#9;&#9;raise ValueError(&quot;point must be a 2D vector&quot;)<br>
-&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;return R @ point + self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_point(self,&nbsp;point:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;2D&nbsp;point&nbsp;using&nbsp;the&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;point&nbsp;=&nbsp;numpy.asarray(point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;point.shape&nbsp;!=&nbsp;(2,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;point&nbsp;must&nbsp;be&nbsp;a&nbsp;2D&nbsp;vector&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;R&nbsp;@&nbsp;point&nbsp;+&nbsp;self.lin<br>
 <br>
-&#9;def transform_vector(self, vector: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a 2D vector using the pose (ignoring translation).&quot;&quot;&quot;<br>
-&#9;&#9;vector = numpy.asarray(vector)<br>
-&#9;&#9;if vector.shape != (2,):<br>
-&#9;&#9;&#9;raise ValueError(&quot;vector must be a 2D vector&quot;)<br>
-&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;return R @ vector<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_vector(self,&nbsp;vector:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;2D&nbsp;vector&nbsp;using&nbsp;the&nbsp;pose&nbsp;(ignoring&nbsp;translation).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vector&nbsp;=&nbsp;numpy.asarray(vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vector.shape&nbsp;!=&nbsp;(2,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;vector&nbsp;must&nbsp;be&nbsp;a&nbsp;2D&nbsp;vector&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;R&nbsp;@&nbsp;vector<br>
 <br>
-&#9;def rotate_vector(self, vector: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Rotate a 2D vector using the pose's rotation.&quot;&quot;&quot;<br>
-&#9;&#9;vector = numpy.asarray(vector)<br>
-&#9;&#9;if vector.shape != (2,):<br>
-&#9;&#9;&#9;raise ValueError(&quot;vector must be a 2D vector&quot;)<br>
-&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;return R @ vector<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotate_vector(self,&nbsp;vector:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Rotate&nbsp;a&nbsp;2D&nbsp;vector&nbsp;using&nbsp;the&nbsp;pose's&nbsp;rotation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vector&nbsp;=&nbsp;numpy.asarray(vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vector.shape&nbsp;!=&nbsp;(2,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;vector&nbsp;must&nbsp;be&nbsp;a&nbsp;2D&nbsp;vector&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;R&nbsp;@&nbsp;vector<br>
 <br>
-&#9;def inverse_transform_point(self, point: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a 2D point using the inverse of the pose.&quot;&quot;&quot;<br>
-&#9;&#9;point = numpy.asarray(point)<br>
-&#9;&#9;point = point.reshape(2)<br>
-&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;return R.T @ (point - self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_point(self,&nbsp;point:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;2D&nbsp;point&nbsp;using&nbsp;the&nbsp;inverse&nbsp;of&nbsp;the&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;point&nbsp;=&nbsp;numpy.asarray(point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;point&nbsp;=&nbsp;point.reshape(2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;R.T&nbsp;@&nbsp;(point&nbsp;-&nbsp;self.lin)<br>
 <br>
-&#9;def inverse_rotate_vector(self, vector: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Rotate a 2D vector using the inverse of the pose's rotation.&quot;&quot;&quot;<br>
-&#9;&#9;vector = numpy.asarray(vector)<br>
-&#9;&#9;if vector.shape != (2,):<br>
-&#9;&#9;&#9;raise ValueError(&quot;vector must be a 2D vector&quot;)<br>
-&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;return R.T @ vector<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_rotate_vector(self,&nbsp;vector:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Rotate&nbsp;a&nbsp;2D&nbsp;vector&nbsp;using&nbsp;the&nbsp;inverse&nbsp;of&nbsp;the&nbsp;pose's&nbsp;rotation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vector&nbsp;=&nbsp;numpy.asarray(vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vector.shape&nbsp;!=&nbsp;(2,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;vector&nbsp;must&nbsp;be&nbsp;a&nbsp;2D&nbsp;vector&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;R.T&nbsp;@&nbsp;vector<br>
 <br>
-&#9;def inverse_transform_vector(self, vector: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a 2D vector using the inverse of the pose (ignoring translation).&quot;&quot;&quot;<br>
-&#9;&#9;vector = numpy.asarray(vector)<br>
-&#9;&#9;if vector.shape != (2,):<br>
-&#9;&#9;&#9;raise ValueError(&quot;vector must be a 2D vector&quot;)<br>
-&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;return R.T @ vector<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_vector(self,&nbsp;vector:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;2D&nbsp;vector&nbsp;using&nbsp;the&nbsp;inverse&nbsp;of&nbsp;the&nbsp;pose&nbsp;(ignoring&nbsp;translation).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vector&nbsp;=&nbsp;numpy.asarray(vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vector.shape&nbsp;!=&nbsp;(2,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;vector&nbsp;must&nbsp;be&nbsp;a&nbsp;2D&nbsp;vector&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;R.T&nbsp;@&nbsp;vector<br>
 <br>
-&#9;def __mul__(self, other):<br>
-&#9;&#9;&quot;&quot;&quot;Compose this pose with another pose.&quot;&quot;&quot;<br>
-&#9;&#9;if not isinstance(other, Pose2):<br>
-&#9;&#9;&#9;raise TypeError(&quot;Can only multiply Pose2 with Pose2&quot;)<br>
-&#9;&#9;# Compose rotations: angles add<br>
-&#9;&#9;new_ang = self.ang + other.ang<br>
-&#9;&#9;# Compose translations: rotate other's translation and add to self's<br>
-&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;new_lin = self.lin + R @ other.lin<br>
-&#9;&#9;return Pose2(ang=new_ang, lin=new_lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__mul__(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compose&nbsp;this&nbsp;pose&nbsp;with&nbsp;another&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(other,&nbsp;Pose2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;TypeError(&quot;Can&nbsp;only&nbsp;multiply&nbsp;Pose2&nbsp;with&nbsp;Pose2&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Compose&nbsp;rotations:&nbsp;angles&nbsp;add<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_ang&nbsp;=&nbsp;self.ang&nbsp;+&nbsp;other.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Compose&nbsp;translations:&nbsp;rotate&nbsp;other's&nbsp;translation&nbsp;and&nbsp;add&nbsp;to&nbsp;self's<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_lin&nbsp;=&nbsp;self.lin&nbsp;+&nbsp;R&nbsp;@&nbsp;other.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2(ang=new_ang,&nbsp;lin=new_lin)<br>
 <br>
-&#9;def __matmul__(self, other):<br>
-&#9;&#9;&quot;&quot;&quot;Compose this pose with another pose using @ operator.&quot;&quot;&quot;<br>
-&#9;&#9;return self * other<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__matmul__(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compose&nbsp;this&nbsp;pose&nbsp;with&nbsp;another&nbsp;pose&nbsp;using&nbsp;@&nbsp;operator.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self&nbsp;*&nbsp;other<br>
 <br>
-&#9;def compose(self, other: 'Pose2') -&gt; 'Pose2':<br>
-&#9;&#9;&quot;&quot;&quot;Compose this pose with another pose.&quot;&quot;&quot;<br>
-&#9;&#9;return self * other<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;compose(self,&nbsp;other:&nbsp;'Pose2')&nbsp;-&gt;&nbsp;'Pose2':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compose&nbsp;this&nbsp;pose&nbsp;with&nbsp;another&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self&nbsp;*&nbsp;other<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def rotation(angle: float):<br>
-&#9;&#9;&quot;&quot;&quot;Create a rotation pose by a given angle.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose2(ang=angle, lin=numpy.array([0.0, 0.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotation(angle:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;rotation&nbsp;pose&nbsp;by&nbsp;a&nbsp;given&nbsp;angle.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2(ang=angle,&nbsp;lin=numpy.array([0.0,&nbsp;0.0]))<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def translation(x: float, y: float):<br>
-&#9;&#9;&quot;&quot;&quot;Create a translation pose.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose2(ang=0.0, lin=numpy.array([x, y]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;translation(x:&nbsp;float,&nbsp;y:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;translation&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2(ang=0.0,&nbsp;lin=numpy.array([x,&nbsp;y]))<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def move(dx: float, dy: float):<br>
-&#9;&#9;&quot;&quot;&quot;Move the pose by given deltas in local coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose2.translation(dx, dy)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;move(dx:&nbsp;float,&nbsp;dy:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Move&nbsp;the&nbsp;pose&nbsp;by&nbsp;given&nbsp;deltas&nbsp;in&nbsp;local&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2.translation(dx,&nbsp;dy)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def moveX(distance: float):<br>
-&#9;&#9;&quot;&quot;&quot;Move along X axis.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose2.move(distance, 0.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;moveX(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Move&nbsp;along&nbsp;X&nbsp;axis.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2.move(distance,&nbsp;0.0)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def moveY(distance: float):<br>
-&#9;&#9;&quot;&quot;&quot;Move along Y axis.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose2.move(0.0, distance)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;moveY(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Move&nbsp;along&nbsp;Y&nbsp;axis.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2.move(0.0,&nbsp;distance)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def right(distance: float):<br>
-&#9;&#9;&quot;&quot;&quot;Move right (along X axis).&quot;&quot;&quot;<br>
-&#9;&#9;return Pose2.move(distance, 0.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;right(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Move&nbsp;right&nbsp;(along&nbsp;X&nbsp;axis).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2.move(distance,&nbsp;0.0)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def forward(distance: float):<br>
-&#9;&#9;&quot;&quot;&quot;Move forward (along Y axis).&quot;&quot;&quot;<br>
-&#9;&#9;return Pose2.move(0.0, distance)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;forward(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Move&nbsp;forward&nbsp;(along&nbsp;Y&nbsp;axis).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2.move(0.0,&nbsp;distance)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def lerp(pose1: 'Pose2', pose2: 'Pose2', t: float) -&gt; 'Pose2':<br>
-&#9;&#9;&quot;&quot;&quot;Linearly interpolate between two poses.&quot;&quot;&quot;<br>
-&#9;&#9;lerped_ang = (1 - t) * pose1.ang + t * pose2.ang<br>
-&#9;&#9;lerped_lin = (1 - t) * pose1.lin + t * pose2.lin<br>
-&#9;&#9;return Pose2(ang=lerped_ang, lin=lerped_lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;lerp(pose1:&nbsp;'Pose2',&nbsp;pose2:&nbsp;'Pose2',&nbsp;t:&nbsp;float)&nbsp;-&gt;&nbsp;'Pose2':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Linearly&nbsp;interpolate&nbsp;between&nbsp;two&nbsp;poses.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lerped_ang&nbsp;=&nbsp;(1&nbsp;-&nbsp;t)&nbsp;*&nbsp;pose1.ang&nbsp;+&nbsp;t&nbsp;*&nbsp;pose2.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lerped_lin&nbsp;=&nbsp;(1&nbsp;-&nbsp;t)&nbsp;*&nbsp;pose1.lin&nbsp;+&nbsp;t&nbsp;*&nbsp;pose2.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2(ang=lerped_ang,&nbsp;lin=lerped_lin)<br>
 <br>
-&#9;def normalize_angle(self):<br>
-&#9;&#9;&quot;&quot;&quot;Normalize the angle to [-π, π].&quot;&quot;&quot;<br>
-&#9;&#9;self.ang = math.atan2(math.sin(self.ang), math.cos(self.ang))<br>
-&#9;&#9;self._rot_matrix = None<br>
-&#9;&#9;self._mat = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;normalize_angle(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Normalize&nbsp;the&nbsp;angle&nbsp;to&nbsp;[-π,&nbsp;π].&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.ang&nbsp;=&nbsp;math.atan2(math.sin(self.ang),&nbsp;math.cos(self.ang))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot_matrix&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None<br>
 <br>
-&#9;@property<br>
-&#9;def x(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get X coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;return self.lin[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;x(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;X&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.lin[0]<br>
 <br>
-&#9;@property<br>
-&#9;def y(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get Y coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;return self.lin[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;y(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;Y&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.lin[1]<br>
 <br>
-&#9;@x.setter<br>
-&#9;def x(self, value: float):<br>
-&#9;&#9;&quot;&quot;&quot;Set X coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;self.lin[0] = value<br>
-&#9;&#9;self._mat = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@x.setter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;x(self,&nbsp;value:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Set&nbsp;X&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lin[0]&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None<br>
 <br>
-&#9;@y.setter<br>
-&#9;def y(self, value: float):<br>
-&#9;&#9;&quot;&quot;&quot;Set Y coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;self.lin[1] = value<br>
-&#9;&#9;self._mat = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@y.setter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;y(self,&nbsp;value:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Set&nbsp;Y&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lin[1]&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

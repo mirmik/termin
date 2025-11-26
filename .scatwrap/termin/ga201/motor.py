@@ -7,219 +7,219 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-import math<br>
-from termin.ga201.point import Point2<br>
-from termin.ga201.screw import Screw2<br>
-import numpy<br>
+import&nbsp;math<br>
+from&nbsp;termin.ga201.point&nbsp;import&nbsp;Point2<br>
+from&nbsp;termin.ga201.screw&nbsp;import&nbsp;Screw2<br>
+import&nbsp;numpy<br>
 <br>
 <br>
-class Motor2:<br>
-&#9;def __init__(self, x=0, y=0, z=0, w=1):<br>
-&#9;&#9;self.x = x<br>
-&#9;&#9;self.y = y<br>
-&#9;&#9;self.z = z<br>
-&#9;&#9;self.w = w<br>
+class&nbsp;Motor2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;x=0,&nbsp;y=0,&nbsp;z=0,&nbsp;w=1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.x&nbsp;=&nbsp;x<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.y&nbsp;=&nbsp;y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.z&nbsp;=&nbsp;z<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.w&nbsp;=&nbsp;w<br>
 <br>
-&#9;def self_unitize(self):<br>
-&#9;&#9;l = self.z * self.z + self.w * self.w<br>
-&#9;&#9;n = math.sqrt(l)<br>
-&#9;&#9;return Motor2(self.x / n,<br>
-&#9;&#9;&#9;&#9;&#9;self.y / n,<br>
-&#9;&#9;&#9;&#9;&#9;self.z / n,<br>
-&#9;&#9;&#9;&#9;&#9;self.w / n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;self_unitize(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;l&nbsp;=&nbsp;self.z&nbsp;*&nbsp;self.z&nbsp;+&nbsp;self.w&nbsp;*&nbsp;self.w<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;math.sqrt(l)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(self.x&nbsp;/&nbsp;n,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.y&nbsp;/&nbsp;n,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.z&nbsp;/&nbsp;n,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.w&nbsp;/&nbsp;n)<br>
 <br>
-&#9;def log(self):<br>
-&#9;&#9;angle = self.factorize_rotation_angle()<br>
-&#9;&#9;translation = self.factorize_translation_vector()<br>
-&#9;&#9;return Screw2(angle, translation)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;log(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle&nbsp;=&nbsp;self.factorize_rotation_angle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translation&nbsp;=&nbsp;self.factorize_translation_vector()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(angle,&nbsp;translation)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def rotation(rads):<br>
-&#9;&#9;z = math.sin(rads/2)<br>
-&#9;&#9;w = math.cos(rads/2)<br>
-&#9;&#9;return Motor2(0, 0, z, w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotation(rads):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;=&nbsp;math.sin(rads/2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w&nbsp;=&nbsp;math.cos(rads/2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(0,&nbsp;0,&nbsp;z,&nbsp;w)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def translation(x, y):<br>
-&#9;&#9;x = x/2<br>
-&#9;&#9;y = y/2<br>
-&#9;&#9;z = 0<br>
-&#9;&#9;w = 1<br>
-&#9;&#9;return Motor2(x, y, z, w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;translation(x,&nbsp;y):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;x/2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;y/2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(x,&nbsp;y,&nbsp;z,&nbsp;w)<br>
 <br>
-&#9;def __mul__(self, other):<br>
-&#9;&#9;q = self<br>
-&#9;&#9;p = other<br>
-&#9;&#9;return Motor2(<br>
-&#9;&#9;&#9;q.w*p.x + q.x*p.w - q.z*p.y + q.y*p.z,<br>
-&#9;&#9;&#9;q.w*p.y + q.y*p.w - q.x*p.z + q.z*p.x,<br>
-&#9;&#9;&#9;q.w*p.z + q.z*p.w,<br>
-&#9;&#9;&#9;q.w*p.w - q.z*p.z<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__mul__(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p&nbsp;=&nbsp;other<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q.w*p.x&nbsp;+&nbsp;q.x*p.w&nbsp;-&nbsp;q.z*p.y&nbsp;+&nbsp;q.y*p.z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q.w*p.y&nbsp;+&nbsp;q.y*p.w&nbsp;-&nbsp;q.x*p.z&nbsp;+&nbsp;q.z*p.x,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q.w*p.z&nbsp;+&nbsp;q.z*p.w,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q.w*p.w&nbsp;-&nbsp;q.z*p.z<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def mul_screw(self, scr):<br>
-&#9;&#9;return self * Motor2.from_screw_naive(scr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mul_screw(self,&nbsp;scr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self&nbsp;*&nbsp;Motor2.from_screw_naive(scr)<br>
 <br>
-&#9;def __add__(self, other):<br>
-&#9;&#9;return Motor2(self.x+other.x, self.y+other.y, self.z+other.z, self.w+other.w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__add__(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(self.x+other.x,&nbsp;self.y+other.y,&nbsp;self.z+other.z,&nbsp;self.w+other.w)<br>
 <br>
-&#9;def mul_scalar(self, s):<br>
-&#9;&#9;return Motor2(self.x*s, self.y*s, self.z*s, self.w*s)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mul_scalar(self,&nbsp;s):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(self.x*s,&nbsp;self.y*s,&nbsp;self.z*s,&nbsp;self.w*s)<br>
 <br>
-&#9;def transform_point(self, p):<br>
-&#9;&#9;q = self<br>
-&#9;&#9;return Point2(<br>
-&#9;&#9;&#9;(q.w**2 - q.z**2)*p.x - 2*q.w*q.z *<br>
-&#9;&#9;&#9;p.y + (2*q.w*q.x - 2*q.z*q.y)*p.z,<br>
-&#9;&#9;&#9;(q.w**2 - q.z**2)*p.y + 2*q.w*q.z *<br>
-&#9;&#9;&#9;p.x + (2*q.w*q.y + 2*q.z*q.x)*p.z,<br>
-&#9;&#9;&#9;(q.w**2 + q.z**2)*p.z<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_point(self,&nbsp;p):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Point2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(q.w**2&nbsp;-&nbsp;q.z**2)*p.x&nbsp;-&nbsp;2*q.w*q.z&nbsp;*<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p.y&nbsp;+&nbsp;(2*q.w*q.x&nbsp;-&nbsp;2*q.z*q.y)*p.z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(q.w**2&nbsp;-&nbsp;q.z**2)*p.y&nbsp;+&nbsp;2*q.w*q.z&nbsp;*<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p.x&nbsp;+&nbsp;(2*q.w*q.y&nbsp;+&nbsp;2*q.z*q.x)*p.z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(q.w**2&nbsp;+&nbsp;q.z**2)*p.z<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def rotation_matrix(self):<br>
-&#9;&#9;angle = self.angle()<br>
-&#9;&#9;s = math.sin(angle)<br>
-&#9;&#9;c = math.cos(angle)<br>
-&#9;&#9;arr = numpy.array([<br>
-&#9;&#9;&#9;[1, 0, 0],<br>
-&#9;&#9;&#9;[0, c, -s],<br>
-&#9;&#9;&#9;[0, s, c],<br>
-&#9;&#9;])<br>
-&#9;&#9;return arr<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotation_matrix(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle&nbsp;=&nbsp;self.angle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;math.sin(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;math.cos(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr&nbsp;=&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;c,&nbsp;-s],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;s,&nbsp;c],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;arr<br>
 <br>
-&#9;def transform(self, o):<br>
-&#9;&#9;if isinstance(o, Point2):<br>
-&#9;&#9;&#9;return self.transform_point(o)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform(self,&nbsp;o):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(o,&nbsp;Point2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.transform_point(o)<br>
 <br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return &quot;Motor(%s, %s, %s, %s)&quot; % (self.x, self.y, self.z, self.w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;&quot;Motor(%s,&nbsp;%s,&nbsp;%s,&nbsp;%s)&quot;&nbsp;%&nbsp;(self.x,&nbsp;self.y,&nbsp;self.z,&nbsp;self.w)<br>
 <br>
-&#9;def __str__(self):<br>
-&#9;&#9;return repr(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__str__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;repr(self)<br>
 <br>
-&#9;def factorize_rotation_angle(self):<br>
-&#9;&#9;return math.atan2(self.z, self.w) * 2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;factorize_rotation_angle(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;math.atan2(self.z,&nbsp;self.w)&nbsp;*&nbsp;2<br>
 <br>
-&#9;def angle(self):<br>
-&#9;&#9;return self.factorize_rotation_angle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;angle(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.factorize_rotation_angle()<br>
 <br>
-&#9;def factorize_rotation(self):<br>
-&#9;&#9;return Motor2(0, 0, self.z, self.w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;factorize_rotation(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(0,&nbsp;0,&nbsp;self.z,&nbsp;self.w)<br>
 <br>
-&#9;def reverse(self):<br>
-&#9;&#9;return Motor2(-self.x, -self.y, -self.z, self.w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;reverse(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(-self.x,&nbsp;-self.y,&nbsp;-self.z,&nbsp;self.w)<br>
 <br>
-&#9;def inverse(self):<br>
-&#9;&#9;rotation = self.factorize_rotation()<br>
-&#9;&#9;translation = self.factorize_translation()<br>
-&#9;&#9;return rotation.reverse() * translation.reverse()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotation&nbsp;=&nbsp;self.factorize_rotation()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translation&nbsp;=&nbsp;self.factorize_translation()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;rotation.reverse()&nbsp;*&nbsp;translation.reverse()<br>
 <br>
-&#9;def factorize_translation(self):<br>
-&#9;&#9;q = self<br>
-&#9;&#9;return Motor2(<br>
-&#9;&#9;&#9;q.w*q.x - q.z*q.y,<br>
-&#9;&#9;&#9;q.w*q.y + q.z*q.x,<br>
-&#9;&#9;&#9;0,<br>
-&#9;&#9;&#9;1<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;factorize_translation(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q.w*q.x&nbsp;-&nbsp;q.z*q.y,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q.w*q.y&nbsp;+&nbsp;q.z*q.x,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def factorize_translation_point(self):<br>
-&#9;&#9;#probe = Point2(0,0)<br>
-&#9;&#9;#r = self.transform_point(probe)<br>
-&#9;&#9;# return Motor(r.x/2, r.y/2, 0, 1)<br>
-&#9;&#9;q = self<br>
-&#9;&#9;return Point2(<br>
-&#9;&#9;&#9;q.w*q.x - q.z*q.y,<br>
-&#9;&#9;&#9;q.w*q.y + q.z*q.x,<br>
-&#9;&#9;&#9;1<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;factorize_translation_point(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#probe&nbsp;=&nbsp;Point2(0,0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#r&nbsp;=&nbsp;self.transform_point(probe)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;return&nbsp;Motor(r.x/2,&nbsp;r.y/2,&nbsp;0,&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Point2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q.w*q.x&nbsp;-&nbsp;q.z*q.y,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q.w*q.y&nbsp;+&nbsp;q.z*q.x,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def factorize_translation_vector(self):<br>
-&#9;&#9;ft = self.factorize_translation()<br>
-&#9;&#9;return numpy.array([ft.x*2, ft.y*2])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;factorize_translation_vector(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ft&nbsp;=&nbsp;self.factorize_translation()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([ft.x*2,&nbsp;ft.y*2])<br>
 <br>
-&#9;def factorize_parameters(self):<br>
-&#9;&#9;t = self.factorize_translation()<br>
-&#9;&#9;angle = self.factorize_rotation_angle()<br>
-&#9;&#9;x = t.x * 2<br>
-&#9;&#9;y = t.y * 2<br>
-&#9;&#9;return (angle, (x, y))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;factorize_parameters(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;self.factorize_translation()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle&nbsp;=&nbsp;self.factorize_rotation_angle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;t.x&nbsp;*&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;t.y&nbsp;*&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(angle,&nbsp;(x,&nbsp;y))<br>
 <br>
-&#9;def rotate_nparray(self, a):<br>
-&#9;&#9;angle = self.factorize_rotation_angle()<br>
-&#9;&#9;s = math.sin(angle)<br>
-&#9;&#9;c = math.cos(angle)<br>
-&#9;&#9;return numpy.array([<br>
-&#9;&#9;&#9;c*a[0] - s*a[1],<br>
-&#9;&#9;&#9;s*a[0] + c*a[1]<br>
-&#9;&#9;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotate_nparray(self,&nbsp;a):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle&nbsp;=&nbsp;self.factorize_rotation_angle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;math.sin(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;math.cos(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c*a[0]&nbsp;-&nbsp;s*a[1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s*a[0]&nbsp;+&nbsp;c*a[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
 <br>
-&#9;def average_with(self, other):<br>
-&#9;&#9;ft = self.factorize_translation_vector()<br>
-&#9;&#9;ft2 = other.factorize_translation_vector()<br>
-&#9;&#9;ft_avg = (ft + ft2) / 2<br>
-&#9;&#9;fr = self.factorize_rotation_angle()<br>
-&#9;&#9;fr2 = other.factorize_rotation_angle()<br>
-&#9;&#9;fr_avg = (fr + fr2) / 2<br>
-&#9;&#9;return Motor2.translation(ft_avg[0], ft_avg[1]) * Motor2.rotation(fr_avg)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;average_with(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ft&nbsp;=&nbsp;self.factorize_translation_vector()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ft2&nbsp;=&nbsp;other.factorize_translation_vector()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ft_avg&nbsp;=&nbsp;(ft&nbsp;+&nbsp;ft2)&nbsp;/&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fr&nbsp;=&nbsp;self.factorize_rotation_angle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fr2&nbsp;=&nbsp;other.factorize_rotation_angle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fr_avg&nbsp;=&nbsp;(fr&nbsp;+&nbsp;fr2)&nbsp;/&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2.translation(ft_avg[0],&nbsp;ft_avg[1])&nbsp;*&nbsp;Motor2.rotation(fr_avg)<br>
 <br>
 <br>
-&#9;def rotate_nparray_inverse(self, a):<br>
-&#9;&#9;angle = self.factorize_rotation_angle()<br>
-&#9;&#9;s = math.sin(angle)<br>
-&#9;&#9;c = math.cos(angle)<br>
-&#9;&#9;return numpy.array([<br>
-&#9;&#9;&#9;c*a[0] + s*a[1],<br>
-&#9;&#9;&#9;-s*a[0] + c*a[1]<br>
-&#9;&#9;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotate_nparray_inverse(self,&nbsp;a):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle&nbsp;=&nbsp;self.factorize_rotation_angle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;math.sin(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;math.cos(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c*a[0]&nbsp;+&nbsp;s*a[1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-s*a[0]&nbsp;+&nbsp;c*a[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
 <br>
-&#9;def __eq__(self, oth):<br>
-&#9;&#9;return (<br>
-&#9;&#9;&#9;self.x == oth.x and<br>
-&#9;&#9;&#9;self.y == oth.y and<br>
-&#9;&#9;&#9;self.z == oth.z and<br>
-&#9;&#9;&#9;self.w == oth.w<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__eq__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.x&nbsp;==&nbsp;oth.x&nbsp;and<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.y&nbsp;==&nbsp;oth.y&nbsp;and<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.z&nbsp;==&nbsp;oth.z&nbsp;and<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.w&nbsp;==&nbsp;oth.w<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def __sub__(self, oth):<br>
-&#9;&#9;return Motor2(<br>
-&#9;&#9;&#9;self.x - oth.x,<br>
-&#9;&#9;&#9;self.y - oth.y,<br>
-&#9;&#9;&#9;self.z - oth.z,<br>
-&#9;&#9;&#9;self.w - oth.w<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__sub__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.x&nbsp;-&nbsp;oth.x,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.y&nbsp;-&nbsp;oth.y,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.z&nbsp;-&nbsp;oth.z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.w&nbsp;-&nbsp;oth.w<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def __truediv__(self, s):<br>
-&#9;&#9;return Motor2(<br>
-&#9;&#9;&#9;self.x / s,<br>
-&#9;&#9;&#9;self.y / s,<br>
-&#9;&#9;&#9;self.z / s,<br>
-&#9;&#9;&#9;self.w / s<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__truediv__(self,&nbsp;s):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.x&nbsp;/&nbsp;s,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.y&nbsp;/&nbsp;s,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.z&nbsp;/&nbsp;s,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.w&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def is_zero_equal(self, eps=1e-8):<br>
-&#9;&#9;a = numpy.array([self.x, self.y, self.z, self.w])<br>
-&#9;&#9;return numpy.linalg.norm(a) &lt; eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;is_zero_equal(self,&nbsp;eps=1e-8):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;numpy.array([self.x,&nbsp;self.y,&nbsp;self.z,&nbsp;self.w])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.linalg.norm(a)&nbsp;&lt;&nbsp;eps<br>
 <br>
-&#9;def splash_to_screw(self):<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;m=self.z,<br>
-&#9;&#9;&#9;v=[self.x,<br>
-&#9;&#9;&#9;self.y]<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;splash_to_screw(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m=self.z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v=[self.x,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.y]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def from_screw(scr):<br>
-&#9;&#9;return Motor2.translation(*scr.lin()) * Motor2.rotation(scr.ang())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_screw(scr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2.translation(*scr.lin())&nbsp;*&nbsp;Motor2.rotation(scr.ang())<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def from_screw_naive(scr):<br>
-&#9;&#9;return Motor2(<br>
-&#9;&#9;&#9;scr.lin()[0],<br>
-&#9;&#9;&#9;scr.lin()[1],<br>
-&#9;&#9;&#9;scr.ang(),<br>
-&#9;&#9;&#9;0<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_screw_naive(scr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Motor2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scr.lin()[0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scr.lin()[1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scr.ang(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

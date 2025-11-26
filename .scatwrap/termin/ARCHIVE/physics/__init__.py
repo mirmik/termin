@@ -7,7 +7,7 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-from termin.ga201.screw import Screw2<br>
+from&nbsp;termin.ga201.screw&nbsp;import&nbsp;Screw2<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

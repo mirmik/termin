@@ -6,194 +6,194 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-#!/usr/bin/env python3<br>
+#!/usr/bin/env&nbsp;python3<br>
 <br>
-import numpy<br>
-import scipy<br>
-from termin.physics.indexed_matrix import IndexedMatrix, IndexedVector<br>
-import torch<br>
+import&nbsp;numpy<br>
+import&nbsp;scipy<br>
+from&nbsp;termin.physics.indexed_matrix&nbsp;import&nbsp;IndexedMatrix,&nbsp;IndexedVector<br>
+import&nbsp;torch<br>
 <br>
-TORCH_DEVICE = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;<br>
+TORCH_DEVICE&nbsp;=&nbsp;&quot;cuda&quot;&nbsp;if&nbsp;torch.cuda.is_available()&nbsp;else&nbsp;&quot;cpu&quot;<br>
 <br>
-def full_indexes_list_vector(arr):<br>
-&#9;s = set()<br>
-&#9;for a in arr:<br>
-&#9;&#9;for index in a.idxs:<br>
-&#9;&#9;&#9;s.add(index)<br>
-&#9;return sorted(list(s))<br>
-<br>
-<br>
-def full_indexes_list_matrix(arr, lidxs=None, ridxs=None):<br>
-&#9;l = set()<br>
-&#9;r = set()<br>
-&#9;for a in arr:<br>
-&#9;&#9;if lidxs is None:<br>
-&#9;&#9;&#9;for index in a.lidxs:<br>
-&#9;&#9;&#9;&#9;l.add(index)<br>
-&#9;&#9;if ridxs is None:<br>
-&#9;&#9;&#9;for index in a.ridxs:<br>
-&#9;&#9;&#9;&#9;r.add(index)<br>
-<br>
-&#9;lidxs = lidxs if lidxs is not None else sorted(list(l))<br>
-&#9;ridxs = ridxs if ridxs is not None else sorted(list(r))<br>
-<br>
-&#9;return lidxs, ridxs<br>
+def&nbsp;full_indexes_list_vector(arr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;set()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;a&nbsp;in&nbsp;arr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;index&nbsp;in&nbsp;a.idxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s.add(index)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;sorted(list(s))<br>
 <br>
 <br>
-def symmetric_full_indexes_list_matrix(arr, idxs=None):<br>
-&#9;l = set()<br>
-&#9;for a in arr:<br>
-&#9;&#9;if idxs is None:<br>
-&#9;&#9;&#9;for index in a.lidxs:<br>
-&#9;&#9;&#9;&#9;l.add(index)<br>
+def&nbsp;full_indexes_list_matrix(arr,&nbsp;lidxs=None,&nbsp;ridxs=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;l&nbsp;=&nbsp;set()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;=&nbsp;set()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;a&nbsp;in&nbsp;arr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lidxs&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;index&nbsp;in&nbsp;a.lidxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;l.add(index)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ridxs&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;index&nbsp;in&nbsp;a.ridxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r.add(index)<br>
 <br>
-&#9;idxs = idxs if idxs is not None else sorted(list(l))<br>
-&#9;return idxs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;lidxs&nbsp;=&nbsp;lidxs&nbsp;if&nbsp;lidxs&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;sorted(list(l))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ridxs&nbsp;=&nbsp;ridxs&nbsp;if&nbsp;ridxs&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;sorted(list(r))<br>
 <br>
-def symmetric_matrix_numbers(Aarr):<br>
-&#9;res = []<br>
-&#9;counter = 0<br>
-&#9;for A in Aarr:<br>
-&#9;&#9;res.append((counter, counter + A.matrix.shape[0]))<br>
-&#9;&#9;counter += A.matrix.shape[0]<br>
-&#9;return res<br>
-<br>
-def indexed_matrix_summation(arr, lidxs=None, ridxs=None):<br>
-&#9;lidxs, ridxs = full_indexes_list_matrix(arr, lidxs=lidxs, ridxs=ridxs)<br>
-<br>
-&#9;result_matrix = IndexedMatrix(numpy.zeros(<br>
-&#9;&#9;(len(lidxs), len(ridxs))), lidxs, ridxs)<br>
-&#9;for m in arr:<br>
-&#9;&#9;result_matrix.accumulate_from(m)<br>
-&#9;return result_matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;lidxs,&nbsp;ridxs<br>
 <br>
 <br>
-def symmetric_indexed_matrix_summation(arr, idxs=None):<br>
-&#9;numbers = symmetric_matrix_numbers(arr)<br>
-&#9;idxs = symmetric_full_indexes_list_matrix(<br>
-&#9;&#9;arr, idxs=idxs)<br>
+def&nbsp;symmetric_full_indexes_list_matrix(arr,&nbsp;idxs=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;l&nbsp;=&nbsp;set()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;a&nbsp;in&nbsp;arr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;idxs&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;index&nbsp;in&nbsp;a.lidxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;l.add(index)<br>
 <br>
-&#9;result_matrix = IndexedMatrix(numpy.zeros(<br>
-&#9;&#9;(len(idxs), len(idxs))), idxs, idxs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;idxs&nbsp;=&nbsp;idxs&nbsp;if&nbsp;idxs&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;sorted(list(l))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;idxs<br>
 <br>
-#    for i in range(len(arr)):<br>
-#        A_view = result_matrix.matrix[numbers[i][0]:numbers[i][1], numbers[i][0]:numbers[i][1]]<br>
-#        A_view += arr[i].matrix<br>
+def&nbsp;symmetric_matrix_numbers(Aarr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;res&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;counter&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;A&nbsp;in&nbsp;Aarr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;res.append((counter,&nbsp;counter&nbsp;+&nbsp;A.matrix.shape[0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;counter&nbsp;+=&nbsp;A.matrix.shape[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;res<br>
 <br>
-&#9;for m in arr:<br>
-&#9;&#9;result_matrix.accumulate_from(m)<br>
-&#9;return result_matrix<br>
+def&nbsp;indexed_matrix_summation(arr,&nbsp;lidxs=None,&nbsp;ridxs=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;lidxs,&nbsp;ridxs&nbsp;=&nbsp;full_indexes_list_matrix(arr,&nbsp;lidxs=lidxs,&nbsp;ridxs=ridxs)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;result_matrix&nbsp;=&nbsp;IndexedMatrix(numpy.zeros(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(len(lidxs),&nbsp;len(ridxs))),&nbsp;lidxs,&nbsp;ridxs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;m&nbsp;in&nbsp;arr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result_matrix.accumulate_from(m)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;result_matrix<br>
 <br>
 <br>
-def indexed_vector_summation(arr, idxs=None):<br>
-&#9;if idxs is None:<br>
-&#9;&#9;idxs = full_indexes_list_vector(arr)<br>
-&#9;result_vector = IndexedVector(numpy.zeros(<br>
-&#9;&#9;(len(idxs))), idxs)<br>
-&#9;for m in arr:<br>
-&#9;&#9;result_vector.accumulate_from(m)<br>
-&#9;return result_vector<br>
+def&nbsp;symmetric_indexed_matrix_summation(arr,&nbsp;idxs=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;numbers&nbsp;=&nbsp;symmetric_matrix_numbers(arr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;idxs&nbsp;=&nbsp;symmetric_full_indexes_list_matrix(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr,&nbsp;idxs=idxs)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;result_matrix&nbsp;=&nbsp;IndexedMatrix(numpy.zeros(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(len(idxs),&nbsp;len(idxs))),&nbsp;idxs,&nbsp;idxs)<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(len(arr)):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_view&nbsp;=&nbsp;result_matrix.matrix[numbers[i][0]:numbers[i][1],&nbsp;numbers[i][0]:numbers[i][1]]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_view&nbsp;+=&nbsp;arr[i].matrix<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;m&nbsp;in&nbsp;arr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result_matrix.accumulate_from(m)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;result_matrix<br>
 <br>
 <br>
-def invoke_set_values_for_indexed_vector(self, indexed_vector):<br>
-&#9;indexes = indexed_vector.idxs<br>
-&#9;values = indexed_vector.matrix<br>
-&#9;for idx, val in zip(indexes, values):<br>
-&#9;&#9;idx.set_value(val)<br>
+def&nbsp;indexed_vector_summation(arr,&nbsp;idxs=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;idxs&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idxs&nbsp;=&nbsp;full_indexes_list_vector(arr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;result_vector&nbsp;=&nbsp;IndexedVector(numpy.zeros(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(len(idxs))),&nbsp;idxs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;m&nbsp;in&nbsp;arr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result_vector.accumulate_from(m)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;result_vector<br>
 <br>
-def commutator_list_indexes(commutator_list):<br>
-&#9;indexes = {}<br>
-&#9;counter = 0<br>
-&#9;for commutator in commutator_list:<br>
-&#9;&#9;indexes[commutator] = (counter, counter + commutator.dim())<br>
-&#9;&#9;counter += commutator.dim()<br>
-&#9;return indexes, counter<br>
 <br>
-def qpc_solver_indexes_array(<br>
-&#9;&#9;Aarr: list, <br>
-&#9;&#9;Carr: list, <br>
-&#9;&#9;Barr: list = [], <br>
-&#9;&#9;Darr: list = [],<br>
-&#9;&#9;Harr: list = [],<br>
-&#9;&#9;Ksiarr: list = []):<br>
-&#9;A_counter = 0<br>
-&#9;B_counter = 0<br>
-&#9;H_counter = 0<br>
-&#9;D_counter = 0<br>
-&#9;A_idxs = []<br>
-&#9;B_idxs = []<br>
-&#9;H_idxs = []<br>
-&#9;D_idxs = []<br>
-&#9;commutator_list_unique = []<br>
-&#9;for A in Aarr:<br>
-&#9;&#9;if A.lcomm in commutator_list_unique:<br>
-&#9;&#9;&#9;continue<br>
-&#9;&#9;commutator_list_unique.append(A.lcomm)<br>
-&#9;&#9;A_counter += A.lcomm.dim()<br>
-&#9;&#9;A_idxs.extend(A.lidxs)<br>
-&#9;for B in Barr:<br>
-&#9;&#9;if B.rcomm in commutator_list_unique:<br>
-&#9;&#9;&#9;continue<br>
-&#9;&#9;commutator_list_unique.append(B.rcomm)<br>
-&#9;&#9;B_counter += B.rcomm.dim()<br>
-&#9;&#9;B_idxs.extend(B.ridxs)<br>
-&#9;for H in Harr:<br>
-&#9;&#9;if H.rcomm in commutator_list_unique:<br>
-&#9;&#9;&#9;continue<br>
-&#9;&#9;commutator_list_unique.append(H.rcomm)<br>
-&#9;&#9;H_counter += H.rcomm.dim()<br>
-&#9;&#9;H_idxs.extend(H.ridxs)<br>
-&#9;for D in Darr:<br>
-&#9;&#9;if D.comm in commutator_list_unique:<br>
-&#9;&#9;&#9;continue<br>
-&#9;&#9;commutator_list_unique.append(D.comm)<br>
-&#9;&#9;D_counter += D.comm.dim()<br>
-&#9;&#9;D_idxs.extend(D.idxs)<br>
+def&nbsp;invoke_set_values_for_indexed_vector(self,&nbsp;indexed_vector):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;indexes&nbsp;=&nbsp;indexed_vector.idxs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;values&nbsp;=&nbsp;indexed_vector.matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;idx,&nbsp;val&nbsp;in&nbsp;zip(indexes,&nbsp;values):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx.set_value(val)<br>
 <br>
-&#9;#commutator_list_unique = list(set(commutator_list))<br>
-&#9;indexes, fulldim = commutator_list_indexes(commutator_list_unique)<br>
-&#9;<br>
-&#9;Q = numpy.zeros((fulldim, fulldim))<br>
-&#9;b = numpy.zeros((fulldim, 1))<br>
-&#9;for A in Aarr:<br>
-&#9;&#9;Q[indexes[A.lcomm][0]:indexes[A.lcomm][1], indexes[A.lcomm][0]:indexes[A.lcomm][1]] += A.matrix<br>
-&#9;for B in Barr:<br>
-&#9;&#9;Q[indexes[B.lcomm][0]:indexes[B.lcomm][1], indexes[B.rcomm][0]:indexes[B.rcomm][1]] += B.matrix<br>
-&#9;&#9;Q[indexes[B.rcomm][0]:indexes[B.rcomm][1], indexes[B.lcomm][0]:indexes[B.lcomm][1]] += B.matrix.T<br>
-&#9;for H in Harr:<br>
-&#9;&#9;Q[indexes[H.lcomm][0]:indexes[H.lcomm][1], indexes[H.rcomm][0]:indexes[H.rcomm][1]] += H.matrix<br>
-&#9;&#9;Q[indexes[H.rcomm][0]:indexes[H.rcomm][1], indexes[H.lcomm][0]:indexes[H.lcomm][1]] += H.matrix.T<br>
+def&nbsp;commutator_list_indexes(commutator_list):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;indexes&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;counter&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;commutator&nbsp;in&nbsp;commutator_list:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indexes[commutator]&nbsp;=&nbsp;(counter,&nbsp;counter&nbsp;+&nbsp;commutator.dim())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;counter&nbsp;+=&nbsp;commutator.dim()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;indexes,&nbsp;counter<br>
 <br>
-&#9;for C in Carr:<br>
-&#9;&#9;b[indexes[C.comm][0]:indexes[C.comm][1], 0] += C.matrix<br>
-&#9;for D in Darr:<br>
-&#9;&#9;b[indexes[D.comm][0]:indexes[D.comm][1], 0] += D.matrix<br>
-&#9;for Ksi in Ksiarr:<br>
-&#9;&#9;b[indexes[Ksi.comm][0]:indexes[Ksi.comm][1], 0] += Ksi.matrix<br>
+def&nbsp;qpc_solver_indexes_array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Aarr:&nbsp;list,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Carr:&nbsp;list,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Barr:&nbsp;list&nbsp;=&nbsp;[],&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Darr:&nbsp;list&nbsp;=&nbsp;[],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Harr:&nbsp;list&nbsp;=&nbsp;[],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ksiarr:&nbsp;list&nbsp;=&nbsp;[]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A_counter&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;B_counter&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;H_counter&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;D_counter&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A_idxs&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;B_idxs&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;H_idxs&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;D_idxs&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;commutator_list_unique&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;A&nbsp;in&nbsp;Aarr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;A.lcomm&nbsp;in&nbsp;commutator_list_unique:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;commutator_list_unique.append(A.lcomm)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_counter&nbsp;+=&nbsp;A.lcomm.dim()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_idxs.extend(A.lidxs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;B&nbsp;in&nbsp;Barr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;B.rcomm&nbsp;in&nbsp;commutator_list_unique:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;commutator_list_unique.append(B.rcomm)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;B_counter&nbsp;+=&nbsp;B.rcomm.dim()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;B_idxs.extend(B.ridxs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;H&nbsp;in&nbsp;Harr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;H.rcomm&nbsp;in&nbsp;commutator_list_unique:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;commutator_list_unique.append(H.rcomm)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H_counter&nbsp;+=&nbsp;H.rcomm.dim()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H_idxs.extend(H.ridxs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;D&nbsp;in&nbsp;Darr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;D.comm&nbsp;in&nbsp;commutator_list_unique:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;commutator_list_unique.append(D.comm)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;D_counter&nbsp;+=&nbsp;D.comm.dim()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;D_idxs.extend(D.idxs)<br>
 <br>
-&#9;Q_torch = torch.tensor(Q, dtype=torch.float64).to(device=TORCH_DEVICE)<br>
-&#9;b_torch = torch.tensor(b, dtype=torch.float64).to(device=TORCH_DEVICE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#commutator_list_unique&nbsp;=&nbsp;list(set(commutator_list))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;indexes,&nbsp;fulldim&nbsp;=&nbsp;commutator_list_indexes(commutator_list_unique)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Q&nbsp;=&nbsp;numpy.zeros((fulldim,&nbsp;fulldim))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;numpy.zeros((fulldim,&nbsp;1))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;A&nbsp;in&nbsp;Aarr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Q[indexes[A.lcomm][0]:indexes[A.lcomm][1],&nbsp;indexes[A.lcomm][0]:indexes[A.lcomm][1]]&nbsp;+=&nbsp;A.matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;B&nbsp;in&nbsp;Barr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Q[indexes[B.lcomm][0]:indexes[B.lcomm][1],&nbsp;indexes[B.rcomm][0]:indexes[B.rcomm][1]]&nbsp;+=&nbsp;B.matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Q[indexes[B.rcomm][0]:indexes[B.rcomm][1],&nbsp;indexes[B.lcomm][0]:indexes[B.lcomm][1]]&nbsp;+=&nbsp;B.matrix.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;H&nbsp;in&nbsp;Harr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Q[indexes[H.lcomm][0]:indexes[H.lcomm][1],&nbsp;indexes[H.rcomm][0]:indexes[H.rcomm][1]]&nbsp;+=&nbsp;H.matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Q[indexes[H.rcomm][0]:indexes[H.rcomm][1],&nbsp;indexes[H.lcomm][0]:indexes[H.lcomm][1]]&nbsp;+=&nbsp;H.matrix.T<br>
 <br>
-&#9;#X = numpy.linalg.inv(Q) @ b<br>
-&#9;#X_torch = torch.linalg.solve(Q_torch, b_torch)<br>
-&#9;X_torch = torch.pinverse(Q_torch) @ b_torch<br>
-&#9;X = X_torch.cpu().detach().numpy()<br>
-&#9;#X = numpy.linalg.solve(Q, b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;C&nbsp;in&nbsp;Carr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[indexes[C.comm][0]:indexes[C.comm][1],&nbsp;0]&nbsp;+=&nbsp;C.matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;D&nbsp;in&nbsp;Darr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[indexes[D.comm][0]:indexes[D.comm][1],&nbsp;0]&nbsp;+=&nbsp;D.matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;Ksi&nbsp;in&nbsp;Ksiarr:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[indexes[Ksi.comm][0]:indexes[Ksi.comm][1],&nbsp;0]&nbsp;+=&nbsp;Ksi.matrix<br>
 <br>
-&#9;X = X_torch<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Q_torch&nbsp;=&nbsp;torch.tensor(Q,&nbsp;dtype=torch.float64).to(device=TORCH_DEVICE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b_torch&nbsp;=&nbsp;torch.tensor(b,&nbsp;dtype=torch.float64).to(device=TORCH_DEVICE)<br>
 <br>
-&#9;X = X.reshape((X.shape[0],))<br>
-&#9;x = X[:len(A_idxs)]<br>
-&#9;l = X[len(A_idxs):len(A_idxs) + len(B_idxs)]<br>
-&#9;ksi = X[len(A_idxs) + len(B_idxs):]<br>
-&#9;<br>
-&#9;x = x.cpu().detach().numpy()<br>
-&#9;l = l.cpu().detach().numpy()<br>
-&#9;ksi = ksi.cpu().detach().numpy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#X&nbsp;=&nbsp;numpy.linalg.inv(Q)&nbsp;@&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#X_torch&nbsp;=&nbsp;torch.linalg.solve(Q_torch,&nbsp;b_torch)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;X_torch&nbsp;=&nbsp;torch.pinverse(Q_torch)&nbsp;@&nbsp;b_torch<br>
+&nbsp;&nbsp;&nbsp;&nbsp;X&nbsp;=&nbsp;X_torch.cpu().detach().numpy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#X&nbsp;=&nbsp;numpy.linalg.solve(Q,&nbsp;b)<br>
 <br>
-&#9;return (IndexedVector(x, idxs=A_idxs), <br>
-&#9;&#9;IndexedVector(l, idxs=B_idxs), <br>
-&#9;&#9;IndexedVector(ksi, idxs=H_idxs), Q, b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;X&nbsp;=&nbsp;X_torch<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;X&nbsp;=&nbsp;X.reshape((X.shape[0],))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;X[:len(A_idxs)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;l&nbsp;=&nbsp;X[len(A_idxs):len(A_idxs)&nbsp;+&nbsp;len(B_idxs)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ksi&nbsp;=&nbsp;X[len(A_idxs)&nbsp;+&nbsp;len(B_idxs):]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;x.cpu().detach().numpy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;l&nbsp;=&nbsp;l.cpu().detach().numpy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ksi&nbsp;=&nbsp;ksi.cpu().detach().numpy()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(IndexedVector(x,&nbsp;idxs=A_idxs),&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IndexedVector(l,&nbsp;idxs=B_idxs),&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IndexedVector(ksi,&nbsp;idxs=H_idxs),&nbsp;Q,&nbsp;b)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

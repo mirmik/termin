@@ -7,169 +7,169 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-from termin.closest import closest_points_between_segments, closest_points_between_capsules, closest_points_between_capsule_and_sphere<br>
-import numpy<br>
-from termin.colliders.collider import Collider<br>
-from termin.colliders.sphere import SphereCollider<br>
+from&nbsp;termin.closest&nbsp;import&nbsp;closest_points_between_segments,&nbsp;closest_points_between_capsules,&nbsp;closest_points_between_capsule_and_sphere<br>
+import&nbsp;numpy<br>
+from&nbsp;termin.colliders.collider&nbsp;import&nbsp;Collider<br>
+from&nbsp;termin.colliders.sphere&nbsp;import&nbsp;SphereCollider<br>
 <br>
-class CapsuleCollider(Collider):<br>
-&#9;def closest_to_ray(self, ray: &quot;Ray3&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Ближайшие точки между сегментом капсулы и лучом:<br>
-&#9;&#9;Реализуем прямой рейкаст в капсулу (цилиндр вдоль [a,b] + две сферы)<br>
-&#9;&#9;через аналитические уравнения:<br>
-&#9;&#9;&#9;|(w_perp + t * D_perp)|^2 = r^2  — пересечение с цилиндром<br>
-&#9;&#9;&#9;|O + tD - C|^2 = r^2              — пересечение с каждой сферой<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;from termin.closest import closest_points_between_segments<br>
+class&nbsp;CapsuleCollider(Collider):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_ray(self,&nbsp;ray:&nbsp;&quot;Ray3&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ближайшие&nbsp;точки&nbsp;между&nbsp;сегментом&nbsp;капсулы&nbsp;и&nbsp;лучом:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Реализуем&nbsp;прямой&nbsp;рейкаст&nbsp;в&nbsp;капсулу&nbsp;(цилиндр&nbsp;вдоль&nbsp;[a,b]&nbsp;+&nbsp;две&nbsp;сферы)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;через&nbsp;аналитические&nbsp;уравнения:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|(w_perp&nbsp;+&nbsp;t&nbsp;*&nbsp;D_perp)|^2&nbsp;=&nbsp;r^2&nbsp;&nbsp;—&nbsp;пересечение&nbsp;с&nbsp;цилиндром<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|O&nbsp;+&nbsp;tD&nbsp;-&nbsp;C|^2&nbsp;=&nbsp;r^2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;—&nbsp;пересечение&nbsp;с&nbsp;каждой&nbsp;сферой<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.closest&nbsp;import&nbsp;closest_points_between_segments<br>
 <br>
-&#9;&#9;O = ray.origin<br>
-&#9;&#9;D = ray.direction<br>
-&#9;&#9;A = self.a<br>
-&#9;&#9;B = self.b<br>
-&#9;&#9;r = self.radius<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;O&nbsp;=&nbsp;ray.origin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;D&nbsp;=&nbsp;ray.direction<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;self.a<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;B&nbsp;=&nbsp;self.b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;=&nbsp;self.radius<br>
 <br>
-&#9;&#9;axis = B - A<br>
-&#9;&#9;length = numpy.linalg.norm(axis)<br>
-&#9;&#9;if length &lt; 1e-8:<br>
-&#9;&#9;&#9;# Вырожденная капсула → сфера.<br>
-&#9;&#9;&#9;return SphereCollider(A, r).closest_to_ray(ray)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;B&nbsp;-&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;length&nbsp;=&nbsp;numpy.linalg.norm(axis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;length&nbsp;&lt;&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вырожденная&nbsp;капсула&nbsp;→&nbsp;сфера.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;SphereCollider(A,&nbsp;r).closest_to_ray(ray)<br>
 <br>
-&#9;&#9;U = axis / length<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;U&nbsp;=&nbsp;axis&nbsp;/&nbsp;length<br>
 <br>
-&#9;&#9;# Проверяем, стартует ли луч внутри капсулы.<br>
-&#9;&#9;proj0 = numpy.dot(O - A, U)<br>
-&#9;&#9;closest_axis_pt = A + numpy.clip(proj0, 0.0, length) * U<br>
-&#9;&#9;dist_axis0 = numpy.linalg.norm(O - closest_axis_pt)<br>
-&#9;&#9;if dist_axis0 &lt;= r + 1e-8:<br>
-&#9;&#9;&#9;return O, O, 0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверяем,&nbsp;стартует&nbsp;ли&nbsp;луч&nbsp;внутри&nbsp;капсулы.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;proj0&nbsp;=&nbsp;numpy.dot(O&nbsp;-&nbsp;A,&nbsp;U)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_axis_pt&nbsp;=&nbsp;A&nbsp;+&nbsp;numpy.clip(proj0,&nbsp;0.0,&nbsp;length)&nbsp;*&nbsp;U<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dist_axis0&nbsp;=&nbsp;numpy.linalg.norm(O&nbsp;-&nbsp;closest_axis_pt)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dist_axis0&nbsp;&lt;=&nbsp;r&nbsp;+&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;O,&nbsp;O,&nbsp;0.0<br>
 <br>
-&#9;&#9;def sphere_hit(center: numpy.ndarray) -&gt; float | None:<br>
-&#9;&#9;&#9;m = O - center<br>
-&#9;&#9;&#9;b = numpy.dot(m, D)<br>
-&#9;&#9;&#9;c = numpy.dot(m, m) - r * r<br>
-&#9;&#9;&#9;disc = b * b - c<br>
-&#9;&#9;&#9;if disc &lt; 0:<br>
-&#9;&#9;&#9;&#9;return None<br>
-&#9;&#9;&#9;sqrt_disc = numpy.sqrt(disc)<br>
-&#9;&#9;&#9;t0 = -b - sqrt_disc<br>
-&#9;&#9;&#9;if t0 &gt;= 0:<br>
-&#9;&#9;&#9;&#9;return t0<br>
-&#9;&#9;&#9;t1 = -b + sqrt_disc<br>
-&#9;&#9;&#9;return t1 if t1 &gt;= 0 else None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;sphere_hit(center:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;float&nbsp;|&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m&nbsp;=&nbsp;O&nbsp;-&nbsp;center<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;numpy.dot(m,&nbsp;D)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;numpy.dot(m,&nbsp;m)&nbsp;-&nbsp;r&nbsp;*&nbsp;r<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;disc&nbsp;=&nbsp;b&nbsp;*&nbsp;b&nbsp;-&nbsp;c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;disc&nbsp;&lt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sqrt_disc&nbsp;=&nbsp;numpy.sqrt(disc)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t0&nbsp;=&nbsp;-b&nbsp;-&nbsp;sqrt_disc<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t0&nbsp;&gt;=&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;t0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t1&nbsp;=&nbsp;-b&nbsp;+&nbsp;sqrt_disc<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;t1&nbsp;if&nbsp;t1&nbsp;&gt;=&nbsp;0&nbsp;else&nbsp;None<br>
 <br>
-&#9;&#9;t_candidates = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_candidates&nbsp;=&nbsp;[]<br>
 <br>
-&#9;&#9;# Пересечение с цилиндрической частью: |w_perp + t D_perp|^2 = r^2<br>
-&#9;&#9;w = O - A<br>
-&#9;&#9;w_par = numpy.dot(w, U)<br>
-&#9;&#9;w_perp = w - w_par * U<br>
-&#9;&#9;D_par = numpy.dot(D, U)<br>
-&#9;&#9;D_perp = D - D_par * U<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пересечение&nbsp;с&nbsp;цилиндрической&nbsp;частью:&nbsp;|w_perp&nbsp;+&nbsp;t&nbsp;D_perp|^2&nbsp;=&nbsp;r^2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w&nbsp;=&nbsp;O&nbsp;-&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w_par&nbsp;=&nbsp;numpy.dot(w,&nbsp;U)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w_perp&nbsp;=&nbsp;w&nbsp;-&nbsp;w_par&nbsp;*&nbsp;U<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;D_par&nbsp;=&nbsp;numpy.dot(D,&nbsp;U)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;D_perp&nbsp;=&nbsp;D&nbsp;-&nbsp;D_par&nbsp;*&nbsp;U<br>
 <br>
-&#9;&#9;a = numpy.dot(D_perp, D_perp)<br>
-&#9;&#9;b = 2.0 * numpy.dot(D_perp, w_perp)<br>
-&#9;&#9;c = numpy.dot(w_perp, w_perp) - r * r<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;numpy.dot(D_perp,&nbsp;D_perp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;2.0&nbsp;*&nbsp;numpy.dot(D_perp,&nbsp;w_perp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;numpy.dot(w_perp,&nbsp;w_perp)&nbsp;-&nbsp;r&nbsp;*&nbsp;r<br>
 <br>
-&#9;&#9;if a &gt; 1e-12:<br>
-&#9;&#9;&#9;disc = b * b - 4.0 * a * c<br>
-&#9;&#9;&#9;if disc &gt;= 0.0:<br>
-&#9;&#9;&#9;&#9;sqrt_disc = numpy.sqrt(disc)<br>
-&#9;&#9;&#9;&#9;t0 = (-b - sqrt_disc) / (2.0 * a)<br>
-&#9;&#9;&#9;&#9;t1 = (-b + sqrt_disc) / (2.0 * a)<br>
-&#9;&#9;&#9;&#9;for t in (t0, t1):<br>
-&#9;&#9;&#9;&#9;&#9;if t &lt; 0:<br>
-&#9;&#9;&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;&#9;&#9;s = w_par + t * D_par  # параметр вдоль оси капсулы<br>
-&#9;&#9;&#9;&#9;&#9;if 0.0 &lt;= s &lt;= length:<br>
-&#9;&#9;&#9;&#9;&#9;&#9;t_candidates.append(t)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;# Луч параллелен оси. Если проекция в пределах радиуса, стукнемся об крышки.<br>
-&#9;&#9;&#9;if c &lt;= 0.0 and (D_par &gt; 0.0 or D_par &lt; 0.0):<br>
-&#9;&#9;&#9;&#9;# Попадание в цилиндрическую часть, но точное t определят сферы.<br>
-&#9;&#9;&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;a&nbsp;&gt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;disc&nbsp;=&nbsp;b&nbsp;*&nbsp;b&nbsp;-&nbsp;4.0&nbsp;*&nbsp;a&nbsp;*&nbsp;c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;disc&nbsp;&gt;=&nbsp;0.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sqrt_disc&nbsp;=&nbsp;numpy.sqrt(disc)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t0&nbsp;=&nbsp;(-b&nbsp;-&nbsp;sqrt_disc)&nbsp;/&nbsp;(2.0&nbsp;*&nbsp;a)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t1&nbsp;=&nbsp;(-b&nbsp;+&nbsp;sqrt_disc)&nbsp;/&nbsp;(2.0&nbsp;*&nbsp;a)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;t&nbsp;in&nbsp;(t0,&nbsp;t1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t&nbsp;&lt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;w_par&nbsp;+&nbsp;t&nbsp;*&nbsp;D_par&nbsp;&nbsp;#&nbsp;параметр&nbsp;вдоль&nbsp;оси&nbsp;капсулы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;0.0&nbsp;&lt;=&nbsp;s&nbsp;&lt;=&nbsp;length:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_candidates.append(t)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Луч&nbsp;параллелен&nbsp;оси.&nbsp;Если&nbsp;проекция&nbsp;в&nbsp;пределах&nbsp;радиуса,&nbsp;стукнемся&nbsp;об&nbsp;крышки.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;c&nbsp;&lt;=&nbsp;0.0&nbsp;and&nbsp;(D_par&nbsp;&gt;&nbsp;0.0&nbsp;or&nbsp;D_par&nbsp;&lt;&nbsp;0.0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Попадание&nbsp;в&nbsp;цилиндрическую&nbsp;часть,&nbsp;но&nbsp;точное&nbsp;t&nbsp;определят&nbsp;сферы.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;&#9;# Пересечения с капами<br>
-&#9;&#9;t_sphere_a = sphere_hit(A)<br>
-&#9;&#9;if t_sphere_a is not None:<br>
-&#9;&#9;&#9;t_candidates.append(t_sphere_a)<br>
-&#9;&#9;t_sphere_b = sphere_hit(B)<br>
-&#9;&#9;if t_sphere_b is not None:<br>
-&#9;&#9;&#9;t_candidates.append(t_sphere_b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пересечения&nbsp;с&nbsp;капами<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_sphere_a&nbsp;=&nbsp;sphere_hit(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t_sphere_a&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_candidates.append(t_sphere_a)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_sphere_b&nbsp;=&nbsp;sphere_hit(B)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t_sphere_b&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_candidates.append(t_sphere_b)<br>
 <br>
-&#9;&#9;if t_candidates:<br>
-&#9;&#9;&#9;t_hit = min(t_candidates)<br>
-&#9;&#9;&#9;p_hit = ray.point_at(t_hit)<br>
-&#9;&#9;&#9;return p_hit, p_hit, 0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t_candidates:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_hit&nbsp;=&nbsp;min(t_candidates)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_hit&nbsp;=&nbsp;ray.point_at(t_hit)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p_hit,&nbsp;p_hit,&nbsp;0.0<br>
 <br>
-&#9;&#9;# Нет пересечения — берем ближайшие точки между лучом (обрезанным) и осью капсулы.<br>
-&#9;&#9;FAR = 1e6<br>
-&#9;&#9;p_seg, p_ray, dist_axis = closest_points_between_segments(<br>
-&#9;&#9;&#9;A, B,<br>
-&#9;&#9;&#9;O, O + D * FAR<br>
-&#9;&#9;)<br>
-&#9;&#9;dir_vec = p_ray - p_seg<br>
-&#9;&#9;n = numpy.linalg.norm(dir_vec)<br>
-&#9;&#9;if n &gt; 1e-8:<br>
-&#9;&#9;&#9;p_col = p_seg + dir_vec * (r / n)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;# Луч параллелен оси: сдвигаем вдоль любой нормали.<br>
-&#9;&#9;&#9;normal = numpy.cross(U, numpy.array([1.0, 0.0, 0.0]))<br>
-&#9;&#9;&#9;if numpy.linalg.norm(normal) &lt; 1e-8:<br>
-&#9;&#9;&#9;&#9;normal = numpy.cross(U, numpy.array([0.0, 1.0, 0.0]))<br>
-&#9;&#9;&#9;normal = normal / numpy.linalg.norm(normal)<br>
-&#9;&#9;&#9;p_col = p_seg + normal * r<br>
-&#9;&#9;return p_col, p_ray, numpy.linalg.norm(p_col - p_ray)<br>
-&#9;<br>
-&#9;def __init__(self, a: numpy.ndarray, b: numpy.ndarray, radius: float):<br>
-&#9;&#9;self.a = a<br>
-&#9;&#9;self.b = b<br>
-&#9;&#9;self.radius = radius<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нет&nbsp;пересечения&nbsp;—&nbsp;берем&nbsp;ближайшие&nbsp;точки&nbsp;между&nbsp;лучом&nbsp;(обрезанным)&nbsp;и&nbsp;осью&nbsp;капсулы.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;FAR&nbsp;=&nbsp;1e6<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_seg,&nbsp;p_ray,&nbsp;dist_axis&nbsp;=&nbsp;closest_points_between_segments(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A,&nbsp;B,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;O,&nbsp;O&nbsp;+&nbsp;D&nbsp;*&nbsp;FAR<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dir_vec&nbsp;=&nbsp;p_ray&nbsp;-&nbsp;p_seg<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;numpy.linalg.norm(dir_vec)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;&gt;&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_col&nbsp;=&nbsp;p_seg&nbsp;+&nbsp;dir_vec&nbsp;*&nbsp;(r&nbsp;/&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Луч&nbsp;параллелен&nbsp;оси:&nbsp;сдвигаем&nbsp;вдоль&nbsp;любой&nbsp;нормали.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normal&nbsp;=&nbsp;numpy.cross(U,&nbsp;numpy.array([1.0,&nbsp;0.0,&nbsp;0.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;numpy.linalg.norm(normal)&nbsp;&lt;&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normal&nbsp;=&nbsp;numpy.cross(U,&nbsp;numpy.array([0.0,&nbsp;1.0,&nbsp;0.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normal&nbsp;=&nbsp;normal&nbsp;/&nbsp;numpy.linalg.norm(normal)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_col&nbsp;=&nbsp;p_seg&nbsp;+&nbsp;normal&nbsp;*&nbsp;r<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p_col,&nbsp;p_ray,&nbsp;numpy.linalg.norm(p_col&nbsp;-&nbsp;p_ray)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;a:&nbsp;numpy.ndarray,&nbsp;b:&nbsp;numpy.ndarray,&nbsp;radius:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.a&nbsp;=&nbsp;a<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.b&nbsp;=&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.radius&nbsp;=&nbsp;radius<br>
 <br>
-&#9;def transform_by(self, transform: 'Pose3'):<br>
-&#9;&#9;&quot;&quot;&quot;Return a new CapsuleCollider transformed by the given Pose3.&quot;&quot;&quot;<br>
-&#9;&#9;new_a = transform.transform_point(self.a)<br>
-&#9;&#9;new_b = transform.transform_point(self.b)<br>
-&#9;&#9;return CapsuleCollider(new_a, new_b, self.radius)<br>
-&#9;<br>
-&#9;def closest_to_capsule(self, other: &quot;CapsuleCollider&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;Return the closest points and distance between this capsule and another capsule.&quot;&quot;&quot;<br>
-&#9;&#9;p_near, q_near, dist = closest_points_between_capsules(<br>
-&#9;&#9;&#9;self.a, self.b, self.radius,<br>
-&#9;&#9;&#9;other.a, other.b, other.radius)<br>
-&#9;&#9;return p_near, q_near, dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_by(self,&nbsp;transform:&nbsp;'Pose3'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;a&nbsp;new&nbsp;CapsuleCollider&nbsp;transformed&nbsp;by&nbsp;the&nbsp;given&nbsp;Pose3.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_a&nbsp;=&nbsp;transform.transform_point(self.a)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_b&nbsp;=&nbsp;transform.transform_point(self.b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;CapsuleCollider(new_a,&nbsp;new_b,&nbsp;self.radius)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_capsule(self,&nbsp;other:&nbsp;&quot;CapsuleCollider&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;closest&nbsp;points&nbsp;and&nbsp;distance&nbsp;between&nbsp;this&nbsp;capsule&nbsp;and&nbsp;another&nbsp;capsule.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_near,&nbsp;q_near,&nbsp;dist&nbsp;=&nbsp;closest_points_between_capsules(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.a,&nbsp;self.b,&nbsp;self.radius,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;other.a,&nbsp;other.b,&nbsp;other.radius)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p_near,&nbsp;q_near,&nbsp;dist<br>
 <br>
-&#9;def closest_to_sphere(self, other: &quot;SphereCollider&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;Return the closest points and distance between this capsule and a sphere.&quot;&quot;&quot;<br>
-&#9;&#9;p_near, q_near, dist = closest_points_between_capsule_and_sphere(<br>
-&#9;&#9;&#9;self.a, self.b, self.radius,<br>
-&#9;&#9;&#9;other.center, other.radius)<br>
-&#9;&#9;return p_near, q_near, dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_sphere(self,&nbsp;other:&nbsp;&quot;SphereCollider&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;closest&nbsp;points&nbsp;and&nbsp;distance&nbsp;between&nbsp;this&nbsp;capsule&nbsp;and&nbsp;a&nbsp;sphere.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_near,&nbsp;q_near,&nbsp;dist&nbsp;=&nbsp;closest_points_between_capsule_and_sphere(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.a,&nbsp;self.b,&nbsp;self.radius,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;other.center,&nbsp;other.radius)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p_near,&nbsp;q_near,&nbsp;dist<br>
 <br>
-&#9;def closest_to_union_collider(self, other: &quot;UnionCollider&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;Return the closest points and distance between this capsule and a union collider.&quot;&quot;&quot;<br>
-&#9;&#9;a,b,c = other.closest_to_collider(self)<br>
-&#9;&#9;return b,a,c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_union_collider(self,&nbsp;other:&nbsp;&quot;UnionCollider&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;closest&nbsp;points&nbsp;and&nbsp;distance&nbsp;between&nbsp;this&nbsp;capsule&nbsp;and&nbsp;a&nbsp;union&nbsp;collider.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a,b,c&nbsp;=&nbsp;other.closest_to_collider(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;b,a,c<br>
 <br>
-&#9;def closest_to_collider(self, other: &quot;Collider&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;Return the closest points and distance between this collider and another collider.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_collider(self,&nbsp;other:&nbsp;&quot;Collider&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;closest&nbsp;points&nbsp;and&nbsp;distance&nbsp;between&nbsp;this&nbsp;collider&nbsp;and&nbsp;another&nbsp;collider.&quot;&quot;&quot;<br>
 <br>
-&#9;&#9;from .sphere import SphereCollider<br>
-&#9;&#9;from .union_collider import UnionCollider<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.sphere&nbsp;import&nbsp;SphereCollider<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.union_collider&nbsp;import&nbsp;UnionCollider<br>
 <br>
-&#9;&#9;if isinstance(other, CapsuleCollider):<br>
-&#9;&#9;&#9;return self.closest_to_capsule(other)<br>
-&#9;&#9;elif isinstance(other, SphereCollider):<br>
-&#9;&#9;&#9;return other.closest_to_sphere(self)<br>
-&#9;&#9;elif isinstance(other, UnionCollider):<br>
-&#9;&#9;&#9;return self.closest_to_union_collider(other)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;raise NotImplementedError(f&quot;closest_to_collider not implemented for {type(other)}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(other,&nbsp;CapsuleCollider):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.closest_to_capsule(other)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(other,&nbsp;SphereCollider):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;other.closest_to_sphere(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(other,&nbsp;UnionCollider):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.closest_to_union_collider(other)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(f&quot;closest_to_collider&nbsp;not&nbsp;implemented&nbsp;for&nbsp;{type(other)}&quot;)<br>
 <br>
-&#9;def distance(self, other: &quot;Collider&quot;) -&gt; float:<br>
-&#9;&#9;&quot;&quot;&quot;Return the distance between this collider and another collider.&quot;&quot;&quot;<br>
-&#9;&#9;_, _, dist = self.closest_to_collider(other)<br>
-&#9;&#9;return dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;distance(self,&nbsp;other:&nbsp;&quot;Collider&quot;)&nbsp;-&gt;&nbsp;float:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;distance&nbsp;between&nbsp;this&nbsp;collider&nbsp;and&nbsp;another&nbsp;collider.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_,&nbsp;_,&nbsp;dist&nbsp;=&nbsp;self.closest_to_collider(other)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;dist<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

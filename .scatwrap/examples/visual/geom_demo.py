@@ -7,158 +7,158 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 &quot;&quot;&quot;<br>
-Demo: rendering cube wireframe using a geometry shader.<br>
+Demo:&nbsp;rendering&nbsp;cube&nbsp;wireframe&nbsp;using&nbsp;a&nbsp;geometry&nbsp;shader.<br>
 &quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.mesh.mesh import CubeMesh<br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;MeshDrawable,<br>
-&#9;Scene,<br>
-&#9;Material,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;CubeMesh<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from termin.visualization.components import MeshRenderer<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
 <br>
 <br>
-# =============================<br>
-#   Vertex Shader<br>
-# =============================<br>
-vert = &quot;&quot;&quot;<br>
-#version 330 core<br>
+#&nbsp;=============================<br>
+#&nbsp;&nbsp;&nbsp;Vertex&nbsp;Shader<br>
+#&nbsp;=============================<br>
+vert&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-layout(location = 0) in vec3 a_position;<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_pos_world;<br>
+out&nbsp;vec3&nbsp;v_pos_world;<br>
 <br>
-void main() {<br>
-&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
-&#9;v_pos_world = world.xyz;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;world&nbsp;=&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_pos_world&nbsp;=&nbsp;world.xyz;<br>
 <br>
-&#9;gl_Position = u_projection * u_view * world;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-# =============================<br>
-#   Geometry Shader (line generation)<br>
-# =============================<br>
-geom = &quot;&quot;&quot;<br>
-#version 330 core<br>
+#&nbsp;=============================<br>
+#&nbsp;&nbsp;&nbsp;Geometry&nbsp;Shader&nbsp;(line&nbsp;generation)<br>
+#&nbsp;=============================<br>
+geom&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-layout(triangles) in;<br>
-layout(line_strip, max_vertices = 6) out;<br>
+layout(triangles)&nbsp;in;<br>
+layout(line_strip,&nbsp;max_vertices&nbsp;=&nbsp;6)&nbsp;out;<br>
 <br>
-in vec3 v_pos_world[];<br>
+in&nbsp;vec3&nbsp;v_pos_world[];<br>
 <br>
-out vec3 g_pos_world;<br>
+out&nbsp;vec3&nbsp;g_pos_world;<br>
 <br>
-void main() {<br>
-&#9;// три вершины входного треугольника<br>
-&#9;for (int i = 0; i &lt; 3; i++) {<br>
-&#9;&#9;int j = (i + 1) % 3;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;три&nbsp;вершины&nbsp;входного&nbsp;треугольника<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;(int&nbsp;i&nbsp;=&nbsp;0;&nbsp;i&nbsp;&lt;&nbsp;3;&nbsp;i++)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;j&nbsp;=&nbsp;(i&nbsp;+&nbsp;1)&nbsp;%&nbsp;3;<br>
 <br>
-&#9;&#9;g_pos_world = v_pos_world[i];<br>
-&#9;&#9;gl_Position = gl_in[i].gl_Position;<br>
-&#9;&#9;EmitVertex();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g_pos_world&nbsp;=&nbsp;v_pos_world[i];<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;gl_in[i].gl_Position;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EmitVertex();<br>
 <br>
-&#9;&#9;g_pos_world = v_pos_world[j];<br>
-&#9;&#9;gl_Position = gl_in[j].gl_Position;<br>
-&#9;&#9;EmitVertex();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g_pos_world&nbsp;=&nbsp;v_pos_world[j];<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;gl_in[j].gl_Position;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EmitVertex();<br>
 <br>
-&#9;&#9;EndPrimitive();<br>
-&#9;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EndPrimitive();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-# =============================<br>
-#   Fragment Shader<br>
-# =============================<br>
-frag = &quot;&quot;&quot;<br>
-#version 330 core<br>
+#&nbsp;=============================<br>
+#&nbsp;&nbsp;&nbsp;Fragment&nbsp;Shader<br>
+#&nbsp;=============================<br>
+frag&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-in vec3 g_pos_world;<br>
+in&nbsp;vec3&nbsp;g_pos_world;<br>
 <br>
-uniform vec4 u_color;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;// просто цвет линий<br>
-&#9;FragColor = vec4(u_color.rgb, u_color.a);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;просто&nbsp;цвет&nbsp;линий<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(u_color.rgb,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-# =============================<br>
-#   Scene builder<br>
-# =============================<br>
-def build_scene(world: VisualizationWorld):<br>
-&#9;cube_mesh = CubeMesh()<br>
-&#9;drawable = MeshDrawable(cube_mesh)<br>
+#&nbsp;=============================<br>
+#&nbsp;&nbsp;&nbsp;Scene&nbsp;builder<br>
+#&nbsp;=============================<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube_mesh&nbsp;=&nbsp;CubeMesh()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;drawable&nbsp;=&nbsp;MeshDrawable(cube_mesh)<br>
 <br>
-&#9;# теперь прокидываем третий аргумент — geometry shader<br>
-&#9;shader_prog = ShaderProgram(<br>
-&#9;&#9;vertex_source=vert,<br>
-&#9;&#9;fragment_source=frag,<br>
-&#9;&#9;geometry_source=geom,<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;теперь&nbsp;прокидываем&nbsp;третий&nbsp;аргумент&nbsp;—&nbsp;geometry&nbsp;shader<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader_prog&nbsp;=&nbsp;ShaderProgram(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex_source=vert,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fragment_source=frag,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;geometry_source=geom,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;# красим линии (красный wireframe)<br>
-&#9;material = Material(<br>
-&#9;&#9;shader=shader_prog,<br>
-&#9;&#9;color=np.array([1.0, 0.1, 0.1, 1.0], dtype=np.float32)<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;красим&nbsp;линии&nbsp;(красный&nbsp;wireframe)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;Material(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader=shader_prog,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=np.array([1.0,&nbsp;0.1,&nbsp;0.1,&nbsp;1.0],&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;entity = Entity(pose=Pose3.identity(), name=&quot;wire_cube&quot;)<br>
-&#9;entity.add_component(MeshRenderer(drawable, material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;wire_cube&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity.add_component(MeshRenderer(drawable,&nbsp;material))<br>
 <br>
-&#9;scene = Scene()<br>
-&#9;scene.add(entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(entity)<br>
 <br>
-&#9;# оставляем небо для красоты<br>
-&#9;skybox = SkyBoxEntity()<br>
-&#9;scene.add(skybox)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;оставляем&nbsp;небо&nbsp;для&nbsp;красоты<br>
+&nbsp;&nbsp;&nbsp;&nbsp;skybox&nbsp;=&nbsp;SkyBoxEntity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(skybox)<br>
 <br>
-&#9;world.add_scene(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
-&#9;# камера как в базовом примере<br>
-&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
-&#9;camera = PerspectiveCameraComponent()<br>
-&#9;camera_entity.add_component(camera)<br>
-&#9;camera_entity.add_component(OrbitCameraController())<br>
-&#9;scene.add(camera_entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;камера&nbsp;как&nbsp;в&nbsp;базовом&nbsp;примере<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(OrbitCameraController())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(camera_entity)<br>
 <br>
-&#9;return scene, camera<br>
-<br>
-<br>
-# =============================<br>
-#   Main<br>
-# =============================<br>
-def main():<br>
-&#9;world = VisualizationWorld()<br>
-&#9;scene, camera = build_scene(world)<br>
-&#9;window = world.create_window(title=&quot;termin geometry-shader wireframe demo&quot;)<br>
-&#9;window.add_viewport(scene, camera)<br>
-&#9;world.run()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;camera<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+#&nbsp;=============================<br>
+#&nbsp;&nbsp;&nbsp;Main<br>
+#&nbsp;=============================<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;camera&nbsp;=&nbsp;build_scene(world)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;world.create_window(title=&quot;termin&nbsp;geometry-shader&nbsp;wireframe&nbsp;demo&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

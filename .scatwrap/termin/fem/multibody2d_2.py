@@ -6,315 +6,315 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# &quot;&quot;&quot;<br>
-# Вторая версия модели многотельной системы в 2D<br>
-# &quot;&quot;&quot;<br>
+#&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;Вторая&nbsp;версия&nbsp;модели&nbsp;многотельной&nbsp;системы&nbsp;в&nbsp;2D<br>
+#&nbsp;&quot;&quot;&quot;<br>
 <br>
 <br>
-# from typing import List, Dict<br>
-# import numpy as np<br>
-# from termin.fem.assembler import Variable, Contribution<br>
-# from termin.geombase.pose2 import Pose2<br>
-# from termin.geombase.screw import Screw2<br>
-# from termin.fem.inertia2d import SpatialInertia2D<br>
+#&nbsp;from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Dict<br>
+#&nbsp;import&nbsp;numpy&nbsp;as&nbsp;np<br>
+#&nbsp;from&nbsp;termin.fem.assembler&nbsp;import&nbsp;Variable,&nbsp;Contribution<br>
+#&nbsp;from&nbsp;termin.geombase.pose2&nbsp;import&nbsp;Pose2<br>
+#&nbsp;from&nbsp;termin.geombase.screw&nbsp;import&nbsp;Screw2<br>
+#&nbsp;from&nbsp;termin.fem.inertia2d&nbsp;import&nbsp;SpatialInertia2D<br>
 <br>
 <br>
-# class RigidBody2D(Contribution):<br>
-#     &quot;&quot;&quot;<br>
-#     Твердое тело в плоскости (3 СС: x, y, θ).<br>
-#     Поддерживает внецентренную инерцию (смещённый ЦМ).<br>
-#     &quot;&quot;&quot;<br>
+#&nbsp;class&nbsp;RigidBody2D(Contribution):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Твердое&nbsp;тело&nbsp;в&nbsp;плоскости&nbsp;(3&nbsp;СС:&nbsp;x,&nbsp;y,&nbsp;θ).<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Поддерживает&nbsp;внецентренную&nbsp;инерцию&nbsp;(смещённый&nbsp;ЦМ).<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
 <br>
-#     def __init__(self, <br>
-#                 inertia: SpatialInertia2D, <br>
-#                 gravity: np.ndarray = None,<br>
-#                 assembler=None, <br>
-#                 name=&quot;rbody2d&quot;,<br>
-#                 angle_normalize: callable = None<br>
-#             ):<br>
-#         self.acceleration_var = Variable(<br>
-#             name + &quot;_acc&quot;, size=3, tag=&quot;acceleration&quot;<br>
-#         )  # [ax, ay, α] в глобальной СК<br>
-#         self.velocity_var = Variable(<br>
-#             name + &quot;_vel&quot;, size=3, tag=&quot;velocity&quot;<br>
-#         )  # [vx, vy, ω] в глобальной СК<br>
-#         self.pose_var = Variable(<br>
-#             name + &quot;_pos&quot;, size=3, tag=&quot;position&quot;<br>
-#         )  # [x, y, θ] в глобальной СК<br>
-#         self.inertia = inertia<br>
-#         self.gravity = (<br>
-#             np.array([0.0, -9.81]) if gravity is None else np.asarray(gravity, float).reshape(2)<br>
-#         )<br>
-#         super().__init__(<br>
-#             [self.acceleration_var, self.velocity_var, self.pose_var], assembler=assembler<br>
-#             )<br>
-#         self.angle_normalize = angle_normalize<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inertia:&nbsp;SpatialInertia2D,&nbsp;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gravity:&nbsp;np.ndarray&nbsp;=&nbsp;None,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=None,&nbsp;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name=&quot;rbody2d&quot;,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle_normalize:&nbsp;callable&nbsp;=&nbsp;None<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.acceleration_var&nbsp;=&nbsp;Variable(<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;+&nbsp;&quot;_acc&quot;,&nbsp;size=3,&nbsp;tag=&quot;acceleration&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;&nbsp;#&nbsp;[ax,&nbsp;ay,&nbsp;α]&nbsp;в&nbsp;глобальной&nbsp;СК<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.velocity_var&nbsp;=&nbsp;Variable(<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;+&nbsp;&quot;_vel&quot;,&nbsp;size=3,&nbsp;tag=&quot;velocity&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;&nbsp;#&nbsp;[vx,&nbsp;vy,&nbsp;ω]&nbsp;в&nbsp;глобальной&nbsp;СК<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pose_var&nbsp;=&nbsp;Variable(<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;+&nbsp;&quot;_pos&quot;,&nbsp;size=3,&nbsp;tag=&quot;position&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;&nbsp;#&nbsp;[x,&nbsp;y,&nbsp;θ]&nbsp;в&nbsp;глобальной&nbsp;СК<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inertia&nbsp;=&nbsp;inertia<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gravity&nbsp;=&nbsp;(<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.array([0.0,&nbsp;-9.81])&nbsp;if&nbsp;gravity&nbsp;is&nbsp;None&nbsp;else&nbsp;np.asarray(gravity,&nbsp;float).reshape(2)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[self.acceleration_var,&nbsp;self.velocity_var,&nbsp;self.pose_var],&nbsp;assembler=assembler<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.angle_normalize&nbsp;=&nbsp;angle_normalize<br>
 <br>
-#     def pose(self):<br>
-#         return Pose2(<br>
-#             lin=self.pose_var.value[0:2].copy(),<br>
-#             ang=float(self.pose_var.value[2].copy())<br>
-#         )<br>
-&#9;&#9;<br>
-#     # ---------- ВКЛАД В СИСТЕМУ ----------<br>
-#     def contribute(self, matrices, index_maps):<br>
-#         self.contribute_to_mass_matrix(matrices, index_maps)<br>
-#         # Гравитация в глобальной СК<br>
-#         a_idx = index_maps[&quot;acceleration&quot;][self.acceleration_var]<br>
-#         b = matrices[&quot;load&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;pose(self):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2(<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=self.pose_var.value[0:2].copy(),<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=float(self.pose_var.value[2].copy())<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;----------&nbsp;ВКЛАД&nbsp;В&nbsp;СИСТЕМУ&nbsp;----------<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute(self,&nbsp;matrices,&nbsp;index_maps):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_mass_matrix(matrices,&nbsp;index_maps)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Гравитация&nbsp;в&nbsp;глобальной&nbsp;СК<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_idx&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;][self.acceleration_var]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;matrices[&quot;load&quot;]<br>
 <br>
-#         # 1) Инерционный скоростной bias, она же сила Кориолиса: v×* (I v)<br>
-#         v = self.velocity_var.value<br>
-#         velscr = Screw2(lin=v[0:2], ang=v[2])<br>
-#         velscr_local = velscr.rotated_by(self.pose().inverse())<br>
-#         bias_wrench = self.inertia.bias_wrench(velscr_local) <br>
-#         bw_world = bias_wrench.rotated_by(self.pose())<br>
-#         b[a_idx] += bw_world.to_vector_vw_order()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;1)&nbsp;Инерционный&nbsp;скоростной&nbsp;bias,&nbsp;она&nbsp;же&nbsp;сила&nbsp;Кориолиса:&nbsp;v×*&nbsp;(I&nbsp;v)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;self.velocity_var.value<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;velscr&nbsp;=&nbsp;Screw2(lin=v[0:2],&nbsp;ang=v[2])<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;velscr_local&nbsp;=&nbsp;velscr.rotated_by(self.pose().inverse())<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bias_wrench&nbsp;=&nbsp;self.inertia.bias_wrench(velscr_local)&nbsp;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bw_world&nbsp;=&nbsp;bias_wrench.rotated_by(self.pose())<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[a_idx]&nbsp;+=&nbsp;bw_world.to_vector_vw_order()<br>
 <br>
-#         # 2) Гравитационная сила<br>
-#         gravity_local = self.pose().inverse().rotate_vector(self.gravity)<br>
-#         gr_wrench_local = self.inertia.gravity_wrench(gravity_local).to_vector_vw_order()<br>
-#         gr_wrench_world = Screw2.from_vector_vw_order(gr_wrench_local).rotated_by(self.pose())<br>
-#         b[a_idx] += gr_wrench_world.to_vector_vw_order()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;2)&nbsp;Гравитационная&nbsp;сила<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gravity_local&nbsp;=&nbsp;self.pose().inverse().rotate_vector(self.gravity)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gr_wrench_local&nbsp;=&nbsp;self.inertia.gravity_wrench(gravity_local).to_vector_vw_order()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gr_wrench_world&nbsp;=&nbsp;Screw2.from_vector_vw_order(gr_wrench_local).rotated_by(self.pose())<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[a_idx]&nbsp;+=&nbsp;gr_wrench_world.to_vector_vw_order()<br>
 <br>
-#     def contribute_for_constraints_correction(self, matrices, index_maps):<br>
-#         self.contribute_to_mass_matrix(matrices, index_maps)<br>
-&#9;<br>
-#     def contribute_to_mass_matrix(self, matrices, index_maps):<br>
-#         A = matrices[&quot;mass&quot;]<br>
-#         amap = index_maps[&quot;acceleration&quot;]<br>
-#         a_idx = amap[self.acceleration_var]<br>
-#         IM = self.inertia.to_matrix_vw_order()<br>
-#         A[np.ix_(a_idx, a_idx)] += IM<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_for_constraints_correction(self,&nbsp;matrices,&nbsp;index_maps):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_mass_matrix(matrices,&nbsp;index_maps)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_mass_matrix(self,&nbsp;matrices,&nbsp;index_maps):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;matrices[&quot;mass&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;amap&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_idx&nbsp;=&nbsp;amap[self.acceleration_var]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IM&nbsp;=&nbsp;self.inertia.to_matrix_vw_order()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[np.ix_(a_idx,&nbsp;a_idx)]&nbsp;+=&nbsp;IM<br>
 <br>
-#     def finish_timestep(self, dt):<br>
-#         # semimplicit Euler<br>
-#         v = self.velocity_var.value<br>
-#         a = self.acceleration_var.value<br>
-#         v += a * dt<br>
-#         self.velocity_var.value = v<br>
-#         self.pose_var.value += v * dt<br>
-<br>
-<br>
-#         if self.angle_normalize is not None:<br>
-#             self.pose_var.value[2] = self.angle_normalize(self.pose_var.value[2])<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;finish_timestep(self,&nbsp;dt):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;semimplicit&nbsp;Euler<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;self.velocity_var.value<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;self.acceleration_var.value<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;+=&nbsp;a&nbsp;*&nbsp;dt<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.velocity_var.value&nbsp;=&nbsp;v<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pose_var.value&nbsp;+=&nbsp;v&nbsp;*&nbsp;dt<br>
 <br>
 <br>
-# class ForceOnBody2D(Contribution):<br>
-#     &quot;&quot;&quot;<br>
-#     Внешняя сила и момент, приложенные к твердому телу в 2D.<br>
-#     &quot;&quot;&quot;<br>
-#     def __init__(self, body: RigidBody2D, wrench: Screw2,<br>
-#                  in_local_frame: bool = False, assembler=None):<br>
-#         &quot;&quot;&quot;<br>
-#         Args:<br>
-#             wrench: Screw2 — сила и момент<br>
-#             in_local_frame: если True, сила задана в локальной СК тела<br>
-#         &quot;&quot;&quot;<br>
-#         self.body = body<br>
-#         self.acceleration = body.acceleration_var<br>
-#         self.wrench = wrench<br>
-#         self.in_local_frame = in_local_frame<br>
-#         super().__init__([], assembler=assembler)  # Нет переменных для этой нагрузки<br>
-<br>
-#     def contribute(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-#         &quot;&quot;&quot;<br>
-#         Добавить вклад в вектор нагрузок<br>
-#         &quot;&quot;&quot;<br>
-#         b = matrices[&quot;load&quot;]<br>
-#         index_map = index_maps[&quot;acceleration&quot;]<br>
-#         a_indices = index_map[self.acceleration]<br>
-#         wrench = self.wrench.rotated_by(self.body.pose()) if self.in_local_frame else self.wrench<br>
-#         b[a_indices[0]] += wrench.lin[0]<br>
-#         b[a_indices[1]] += wrench.lin[1]<br>
-#         b[a_indices[2]] += wrench.ang<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.angle_normalize&nbsp;is&nbsp;not&nbsp;None:<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pose_var.value[2]&nbsp;=&nbsp;self.angle_normalize(self.pose_var.value[2])<br>
 <br>
 <br>
-#     def contribute_for_constraints_correction(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-#         &quot;&quot;&quot;<br>
-#         Внешние силы не влияют на коррекцию ограничений на положения<br>
-#         &quot;&quot;&quot;<br>
-#         pass<br>
+#&nbsp;class&nbsp;ForceOnBody2D(Contribution):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Внешняя&nbsp;сила&nbsp;и&nbsp;момент,&nbsp;приложенные&nbsp;к&nbsp;твердому&nbsp;телу&nbsp;в&nbsp;2D.<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;body:&nbsp;RigidBody2D,&nbsp;wrench:&nbsp;Screw2,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;in_local_frame:&nbsp;bool&nbsp;=&nbsp;False,&nbsp;assembler=None):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench:&nbsp;Screw2&nbsp;—&nbsp;сила&nbsp;и&nbsp;момент<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;in_local_frame:&nbsp;если&nbsp;True,&nbsp;сила&nbsp;задана&nbsp;в&nbsp;локальной&nbsp;СК&nbsp;тела<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.body&nbsp;=&nbsp;body<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.acceleration&nbsp;=&nbsp;body.acceleration_var<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.wrench&nbsp;=&nbsp;wrench<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.in_local_frame&nbsp;=&nbsp;in_local_frame<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__([],&nbsp;assembler=assembler)&nbsp;&nbsp;#&nbsp;Нет&nbsp;переменных&nbsp;для&nbsp;этой&nbsp;нагрузки<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;вектор&nbsp;нагрузок<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;matrices[&quot;load&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_indices&nbsp;=&nbsp;index_map[self.acceleration]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench&nbsp;=&nbsp;self.wrench.rotated_by(self.body.pose())&nbsp;if&nbsp;self.in_local_frame&nbsp;else&nbsp;self.wrench<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[a_indices[0]]&nbsp;+=&nbsp;wrench.lin[0]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[a_indices[1]]&nbsp;+=&nbsp;wrench.lin[1]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[a_indices[2]]&nbsp;+=&nbsp;wrench.ang<br>
 <br>
 <br>
-# class FixedRotationJoint2D(Contribution):<br>
-#     &quot;&quot;&quot;<br>
-#     Вращательный шарнир с фиксацией в пространстве (ground revolute joint).<br>
-&#9;<br>
-#     Фиксирует точку на теле в пространстве, разрешая только вращение вокруг этой точки.<br>
-#     Эквивалентно присоединению тела к неподвижному основанию через шарнир.<br>
-<br>
-#     Соглашение о знаках: Лямбда задаёт силу действующую на тело со стороны шарнира.<br>
-#     &quot;&quot;&quot;<br>
-#     def __init__(self,<br>
-#         body: RigidBody2D,<br>
-#         coords_of_joint: np.ndarray = None,<br>
-#         assembler=None):<br>
-#         &quot;&quot;&quot;<br>
-#         Args:<br>
-#             body: Твердое тело, к которому применяется шарнир<br>
-#             coords_of_joint: Вектор координат шарнира [x, y]<br>
-#             assembler: Ассемблер для сборки системы<br>
-#         &quot;&quot;&quot;<br>
-#         self.body = body<br>
-#         self.internal_force = Variable(&quot;F_joint&quot;, size=2, tag=&quot;force&quot;)<br>
-&#9;&#9;<br>
-#         body_pose = self.body.pose()<br>
-<br>
-#         self.coords_of_joint = coords_of_joint.copy() if coords_of_joint is not None else body_pose.lin.copy()<br>
-#         self.radius_in_local = body_pose.inverse_transform_point(self.coords_of_joint)<br>
-<br>
-#         super().__init__([body.acceleration_var, self.internal_force], assembler=assembler)<br>
-<br>
-#     def radius(self):<br>
-#         &quot;&quot;&quot;Обновить радиус до тела&quot;&quot;&quot;<br>
-#         body_pose = self.body.pose()<br>
-#         return body_pose.rotate_vector(self.radius_in_local) # тут достаточно повернуть<br>
-<br>
-#     def contribute(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-#         &quot;&quot;&quot;<br>
-#         Добавить вклад в матрицы<br>
-#         &quot;&quot;&quot;<br>
-#         radius = self.radius()<br>
-#         omega = self.body.velocity_var.value[2]<br>
-&#9;&#9;<br>
-#         self.contribute_to_holonomic_matrix(matrices, index_maps)<br>
-<br>
-#         h = matrices[&quot;holonomic_rhs&quot;]<br>
-#         constraints_map = index_maps[&quot;force&quot;]<br>
-#         F_indices = constraints_map[self.internal_force]<br>
-<br>
-#         bias = - (omega**2) * radius<br>
-#         h[F_indices[0]] += bias[0]<br>
-#         h[F_indices[1]] += bias[1]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_for_constraints_correction(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Внешние&nbsp;силы&nbsp;не&nbsp;влияют&nbsp;на&nbsp;коррекцию&nbsp;ограничений&nbsp;на&nbsp;положения<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
 <br>
-#     def contribute_to_holonomic_matrix(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-#         &quot;&quot;&quot;<br>
-#         Добавить вклад в матрицы ограничений на положения<br>
-#         &quot;&quot;&quot;<br>
-#         radius = self.radius()<br>
-#         H = matrices[&quot;holonomic&quot;]  # Матрица ограничений<br>
-#         index_map = index_maps[&quot;acceleration&quot;]<br>
-#         constraint_map = index_maps[&quot;force&quot;]<br>
-#         F_indices = constraint_map[self.internal_force]<br>
-#         a_indices = index_map[self.body.acceleration_var]<br>
+#&nbsp;class&nbsp;FixedRotationJoint2D(Contribution):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вращательный&nbsp;шарнир&nbsp;с&nbsp;фиксацией&nbsp;в&nbsp;пространстве&nbsp;(ground&nbsp;revolute&nbsp;joint).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Фиксирует&nbsp;точку&nbsp;на&nbsp;теле&nbsp;в&nbsp;пространстве,&nbsp;разрешая&nbsp;только&nbsp;вращение&nbsp;вокруг&nbsp;этой&nbsp;точки.<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Эквивалентно&nbsp;присоединению&nbsp;тела&nbsp;к&nbsp;неподвижному&nbsp;основанию&nbsp;через&nbsp;шарнир.<br>
 <br>
-#         # Вклад в матрицу ограничений от связи шарнира<br>
-#         H[np.ix_(F_indices, a_indices)] += - np.array([<br>
-#             [1.0, 0.0, -radius[1]],<br>
-#             [0.0, 1.0,  radius[0]]<br>
-#         ])<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Соглашение&nbsp;о&nbsp;знаках:&nbsp;Лямбда&nbsp;задаёт&nbsp;силу&nbsp;действующую&nbsp;на&nbsp;тело&nbsp;со&nbsp;стороны&nbsp;шарнира.<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:&nbsp;RigidBody2D,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coords_of_joint:&nbsp;np.ndarray&nbsp;=&nbsp;None,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=None):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:&nbsp;Твердое&nbsp;тело,&nbsp;к&nbsp;которому&nbsp;применяется&nbsp;шарнир<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coords_of_joint:&nbsp;Вектор&nbsp;координат&nbsp;шарнира&nbsp;[x,&nbsp;y]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler:&nbsp;Ассемблер&nbsp;для&nbsp;сборки&nbsp;системы<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.body&nbsp;=&nbsp;body<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.internal_force&nbsp;=&nbsp;Variable(&quot;F_joint&quot;,&nbsp;size=2,&nbsp;tag=&quot;force&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body_pose&nbsp;=&nbsp;self.body.pose()<br>
 <br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.coords_of_joint&nbsp;=&nbsp;coords_of_joint.copy()&nbsp;if&nbsp;coords_of_joint&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;body_pose.lin.copy()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.radius_in_local&nbsp;=&nbsp;body_pose.inverse_transform_point(self.coords_of_joint)<br>
 <br>
-#     def contribute_for_constraints_correction(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-#         &quot;&quot;&quot;<br>
-#         Добавить вклад в матрицы для коррекции ограничений на положения<br>
-#         &quot;&quot;&quot;<br>
-#         radius = self.radius()<br>
-#         self.contribute_to_holonomic_matrix(matrices, index_maps)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__([body.acceleration_var,&nbsp;self.internal_force],&nbsp;assembler=assembler)<br>
 <br>
-#         constraint_map = index_maps[&quot;force&quot;]<br>
-#         poserr = matrices[&quot;position_error&quot;]<br>
-#         F_indices = constraint_map[self.internal_force]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;radius(self):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Обновить&nbsp;радиус&nbsp;до&nbsp;тела&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body_pose&nbsp;=&nbsp;self.body.pose()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;body_pose.rotate_vector(self.radius_in_local)&nbsp;#&nbsp;тут&nbsp;достаточно&nbsp;повернуть<br>
 <br>
-#         poserr[F_indices] += (self.body.pose().lin + radius) - self.coords_of_joint<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицы<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;radius&nbsp;=&nbsp;self.radius()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;omega&nbsp;=&nbsp;self.body.velocity_var.value[2]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_holonomic_matrix(matrices,&nbsp;index_maps)<br>
 <br>
-# class RevoluteJoint2D(Contribution):<br>
-#     &quot;&quot;&quot;<br>
-#     Двухтелый вращательный шарнир (revolute joint).<br>
-#     Связывает две точки на двух телах: точка A должна совпадать с точкой B.<br>
-#     &quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;=&nbsp;matrices[&quot;holonomic_rhs&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;constraints_map&nbsp;=&nbsp;index_maps[&quot;force&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F_indices&nbsp;=&nbsp;constraints_map[self.internal_force]<br>
 <br>
-#     def __init__(self,<br>
-#         bodyA: RigidBody2D,<br>
-#         bodyB: RigidBody2D,<br>
-#         coords_of_joint: np.ndarray = None,<br>
-#         assembler=None):<br>
-<br>
-#         coords_of_joint = coords_of_joint.copy() if coords_of_joint is not None else bodyA.pose().lin.copy()<br>
-<br>
-#         self.bodyA = bodyA<br>
-#         self.bodyB = bodyB<br>
-<br>
-#         # переменная внутренней силы (двухкомпонентная)<br>
-#         self.internal_force = Variable(&quot;F_rev&quot;, size=2, tag=&quot;force&quot;)<br>
-<br>
-#         # вычисляем локальные точки для обоих тел<br>
-#         poseA = self.bodyA.pose()<br>
-#         poseB = self.bodyB.pose()<br>
-<br>
-#         self.rA_local = poseA.inverse_transform_point(coords_of_joint)<br>
-#         self.rB_local = poseB.inverse_transform_point(coords_of_joint)<br>
-<br>
-#         # актуализируем глобальные вектор-радиусы<br>
-#         self.update_radii()<br>
-<br>
-#         super().__init__([bodyA.acceleration_var, bodyB.acceleration_var, self.internal_force], assembler=assembler)<br>
-<br>
-#     def update_radii(self):<br>
-#         &quot;&quot;&quot;Пересчитать глобальные радиусы до опорных точек&quot;&quot;&quot;<br>
-#         poseA = self.bodyA.pose()<br>
-#         poseB = self.bodyB.pose()<br>
-#         self.rA = poseA.rotate_vector(self.rA_local)<br>
-#         self.rB = poseB.rotate_vector(self.rB_local)<br>
-<br>
-#     def contribute(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-#         &quot;&quot;&quot;Добавляет вклад в матрицы для ускорений&quot;&quot;&quot;<br>
-<br>
-#         # радиусы актуализируем каждый вызов<br>
-#         self.update_radii()<br>
-<br>
-#         self.contribute_to_holonomic_matrix(matrices, index_maps)<br>
-<br>
-#         h = matrices[&quot;holonomic_rhs&quot;]<br>
-#         cmap = index_maps[&quot;force&quot;]<br>
-#         F_indices = cmap[self.internal_force]<br>
-<br>
-#         omegaA = self.bodyA.velocity_var.value[2]<br>
-#         omegaB = self.bodyB.velocity_var.value[2]<br>
-<br>
-#         bias = (omegaA**2) * self.rA - (omegaB**2) * self.rB<br>
-#         h[F_indices[0]] += -bias[0]<br>
-#         h[F_indices[1]] += -bias[1]<br>
-<br>
-#     def contribute_to_holonomic_matrix(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-#         &quot;&quot;&quot;Добавляет вклад в матрицу ограничений на положения&quot;&quot;&quot;<br>
-#         H = matrices[&quot;holonomic&quot;]<br>
-<br>
-#         amap = index_maps[&quot;acceleration&quot;]<br>
-#         cmap = index_maps[&quot;force&quot;]<br>
-#         aA = amap[self.bodyA.acceleration_var]<br>
-#         aB = amap[self.bodyB.acceleration_var]<br>
-#         F = cmap[self.internal_force]  # 2 строки ограничений<br>
-<br>
-#         # Вклад в матрицу ограничений от связи шарнира<br>
-#         H[np.ix_(F, aA)] += np.array([<br>
-#             [ 1.0,  0.0, -self.rA[1]],<br>
-#             [ 0.0,  1.0,  self.rA[0]]<br>
-#         ])  <br>
-<br>
-#         H[np.ix_(F, aB)] += np.array([<br>
-#             [-1.0,  0.0,  self.rB[1]],<br>
-#             [ 0.0, -1.0, -self.rB[0]]<br>
-#         ])<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bias&nbsp;=&nbsp;-&nbsp;(omega**2)&nbsp;*&nbsp;radius<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h[F_indices[0]]&nbsp;+=&nbsp;bias[0]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h[F_indices[1]]&nbsp;+=&nbsp;bias[1]<br>
 <br>
 <br>
-#     def contribute_for_constraints_correction(self, matrices, index_maps):<br>
-#         &quot;&quot;&quot;Для позиционной и скоростной проекции&quot;&quot;&quot;<br>
-#         self.update_radii()<br>
-#         self.contribute_to_holonomic_matrix(matrices, index_maps)<br>
-#         poserr = matrices[&quot;position_error&quot;]<br>
-#         cmap = index_maps[&quot;force&quot;]<br>
-#         F = cmap[self.internal_force]  # 2 строки ограничений<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_holonomic_matrix(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицы&nbsp;ограничений&nbsp;на&nbsp;положения<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;radius&nbsp;=&nbsp;self.radius()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;matrices[&quot;holonomic&quot;]&nbsp;&nbsp;#&nbsp;Матрица&nbsp;ограничений<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;constraint_map&nbsp;=&nbsp;index_maps[&quot;force&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F_indices&nbsp;=&nbsp;constraint_map[self.internal_force]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_indices&nbsp;=&nbsp;index_map[self.body.acceleration_var]<br>
 <br>
-#         # ---------- позиционная ошибка ----------<br>
-#         # φ = cA - cB = (pA + rA) - (pB + rB)<br>
-#         pA = self.bodyA.pose().lin<br>
-#         pB = self.bodyB.pose().lin<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вклад&nbsp;в&nbsp;матрицу&nbsp;ограничений&nbsp;от&nbsp;связи&nbsp;шарнира<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H[np.ix_(F_indices,&nbsp;a_indices)]&nbsp;+=&nbsp;-&nbsp;np.array([<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;0.0,&nbsp;-radius[1]],<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;1.0,&nbsp;&nbsp;radius[0]]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
 <br>
-#         poserr[F] += (pA + self.rA) - (pB + self.rB)<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_for_constraints_correction(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицы&nbsp;для&nbsp;коррекции&nbsp;ограничений&nbsp;на&nbsp;положения<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;radius&nbsp;=&nbsp;self.radius()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_holonomic_matrix(matrices,&nbsp;index_maps)<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;constraint_map&nbsp;=&nbsp;index_maps[&quot;force&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poserr&nbsp;=&nbsp;matrices[&quot;position_error&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F_indices&nbsp;=&nbsp;constraint_map[self.internal_force]<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poserr[F_indices]&nbsp;+=&nbsp;(self.body.pose().lin&nbsp;+&nbsp;radius)&nbsp;-&nbsp;self.coords_of_joint<br>
+<br>
+#&nbsp;class&nbsp;RevoluteJoint2D(Contribution):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Двухтелый&nbsp;вращательный&nbsp;шарнир&nbsp;(revolute&nbsp;joint).<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Связывает&nbsp;две&nbsp;точки&nbsp;на&nbsp;двух&nbsp;телах:&nbsp;точка&nbsp;A&nbsp;должна&nbsp;совпадать&nbsp;с&nbsp;точкой&nbsp;B.<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bodyA:&nbsp;RigidBody2D,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bodyB:&nbsp;RigidBody2D,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coords_of_joint:&nbsp;np.ndarray&nbsp;=&nbsp;None,<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=None):<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coords_of_joint&nbsp;=&nbsp;coords_of_joint.copy()&nbsp;if&nbsp;coords_of_joint&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;bodyA.pose().lin.copy()<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bodyA&nbsp;=&nbsp;bodyA<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bodyB&nbsp;=&nbsp;bodyB<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;переменная&nbsp;внутренней&nbsp;силы&nbsp;(двухкомпонентная)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.internal_force&nbsp;=&nbsp;Variable(&quot;F_rev&quot;,&nbsp;size=2,&nbsp;tag=&quot;force&quot;)<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;вычисляем&nbsp;локальные&nbsp;точки&nbsp;для&nbsp;обоих&nbsp;тел<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poseA&nbsp;=&nbsp;self.bodyA.pose()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poseB&nbsp;=&nbsp;self.bodyB.pose()<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rA_local&nbsp;=&nbsp;poseA.inverse_transform_point(coords_of_joint)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rB_local&nbsp;=&nbsp;poseB.inverse_transform_point(coords_of_joint)<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;актуализируем&nbsp;глобальные&nbsp;вектор-радиусы<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_radii()<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__([bodyA.acceleration_var,&nbsp;bodyB.acceleration_var,&nbsp;self.internal_force],&nbsp;assembler=assembler)<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_radii(self):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Пересчитать&nbsp;глобальные&nbsp;радиусы&nbsp;до&nbsp;опорных&nbsp;точек&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poseA&nbsp;=&nbsp;self.bodyA.pose()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poseB&nbsp;=&nbsp;self.bodyB.pose()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rA&nbsp;=&nbsp;poseA.rotate_vector(self.rA_local)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rB&nbsp;=&nbsp;poseB.rotate_vector(self.rB_local)<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Добавляет&nbsp;вклад&nbsp;в&nbsp;матрицы&nbsp;для&nbsp;ускорений&quot;&quot;&quot;<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;радиусы&nbsp;актуализируем&nbsp;каждый&nbsp;вызов<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_radii()<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_holonomic_matrix(matrices,&nbsp;index_maps)<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;=&nbsp;matrices[&quot;holonomic_rhs&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmap&nbsp;=&nbsp;index_maps[&quot;force&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F_indices&nbsp;=&nbsp;cmap[self.internal_force]<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;omegaA&nbsp;=&nbsp;self.bodyA.velocity_var.value[2]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;omegaB&nbsp;=&nbsp;self.bodyB.velocity_var.value[2]<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bias&nbsp;=&nbsp;(omegaA**2)&nbsp;*&nbsp;self.rA&nbsp;-&nbsp;(omegaB**2)&nbsp;*&nbsp;self.rB<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h[F_indices[0]]&nbsp;+=&nbsp;-bias[0]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h[F_indices[1]]&nbsp;+=&nbsp;-bias[1]<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_holonomic_matrix(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Добавляет&nbsp;вклад&nbsp;в&nbsp;матрицу&nbsp;ограничений&nbsp;на&nbsp;положения&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;matrices[&quot;holonomic&quot;]<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;amap&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmap&nbsp;=&nbsp;index_maps[&quot;force&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aA&nbsp;=&nbsp;amap[self.bodyA.acceleration_var]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aB&nbsp;=&nbsp;amap[self.bodyB.acceleration_var]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F&nbsp;=&nbsp;cmap[self.internal_force]&nbsp;&nbsp;#&nbsp;2&nbsp;строки&nbsp;ограничений<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вклад&nbsp;в&nbsp;матрицу&nbsp;ограничений&nbsp;от&nbsp;связи&nbsp;шарнира<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H[np.ix_(F,&nbsp;aA)]&nbsp;+=&nbsp;np.array([<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;1.0,&nbsp;&nbsp;0.0,&nbsp;-self.rA[1]],<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;0.0,&nbsp;&nbsp;1.0,&nbsp;&nbsp;self.rA[0]]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])&nbsp;&nbsp;<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H[np.ix_(F,&nbsp;aB)]&nbsp;+=&nbsp;np.array([<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-1.0,&nbsp;&nbsp;0.0,&nbsp;&nbsp;self.rB[1]],<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;0.0,&nbsp;-1.0,&nbsp;-self.rB[0]]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_for_constraints_correction(self,&nbsp;matrices,&nbsp;index_maps):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Для&nbsp;позиционной&nbsp;и&nbsp;скоростной&nbsp;проекции&quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_radii()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_holonomic_matrix(matrices,&nbsp;index_maps)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poserr&nbsp;=&nbsp;matrices[&quot;position_error&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmap&nbsp;=&nbsp;index_maps[&quot;force&quot;]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F&nbsp;=&nbsp;cmap[self.internal_force]&nbsp;&nbsp;#&nbsp;2&nbsp;строки&nbsp;ограничений<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;----------&nbsp;позиционная&nbsp;ошибка&nbsp;----------<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;φ&nbsp;=&nbsp;cA&nbsp;-&nbsp;cB&nbsp;=&nbsp;(pA&nbsp;+&nbsp;rA)&nbsp;-&nbsp;(pB&nbsp;+&nbsp;rB)<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pA&nbsp;=&nbsp;self.bodyA.pose().lin<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pB&nbsp;=&nbsp;self.bodyB.pose().lin<br>
+<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poserr[F]&nbsp;+=&nbsp;(pA&nbsp;+&nbsp;self.rA)&nbsp;-&nbsp;(pB&nbsp;+&nbsp;self.rB)<br>
 <br>
 <!-- END SCAT CODE -->
 </body>

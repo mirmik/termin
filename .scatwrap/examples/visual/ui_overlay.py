@@ -6,136 +6,136 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Demonstrate 3D scene with a UI canvas overlay.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Demonstrate&nbsp;3D&nbsp;scene&nbsp;with&nbsp;a&nbsp;UI&nbsp;canvas&nbsp;overlay.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.mesh.mesh import CubeMesh<br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;MeshDrawable,<br>
-&#9;Scene,<br>
-&#9;Material,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;CubeMesh<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from termin.visualization.components import MeshRenderer<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
-from termin.visualization.ui import Canvas, UIRectangle<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.ui&nbsp;import&nbsp;Canvas,&nbsp;UIRectangle<br>
 <br>
 <br>
-VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location = 0) in vec3 a_position;<br>
-layout(location = 1) in vec3 a_normal;<br>
+VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_normal;<br>
+out&nbsp;vec3&nbsp;v_normal;<br>
 <br>
-void main() {<br>
-&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-&#9;gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-in vec3 v_normal;<br>
+FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
 <br>
-uniform vec4 u_color;<br>
-uniform vec3 u_light_dir;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
+uniform&nbsp;vec3&nbsp;u_light_dir;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;vec3 N = normalize(v_normal);<br>
-&#9;float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);<br>
-&#9;vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);<br>
-&#9;FragColor = vec4(color, u_color.a);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;N&nbsp;=&nbsp;normalize(v_normal);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(N,&nbsp;-normalize(u_light_dir)),&nbsp;0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;color&nbsp;=&nbsp;u_color.rgb&nbsp;*&nbsp;(0.2&nbsp;+&nbsp;0.8&nbsp;*&nbsp;ndotl);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(color,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-&quot;&quot;&quot;Standard UI shader sources (position + optional texturing).&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Standard&nbsp;UI&nbsp;shader&nbsp;sources&nbsp;(position&nbsp;+&nbsp;optional&nbsp;texturing).&quot;&quot;&quot;<br>
 <br>
-UI_VERTEX_SHADER = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location=0) in vec2 a_position;<br>
-layout(location=1) in vec2 a_uv;<br>
+UI_VERTEX_SHADER&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location=0)&nbsp;in&nbsp;vec2&nbsp;a_position;<br>
+layout(location=1)&nbsp;in&nbsp;vec2&nbsp;a_uv;<br>
 <br>
-out vec2 v_uv;<br>
+out&nbsp;vec2&nbsp;v_uv;<br>
 <br>
-void main(){<br>
-&#9;v_uv = a_uv;<br>
-&#9;gl_Position = vec4(a_position, 0, 1);<br>
+void&nbsp;main(){<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_uv&nbsp;=&nbsp;a_uv;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;vec4(a_position,&nbsp;0,&nbsp;1);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-UI_FRAGMENT_SHADER = &quot;&quot;&quot;<br>
-#version 330 core<br>
-uniform sampler2D u_texture;<br>
-uniform vec4 u_color;<br>
-uniform bool u_use_texture;<br>
+UI_FRAGMENT_SHADER&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+uniform&nbsp;sampler2D&nbsp;u_texture;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
+uniform&nbsp;bool&nbsp;u_use_texture;<br>
 <br>
-in vec2 v_uv;<br>
-out vec4 FragColor;<br>
+in&nbsp;vec2&nbsp;v_uv;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main(){<br>
-&#9;float alpha = u_color.a;<br>
-&#9;if (u_use_texture) {<br>
-&#9;&#9;// При включённой текстуре берём альфа-канал из красного канала атласа<br>
-&#9;&#9;alpha *= texture(u_texture, v_uv).r;<br>
-&#9;}<br>
-&#9;FragColor = vec4(u_color.rgb, alpha);<br>
+void&nbsp;main(){<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;alpha&nbsp;=&nbsp;u_color.a;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(u_use_texture)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;При&nbsp;включённой&nbsp;текстуре&nbsp;берём&nbsp;альфа-канал&nbsp;из&nbsp;красного&nbsp;канала&nbsp;атласа<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alpha&nbsp;*=&nbsp;texture(u_texture,&nbsp;v_uv).r;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(u_color.rgb,&nbsp;alpha);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
 <br>
-def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent, Canvas]:<br>
-&#9;shader = ShaderProgram(VERT, FRAG)<br>
-&#9;material = Material(shader=shader, color=np.array([0.6, 0.8, 0.9, 1.0], dtype=np.float32))<br>
-&#9;mesh = MeshDrawable(CubeMesh(size=1.5))<br>
-&#9;cube = Entity(name=&quot;cube&quot;, pose=Pose3.identity())<br>
-&#9;cube.add_component(MeshRenderer(mesh, material))<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld)&nbsp;-&gt;&nbsp;tuple[Scene,&nbsp;PerspectiveCameraComponent,&nbsp;Canvas]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;ShaderProgram(VERT,&nbsp;FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;Material(shader=shader,&nbsp;color=np.array([0.6,&nbsp;0.8,&nbsp;0.9,&nbsp;1.0],&nbsp;dtype=np.float32))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;MeshDrawable(CubeMesh(size=1.5))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube&nbsp;=&nbsp;Entity(name=&quot;cube&quot;,&nbsp;pose=Pose3.identity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube.add_component(MeshRenderer(mesh,&nbsp;material))<br>
 <br>
-&#9;scene = Scene()<br>
-&#9;scene.add(cube)<br>
-&#9;scene.add(SkyBoxEntity())<br>
-&#9;world.add_scene(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(cube)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(SkyBoxEntity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
-&#9;cam_entity = Entity(name=&quot;camera&quot;)<br>
-&#9;camera = PerspectiveCameraComponent()<br>
-&#9;cam_entity.add_component(camera)<br>
-&#9;cam_entity.add_component(OrbitCameraController(radius=5.0))<br>
-&#9;scene.add(cam_entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_entity.add_component(OrbitCameraController(radius=5.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(cam_entity)<br>
 <br>
-&#9;canvas = Canvas()<br>
-&#9;ui_shader = ShaderProgram(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER)<br>
-&#9;ui_material = Material(shader=ui_shader, color=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32), uniforms={&quot;u_use_texture&quot;: False})<br>
-&#9;canvas.add(UIRectangle(position=(0.05, 0.05), size=(0.25, 0.1), color=(0.1, 0.1, 0.1, 0.7), material=ui_material))<br>
-&#9;canvas.add(UIRectangle(position=(0.07, 0.07), size=(0.21, 0.06), color=(0.9, 0.4, 0.2, 1.0), material=ui_material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;canvas&nbsp;=&nbsp;Canvas()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ui_shader&nbsp;=&nbsp;ShaderProgram(UI_VERTEX_SHADER,&nbsp;UI_FRAGMENT_SHADER)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ui_material&nbsp;=&nbsp;Material(shader=ui_shader,&nbsp;color=np.array([1.0,&nbsp;1.0,&nbsp;1.0,&nbsp;1.0],&nbsp;dtype=np.float32),&nbsp;uniforms={&quot;u_use_texture&quot;:&nbsp;False})<br>
+&nbsp;&nbsp;&nbsp;&nbsp;canvas.add(UIRectangle(position=(0.05,&nbsp;0.05),&nbsp;size=(0.25,&nbsp;0.1),&nbsp;color=(0.1,&nbsp;0.1,&nbsp;0.1,&nbsp;0.7),&nbsp;material=ui_material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;canvas.add(UIRectangle(position=(0.07,&nbsp;0.07),&nbsp;size=(0.21,&nbsp;0.06),&nbsp;color=(0.9,&nbsp;0.4,&nbsp;0.2,&nbsp;1.0),&nbsp;material=ui_material))<br>
 <br>
-&#9;return scene, camera, canvas<br>
-<br>
-<br>
-def main():<br>
-&#9;world = VisualizationWorld()<br>
-&#9;scene, camera, canvas = build_scene(world)<br>
-&#9;window = world.create_window(title=&quot;termin UI overlay&quot;)<br>
-&#9;window.add_viewport(scene, camera, canvas=canvas)<br>
-&#9;world.run()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;camera,&nbsp;canvas<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;camera,&nbsp;canvas&nbsp;=&nbsp;build_scene(world)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;world.create_window(title=&quot;termin&nbsp;UI&nbsp;overlay&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;camera,&nbsp;canvas=canvas)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

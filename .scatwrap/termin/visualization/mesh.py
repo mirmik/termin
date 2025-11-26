@@ -6,248 +6,248 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;GPU mesh helper built on top of :mod:`termin.mesh` geometry.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;GPU&nbsp;mesh&nbsp;helper&nbsp;built&nbsp;on&nbsp;top&nbsp;of&nbsp;:mod:`termin.mesh`&nbsp;geometry.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import Dict, Optional<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;Optional<br>
 <br>
-from termin.mesh.mesh import Mesh2, Mesh3<br>
-from .entity import RenderContext<br>
-from .backends.base import MeshHandle<br>
-<br>
-<br>
-class MeshDrawable:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Рендер-ресурс для 3D-меша.<br>
-<br>
-&#9;Держит ссылку на CPU-геометрию (Mesh3), умеет грузить её в GPU через<br>
-&#9;graphics backend, хранит GPU-хендлы per-context, а также метаданные<br>
-&#9;ресурса: имя и source_id (путь / идентификатор в системе ресурсов).<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;RESOURCE_KIND = &quot;mesh&quot;<br>
-<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;mesh: Mesh3,<br>
-&#9;&#9;*,<br>
-&#9;&#9;source_id: Optional[str] = None,<br>
-&#9;&#9;name: Optional[str] = None,<br>
-&#9;):<br>
-&#9;&#9;self._mesh: Mesh3 = mesh<br>
-<br>
-&#9;&#9;# если нормали ещё не посчитаны — посчитаем здесь, а не в Mesh3<br>
-&#9;&#9;if self._mesh.vertex_normals is None:<br>
-&#9;&#9;&#9;self._mesh.compute_vertex_normals()<br>
-<br>
-&#9;&#9;# GPU-хендлы на разных контекстах<br>
-&#9;&#9;self._context_resources: Dict[int, MeshHandle] = {}<br>
-<br>
-&#9;&#9;# ресурсные метаданные (чтоб Mesh3 о них не знал)<br>
-&#9;&#9;self._source_id: Optional[str] = source_id<br>
-&#9;&#9;# name по умолчанию можно взять из source_id, если имя не задано явно<br>
-&#9;&#9;self.name: Optional[str] = name or source_id<br>
-<br>
-&#9;# --------- интерфейс ресурса ---------<br>
-<br>
-&#9;@property<br>
-&#9;def resource_kind(self) -&gt; str:<br>
-&#9;&#9;return self.RESOURCE_KIND<br>
-<br>
-&#9;@property<br>
-&#9;def resource_id(self) -&gt; Optional[str]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;То, что кладём в сериализацию и по чему грузим обратно.<br>
-&#9;&#9;Обычно это путь к файлу или GUID.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return self._source_id<br>
-<br>
-&#9;def set_source_id(self, source_id: str):<br>
-&#9;&#9;self._source_id = source_id<br>
-&#9;&#9;# если имени ещё не было — логично синхронизировать<br>
-&#9;&#9;if self.name is None:<br>
-&#9;&#9;&#9;self.name = source_id<br>
-<br>
-&#9;# --------- доступ к геометрии ---------<br>
-<br>
-&#9;@property<br>
-&#9;def mesh(self) -&gt; Mesh3:<br>
-&#9;&#9;return self._mesh<br>
-<br>
-&#9;@mesh.setter<br>
-&#9;def mesh(self, value: Mesh3):<br>
-&#9;&#9;# при смене геометрии надо будет перевыгрузить в GPU<br>
-&#9;&#9;self.delete()<br>
-&#9;&#9;self._mesh = value<br>
-&#9;&#9;if self._mesh.vertex_normals is None:<br>
-&#9;&#9;&#9;self._mesh.compute_vertex_normals()<br>
-<br>
-&#9;# --------- GPU lifecycle ---------<br>
-<br>
-&#9;def upload(self, context: RenderContext):<br>
-&#9;&#9;ctx = context.context_key<br>
-&#9;&#9;if ctx in self._context_resources:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;# backend знает, как из Mesh3 сделать GPU-буферы<br>
-&#9;&#9;handle = context.graphics.create_mesh(self._mesh)<br>
-&#9;&#9;self._context_resources[ctx] = handle<br>
-<br>
-&#9;def draw(self, context: RenderContext):<br>
-&#9;&#9;ctx = context.context_key<br>
-&#9;&#9;if ctx not in self._context_resources:<br>
-&#9;&#9;&#9;self.upload(context)<br>
-&#9;&#9;handle = self._context_resources[ctx]<br>
-&#9;&#9;handle.draw()<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;for handle in self._context_resources.values():<br>
-&#9;&#9;&#9;handle.delete()<br>
-&#9;&#9;self._context_resources.clear()<br>
-<br>
-&#9;# --------- сериализация / десериализация ---------<br>
-<br>
-&#9;def serialize(self) -&gt; dict:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает словарь с идентификатором ресурса.<br>
-<br>
-&#9;&#9;По-хорошему, source_id должен выставлять загрузчик ресурсов<br>
-&#9;&#9;(например, путь к файлу или GUID). Mesh3 при этом ни о чём<br>
-&#9;&#9;таком знать не обязан.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if self._source_id is not None:<br>
-&#9;&#9;&#9;return {&quot;mesh&quot;: self._source_id}<br>
-<br>
-&#9;&#9;# Для совместимости со старым кодом: если Mesh3 всё-таки<br>
-&#9;&#9;# имеет поле source_path — используем его, но это считается<br>
-&#9;&#9;# legacy и лучше постепенно от него избавляться.<br>
-&#9;&#9;if hasattr(self._mesh, &quot;source_path&quot;):<br>
-&#9;&#9;&#9;return {&quot;mesh&quot;: getattr(self._mesh, &quot;source_path&quot;)}<br>
-<br>
-&#9;&#9;raise ValueError(<br>
-&#9;&#9;&#9;&quot;MeshDrawable.serialize: не задан source_id и у mesh нет source_path. &quot;<br>
-&#9;&#9;&#9;&quot;Нечего сохранять в качестве идентификатора ресурса.&quot;<br>
-&#9;&#9;)<br>
-<br>
-&#9;@classmethod<br>
-&#9;def deserialize(cls, data: dict, context) -&gt; &quot;MeshDrawable&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Восстановление drawable по идентификатору меша.<br>
-<br>
-&#9;&#9;Предполагается, что `context.load_mesh(mesh_id)` вернёт Mesh3.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;mesh_id = data[&quot;mesh&quot;]<br>
-&#9;&#9;mesh = context.load_mesh(mesh_id)  # должен вернуть Mesh3<br>
-&#9;&#9;return cls(mesh, source_id=mesh_id, name=mesh_id)<br>
-<br>
-&#9;# --------- утилиты для инспектора / дебага ---------<br>
-<br>
-&#9;@staticmethod<br>
-&#9;def from_vertices_indices(vertices, indices) -&gt; &quot;MeshDrawable&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Быстрая обёртка поверх Mesh3 для случаев, когда<br>
-&#9;&#9;геометрия создаётся на лету.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;mesh = Mesh3(vertices=vertices, triangles=indices)<br>
-&#9;&#9;return MeshDrawable(mesh)<br>
-<br>
-&#9;def interleaved_buffer(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Проброс к геометрии. Формат буфера и layout определяет Mesh3.<br>
-&#9;&#9;Это всё ещё геометрическая часть, не завязанная на конкретный API.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return self._mesh.interleaved_buffer()<br>
-<br>
-&#9;def get_vertex_layout(self):<br>
-&#9;&#9;return self._mesh.get_vertex_layout()<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;Mesh2,&nbsp;Mesh3<br>
+from&nbsp;.entity&nbsp;import&nbsp;RenderContext<br>
+from&nbsp;.backends.base&nbsp;import&nbsp;MeshHandle<br>
 <br>
 <br>
-class Mesh2Drawable:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Рендер-ресурс для 2D-меша (линии/треугольники в плоскости).<br>
-&#9;Аналогично MeshDrawable, но поверх Mesh2.<br>
-&#9;&quot;&quot;&quot;<br>
+class&nbsp;MeshDrawable:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Рендер-ресурс&nbsp;для&nbsp;3D-меша.<br>
 <br>
-&#9;RESOURCE_KIND = &quot;mesh2&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Держит&nbsp;ссылку&nbsp;на&nbsp;CPU-геометрию&nbsp;(Mesh3),&nbsp;умеет&nbsp;грузить&nbsp;её&nbsp;в&nbsp;GPU&nbsp;через<br>
+&nbsp;&nbsp;&nbsp;&nbsp;graphics&nbsp;backend,&nbsp;хранит&nbsp;GPU-хендлы&nbsp;per-context,&nbsp;а&nbsp;также&nbsp;метаданные<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ресурса:&nbsp;имя&nbsp;и&nbsp;source_id&nbsp;(путь&nbsp;/&nbsp;идентификатор&nbsp;в&nbsp;системе&nbsp;ресурсов).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;mesh: Mesh2,<br>
-&#9;&#9;*,<br>
-&#9;&#9;source_id: Optional[str] = None,<br>
-&#9;&#9;name: Optional[str] = None,<br>
-&#9;):<br>
-&#9;&#9;self._mesh: Mesh2 = mesh<br>
-&#9;&#9;self._context_resources: Dict[int, MeshHandle] = {}<br>
-&#9;&#9;self._source_id: Optional[str] = source_id<br>
-&#9;&#9;self.name: Optional[str] = name or source_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;RESOURCE_KIND&nbsp;=&nbsp;&quot;mesh&quot;<br>
 <br>
-&#9;@property<br>
-&#9;def resource_kind(self) -&gt; str:<br>
-&#9;&#9;return self.RESOURCE_KIND<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh:&nbsp;Mesh3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;source_id:&nbsp;Optional[str]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;Optional[str]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mesh:&nbsp;Mesh3&nbsp;=&nbsp;mesh<br>
 <br>
-&#9;@property<br>
-&#9;def resource_id(self) -&gt; Optional[str]:<br>
-&#9;&#9;return self._source_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;нормали&nbsp;ещё&nbsp;не&nbsp;посчитаны&nbsp;—&nbsp;посчитаем&nbsp;здесь,&nbsp;а&nbsp;не&nbsp;в&nbsp;Mesh3<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._mesh.vertex_normals&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mesh.compute_vertex_normals()<br>
 <br>
-&#9;def set_source_id(self, source_id: str):<br>
-&#9;&#9;self._source_id = source_id<br>
-&#9;&#9;if self.name is None:<br>
-&#9;&#9;&#9;self.name = source_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;GPU-хендлы&nbsp;на&nbsp;разных&nbsp;контекстах<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._context_resources:&nbsp;Dict[int,&nbsp;MeshHandle]&nbsp;=&nbsp;{}<br>
 <br>
-&#9;@property<br>
-&#9;def mesh(self) -&gt; Mesh2:<br>
-&#9;&#9;return self._mesh<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;ресурсные&nbsp;метаданные&nbsp;(чтоб&nbsp;Mesh3&nbsp;о&nbsp;них&nbsp;не&nbsp;знал)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._source_id:&nbsp;Optional[str]&nbsp;=&nbsp;source_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;name&nbsp;по&nbsp;умолчанию&nbsp;можно&nbsp;взять&nbsp;из&nbsp;source_id,&nbsp;если&nbsp;имя&nbsp;не&nbsp;задано&nbsp;явно<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name:&nbsp;Optional[str]&nbsp;=&nbsp;name&nbsp;or&nbsp;source_id<br>
 <br>
-&#9;@mesh.setter<br>
-&#9;def mesh(self, value: Mesh2):<br>
-&#9;&#9;self.delete()<br>
-&#9;&#9;self._mesh = value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---------&nbsp;интерфейс&nbsp;ресурса&nbsp;---------<br>
 <br>
-&#9;def upload(self, context: RenderContext):<br>
-&#9;&#9;ctx = context.context_key<br>
-&#9;&#9;if ctx in self._context_resources:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;handle = context.graphics.create_mesh(self._mesh)<br>
-&#9;&#9;self._context_resources[ctx] = handle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;resource_kind(self)&nbsp;-&gt;&nbsp;str:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.RESOURCE_KIND<br>
 <br>
-&#9;def draw(self, context: RenderContext):<br>
-&#9;&#9;ctx = context.context_key<br>
-&#9;&#9;if ctx not in self._context_resources:<br>
-&#9;&#9;&#9;self.upload(context)<br>
-&#9;&#9;handle = self._context_resources[ctx]<br>
-&#9;&#9;handle.draw()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;resource_id(self)&nbsp;-&gt;&nbsp;Optional[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;То,&nbsp;что&nbsp;кладём&nbsp;в&nbsp;сериализацию&nbsp;и&nbsp;по&nbsp;чему&nbsp;грузим&nbsp;обратно.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Обычно&nbsp;это&nbsp;путь&nbsp;к&nbsp;файлу&nbsp;или&nbsp;GUID.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._source_id<br>
 <br>
-&#9;def delete(self):<br>
-&#9;&#9;for handle in self._context_resources.values():<br>
-&#9;&#9;&#9;handle.delete()<br>
-&#9;&#9;self._context_resources.clear()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_source_id(self,&nbsp;source_id:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._source_id&nbsp;=&nbsp;source_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;имени&nbsp;ещё&nbsp;не&nbsp;было&nbsp;—&nbsp;логично&nbsp;синхронизировать<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.name&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;source_id<br>
 <br>
-&#9;def serialize(self) -&gt; dict:<br>
-&#9;&#9;if self._source_id is not None:<br>
-&#9;&#9;&#9;return {&quot;mesh&quot;: self._source_id}<br>
-&#9;&#9;if hasattr(self._mesh, &quot;source_path&quot;):<br>
-&#9;&#9;&#9;return {&quot;mesh&quot;: getattr(self._mesh, &quot;source_path&quot;)}<br>
-&#9;&#9;raise ValueError(<br>
-&#9;&#9;&#9;&quot;Mesh2Drawable.serialize: не задан source_id и нет mesh.source_path.&quot;<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---------&nbsp;доступ&nbsp;к&nbsp;геометрии&nbsp;---------<br>
 <br>
-&#9;@classmethod<br>
-&#9;def deserialize(cls, data: dict, context) -&gt; &quot;Mesh2Drawable&quot;:<br>
-&#9;&#9;mesh_id = data[&quot;mesh&quot;]<br>
-&#9;&#9;mesh = context.load_mesh(mesh_id)  # должен вернуть Mesh2<br>
-&#9;&#9;return cls(mesh, source_id=mesh_id, name=mesh_id)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mesh(self)&nbsp;-&gt;&nbsp;Mesh3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._mesh<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def from_vertices_indices(vertices, indices) -&gt; &quot;Mesh2Drawable&quot;:<br>
-&#9;&#9;mesh = Mesh2(vertices=vertices, indices=indices)<br>
-&#9;&#9;return Mesh2Drawable(mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@mesh.setter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mesh(self,&nbsp;value:&nbsp;Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;при&nbsp;смене&nbsp;геометрии&nbsp;надо&nbsp;будет&nbsp;перевыгрузить&nbsp;в&nbsp;GPU<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.delete()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mesh&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._mesh.vertex_normals&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mesh.compute_vertex_normals()<br>
 <br>
-&#9;def interleaved_buffer(self):<br>
-&#9;&#9;return self._mesh.interleaved_buffer()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---------&nbsp;GPU&nbsp;lifecycle&nbsp;---------<br>
 <br>
-&#9;def get_vertex_layout(self):<br>
-&#9;&#9;return self._mesh.get_vertex_layout()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;upload(self,&nbsp;context:&nbsp;RenderContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctx&nbsp;=&nbsp;context.context_key<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ctx&nbsp;in&nbsp;self._context_resources:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;backend&nbsp;знает,&nbsp;как&nbsp;из&nbsp;Mesh3&nbsp;сделать&nbsp;GPU-буферы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;context.graphics.create_mesh(self._mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._context_resources[ctx]&nbsp;=&nbsp;handle<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;context:&nbsp;RenderContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctx&nbsp;=&nbsp;context.context_key<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ctx&nbsp;not&nbsp;in&nbsp;self._context_resources:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.upload(context)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;self._context_resources[ctx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle.draw()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;handle&nbsp;in&nbsp;self._context_resources.values():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle.delete()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._context_resources.clear()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---------&nbsp;сериализация&nbsp;/&nbsp;десериализация&nbsp;---------<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;serialize(self)&nbsp;-&gt;&nbsp;dict:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;словарь&nbsp;с&nbsp;идентификатором&nbsp;ресурса.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По-хорошему,&nbsp;source_id&nbsp;должен&nbsp;выставлять&nbsp;загрузчик&nbsp;ресурсов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(например,&nbsp;путь&nbsp;к&nbsp;файлу&nbsp;или&nbsp;GUID).&nbsp;Mesh3&nbsp;при&nbsp;этом&nbsp;ни&nbsp;о&nbsp;чём<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;таком&nbsp;знать&nbsp;не&nbsp;обязан.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._source_id&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{&quot;mesh&quot;:&nbsp;self._source_id}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Для&nbsp;совместимости&nbsp;со&nbsp;старым&nbsp;кодом:&nbsp;если&nbsp;Mesh3&nbsp;всё-таки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;имеет&nbsp;поле&nbsp;source_path&nbsp;—&nbsp;используем&nbsp;его,&nbsp;но&nbsp;это&nbsp;считается<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;legacy&nbsp;и&nbsp;лучше&nbsp;постепенно&nbsp;от&nbsp;него&nbsp;избавляться.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(self._mesh,&nbsp;&quot;source_path&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{&quot;mesh&quot;:&nbsp;getattr(self._mesh,&nbsp;&quot;source_path&quot;)}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;MeshDrawable.serialize:&nbsp;не&nbsp;задан&nbsp;source_id&nbsp;и&nbsp;у&nbsp;mesh&nbsp;нет&nbsp;source_path.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Нечего&nbsp;сохранять&nbsp;в&nbsp;качестве&nbsp;идентификатора&nbsp;ресурса.&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@classmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;deserialize(cls,&nbsp;data:&nbsp;dict,&nbsp;context)&nbsp;-&gt;&nbsp;&quot;MeshDrawable&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Восстановление&nbsp;drawable&nbsp;по&nbsp;идентификатору&nbsp;меша.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Предполагается,&nbsp;что&nbsp;`context.load_mesh(mesh_id)`&nbsp;вернёт&nbsp;Mesh3.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh_id&nbsp;=&nbsp;data[&quot;mesh&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;context.load_mesh(mesh_id)&nbsp;&nbsp;#&nbsp;должен&nbsp;вернуть&nbsp;Mesh3<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;cls(mesh,&nbsp;source_id=mesh_id,&nbsp;name=mesh_id)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---------&nbsp;утилиты&nbsp;для&nbsp;инспектора&nbsp;/&nbsp;дебага&nbsp;---------<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_vertices_indices(vertices,&nbsp;indices)&nbsp;-&gt;&nbsp;&quot;MeshDrawable&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Быстрая&nbsp;обёртка&nbsp;поверх&nbsp;Mesh3&nbsp;для&nbsp;случаев,&nbsp;когда<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;геометрия&nbsp;создаётся&nbsp;на&nbsp;лету.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;Mesh3(vertices=vertices,&nbsp;triangles=indices)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;MeshDrawable(mesh)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;interleaved_buffer(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Проброс&nbsp;к&nbsp;геометрии.&nbsp;Формат&nbsp;буфера&nbsp;и&nbsp;layout&nbsp;определяет&nbsp;Mesh3.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Это&nbsp;всё&nbsp;ещё&nbsp;геометрическая&nbsp;часть,&nbsp;не&nbsp;завязанная&nbsp;на&nbsp;конкретный&nbsp;API.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._mesh.interleaved_buffer()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_vertex_layout(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._mesh.get_vertex_layout()<br>
+<br>
+<br>
+class&nbsp;Mesh2Drawable:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Рендер-ресурс&nbsp;для&nbsp;2D-меша&nbsp;(линии/треугольники&nbsp;в&nbsp;плоскости).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Аналогично&nbsp;MeshDrawable,&nbsp;но&nbsp;поверх&nbsp;Mesh2.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;RESOURCE_KIND&nbsp;=&nbsp;&quot;mesh2&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh:&nbsp;Mesh2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;source_id:&nbsp;Optional[str]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;Optional[str]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mesh:&nbsp;Mesh2&nbsp;=&nbsp;mesh<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._context_resources:&nbsp;Dict[int,&nbsp;MeshHandle]&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._source_id:&nbsp;Optional[str]&nbsp;=&nbsp;source_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name:&nbsp;Optional[str]&nbsp;=&nbsp;name&nbsp;or&nbsp;source_id<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;resource_kind(self)&nbsp;-&gt;&nbsp;str:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.RESOURCE_KIND<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;resource_id(self)&nbsp;-&gt;&nbsp;Optional[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._source_id<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_source_id(self,&nbsp;source_id:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._source_id&nbsp;=&nbsp;source_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.name&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;source_id<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mesh(self)&nbsp;-&gt;&nbsp;Mesh2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._mesh<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@mesh.setter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mesh(self,&nbsp;value:&nbsp;Mesh2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.delete()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mesh&nbsp;=&nbsp;value<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;upload(self,&nbsp;context:&nbsp;RenderContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctx&nbsp;=&nbsp;context.context_key<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ctx&nbsp;in&nbsp;self._context_resources:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;context.graphics.create_mesh(self._mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._context_resources[ctx]&nbsp;=&nbsp;handle<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;context:&nbsp;RenderContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctx&nbsp;=&nbsp;context.context_key<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ctx&nbsp;not&nbsp;in&nbsp;self._context_resources:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.upload(context)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;self._context_resources[ctx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle.draw()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;handle&nbsp;in&nbsp;self._context_resources.values():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle.delete()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._context_resources.clear()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;serialize(self)&nbsp;-&gt;&nbsp;dict:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._source_id&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{&quot;mesh&quot;:&nbsp;self._source_id}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(self._mesh,&nbsp;&quot;source_path&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{&quot;mesh&quot;:&nbsp;getattr(self._mesh,&nbsp;&quot;source_path&quot;)}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Mesh2Drawable.serialize:&nbsp;не&nbsp;задан&nbsp;source_id&nbsp;и&nbsp;нет&nbsp;mesh.source_path.&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@classmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;deserialize(cls,&nbsp;data:&nbsp;dict,&nbsp;context)&nbsp;-&gt;&nbsp;&quot;Mesh2Drawable&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh_id&nbsp;=&nbsp;data[&quot;mesh&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;context.load_mesh(mesh_id)&nbsp;&nbsp;#&nbsp;должен&nbsp;вернуть&nbsp;Mesh2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;cls(mesh,&nbsp;source_id=mesh_id,&nbsp;name=mesh_id)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_vertices_indices(vertices,&nbsp;indices)&nbsp;-&gt;&nbsp;&quot;Mesh2Drawable&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;Mesh2(vertices=vertices,&nbsp;indices=indices)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Mesh2Drawable(mesh)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;interleaved_buffer(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._mesh.interleaved_buffer()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_vertex_layout(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._mesh.get_vertex_layout()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

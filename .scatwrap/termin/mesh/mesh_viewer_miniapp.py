@@ -6,149 +6,149 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Minimal demo that renders a cube and allows orbiting camera controls.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Minimal&nbsp;demo&nbsp;that&nbsp;renders&nbsp;a&nbsp;cube&nbsp;and&nbsp;allows&nbsp;orbiting&nbsp;camera&nbsp;controls.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;MeshDrawable,<br>
-&#9;Scene,<br>
-&#9;Material,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from termin.visualization.components import MeshRenderer, LineRenderer  <br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer,&nbsp;LineRenderer&nbsp;&nbsp;<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
 <br>
-vert = &quot;&quot;&quot;<br>
-#version 330 core<br>
+vert&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-layout(location = 0) in vec3 a_position;<br>
-layout(location = 1) in vec3 a_normal;<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_normal;     // нормаль в мировом пространстве<br>
-out vec3 v_world_pos;  // позиция в мировом пространстве<br>
+out&nbsp;vec3&nbsp;v_normal;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;нормаль&nbsp;в&nbsp;мировом&nbsp;пространстве<br>
+out&nbsp;vec3&nbsp;v_world_pos;&nbsp;&nbsp;//&nbsp;позиция&nbsp;в&nbsp;мировом&nbsp;пространстве<br>
 <br>
-void main() {<br>
-&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
-&#9;v_world_pos = world.xyz;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;world&nbsp;=&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_world_pos&nbsp;=&nbsp;world.xyz;<br>
 <br>
-&#9;// нормальная матрица = mat3(transpose(inverse(u_model)))<br>
-&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;нормальная&nbsp;матрица&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
 <br>
-&#9;gl_Position = u_projection * u_view * world;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-frag = &quot;&quot;&quot;<br>
-#version 330 core<br>
+frag&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-in vec3 v_normal;<br>
-in vec3 v_world_pos;<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
+in&nbsp;vec3&nbsp;v_world_pos;<br>
 <br>
-uniform vec4 u_color;        // базовый цвет материала (RGBA)<br>
-uniform vec3 u_light_dir;    // направление от источника к объекту (world space)<br>
-uniform vec3 u_light_color;  // цвет света<br>
-uniform vec3 u_view_pos;     // позиция камеры (world space)<br>
+uniform&nbsp;vec4&nbsp;u_color;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;базовый&nbsp;цвет&nbsp;материала&nbsp;(RGBA)<br>
+uniform&nbsp;vec3&nbsp;u_light_dir;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;направление&nbsp;от&nbsp;источника&nbsp;к&nbsp;объекту&nbsp;(world&nbsp;space)<br>
+uniform&nbsp;vec3&nbsp;u_light_color;&nbsp;&nbsp;//&nbsp;цвет&nbsp;света<br>
+uniform&nbsp;vec3&nbsp;u_view_pos;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;позиция&nbsp;камеры&nbsp;(world&nbsp;space)<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;// Нормаль<br>
-&#9;vec3 N = normalize(v_normal);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Нормаль<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;N&nbsp;=&nbsp;normalize(v_normal);<br>
 <br>
-&#9;// Направление на свет: если u_light_dir - направление *от* света, то на объект оно то же<br>
-&#9;vec3 L = normalize(-u_light_dir); // если задаёшь уже &quot;к объекту&quot;, убери минус<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Направление&nbsp;на&nbsp;свет:&nbsp;если&nbsp;u_light_dir&nbsp;-&nbsp;направление&nbsp;*от*&nbsp;света,&nbsp;то&nbsp;на&nbsp;объект&nbsp;оно&nbsp;то&nbsp;же<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;L&nbsp;=&nbsp;normalize(-u_light_dir);&nbsp;//&nbsp;если&nbsp;задаёшь&nbsp;уже&nbsp;&quot;к&nbsp;объекту&quot;,&nbsp;убери&nbsp;минус<br>
 <br>
-&#9;// Направление на камеру<br>
-&#9;vec3 V = normalize(u_view_pos - v_world_pos);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Направление&nbsp;на&nbsp;камеру<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;V&nbsp;=&nbsp;normalize(u_view_pos&nbsp;-&nbsp;v_world_pos);<br>
 <br>
-&#9;// Полуунитектор (half-vector) для Blinn–Phong<br>
-&#9;vec3 H = normalize(L + V);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Полуунитектор&nbsp;(half-vector)&nbsp;для&nbsp;Blinn–Phong<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;H&nbsp;=&nbsp;normalize(L&nbsp;+&nbsp;V);<br>
 <br>
-&#9;// --- коэффициенты освещения ---<br>
-&#9;const float ambientStrength  = 0.2;  // эмбиент<br>
-&#9;const float diffuseStrength  = 0.8;  // диффуз<br>
-&#9;const float specularStrength = 0.4;  // спекуляр<br>
-&#9;const float shininess        = 32.0; // степень блеска<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;---&nbsp;коэффициенты&nbsp;освещения&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;ambientStrength&nbsp;&nbsp;=&nbsp;0.2;&nbsp;&nbsp;//&nbsp;эмбиент<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;diffuseStrength&nbsp;&nbsp;=&nbsp;0.8;&nbsp;&nbsp;//&nbsp;диффуз<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;specularStrength&nbsp;=&nbsp;0.4;&nbsp;&nbsp;//&nbsp;спекуляр<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;shininess&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;32.0;&nbsp;//&nbsp;степень&nbsp;блеска<br>
 <br>
-&#9;// Эмбиент<br>
-&#9;vec3 ambient = ambientStrength * u_color.rgb;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Эмбиент<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;ambient&nbsp;=&nbsp;ambientStrength&nbsp;*&nbsp;u_color.rgb;<br>
 <br>
-&#9;// Диффуз (Ламберт)<br>
-&#9;float ndotl = max(dot(N, L), 0.0);<br>
-&#9;vec3 diffuse = diffuseStrength * ndotl * u_color.rgb;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Диффуз&nbsp;(Ламберт)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(N,&nbsp;L),&nbsp;0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;diffuse&nbsp;=&nbsp;diffuseStrength&nbsp;*&nbsp;ndotl&nbsp;*&nbsp;u_color.rgb;<br>
 <br>
-&#9;// Спекуляр (Blinn–Phong)<br>
-&#9;float specFactor = 0.0;<br>
-&#9;if (ndotl &gt; 0.0) {<br>
-&#9;&#9;specFactor = pow(max(dot(N, H), 0.0), shininess);<br>
-&#9;}<br>
-&#9;vec3 specular = specularStrength * specFactor * u_light_color;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Спекуляр&nbsp;(Blinn–Phong)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;specFactor&nbsp;=&nbsp;0.0;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(ndotl&nbsp;&gt;&nbsp;0.0)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;specFactor&nbsp;=&nbsp;pow(max(dot(N,&nbsp;H),&nbsp;0.0),&nbsp;shininess);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;specular&nbsp;=&nbsp;specularStrength&nbsp;*&nbsp;specFactor&nbsp;*&nbsp;u_light_color;<br>
 <br>
-&#9;// Итоговый цвет: модифицируем цвет материала цветом света<br>
-&#9;vec3 color = (ambient + diffuse) * u_light_color + specular;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Итоговый&nbsp;цвет:&nbsp;модифицируем&nbsp;цвет&nbsp;материала&nbsp;цветом&nbsp;света<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;color&nbsp;=&nbsp;(ambient&nbsp;+&nbsp;diffuse)&nbsp;*&nbsp;u_light_color&nbsp;+&nbsp;specular;<br>
 <br>
-&#9;// Можно слегка ограничить, чтобы не улетало в дикий перегиб<br>
-&#9;color = clamp(color, 0.0, 1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Можно&nbsp;слегка&nbsp;ограничить,&nbsp;чтобы&nbsp;не&nbsp;улетало&nbsp;в&nbsp;дикий&nbsp;перегиб<br>
+&nbsp;&nbsp;&nbsp;&nbsp;color&nbsp;=&nbsp;clamp(color,&nbsp;0.0,&nbsp;1.0);<br>
 <br>
-&#9;FragColor = vec4(color, u_color.a);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(color,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-def build_scene(world: VisualizationWorld, mesh: &quot;Mesh&quot;) -&gt; tuple[Scene, PerspectiveCameraComponent]:<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld,&nbsp;mesh:&nbsp;&quot;Mesh&quot;)&nbsp;-&gt;&nbsp;tuple[Scene,&nbsp;PerspectiveCameraComponent]:<br>
 <br>
-&#9;scene = Scene()<br>
-&#9;<br>
-&#9;drawable = MeshDrawable(mesh)<br>
-&#9;shader_prog = ShaderProgram(vert, frag)<br>
-&#9;material = Material(shader=shader_prog, color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))<br>
-&#9;entity = Entity(pose=Pose3.identity(), name=&quot;cube&quot;)<br>
-&#9;entity.add_component(MeshRenderer(drawable, material))<br>
-&#9;<br>
-&#9;scene.add(entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;drawable&nbsp;=&nbsp;MeshDrawable(mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader_prog&nbsp;=&nbsp;ShaderProgram(vert,&nbsp;frag)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;Material(shader=shader_prog,&nbsp;color=np.array([0.8,&nbsp;0.3,&nbsp;0.3,&nbsp;1.0],&nbsp;dtype=np.float32))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;cube&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity.add_component(MeshRenderer(drawable,&nbsp;material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(entity)<br>
 <br>
-&#9;skybox = SkyBoxEntity()<br>
-&#9;scene.add(skybox)<br>
-&#9;world.add_scene(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;skybox&nbsp;=&nbsp;SkyBoxEntity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(skybox)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
-&#9;T = 10000.0<br>
-&#9;coord_lines = Entity(name=&quot;coord_lines&quot;)<br>
-&#9;coord_lines.add_component(LineRenderer(points=[(0,0,-T), (0,0,T)], color=(1,0,0,1), width=2.0))  # Z - красная<br>
-&#9;coord_lines.add_component(LineRenderer(points=[(0,-T,0), (0,T,0)], color=(0,1,0,1), width=2.0))  # Y - зелёная<br>
-&#9;coord_lines.add_component(LineRenderer(points=[(-T,0,0), (T,0,0)], color=(0,0,1,1), width=2.0))  # X - синяя<br>
-&#9;scene.add(coord_lines)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;T&nbsp;=&nbsp;10000.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;coord_lines&nbsp;=&nbsp;Entity(name=&quot;coord_lines&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;coord_lines.add_component(LineRenderer(points=[(0,0,-T),&nbsp;(0,0,T)],&nbsp;color=(1,0,0,1),&nbsp;width=2.0))&nbsp;&nbsp;#&nbsp;Z&nbsp;-&nbsp;красная<br>
+&nbsp;&nbsp;&nbsp;&nbsp;coord_lines.add_component(LineRenderer(points=[(0,-T,0),&nbsp;(0,T,0)],&nbsp;color=(0,1,0,1),&nbsp;width=2.0))&nbsp;&nbsp;#&nbsp;Y&nbsp;-&nbsp;зелёная<br>
+&nbsp;&nbsp;&nbsp;&nbsp;coord_lines.add_component(LineRenderer(points=[(-T,0,0),&nbsp;(T,0,0)],&nbsp;color=(0,0,1,1),&nbsp;width=2.0))&nbsp;&nbsp;#&nbsp;X&nbsp;-&nbsp;синяя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(coord_lines)<br>
 <br>
-&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
-&#9;camera = PerspectiveCameraComponent()<br>
-&#9;camera_entity.add_component(camera)<br>
-&#9;camera_entity.add_component(OrbitCameraController())<br>
-&#9;scene.add(camera_entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(OrbitCameraController())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(camera_entity)<br>
 <br>
-&#9;return scene, camera<br>
-<br>
-<br>
-def show_mesh_app(mesh: &quot;Mesh&quot;):<br>
-&#9;world = VisualizationWorld()<br>
-&#9;scene, camera = build_scene(world, mesh)<br>
-&#9;window = world.create_window(title=&quot;termin cube demo&quot;)<br>
-&#9;window.add_viewport(scene, camera)<br>
-&#9;world.run()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;camera<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+def&nbsp;show_mesh_app(mesh:&nbsp;&quot;Mesh&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;camera&nbsp;=&nbsp;build_scene(world,&nbsp;mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;world.create_window(title=&quot;termin&nbsp;cube&nbsp;demo&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

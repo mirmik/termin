@@ -6,578 +6,578 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# ===== termin/apps/editor_window.py =====<br>
-import os<br>
-from PyQt5 import uic<br>
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu<br>
-from PyQt5.QtCore import Qt, QPoint<br>
-<br>
-from termin.visualization.camera import PerspectiveCameraComponent, OrbitCameraController<br>
-from termin.visualization.components.mesh_renderer import MeshRenderer<br>
-from termin.visualization.entity import Entity<br>
-from termin.kinematic.transform import Transform3<br>
-from editor_tree import SceneTreeModel<br>
-from editor_inspector import EntityInspector<br>
-from termin.visualization.picking import id_to_rgb<br>
-from termin.visualization.resources import ResourceManager<br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.visualization.gizmos.gizmo_axes import GizmoEntity, GizmoMoveController<br>
-from termin.visualization.backends.base import Action, MouseButton<br>
-<br>
-<br>
-class EditorWindow(QMainWindow):<br>
-&#9;def __init__(self, world, scene):<br>
-&#9;&#9;super().__init__()<br>
-&#9;&#9;self.selected_entity_id = 0<br>
-&#9;&#9;self.hover_entity_id = 0   # &lt;--- добавили<br>
-<br>
-&#9;&#9;ui_path = os.path.join(os.path.dirname(__file__), &quot;editor.ui&quot;)<br>
-&#9;&#9;uic.loadUi(ui_path, self)<br>
-<br>
-&#9;&#9;self.world = world<br>
-&#9;&#9;self.scene = scene<br>
-<br>
-&#9;&#9;# будут созданы ниже<br>
-&#9;&#9;self.camera = None<br>
-&#9;&#9;self.editor_entities = None<br>
-&#9;&#9;self.gizmo: GizmoEntity | None = None<br>
-<br>
-&#9;&#9;# --- ресурс-менеджер редактора ---<br>
-&#9;&#9;self.resource_manager = ResourceManager()<br>
-&#9;&#9;self._init_resources_from_scene()<br>
-<br>
-<br>
-&#9;&#9;# --- UI из .ui ---<br>
-&#9;&#9;self.sceneTree: QTreeView = self.findChild(QTreeView, &quot;sceneTree&quot;)<br>
-<br>
-&#9;&#9;self.sceneTree.setContextMenuPolicy(Qt.CustomContextMenu)<br>
-&#9;&#9;self.sceneTree.customContextMenuRequested.connect(self.on_tree_context_menu)<br>
-<br>
-&#9;&#9;self.viewportContainer: QWidget = self.findChild(QWidget, &quot;viewportContainer&quot;)<br>
-&#9;&#9;self.inspectorContainer: QWidget = self.findChild(QWidget, &quot;inspectorContainer&quot;)<br>
-<br>
-&#9;&#9;from PyQt5.QtWidgets import QSplitter<br>
-&#9;&#9;self.topSplitter: QSplitter = self.findChild(QSplitter, &quot;topSplitter&quot;)<br>
-&#9;&#9;self.verticalSplitter: QSplitter = self.findChild(QSplitter, &quot;verticalSplitter&quot;)<br>
-<br>
-&#9;&#9;self._fix_splitters()<br>
-<br>
-<br>
-&#9;&#9;# --- инспектор ---<br>
-&#9;&#9;self.inspector = EntityInspector(self.resource_manager, self.inspectorContainer)<br>
-&#9;&#9;self._init_inspector_widget()<br>
-<br>
-&#9;&#9;component_library = [<br>
-&#9;&#9;&#9;(&quot;PerspectiveCameraComponent&quot;, PerspectiveCameraComponent),<br>
-&#9;&#9;&#9;(&quot;OrbitCameraController&quot;,      OrbitCameraController),<br>
-&#9;&#9;&#9;(&quot;MeshRenderer&quot;,               MeshRenderer),<br>
-&#9;&#9;]<br>
-&#9;&#9;self.inspector.set_component_library(component_library)<br>
-<br>
-&#9;&#9;# на всякий случай — зарегистрируем компоненты и в ресурс-менеджере<br>
-&#9;&#9;for label, cls in component_library:<br>
-&#9;&#9;&#9;self.resource_manager.register_component(label, cls)<br>
-<br>
-&#9;&#9;self.inspector.transform_changed.connect(self._on_inspector_transform_changed)<br>
-&#9;&#9;self.inspector.component_changed.connect(self._on_inspector_component_changed)<br>
-<br>
-<br>
-&#9;&#9;# --- создаём редакторские сущности (root, камера, гизмо) ---<br>
-&#9;&#9;self._ensure_editor_entities_root()<br>
-&#9;&#9;self._ensure_editor_camera()<br>
-&#9;&#9;self._ensure_gizmo()<br>
-<br>
-&#9;&#9;# --- дерево сцены ---<br>
-&#9;&#9;self._tree_model = SceneTreeModel(scene)<br>
-&#9;&#9;self._setup_tree_model()<br>
-<br>
-&#9;&#9;self.sceneTree.setModel(self._tree_model)<br>
-&#9;&#9;self.sceneTree.expandAll()<br>
-&#9;&#9;self.sceneTree.clicked.connect(self.on_tree_click)<br>
-<br>
-&#9;&#9;# --- viewport ---<br>
-&#9;&#9;self._init_viewport()<br>
-<br>
-<br>
-&#9;def _ensure_editor_entities_root(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Ищем/создаём корневую сущность для редакторских вещей:<br>
-&#9;&#9;камера, гизмо и т.п.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;for ent in self.scene.entities:<br>
-&#9;&#9;&#9;if getattr(ent, &quot;name&quot;, &quot;&quot;) == &quot;EditorEntities&quot;:<br>
-&#9;&#9;&#9;&#9;self.editor_entities = ent<br>
-&#9;&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;editor_entities = Entity(name=&quot;EditorEntities&quot;)<br>
-&#9;&#9;self.scene.add(editor_entities)<br>
-&#9;&#9;self.editor_entities = editor_entities<br>
-<br>
-&#9;def _ensure_editor_camera(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Создаём редакторскую камеру и вешаем её под EditorEntities (если он есть).<br>
-&#9;&#9;Никакого поиска по сцене – у редактора всегда своя камера.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;camera_entity = Entity(name=&quot;camera&quot;, pose=Pose3.identity())<br>
-&#9;&#9;camera = PerspectiveCameraComponent()<br>
-&#9;&#9;camera_entity.add_component(camera)<br>
-&#9;&#9;camera_entity.add_component(OrbitCameraController())<br>
-<br>
-&#9;&#9;self.editor_entities.transform.link(camera_entity.transform)<br>
-&#9;&#9;self.scene.add(camera_entity)<br>
-&#9;&#9;self.camera = camera<br>
-<br>
-&#9;def _ensure_gizmo(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Ищем гизмо в сцене, если нет – создаём.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;for ent in self.scene.entities:<br>
-&#9;&#9;&#9;if isinstance(ent, GizmoEntity) or getattr(ent, &quot;name&quot;, &quot;&quot;) == &quot;gizmo&quot;:<br>
-&#9;&#9;&#9;&#9;self.gizmo = ent<br>
-&#9;&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;gizmo = GizmoEntity(size=1.5)<br>
-&#9;&#9;gizmo_controller = GizmoMoveController(gizmo, self.scene)<br>
-&#9;&#9;gizmo.add_component(gizmo_controller)<br>
-<br>
-&#9;&#9;if self.editor_entities is not None:<br>
-&#9;&#9;&#9;self.editor_entities.transform.add_child(gizmo.transform)<br>
-<br>
-&#9;&#9;self.scene.add(gizmo)<br>
-&#9;&#9;self.gizmo = gizmo<br>
-<br>
-<br>
-<br>
-&#9;# ----------- ресурсы из сцены -----------<br>
-<br>
-&#9;def _init_resources_from_scene(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Складываем в ResourceManager материалы и меши, использованные в сцене.<br>
-&#9;&#9;И даём им хоть какие-то имена, если их ещё нет.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;for ent in self.scene.entities:<br>
-&#9;&#9;&#9;mr = ent.get_component(MeshRenderer)<br>
-&#9;&#9;&#9;if mr is None:<br>
-&#9;&#9;&#9;&#9;continue<br>
-<br>
-&#9;&#9;&#9;# ------------ МЕШИ ------------<br>
-&#9;&#9;&#9;mesh = getattr(mr, &quot;mesh&quot;, None)<br>
-&#9;&#9;&#9;if mesh is not None:<br>
-&#9;&#9;&#9;&#9;existing_mesh_name = self.resource_manager.find_mesh_name(mesh)<br>
-&#9;&#9;&#9;&#9;if existing_mesh_name is None:<br>
-&#9;&#9;&#9;&#9;&#9;name = getattr(mesh, &quot;name&quot;, None)<br>
-&#9;&#9;&#9;&#9;&#9;if not name:<br>
-&#9;&#9;&#9;&#9;&#9;&#9;base = f&quot;{ent.name}_mesh&quot; if getattr(ent, &quot;name&quot;, None) else &quot;Mesh&quot;<br>
-&#9;&#9;&#9;&#9;&#9;&#9;name = base<br>
-&#9;&#9;&#9;&#9;&#9;&#9;i = 1<br>
-&#9;&#9;&#9;&#9;&#9;&#9;while name in self.resource_manager.meshes:<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;i += 1<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;name = f&quot;{base}_{i}&quot;<br>
-&#9;&#9;&#9;&#9;&#9;mesh.name = name<br>
-&#9;&#9;&#9;&#9;&#9;self.resource_manager.register_mesh(name, mesh)<br>
-<br>
-&#9;&#9;&#9;# ------------ МАТЕРИАЛЫ ------------<br>
-&#9;&#9;&#9;mat = mr.material<br>
-&#9;&#9;&#9;if mat is None:<br>
-&#9;&#9;&#9;&#9;continue<br>
-<br>
-&#9;&#9;&#9;existing_name = self.resource_manager.find_material_name(mat)<br>
-&#9;&#9;&#9;if existing_name is not None:<br>
-&#9;&#9;&#9;&#9;continue<br>
-<br>
-&#9;&#9;&#9;name = getattr(mat, &quot;name&quot;, None)<br>
-&#9;&#9;&#9;if not name:<br>
-&#9;&#9;&#9;&#9;base = f&quot;{ent.name}_mat&quot; if getattr(ent, &quot;name&quot;, None) else &quot;Material&quot;<br>
-&#9;&#9;&#9;&#9;name = base<br>
-&#9;&#9;&#9;&#9;i = 1<br>
-&#9;&#9;&#9;&#9;while name in self.resource_manager.materials:<br>
-&#9;&#9;&#9;&#9;&#9;i += 1<br>
-&#9;&#9;&#9;&#9;&#9;name = f&quot;{base}_{i}&quot;<br>
-&#9;&#9;&#9;&#9;mat.name = name<br>
-<br>
-&#9;&#9;&#9;self.resource_manager.register_material(name, mat)<br>
-<br>
-<br>
-&#9;# ----------- реакции инспектора -----------<br>
-<br>
-&#9;def _on_inspector_transform_changed(self):<br>
-&#9;&#9;if self.viewport_window is not None:<br>
-&#9;&#9;&#9;self.viewport_window._request_update()<br>
-<br>
-&#9;def _on_inspector_component_changed(self):<br>
-&#9;&#9;if self.viewport_window is not None:<br>
-&#9;&#9;&#9;self.viewport_window._request_update()<br>
-<br>
-&#9;# ----------- контекстное меню дерева -----------<br>
-<br>
-&#9;def on_tree_context_menu(self, pos: QPoint):<br>
-&#9;&#9;index = self.sceneTree.indexAt(pos)<br>
-&#9;&#9;node = index.internalPointer() if index.isValid() else None<br>
-&#9;&#9;target_obj = node.obj if node is not None else None<br>
-<br>
-&#9;&#9;menu = QMenu(self)<br>
-&#9;&#9;action_add = menu.addAction(&quot;Add entity&quot;)<br>
-<br>
-&#9;&#9;action_delete = None<br>
-&#9;&#9;if isinstance(target_obj, Entity):<br>
-&#9;&#9;&#9;action_delete = menu.addAction(&quot;Delete entity&quot;)<br>
-<br>
-&#9;&#9;global_pos = self.sceneTree.viewport().mapToGlobal(pos)<br>
-&#9;&#9;action = menu.exec_(global_pos)<br>
-&#9;&#9;if action == action_add:<br>
-&#9;&#9;&#9;self._create_entity_from_context(target_obj)<br>
-&#9;&#9;elif action == action_delete:<br>
-&#9;&#9;&#9;self._delete_entity_from_context(target_obj)<br>
-<br>
-&#9;def _delete_entity_from_context(self, ent: Entity):<br>
-&#9;&#9;if not isinstance(ent, Entity):<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;parent_tf = getattr(ent.transform, &quot;parent&quot;, None)<br>
-&#9;&#9;parent_ent = getattr(parent_tf, &quot;entity&quot;, None) if parent_tf is not None else None<br>
-&#9;&#9;if not isinstance(parent_ent, Entity):<br>
-&#9;&#9;&#9;parent_ent = None<br>
-<br>
-&#9;&#9;if self.inspector is not None:<br>
-&#9;&#9;&#9;self.inspector.set_target(None)<br>
-<br>
-&#9;&#9;self.on_selection_changed(None)<br>
-<br>
-&#9;&#9;if hasattr(self.scene, &quot;remove&quot;):<br>
-&#9;&#9;&#9;self.scene.remove(ent)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;try:<br>
-&#9;&#9;&#9;&#9;self.scene.entities.remove(ent)<br>
-&#9;&#9;&#9;&#9;ent.on_removed()<br>
-&#9;&#9;&#9;except ValueError:<br>
-&#9;&#9;&#9;&#9;pass<br>
-<br>
-&#9;&#9;self._rebuild_tree_model(select_obj=parent_ent)<br>
-<br>
-&#9;&#9;if self.viewport_window is not None:<br>
-&#9;&#9;&#9;self.viewport_window._request_update()<br>
-<br>
-&#9;def _setup_tree_model(self):<br>
-&#9;&#9;self.sceneTree.setModel(self._tree_model)<br>
-&#9;&#9;self.sceneTree.expandAll()<br>
-&#9;&#9;self.sceneTree.clicked.connect(self.on_tree_click)<br>
-<br>
-&#9;&#9;sel_model = self.sceneTree.selectionModel()<br>
-&#9;&#9;if sel_model is not None:<br>
-&#9;&#9;&#9;sel_model.currentChanged.connect(self.on_tree_current_changed)<br>
-<br>
-&#9;def _rebuild_tree_model(self, select_obj=None):<br>
-&#9;&#9;self._tree_model = SceneTreeModel(self.scene)<br>
-&#9;&#9;self._setup_tree_model()<br>
-&#9;&#9;if select_obj is not None:<br>
-&#9;&#9;&#9;self._select_object_in_tree(select_obj)<br>
-<br>
-&#9;def on_tree_current_changed(self, current, _previous):<br>
-&#9;&#9;if not current.isValid():<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;self.on_tree_click(current)<br>
-<br>
-&#9;def _create_entity_from_context(self, target_obj):<br>
-&#9;&#9;parent_transform = None<br>
-&#9;&#9;if isinstance(target_obj, Entity):<br>
-&#9;&#9;&#9;parent_transform = target_obj.transform<br>
-&#9;&#9;elif isinstance(target_obj, Transform3):<br>
-&#9;&#9;&#9;parent_transform = target_obj<br>
-<br>
-&#9;&#9;existing = {e.name for e in self.scene.entities}<br>
-&#9;&#9;base = &quot;entity&quot;<br>
-&#9;&#9;i = 1<br>
-&#9;&#9;while f&quot;{base}{i}&quot; in existing:<br>
-&#9;&#9;&#9;i += 1<br>
-&#9;&#9;name = f&quot;{base}{i}&quot;<br>
-<br>
-&#9;&#9;ent = Entity(pose=Pose3.identity(), name=name)<br>
-<br>
-&#9;&#9;if parent_transform is not None:<br>
-&#9;&#9;&#9;ent.transform.set_parent(parent_transform)<br>
-<br>
-&#9;&#9;self.scene.add(ent)<br>
-&#9;&#9;self._rebuild_tree_model(select_obj=ent)<br>
-<br>
-&#9;&#9;if self.viewport_window is not None:<br>
-&#9;&#9;&#9;self.viewport_window._request_update()<br>
-<br>
-&#9;def _init_inspector_widget(self):<br>
-&#9;&#9;parent = self.inspectorContainer<br>
-&#9;&#9;layout = parent.layout()<br>
-&#9;&#9;if layout is None:<br>
-&#9;&#9;&#9;layout = QVBoxLayout(parent)<br>
-&#9;&#9;&#9;parent.setLayout(layout)<br>
-&#9;&#9;layout.addWidget(self.inspector)<br>
-<br>
-&#9;def _fix_splitters(self):<br>
-&#9;&#9;self.topSplitter.setOpaqueResize(False)<br>
-&#9;&#9;self.verticalSplitter.setOpaqueResize(False)<br>
-<br>
-&#9;&#9;self.topSplitter.setCollapsible(0, False)<br>
-&#9;&#9;self.topSplitter.setCollapsible(1, False)<br>
-&#9;&#9;self.topSplitter.setCollapsible(2, False)<br>
-<br>
-&#9;&#9;self.verticalSplitter.setCollapsible(0, False)<br>
-&#9;&#9;self.verticalSplitter.setCollapsible(1, False)<br>
-<br>
-&#9;&#9;self.topSplitter.setSizes([300, 1000, 300])<br>
-&#9;&#9;self.verticalSplitter.setSizes([600, 200])<br>
-<br>
-&#9;# ----------- синхронизация с пиками -----------<br>
-<br>
-&#9;def mouse_button_event(self, button_type, action, x, y, viewport):<br>
-&#9;&#9;from termin.visualization.backends.base import MouseButton<br>
-&#9;&#9;if button_type == MouseButton.LEFT and action == Action.RELEASE:<br>
-&#9;&#9;&#9;self._pending_pick_release = (x, y, viewport)<br>
-&#9;&#9;if button_type == MouseButton.LEFT and action == Action.PRESS:<br>
-&#9;&#9;&#9;self._pending_pick_press = (x, y, viewport)<br>
-<br>
-&#9;def _after_render(self, window):<br>
-&#9;&#9;if self._pending_pick_press is not None:<br>
-&#9;&#9;&#9;self._process_pending_pick_press(self._pending_pick_press, window)<br>
-&#9;&#9;if self._pending_pick_release is not None:<br>
-&#9;&#9;&#9;self._process_pending_pick_release(self._pending_pick_release, window)<br>
-&#9;&#9;if self._pending_hover is not None:<br>
-&#9;&#9;&#9;self._process_pending_hover(self._pending_hover, window)<br>
-<br>
-&#9;def _process_pending_hover(self, pending_hover, window):<br>
-&#9;&#9;x, y, viewport = pending_hover<br>
-&#9;&#9;self._pending_hover = None<br>
-<br>
-&#9;&#9;hovered_ent = window.pick_entity_at(x, y, viewport)<br>
-&#9;&#9;self._update_hover_entity(hovered_ent)<br>
-<br>
-&#9;def _process_pending_pick_release(self, pending_release, window):<br>
-&#9;&#9;x, y, viewport = pending_release<br>
-&#9;&#9;self._pending_pick_release = None<br>
-<br>
-&#9;&#9;picked_ent = window.pick_entity_at(x, y, viewport)<br>
-<br>
-&#9;&#9;# обычный selection (как у тебя было)<br>
-&#9;&#9;if picked_ent is not None:<br>
-&#9;&#9;&#9;self.on_selection_changed(picked_ent)<br>
-&#9;&#9;&#9;self._select_object_in_tree(picked_ent)<br>
-&#9;&#9;&#9;self.inspector.set_target(picked_ent)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self.on_selection_changed(None)<br>
-&#9;&#9;&#9;self.inspector.set_target(None)<br>
-<br>
-&#9;def _is_entity_part_of_gizmo(self, ent: Entity) -&gt; bool:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Проверяет, является ли ent частью гизмо (стрелкой, кольцом и т.п.).<br>
-&#9;&#9;Ходит вверх по иерархии transform, пока не найдёт gizmo_axis_* или gizmo_rot_*.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if ent is None or self.gizmo is None:<br>
-&#9;&#9;&#9;return False<br>
-<br>
-&#9;&#9;cur = ent<br>
-&#9;&#9;while cur is not None:<br>
-&#9;&#9;&#9;name = cur.name<br>
-<br>
-&#9;&#9;&#9;if name.startswith(&quot;gizmo_axis_&quot;) or name.startswith(&quot;gizmo_rot_&quot;):<br>
-&#9;&#9;&#9;&#9;return True<br>
-<br>
-&#9;&#9;&#9;tf = cur.transform<br>
-&#9;&#9;&#9;parent_tf = tf.parent if tf is not None else None<br>
-&#9;&#9;&#9;cur = parent_tf.entity if parent_tf is not None else None<br>
-<br>
-&#9;&#9;return False<br>
-<br>
-&#9;def _process_pending_pick_press(self, pending_press, window):<br>
-&#9;&#9;x, y, viewport = pending_press<br>
-&#9;&#9;self._pending_pick_press = None<br>
-<br>
-&#9;&#9;picked_ent = window.pick_entity_at(x, y, viewport)<br>
-<br>
-&#9;&#9;gizmo_ctrl = None<br>
-&#9;&#9;if self.gizmo is not None:<br>
-&#9;&#9;&#9;gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)<br>
-<br>
-&#9;&#9;# сначала проверяем, не гизмо ли это<br>
-&#9;&#9;if picked_ent is not None and gizmo_ctrl is not None:<br>
-&#9;&#9;&#9;ent = picked_ent<br>
-&#9;&#9;&#9;is_gizmo_part = self._is_entity_part_of_gizmo(ent)<br>
-<br>
-&#9;&#9;&#9;if is_gizmo_part:<br>
-&#9;&#9;&#9;&#9;print(&quot;Clicked on gizmo part&quot;)<br>
-&#9;&#9;&#9;&#9;name = picked_ent.name or &quot;&quot;<br>
-&#9;&#9;&#9;&#9;print(f&quot;Clicked on gizmo part: {name}&quot;)<br>
-<br>
-&#9;&#9;&#9;&#9;# перемещение по оси<br>
-&#9;&#9;&#9;&#9;if name.endswith(&quot;shaft&quot;) or name.endswith(&quot;head&quot;):<br>
-&#9;&#9;&#9;&#9;&#9;axis = name[0]<br>
-&#9;&#9;&#9;&#9;&#9;gizmo_ctrl.start_translate_from_pick(axis, viewport, x, y)<br>
-&#9;&#9;&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;&#9;&#9;# вращение по оси (если уже подключишь кольца)<br>
-&#9;&#9;&#9;&#9;if name.endswith(&quot;ring&quot;):<br>
-&#9;&#9;&#9;&#9;&#9;print(&quot;Starting rotation from pick&quot;)<br>
-&#9;&#9;&#9;&#9;&#9;axis = name[0]<br>
-&#9;&#9;&#9;&#9;&#9;gizmo_ctrl.start_rotate_from_pick(axis, viewport, x, y)<br>
-&#9;&#9;&#9;&#9;&#9;return<br>
-<br>
-<br>
-&#9;def _extract_gizmo_hit(self, ent: Entity | None):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает (&quot;translate&quot; | &quot;rotate&quot;, axis) если кликнули по части гизмо,<br>
-&#9;&#9;иначе None.<br>
-<br>
-&#9;&#9;Ходим вверх по иерархии transform, пока не найдём gizmo_axis_* или gizmo_rot_*.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if ent is None or self.gizmo is None:<br>
-&#9;&#9;&#9;return None<br>
-<br>
-&#9;&#9;cur = ent<br>
-&#9;&#9;while cur is not None:<br>
-&#9;&#9;&#9;name = getattr(cur, &quot;name&quot;, &quot;&quot;)<br>
-<br>
-&#9;&#9;&#9;if name.startswith(&quot;gizmo_axis_&quot;):<br>
-&#9;&#9;&#9;&#9;axis = name.removeprefix(&quot;gizmo_axis_&quot;)<br>
-&#9;&#9;&#9;&#9;return (&quot;translate&quot;, axis)<br>
-<br>
-&#9;&#9;&#9;if name.startswith(&quot;gizmo_rot_&quot;):<br>
-&#9;&#9;&#9;&#9;axis = name.removeprefix(&quot;gizmo_rot_&quot;)<br>
-&#9;&#9;&#9;&#9;return (&quot;rotate&quot;, axis)<br>
-<br>
-&#9;&#9;&#9;tf = getattr(cur, &quot;transform&quot;, None)<br>
-&#9;&#9;&#9;parent_tf = getattr(tf, &quot;parent&quot;, None) if tf is not None else None<br>
-&#9;&#9;&#9;cur = getattr(parent_tf, &quot;entity&quot;, None) if parent_tf is not None else None<br>
-<br>
-&#9;&#9;return None<br>
-<br>
-&#9;def _update_hover_entity(self, ent: Entity | None):<br>
-&#9;&#9;# как и в selection – игнорим невыделяемое (гизмо и т.п.)<br>
-&#9;&#9;if ent is not None and ent.selectable is False:<br>
-&#9;&#9;&#9;ent = None<br>
-<br>
-&#9;&#9;if ent is not None:<br>
-&#9;&#9;&#9;new_id = self.viewport_window._get_pick_id_for_entity(ent)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;new_id = 0<br>
-<br>
-&#9;&#9;if new_id == self.hover_entity_id:<br>
-&#9;&#9;&#9;return  # ничего не поменялось<br>
-<br>
-&#9;&#9;self.hover_entity_id = new_id<br>
-<br>
-&#9;&#9;if self.viewport_window is not None:<br>
-&#9;&#9;&#9;self.viewport_window._request_update()<br>
-<br>
-&#9;def _select_object_in_tree(self, obj):<br>
-&#9;&#9;model: SceneTreeModel = self.sceneTree.model()<br>
-&#9;&#9;idx = model.index_for_object(obj)<br>
-&#9;&#9;if not idx.isValid():<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;self.sceneTree.setCurrentIndex(idx)<br>
-&#9;&#9;self.sceneTree.scrollTo(idx)<br>
-<br>
-&#9;def _init_viewport(self):<br>
-&#9;&#9;self._pending_pick_press = None<br>
-&#9;&#9;self._pending_pick_release = None<br>
-&#9;&#9;self._pending_hover = None   # &lt;- новый буфер для hover-пика<br>
-&#9;&#9;layout = self.viewportContainer.layout()<br>
-<br>
-&#9;&#9;self.viewport_window = self.world.create_window(<br>
-&#9;&#9;&#9;width=900,<br>
-&#9;&#9;&#9;height=800,<br>
-&#9;&#9;&#9;title=&quot;viewport&quot;,<br>
-&#9;&#9;&#9;parent=self.viewportContainer<br>
-&#9;&#9;)<br>
-&#9;&#9;# здесь self.camera уже создана в _ensure_editor_camera<br>
-&#9;&#9;self.viewport = self.viewport_window.add_viewport(self.scene, self.camera)<br>
-&#9;&#9;self.viewport_window.set_world_mode(&quot;editor&quot;)<br>
-<br>
-&#9;&#9;self.viewport_window.on_mouse_button_event = self.mouse_button_event<br>
-&#9;&#9;self.viewport_window.after_render_handler = self._after_render<br>
-&#9;&#9;self.viewport_window.on_mouse_move_event   = self.mouse_moved<br>
-<br>
-&#9;&#9;gl_widget = self.viewport_window.handle.widget<br>
-&#9;&#9;gl_widget.setFocusPolicy(Qt.StrongFocus)<br>
-&#9;&#9;gl_widget.setMinimumSize(50, 50)<br>
-<br>
-&#9;&#9;layout.addWidget(gl_widget)<br>
-<br>
-&#9;&#9;self.viewport.set_render_pipeline(self.make_pipeline())<br>
-<br>
-<br>
-&#9;&#9;def mouse_moved(self, x: float, y: float, viewport):<br>
-&#9;&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;&#9;Вызывается Window'ом при каждом движении курсора.<br>
-&#9;&#9;&#9;Просто запоминаем, что надо сделать hover-pick после следующего рендера.<br>
-&#9;&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;&#9;if viewport is None:<br>
-&#9;&#9;&#9;&#9;self._pending_hover = None<br>
-&#9;&#9;&#9;&#9;return<br>
-&#9;&#9;&#9;self._pending_hover = (x, y, viewport)<br>
-<br>
-&#9;def on_tree_click(self, index):<br>
-&#9;&#9;node = index.internalPointer()<br>
-&#9;&#9;obj = node.obj<br>
-<br>
-&#9;&#9;self.inspector.set_target(obj)<br>
-<br>
-&#9;&#9;if isinstance(obj, Entity):<br>
-&#9;&#9;&#9;ent = obj<br>
-&#9;&#9;elif isinstance(obj, Transform3):<br>
-&#9;&#9;&#9;ent = next((e for e in self.scene.entities if e.transform is obj), None)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;ent = None<br>
-<br>
-&#9;&#9;self.on_selection_changed(ent)<br>
-<br>
-&#9;&#9;if self.viewport_window is not None:<br>
-&#9;&#9;&#9;self.viewport_window._request_update()<br>
-<br>
-&#9;def mouse_moved(self, x: float, y: float, viewport):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вызывается Window'ом при каждом движении курсора.<br>
-&#9;&#9;Просто запоминаем, что надо сделать hover-pick после следующего рендера.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if viewport is None:<br>
-&#9;&#9;&#9;self._pending_hover = None<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;self._pending_hover = (x, y, viewport)<br>
-<br>
-&#9;def on_selection_changed(self, selected_ent):<br>
-&#9;&#9;if selected_ent is not None and selected_ent.selectable is False:<br>
-&#9;&#9;&#9;# Мы пикнули что-то невыделяемое. Скорее всего гизмо.<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;<br>
-&#9;&#9;self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(selected_ent) if selected_ent is not None else 0<br>
-&#9;&#9;self.gizmo.find_component(GizmoMoveController).set_target(selected_ent)<br>
-<br>
-&#9;def make_pipeline(self) -&gt; list[&quot;FramePass&quot;]:<br>
-&#9;&#9;from termin.visualization.framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass<br>
-&#9;&#9;from termin.visualization.postprocess import PostProcessPass<br>
-&#9;&#9;from termin.visualization.posteffects.highlight import HighlightEffect<br>
-<br>
-&#9;&#9;postprocess = PostProcessPass(<br>
-&#9;&#9;&#9;effects=[],<br>
-&#9;&#9;&#9;input_res=&quot;color&quot;,<br>
-&#9;&#9;&#9;output_res=&quot;color_pp&quot;,<br>
-&#9;&#9;&#9;pass_name=&quot;PostFX&quot;,<br>
-&#9;&#9;)<br>
-<br>
-&#9;&#9;passes: list[&quot;FramePass&quot;] = [<br>
-&#9;&#9;&#9;ColorPass(input_res=&quot;empty&quot;, output_res=&quot;color&quot;, pass_name=&quot;Color&quot;),<br>
-&#9;&#9;&#9;IdPass(input_res=&quot;empty_id&quot;, output_res=&quot;id&quot;, pass_name=&quot;Id&quot;),<br>
-&#9;&#9;&#9;postprocess,<br>
-&#9;&#9;&#9;CanvasPass(<br>
-&#9;&#9;&#9;&#9;src=&quot;color_pp&quot;,<br>
-&#9;&#9;&#9;&#9;dst=&quot;color+ui&quot;,<br>
-&#9;&#9;&#9;&#9;pass_name=&quot;Canvas&quot;,<br>
-&#9;&#9;&#9;),<br>
-&#9;&#9;&#9;PresentToScreenPass(<br>
-&#9;&#9;&#9;&#9;input_res=&quot;color+ui&quot;,<br>
-&#9;&#9;&#9;&#9;pass_name=&quot;Present&quot;,<br>
-&#9;&#9;&#9;)<br>
-&#9;&#9;]<br>
-<br>
-&#9;&#9;postprocess.add_effect(HighlightEffect(lambda: self.hover_entity_id, color=(0.3, 0.8, 1.0, 1.0)))<br>
-&#9;&#9;postprocess.add_effect(HighlightEffect(lambda: self.selected_entity_id, color=(1.0, 0.9, 0.1, 1.0)))<br>
-<br>
-&#9;&#9;return passes<br>
+#&nbsp;=====&nbsp;termin/apps/editor_window.py&nbsp;=====<br>
+import&nbsp;os<br>
+from&nbsp;PyQt5&nbsp;import&nbsp;uic<br>
+from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;QMainWindow,&nbsp;QWidget,&nbsp;QVBoxLayout,&nbsp;QTreeView,&nbsp;QLabel,&nbsp;QMenu<br>
+from&nbsp;PyQt5.QtCore&nbsp;import&nbsp;Qt,&nbsp;QPoint<br>
+<br>
+from&nbsp;termin.visualization.camera&nbsp;import&nbsp;PerspectiveCameraComponent,&nbsp;OrbitCameraController<br>
+from&nbsp;termin.visualization.components.mesh_renderer&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Entity<br>
+from&nbsp;termin.kinematic.transform&nbsp;import&nbsp;Transform3<br>
+from&nbsp;editor_tree&nbsp;import&nbsp;SceneTreeModel<br>
+from&nbsp;editor_inspector&nbsp;import&nbsp;EntityInspector<br>
+from&nbsp;termin.visualization.picking&nbsp;import&nbsp;id_to_rgb<br>
+from&nbsp;termin.visualization.resources&nbsp;import&nbsp;ResourceManager<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.visualization.gizmos.gizmo_axes&nbsp;import&nbsp;GizmoEntity,&nbsp;GizmoMoveController<br>
+from&nbsp;termin.visualization.backends.base&nbsp;import&nbsp;Action,&nbsp;MouseButton<br>
+<br>
+<br>
+class&nbsp;EditorWindow(QMainWindow):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;world,&nbsp;scene):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.selected_entity_id&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.hover_entity_id&nbsp;=&nbsp;0&nbsp;&nbsp;&nbsp;#&nbsp;&lt;---&nbsp;добавили<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ui_path&nbsp;=&nbsp;os.path.join(os.path.dirname(__file__),&nbsp;&quot;editor.ui&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uic.loadUi(ui_path,&nbsp;self)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.world&nbsp;=&nbsp;world<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene&nbsp;=&nbsp;scene<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;будут&nbsp;созданы&nbsp;ниже<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.camera&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.editor_entities&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gizmo:&nbsp;GizmoEntity&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;ресурс-менеджер&nbsp;редактора&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.resource_manager&nbsp;=&nbsp;ResourceManager()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._init_resources_from_scene()<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;UI&nbsp;из&nbsp;.ui&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree:&nbsp;QTreeView&nbsp;=&nbsp;self.findChild(QTreeView,&nbsp;&quot;sceneTree&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.setContextMenuPolicy(Qt.CustomContextMenu)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.customContextMenuRequested.connect(self.on_tree_context_menu)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewportContainer:&nbsp;QWidget&nbsp;=&nbsp;self.findChild(QWidget,&nbsp;&quot;viewportContainer&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspectorContainer:&nbsp;QWidget&nbsp;=&nbsp;self.findChild(QWidget,&nbsp;&quot;inspectorContainer&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;QSplitter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.topSplitter:&nbsp;QSplitter&nbsp;=&nbsp;self.findChild(QSplitter,&nbsp;&quot;topSplitter&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.verticalSplitter:&nbsp;QSplitter&nbsp;=&nbsp;self.findChild(QSplitter,&nbsp;&quot;verticalSplitter&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._fix_splitters()<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;инспектор&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector&nbsp;=&nbsp;EntityInspector(self.resource_manager,&nbsp;self.inspectorContainer)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._init_inspector_widget()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component_library&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(&quot;PerspectiveCameraComponent&quot;,&nbsp;PerspectiveCameraComponent),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(&quot;OrbitCameraController&quot;,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(&quot;MeshRenderer&quot;,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MeshRenderer),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.set_component_library(component_library)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;на&nbsp;всякий&nbsp;случай&nbsp;—&nbsp;зарегистрируем&nbsp;компоненты&nbsp;и&nbsp;в&nbsp;ресурс-менеджере<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;label,&nbsp;cls&nbsp;in&nbsp;component_library:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.resource_manager.register_component(label,&nbsp;cls)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.transform_changed.connect(self._on_inspector_transform_changed)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.component_changed.connect(self._on_inspector_component_changed)<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;создаём&nbsp;редакторские&nbsp;сущности&nbsp;(root,&nbsp;камера,&nbsp;гизмо)&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_editor_entities_root()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_editor_camera()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_gizmo()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;дерево&nbsp;сцены&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._tree_model&nbsp;=&nbsp;SceneTreeModel(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._setup_tree_model()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.setModel(self._tree_model)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.expandAll()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.clicked.connect(self.on_tree_click)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;viewport&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._init_viewport()<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_ensure_editor_entities_root(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ищем/создаём&nbsp;корневую&nbsp;сущность&nbsp;для&nbsp;редакторских&nbsp;вещей:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;камера,&nbsp;гизмо&nbsp;и&nbsp;т.п.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ent&nbsp;in&nbsp;self.scene.entities:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;getattr(ent,&nbsp;&quot;name&quot;,&nbsp;&quot;&quot;)&nbsp;==&nbsp;&quot;EditorEntities&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.editor_entities&nbsp;=&nbsp;ent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;editor_entities&nbsp;=&nbsp;Entity(name=&quot;EditorEntities&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.add(editor_entities)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.editor_entities&nbsp;=&nbsp;editor_entities<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_ensure_editor_camera(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Создаём&nbsp;редакторскую&nbsp;камеру&nbsp;и&nbsp;вешаем&nbsp;её&nbsp;под&nbsp;EditorEntities&nbsp;(если&nbsp;он&nbsp;есть).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Никакого&nbsp;поиска&nbsp;по&nbsp;сцене&nbsp;–&nbsp;у&nbsp;редактора&nbsp;всегда&nbsp;своя&nbsp;камера.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;,&nbsp;pose=Pose3.identity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(OrbitCameraController())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.editor_entities.transform.link(camera_entity.transform)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.add(camera_entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.camera&nbsp;=&nbsp;camera<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_ensure_gizmo(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ищем&nbsp;гизмо&nbsp;в&nbsp;сцене,&nbsp;если&nbsp;нет&nbsp;–&nbsp;создаём.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ent&nbsp;in&nbsp;self.scene.entities:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(ent,&nbsp;GizmoEntity)&nbsp;or&nbsp;getattr(ent,&nbsp;&quot;name&quot;,&nbsp;&quot;&quot;)&nbsp;==&nbsp;&quot;gizmo&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gizmo&nbsp;=&nbsp;ent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo&nbsp;=&nbsp;GizmoEntity(size=1.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_controller&nbsp;=&nbsp;GizmoMoveController(gizmo,&nbsp;self.scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo.add_component(gizmo_controller)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.editor_entities&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.editor_entities.transform.add_child(gizmo.transform)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.add(gizmo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gizmo&nbsp;=&nbsp;gizmo<br>
+<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-----------&nbsp;ресурсы&nbsp;из&nbsp;сцены&nbsp;-----------<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_init_resources_from_scene(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Складываем&nbsp;в&nbsp;ResourceManager&nbsp;материалы&nbsp;и&nbsp;меши,&nbsp;использованные&nbsp;в&nbsp;сцене.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;И&nbsp;даём&nbsp;им&nbsp;хоть&nbsp;какие-то&nbsp;имена,&nbsp;если&nbsp;их&nbsp;ещё&nbsp;нет.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ent&nbsp;in&nbsp;self.scene.entities:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mr&nbsp;=&nbsp;ent.get_component(MeshRenderer)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mr&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------&nbsp;МЕШИ&nbsp;------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;getattr(mr,&nbsp;&quot;mesh&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mesh&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;existing_mesh_name&nbsp;=&nbsp;self.resource_manager.find_mesh_name(mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;existing_mesh_name&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;getattr(mesh,&nbsp;&quot;name&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;name:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base&nbsp;=&nbsp;f&quot;{ent.name}_mesh&quot;&nbsp;if&nbsp;getattr(ent,&nbsp;&quot;name&quot;,&nbsp;None)&nbsp;else&nbsp;&quot;Mesh&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;base<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;name&nbsp;in&nbsp;self.resource_manager.meshes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;+=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;f&quot;{base}_{i}&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh.name&nbsp;=&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.resource_manager.register_mesh(name,&nbsp;mesh)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------&nbsp;МАТЕРИАЛЫ&nbsp;------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat&nbsp;=&nbsp;mr.material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mat&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;existing_name&nbsp;=&nbsp;self.resource_manager.find_material_name(mat)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;existing_name&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;getattr(mat,&nbsp;&quot;name&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;name:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base&nbsp;=&nbsp;f&quot;{ent.name}_mat&quot;&nbsp;if&nbsp;getattr(ent,&nbsp;&quot;name&quot;,&nbsp;None)&nbsp;else&nbsp;&quot;Material&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;base<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;name&nbsp;in&nbsp;self.resource_manager.materials:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;+=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;f&quot;{base}_{i}&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat.name&nbsp;=&nbsp;name<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.resource_manager.register_material(name,&nbsp;mat)<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-----------&nbsp;реакции&nbsp;инспектора&nbsp;-----------<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_on_inspector_transform_changed(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.viewport_window&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_on_inspector_component_changed(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.viewport_window&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-----------&nbsp;контекстное&nbsp;меню&nbsp;дерева&nbsp;-----------<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_tree_context_menu(self,&nbsp;pos:&nbsp;QPoint):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index&nbsp;=&nbsp;self.sceneTree.indexAt(pos)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node&nbsp;=&nbsp;index.internalPointer()&nbsp;if&nbsp;index.isValid()&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;target_obj&nbsp;=&nbsp;node.obj&nbsp;if&nbsp;node&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;menu&nbsp;=&nbsp;QMenu(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;action_add&nbsp;=&nbsp;menu.addAction(&quot;Add&nbsp;entity&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;action_delete&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(target_obj,&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;action_delete&nbsp;=&nbsp;menu.addAction(&quot;Delete&nbsp;entity&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;global_pos&nbsp;=&nbsp;self.sceneTree.viewport().mapToGlobal(pos)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;action&nbsp;=&nbsp;menu.exec_(global_pos)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;action&nbsp;==&nbsp;action_add:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._create_entity_from_context(target_obj)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;action&nbsp;==&nbsp;action_delete:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._delete_entity_from_context(target_obj)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_delete_entity_from_context(self,&nbsp;ent:&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(ent,&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_tf&nbsp;=&nbsp;getattr(ent.transform,&nbsp;&quot;parent&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_ent&nbsp;=&nbsp;getattr(parent_tf,&nbsp;&quot;entity&quot;,&nbsp;None)&nbsp;if&nbsp;parent_tf&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(parent_ent,&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_ent&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.inspector&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.set_target(None)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_selection_changed(None)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(self.scene,&nbsp;&quot;remove&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.remove(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.entities.remove(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent.on_removed()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;ValueError:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rebuild_tree_model(select_obj=parent_ent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.viewport_window&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_setup_tree_model(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.setModel(self._tree_model)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.expandAll()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.clicked.connect(self.on_tree_click)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sel_model&nbsp;=&nbsp;self.sceneTree.selectionModel()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;sel_model&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sel_model.currentChanged.connect(self.on_tree_current_changed)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_rebuild_tree_model(self,&nbsp;select_obj=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._tree_model&nbsp;=&nbsp;SceneTreeModel(self.scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._setup_tree_model()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;select_obj&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._select_object_in_tree(select_obj)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_tree_current_changed(self,&nbsp;current,&nbsp;_previous):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;current.isValid():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_tree_click(current)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_create_entity_from_context(self,&nbsp;target_obj):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_transform&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(target_obj,&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_transform&nbsp;=&nbsp;target_obj.transform<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(target_obj,&nbsp;Transform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_transform&nbsp;=&nbsp;target_obj<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;existing&nbsp;=&nbsp;{e.name&nbsp;for&nbsp;e&nbsp;in&nbsp;self.scene.entities}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base&nbsp;=&nbsp;&quot;entity&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;f&quot;{base}{i}&quot;&nbsp;in&nbsp;existing:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;+=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;f&quot;{base}{i}&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=name)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;parent_transform&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent.transform.set_parent(parent_transform)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.add(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rebuild_tree_model(select_obj=ent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.viewport_window&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_init_inspector_widget(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent&nbsp;=&nbsp;self.inspectorContainer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;parent.layout()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;layout&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;QVBoxLayout(parent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent.setLayout(layout)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addWidget(self.inspector)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_fix_splitters(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.topSplitter.setOpaqueResize(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.verticalSplitter.setOpaqueResize(False)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.topSplitter.setCollapsible(0,&nbsp;False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.topSplitter.setCollapsible(1,&nbsp;False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.topSplitter.setCollapsible(2,&nbsp;False)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.verticalSplitter.setCollapsible(0,&nbsp;False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.verticalSplitter.setCollapsible(1,&nbsp;False)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.topSplitter.setSizes([300,&nbsp;1000,&nbsp;300])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.verticalSplitter.setSizes([600,&nbsp;200])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-----------&nbsp;синхронизация&nbsp;с&nbsp;пиками&nbsp;-----------<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mouse_button_event(self,&nbsp;button_type,&nbsp;action,&nbsp;x,&nbsp;y,&nbsp;viewport):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.backends.base&nbsp;import&nbsp;MouseButton<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;button_type&nbsp;==&nbsp;MouseButton.LEFT&nbsp;and&nbsp;action&nbsp;==&nbsp;Action.RELEASE:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_pick_release&nbsp;=&nbsp;(x,&nbsp;y,&nbsp;viewport)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;button_type&nbsp;==&nbsp;MouseButton.LEFT&nbsp;and&nbsp;action&nbsp;==&nbsp;Action.PRESS:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_pick_press&nbsp;=&nbsp;(x,&nbsp;y,&nbsp;viewport)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_after_render(self,&nbsp;window):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._pending_pick_press&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._process_pending_pick_press(self._pending_pick_press,&nbsp;window)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._pending_pick_release&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._process_pending_pick_release(self._pending_pick_release,&nbsp;window)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._pending_hover&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._process_pending_hover(self._pending_hover,&nbsp;window)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_process_pending_hover(self,&nbsp;pending_hover,&nbsp;window):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y,&nbsp;viewport&nbsp;=&nbsp;pending_hover<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_hover&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hovered_ent&nbsp;=&nbsp;window.pick_entity_at(x,&nbsp;y,&nbsp;viewport)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_hover_entity(hovered_ent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_process_pending_pick_release(self,&nbsp;pending_release,&nbsp;window):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y,&nbsp;viewport&nbsp;=&nbsp;pending_release<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_pick_release&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;picked_ent&nbsp;=&nbsp;window.pick_entity_at(x,&nbsp;y,&nbsp;viewport)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;обычный&nbsp;selection&nbsp;(как&nbsp;у&nbsp;тебя&nbsp;было)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;picked_ent&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_selection_changed(picked_ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._select_object_in_tree(picked_ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.set_target(picked_ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_selection_changed(None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.set_target(None)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_is_entity_part_of_gizmo(self,&nbsp;ent:&nbsp;Entity)&nbsp;-&gt;&nbsp;bool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Проверяет,&nbsp;является&nbsp;ли&nbsp;ent&nbsp;частью&nbsp;гизмо&nbsp;(стрелкой,&nbsp;кольцом&nbsp;и&nbsp;т.п.).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ходит&nbsp;вверх&nbsp;по&nbsp;иерархии&nbsp;transform,&nbsp;пока&nbsp;не&nbsp;найдёт&nbsp;gizmo_axis_*&nbsp;или&nbsp;gizmo_rot_*.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;None&nbsp;or&nbsp;self.gizmo&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;ent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;cur&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;cur.name<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;name.startswith(&quot;gizmo_axis_&quot;)&nbsp;or&nbsp;name.startswith(&quot;gizmo_rot_&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;True<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tf&nbsp;=&nbsp;cur.transform<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_tf&nbsp;=&nbsp;tf.parent&nbsp;if&nbsp;tf&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;parent_tf.entity&nbsp;if&nbsp;parent_tf&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_process_pending_pick_press(self,&nbsp;pending_press,&nbsp;window):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y,&nbsp;viewport&nbsp;=&nbsp;pending_press<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_pick_press&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;picked_ent&nbsp;=&nbsp;window.pick_entity_at(x,&nbsp;y,&nbsp;viewport)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_ctrl&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.gizmo&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_ctrl&nbsp;=&nbsp;self.gizmo.find_component(GizmoMoveController)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;сначала&nbsp;проверяем,&nbsp;не&nbsp;гизмо&nbsp;ли&nbsp;это<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;picked_ent&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;gizmo_ctrl&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;picked_ent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;is_gizmo_part&nbsp;=&nbsp;self._is_entity_part_of_gizmo(ent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;is_gizmo_part:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Clicked&nbsp;on&nbsp;gizmo&nbsp;part&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;picked_ent.name&nbsp;or&nbsp;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;Clicked&nbsp;on&nbsp;gizmo&nbsp;part:&nbsp;{name}&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;перемещение&nbsp;по&nbsp;оси<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;name.endswith(&quot;shaft&quot;)&nbsp;or&nbsp;name.endswith(&quot;head&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;name[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_ctrl.start_translate_from_pick(axis,&nbsp;viewport,&nbsp;x,&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;вращение&nbsp;по&nbsp;оси&nbsp;(если&nbsp;уже&nbsp;подключишь&nbsp;кольца)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;name.endswith(&quot;ring&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Starting&nbsp;rotation&nbsp;from&nbsp;pick&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;name[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_ctrl.start_rotate_from_pick(axis,&nbsp;viewport,&nbsp;x,&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_extract_gizmo_hit(self,&nbsp;ent:&nbsp;Entity&nbsp;|&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;(&quot;translate&quot;&nbsp;|&nbsp;&quot;rotate&quot;,&nbsp;axis)&nbsp;если&nbsp;кликнули&nbsp;по&nbsp;части&nbsp;гизмо,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;иначе&nbsp;None.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ходим&nbsp;вверх&nbsp;по&nbsp;иерархии&nbsp;transform,&nbsp;пока&nbsp;не&nbsp;найдём&nbsp;gizmo_axis_*&nbsp;или&nbsp;gizmo_rot_*.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;None&nbsp;or&nbsp;self.gizmo&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;ent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;cur&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;getattr(cur,&nbsp;&quot;name&quot;,&nbsp;&quot;&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;name.startswith(&quot;gizmo_axis_&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;name.removeprefix(&quot;gizmo_axis_&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(&quot;translate&quot;,&nbsp;axis)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;name.startswith(&quot;gizmo_rot_&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;name.removeprefix(&quot;gizmo_rot_&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(&quot;rotate&quot;,&nbsp;axis)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tf&nbsp;=&nbsp;getattr(cur,&nbsp;&quot;transform&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_tf&nbsp;=&nbsp;getattr(tf,&nbsp;&quot;parent&quot;,&nbsp;None)&nbsp;if&nbsp;tf&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;getattr(parent_tf,&nbsp;&quot;entity&quot;,&nbsp;None)&nbsp;if&nbsp;parent_tf&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_update_hover_entity(self,&nbsp;ent:&nbsp;Entity&nbsp;|&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;как&nbsp;и&nbsp;в&nbsp;selection&nbsp;–&nbsp;игнорим&nbsp;невыделяемое&nbsp;(гизмо&nbsp;и&nbsp;т.п.)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;ent.selectable&nbsp;is&nbsp;False:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_id&nbsp;=&nbsp;self.viewport_window._get_pick_id_for_entity(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_id&nbsp;=&nbsp;0<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;new_id&nbsp;==&nbsp;self.hover_entity_id:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;&nbsp;#&nbsp;ничего&nbsp;не&nbsp;поменялось<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.hover_entity_id&nbsp;=&nbsp;new_id<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.viewport_window&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_select_object_in_tree(self,&nbsp;obj):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;model:&nbsp;SceneTreeModel&nbsp;=&nbsp;self.sceneTree.model()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;model.index_for_object(obj)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;idx.isValid():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.setCurrentIndex(idx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sceneTree.scrollTo(idx)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_init_viewport(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_pick_press&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_pick_release&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_hover&nbsp;=&nbsp;None&nbsp;&nbsp;&nbsp;#&nbsp;&lt;-&nbsp;новый&nbsp;буфер&nbsp;для&nbsp;hover-пика<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;self.viewportContainer.layout()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window&nbsp;=&nbsp;self.world.create_window(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width=900,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;height=800,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;title=&quot;viewport&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent=self.viewportContainer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;здесь&nbsp;self.camera&nbsp;уже&nbsp;создана&nbsp;в&nbsp;_ensure_editor_camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport&nbsp;=&nbsp;self.viewport_window.add_viewport(self.scene,&nbsp;self.camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window.set_world_mode(&quot;editor&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window.on_mouse_button_event&nbsp;=&nbsp;self.mouse_button_event<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window.after_render_handler&nbsp;=&nbsp;self._after_render<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window.on_mouse_move_event&nbsp;&nbsp;&nbsp;=&nbsp;self.mouse_moved<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_widget&nbsp;=&nbsp;self.viewport_window.handle.widget<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_widget.setFocusPolicy(Qt.StrongFocus)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_widget.setMinimumSize(50,&nbsp;50)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addWidget(gl_widget)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport.set_render_pipeline(self.make_pipeline())<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mouse_moved(self,&nbsp;x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;viewport):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вызывается&nbsp;Window'ом&nbsp;при&nbsp;каждом&nbsp;движении&nbsp;курсора.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Просто&nbsp;запоминаем,&nbsp;что&nbsp;надо&nbsp;сделать&nbsp;hover-pick&nbsp;после&nbsp;следующего&nbsp;рендера.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_hover&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_hover&nbsp;=&nbsp;(x,&nbsp;y,&nbsp;viewport)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_tree_click(self,&nbsp;index):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node&nbsp;=&nbsp;index.internalPointer()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obj&nbsp;=&nbsp;node.obj<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.set_target(obj)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(obj,&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;obj<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(obj,&nbsp;Transform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;next((e&nbsp;for&nbsp;e&nbsp;in&nbsp;self.scene.entities&nbsp;if&nbsp;e.transform&nbsp;is&nbsp;obj),&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_selection_changed(ent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.viewport_window&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewport_window._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mouse_moved(self,&nbsp;x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;viewport):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вызывается&nbsp;Window'ом&nbsp;при&nbsp;каждом&nbsp;движении&nbsp;курсора.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Просто&nbsp;запоминаем,&nbsp;что&nbsp;надо&nbsp;сделать&nbsp;hover-pick&nbsp;после&nbsp;следующего&nbsp;рендера.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_hover&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_hover&nbsp;=&nbsp;(x,&nbsp;y,&nbsp;viewport)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_selection_changed(self,&nbsp;selected_ent):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;selected_ent&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;selected_ent.selectable&nbsp;is&nbsp;False:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Мы&nbsp;пикнули&nbsp;что-то&nbsp;невыделяемое.&nbsp;Скорее&nbsp;всего&nbsp;гизмо.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.selected_entity_id&nbsp;=&nbsp;self.viewport_window._get_pick_id_for_entity(selected_ent)&nbsp;if&nbsp;selected_ent&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gizmo.find_component(GizmoMoveController).set_target(selected_ent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;make_pipeline(self)&nbsp;-&gt;&nbsp;list[&quot;FramePass&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.framegraph&nbsp;import&nbsp;ColorPass,&nbsp;IdPass,&nbsp;CanvasPass,&nbsp;PresentToScreenPass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.postprocess&nbsp;import&nbsp;PostProcessPass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.posteffects.highlight&nbsp;import&nbsp;HighlightEffect<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;postprocess&nbsp;=&nbsp;PostProcessPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;effects=[],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;input_res=&quot;color&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output_res=&quot;color_pp&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;PostFX&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;passes:&nbsp;list[&quot;FramePass&quot;]&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorPass(input_res=&quot;empty&quot;,&nbsp;output_res=&quot;color&quot;,&nbsp;pass_name=&quot;Color&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IdPass(input_res=&quot;empty_id&quot;,&nbsp;output_res=&quot;id&quot;,&nbsp;pass_name=&quot;Id&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;postprocess,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CanvasPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;src=&quot;color_pp&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dst=&quot;color+ui&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;Canvas&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PresentToScreenPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;input_res=&quot;color+ui&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;Present&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;postprocess.add_effect(HighlightEffect(lambda:&nbsp;self.hover_entity_id,&nbsp;color=(0.3,&nbsp;0.8,&nbsp;1.0,&nbsp;1.0)))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;postprocess.add_effect(HighlightEffect(lambda:&nbsp;self.selected_entity_id,&nbsp;color=(1.0,&nbsp;0.9,&nbsp;0.1,&nbsp;1.0)))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;passes<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

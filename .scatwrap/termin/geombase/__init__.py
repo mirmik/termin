@@ -7,27 +7,27 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 &quot;&quot;&quot;<br>
-Базовые геометрические классы (Geometric Base).<br>
+Базовые&nbsp;геометрические&nbsp;классы&nbsp;(Geometric&nbsp;Base).<br>
 <br>
-Содержит фундаментальные классы для представления геометрии:<br>
-- Pose2 - позы (положение + ориентация) в 2D пространстве<br>
-- Pose3 - позы (положение + ориентация) в 3D пространстве<br>
-- Screw, Screw2, Screw3 - винтовые преобразования<br>
+Содержит&nbsp;фундаментальные&nbsp;классы&nbsp;для&nbsp;представления&nbsp;геометрии:<br>
+-&nbsp;Pose2&nbsp;-&nbsp;позы&nbsp;(положение&nbsp;+&nbsp;ориентация)&nbsp;в&nbsp;2D&nbsp;пространстве<br>
+-&nbsp;Pose3&nbsp;-&nbsp;позы&nbsp;(положение&nbsp;+&nbsp;ориентация)&nbsp;в&nbsp;3D&nbsp;пространстве<br>
+-&nbsp;Screw,&nbsp;Screw2,&nbsp;Screw3&nbsp;-&nbsp;винтовые&nbsp;преобразования<br>
 &quot;&quot;&quot;<br>
 <br>
-from .pose2 import Pose2<br>
-from .pose3 import Pose3<br>
-from .screw import Screw, Screw2, Screw3<br>
-from .aabb import AABB, TransformAABB<br>
+from&nbsp;.pose2&nbsp;import&nbsp;Pose2<br>
+from&nbsp;.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;.screw&nbsp;import&nbsp;Screw,&nbsp;Screw2,&nbsp;Screw3<br>
+from&nbsp;.aabb&nbsp;import&nbsp;AABB,&nbsp;TransformAABB<br>
 <br>
-__all__ = [<br>
-&#9;'Pose2',<br>
-&#9;'Pose3',<br>
-&#9;'Screw',<br>
-&#9;'Screw2',<br>
-&#9;'Screw3',<br>
-&#9;'AABB',<br>
-&#9;'TransformAABB'<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Pose2',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Pose3',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Screw',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Screw2',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Screw3',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'AABB',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'TransformAABB'<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

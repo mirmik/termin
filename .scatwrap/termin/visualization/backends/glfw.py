@@ -6,145 +6,145 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;GLFW-based window backend.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;GLFW-based&nbsp;window&nbsp;backend.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import Callable, Optional<br>
+from&nbsp;typing&nbsp;import&nbsp;Callable,&nbsp;Optional<br>
 <br>
-import glfw<br>
+import&nbsp;glfw<br>
 <br>
-from .base import Action, BackendWindow, Key, MouseButton, WindowBackend<br>
+from&nbsp;.base&nbsp;import&nbsp;Action,&nbsp;BackendWindow,&nbsp;Key,&nbsp;MouseButton,&nbsp;WindowBackend<br>
 <br>
-from OpenGL import GL as gl<br>
-<br>
-<br>
-def _ensure_glfw():<br>
-&#9;if not glfw.init():<br>
-&#9;&#9;raise RuntimeError(&quot;Failed to initialize GLFW&quot;)<br>
+from&nbsp;OpenGL&nbsp;import&nbsp;GL&nbsp;as&nbsp;gl<br>
 <br>
 <br>
-def _translate_mouse_button(button: int) -&gt; MouseButton:<br>
-&#9;mapping = {<br>
-&#9;&#9;glfw.MOUSE_BUTTON_LEFT: MouseButton.LEFT,<br>
-&#9;&#9;glfw.MOUSE_BUTTON_RIGHT: MouseButton.RIGHT,<br>
-&#9;&#9;glfw.MOUSE_BUTTON_MIDDLE: MouseButton.MIDDLE,<br>
-&#9;}<br>
-&#9;return mapping.get(button, MouseButton.LEFT)<br>
+def&nbsp;_ensure_glfw():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;glfw.init():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;Failed&nbsp;to&nbsp;initialize&nbsp;GLFW&quot;)<br>
 <br>
 <br>
-def _translate_action(action: int) -&gt; Action:<br>
-&#9;mapping = {<br>
-&#9;&#9;glfw.PRESS: Action.PRESS,<br>
-&#9;&#9;glfw.RELEASE: Action.RELEASE,<br>
-&#9;&#9;glfw.REPEAT: Action.REPEAT,<br>
-&#9;}<br>
-&#9;return mapping.get(action, Action.RELEASE)<br>
+def&nbsp;_translate_mouse_button(button:&nbsp;int)&nbsp;-&gt;&nbsp;MouseButton:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mapping&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.MOUSE_BUTTON_LEFT:&nbsp;MouseButton.LEFT,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.MOUSE_BUTTON_RIGHT:&nbsp;MouseButton.RIGHT,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.MOUSE_BUTTON_MIDDLE:&nbsp;MouseButton.MIDDLE,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;mapping.get(button,&nbsp;MouseButton.LEFT)<br>
 <br>
 <br>
-def _translate_key(key: int) -&gt; Key:<br>
-&#9;if key == glfw.KEY_ESCAPE:<br>
-&#9;&#9;return Key.ESCAPE<br>
-&#9;if key == glfw.KEY_SPACE:<br>
-&#9;&#9;return Key.SPACE<br>
-&#9;if key &lt; 0:<br>
-&#9;&#9;return Key.UNKNOWN<br>
-&#9;try:<br>
-&#9;&#9;return Key(key)<br>
-&#9;except ValueError:<br>
-&#9;&#9;return Key.UNKNOWN<br>
+def&nbsp;_translate_action(action:&nbsp;int)&nbsp;-&gt;&nbsp;Action:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mapping&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.PRESS:&nbsp;Action.PRESS,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.RELEASE:&nbsp;Action.RELEASE,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.REPEAT:&nbsp;Action.REPEAT,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;mapping.get(action,&nbsp;Action.RELEASE)<br>
 <br>
 <br>
-class GLFWWindowHandle(BackendWindow):<br>
-&#9;def __init__(self, width: int, height: int, title: str, share: Optional[BackendWindow] = None):<br>
-&#9;&#9;_ensure_glfw()<br>
-&#9;&#9;glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)<br>
-&#9;&#9;glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)<br>
-&#9;&#9;glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)<br>
-&#9;&#9;glfw.window_hint(glfw.RESIZABLE, glfw.TRUE)<br>
-<br>
-&#9;&#9;share_handle = share._window if isinstance(share, GLFWWindowHandle) else getattr(share, &quot;_window&quot;, None)<br>
-&#9;&#9;self._window = glfw.create_window(width, height, title, None, share_handle)<br>
-&#9;&#9;if not self._window:<br>
-&#9;&#9;&#9;raise RuntimeError(&quot;Failed to create GLFW window&quot;)<br>
-&#9;&#9;glfw.make_context_current(self._window)<br>
-<br>
-&#9;def close(self):<br>
-&#9;&#9;if self._window:<br>
-&#9;&#9;&#9;glfw.destroy_window(self._window)<br>
-&#9;&#9;&#9;self._window = None<br>
-<br>
-&#9;def should_close(self) -&gt; bool:<br>
-&#9;&#9;return self._window is None or glfw.window_should_close(self._window)<br>
-<br>
-&#9;def make_current(self):<br>
-&#9;&#9;if self._window is not None:<br>
-&#9;&#9;&#9;glfw.make_context_current(self._window)<br>
-<br>
-&#9;def swap_buffers(self):<br>
-&#9;&#9;if self._window is not None:<br>
-&#9;&#9;&#9;glfw.swap_buffers(self._window)<br>
-<br>
-&#9;def framebuffer_size(self):<br>
-&#9;&#9;return glfw.get_framebuffer_size(self._window)<br>
-<br>
-&#9;def window_size(self):<br>
-&#9;&#9;return glfw.get_window_size(self._window)<br>
-<br>
-&#9;def get_cursor_pos(self):<br>
-&#9;&#9;return glfw.get_cursor_pos(self._window)<br>
-<br>
-&#9;def set_should_close(self, flag: bool):<br>
-&#9;&#9;if self._window is not None:<br>
-&#9;&#9;&#9;glfw.set_window_should_close(self._window, flag)<br>
-<br>
-&#9;def set_user_pointer(self, ptr):<br>
-&#9;&#9;glfw.set_window_user_pointer(self._window, ptr)<br>
-<br>
-&#9;def set_framebuffer_size_callback(self, callback: Callable):<br>
-&#9;&#9;glfw.set_framebuffer_size_callback(self._window, lambda *_args: callback(self, *_args[1:]))<br>
-<br>
-&#9;def set_cursor_pos_callback(self, callback: Callable):<br>
-&#9;&#9;def wrapper(_win, x, y):<br>
-&#9;&#9;&#9;callback(self, x, y)<br>
-&#9;&#9;glfw.set_cursor_pos_callback(self._window, wrapper)<br>
-<br>
-&#9;def set_scroll_callback(self, callback: Callable):<br>
-&#9;&#9;def wrapper(_win, xoffset, yoffset):<br>
-&#9;&#9;&#9;callback(self, xoffset, yoffset)<br>
-&#9;&#9;glfw.set_scroll_callback(self._window, wrapper)<br>
-<br>
-&#9;def set_mouse_button_callback(self, callback: Callable):<br>
-&#9;&#9;def wrapper(_win, button, action, mods):<br>
-&#9;&#9;&#9;callback(self, _translate_mouse_button(button), _translate_action(action), mods)<br>
-&#9;&#9;glfw.set_mouse_button_callback(self._window, wrapper)<br>
-<br>
-&#9;def set_key_callback(self, callback: Callable):<br>
-&#9;&#9;def wrapper(_win, key, scancode, action, mods):<br>
-&#9;&#9;&#9;callback(self, _translate_key(key), scancode, _translate_action(action), mods)<br>
-&#9;&#9;glfw.set_key_callback(self._window, wrapper)<br>
-<br>
-&#9;def request_update(self):<br>
-&#9;&#9;# GLFW не имеет встроенного механизма для запроса перерисовки окна,<br>
-&#9;&#9;# обычно это делается в основном цикле приложения.<br>
-&#9;&#9;pass<br>
-<br>
-&#9;def bind_window_framebuffer(self):<br>
-&#9;&#9;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)<br>
+def&nbsp;_translate_key(key:&nbsp;int)&nbsp;-&gt;&nbsp;Key:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;key&nbsp;==&nbsp;glfw.KEY_ESCAPE:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Key.ESCAPE<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;key&nbsp;==&nbsp;glfw.KEY_SPACE:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Key.SPACE<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;key&nbsp;&lt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Key.UNKNOWN<br>
+&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Key(key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;ValueError:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Key.UNKNOWN<br>
 <br>
 <br>
-class GLFWWindowBackend(WindowBackend):<br>
-&#9;def __init__(self):<br>
-&#9;&#9;_ensure_glfw()<br>
+class&nbsp;GLFWWindowHandle(BackendWindow):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;width:&nbsp;int,&nbsp;height:&nbsp;int,&nbsp;title:&nbsp;str,&nbsp;share:&nbsp;Optional[BackendWindow]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_ensure_glfw()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR,&nbsp;3)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.window_hint(glfw.CONTEXT_VERSION_MINOR,&nbsp;3)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.window_hint(glfw.OPENGL_PROFILE,&nbsp;glfw.OPENGL_CORE_PROFILE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.window_hint(glfw.RESIZABLE,&nbsp;glfw.TRUE)<br>
 <br>
-&#9;def create_window(self, width: int, height: int, title: str, share: Optional[BackendWindow] = None) -&gt; GLFWWindowHandle:<br>
-&#9;&#9;return GLFWWindowHandle(width, height, title, share=share)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;share_handle&nbsp;=&nbsp;share._window&nbsp;if&nbsp;isinstance(share,&nbsp;GLFWWindowHandle)&nbsp;else&nbsp;getattr(share,&nbsp;&quot;_window&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._window&nbsp;=&nbsp;glfw.create_window(width,&nbsp;height,&nbsp;title,&nbsp;None,&nbsp;share_handle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;self._window:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;Failed&nbsp;to&nbsp;create&nbsp;GLFW&nbsp;window&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.make_context_current(self._window)<br>
 <br>
-&#9;def poll_events(self):<br>
-&#9;&#9;glfw.poll_events()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;close(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._window:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.destroy_window(self._window)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._window&nbsp;=&nbsp;None<br>
 <br>
-&#9;def terminate(self):<br>
-&#9;&#9;glfw.terminate()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;should_close(self)&nbsp;-&gt;&nbsp;bool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._window&nbsp;is&nbsp;None&nbsp;or&nbsp;glfw.window_should_close(self._window)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;make_current(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._window&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.make_context_current(self._window)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;swap_buffers(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._window&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.swap_buffers(self._window)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;framebuffer_size(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;glfw.get_framebuffer_size(self._window)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;window_size(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;glfw.get_window_size(self._window)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_cursor_pos(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;glfw.get_cursor_pos(self._window)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_should_close(self,&nbsp;flag:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._window&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.set_window_should_close(self._window,&nbsp;flag)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_user_pointer(self,&nbsp;ptr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.set_window_user_pointer(self._window,&nbsp;ptr)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_framebuffer_size_callback(self,&nbsp;callback:&nbsp;Callable):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.set_framebuffer_size_callback(self._window,&nbsp;lambda&nbsp;*_args:&nbsp;callback(self,&nbsp;*_args[1:]))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_cursor_pos_callback(self,&nbsp;callback:&nbsp;Callable):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;wrapper(_win,&nbsp;x,&nbsp;y):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;callback(self,&nbsp;x,&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.set_cursor_pos_callback(self._window,&nbsp;wrapper)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_scroll_callback(self,&nbsp;callback:&nbsp;Callable):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;wrapper(_win,&nbsp;xoffset,&nbsp;yoffset):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;callback(self,&nbsp;xoffset,&nbsp;yoffset)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.set_scroll_callback(self._window,&nbsp;wrapper)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_mouse_button_callback(self,&nbsp;callback:&nbsp;Callable):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;wrapper(_win,&nbsp;button,&nbsp;action,&nbsp;mods):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;callback(self,&nbsp;_translate_mouse_button(button),&nbsp;_translate_action(action),&nbsp;mods)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.set_mouse_button_callback(self._window,&nbsp;wrapper)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_key_callback(self,&nbsp;callback:&nbsp;Callable):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;wrapper(_win,&nbsp;key,&nbsp;scancode,&nbsp;action,&nbsp;mods):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;callback(self,&nbsp;_translate_key(key),&nbsp;scancode,&nbsp;_translate_action(action),&nbsp;mods)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.set_key_callback(self._window,&nbsp;wrapper)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;request_update(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;GLFW&nbsp;не&nbsp;имеет&nbsp;встроенного&nbsp;механизма&nbsp;для&nbsp;запроса&nbsp;перерисовки&nbsp;окна,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;обычно&nbsp;это&nbsp;делается&nbsp;в&nbsp;основном&nbsp;цикле&nbsp;приложения.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind_window_framebuffer(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER,&nbsp;0)<br>
+<br>
+<br>
+class&nbsp;GLFWWindowBackend(WindowBackend):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_ensure_glfw()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_window(self,&nbsp;width:&nbsp;int,&nbsp;height:&nbsp;int,&nbsp;title:&nbsp;str,&nbsp;share:&nbsp;Optional[BackendWindow]&nbsp;=&nbsp;None)&nbsp;-&gt;&nbsp;GLFWWindowHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;GLFWWindowHandle(width,&nbsp;height,&nbsp;title,&nbsp;share=share)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;poll_events(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.poll_events()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;terminate(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glfw.terminate()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

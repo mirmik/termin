@@ -6,44 +6,44 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from dataclasses import dataclass<br>
-from typing import Optional<br>
+from&nbsp;dataclasses&nbsp;import&nbsp;dataclass<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
 <br>
 @dataclass<br>
-class AnimationKeyframe:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Кадр анимации в момент time.<br>
+class&nbsp;AnimationKeyframe:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Кадр&nbsp;анимации&nbsp;в&nbsp;момент&nbsp;time.<br>
 <br>
-&#9;Любое из полей может быть None — тогда этот канал анимацией не затрагивается.<br>
-&#9;translation: np.array shape (3,)<br>
-&#9;rotation:    np.array shape (4,) (кватернион x, y, z, w)<br>
-&#9;scale:       float (uniform-скейл)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;time: float<br>
-&#9;translation: Optional[np.ndarray] = None<br>
-&#9;rotation: Optional[np.ndarray] = None<br>
-&#9;scale: Optional[float] = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Любое&nbsp;из&nbsp;полей&nbsp;может&nbsp;быть&nbsp;None&nbsp;—&nbsp;тогда&nbsp;этот&nbsp;канал&nbsp;анимацией&nbsp;не&nbsp;затрагивается.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;translation:&nbsp;np.array&nbsp;shape&nbsp;(3,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rotation:&nbsp;&nbsp;&nbsp;&nbsp;np.array&nbsp;shape&nbsp;(4,)&nbsp;(кватернион&nbsp;x,&nbsp;y,&nbsp;z,&nbsp;w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scale:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;(uniform-скейл)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;time:&nbsp;float<br>
+&nbsp;&nbsp;&nbsp;&nbsp;translation:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rotation:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scale:&nbsp;Optional[float]&nbsp;=&nbsp;None<br>
 <br>
-&#9;def __post_init__(self):<br>
-&#9;&#9;self.time = float(self.time)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__post_init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.time&nbsp;=&nbsp;float(self.time)<br>
 <br>
-&#9;&#9;if self.translation is not None:<br>
-&#9;&#9;&#9;self.translation = np.asarray(self.translation, dtype=float)<br>
-&#9;&#9;&#9;if self.translation.shape != (3,):<br>
-&#9;&#9;&#9;&#9;raise ValueError(&quot;translation must have shape (3,)&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.translation&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.translation&nbsp;=&nbsp;np.asarray(self.translation,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.translation.shape&nbsp;!=&nbsp;(3,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;translation&nbsp;must&nbsp;have&nbsp;shape&nbsp;(3,)&quot;)<br>
 <br>
-&#9;&#9;if self.rotation is not None:<br>
-&#9;&#9;&#9;self.rotation = np.asarray(self.rotation, dtype=float)<br>
-&#9;&#9;&#9;if self.rotation.shape != (4,):<br>
-&#9;&#9;&#9;&#9;raise ValueError(&quot;rotation (quaternion) must have shape (4,)&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.rotation&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rotation&nbsp;=&nbsp;np.asarray(self.rotation,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.rotation.shape&nbsp;!=&nbsp;(4,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;rotation&nbsp;(quaternion)&nbsp;must&nbsp;have&nbsp;shape&nbsp;(4,)&quot;)<br>
 <br>
-&#9;&#9;if self.scale is not None:<br>
-&#9;&#9;&#9;self.scale = float(self.scale)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.scale&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scale&nbsp;=&nbsp;float(self.scale)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

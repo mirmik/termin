@@ -7,77 +7,77 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-from dataclasses import dataclass, field<br>
-from typing import Optional, Tuple<br>
-from .scene import Scene<br>
-from .camera import CameraComponent<br>
+from&nbsp;dataclasses&nbsp;import&nbsp;dataclass,&nbsp;field<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional,&nbsp;Tuple<br>
+from&nbsp;.scene&nbsp;import&nbsp;Scene<br>
+from&nbsp;.camera&nbsp;import&nbsp;CameraComponent<br>
 <br>
 @dataclass<br>
-class Viewport:<br>
-&#9;scene: Scene<br>
-&#9;camera: CameraComponent<br>
-&#9;window: &quot;Window&quot;<br>
-&#9;rect: Tuple[float, float, float, float] # x, y, width, height in normalized coords (0.0:1.0)<br>
-&#9;canvas: Optional[&quot;Canvas&quot;] = None<br>
-&#9;frame_passes: list[&quot;FramePass&quot;] = field(default_factory=list)<br>
+class&nbsp;Viewport:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene:&nbsp;Scene<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera:&nbsp;CameraComponent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window:&nbsp;&quot;Window&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rect:&nbsp;Tuple[float,&nbsp;float,&nbsp;float,&nbsp;float]&nbsp;#&nbsp;x,&nbsp;y,&nbsp;width,&nbsp;height&nbsp;in&nbsp;normalized&nbsp;coords&nbsp;(0.0:1.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;canvas:&nbsp;Optional[&quot;Canvas&quot;]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;frame_passes:&nbsp;list[&quot;FramePass&quot;]&nbsp;=&nbsp;field(default_factory=list)<br>
 <br>
 <br>
-&#9;def screen_point_to_ray(self, x, y):<br>
-&#9;&#9;# окно → прямоугольник вьюпорта в пикселях<br>
-&#9;&#9;rect = self.window.viewport_rect_to_pixels(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;screen_point_to_ray(self,&nbsp;x,&nbsp;y):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;окно&nbsp;→&nbsp;прямоугольник&nbsp;вьюпорта&nbsp;в&nbsp;пикселях<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rect&nbsp;=&nbsp;self.window.viewport_rect_to_pixels(self)<br>
 <br>
-&#9;&#9;# вызываем камеру<br>
-&#9;&#9;return self.camera.screen_point_to_ray(x, y, viewport_rect=rect)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;вызываем&nbsp;камеру<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.camera.screen_point_to_ray(x,&nbsp;y,&nbsp;viewport_rect=rect)<br>
 <br>
-&#9;def set_render_pipeline(self, passes: list[&quot;FramePass&quot;]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Устанавливает конвейер рендера для этого вьюпорта.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_render_pipeline(self,&nbsp;passes:&nbsp;list[&quot;FramePass&quot;]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Устанавливает&nbsp;конвейер&nbsp;рендера&nbsp;для&nbsp;этого&nbsp;вьюпорта.<br>
 <br>
-&#9;&#9;passes – список FramePass.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.frame_passes = passes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;passes&nbsp;–&nbsp;список&nbsp;FramePass.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.frame_passes&nbsp;=&nbsp;passes<br>
 <br>
-&#9;def find_render_pass(self, pass_name: str) -&gt; Optional[&quot;FramePass&quot;]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Ищет в конвейере рендера пасс с заданным именем.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;find_render_pass(self,&nbsp;pass_name:&nbsp;str)&nbsp;-&gt;&nbsp;Optional[&quot;FramePass&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ищет&nbsp;в&nbsp;конвейере&nbsp;рендера&nbsp;пасс&nbsp;с&nbsp;заданным&nbsp;именем.<br>
 <br>
-&#9;&#9;Возвращает FramePass или None.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;for p in self.frame_passes:<br>
-&#9;&#9;&#9;if p.pass_name == pass_name:<br>
-&#9;&#9;&#9;&#9;return p<br>
-&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;FramePass&nbsp;или&nbsp;None.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;p&nbsp;in&nbsp;self.frame_passes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;p.pass_name&nbsp;==&nbsp;pass_name:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
-&#9;# -------------------------------------------------------------<br>
-&#9;#     ДЕФОЛТНЫЙ ПАЙПЛАЙН ДЛЯ ВЬЮПОРТА<br>
-&#9;# -------------------------------------------------------------<br>
-&#9;@staticmethod<br>
-&#9;def make_default_pipeline() -&gt; list[&quot;FramePass&quot;]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Собирает дефолтный конвейер рендера для этого вьюпорта.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;from .framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass<br>
-&#9;&#9;from .postprocess import PostProcessPass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ДЕФОЛТНЫЙ&nbsp;ПАЙПЛАЙН&nbsp;ДЛЯ&nbsp;ВЬЮПОРТА<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;make_default_pipeline()&nbsp;-&gt;&nbsp;list[&quot;FramePass&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собирает&nbsp;дефолтный&nbsp;конвейер&nbsp;рендера&nbsp;для&nbsp;этого&nbsp;вьюпорта.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.framegraph&nbsp;import&nbsp;ColorPass,&nbsp;IdPass,&nbsp;CanvasPass,&nbsp;PresentToScreenPass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.postprocess&nbsp;import&nbsp;PostProcessPass<br>
 <br>
-&#9;&#9;passes: List[&quot;FramePass&quot;] = [<br>
-&#9;&#9;&#9;ColorPass(input_res=&quot;empty&quot;, output_res=&quot;color&quot;, pass_name=&quot;Color&quot;),<br>
-&#9;&#9;&#9;PostProcessPass(<br>
-&#9;&#9;&#9;&#9;effects=[],  # можно заранее что-то положить сюда<br>
-&#9;&#9;&#9;&#9;input_res=&quot;color&quot;,<br>
-&#9;&#9;&#9;&#9;output_res=&quot;color_pp&quot;,<br>
-&#9;&#9;&#9;&#9;pass_name=&quot;PostFX&quot;,<br>
-&#9;&#9;&#9;),<br>
-&#9;&#9;&#9;CanvasPass(<br>
-&#9;&#9;&#9;&#9;src=&quot;color_pp&quot;,<br>
-&#9;&#9;&#9;&#9;dst=&quot;color+ui&quot;,<br>
-&#9;&#9;&#9;&#9;pass_name=&quot;Canvas&quot;,<br>
-&#9;&#9;&#9;),<br>
-&#9;&#9;&#9;PresentToScreenPass(<br>
-&#9;&#9;&#9;&#9;input_res=&quot;color+ui&quot;,<br>
-&#9;&#9;&#9;&#9;pass_name=&quot;Present&quot;,<br>
-&#9;&#9;&#9;)<br>
-&#9;&#9;]<br>
-&#9;&#9;return passes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;passes:&nbsp;List[&quot;FramePass&quot;]&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorPass(input_res=&quot;empty&quot;,&nbsp;output_res=&quot;color&quot;,&nbsp;pass_name=&quot;Color&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PostProcessPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;effects=[],&nbsp;&nbsp;#&nbsp;можно&nbsp;заранее&nbsp;что-то&nbsp;положить&nbsp;сюда<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;input_res=&quot;color&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output_res=&quot;color_pp&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;PostFX&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CanvasPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;src=&quot;color_pp&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dst=&quot;color+ui&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;Canvas&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PresentToScreenPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;input_res=&quot;color+ui&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;Present&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;passes<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

@@ -6,192 +6,192 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from dataclasses import dataclass, field<br>
-from typing import Dict, Tuple<br>
+from&nbsp;dataclasses&nbsp;import&nbsp;dataclass,&nbsp;field<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;Tuple<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from .shader import ShaderProgram<br>
-from .backends.base import GraphicsBackend, FramebufferHandle, TextureHandle<br>
-from .framegraph import FrameContext, RenderFramePass, blit_fbo_to_fbo<br>
-<br>
-<br>
-class PostEffect:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Базовый интерфейс пост-эффекта.<br>
-<br>
-&#9;По умолчанию:<br>
-&#9;- не требует дополнительных ресурсов (кроме основного color);<br>
-&#9;- получает текущую color-текстуру и словарь extra_textures.<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;name: str = &quot;unnamed_post_effect&quot;<br>
-<br>
-&#9;def required_resources(self) -&gt; set[str]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Какие ресурсы (по именам FrameGraph) нужны этому эффекту,<br>
-&#9;&#9;помимо основного input_res (обычно color).<br>
-<br>
-&#9;&#9;Например:<br>
-&#9;&#9;&#9;{&quot;id&quot;}<br>
-&#9;&#9;&#9;{&quot;id&quot;, &quot;depth&quot;}<br>
-&#9;&#9;и т.п.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return set()<br>
-<br>
-&#9;def draw(<br>
-&#9;&#9;self,<br>
-&#9;&#9;gfx: &quot;GraphicsBackend&quot;,<br>
-&#9;&#9;context_key: int,<br>
-&#9;&#9;color_tex: &quot;TextureHandle&quot;,<br>
-&#9;&#9;extra_textures: dict[str, &quot;TextureHandle&quot;],<br>
-&#9;&#9;size: tuple[int, int],<br>
-&#9;):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;color_tex      – текущая цветовая текстура (что пришло с предыдущего шага).<br>
-&#9;&#9;extra_textures – карта имя_ресурса -&gt; TextureHandle (id, depth, normals...).<br>
-&#9;&#9;size           – (width, height) целевого буфера.<br>
-<br>
-&#9;&#9;Эффект внутри сам:<br>
-&#9;&#9;- биндит нужные текстуры по юнитам;<br>
-&#9;&#9;- включает свой шейдер;<br>
-&#9;&#9;- рисует фуллскрин-квад.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;raise NotImplementedError<br>
+from&nbsp;.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;.backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;FramebufferHandle,&nbsp;TextureHandle<br>
+from&nbsp;.framegraph&nbsp;import&nbsp;FrameContext,&nbsp;RenderFramePass,&nbsp;blit_fbo_to_fbo<br>
 <br>
 <br>
+class&nbsp;PostEffect:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Базовый&nbsp;интерфейс&nbsp;пост-эффекта.<br>
 <br>
-class PostProcessPass(RenderFramePass):<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;effects,<br>
-&#9;&#9;input_res: str,<br>
-&#9;&#9;output_res: str,<br>
-&#9;&#9;pass_name: str = &quot;PostProcess&quot;,<br>
-&#9;):<br>
-&#9;&#9;# нормализуем список эффектов<br>
-&#9;&#9;if not isinstance(effects, (list, tuple)):<br>
-&#9;&#9;&#9;effects = [effects]<br>
-&#9;&#9;self.effects = list(effects)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;не&nbsp;требует&nbsp;дополнительных&nbsp;ресурсов&nbsp;(кроме&nbsp;основного&nbsp;color);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;получает&nbsp;текущую&nbsp;color-текстуру&nbsp;и&nbsp;словарь&nbsp;extra_textures.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;&#9;self.input_res = input_res<br>
-&#9;&#9;self.output_res = output_res<br>
+&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;str&nbsp;=&nbsp;&quot;unnamed_post_effect&quot;<br>
 <br>
-&#9;&#9;# --- динамически собираем reads на основе эффектов ---<br>
-&#9;&#9;reads: set[str] = {input_res}<br>
-&#9;&#9;for eff in self.effects:<br>
-&#9;&#9;&#9;# даём шанс и &quot;старым&quot; объектам, если вдруг не наследуются от PostEffect<br>
-&#9;&#9;&#9;reads |= set(eff.required_resources())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;required_resources(self)&nbsp;-&gt;&nbsp;set[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Какие&nbsp;ресурсы&nbsp;(по&nbsp;именам&nbsp;FrameGraph)&nbsp;нужны&nbsp;этому&nbsp;эффекту,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;помимо&nbsp;основного&nbsp;input_res&nbsp;(обычно&nbsp;color).<br>
 <br>
-&#9;&#9;super().__init__(<br>
-&#9;&#9;&#9;pass_name=pass_name,<br>
-&#9;&#9;&#9;reads=reads,<br>
-&#9;&#9;&#9;writes={output_res},<br>
-&#9;&#9;&#9;inplace=False,<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Например:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&quot;id&quot;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&quot;id&quot;,&nbsp;&quot;depth&quot;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;и&nbsp;т.п.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;set()<br>
 <br>
-&#9;&#9;self._temp_fbos: list[&quot;FramebufferHandle&quot;] = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx:&nbsp;&quot;GraphicsBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context_key:&nbsp;int,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_tex:&nbsp;&quot;TextureHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extra_textures:&nbsp;dict[str,&nbsp;&quot;TextureHandle&quot;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;tuple[int,&nbsp;int],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_tex&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;–&nbsp;текущая&nbsp;цветовая&nbsp;текстура&nbsp;(что&nbsp;пришло&nbsp;с&nbsp;предыдущего&nbsp;шага).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extra_textures&nbsp;–&nbsp;карта&nbsp;имя_ресурса&nbsp;-&gt;&nbsp;TextureHandle&nbsp;(id,&nbsp;depth,&nbsp;normals...).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;–&nbsp;(width,&nbsp;height)&nbsp;целевого&nbsp;буфера.<br>
 <br>
-&#9;def _get_temp_fbo(self, ctx: &quot;FrameContext&quot;, index: int, size: tuple[int, int]):<br>
-&#9;&#9;gfx = ctx.graphics<br>
-&#9;&#9;while len(self._temp_fbos) &lt;= index:<br>
-&#9;&#9;&#9;self._temp_fbos.append(gfx.create_framebuffer(size))<br>
-&#9;&#9;fb = self._temp_fbos[index]<br>
-&#9;&#9;fb.resize(size)<br>
-&#9;&#9;return fb<br>
-<br>
-&#9;def rebuild_reads(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вызывать, если ты поменял self.effects после создания пасса.<br>
-&#9;&#9;Обновляет список ресурсов, которые пасс читает,<br>
-&#9;&#9;чтобы FrameGraph учёл новые зависимости.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;reads: set[str] = {self.input_res}<br>
-&#9;&#9;for eff in self.effects:<br>
-&#9;&#9;&#9;reads |= set(eff.required_resources())<br>
-&#9;&#9;self.reads = reads<br>
-<br>
-&#9;def add_effect(self, effect: PostEffect):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавляет эффект в конец цепочки.<br>
-&#9;&#9;После вызова нужно вызвать rebuild_reads().<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.effects.append(effect)<br>
-&#9;&#9;self.rebuild_reads()<br>
-<br>
-&#9;def execute(self, ctx: &quot;FrameContext&quot;):<br>
-&#9;&#9;gfx      = ctx.graphics<br>
-&#9;&#9;window   = ctx.window<br>
-&#9;&#9;viewport = ctx.viewport<br>
-&#9;&#9;px, py, pw, ph = ctx.rect<br>
-&#9;&#9;key      = ctx.context_key<br>
-<br>
-&#9;&#9;size = (pw, ph)<br>
-<br>
-&#9;&#9;fb_in = ctx.fbos.get(self.input_res)<br>
-&#9;&#9;if fb_in is None:<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;color_tex = fb_in.color_texture()<br>
-<br>
-&#9;&#9;# --- extra textures ---<br>
-&#9;&#9;required_resources: set[str] = set()<br>
-&#9;&#9;for eff in self.effects:<br>
-&#9;&#9;&#9;req = getattr(eff, &quot;required_resources&quot;, None)<br>
-&#9;&#9;&#9;if callable(req):<br>
-&#9;&#9;&#9;&#9;required_resources |= set(req())<br>
-<br>
-&#9;&#9;extra_textures: dict[str, &quot;TextureHandle&quot;] = {}<br>
-&#9;&#9;for res_name in required_resources:<br>
-&#9;&#9;&#9;fb = ctx.fbos.get(res_name)<br>
-&#9;&#9;&#9;if fb is None:<br>
-&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;extra_textures[res_name] = fb.color_texture()<br>
-<br>
-&#9;&#9;fb_out_final = window.get_viewport_fbo(viewport, self.output_res, size)<br>
-&#9;&#9;ctx.fbos[self.output_res] = fb_out_final<br>
-<br>
-&#9;&#9;# --- нет эффектов -&gt; блит и выходим ---<br>
-&#9;&#9;if not self.effects:<br>
-&#9;&#9;&#9;blit_fbo_to_fbo(gfx, fb_in, fb_out_final, size, key)<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;current_tex = color_tex<br>
-<br>
-&#9;&#9;# &lt;&lt;&lt; ВАЖНО: постпроцесс — чисто экранная штука, отключаем глубину &gt;&gt;&gt;<br>
-&#9;&#9;gfx.set_depth_test(False)<br>
-&#9;&#9;gfx.set_depth_mask(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Эффект&nbsp;внутри&nbsp;сам:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;биндит&nbsp;нужные&nbsp;текстуры&nbsp;по&nbsp;юнитам;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;включает&nbsp;свой&nbsp;шейдер;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;рисует&nbsp;фуллскрин-квад.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError<br>
 <br>
 <br>
-&#9;&#9;try:<br>
-&#9;&#9;&#9;if len(self.effects) == 1:<br>
-&#9;&#9;&#9;&#9;effect = self.effects[0]<br>
-&#9;&#9;&#9;&#9;gfx.bind_framebuffer(fb_out_final)<br>
-&#9;&#9;&#9;&#9;gfx.set_viewport(0, 0, pw, ph)<br>
-&#9;&#9;&#9;&#9;effect.draw(gfx, key, current_tex, extra_textures, size)<br>
-&#9;&#9;&#9;&#9;return<br>
 <br>
-&#9;&#9;&#9;# несколько эффектов — пинг-понг<br>
-&#9;&#9;&#9;for i, effect in enumerate(self.effects):<br>
-&#9;&#9;&#9;&#9;is_last = (i == len(self.effects) - 1)<br>
+class&nbsp;PostProcessPass(RenderFramePass):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;effects,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;input_res:&nbsp;str,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output_res:&nbsp;str,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name:&nbsp;str&nbsp;=&nbsp;&quot;PostProcess&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;нормализуем&nbsp;список&nbsp;эффектов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(effects,&nbsp;(list,&nbsp;tuple)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;effects&nbsp;=&nbsp;[effects]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.effects&nbsp;=&nbsp;list(effects)<br>
 <br>
-&#9;&#9;&#9;&#9;if is_last:<br>
-&#9;&#9;&#9;&#9;&#9;fb_target = fb_out_final<br>
-&#9;&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;&#9;fb_target = self._get_temp_fbo(ctx, i % 2, size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.input_res&nbsp;=&nbsp;input_res<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output_res&nbsp;=&nbsp;output_res<br>
 <br>
-&#9;&#9;&#9;&#9;gfx.bind_framebuffer(fb_target)<br>
-&#9;&#9;&#9;&#9;gfx.set_viewport(0, 0, pw, ph)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;динамически&nbsp;собираем&nbsp;reads&nbsp;на&nbsp;основе&nbsp;эффектов&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads:&nbsp;set[str]&nbsp;=&nbsp;{input_res}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;eff&nbsp;in&nbsp;self.effects:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;даём&nbsp;шанс&nbsp;и&nbsp;&quot;старым&quot;&nbsp;объектам,&nbsp;если&nbsp;вдруг&nbsp;не&nbsp;наследуются&nbsp;от&nbsp;PostEffect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads&nbsp;|=&nbsp;set(eff.required_resources())<br>
 <br>
-&#9;&#9;&#9;&#9;effect.draw(gfx, key, current_tex, extra_textures, size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads=reads,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes={output_res},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=False,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;&#9;&#9;&#9;current_tex = fb_target.color_texture()<br>
-&#9;&#9;finally:<br>
-&#9;&#9;&#9;# восстанавливаем &quot;нормальное&quot; состояние для последующих пассов<br>
-&#9;&#9;&#9;gfx.set_depth_test(True)<br>
-&#9;&#9;&#9;gfx.set_depth_mask(True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._temp_fbos:&nbsp;list[&quot;FramebufferHandle&quot;]&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_get_temp_fbo(self,&nbsp;ctx:&nbsp;&quot;FrameContext&quot;,&nbsp;index:&nbsp;int,&nbsp;size:&nbsp;tuple[int,&nbsp;int]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;=&nbsp;ctx.graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;len(self._temp_fbos)&nbsp;&lt;=&nbsp;index:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._temp_fbos.append(gfx.create_framebuffer(size))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb&nbsp;=&nbsp;self._temp_fbos[index]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb.resize(size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;fb<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rebuild_reads(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вызывать,&nbsp;если&nbsp;ты&nbsp;поменял&nbsp;self.effects&nbsp;после&nbsp;создания&nbsp;пасса.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Обновляет&nbsp;список&nbsp;ресурсов,&nbsp;которые&nbsp;пасс&nbsp;читает,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;чтобы&nbsp;FrameGraph&nbsp;учёл&nbsp;новые&nbsp;зависимости.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads:&nbsp;set[str]&nbsp;=&nbsp;{self.input_res}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;eff&nbsp;in&nbsp;self.effects:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads&nbsp;|=&nbsp;set(eff.required_resources())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.reads&nbsp;=&nbsp;reads<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_effect(self,&nbsp;effect:&nbsp;PostEffect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавляет&nbsp;эффект&nbsp;в&nbsp;конец&nbsp;цепочки.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;После&nbsp;вызова&nbsp;нужно&nbsp;вызвать&nbsp;rebuild_reads().<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.effects.append(effect)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rebuild_reads()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(self,&nbsp;ctx:&nbsp;&quot;FrameContext&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;ctx.graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;&nbsp;&nbsp;=&nbsp;ctx.window<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;ctx.viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;ctx.rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;ctx.context_key<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size&nbsp;=&nbsp;(pw,&nbsp;ph)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_in&nbsp;=&nbsp;ctx.fbos.get(self.input_res)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fb_in&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_tex&nbsp;=&nbsp;fb_in.color_texture()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;extra&nbsp;textures&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;required_resources:&nbsp;set[str]&nbsp;=&nbsp;set()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;eff&nbsp;in&nbsp;self.effects:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;req&nbsp;=&nbsp;getattr(eff,&nbsp;&quot;required_resources&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;callable(req):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;required_resources&nbsp;|=&nbsp;set(req())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extra_textures:&nbsp;dict[str,&nbsp;&quot;TextureHandle&quot;]&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;res_name&nbsp;in&nbsp;required_resources:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb&nbsp;=&nbsp;ctx.fbos.get(res_name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fb&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extra_textures[res_name]&nbsp;=&nbsp;fb.color_texture()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_out_final&nbsp;=&nbsp;window.get_viewport_fbo(viewport,&nbsp;self.output_res,&nbsp;size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctx.fbos[self.output_res]&nbsp;=&nbsp;fb_out_final<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;нет&nbsp;эффектов&nbsp;-&gt;&nbsp;блит&nbsp;и&nbsp;выходим&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;self.effects:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blit_fbo_to_fbo(gfx,&nbsp;fb_in,&nbsp;fb_out_final,&nbsp;size,&nbsp;key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current_tex&nbsp;=&nbsp;color_tex<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&lt;&lt;&lt;&nbsp;ВАЖНО:&nbsp;постпроцесс&nbsp;—&nbsp;чисто&nbsp;экранная&nbsp;штука,&nbsp;отключаем&nbsp;глубину&nbsp;&gt;&gt;&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_test(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_mask(False)<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(self.effects)&nbsp;==&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;effect&nbsp;=&nbsp;self.effects[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.bind_framebuffer(fb_out_final)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_viewport(0,&nbsp;0,&nbsp;pw,&nbsp;ph)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;effect.draw(gfx,&nbsp;key,&nbsp;current_tex,&nbsp;extra_textures,&nbsp;size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;несколько&nbsp;эффектов&nbsp;—&nbsp;пинг-понг<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;effect&nbsp;in&nbsp;enumerate(self.effects):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;is_last&nbsp;=&nbsp;(i&nbsp;==&nbsp;len(self.effects)&nbsp;-&nbsp;1)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;is_last:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_target&nbsp;=&nbsp;fb_out_final<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_target&nbsp;=&nbsp;self._get_temp_fbo(ctx,&nbsp;i&nbsp;%&nbsp;2,&nbsp;size)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.bind_framebuffer(fb_target)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_viewport(0,&nbsp;0,&nbsp;pw,&nbsp;ph)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;effect.draw(gfx,&nbsp;key,&nbsp;current_tex,&nbsp;extra_textures,&nbsp;size)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current_tex&nbsp;=&nbsp;fb_target.color_texture()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;восстанавливаем&nbsp;&quot;нормальное&quot;&nbsp;состояние&nbsp;для&nbsp;последующих&nbsp;пассов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_test(True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_mask(True)<br>
 <br>
 <!-- END SCAT CODE -->
 </body>

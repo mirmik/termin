@@ -7,34 +7,34 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 &quot;&quot;&quot;<br>
-Модуль кинематики и трансформаций.<br>
+Модуль&nbsp;кинематики&nbsp;и&nbsp;трансформаций.<br>
 <br>
-Содержит классы для работы с:<br>
-- Трансформациями (Transform, Transform3)<br>
-- Кинематическими преобразованиями (Rotator3, Actuator3)<br>
-- Кинематическими цепями (KinematicChain3)<br>
+Содержит&nbsp;классы&nbsp;для&nbsp;работы&nbsp;с:<br>
+-&nbsp;Трансформациями&nbsp;(Transform,&nbsp;Transform3)<br>
+-&nbsp;Кинематическими&nbsp;преобразованиями&nbsp;(Rotator3,&nbsp;Actuator3)<br>
+-&nbsp;Кинематическими&nbsp;цепями&nbsp;(KinematicChain3)<br>
 &quot;&quot;&quot;<br>
 <br>
-from .transform import Transform, Transform3<br>
-from .kinematic import (<br>
-&#9;KinematicTransform3,<br>
-&#9;KinematicTransform3OneScrew,<br>
-&#9;Rotator3,<br>
-&#9;Actuator3<br>
+from&nbsp;.transform&nbsp;import&nbsp;Transform,&nbsp;Transform3<br>
+from&nbsp;.kinematic&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;KinematicTransform3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;KinematicTransform3OneScrew,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Rotator3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Actuator3<br>
 )<br>
-from .kinchain import KinematicChain3<br>
-from .conditions import SymCondition, ConditionCollection<br>
+from&nbsp;.kinchain&nbsp;import&nbsp;KinematicChain3<br>
+from&nbsp;.conditions&nbsp;import&nbsp;SymCondition,&nbsp;ConditionCollection<br>
 <br>
-__all__ = [<br>
-&#9;'Transform',<br>
-&#9;'Transform3',<br>
-&#9;'KinematicTransform3',<br>
-&#9;'KinematicTransform3OneScrew',<br>
-&#9;'Rotator3',<br>
-&#9;'Actuator3',<br>
-&#9;'KinematicChain3',<br>
-&#9;'SymCondition',<br>
-&#9;'ConditionCollection'<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Transform',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Transform3',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'KinematicTransform3',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'KinematicTransform3OneScrew',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Rotator3',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Actuator3',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'KinematicChain3',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'SymCondition',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'ConditionCollection'<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

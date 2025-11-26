@@ -6,148 +6,148 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Keyframed animation demo: translation + rotation + scale.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Keyframed&nbsp;animation&nbsp;demo:&nbsp;translation&nbsp;+&nbsp;rotation&nbsp;+&nbsp;scale.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.mesh.mesh import CubeMesh<br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;MeshDrawable,<br>
-&#9;Scene,<br>
-&#9;Material,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;CubeMesh<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from termin.visualization.components import MeshRenderer<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
-from termin.visualization.animation import (<br>
-&#9;AnimationChannel,<br>
-&#9;AnimationClip,<br>
-&#9;AnimationPlayer,<br>
-&#9;AnimationKeyframe,<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.animation&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;AnimationChannel,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;AnimationClip,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;AnimationPlayer,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe,<br>
 )<br>
 <br>
 <br>
-VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location = 0) in vec3 a_position;<br>
-layout(location = 1) in vec3 a_normal;<br>
+VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_normal;<br>
+out&nbsp;vec3&nbsp;v_normal;<br>
 <br>
-void main() {<br>
-&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-&#9;gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-in vec3 v_normal;<br>
+FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
 <br>
-uniform vec4 u_color;<br>
-uniform vec3 u_light_dir;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
+uniform&nbsp;vec3&nbsp;u_light_dir;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;vec3 N = normalize(v_normal);<br>
-&#9;float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);<br>
-&#9;vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);<br>
-&#9;FragColor = vec4(color, u_color.a);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;N&nbsp;=&nbsp;normalize(v_normal);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(N,&nbsp;-normalize(u_light_dir)),&nbsp;0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;color&nbsp;=&nbsp;u_color.rgb&nbsp;*&nbsp;(0.2&nbsp;+&nbsp;0.8&nbsp;*&nbsp;ndotl);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(color,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-def build_scene(world: VisualizationWorld):<br>
-&#9;mesh = MeshDrawable(CubeMesh(size=1.0))<br>
-&#9;shader = ShaderProgram(VERT, FRAG)<br>
-&#9;material = Material(<br>
-&#9;&#9;shader=shader,<br>
-&#9;&#9;color=np.array([0.4, 0.9, 0.4, 1.0], dtype=np.float32),<br>
-&#9;)<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;MeshDrawable(CubeMesh(size=1.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;ShaderProgram(VERT,&nbsp;FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;Material(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader=shader,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=np.array([0.4,&nbsp;0.9,&nbsp;0.4,&nbsp;1.0],&nbsp;dtype=np.float32),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;cube = Entity(pose=Pose3.identity(), name=&quot;animated_cube&quot;)<br>
-&#9;cube.add_component(MeshRenderer(mesh, material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;animated_cube&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube.add_component(MeshRenderer(mesh,&nbsp;material))<br>
 <br>
-&#9;# ============<br>
-&#9;# Keyframes<br>
-&#9;# ============<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;============<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Keyframes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;============<br>
 <br>
-&#9;# движение по &quot;квадрату&quot;<br>
-&#9;trs_keys = [<br>
-&#9;&#9;AnimationKeyframe(0.0, translation=np.array([1.5, 0.0, 0.0])),<br>
-&#9;&#9;AnimationKeyframe(1.0, translation=np.array([0.0, 1.5, 0.0])),<br>
-&#9;&#9;AnimationKeyframe(2.0, translation=np.array([-1.5, 0.0, 0.0])),<br>
-&#9;&#9;AnimationKeyframe(3.0, translation=np.array([0.0, -1.5, 0.0])),<br>
-&#9;&#9;AnimationKeyframe(4.0, translation=np.array([1.5, 0.0, 0.0])),<br>
-&#9;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;движение&nbsp;по&nbsp;&quot;квадрату&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;trs_keys&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(0.0,&nbsp;translation=np.array([1.5,&nbsp;0.0,&nbsp;0.0])),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(1.0,&nbsp;translation=np.array([0.0,&nbsp;1.5,&nbsp;0.0])),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(2.0,&nbsp;translation=np.array([-1.5,&nbsp;0.0,&nbsp;0.0])),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(3.0,&nbsp;translation=np.array([0.0,&nbsp;-1.5,&nbsp;0.0])),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(4.0,&nbsp;translation=np.array([1.5,&nbsp;0.0,&nbsp;0.0])),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;]<br>
 <br>
-&#9;# полный оборот вокруг Y за 4 секунды<br>
-&#9;rot_keys = [<br>
-&#9;&#9;AnimationKeyframe(0.0, rotation=Pose3.rotateY(0.0).ang),<br>
-&#9;&#9;AnimationKeyframe(1.0, rotation=Pose3.rotateY(np.pi/2).ang),<br>
-&#9;&#9;AnimationKeyframe(2.0, rotation=Pose3.rotateY(np.pi).ang),<br>
-&#9;&#9;AnimationKeyframe(3.0, rotation=Pose3.rotateY(1.5 * np.pi).ang),<br>
-&#9;&#9;AnimationKeyframe(4.0, rotation=Pose3.rotateY(2.0 * np.pi).ang),<br>
-&#9;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;полный&nbsp;оборот&nbsp;вокруг&nbsp;Y&nbsp;за&nbsp;4&nbsp;секунды<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rot_keys&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(0.0,&nbsp;rotation=Pose3.rotateY(0.0).ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(1.0,&nbsp;rotation=Pose3.rotateY(np.pi/2).ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(2.0,&nbsp;rotation=Pose3.rotateY(np.pi).ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(3.0,&nbsp;rotation=Pose3.rotateY(1.5&nbsp;*&nbsp;np.pi).ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(4.0,&nbsp;rotation=Pose3.rotateY(2.0&nbsp;*&nbsp;np.pi).ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;]<br>
 <br>
-&#9;# пульсация масштаба<br>
-&#9;scale_keys = [<br>
-&#9;&#9;AnimationKeyframe(0.0, scale=1.0),<br>
-&#9;&#9;AnimationKeyframe(1.0, scale=1.5),<br>
-&#9;&#9;AnimationKeyframe(2.0, scale=1.0),<br>
-&#9;&#9;AnimationKeyframe(3.0, scale=0.7),<br>
-&#9;&#9;AnimationKeyframe(4.0, scale=1.0),<br>
-&#9;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;пульсация&nbsp;масштаба<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scale_keys&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(0.0,&nbsp;scale=1.0),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(1.0,&nbsp;scale=1.5),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(2.0,&nbsp;scale=1.0),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(3.0,&nbsp;scale=0.7),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AnimationKeyframe(4.0,&nbsp;scale=1.0),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;]<br>
 <br>
-&#9;clip = AnimationClip(<br>
-&#9;&#9;&quot;move_rotate_scale&quot;,<br>
-&#9;&#9;tps = 1.0,  # тики в секунду<br>
-&#9;&#9;channels={<br>
-&#9;&#9;&#9;&quot;clip&quot; :AnimationChannel(translation_keys=trs_keys, rotation_keys=rot_keys, scale_keys=scale_keys)<br>
-&#9;&#9;},<br>
-&#9;&#9;loop=True,<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;clip&nbsp;=&nbsp;AnimationClip(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;move_rotate_scale&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tps&nbsp;=&nbsp;1.0,&nbsp;&nbsp;#&nbsp;тики&nbsp;в&nbsp;секунду<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;channels={<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;clip&quot;&nbsp;:AnimationChannel(translation_keys=trs_keys,&nbsp;rotation_keys=rot_keys,&nbsp;scale_keys=scale_keys)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop=True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;player = cube.add_component(AnimationPlayer())<br>
-&#9;player.add_clip(clip)<br>
-&#9;player.play(&quot;move_rotate_scale&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;player&nbsp;=&nbsp;cube.add_component(AnimationPlayer())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;player.add_clip(clip)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;player.play(&quot;move_rotate_scale&quot;)<br>
 <br>
-&#9;scene = Scene()<br>
-&#9;scene.add(cube)<br>
-&#9;scene.add(SkyBoxEntity())<br>
-&#9;world.add_scene(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(cube)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(SkyBoxEntity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
-&#9;cam_entity = Entity(name=&quot;camera&quot;)<br>
-&#9;cam = PerspectiveCameraComponent()<br>
-&#9;cam_entity.add_component(cam)<br>
-&#9;cam_entity.add_component(OrbitCameraController(radius=6.0, elevation=30.0))<br>
-&#9;scene.add(cam_entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_entity.add_component(cam)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_entity.add_component(OrbitCameraController(radius=6.0,&nbsp;elevation=30.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(cam_entity)<br>
 <br>
-&#9;return scene, cam<br>
-<br>
-<br>
-def main():<br>
-&#9;world = VisualizationWorld()<br>
-&#9;scene, cam = build_scene(world)<br>
-&#9;window = world.create_window(title=&quot;termin keyframed cube&quot;)<br>
-&#9;window.add_viewport(scene, cam)<br>
-&#9;world.run()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;cam<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;cam&nbsp;=&nbsp;build_scene(world)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;world.create_window(title=&quot;termin&nbsp;keyframed&nbsp;cube&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;cam)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

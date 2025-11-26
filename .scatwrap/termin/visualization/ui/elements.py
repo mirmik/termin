@@ -6,254 +6,254 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from __future__ import annotations<br>
-from dataclasses import dataclass<br>
-from typing import Tuple<br>
-import numpy as np<br>
-from ..material import Material<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+from&nbsp;dataclasses&nbsp;import&nbsp;dataclass<br>
+from&nbsp;typing&nbsp;import&nbsp;Tuple<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;..material&nbsp;import&nbsp;Material<br>
 <br>
-IDENTITY = np.identity(4, dtype=np.float32)<br>
-<br>
-<br>
-<br>
-class UIElement:<br>
-&#9;&quot;&quot;&quot;Base UI element rendered inside a canvas.&quot;&quot;&quot;<br>
-<br>
-&#9;material: Material | None = None<br>
-<br>
-&#9;def draw(self, canvas, graphics, context_key: int, viewport_rect: Tuple[int, int, int, int]):<br>
-&#9;&#9;raise NotImplementedError<br>
-<br>
-&#9;def _require_material(self) -&gt; Material:<br>
-&#9;&#9;if self.material is None:<br>
-&#9;&#9;&#9;raise RuntimeError(f&quot;{self.__class__.__name__} has no material assigned.&quot;)<br>
-&#9;&#9;return self.material<br>
-&#9;<br>
-&#9;def contains(self, nx: float, ny: float) -&gt; bool:<br>
-&#9;&#9;return False<br>
-&#9;<br>
-&#9;def on_mouse_down(self, x: float, y: float, viewport_rect):<br>
-&#9;&#9;pass<br>
-<br>
-&#9;def on_mouse_move(self, x: float, y: float, viewport_rect):<br>
-&#9;&#9;pass<br>
-<br>
-&#9;def on_mouse_up(self, x: float, y: float, viewport_rect):<br>
-&#9;&#9;pass  <br>
+IDENTITY&nbsp;=&nbsp;np.identity(4,&nbsp;dtype=np.float32)<br>
 <br>
 <br>
-@dataclass<br>
-class UIRectangle(UIElement):<br>
-&#9;&quot;&quot;&quot;Axis-aligned rectangle defined in normalized viewport coordinates.&quot;&quot;&quot;<br>
 <br>
-&#9;position: Tuple[float, float]<br>
-&#9;size: Tuple[float, float]<br>
-&#9;color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)<br>
-&#9;material: Material | None = None<br>
+class&nbsp;UIElement:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Base&nbsp;UI&nbsp;element&nbsp;rendered&nbsp;inside&nbsp;a&nbsp;canvas.&quot;&quot;&quot;<br>
 <br>
-&#9;def _to_clip_vertices(self) -&gt; np.ndarray:<br>
-&#9;&#9;x, y = self.position<br>
-&#9;&#9;w, h = self.size<br>
-&#9;&#9;left = x * 2.0 - 1.0<br>
-&#9;&#9;right = (x + w) * 2.0 - 1.0<br>
-&#9;&#9;top = 1.0 - y * 2.0<br>
-&#9;&#9;bottom = 1.0 - (y + h) * 2.0<br>
-&#9;&#9;return np.array(<br>
-&#9;&#9;&#9;[<br>
-&#9;&#9;&#9;&#9;[left, top],<br>
-&#9;&#9;&#9;&#9;[right, top],<br>
-&#9;&#9;&#9;&#9;[left, bottom],<br>
-&#9;&#9;&#9;&#9;[right, bottom],<br>
-&#9;&#9;&#9;],<br>
-&#9;&#9;&#9;dtype=np.float32,<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material:&nbsp;Material&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
-&#9;def contains(self, nx: float, ny: float) -&gt; bool:<br>
-&#9;&#9;x, y = self.position<br>
-&#9;&#9;w, h = self.size<br>
-&#9;&#9;return x &lt;= nx &lt;= x + w and y &lt;= ny &lt;= y + h<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;canvas,&nbsp;graphics,&nbsp;context_key:&nbsp;int,&nbsp;viewport_rect:&nbsp;Tuple[int,&nbsp;int,&nbsp;int,&nbsp;int]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError<br>
 <br>
-&#9;def draw(self, canvas, graphics, context_key: int, viewport_rect: Tuple[int, int, int, int]):<br>
-&#9;&#9;material = self._require_material()<br>
-&#9;&#9;material.apply(IDENTITY, IDENTITY, IDENTITY, graphics=graphics, context_key=context_key)<br>
-&#9;&#9;vertices = self._to_clip_vertices()<br>
-&#9;&#9;shader = material.shader<br>
-&#9;&#9;shader.set_uniform_vec4(&quot;u_color&quot;, np.array(self.color, dtype=np.float32))<br>
-&#9;&#9;shader.set_uniform_int(&quot;u_use_texture&quot;, 0)<br>
-&#9;&#9;canvas.draw_vertices(graphics, context_key, vertices)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_require_material(self)&nbsp;-&gt;&nbsp;Material:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.material&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(f&quot;{self.__class__.__name__}&nbsp;has&nbsp;no&nbsp;material&nbsp;assigned.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contains(self,&nbsp;nx:&nbsp;float,&nbsp;ny:&nbsp;float)&nbsp;-&gt;&nbsp;bool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_down(self,&nbsp;x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;viewport_rect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_move(self,&nbsp;x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;viewport_rect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_up(self,&nbsp;x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;viewport_rect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass&nbsp;&nbsp;<br>
 <br>
 <br>
 @dataclass<br>
-class UIText(UIElement):<br>
-&#9;text: str<br>
-&#9;position: tuple[float, float]<br>
-&#9;color: tuple[float, float, float, float] = (1, 1, 1, 1)<br>
-&#9;scale: float = 1.0<br>
-&#9;material: Material | None = None<br>
+class&nbsp;UIRectangle(UIElement):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Axis-aligned&nbsp;rectangle&nbsp;defined&nbsp;in&nbsp;normalized&nbsp;viewport&nbsp;coordinates.&quot;&quot;&quot;<br>
 <br>
-&#9;def draw(self, canvas, graphics, context_key, viewport):<br>
-&#9;&#9;if not hasattr(canvas, &quot;font&quot;):<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;material = self._require_material()<br>
-&#9;&#9;material.apply(IDENTITY, IDENTITY, IDENTITY, graphics=graphics, context_key=context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;position:&nbsp;Tuple[float,&nbsp;float]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;Tuple[float,&nbsp;float]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;color:&nbsp;Tuple[float,&nbsp;float,&nbsp;float,&nbsp;float]&nbsp;=&nbsp;(1.0,&nbsp;1.0,&nbsp;1.0,&nbsp;1.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material:&nbsp;Material&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
-&#9;&#9;shader = material.shader<br>
-&#9;&#9;shader.set_uniform_vec4(&quot;u_color&quot;, np.array(self.color, dtype=np.float32))<br>
-&#9;&#9;shader.set_uniform_int(&quot;u_use_texture&quot;, 1)<br>
-&#9;&#9;texture_handle = canvas.font.ensure_texture(graphics, context_key=context_key)<br>
-&#9;&#9;texture_handle.bind(0)<br>
-&#9;&#9;shader.set_uniform_int(&quot;u_texture&quot;, 0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_to_clip_vertices(self)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y&nbsp;=&nbsp;self.position<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;self.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;left&nbsp;=&nbsp;x&nbsp;*&nbsp;2.0&nbsp;-&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;right&nbsp;=&nbsp;(x&nbsp;+&nbsp;w)&nbsp;*&nbsp;2.0&nbsp;-&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;top&nbsp;=&nbsp;1.0&nbsp;-&nbsp;y&nbsp;*&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bottom&nbsp;=&nbsp;1.0&nbsp;-&nbsp;(y&nbsp;+&nbsp;h)&nbsp;*&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[left,&nbsp;top],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[right,&nbsp;top],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[left,&nbsp;bottom],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[right,&nbsp;bottom],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dtype=np.float32,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;&#9;x, y = self.position<br>
-&#9;&#9;px, py, pw, ph = viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contains(self,&nbsp;nx:&nbsp;float,&nbsp;ny:&nbsp;float)&nbsp;-&gt;&nbsp;bool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y&nbsp;=&nbsp;self.position<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;self.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;x&nbsp;&lt;=&nbsp;nx&nbsp;&lt;=&nbsp;x&nbsp;+&nbsp;w&nbsp;and&nbsp;y&nbsp;&lt;=&nbsp;ny&nbsp;&lt;=&nbsp;y&nbsp;+&nbsp;h<br>
 <br>
-&#9;&#9;cx = x<br>
-&#9;&#9;cy = y<br>
-<br>
-&#9;&#9;for ch in self.text:<br>
-&#9;&#9;&#9;if ch not in canvas.font.glyphs:<br>
-&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;glyph = canvas.font.glyphs[ch]<br>
-&#9;&#9;&#9;w, h = glyph[&quot;size&quot;]<br>
-&#9;&#9;&#9;u0, v0, u1, v1 = glyph[&quot;uv&quot;]<br>
-<br>
-&#9;&#9;&#9;sx = w * self.scale / pw * 2<br>
-&#9;&#9;&#9;sy = h * self.scale / ph * 2<br>
-<br>
-&#9;&#9;&#9;vx0 = cx * 2 - 1<br>
-&#9;&#9;&#9;vy0 = 1 - cy * 2<br>
-&#9;&#9;&#9;vx1 = (cx + w * self.scale / pw) * 2 - 1<br>
-&#9;&#9;&#9;vy1 = 1 - (cy + h * self.scale / ph) * 2<br>
-<br>
-&#9;&#9;&#9;vertices = np.array([<br>
-&#9;&#9;&#9;&#9;[vx0, vy0, u0, v0],<br>
-&#9;&#9;&#9;&#9;[vx1, vy0, u1, v0],<br>
-&#9;&#9;&#9;&#9;[vx0, vy1, u0, v1],<br>
-&#9;&#9;&#9;&#9;[vx1, vy1, u1, v1],<br>
-&#9;&#9;&#9;], dtype=np.float32)<br>
-<br>
-&#9;&#9;&#9;canvas.draw_textured_quad(graphics, context_key, vertices)<br>
-<br>
-&#9;&#9;&#9;cx += (w * self.scale) / pw<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;canvas,&nbsp;graphics,&nbsp;context_key:&nbsp;int,&nbsp;viewport_rect:&nbsp;Tuple[int,&nbsp;int,&nbsp;int,&nbsp;int]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;self._require_material()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material.apply(IDENTITY,&nbsp;IDENTITY,&nbsp;IDENTITY,&nbsp;graphics=graphics,&nbsp;context_key=context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;self._to_clip_vertices()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;material.shader<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec4(&quot;u_color&quot;,&nbsp;np.array(self.color,&nbsp;dtype=np.float32))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_use_texture&quot;,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.draw_vertices(graphics,&nbsp;context_key,&nbsp;vertices)<br>
 <br>
 <br>
 @dataclass<br>
-class UIButton(UIElement):<br>
-&#9;position: tuple[float, float]<br>
-&#9;size: tuple[float, float]<br>
-&#9;text: str<br>
-&#9;on_click: callable | None = None<br>
+class&nbsp;UIText(UIElement):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;text:&nbsp;str<br>
+&nbsp;&nbsp;&nbsp;&nbsp;position:&nbsp;tuple[float,&nbsp;float]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;color:&nbsp;tuple[float,&nbsp;float,&nbsp;float,&nbsp;float]&nbsp;=&nbsp;(1,&nbsp;1,&nbsp;1,&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scale:&nbsp;float&nbsp;=&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material:&nbsp;Material&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
-&#9;material: Material | None = None          # фон<br>
-&#9;text_material: Material | None = None     # текст<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;canvas,&nbsp;graphics,&nbsp;context_key,&nbsp;viewport):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;hasattr(canvas,&nbsp;&quot;font&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;self._require_material()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material.apply(IDENTITY,&nbsp;IDENTITY,&nbsp;IDENTITY,&nbsp;graphics=graphics,&nbsp;context_key=context_key)<br>
 <br>
-&#9;background_color: tuple = (0.2, 0.2, 0.25, 1.0)<br>
-&#9;text_color: tuple = (1, 1, 1, 1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;material.shader<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec4(&quot;u_color&quot;,&nbsp;np.array(self.color,&nbsp;dtype=np.float32))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_use_texture&quot;,&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;texture_handle&nbsp;=&nbsp;canvas.font.ensure_texture(graphics,&nbsp;context_key=context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;texture_handle.bind(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_texture&quot;,&nbsp;0)<br>
 <br>
-&#9;def __post_init__(self):<br>
-&#9;&#9;if self.material is None:<br>
-&#9;&#9;&#9;raise RuntimeError(&quot;UIButton requires material for background&quot;)<br>
-&#9;&#9;if self.text_material is None:<br>
-&#9;&#9;&#9;raise RuntimeError(&quot;UIButton requires text_material for label&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y&nbsp;=&nbsp;self.position<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;viewport<br>
 <br>
-&#9;&#9;self.bg = UIRectangle(<br>
-&#9;&#9;&#9;position=self.position,<br>
-&#9;&#9;&#9;size=self.size,<br>
-&#9;&#9;&#9;color=self.background_color,<br>
-&#9;&#9;&#9;material=self.material,<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cx&nbsp;=&nbsp;x<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cy&nbsp;=&nbsp;y<br>
 <br>
-&#9;&#9;# небольшое смещение текста внутрь<br>
-&#9;&#9;text_pos = (<br>
-&#9;&#9;&#9;self.position[0] + 0.01,<br>
-&#9;&#9;&#9;self.position[1] + 0.01,<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ch&nbsp;in&nbsp;self.text:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ch&nbsp;not&nbsp;in&nbsp;canvas.font.glyphs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glyph&nbsp;=&nbsp;canvas.font.glyphs[ch]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;glyph[&quot;size&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u0,&nbsp;v0,&nbsp;u1,&nbsp;v1&nbsp;=&nbsp;glyph[&quot;uv&quot;]<br>
 <br>
-&#9;&#9;self.label = UIText(<br>
-&#9;&#9;&#9;text=self.text,<br>
-&#9;&#9;&#9;position=text_pos,<br>
-&#9;&#9;&#9;color=self.text_color,<br>
-&#9;&#9;&#9;scale=1.0,<br>
-&#9;&#9;&#9;material=self.text_material,<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sx&nbsp;=&nbsp;w&nbsp;*&nbsp;self.scale&nbsp;/&nbsp;pw&nbsp;*&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sy&nbsp;=&nbsp;h&nbsp;*&nbsp;self.scale&nbsp;/&nbsp;ph&nbsp;*&nbsp;2<br>
 <br>
-&#9;def contains(self, nx, ny):<br>
-&#9;&#9;return self.bg.contains(nx, ny)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vx0&nbsp;=&nbsp;cx&nbsp;*&nbsp;2&nbsp;-&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vy0&nbsp;=&nbsp;1&nbsp;-&nbsp;cy&nbsp;*&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vx1&nbsp;=&nbsp;(cx&nbsp;+&nbsp;w&nbsp;*&nbsp;self.scale&nbsp;/&nbsp;pw)&nbsp;*&nbsp;2&nbsp;-&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vy1&nbsp;=&nbsp;1&nbsp;-&nbsp;(cy&nbsp;+&nbsp;h&nbsp;*&nbsp;self.scale&nbsp;/&nbsp;ph)&nbsp;*&nbsp;2<br>
 <br>
-&#9;def draw(self, canvas, graphics, context_key, viewport_rect):<br>
-&#9;&#9;self.bg.draw(canvas, graphics, context_key, viewport_rect)<br>
-&#9;&#9;self.label.draw(canvas, graphics, context_key, viewport_rect)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;np.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[vx0,&nbsp;vy0,&nbsp;u0,&nbsp;v0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[vx1,&nbsp;vy0,&nbsp;u1,&nbsp;v0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[vx0,&nbsp;vy1,&nbsp;u0,&nbsp;v1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[vx1,&nbsp;vy1,&nbsp;u1,&nbsp;v1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],&nbsp;dtype=np.float32)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.draw_textured_quad(graphics,&nbsp;context_key,&nbsp;vertices)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cx&nbsp;+=&nbsp;(w&nbsp;*&nbsp;self.scale)&nbsp;/&nbsp;pw<br>
+<br>
 <br>
 @dataclass<br>
-class UISlider(UIElement):<br>
-&#9;position: tuple[float, float]              # нормализовано 0..1<br>
-&#9;size: tuple[float, float]                  # ширина/высота трека<br>
-&#9;value: float = 0.5                         # 0..1<br>
-&#9;on_change: callable | None = None<br>
-&#9;material: Material | None = None<br>
-&#9;handle_material: Material | None = None<br>
+class&nbsp;UIButton(UIElement):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;position:&nbsp;tuple[float,&nbsp;float]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;tuple[float,&nbsp;float]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;text:&nbsp;str<br>
+&nbsp;&nbsp;&nbsp;&nbsp;on_click:&nbsp;callable&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
-&#9;_dragging: bool = False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material:&nbsp;Material&nbsp;|&nbsp;None&nbsp;=&nbsp;None&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;фон<br>
+&nbsp;&nbsp;&nbsp;&nbsp;text_material:&nbsp;Material&nbsp;|&nbsp;None&nbsp;=&nbsp;None&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;текст<br>
 <br>
-&#9;def _track_vertices(self):<br>
-&#9;&#9;rect = UIRectangle(<br>
-&#9;&#9;&#9;position=self.position,<br>
-&#9;&#9;&#9;size=self.size,<br>
-&#9;&#9;&#9;color=(0.3, 0.3, 0.3, 1),<br>
-&#9;&#9;&#9;material=self.material<br>
-&#9;&#9;)<br>
-&#9;&#9;return rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;background_color:&nbsp;tuple&nbsp;=&nbsp;(0.2,&nbsp;0.2,&nbsp;0.25,&nbsp;1.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;text_color:&nbsp;tuple&nbsp;=&nbsp;(1,&nbsp;1,&nbsp;1,&nbsp;1)<br>
 <br>
-&#9;def _handle_position(self):<br>
-&#9;&#9;x, y = self.position<br>
-&#9;&#9;w, h = self.size<br>
-&#9;&#9;hx = x + self.value * w<br>
-&#9;&#9;return hx, y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__post_init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.material&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;UIButton&nbsp;requires&nbsp;material&nbsp;for&nbsp;background&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.text_material&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;UIButton&nbsp;requires&nbsp;text_material&nbsp;for&nbsp;label&quot;)<br>
 <br>
-&#9;def draw(self, canvas, graphics, context_key, viewport_rect):<br>
-&#9;&#9;track = self._track_vertices()<br>
-&#9;&#9;track.draw(canvas, graphics, context_key, viewport_rect)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bg&nbsp;=&nbsp;UIRectangle(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;position=self.position,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size=self.size,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=self.background_color,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material=self.material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;&#9;hx, hy = self._handle_position()<br>
-&#9;&#9;handle = UIRectangle(<br>
-&#9;&#9;&#9;position=(hx - 0.01, hy),<br>
-&#9;&#9;&#9;size=(0.02, self.size[1]),<br>
-&#9;&#9;&#9;color=(0.8, 0.8, 0.9, 1),<br>
-&#9;&#9;&#9;material=self.handle_material<br>
-&#9;&#9;)<br>
-&#9;&#9;handle.draw(canvas, graphics, context_key, viewport_rect)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;небольшое&nbsp;смещение&nbsp;текста&nbsp;внутрь<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text_pos&nbsp;=&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.position[0]&nbsp;+&nbsp;0.01,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.position[1]&nbsp;+&nbsp;0.01,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def contains(self, nx, ny):<br>
-&#9;&#9;x, y = self.position<br>
-&#9;&#9;w, h = self.size<br>
-&#9;&#9;return x &lt;= nx &lt;= x + w and y &lt;= ny &lt;= y + h<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.label&nbsp;=&nbsp;UIText(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text=self.text,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;position=text_pos,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=self.text_color,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scale=1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material=self.text_material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;# === Events ===<br>
-&#9;def on_mouse_down(self, x, y):<br>
-&#9;&#9;print(&quot;Slider mouse down at:&quot;, (x, y))<br>
-&#9;&#9;self._dragging = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contains(self,&nbsp;nx,&nbsp;ny):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.bg.contains(nx,&nbsp;ny)<br>
 <br>
-&#9;def on_mouse_move(self, x, y, viewport_rect):<br>
-&#9;&#9;# преобразуем в нормализованные координаты<br>
-&#9;&#9;px, py, pw, ph = viewport_rect<br>
-&#9;&#9;nx = (x - px) / pw<br>
-&#9;&#9;ny = (y - py) / ph<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;canvas,&nbsp;graphics,&nbsp;context_key,&nbsp;viewport_rect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bg.draw(canvas,&nbsp;graphics,&nbsp;context_key,&nbsp;viewport_rect)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.label.draw(canvas,&nbsp;graphics,&nbsp;context_key,&nbsp;viewport_rect)<br>
 <br>
-&#9;&#9;print(&quot;Slider mouse move at:&quot;, (nx, ny))<br>
-&#9;&#9;if not self._dragging:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;x0, y0 = self.position<br>
-&#9;&#9;w, h = self.size<br>
-&#9;&#9;t = (nx - x0) / w<br>
-&#9;&#9;t = max(0.0, min(1.0, t))<br>
-&#9;&#9;self.value = t<br>
-&#9;&#9;if self.on_change:<br>
-&#9;&#9;&#9;self.on_change(self.value)<br>
+@dataclass<br>
+class&nbsp;UISlider(UIElement):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;position:&nbsp;tuple[float,&nbsp;float]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;нормализовано&nbsp;0..1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;tuple[float,&nbsp;float]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;ширина/высота&nbsp;трека<br>
+&nbsp;&nbsp;&nbsp;&nbsp;value:&nbsp;float&nbsp;=&nbsp;0.5&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;0..1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;on_change:&nbsp;callable&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material:&nbsp;Material&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;handle_material:&nbsp;Material&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;_dragging:&nbsp;bool&nbsp;=&nbsp;False<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_track_vertices(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rect&nbsp;=&nbsp;UIRectangle(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;position=self.position,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size=self.size,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=(0.3,&nbsp;0.3,&nbsp;0.3,&nbsp;1),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material=self.material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;rect<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_handle_position(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y&nbsp;=&nbsp;self.position<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;self.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hx&nbsp;=&nbsp;x&nbsp;+&nbsp;self.value&nbsp;*&nbsp;w<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;hx,&nbsp;y<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;canvas,&nbsp;graphics,&nbsp;context_key,&nbsp;viewport_rect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;track&nbsp;=&nbsp;self._track_vertices()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;track.draw(canvas,&nbsp;graphics,&nbsp;context_key,&nbsp;viewport_rect)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hx,&nbsp;hy&nbsp;=&nbsp;self._handle_position()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;UIRectangle(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;position=(hx&nbsp;-&nbsp;0.01,&nbsp;hy),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size=(0.02,&nbsp;self.size[1]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=(0.8,&nbsp;0.8,&nbsp;0.9,&nbsp;1),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material=self.handle_material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle.draw(canvas,&nbsp;graphics,&nbsp;context_key,&nbsp;viewport_rect)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contains(self,&nbsp;nx,&nbsp;ny):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y&nbsp;=&nbsp;self.position<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;self.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;x&nbsp;&lt;=&nbsp;nx&nbsp;&lt;=&nbsp;x&nbsp;+&nbsp;w&nbsp;and&nbsp;y&nbsp;&lt;=&nbsp;ny&nbsp;&lt;=&nbsp;y&nbsp;+&nbsp;h<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;===&nbsp;Events&nbsp;===<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_down(self,&nbsp;x,&nbsp;y):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Slider&nbsp;mouse&nbsp;down&nbsp;at:&quot;,&nbsp;(x,&nbsp;y))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dragging&nbsp;=&nbsp;True<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_move(self,&nbsp;x,&nbsp;y,&nbsp;viewport_rect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;преобразуем&nbsp;в&nbsp;нормализованные&nbsp;координаты<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;viewport_rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nx&nbsp;=&nbsp;(x&nbsp;-&nbsp;px)&nbsp;/&nbsp;pw<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ny&nbsp;=&nbsp;(y&nbsp;-&nbsp;py)&nbsp;/&nbsp;ph<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Slider&nbsp;mouse&nbsp;move&nbsp;at:&quot;,&nbsp;(nx,&nbsp;ny))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;self._dragging:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x0,&nbsp;y0&nbsp;=&nbsp;self.position<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;self.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;(nx&nbsp;-&nbsp;x0)&nbsp;/&nbsp;w<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;max(0.0,&nbsp;min(1.0,&nbsp;t))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.value&nbsp;=&nbsp;t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.on_change:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_change(self.value)<br>
 <br>
 <br>
-&#9;def on_mouse_up(self, x, y, viewport_rect):<br>
-&#9;&#9;print(&quot;Slider mouse up at:&quot;, (x, y))<br>
-&#9;&#9;self._dragging = False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_up(self,&nbsp;x,&nbsp;y,&nbsp;viewport_rect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Slider&nbsp;mouse&nbsp;up&nbsp;at:&quot;,&nbsp;(x,&nbsp;y))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dragging&nbsp;=&nbsp;False<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

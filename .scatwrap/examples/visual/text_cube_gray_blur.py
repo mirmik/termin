@@ -7,144 +7,144 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 &quot;&quot;&quot;<br>
-Textured cube demo + grayscale + Gaussian blur (two-pass)<br>
-Всё в одном файле, как ты просил.<br>
+Textured&nbsp;cube&nbsp;demo&nbsp;+&nbsp;grayscale&nbsp;+&nbsp;Gaussian&nbsp;blur&nbsp;(two-pass)<br>
+Всё&nbsp;в&nbsp;одном&nbsp;файле,&nbsp;как&nbsp;ты&nbsp;просил.<br>
 &quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
-import numpy as np<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.mesh.mesh import TexturedCubeMesh<br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;MeshDrawable,<br>
-&#9;Scene,<br>
-&#9;Material,<br>
-&#9;Texture,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;TexturedCubeMesh<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Texture,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from termin.visualization.components import MeshRenderer<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
-from termin.visualization.posteffects.gray import GrayscaleEffect<br>
-from termin.visualization.posteffects.blur import GaussianBlurPass<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.posteffects.gray&nbsp;import&nbsp;GrayscaleEffect<br>
+from&nbsp;termin.visualization.posteffects.blur&nbsp;import&nbsp;GaussianBlurPass<br>
 <br>
-# ================================================================<br>
-#          СЦЕНА<br>
-# ================================================================<br>
+#&nbsp;================================================================<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;СЦЕНА<br>
+#&nbsp;================================================================<br>
 <br>
-VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location = 0) in vec3 a_position;<br>
-layout(location = 1) in vec3 a_normal;<br>
-layout(location = 2) in vec2 a_texcoord;<br>
+VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
+layout(location&nbsp;=&nbsp;2)&nbsp;in&nbsp;vec2&nbsp;a_texcoord;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_normal;<br>
-out vec3 v_world_pos;<br>
-out vec2 v_texcoord;<br>
+out&nbsp;vec3&nbsp;v_normal;<br>
+out&nbsp;vec3&nbsp;v_world_pos;<br>
+out&nbsp;vec2&nbsp;v_texcoord;<br>
 <br>
-void main() {<br>
-&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
-&#9;v_world_pos = world.xyz;<br>
-&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-&#9;v_texcoord = a_texcoord;<br>
-&#9;gl_Position = u_projection * u_view * world;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;world&nbsp;=&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_world_pos&nbsp;=&nbsp;world.xyz;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_texcoord&nbsp;=&nbsp;a_texcoord;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-in vec3 v_normal;<br>
-in vec3 v_world_pos;<br>
-in vec2 v_texcoord;<br>
+FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
+in&nbsp;vec3&nbsp;v_world_pos;<br>
+in&nbsp;vec2&nbsp;v_texcoord;<br>
 <br>
-uniform vec3 u_light_dir;<br>
-uniform vec3 u_light_color;<br>
-uniform vec3 u_view_pos;<br>
-uniform sampler2D u_diffuse_map;<br>
+uniform&nbsp;vec3&nbsp;u_light_dir;<br>
+uniform&nbsp;vec3&nbsp;u_light_color;<br>
+uniform&nbsp;vec3&nbsp;u_view_pos;<br>
+uniform&nbsp;sampler2D&nbsp;u_diffuse_map;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;vec3 N = normalize(v_normal);<br>
-&#9;vec3 L = normalize(-u_light_dir);<br>
-&#9;vec3 V = normalize(u_view_pos - v_world_pos);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;N&nbsp;=&nbsp;normalize(v_normal);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;L&nbsp;=&nbsp;normalize(-u_light_dir);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;V&nbsp;=&nbsp;normalize(u_view_pos&nbsp;-&nbsp;v_world_pos);<br>
 <br>
-&#9;vec3 texColor = texture(u_diffuse_map, v_texcoord).rgb;<br>
-&#9;float ndotl = max(dot(N, L), 0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;texColor&nbsp;=&nbsp;texture(u_diffuse_map,&nbsp;v_texcoord).rgb;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(N,&nbsp;L),&nbsp;0.0);<br>
 <br>
-&#9;vec3 diffuse = texColor * ndotl;<br>
-&#9;vec3 ambient = texColor * 0.2;<br>
-&#9;vec3 H = normalize(L + V);<br>
-&#9;float spec = pow(max(dot(N, H), 0.0), 32.0);<br>
-&#9;vec3 specular = vec3(0.4) * spec;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;diffuse&nbsp;=&nbsp;texColor&nbsp;*&nbsp;ndotl;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;ambient&nbsp;=&nbsp;texColor&nbsp;*&nbsp;0.2;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;H&nbsp;=&nbsp;normalize(L&nbsp;+&nbsp;V);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;spec&nbsp;=&nbsp;pow(max(dot(N,&nbsp;H),&nbsp;0.0),&nbsp;32.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;specular&nbsp;=&nbsp;vec3(0.4)&nbsp;*&nbsp;spec;<br>
 <br>
-&#9;vec3 color = (ambient + diffuse) * u_light_color + specular;<br>
-&#9;FragColor = vec4(color, 1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;color&nbsp;=&nbsp;(ambient&nbsp;+&nbsp;diffuse)&nbsp;*&nbsp;u_light_color&nbsp;+&nbsp;specular;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(color,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-def build_scene(world):<br>
-&#9;texture_path = &quot;examples/data/textures/crate_diffuse.png&quot;<br>
-&#9;texture = Texture.from_file(texture_path)<br>
+def&nbsp;build_scene(world):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;texture_path&nbsp;=&nbsp;&quot;examples/data/textures/crate_diffuse.png&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;texture&nbsp;=&nbsp;Texture.from_file(texture_path)<br>
 <br>
-&#9;mesh = TexturedCubeMesh()<br>
-&#9;drawable = MeshDrawable(mesh)<br>
-&#9;material = Material(<br>
-&#9;&#9;shader=ShaderProgram(VERT, FRAG),<br>
-&#9;&#9;color=None,<br>
-&#9;&#9;textures={&quot;u_diffuse_map&quot;: texture},<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;TexturedCubeMesh()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;drawable&nbsp;=&nbsp;MeshDrawable(mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;Material(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader=ShaderProgram(VERT,&nbsp;FRAG),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;textures={&quot;u_diffuse_map&quot;:&nbsp;texture},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;cube = Entity(pose=Pose3.identity())<br>
-&#9;cube.add_component(MeshRenderer(drawable, material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube&nbsp;=&nbsp;Entity(pose=Pose3.identity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube.add_component(MeshRenderer(drawable,&nbsp;material))<br>
 <br>
-&#9;scene = Scene()<br>
-&#9;scene.add(cube)<br>
-&#9;scene.add(SkyBoxEntity())<br>
-&#9;world.add_scene(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(cube)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(SkyBoxEntity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
-&#9;cam_ent = Entity()<br>
-&#9;cam = PerspectiveCameraComponent()<br>
-&#9;cam_ent.add_component(cam)<br>
-&#9;cam_ent.add_component(OrbitCameraController())<br>
-&#9;scene.add(cam_ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_ent&nbsp;=&nbsp;Entity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_ent.add_component(cam)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cam_ent.add_component(OrbitCameraController())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(cam_ent)<br>
 <br>
-&#9;return scene, cam<br>
-<br>
-<br>
-# ================================================================<br>
-#          MAIN<br>
-# ================================================================<br>
-<br>
-def main():<br>
-&#9;world = VisualizationWorld()<br>
-<br>
-&#9;scene, cam = build_scene(world)<br>
-<br>
-&#9;win = world.create_window(title=&quot;Cube + Grayscale + Gaussian Blur&quot;)<br>
-&#9;vp = win.add_viewport(scene, cam)<br>
-<br>
-&#9;postprocess = vp.find_render_pass(&quot;PostFX&quot;)<br>
-<br>
-&#9;# цепочка: Grayscale → Blur Horizontal → Blur Vertical<br>
-&#9;postprocess.add_effect(GrayscaleEffect())<br>
-&#9;postprocess.add_effect(GaussianBlurPass(direction=(1.0, 0.0)))  # horizontal<br>
-&#9;postprocess.add_effect(GaussianBlurPass(direction=(0.0, 1.0)))  # vertical<br>
-<br>
-&#9;world.run()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;cam<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+#&nbsp;================================================================<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MAIN<br>
+#&nbsp;================================================================<br>
+<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;cam&nbsp;=&nbsp;build_scene(world)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;win&nbsp;=&nbsp;world.create_window(title=&quot;Cube&nbsp;+&nbsp;Grayscale&nbsp;+&nbsp;Gaussian&nbsp;Blur&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vp&nbsp;=&nbsp;win.add_viewport(scene,&nbsp;cam)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;postprocess&nbsp;=&nbsp;vp.find_render_pass(&quot;PostFX&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;цепочка:&nbsp;Grayscale&nbsp;→&nbsp;Blur&nbsp;Horizontal&nbsp;→&nbsp;Blur&nbsp;Vertical<br>
+&nbsp;&nbsp;&nbsp;&nbsp;postprocess.add_effect(GrayscaleEffect())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;postprocess.add_effect(GaussianBlurPass(direction=(1.0,&nbsp;0.0)))&nbsp;&nbsp;#&nbsp;horizontal<br>
+&nbsp;&nbsp;&nbsp;&nbsp;postprocess.add_effect(GaussianBlurPass(direction=(0.0,&nbsp;1.0)))&nbsp;&nbsp;#&nbsp;vertical<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

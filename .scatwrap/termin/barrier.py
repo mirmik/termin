@@ -6,31 +6,31 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-#/usr/bin/env python3<br>
+#/usr/bin/env&nbsp;python3<br>
 <br>
-import math<br>
+import&nbsp;math<br>
 <br>
-def shotki_barrier(b, l):<br>
-&#9;def func(x):<br>
-&#9;&#9;if x &gt;= l: <br>
-&#9;&#9;&#9;return 0<br>
-&#9;&#9;return b/x + b*x/(l**2) - 2*b/l<br>
-&#9;return func<br>
+def&nbsp;shotki_barrier(b,&nbsp;l):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;func(x):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x&nbsp;&gt;=&nbsp;l:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;b/x&nbsp;+&nbsp;b*x/(l**2)&nbsp;-&nbsp;2*b/l<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;func<br>
 <br>
-def alpha_function(l, k):<br>
-&#9;l2 = l * k<br>
-&#9;a = 1/(k-1)/l<br>
-&#9;b = - 1/(k-1)<br>
-&#9;def func(x):<br>
-&#9;&#9;if x &gt; l: <br>
-&#9;&#9;&#9;return 0<br>
-&#9;&#9;elif x &lt; l2:<br>
-&#9;&#9;&#9;return 1<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;return a*x+b<br>
-&#9;return func<br>
+def&nbsp;alpha_function(l,&nbsp;k):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;l2&nbsp;=&nbsp;l&nbsp;*&nbsp;k<br>
+&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;1/(k-1)/l<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;-&nbsp;1/(k-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;func(x):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x&nbsp;&gt;&nbsp;l:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;x&nbsp;&lt;&nbsp;l2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;a*x+b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;func<br>
 <br>
-&#9;&#9;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

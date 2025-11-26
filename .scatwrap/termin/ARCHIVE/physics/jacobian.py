@@ -6,9 +6,9 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-#!/usr/bin/env python3<br>
+#!/usr/bin/env&nbsp;python3<br>
 <br>
-import numpy<br>
+import&nbsp;numpy<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

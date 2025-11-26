@@ -6,78 +6,78 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy as np<br>
-from ..shader import ShaderProgram<br>
-from ..postprocess import PostEffect<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;..shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;..postprocess&nbsp;import&nbsp;PostEffect<br>
 <br>
-# ================================================================<br>
-#          TWO-PASS GAUSSIAN BLUR (H + V)<br>
-# ================================================================<br>
+#&nbsp;================================================================<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TWO-PASS&nbsp;GAUSSIAN&nbsp;BLUR&nbsp;(H&nbsp;+&nbsp;V)<br>
+#&nbsp;================================================================<br>
 <br>
-GAUSS_VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location=0) in vec2 a_pos;<br>
-layout(location=1) in vec2 a_uv;<br>
-out vec2 v_uv;<br>
-void main() {<br>
-&#9;v_uv = a_uv;<br>
-&#9;gl_Position = vec4(a_pos, 0.0, 1.0);<br>
+GAUSS_VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location=0)&nbsp;in&nbsp;vec2&nbsp;a_pos;<br>
+layout(location=1)&nbsp;in&nbsp;vec2&nbsp;a_uv;<br>
+out&nbsp;vec2&nbsp;v_uv;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_uv&nbsp;=&nbsp;a_uv;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;vec4(a_pos,&nbsp;0.0,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-GAUSS_FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-in vec2 v_uv;<br>
+GAUSS_FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+in&nbsp;vec2&nbsp;v_uv;<br>
 <br>
-uniform sampler2D u_texture;<br>
-uniform vec2 u_direction;   // (1,0) for horizontal, (0,1) for vertical<br>
-uniform vec2 u_texel_size;  // 1.0 / resolution<br>
+uniform&nbsp;sampler2D&nbsp;u_texture;<br>
+uniform&nbsp;vec2&nbsp;u_direction;&nbsp;&nbsp;&nbsp;//&nbsp;(1,0)&nbsp;for&nbsp;horizontal,&nbsp;(0,1)&nbsp;for&nbsp;vertical<br>
+uniform&nbsp;vec2&nbsp;u_texel_size;&nbsp;&nbsp;//&nbsp;1.0&nbsp;/&nbsp;resolution<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-// 5-tap gaussian weights (approx sigma=2)<br>
-const float w0 = 0.227027;<br>
-const float w1 = 0.316216;<br>
-const float w2 = 0.070270;<br>
+//&nbsp;5-tap&nbsp;gaussian&nbsp;weights&nbsp;(approx&nbsp;sigma=2)<br>
+const&nbsp;float&nbsp;w0&nbsp;=&nbsp;0.227027;<br>
+const&nbsp;float&nbsp;w1&nbsp;=&nbsp;0.316216;<br>
+const&nbsp;float&nbsp;w2&nbsp;=&nbsp;0.070270;<br>
 <br>
-void main() {<br>
-&#9;vec2 ts = u_texel_size;<br>
-&#9;vec2 dir = u_direction;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;ts&nbsp;=&nbsp;u_texel_size;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;dir&nbsp;=&nbsp;u_direction;<br>
 <br>
-&#9;vec3 c = texture(u_texture, v_uv).rgb * w0;<br>
-&#9;c += texture(u_texture, v_uv + dir * ts * 1.0).rgb * w1;<br>
-&#9;c += texture(u_texture, v_uv - dir * ts * 1.0).rgb * w1;<br>
-&#9;c += texture(u_texture, v_uv + dir * ts * 2.0).rgb * w2;<br>
-&#9;c += texture(u_texture, v_uv - dir * ts * 2.0).rgb * w2;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;c&nbsp;=&nbsp;texture(u_texture,&nbsp;v_uv).rgb&nbsp;*&nbsp;w0;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;+=&nbsp;texture(u_texture,&nbsp;v_uv&nbsp;+&nbsp;dir&nbsp;*&nbsp;ts&nbsp;*&nbsp;1.0).rgb&nbsp;*&nbsp;w1;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;+=&nbsp;texture(u_texture,&nbsp;v_uv&nbsp;-&nbsp;dir&nbsp;*&nbsp;ts&nbsp;*&nbsp;1.0).rgb&nbsp;*&nbsp;w1;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;+=&nbsp;texture(u_texture,&nbsp;v_uv&nbsp;+&nbsp;dir&nbsp;*&nbsp;ts&nbsp;*&nbsp;2.0).rgb&nbsp;*&nbsp;w2;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;+=&nbsp;texture(u_texture,&nbsp;v_uv&nbsp;-&nbsp;dir&nbsp;*&nbsp;ts&nbsp;*&nbsp;2.0).rgb&nbsp;*&nbsp;w2;<br>
 <br>
-&#9;FragColor = vec4(c, 1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(c,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-class GaussianBlurPass(PostEffect):<br>
-&#9;&quot;&quot;&quot;Один проход: горизонтальный или вертикальный.&quot;&quot;&quot;<br>
+class&nbsp;GaussianBlurPass(PostEffect):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Один&nbsp;проход:&nbsp;горизонтальный&nbsp;или&nbsp;вертикальный.&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, direction):<br>
-&#9;&#9;self.shader = ShaderProgram(GAUSS_VERT, GAUSS_FRAG)<br>
-&#9;&#9;self.direction = np.array(direction, dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;direction):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader&nbsp;=&nbsp;ShaderProgram(GAUSS_VERT,&nbsp;GAUSS_FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.direction&nbsp;=&nbsp;np.array(direction,&nbsp;dtype=np.float32)<br>
 <br>
-&#9;def draw(self, gfx, key, color_tex, extra_textures, size):<br>
-&#9;&#9;w, h = size<br>
-&#9;&#9;texel_size = np.array([1.0/max(1,w), 1.0/max(1,h)], dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;gfx,&nbsp;key,&nbsp;color_tex,&nbsp;extra_textures,&nbsp;size):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;texel_size&nbsp;=&nbsp;np.array([1.0/max(1,w),&nbsp;1.0/max(1,h)],&nbsp;dtype=np.float32)<br>
 <br>
-&#9;&#9;self.shader.ensure_ready(gfx)<br>
-&#9;&#9;self.shader.use()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.ensure_ready(gfx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.use()<br>
 <br>
-&#9;&#9;color_tex.bind(0)<br>
-&#9;&#9;self.shader.set_uniform_int(&quot;u_texture&quot;, 0)<br>
-&#9;&#9;self.shader.set_uniform_auto(&quot;u_texel_size&quot;, texel_size)<br>
-&#9;&#9;self.shader.set_uniform_auto(&quot;u_direction&quot;, self.direction)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_tex.bind(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.set_uniform_int(&quot;u_texture&quot;,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.set_uniform_auto(&quot;u_texel_size&quot;,&nbsp;texel_size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.set_uniform_auto(&quot;u_direction&quot;,&nbsp;self.direction)<br>
 <br>
-&#9;&#9;gfx.set_depth_test(False)<br>
-&#9;&#9;gfx.set_cull_face(False)<br>
-&#9;&#9;gfx.set_blend(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_test(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_cull_face(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_blend(False)<br>
 <br>
-&#9;&#9;gfx.draw_ui_textured_quad(key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.draw_ui_textured_quad(key)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

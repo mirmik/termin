@@ -6,34 +6,34 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy<br>
-from termin.ga201.motor import Motor2<br>
+import&nbsp;numpy<br>
+from&nbsp;termin.ga201.motor&nbsp;import&nbsp;Motor2<br>
 <br>
 <br>
-class PoseObject:<br>
-&#9;def __init__(self, pose=Motor2()):<br>
-&#9;&#9;self._position = pose<br>
+class&nbsp;PoseObject:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;pose=Motor2()):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._position&nbsp;=&nbsp;pose<br>
 <br>
-&#9;def position(self):<br>
-&#9;&#9;return self._position<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;position(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._position<br>
 <br>
-&#9;def update_position(self, pose):<br>
-&#9;&#9;self._position = pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_position(self,&nbsp;pose):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._position&nbsp;=&nbsp;pose<br>
 <br>
 <br>
-class ReferencedPoseObject:<br>
-&#9;def __init__(self, pose=Motor2(), parent=None):<br>
-&#9;&#9;self._pose_in_frame = pose<br>
-&#9;&#9;self._parent = parent<br>
+class&nbsp;ReferencedPoseObject:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;pose=Motor2(),&nbsp;parent=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pose_in_frame&nbsp;=&nbsp;pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._parent&nbsp;=&nbsp;parent<br>
 <br>
-&#9;def position(self):<br>
-&#9;&#9;return self._parent.position() * self._pose_in_frame<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;position(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._parent.position()&nbsp;*&nbsp;self._pose_in_frame<br>
 <br>
-&#9;def relative_position(self):<br>
-&#9;&#9;return self._pose_in_frame<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;relative_position(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._pose_in_frame<br>
 <br>
-&#9;def parent(self):<br>
-&#9;&#9;return self._parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;parent(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._parent<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

@@ -6,15 +6,15 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Basic UI overlay primitives.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Basic&nbsp;UI&nbsp;overlay&nbsp;primitives.&quot;&quot;&quot;<br>
 <br>
-from .canvas import Canvas<br>
-from .elements import UIElement, UIRectangle<br>
+from&nbsp;.canvas&nbsp;import&nbsp;Canvas<br>
+from&nbsp;.elements&nbsp;import&nbsp;UIElement,&nbsp;UIRectangle<br>
 <br>
-__all__ = [<br>
-&#9;&quot;Canvas&quot;,<br>
-&#9;&quot;UIElement&quot;,<br>
-&#9;&quot;UIRectangle&quot;<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Canvas&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;UIElement&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;UIRectangle&quot;<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

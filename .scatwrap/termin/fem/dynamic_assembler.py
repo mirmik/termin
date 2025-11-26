@@ -6,447 +6,447 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from termin.fem.assembler import MatrixAssembler, Variable, Contribution<br>
-from typing import Dict, List, Tuple<br>
-import numpy as np<br>
-from termin.linalg.subspaces import project_onto_affine, metric_project_onto_constraints <br>
-from termin.geombase.pose3 import Pose3<br>
-<br>
-class DynamicMatrixAssembler(MatrixAssembler):<br>
-&#9;def __init__(self):<br>
-&#9;&#9;super().__init__()<br>
-&#9;&#9;self.time_step = 0.01<br>
-<br>
-&#9;def _build_index_maps(self) -&gt; Dict[Variable, List[int]]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Построить отображение: Variable -&gt; глобальные индексы DOF<br>
-&#9;&#9;<br>
-&#9;&#9;Назначает каждой компоненте каждой переменной уникальный<br>
-&#9;&#9;глобальный индекс в системе.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self._index_map_by_tags = {}<br>
-&#9;&#9;tags = set(var.tag for var in self.variables)<br>
-<br>
-&#9;&#9;for tag in tags:<br>
-&#9;&#9;&#9;vars_with_tag = [var for var in self.variables if var.tag == tag]<br>
-&#9;&#9;&#9;index_map = self._build_index_map(vars_with_tag)<br>
-&#9;&#9;&#9;self._index_map_by_tags[tag] = index_map<br>
-<br>
-&#9;&#9;self._index_map = self._index_map_by_tags.get(&quot;acceleration&quot;, {})<br>
-&#9;&#9;self._holonomic_index_map = self._index_map_by_tags.get(&quot;force&quot;, {})<br>
-<br>
-&#9;&#9;self._dirty_index_map = False<br>
-<br>
-&#9;# def collect_current_q(self, index_map: Dict[Variable, List[int]]):<br>
-&#9;#     &quot;&quot;&quot;Собрать текущее значение q из всех переменных&quot;&quot;&quot;<br>
-&#9;#     old_q = np.zeros(self.total_variables_by_tag(&quot;acceleration&quot;))<br>
-&#9;#     for var in self.variables:<br>
-&#9;#         if var.tag == &quot;acceleration&quot;:<br>
-&#9;#             indices = index_map[var]<br>
-&#9;#             old_q[indices] = var.value_by_rank(2)  # текущее значение<br>
-&#9;#     return old_q<br>
-<br>
-&#9;# def collect_current_q_dot(self, index_map: Dict[Variable, List[int]]):<br>
-&#9;#     &quot;&quot;&quot;Собрать текущее значение q_dot из всех переменных&quot;&quot;&quot;<br>
-&#9;#     old_q_dot = np.zeros(self.total_variables_by_tag(&quot;acceleration&quot;))<br>
-&#9;#     for var in self.variables:<br>
-&#9;#         if var.tag == &quot;acceleration&quot;:<br>
-&#9;#             indices = index_map[var]<br>
-&#9;#             old_q_dot[indices] = var.value_by_rank(1)  # текущее значение скорости<br>
-&#9;#     return old_q_dot<br>
-<br>
-&#9;# def set_old_q(self, q: np.ndarray):<br>
-&#9;#     &quot;&quot;&quot;Установить старое значение q&quot;&quot;&quot;<br>
-&#9;#     self.old_q = np.array(q)<br>
-<br>
-&#9;# def set_old_q_dot(self, q_dot: np.ndarray):<br>
-&#9;#     &quot;&quot;&quot;Установить старое значение q_dot&quot;&quot;&quot;<br>
-&#9;#     self.old_q_dot = np.array(q_dot)<br>
-<br>
-&#9;def index_maps(self) -&gt; Dict[str, Dict[Variable, List[int]]]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Получить текущее отображение Variable -&gt; глобальные индексы DOF<br>
-&#9;&#9;для разных типов переменных<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if self._dirty_index_map:<br>
-&#9;&#9;&#9;self._build_index_maps()<br>
-&#9;&#9;return {<br>
-&#9;&#9;&#9;&quot;acceleration&quot;: self._index_map,<br>
-&#9;&#9;&#9;&quot;force&quot;: self._holonomic_index_map<br>
-&#9;&#9;}<br>
-<br>
-&#9;def index_map_by_tag(self, tag: str) -&gt; Dict[Variable, List[int]]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Получить текущее отображение Variable -&gt; глобальные индексы DOF<br>
-&#9;&#9;для переменных с заданным тегом<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if self._dirty_index_map:<br>
-&#9;&#9;&#9;self._build_index_maps()<br>
-&#9;&#9;return self._index_map_by_tags.get(tag, {})<br>
-<br>
-&#9;def assemble_electric_domain(self):<br>
-&#9;&#9;# Построить карту индексов<br>
-&#9;&#9;index_maps = {<br>
-&#9;&#9;&#9;&quot;voltage&quot;: self.index_map_by_tag(&quot;voltage&quot;),<br>
-&#9;&#9;&#9;&quot;current&quot;: self.index_map_by_tag(&quot;current&quot;),<br>
-&#9;&#9;&#9;#&quot;charge&quot;: self.index_map_by_tag(&quot;charge&quot;),<br>
-&#9;&#9;}<br>
-<br>
-&#9;&#9;# Создать глобальные матрицы и вектор<br>
-&#9;&#9;n_voltage = self.total_variables_by_tag(tag=&quot;voltage&quot;)<br>
-&#9;&#9;n_currents = self.total_variables_by_tag(tag=&quot;current&quot;)<br>
-&#9;&#9;#n_charge = self.total_variables_by_tag(tag=&quot;charge&quot;)<br>
-<br>
-&#9;&#9;matrices = {<br>
-&#9;&#9;&#9;&quot;conductance&quot;: np.zeros((n_voltage, n_voltage)),<br>
-&#9;&#9;&#9;&quot;electric_holonomic&quot;: np.zeros((n_currents, n_voltage)),<br>
-&#9;&#9;&#9;&quot;electric_holonomic_rhs&quot;: np.zeros(n_currents),<br>
-&#9;&#9;&#9;&quot;rhs&quot;: np.zeros(n_voltage),<br>
-&#9;&#9;&#9;&quot;current_to_current&quot;: np.zeros((n_currents, n_currents)),<br>
-&#9;&#9;&#9;#&quot;charge_constraint&quot;: np.zeros((n_charge, n_voltage)),<br>
-&#9;&#9;&#9;#&quot;charge_constraint_rhs&quot;: np.zeros((n_charge)),<br>
-&#9;&#9;}<br>
-<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.contribute(matrices, index_maps)<br>
-<br>
-&#9;&#9;return matrices<br>
-<br>
-&#9;def assemble_electromechanic_domain(self):<br>
-&#9;&#9;# Построить карту индексов<br>
-&#9;&#9;index_maps = {<br>
-&#9;&#9;&#9;&quot;voltage&quot;: self.index_map_by_tag(&quot;voltage&quot;),<br>
-&#9;&#9;&#9;&quot;current&quot;: self.index_map_by_tag(&quot;current&quot;),<br>
-&#9;&#9;&#9;&quot;acceleration&quot;: self.index_map_by_tag(&quot;acceleration&quot;),<br>
-&#9;&#9;&#9;&quot;force&quot;: self.index_map_by_tag(&quot;force&quot;),<br>
-&#9;&#9;}<br>
-<br>
-&#9;&#9;# Создать глобальные матрицы и вектор<br>
-&#9;&#9;n_voltage = self.total_variables_by_tag(tag=&quot;voltage&quot;)<br>
-&#9;&#9;n_currents = self.total_variables_by_tag(tag=&quot;current&quot;)<br>
-&#9;&#9;n_acceleration = self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
-&#9;&#9;n_force = self.total_variables_by_tag(tag=&quot;force&quot;)<br>
-<br>
-&#9;&#9;matrices = {<br>
-&#9;&#9;&#9;&quot;conductance&quot;: np.zeros((n_voltage, n_voltage)),<br>
-&#9;&#9;&#9;&quot;mass&quot;: np.zeros((n_acceleration, n_acceleration)),<br>
-&#9;&#9;&#9;&quot;load&quot; : np.zeros(n_acceleration),<br>
-&#9;&#9;&#9;&quot;electric_holonomic&quot;: np.zeros((n_currents, n_voltage)),<br>
-&#9;&#9;&#9;&quot;electric_holonomic_rhs&quot;: np.zeros(n_currents),<br>
-&#9;&#9;&#9;&quot;current_to_current&quot;: np.zeros((n_currents, n_currents)),<br>
-&#9;&#9;&#9;&quot;holonomic&quot;: np.zeros((n_force, n_acceleration)),<br>
-&#9;&#9;&#9;&quot;electromechanic_coupling&quot;: np.zeros((n_acceleration, n_currents)),<br>
-&#9;&#9;&#9;&quot;electromechanic_coupling_damping&quot;: np.zeros((n_acceleration, n_currents)),<br>
-&#9;&#9;&#9;&quot;holonomic_load&quot;: np.zeros(n_force),<br>
-&#9;&#9;&#9;&quot;rhs&quot;: np.zeros(n_voltage),<br>
-&#9;&#9;}<br>
-<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.contribute(matrices, index_maps)<br>
-<br>
-&#9;&#9;return matrices<br>
-<br>
-&#9;def names_from_variables(self, variables: List[Variable]) -&gt; List[str]:<br>
-&#9;&#9;&quot;&quot;&quot;Получить список имен переменных из списка Variable&quot;&quot;&quot;<br>
-&#9;&#9;names = []<br>
-&#9;&#9;for var in variables:<br>
-&#9;&#9;&#9;names.extend(var.names())<br>
-&#9;&#9;return names<br>
-<br>
-&#9;def assemble_extended_system_for_electromechanic(self, matrices: Dict[str, np.ndarray]) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;&#9;n_voltage = self.total_variables_by_tag(tag=&quot;voltage&quot;)<br>
-&#9;&#9;n_currents = self.total_variables_by_tag(tag=&quot;current&quot;)<br>
-&#9;&#9;n_acceleration = self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
-&#9;&#9;n_force = self.total_variables_by_tag(tag=&quot;force&quot;)<br>
-<br>
-&#9;&#9;A_ext = np.zeros((n_voltage + n_currents + n_acceleration + n_force,<br>
-&#9;&#9;&#9;&#9;&#9;&#9;n_voltage + n_currents + n_acceleration + n_force))<br>
-<br>
-&#9;&#9;С_ext = np.zeros((n_voltage + n_currents + n_acceleration + n_force,<br>
-&#9;&#9;&#9;&#9;&#9;&#9;n_voltage + n_currents + n_acceleration + n_force))<br>
-&#9;&#9;<br>
-<br>
-&#9;&#9;b_ext = np.zeros(n_voltage + n_currents + n_acceleration + n_force)<br>
-&#9;&#9;variables = (<br>
-&#9;&#9;&#9;list(self.index_map_by_tag(&quot;voltage&quot;).keys()) +<br>
-&#9;&#9;&#9;list(self.index_map_by_tag(&quot;current&quot;).keys()) +<br>
-&#9;&#9;&#9;list(self.index_map_by_tag(&quot;acceleration&quot;).keys()) +<br>
-&#9;&#9;&#9;list(self.index_map_by_tag(&quot;force&quot;).keys())<br>
-&#9;&#9;)<br>
-&#9;&#9;variables = self.names_from_variables(variables)<br>
-<br>
-&#9;&#9;r0 = n_voltage<br>
-&#9;&#9;r1 = n_voltage + n_currents<br>
-&#9;&#9;r2 = n_voltage + n_currents + n_acceleration<br>
-&#9;&#9;r3 = n_voltage + n_currents + n_acceleration + n_force<br>
-<br>
-&#9;&#9;#v = [0:r0]<br>
-&#9;&#9;#c = [r0:r1]<br>
-&#9;&#9;#a = [r1:r2]<br>
-&#9;&#9;#f = [r2:r3]<br>
-&#9;&#9;print(r0, r1, r2, r3)<br>
-&#9;&#9;print(matrices[&quot;electromechanic_coupling&quot;].shape)<br>
-<br>
-&#9;&#9;A_ext[0:r0, 0:r0] = matrices[&quot;conductance&quot;]<br>
-&#9;&#9;A_ext[r0:r1, 0:r0] = matrices[&quot;electric_holonomic&quot;]<br>
-&#9;&#9;A_ext[0:r0, r0:r1] = matrices[&quot;electric_holonomic&quot;].T<br>
-&#9;&#9;A_ext[r0:r1, r0:r1] = matrices[&quot;current_to_current&quot;]<br>
-<br>
-&#9;&#9;A_ext[r1:r2, r1:r2] = matrices[&quot;mass&quot;]        <br>
-&#9;&#9;A_ext[r2:r3, r1:r2] = matrices[&quot;holonomic&quot;]<br>
-&#9;&#9;A_ext[r1:r2, r2:r3] = matrices[&quot;holonomic&quot;].T<br>
-<br>
-&#9;&#9;A_ext[r1:r2, r0:r1] = matrices[&quot;electromechanic_coupling&quot;]<br>
-&#9;&#9;#A_ext[r0:r1, r1:r2] = matrices[&quot;electromechanic_coupling&quot;].T<br>
-<br>
-&#9;&#9;b_ext[0:r0] = matrices[&quot;rhs&quot;]<br>
-&#9;&#9;b_ext[r0:r1] = matrices[&quot;electric_holonomic_rhs&quot;]<br>
-&#9;&#9;b_ext[r1:r2] = matrices[&quot;load&quot;]<br>
-&#9;&#9;b_ext[r2:r3] = matrices[&quot;holonomic_load&quot;]<br>
-<br>
-&#9;&#9;EM_damping = matrices[&quot;electromechanic_coupling_damping&quot;]<br>
-&#9;&#9;q_dot = self.collect_variables(&quot;velocity&quot;)<br>
-&#9;&#9;b_em = EM_damping @ q_dot<br>
-&#9;&#9;b_ext[r0:r1] += b_em<br>
-<br>
-&#9;&#9;return A_ext, b_ext, variables<br>
-<br>
-&#9;def assemble_extended_system_for_electric(self, matrices: Dict[str, np.ndarray]) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;&#9;n_voltage = self.total_variables_by_tag(tag=&quot;voltage&quot;)<br>
-&#9;&#9;n_currents = self.total_variables_by_tag(tag=&quot;current&quot;)<br>
-<br>
-&#9;&#9;A_ext = np.zeros((n_voltage + n_currents, n_voltage + n_currents))<br>
-&#9;&#9;b_ext = np.zeros(n_voltage + n_currents)<br>
-&#9;&#9;variables = (<br>
-&#9;&#9;&#9;list(self.index_map_by_tag(&quot;voltage&quot;).keys()) +<br>
-&#9;&#9;&#9;list(self.index_map_by_tag(&quot;current&quot;).keys()))<br>
-&#9;&#9;variables = [var for var in variables]<br>
-<br>
-&#9;&#9;r0 = n_voltage<br>
-&#9;&#9;r1 = n_voltage + n_currents<br>
-&#9;&#9;c0 = n_voltage<br>
-&#9;&#9;c1 = n_voltage + n_currents<br>
-<br>
-&#9;&#9;A_ext[0:r0, 0:c0] = matrices[&quot;conductance&quot;]<br>
-&#9;&#9;A_ext[r0:r1, 0:c0] = matrices[&quot;electric_holonomic&quot;]<br>
-&#9;&#9;A_ext[0:r0, c0:c1] = matrices[&quot;electric_holonomic&quot;].T<br>
-&#9;&#9;A_ext[c0:c1, c0:c1] = matrices[&quot;current_to_current&quot;]<br>
-<br>
-&#9;&#9;b_ext[0:r0] = matrices[&quot;rhs&quot;]<br>
-&#9;&#9;b_ext[r0:r1] = matrices[&quot;electric_holonomic_rhs&quot;]<br>
-<br>
-&#9;&#9;return A_ext, b_ext, variables <br>
-<br>
-&#9;def assemble(self):<br>
-&#9;&#9;# Построить карту индексов<br>
-&#9;&#9;index_maps = self.index_maps()<br>
-<br>
-&#9;&#9;# Создать глобальные матрицы и вектор<br>
-&#9;&#9;n_dofs = self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
-&#9;&#9;n_positions = self.total_variables_by_tag(tag=&quot;position&quot;)<br>
-&#9;&#9;n_constraints = self.total_variables_by_tag(tag=&quot;force&quot;)<br>
-<br>
-&#9;&#9;matrices = {<br>
-&#9;&#9;&#9;&quot;mass&quot;: np.zeros((n_dofs, n_dofs)),<br>
-&#9;&#9;&#9;&quot;damping&quot;: np.zeros((n_dofs, n_dofs)),<br>
-&#9;&#9;&#9;&quot;stiffness&quot;: np.zeros((n_dofs, n_positions)),<br>
-&#9;&#9;&#9;&quot;load&quot;: np.zeros(n_dofs),<br>
-&#9;&#9;&#9;&quot;holonomic&quot;: np.zeros((n_constraints, n_dofs)),<br>
-&#9;&#9;&#9;&quot;holonomic_rhs&quot;: np.zeros(n_constraints),<br>
-&#9;&#9;&#9;#&quot;old_q&quot;: self.collect_variables(index_maps[&quot;acceleration&quot;]),<br>
-&#9;&#9;&#9;#&quot;old_q_dot&quot;: self.collect_current_q_dot(index_maps[&quot;acceleration&quot;]),<br>
-&#9;&#9;&#9;#&quot;holonomic_velocity_rhs&quot;: np.zeros(n_constraints),<br>
-&#9;&#9;}<br>
-<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.contribute(matrices, index_maps)<br>
-<br>
-&#9;&#9;return matrices<br>
-<br>
-&#9;def assemble_for_constraints_correction(self):<br>
-&#9;&#9;# Построить карту индексов<br>
-&#9;&#9;index_maps = self.index_maps()<br>
-<br>
-&#9;&#9;# Создать глобальные матрицы и вектор<br>
-&#9;&#9;n_dofs = self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
-&#9;&#9;n_constraints = self.total_variables_by_tag(tag=&quot;force&quot;)<br>
-<br>
-&#9;&#9;matrices = {<br>
-&#9;&#9;&#9;&quot;mass&quot;: np.zeros((n_dofs, n_dofs)),<br>
-&#9;&#9;&#9;&quot;holonomic&quot;: np.zeros((n_constraints, n_dofs)),<br>
-&#9;&#9;&#9;&quot;position_error&quot;: np.zeros(n_constraints),<br>
-&#9;&#9;&#9;&quot;holonomic_velocity_rhs&quot;: np.zeros(n_constraints),<br>
-&#9;&#9;}<br>
-<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.contribute_for_constraints_correction(matrices, index_maps)<br>
-<br>
-&#9;&#9;return matrices<br>
-<br>
-&#9;def assemble_extended_system(self, matrices: Dict[str, np.ndarray]) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;&#9;A = matrices[&quot;mass&quot;]<br>
-&#9;&#9;C = matrices[&quot;damping&quot;]<br>
-&#9;&#9;K = matrices[&quot;stiffness&quot;]<br>
-&#9;&#9;b = matrices[&quot;load&quot;]<br>
-&#9;&#9;old_q_dot = self.collect_variables(&quot;velocity&quot;)<br>
-&#9;&#9;old_q = self.collect_variables(&quot;position&quot;)<br>
-&#9;&#9;H = matrices[&quot;holonomic&quot;]<br>
-&#9;&#9;h = matrices[&quot;holonomic_rhs&quot;]<br>
-<br>
-&#9;&#9;variables = (<br>
-&#9;&#9;&#9;list(self.index_map_by_tag(&quot;acceleration&quot;).keys()) + <br>
-&#9;&#9;&#9;list(self.index_map_by_tag(&quot;force&quot;).keys()))<br>
-&#9;&#9;variables = self.names_from_variables(variables)<br>
-<br>
-&#9;&#9;size = self.total_variables_by_tag(tag=&quot;acceleration&quot;) + self.total_variables_by_tag(tag=&quot;force&quot;)<br>
-&#9;&#9;n_dofs = self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
-&#9;&#9;n_holonomic = self.total_variables_by_tag(tag=&quot;force&quot;)<br>
-<br>
-&#9;&#9;# Расширенная система<br>
-&#9;&#9;A_ext = np.zeros((size, size))<br>
-&#9;&#9;b_ext = np.zeros(size)<br>
-<br>
-&#9;&#9;r0 = A.shape[0]<br>
-&#9;&#9;r1 = A.shape[0] + n_holonomic<br>
-<br>
-&#9;&#9;c0 = A.shape[1]<br>
-&#9;&#9;c1 = A.shape[1] + n_holonomic<br>
-<br>
-&#9;&#9;A_ext[0:r0, 0:c0] = A<br>
-&#9;&#9;A_ext[0:r0, c0:c1] = H.T<br>
-&#9;&#9;A_ext[r0:r1, 0:c0] = H<br>
-&#9;&#9;b_ext[0:r0] = b - C @ old_q_dot - K @ old_q<br>
-&#9;&#9;b_ext[r0:r1] = h<br>
-<br>
-&#9;&#9;return A_ext, b_ext, variables<br>
-<br>
-&#9;def velocity_project_onto_constraints(self, q_dot: np.ndarray, matrices: Dict[str, np.ndarray]) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Проецировать скорости на ограничения&quot;&quot;&quot;<br>
-&#9;&#9;H = matrices[&quot;holonomic&quot;]<br>
-&#9;&#9;h = matrices[&quot;holonomic_velocity_rhs&quot;]<br>
-&#9;&#9;M = matrices[&quot;mass&quot;]<br>
-&#9;&#9;M_inv = np.linalg.inv(M)<br>
-&#9;&#9;return metric_project_onto_constraints(q_dot, H, M_inv, h=h)<br>
-<br>
-&#9;def coords_project_onto_constraints(self, q: np.ndarray, matrices: Dict[str, np.ndarray]) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Проецировать скорости на ограничения&quot;&quot;&quot;<br>
-&#9;&#9;H = matrices[&quot;holonomic&quot;]<br>
-&#9;&#9;f = matrices[&quot;position_error&quot;]<br>
-&#9;&#9;M = matrices[&quot;mass&quot;]<br>
-&#9;&#9;M_inv = np.linalg.inv(M)<br>
-&#9;&#9;return metric_project_onto_constraints(q, H, M_inv, error=f)<br>
-<br>
-&#9;def collect_variables(self, tag: str) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Собрать текущее значение переменных с заданным тегом из всех переменных&quot;&quot;&quot;<br>
-&#9;&#9;q = np.zeros(self.total_variables_by_tag(tag))<br>
-&#9;&#9;index_map = self.index_map_by_tag(tag)<br>
-&#9;&#9;for var in self.variables:<br>
-&#9;&#9;&#9;if var.tag == tag:<br>
-&#9;&#9;&#9;&#9;indices = index_map[var]<br>
-&#9;&#9;&#9;&#9;q[indices] = var.value  # текущее значение<br>
-&#9;&#9;return q<br>
-<br>
-&#9;def upload_variables(self, tag: str, values: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;Загрузить значения переменных с заданным тегом обратно в переменные&quot;&quot;&quot;<br>
-&#9;&#9;index_map = self.index_map_by_tag(tag)<br>
-&#9;&#9;count = 0<br>
-&#9;&#9;for var in self.variables:<br>
-&#9;&#9;&#9;if var.tag == tag:<br>
-&#9;&#9;&#9;&#9;indices = index_map[var]<br>
-&#9;&#9;&#9;&#9;var.set_value(values[indices])<br>
-&#9;&#9;&#9;&#9;count += var.size<br>
-&#9;&#9;if count != len(values):<br>
-&#9;&#9;&#9;raise ValueError(&quot;Количество загруженных значений не соответствует количеству переменных с заданным тегом&quot;)<br>
-<br>
-&#9;def upload_solution(self, variables: List[Variable], values: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;Загрузить значения обратно в переменные по списку Variable&quot;&quot;&quot;<br>
-&#9;&#9;index = 0<br>
-&#9;&#9;for var in variables:<br>
-&#9;&#9;&#9;size = var.size<br>
-&#9;&#9;&#9;var.set_value(values[index:index + size])<br>
-&#9;&#9;&#9;index += size<br>
-&#9;&#9;if index != len(values):<br>
-&#9;&#9;&#9;raise ValueError(&quot;Количество загруженных значений не соответствует количеству переменных&quot;)<br>
-<br>
-&#9;def integrate_with_constraint_projection(self, <br>
-&#9;&#9;&#9;&#9;q_ddot: np.ndarray, matrices: Dict[str, np.ndarray]):<br>
-&#9;&#9;dt = self.time_step<br>
-<br>
-&#9;&#9;self.upload_variables(&quot;acceleration&quot;, q_ddot)<br>
-<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.finish_timestep(dt)<br>
-<br>
-&#9;&#9;q_dot = self.collect_variables(&quot;velocity&quot;)<br>
-<br>
-&#9;&#9;for _ in range(2):  # несколько итераций проекции положений<br>
-&#9;&#9;&#9;q = self.collect_variables(&quot;position&quot;)<br>
-&#9;&#9;&#9;matrices = self.assemble_for_constraints_correction()<br>
-&#9;&#9;&#9;q = self.coords_project_onto_constraints(q, matrices)<br>
-&#9;&#9;&#9;self.upload_variables(&quot;position&quot;, q)<br>
-&#9;&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;&#9;if hasattr(contribution, &quot;finish_correction_step&quot;):<br>
-&#9;&#9;&#9;&#9;&#9;contribution.finish_correction_step()<br>
-&#9;&#9;<br>
-&#9;&#9;matrices = self.assemble_for_constraints_correction()<br>
-&#9;&#9;q_dot = self.velocity_project_onto_constraints(q_dot, matrices)   <br>
-&#9;&#9;self.upload_variables(&quot;velocity&quot;, q_dot)<br>
-<br>
-&#9;&#9;return q_dot, q<br>
-<br>
-&#9;def sort_results(self, x_ext: np.ndarray) -&gt; Tuple[np.ndarray, np.ndarray, np.ndarray]:<br>
-&#9;&#9;&quot;&quot;&quot;Разделить расширенное решение на ускорения и множители Лагранжа&quot;&quot;&quot;<br>
-&#9;&#9;n_dofs = self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
-&#9;&#9;n_holonomic = self.total_variables_by_tag(tag=&quot;force&quot;)<br>
-<br>
-&#9;&#9;q_ddot = x_ext[:n_dofs]<br>
-&#9;&#9;holonomic_lambdas = x_ext[n_dofs:n_dofs + n_holonomic]<br>
-<br>
-&#9;&#9;nonholonomic_lambdas = []<br>
-<br>
-&#9;&#9;return q_ddot, holonomic_lambdas, nonholonomic_lambdas<br>
-<br>
-&#9;def integrate_velocities(self, old_q_dot: np.ndarray, q_ddot: np.ndarray) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Интегрировать ускорения для получения новых скоростей&quot;&quot;&quot;<br>
-&#9;&#9;return old_q_dot + q_ddot * self.time_step<br>
-<br>
-&#9;def restore_velocity_constraints(self, q_dot: np.ndarray, HN: np.ndarray, hn: np.ndarray) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Восстановить ограничения на скорости (например, для закрепленных тел)<br>
-<br>
-&#9;&#9;&#9;HN - матрица ограничений на скорости, объединение H и N<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return project_onto_affine(q_dot, HN, hn)<br>
-<br>
-&#9;def integrate_positions(self, old_q: np.ndarray, q_dot: np.ndarray, q_ddot: np.ndarray) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Интегрировать скорости для получения новых положений&quot;&quot;&quot;<br>
-&#9;&#9;return old_q + q_dot * self.time_step + 0.5 * q_ddot * self.time_step**2<br>
-<br>
-&#9;# def restore_position_constraints(self, q: np.ndarray, H: np.ndarray, h: np.ndarray) -&gt; np.ndarray:<br>
-&#9;#     &quot;&quot;&quot;Восстановить ограничения на положения (например, для закрепленных тел)&quot;&quot;&quot;<br>
-&#9;#     return project_onto_affine(q, H, h)<br>
-<br>
-&#9;def upload_results(self, q_ddot: np.ndarray, q_dot: np.ndarray, q: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;Загрузить результаты обратно в переменные&quot;&quot;&quot;<br>
-&#9;&#9;index_map = self.index_maps()[&quot;acceleration&quot;]<br>
-&#9;&#9;for var in self.variables:<br>
-&#9;&#9;&#9;if var.tag == &quot;acceleration&quot;:<br>
-&#9;&#9;&#9;&#9;indices = index_map[var]<br>
-&#9;&#9;&#9;&#9;var.set_values(q_ddot[indices], q_dot[indices], q[indices])<br>
-<br>
-&#9;def upload_result_values(self, q: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;Загрузить только положения обратно в переменные&quot;&quot;&quot;<br>
-&#9;&#9;index_map = self.index_maps()[&quot;acceleration&quot;]<br>
-&#9;&#9;for var in self.variables:<br>
-&#9;&#9;&#9;if var.tag == &quot;acceleration&quot;:<br>
-&#9;&#9;&#9;&#9;indices = index_map[var]<br>
-&#9;&#9;&#9;&#9;var.set_value(q[indices])<br>
-<br>
-&#9;def integrate_nonlinear(self):<br>
-&#9;&#9;&quot;&quot;&quot;Интегрировать нелинейные переменные (если есть)&quot;&quot;&quot;<br>
-&#9;&#9;index_map = self.index_maps()[&quot;acceleration&quot;]<br>
-&#9;&#9;for var in self.variables:<br>
-&#9;&#9;&#9;if var.tag == &quot;acceleration&quot;:<br>
-&#9;&#9;&#9;&#9;var.integrate_nonlinear(self.time_step)<br>
+from&nbsp;termin.fem.assembler&nbsp;import&nbsp;MatrixAssembler,&nbsp;Variable,&nbsp;Contribution<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;List,&nbsp;Tuple<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;termin.linalg.subspaces&nbsp;import&nbsp;project_onto_affine,&nbsp;metric_project_onto_constraints&nbsp;<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+<br>
+class&nbsp;DynamicMatrixAssembler(MatrixAssembler):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.time_step&nbsp;=&nbsp;0.01<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_build_index_maps(self)&nbsp;-&gt;&nbsp;Dict[Variable,&nbsp;List[int]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Построить&nbsp;отображение:&nbsp;Variable&nbsp;-&gt;&nbsp;глобальные&nbsp;индексы&nbsp;DOF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Назначает&nbsp;каждой&nbsp;компоненте&nbsp;каждой&nbsp;переменной&nbsp;уникальный<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;глобальный&nbsp;индекс&nbsp;в&nbsp;системе.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._index_map_by_tags&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tags&nbsp;=&nbsp;set(var.tag&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;tag&nbsp;in&nbsp;tags:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vars_with_tag&nbsp;=&nbsp;[var&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables&nbsp;if&nbsp;var.tag&nbsp;==&nbsp;tag]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self._build_index_map(vars_with_tag)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._index_map_by_tags[tag]&nbsp;=&nbsp;index_map<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._index_map&nbsp;=&nbsp;self._index_map_by_tags.get(&quot;acceleration&quot;,&nbsp;{})<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._holonomic_index_map&nbsp;=&nbsp;self._index_map_by_tags.get(&quot;force&quot;,&nbsp;{})<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dirty_index_map&nbsp;=&nbsp;False<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;def&nbsp;collect_current_q(self,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Собрать&nbsp;текущее&nbsp;значение&nbsp;q&nbsp;из&nbsp;всех&nbsp;переменных&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;old_q&nbsp;=&nbsp;np.zeros(self.total_variables_by_tag(&quot;acceleration&quot;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var.tag&nbsp;==&nbsp;&quot;acceleration&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;old_q[indices]&nbsp;=&nbsp;var.value_by_rank(2)&nbsp;&nbsp;#&nbsp;текущее&nbsp;значение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;old_q<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;def&nbsp;collect_current_q_dot(self,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Собрать&nbsp;текущее&nbsp;значение&nbsp;q_dot&nbsp;из&nbsp;всех&nbsp;переменных&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;old_q_dot&nbsp;=&nbsp;np.zeros(self.total_variables_by_tag(&quot;acceleration&quot;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var.tag&nbsp;==&nbsp;&quot;acceleration&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;old_q_dot[indices]&nbsp;=&nbsp;var.value_by_rank(1)&nbsp;&nbsp;#&nbsp;текущее&nbsp;значение&nbsp;скорости<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;old_q_dot<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;def&nbsp;set_old_q(self,&nbsp;q:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Установить&nbsp;старое&nbsp;значение&nbsp;q&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.old_q&nbsp;=&nbsp;np.array(q)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;def&nbsp;set_old_q_dot(self,&nbsp;q_dot:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Установить&nbsp;старое&nbsp;значение&nbsp;q_dot&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.old_q_dot&nbsp;=&nbsp;np.array(q_dot)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;index_maps(self)&nbsp;-&gt;&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Получить&nbsp;текущее&nbsp;отображение&nbsp;Variable&nbsp;-&gt;&nbsp;глобальные&nbsp;индексы&nbsp;DOF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;для&nbsp;разных&nbsp;типов&nbsp;переменных<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._dirty_index_map:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._build_index_maps()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;acceleration&quot;:&nbsp;self._index_map,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;force&quot;:&nbsp;self._holonomic_index_map<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;index_map_by_tag(self,&nbsp;tag:&nbsp;str)&nbsp;-&gt;&nbsp;Dict[Variable,&nbsp;List[int]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Получить&nbsp;текущее&nbsp;отображение&nbsp;Variable&nbsp;-&gt;&nbsp;глобальные&nbsp;индексы&nbsp;DOF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;для&nbsp;переменных&nbsp;с&nbsp;заданным&nbsp;тегом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._dirty_index_map:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._build_index_maps()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._index_map_by_tags.get(tag,&nbsp;{})<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_electric_domain(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Построить&nbsp;карту&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_maps&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;voltage&quot;:&nbsp;self.index_map_by_tag(&quot;voltage&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;current&quot;:&nbsp;self.index_map_by_tag(&quot;current&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&quot;charge&quot;:&nbsp;self.index_map_by_tag(&quot;charge&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;глобальные&nbsp;матрицы&nbsp;и&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_voltage&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;voltage&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_currents&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;current&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#n_charge&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;charge&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrices&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;conductance&quot;:&nbsp;np.zeros((n_voltage,&nbsp;n_voltage)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;electric_holonomic&quot;:&nbsp;np.zeros((n_currents,&nbsp;n_voltage)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;electric_holonomic_rhs&quot;:&nbsp;np.zeros(n_currents),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;rhs&quot;:&nbsp;np.zeros(n_voltage),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;current_to_current&quot;:&nbsp;np.zeros((n_currents,&nbsp;n_currents)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&quot;charge_constraint&quot;:&nbsp;np.zeros((n_charge,&nbsp;n_voltage)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&quot;charge_constraint_rhs&quot;:&nbsp;np.zeros((n_charge)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;matrices<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_electromechanic_domain(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Построить&nbsp;карту&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_maps&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;voltage&quot;:&nbsp;self.index_map_by_tag(&quot;voltage&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;current&quot;:&nbsp;self.index_map_by_tag(&quot;current&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;acceleration&quot;:&nbsp;self.index_map_by_tag(&quot;acceleration&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;force&quot;:&nbsp;self.index_map_by_tag(&quot;force&quot;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;глобальные&nbsp;матрицы&nbsp;и&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_voltage&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;voltage&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_currents&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;current&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_acceleration&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_force&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;force&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrices&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;conductance&quot;:&nbsp;np.zeros((n_voltage,&nbsp;n_voltage)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mass&quot;:&nbsp;np.zeros((n_acceleration,&nbsp;n_acceleration)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;load&quot;&nbsp;:&nbsp;np.zeros(n_acceleration),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;electric_holonomic&quot;:&nbsp;np.zeros((n_currents,&nbsp;n_voltage)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;electric_holonomic_rhs&quot;:&nbsp;np.zeros(n_currents),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;current_to_current&quot;:&nbsp;np.zeros((n_currents,&nbsp;n_currents)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;holonomic&quot;:&nbsp;np.zeros((n_force,&nbsp;n_acceleration)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;electromechanic_coupling&quot;:&nbsp;np.zeros((n_acceleration,&nbsp;n_currents)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;electromechanic_coupling_damping&quot;:&nbsp;np.zeros((n_acceleration,&nbsp;n_currents)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;holonomic_load&quot;:&nbsp;np.zeros(n_force),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;rhs&quot;:&nbsp;np.zeros(n_voltage),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;matrices<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;names_from_variables(self,&nbsp;variables:&nbsp;List[Variable])&nbsp;-&gt;&nbsp;List[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Получить&nbsp;список&nbsp;имен&nbsp;переменных&nbsp;из&nbsp;списка&nbsp;Variable&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;names&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;names.extend(var.names())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;names<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_extended_system_for_electromechanic(self,&nbsp;matrices:&nbsp;Dict[str,&nbsp;np.ndarray])&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_voltage&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;voltage&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_currents&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;current&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_acceleration&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_force&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;force&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext&nbsp;=&nbsp;np.zeros((n_voltage&nbsp;+&nbsp;n_currents&nbsp;+&nbsp;n_acceleration&nbsp;+&nbsp;n_force,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_voltage&nbsp;+&nbsp;n_currents&nbsp;+&nbsp;n_acceleration&nbsp;+&nbsp;n_force))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;С_ext&nbsp;=&nbsp;np.zeros((n_voltage&nbsp;+&nbsp;n_currents&nbsp;+&nbsp;n_acceleration&nbsp;+&nbsp;n_force,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_voltage&nbsp;+&nbsp;n_currents&nbsp;+&nbsp;n_acceleration&nbsp;+&nbsp;n_force))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext&nbsp;=&nbsp;np.zeros(n_voltage&nbsp;+&nbsp;n_currents&nbsp;+&nbsp;n_acceleration&nbsp;+&nbsp;n_force)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables&nbsp;=&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list(self.index_map_by_tag(&quot;voltage&quot;).keys())&nbsp;+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list(self.index_map_by_tag(&quot;current&quot;).keys())&nbsp;+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list(self.index_map_by_tag(&quot;acceleration&quot;).keys())&nbsp;+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list(self.index_map_by_tag(&quot;force&quot;).keys())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables&nbsp;=&nbsp;self.names_from_variables(variables)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r0&nbsp;=&nbsp;n_voltage<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r1&nbsp;=&nbsp;n_voltage&nbsp;+&nbsp;n_currents<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r2&nbsp;=&nbsp;n_voltage&nbsp;+&nbsp;n_currents&nbsp;+&nbsp;n_acceleration<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r3&nbsp;=&nbsp;n_voltage&nbsp;+&nbsp;n_currents&nbsp;+&nbsp;n_acceleration&nbsp;+&nbsp;n_force<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#v&nbsp;=&nbsp;[0:r0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#c&nbsp;=&nbsp;[r0:r1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#a&nbsp;=&nbsp;[r1:r2]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#f&nbsp;=&nbsp;[r2:r3]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(r0,&nbsp;r1,&nbsp;r2,&nbsp;r3)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(matrices[&quot;electromechanic_coupling&quot;].shape)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[0:r0,&nbsp;0:r0]&nbsp;=&nbsp;matrices[&quot;conductance&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r0:r1,&nbsp;0:r0]&nbsp;=&nbsp;matrices[&quot;electric_holonomic&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[0:r0,&nbsp;r0:r1]&nbsp;=&nbsp;matrices[&quot;electric_holonomic&quot;].T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r0:r1,&nbsp;r0:r1]&nbsp;=&nbsp;matrices[&quot;current_to_current&quot;]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r1:r2,&nbsp;r1:r2]&nbsp;=&nbsp;matrices[&quot;mass&quot;]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r2:r3,&nbsp;r1:r2]&nbsp;=&nbsp;matrices[&quot;holonomic&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r1:r2,&nbsp;r2:r3]&nbsp;=&nbsp;matrices[&quot;holonomic&quot;].T<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r1:r2,&nbsp;r0:r1]&nbsp;=&nbsp;matrices[&quot;electromechanic_coupling&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#A_ext[r0:r1,&nbsp;r1:r2]&nbsp;=&nbsp;matrices[&quot;electromechanic_coupling&quot;].T<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[0:r0]&nbsp;=&nbsp;matrices[&quot;rhs&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[r0:r1]&nbsp;=&nbsp;matrices[&quot;electric_holonomic_rhs&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[r1:r2]&nbsp;=&nbsp;matrices[&quot;load&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[r2:r3]&nbsp;=&nbsp;matrices[&quot;holonomic_load&quot;]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EM_damping&nbsp;=&nbsp;matrices[&quot;electromechanic_coupling_damping&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_dot&nbsp;=&nbsp;self.collect_variables(&quot;velocity&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_em&nbsp;=&nbsp;EM_damping&nbsp;@&nbsp;q_dot<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[r0:r1]&nbsp;+=&nbsp;b_em<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A_ext,&nbsp;b_ext,&nbsp;variables<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_extended_system_for_electric(self,&nbsp;matrices:&nbsp;Dict[str,&nbsp;np.ndarray])&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_voltage&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;voltage&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_currents&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;current&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext&nbsp;=&nbsp;np.zeros((n_voltage&nbsp;+&nbsp;n_currents,&nbsp;n_voltage&nbsp;+&nbsp;n_currents))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext&nbsp;=&nbsp;np.zeros(n_voltage&nbsp;+&nbsp;n_currents)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables&nbsp;=&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list(self.index_map_by_tag(&quot;voltage&quot;).keys())&nbsp;+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list(self.index_map_by_tag(&quot;current&quot;).keys()))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables&nbsp;=&nbsp;[var&nbsp;for&nbsp;var&nbsp;in&nbsp;variables]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r0&nbsp;=&nbsp;n_voltage<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r1&nbsp;=&nbsp;n_voltage&nbsp;+&nbsp;n_currents<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c0&nbsp;=&nbsp;n_voltage<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c1&nbsp;=&nbsp;n_voltage&nbsp;+&nbsp;n_currents<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[0:r0,&nbsp;0:c0]&nbsp;=&nbsp;matrices[&quot;conductance&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r0:r1,&nbsp;0:c0]&nbsp;=&nbsp;matrices[&quot;electric_holonomic&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[0:r0,&nbsp;c0:c1]&nbsp;=&nbsp;matrices[&quot;electric_holonomic&quot;].T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[c0:c1,&nbsp;c0:c1]&nbsp;=&nbsp;matrices[&quot;current_to_current&quot;]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[0:r0]&nbsp;=&nbsp;matrices[&quot;rhs&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[r0:r1]&nbsp;=&nbsp;matrices[&quot;electric_holonomic_rhs&quot;]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A_ext,&nbsp;b_ext,&nbsp;variables&nbsp;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Построить&nbsp;карту&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_maps&nbsp;=&nbsp;self.index_maps()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;глобальные&nbsp;матрицы&nbsp;и&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_positions&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;position&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_constraints&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;force&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrices&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mass&quot;:&nbsp;np.zeros((n_dofs,&nbsp;n_dofs)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;damping&quot;:&nbsp;np.zeros((n_dofs,&nbsp;n_dofs)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;stiffness&quot;:&nbsp;np.zeros((n_dofs,&nbsp;n_positions)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;load&quot;:&nbsp;np.zeros(n_dofs),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;holonomic&quot;:&nbsp;np.zeros((n_constraints,&nbsp;n_dofs)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;holonomic_rhs&quot;:&nbsp;np.zeros(n_constraints),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&quot;old_q&quot;:&nbsp;self.collect_variables(index_maps[&quot;acceleration&quot;]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&quot;old_q_dot&quot;:&nbsp;self.collect_current_q_dot(index_maps[&quot;acceleration&quot;]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&quot;holonomic_velocity_rhs&quot;:&nbsp;np.zeros(n_constraints),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;matrices<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_for_constraints_correction(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Построить&nbsp;карту&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_maps&nbsp;=&nbsp;self.index_maps()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;глобальные&nbsp;матрицы&nbsp;и&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_constraints&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;force&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrices&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mass&quot;:&nbsp;np.zeros((n_dofs,&nbsp;n_dofs)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;holonomic&quot;:&nbsp;np.zeros((n_constraints,&nbsp;n_dofs)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;position_error&quot;:&nbsp;np.zeros(n_constraints),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;holonomic_velocity_rhs&quot;:&nbsp;np.zeros(n_constraints),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_for_constraints_correction(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;matrices<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_extended_system(self,&nbsp;matrices:&nbsp;Dict[str,&nbsp;np.ndarray])&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;matrices[&quot;mass&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;=&nbsp;matrices[&quot;damping&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;K&nbsp;=&nbsp;matrices[&quot;stiffness&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;matrices[&quot;load&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;old_q_dot&nbsp;=&nbsp;self.collect_variables(&quot;velocity&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;old_q&nbsp;=&nbsp;self.collect_variables(&quot;position&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;matrices[&quot;holonomic&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;=&nbsp;matrices[&quot;holonomic_rhs&quot;]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables&nbsp;=&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list(self.index_map_by_tag(&quot;acceleration&quot;).keys())&nbsp;+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list(self.index_map_by_tag(&quot;force&quot;).keys()))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables&nbsp;=&nbsp;self.names_from_variables(variables)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;acceleration&quot;)&nbsp;+&nbsp;self.total_variables_by_tag(tag=&quot;force&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_holonomic&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;force&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Расширенная&nbsp;система<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext&nbsp;=&nbsp;np.zeros((size,&nbsp;size))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext&nbsp;=&nbsp;np.zeros(size)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r0&nbsp;=&nbsp;A.shape[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r1&nbsp;=&nbsp;A.shape[0]&nbsp;+&nbsp;n_holonomic<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c0&nbsp;=&nbsp;A.shape[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c1&nbsp;=&nbsp;A.shape[1]&nbsp;+&nbsp;n_holonomic<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[0:r0,&nbsp;0:c0]&nbsp;=&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[0:r0,&nbsp;c0:c1]&nbsp;=&nbsp;H.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r0:r1,&nbsp;0:c0]&nbsp;=&nbsp;H<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[0:r0]&nbsp;=&nbsp;b&nbsp;-&nbsp;C&nbsp;@&nbsp;old_q_dot&nbsp;-&nbsp;K&nbsp;@&nbsp;old_q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[r0:r1]&nbsp;=&nbsp;h<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A_ext,&nbsp;b_ext,&nbsp;variables<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;velocity_project_onto_constraints(self,&nbsp;q_dot:&nbsp;np.ndarray,&nbsp;matrices:&nbsp;Dict[str,&nbsp;np.ndarray])&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Проецировать&nbsp;скорости&nbsp;на&nbsp;ограничения&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;matrices[&quot;holonomic&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;=&nbsp;matrices[&quot;holonomic_velocity_rhs&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;M&nbsp;=&nbsp;matrices[&quot;mass&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;M_inv&nbsp;=&nbsp;np.linalg.inv(M)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;metric_project_onto_constraints(q_dot,&nbsp;H,&nbsp;M_inv,&nbsp;h=h)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;coords_project_onto_constraints(self,&nbsp;q:&nbsp;np.ndarray,&nbsp;matrices:&nbsp;Dict[str,&nbsp;np.ndarray])&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Проецировать&nbsp;скорости&nbsp;на&nbsp;ограничения&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;matrices[&quot;holonomic&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&nbsp;=&nbsp;matrices[&quot;position_error&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;M&nbsp;=&nbsp;matrices[&quot;mass&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;M_inv&nbsp;=&nbsp;np.linalg.inv(M)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;metric_project_onto_constraints(q,&nbsp;H,&nbsp;M_inv,&nbsp;error=f)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;collect_variables(self,&nbsp;tag:&nbsp;str)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Собрать&nbsp;текущее&nbsp;значение&nbsp;переменных&nbsp;с&nbsp;заданным&nbsp;тегом&nbsp;из&nbsp;всех&nbsp;переменных&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;np.zeros(self.total_variables_by_tag(tag))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_map_by_tag(tag)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var.tag&nbsp;==&nbsp;tag:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q[indices]&nbsp;=&nbsp;var.value&nbsp;&nbsp;#&nbsp;текущее&nbsp;значение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;q<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;upload_variables(self,&nbsp;tag:&nbsp;str,&nbsp;values:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Загрузить&nbsp;значения&nbsp;переменных&nbsp;с&nbsp;заданным&nbsp;тегом&nbsp;обратно&nbsp;в&nbsp;переменные&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_map_by_tag(tag)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;count&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var.tag&nbsp;==&nbsp;tag:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.set_value(values[indices])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;count&nbsp;+=&nbsp;var.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;count&nbsp;!=&nbsp;len(values):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Количество&nbsp;загруженных&nbsp;значений&nbsp;не&nbsp;соответствует&nbsp;количеству&nbsp;переменных&nbsp;с&nbsp;заданным&nbsp;тегом&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;upload_solution(self,&nbsp;variables:&nbsp;List[Variable],&nbsp;values:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Загрузить&nbsp;значения&nbsp;обратно&nbsp;в&nbsp;переменные&nbsp;по&nbsp;списку&nbsp;Variable&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size&nbsp;=&nbsp;var.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.set_value(values[index:index&nbsp;+&nbsp;size])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index&nbsp;+=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;index&nbsp;!=&nbsp;len(values):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Количество&nbsp;загруженных&nbsp;значений&nbsp;не&nbsp;соответствует&nbsp;количеству&nbsp;переменных&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;integrate_with_constraint_projection(self,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_ddot:&nbsp;np.ndarray,&nbsp;matrices:&nbsp;Dict[str,&nbsp;np.ndarray]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dt&nbsp;=&nbsp;self.time_step<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.upload_variables(&quot;acceleration&quot;,&nbsp;q_ddot)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.finish_timestep(dt)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_dot&nbsp;=&nbsp;self.collect_variables(&quot;velocity&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;range(2):&nbsp;&nbsp;#&nbsp;несколько&nbsp;итераций&nbsp;проекции&nbsp;положений<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;self.collect_variables(&quot;position&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrices&nbsp;=&nbsp;self.assemble_for_constraints_correction()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;self.coords_project_onto_constraints(q,&nbsp;matrices)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.upload_variables(&quot;position&quot;,&nbsp;q)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(contribution,&nbsp;&quot;finish_correction_step&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.finish_correction_step()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrices&nbsp;=&nbsp;self.assemble_for_constraints_correction()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_dot&nbsp;=&nbsp;self.velocity_project_onto_constraints(q_dot,&nbsp;matrices)&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.upload_variables(&quot;velocity&quot;,&nbsp;q_dot)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;q_dot,&nbsp;q<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;sort_results(self,&nbsp;x_ext:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Разделить&nbsp;расширенное&nbsp;решение&nbsp;на&nbsp;ускорения&nbsp;и&nbsp;множители&nbsp;Лагранжа&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;acceleration&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_holonomic&nbsp;=&nbsp;self.total_variables_by_tag(tag=&quot;force&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_ddot&nbsp;=&nbsp;x_ext[:n_dofs]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;holonomic_lambdas&nbsp;=&nbsp;x_ext[n_dofs:n_dofs&nbsp;+&nbsp;n_holonomic]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nonholonomic_lambdas&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;q_ddot,&nbsp;holonomic_lambdas,&nbsp;nonholonomic_lambdas<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;integrate_velocities(self,&nbsp;old_q_dot:&nbsp;np.ndarray,&nbsp;q_ddot:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Интегрировать&nbsp;ускорения&nbsp;для&nbsp;получения&nbsp;новых&nbsp;скоростей&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;old_q_dot&nbsp;+&nbsp;q_ddot&nbsp;*&nbsp;self.time_step<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;restore_velocity_constraints(self,&nbsp;q_dot:&nbsp;np.ndarray,&nbsp;HN:&nbsp;np.ndarray,&nbsp;hn:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Восстановить&nbsp;ограничения&nbsp;на&nbsp;скорости&nbsp;(например,&nbsp;для&nbsp;закрепленных&nbsp;тел)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HN&nbsp;-&nbsp;матрица&nbsp;ограничений&nbsp;на&nbsp;скорости,&nbsp;объединение&nbsp;H&nbsp;и&nbsp;N<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;project_onto_affine(q_dot,&nbsp;HN,&nbsp;hn)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;integrate_positions(self,&nbsp;old_q:&nbsp;np.ndarray,&nbsp;q_dot:&nbsp;np.ndarray,&nbsp;q_ddot:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Интегрировать&nbsp;скорости&nbsp;для&nbsp;получения&nbsp;новых&nbsp;положений&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;old_q&nbsp;+&nbsp;q_dot&nbsp;*&nbsp;self.time_step&nbsp;+&nbsp;0.5&nbsp;*&nbsp;q_ddot&nbsp;*&nbsp;self.time_step**2<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;def&nbsp;restore_position_constraints(self,&nbsp;q:&nbsp;np.ndarray,&nbsp;H:&nbsp;np.ndarray,&nbsp;h:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Восстановить&nbsp;ограничения&nbsp;на&nbsp;положения&nbsp;(например,&nbsp;для&nbsp;закрепленных&nbsp;тел)&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;project_onto_affine(q,&nbsp;H,&nbsp;h)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;upload_results(self,&nbsp;q_ddot:&nbsp;np.ndarray,&nbsp;q_dot:&nbsp;np.ndarray,&nbsp;q:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Загрузить&nbsp;результаты&nbsp;обратно&nbsp;в&nbsp;переменные&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_maps()[&quot;acceleration&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var.tag&nbsp;==&nbsp;&quot;acceleration&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.set_values(q_ddot[indices],&nbsp;q_dot[indices],&nbsp;q[indices])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;upload_result_values(self,&nbsp;q:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Загрузить&nbsp;только&nbsp;положения&nbsp;обратно&nbsp;в&nbsp;переменные&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_maps()[&quot;acceleration&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var.tag&nbsp;==&nbsp;&quot;acceleration&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.set_value(q[indices])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;integrate_nonlinear(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Интегрировать&nbsp;нелинейные&nbsp;переменные&nbsp;(если&nbsp;есть)&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_maps()[&quot;acceleration&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var.tag&nbsp;==&nbsp;&quot;acceleration&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.integrate_nonlinear(self.time_step)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

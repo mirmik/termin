@@ -6,356 +6,356 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy<br>
-import math<br>
-from .pose3 import Pose3<br>
-<br>
-def cross2d(scalar, vec):<br>
-&#9;&quot;&quot;&quot;2D cross product: scalar × vector = [vy, -vx] * scalar&quot;&quot;&quot;<br>
-&#9;return scalar * numpy.array([vec[1], -vec[0]])<br>
-<br>
-def cross2d_scalar(vec1, vec2):<br>
-&#9;&quot;&quot;&quot;2D cross product returning scalar: vec1 × vec2 = v1x*v2y - v1y*v2x&quot;&quot;&quot;<br>
-&#9;return vec1[0]*vec2[1] - vec1[1]*vec2[0]<br>
-<br>
-def cross2d_xz(vec, scalar):<br>
-&#9;&quot;&quot;&quot;2D cross product for twist transformation: vector × scalar = [-sy, sx]&quot;&quot;&quot;<br>
-&#9;return numpy.array([-scalar * vec[1], scalar * vec[0]])<br>
-<br>
-class Screw:<br>
-&#9;&quot;&quot;&quot;A class representing a pair of vector and bivector&quot;&quot;&quot;<br>
-&#9;def __init__(self, ang, lin):<br>
-&#9;&#9;self.ang = ang  # Bivector part<br>
-&#9;&#9;self.lin = lin  # Vector part<br>
-<br>
-&#9;&#9;if not isinstance(self.ang, numpy.ndarray):<br>
-&#9;&#9;&#9;raise Exception(&quot;ang must be ndarray&quot;)<br>
-<br>
-&#9;&#9;if not isinstance(self.lin, numpy.ndarray):<br>
-&#9;&#9;&#9;raise Exception(&quot;lin must be ndarray&quot;)<br>
-<br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return f&quot;Screw(ang={self.ang}, lin={self.lin})&quot;<br>
-<br>
-class Screw2(Screw):<br>
-&#9;&quot;&quot;&quot;A 2D Screw specialized for planar motions.&quot;&quot;&quot;<br>
-&#9;def __init__(self, ang: numpy.ndarray, lin: numpy.ndarray):<br>
-<br>
-&#9;&#9;if not isinstance(ang, numpy.ndarray):<br>
-&#9;&#9;&#9;ang = numpy.array(ang)<br>
-<br>
-&#9;&#9;# # check shapes<br>
-&#9;&#9;# if ang.shape != (1,) and ang.shape != ():<br>
-&#9;&#9;#     raise Exception(&quot;ang must be a scalar or shape (1,) ndarray&quot;)<br>
-<br>
-&#9;&#9;# if lin.shape != (2,):<br>
-&#9;&#9;#     raise Exception(f&quot;lin must be shape (2,) ndarray, got {lin.shape}&quot;)<br>
-<br>
-&#9;&#9;ang = ang.reshape(1)<br>
-&#9;&#9;lin = lin.reshape(2)<br>
-<br>
-&#9;&#9;super().__init__(ang=ang, lin=lin)<br>
-<br>
-&#9;def moment(self) -&gt; float:<br>
-&#9;&#9;&quot;&quot;&quot;Return the moment (bivector part) of the screw.&quot;&quot;&quot;<br>
-&#9;&#9;return self.ang.item() if self.ang.shape == () or self.ang.shape == (1,) else self.ang[0]<br>
-<br>
-&#9;def vector(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Return the vector part of the screw.&quot;&quot;&quot;<br>
-&#9;&#9;return self.lin<br>
-<br>
-&#9;def kinematic_carry(self, arm: &quot;Vector2&quot;) -&gt; &quot;Screw2&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Twist transform. Carry the screw by arm. For pair of angular and linear speeds.&quot;&quot;&quot;<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;lin=self.lin + cross2d(self.moment(), arm),<br>
-&#9;&#9;&#9;ang=self.ang)<br>
-<br>
-&#9;def force_carry(self, arm: &quot;Vector2&quot;) -&gt; &quot;Screw2&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Wrench transform. Carry the screw by arm. For pair of torques and forces.&quot;&quot;&quot;<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;ang=self.ang - numpy.array([cross2d_scalar(arm, self.lin)]),<br>
-&#9;&#9;&#9;lin=self.lin)<br>
-<br>
-&#9;def twist_carry(self, arm: &quot;Vector2&quot;) -&gt; &quot;Screw2&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Alias for kinematic_carry.&quot;&quot;&quot;<br>
-&#9;&#9;return self.kinematic_carry(arm)<br>
-<br>
-&#9;def wrench_carry(self, arm: &quot;Vector2&quot;) -&gt; &quot;Screw2&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Alias for force_carry.&quot;&quot;&quot;<br>
-&#9;&#9;return self.force_carry(arm)<br>
-<br>
-&#9;def transform_by(self, trans):<br>
-&#9;&#9;return Screw2(ang=self.ang, lin=trans.transform_vector(self.lin))<br>
-<br>
-&#9;def rotated_by(self, trans):<br>
-&#9;&#9;return Screw2(ang=self.ang, lin=trans.rotate_vector(self.lin))<br>
-<br>
-&#9;def inverse_transform_by(self, trans):<br>
-&#9;&#9;return Screw2(ang=self.ang, lin=trans.inverse_transform_vector(self.lin))<br>
-<br>
-&#9;def transform_as_twist_by(self, trans):<br>
-&#9;&#9;rlin = trans.transform_vector(self.lin)<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;lin=rlin + cross2d_xz(trans.lin, self.moment()),<br>
-&#9;&#9;&#9;ang=self.ang,<br>
-&#9;&#9;)<br>
-<br>
-&#9;def inverse_transform_as_twist_by(self, trans):<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;ang=self.ang,<br>
-&#9;&#9;&#9;lin=trans.inverse_transform_vector(self.lin - cross2d_xz(trans.lin, self.moment()))<br>
-&#9;&#9;)<br>
-<br>
-&#9;def transform_as_wrench_by(self, trans):<br>
-&#9;&#9;&quot;&quot;&quot;Transform wrench (moment + force) under SE(2) transform.&quot;&quot;&quot;<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;ang=self.ang + numpy.array([cross2d_scalar(trans.lin, self.lin)]),<br>
-&#9;&#9;&#9;lin=trans.transform_vector(self.lin)<br>
-&#9;&#9;)<br>
-<br>
-&#9;def inverse_transform_as_wrench_by(self, trans):<br>
-&#9;&#9;&quot;&quot;&quot;Inverse transform of a wrench under SE(2) transform.&quot;&quot;&quot;<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;ang=self.ang - numpy.array([cross2d_scalar(trans.lin, self.lin)]),<br>
-&#9;&#9;&#9;lin=trans.inverse_transform_vector(self.lin)<br>
-&#9;&#9;)<br>
-<br>
-&#9;def __mul__(self, oth):<br>
-&#9;&#9;return Screw2(self.ang * oth, self.lin * oth)<br>
-<br>
-&#9;def __add__(self, oth):<br>
-&#9;&#9;return Screw2(self.ang + oth.ang, self.lin + oth.lin)<br>
-<br>
-&#9;def __sub__(self, oth):<br>
-&#9;&#9;return Screw2(self.ang - oth.ang, self.lin - oth.lin)<br>
-<br>
-&#9;def to_vector_vw_order(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Return the screw as a 3x1 array in [vx, vy, w] order.&quot;&quot;&quot;<br>
-&#9;&#9;return numpy.array([self.lin[0], self.lin[1], self.moment()], float)<br>
-<br>
-&#9;def to_vector_wv_order(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Return the screw as a 3x1 array in [w, vx, vy] order.&quot;&quot;&quot;<br>
-&#9;&#9;return numpy.array([self.moment(), self.lin[0], self.lin[1]], float)<br>
-<br>
-&#9;def from_vector_vw_order(vec: numpy.ndarray) -&gt; &quot;Screw2&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Create a Screw2 from a 3x1 array in [vx, vy, w] order.&quot;&quot;&quot;<br>
-&#9;&#9;if vec.shape != (3,):<br>
-&#9;&#9;&#9;raise Exception(&quot;Input vector must be of shape (3,)&quot;)<br>
-<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;ang=numpy.array([vec[2]]),<br>
-&#9;&#9;&#9;lin=numpy.array([vec[0], vec[1]])<br>
-&#9;&#9;)<br>
-<br>
-&#9;def from_vector_wv_order(vec: numpy.ndarray) -&gt; &quot;Screw2&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Create a Screw2 from a 3x1 array in [w, vx, vy] order.&quot;&quot;&quot;<br>
-&#9;&#9;if vec.shape != (3,):<br>
-&#9;&#9;&#9;raise Exception(&quot;Input vector must be of shape (3,)&quot;)<br>
-<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;ang=numpy.array([vec[0]]),<br>
-&#9;&#9;&#9;lin=numpy.array([vec[1], vec[2]])<br>
-&#9;&#9;)<br>
-<br>
-&#9;def to_pose(self):<br>
-&#9;&#9;&quot;&quot;&quot;Convert the screw to a Pose2 representation (for small motions).&quot;&quot;&quot;<br>
-&#9;&#9;return Pose2(<br>
-&#9;&#9;&#9;ang=self.moment(),<br>
-&#9;&#9;&#9;lin=self.lin<br>
-&#9;&#9;)<br>
-<br>
-class Screw3(Screw):<br>
-&#9;&quot;&quot;&quot;A 3D Screw specialized for spatial motions.&quot;&quot;&quot;<br>
-&#9;def __init__(self, ang: numpy.ndarray = numpy.array([0,0,0]), lin: numpy.ndarray = numpy.array([0,0,0])):<br>
-&#9;&#9;super().__init__(ang=ang, lin=lin)<br>
-<br>
-&#9;def moment(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Return the moment (bivector part) of the screw.&quot;&quot;&quot;<br>
-&#9;&#9;return self.ang<br>
-<br>
-&#9;def vector(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Return the vector part of the screw.&quot;&quot;&quot;<br>
-&#9;&#9;return self.lin<br>
-<br>
-&#9;def kinematic_carry(self, arm: &quot;Vector3&quot;) -&gt; &quot;Screw3&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Twist transform. Carry the screw by arm. For pair of angular and linear speeds.&quot;&quot;&quot;<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;lin=self.lin + numpy.cross(self.ang, arm),<br>
-&#9;&#9;&#9;ang=self.ang)<br>
-<br>
-&#9;def force_carry(self, arm: &quot;Vector3&quot;) -&gt; &quot;Screw3&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Wrench transform. Carry the screw by arm. For pair of torques and forces.&quot;&quot;&quot;<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang=self.ang - numpy.cross(arm, self.lin),<br>
-&#9;&#9;&#9;lin=self.lin)<br>
-<br>
-&#9;def twist_carry(self, arm: &quot;Vector3&quot;) -&gt; &quot;Screw3&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Alias for kinematic_carry.&quot;&quot;&quot;<br>
-&#9;&#9;return self.kinematic_carry(arm)<br>
-<br>
-&#9;def wrench_carry(self, arm: &quot;Vector3&quot;) -&gt; &quot;Screw3&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Alias for force_carry.&quot;&quot;&quot;<br>
-&#9;&#9;return self.force_carry(arm)<br>
-<br>
-&#9;def transform_by(self, trans):<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang=trans.transform_vector(self.ang),<br>
-&#9;&#9;&#9;lin=trans.transform_vector(self.lin)<br>
-&#9;&#9;)<br>
-<br>
-&#9;def rotate_by(self, rot):<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang=rot.transform_vector(self.ang),<br>
-&#9;&#9;&#9;lin=rot.transform_vector(self.lin)<br>
-&#9;&#9;)<br>
-<br>
-&#9;def inverse_rotate_by(self, rot):<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang=rot.inverse_transform_vector(self.ang),<br>
-&#9;&#9;&#9;lin=rot.inverse_transform_vector(self.lin)<br>
-&#9;&#9;)<br>
-<br>
-&#9;def inverse_transform_by(self, trans):<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang=trans.inverse_transform_vector(self.ang),<br>
-&#9;&#9;&#9;lin=trans.inverse_transform_vector(self.lin)<br>
-&#9;&#9;)<br>
-<br>
-&#9;def transform_as_twist_by(self, trans):<br>
-&#9;&#9;rang = trans.transform_vector(self.ang)<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang = rang,<br>
-&#9;&#9;&#9;lin = trans.transform_vector(self.lin) + numpy.cross(trans.lin, rang)<br>
-&#9;&#9;)<br>
-<br>
-&#9;def inverse_transform_as_twist_by(self, trans):<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang = trans.inverse_transform_vector(self.ang),<br>
-&#9;&#9;&#9;lin = trans.inverse_transform_vector(self.lin - numpy.cross(trans.lin, self.ang))<br>
-&#9;&#9;)<br>
-<br>
-&#9;def transform_as_wrench_by(self, trans):<br>
-&#9;&#9;&quot;&quot;&quot;Transform wrench (moment + force) under SE(3) transform.&quot;&quot;&quot;<br>
-&#9;&#9;p = trans.lin<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang = trans.transform_vector(self.ang + numpy.cross(p, self.lin)),<br>
-&#9;&#9;&#9;lin = trans.transform_vector(self.lin)<br>
-&#9;&#9;)<br>
-<br>
-&#9;def inverse_transform_as_wrench_by(self, trans):<br>
-&#9;&#9;&quot;&quot;&quot;Inverse transform of a wrench under SE(3) transform.&quot;&quot;&quot;<br>
-&#9;&#9;p = trans.lin<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang = trans.inverse_transform_vector(self.ang - numpy.cross(p, self.lin)),<br>
-&#9;&#9;&#9;lin = trans.inverse_transform_vector(self.lin)<br>
-&#9;&#9;)<br>
-<br>
-&#9;def as_pose3(self):<br>
-&#9;&#9;&quot;&quot;&quot;Convert the screw to a Pose3 representation (for small motions).&quot;&quot;&quot;<br>
-&#9;&#9;rotangle = numpy.linalg.norm(self.ang)<br>
-&#9;&#9;if rotangle &lt; 1e-8:<br>
-&#9;&#9;&#9;# Pure translation<br>
-&#9;&#9;&#9;return Pose3(<br>
-&#9;&#9;&#9;&#9;ang=numpy.array([0.0, 0.0, 0.0, 1.0]),<br>
-&#9;&#9;&#9;&#9;lin=self.lin<br>
-&#9;&#9;&#9;)<br>
-&#9;&#9;axis = self.ang / rotangle<br>
-&#9;&#9;half_angle = rotangle / 2.0<br>
-&#9;&#9;q = numpy.array([<br>
-&#9;&#9;&#9;axis[0] * math.sin(half_angle),<br>
-&#9;&#9;&#9;axis[1] * math.sin(half_angle),<br>
-&#9;&#9;&#9;axis[2] * math.sin(half_angle),<br>
-&#9;&#9;&#9;math.cos(half_angle)<br>
-&#9;&#9;])<br>
-&#9;&#9;return Pose3(<br>
-&#9;&#9;&#9;ang=q,<br>
-&#9;&#9;&#9;lin=self.lin<br>
-&#9;&#9;)<br>
-<br>
-&#9;def __mul__(self, oth):<br>
-&#9;&#9;return Screw3(self.ang * oth, self.lin * oth)<br>
-<br>
-&#9;def to_vw_array(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Return the screw as a 6x1 array in [vx, vy, vz, wx, wy, wz] order.&quot;&quot;&quot;<br>
-&#9;&#9;return numpy.hstack([self.lin, self.ang])<br>
-<br>
-&#9;def to_wv_array(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Return the screw as a 6x1 array in [wx, wy, wz, vx, vy, vz] order.&quot;&quot;&quot;<br>
-&#9;&#9;return numpy.hstack([self.ang, self.lin])<br>
-<br>
-&#9;def from_vw_array(vec: numpy.ndarray) -&gt; &quot;Screw3&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Create a Screw3 from a 6x1 array in [vx, vy, vz, wx, wy, wz] order.&quot;&quot;&quot;<br>
-&#9;&#9;if vec.shape != (6,):<br>
-&#9;&#9;&#9;raise Exception(&quot;Input vector must be of shape (6,)&quot;)<br>
-<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang=vec[3:6],<br>
-&#9;&#9;&#9;lin=vec[0:3]<br>
-&#9;&#9;)<br>
-&#9;def from_wv_array(vec: numpy.ndarray) -&gt; &quot;Screw3&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Create a Screw3 from a 6x1 array in [wx, wy, wz, vx, vy, vz] order.&quot;&quot;&quot;<br>
-&#9;&#9;if vec.shape != (6,):<br>
-&#9;&#9;&#9;raise Exception(&quot;Input vector must be of shape (6,)&quot;)<br>
-<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang=vec[0:3],<br>
-&#9;&#9;&#9;lin=vec[3:6]<br>
-&#9;&#9;)<br>
-<br>
-&#9;def to_pose(self):<br>
-&#9;&#9;&quot;&quot;&quot;Convert the screw to a Pose3 representation (for small motions).&quot;&quot;&quot;<br>
-&#9;&#9;lin = self.lin<br>
-<br>
-&#9;&#9;#exponential map for rotation<br>
-&#9;&#9;theta = numpy.linalg.norm(self.ang)<br>
-&#9;&#9;if theta &lt; 1e-8:<br>
-&#9;&#9;&#9;# Pure translation<br>
-&#9;&#9;&#9;return Pose3(<br>
-&#9;&#9;&#9;&#9;ang=numpy.array([0.0, 0.0, 0.0, 1.0]),<br>
-&#9;&#9;&#9;&#9;lin=lin<br>
-&#9;&#9;&#9;)<br>
-&#9;&#9;axis = self.ang / theta<br>
-&#9;&#9;half_angle = theta / 2.0<br>
-&#9;&#9;q = numpy.array([<br>
-&#9;&#9;&#9;axis[0] * math.sin(half_angle),<br>
-&#9;&#9;&#9;axis[1] * math.sin(half_angle),<br>
-&#9;&#9;&#9;axis[2] * math.sin(half_angle),<br>
-&#9;&#9;&#9;math.cos(half_angle)<br>
-&#9;&#9;])<br>
-&#9;&#9;return Pose3(<br>
-&#9;&#9;&#9;ang=q,<br>
-&#9;&#9;&#9;lin=lin<br>
-&#9;&#9;)<br>
-<br>
-&#9;def from_vector_vw_order(vec: numpy.ndarray) -&gt; &quot;Screw3&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Create a Screw3 from a 6x1 array in [vx, vy, vz, wx, wy, wz] order.&quot;&quot;&quot;<br>
-&#9;&#9;if vec.shape != (6,):<br>
-&#9;&#9;&#9;raise Exception(&quot;Input vector must be of shape (6,)&quot;)<br>
-<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang=vec[3:6],<br>
-&#9;&#9;&#9;lin=vec[0:3]<br>
-&#9;&#9;)<br>
-<br>
-&#9;def from_vector_wv_order(vec: numpy.ndarray) -&gt; &quot;Screw3&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Create a Screw3 from a 6x1 array in [wx, wy, wz, vx, vy, vz] order.&quot;&quot;&quot;<br>
-&#9;&#9;if vec.shape != (6,):<br>
-&#9;&#9;&#9;raise Exception(&quot;Input vector must be of shape (6,)&quot;)<br>
-<br>
-&#9;&#9;return Screw3(<br>
-&#9;&#9;&#9;ang=vec[0:3],<br>
-&#9;&#9;&#9;lin=vec[3:6]<br>
-&#9;&#9;)<br>
-<br>
-&#9;def to_vector_vw_order(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Return the screw as a 6x1 array in [vx, vy, vz, wx, wy, wz] order.&quot;&quot;&quot;<br>
-&#9;&#9;return numpy.array([self.lin[0], self.lin[1], self.lin[2],<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;self.ang[0], self.ang[1], self.ang[2]], float)<br>
-<br>
-&#9;def to_vector_wv_order(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Return the screw as a 6x1 array in [wx, wy, wz, vx, vy, vz] order.&quot;&quot;&quot;<br>
-&#9;&#9;return numpy.array([self.ang[0], self.ang[1], self.ang[2],<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;self.lin[0], self.lin[1], self.lin[2]], float)<br>
+import&nbsp;numpy<br>
+import&nbsp;math<br>
+from&nbsp;.pose3&nbsp;import&nbsp;Pose3<br>
+<br>
+def&nbsp;cross2d(scalar,&nbsp;vec):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;2D&nbsp;cross&nbsp;product:&nbsp;scalar&nbsp;×&nbsp;vector&nbsp;=&nbsp;[vy,&nbsp;-vx]&nbsp;*&nbsp;scalar&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scalar&nbsp;*&nbsp;numpy.array([vec[1],&nbsp;-vec[0]])<br>
+<br>
+def&nbsp;cross2d_scalar(vec1,&nbsp;vec2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;2D&nbsp;cross&nbsp;product&nbsp;returning&nbsp;scalar:&nbsp;vec1&nbsp;×&nbsp;vec2&nbsp;=&nbsp;v1x*v2y&nbsp;-&nbsp;v1y*v2x&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;vec1[0]*vec2[1]&nbsp;-&nbsp;vec1[1]*vec2[0]<br>
+<br>
+def&nbsp;cross2d_xz(vec,&nbsp;scalar):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;2D&nbsp;cross&nbsp;product&nbsp;for&nbsp;twist&nbsp;transformation:&nbsp;vector&nbsp;×&nbsp;scalar&nbsp;=&nbsp;[-sy,&nbsp;sx]&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([-scalar&nbsp;*&nbsp;vec[1],&nbsp;scalar&nbsp;*&nbsp;vec[0]])<br>
+<br>
+class&nbsp;Screw:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;class&nbsp;representing&nbsp;a&nbsp;pair&nbsp;of&nbsp;vector&nbsp;and&nbsp;bivector&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;ang,&nbsp;lin):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.ang&nbsp;=&nbsp;ang&nbsp;&nbsp;#&nbsp;Bivector&nbsp;part<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lin&nbsp;=&nbsp;lin&nbsp;&nbsp;#&nbsp;Vector&nbsp;part<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(self.ang,&nbsp;numpy.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;ang&nbsp;must&nbsp;be&nbsp;ndarray&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(self.lin,&nbsp;numpy.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;lin&nbsp;must&nbsp;be&nbsp;ndarray&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;Screw(ang={self.ang},&nbsp;lin={self.lin})&quot;<br>
+<br>
+class&nbsp;Screw2(Screw):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;2D&nbsp;Screw&nbsp;specialized&nbsp;for&nbsp;planar&nbsp;motions.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;ang:&nbsp;numpy.ndarray,&nbsp;lin:&nbsp;numpy.ndarray):<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(ang,&nbsp;numpy.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;numpy.array(ang)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;#&nbsp;check&nbsp;shapes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;if&nbsp;ang.shape&nbsp;!=&nbsp;(1,)&nbsp;and&nbsp;ang.shape&nbsp;!=&nbsp;():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;ang&nbsp;must&nbsp;be&nbsp;a&nbsp;scalar&nbsp;or&nbsp;shape&nbsp;(1,)&nbsp;ndarray&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;if&nbsp;lin.shape&nbsp;!=&nbsp;(2,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(f&quot;lin&nbsp;must&nbsp;be&nbsp;shape&nbsp;(2,)&nbsp;ndarray,&nbsp;got&nbsp;{lin.shape}&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;ang.reshape(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin&nbsp;=&nbsp;lin.reshape(2)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(ang=ang,&nbsp;lin=lin)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;moment(self)&nbsp;-&gt;&nbsp;float:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;moment&nbsp;(bivector&nbsp;part)&nbsp;of&nbsp;the&nbsp;screw.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.ang.item()&nbsp;if&nbsp;self.ang.shape&nbsp;==&nbsp;()&nbsp;or&nbsp;self.ang.shape&nbsp;==&nbsp;(1,)&nbsp;else&nbsp;self.ang[0]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;vector(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;vector&nbsp;part&nbsp;of&nbsp;the&nbsp;screw.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.lin<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;kinematic_carry(self,&nbsp;arm:&nbsp;&quot;Vector2&quot;)&nbsp;-&gt;&nbsp;&quot;Screw2&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Twist&nbsp;transform.&nbsp;Carry&nbsp;the&nbsp;screw&nbsp;by&nbsp;arm.&nbsp;For&nbsp;pair&nbsp;of&nbsp;angular&nbsp;and&nbsp;linear&nbsp;speeds.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=self.lin&nbsp;+&nbsp;cross2d(self.moment(),&nbsp;arm),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.ang)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;force_carry(self,&nbsp;arm:&nbsp;&quot;Vector2&quot;)&nbsp;-&gt;&nbsp;&quot;Screw2&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Wrench&nbsp;transform.&nbsp;Carry&nbsp;the&nbsp;screw&nbsp;by&nbsp;arm.&nbsp;For&nbsp;pair&nbsp;of&nbsp;torques&nbsp;and&nbsp;forces.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.ang&nbsp;-&nbsp;numpy.array([cross2d_scalar(arm,&nbsp;self.lin)]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=self.lin)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;twist_carry(self,&nbsp;arm:&nbsp;&quot;Vector2&quot;)&nbsp;-&gt;&nbsp;&quot;Screw2&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Alias&nbsp;for&nbsp;kinematic_carry.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.kinematic_carry(arm)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;wrench_carry(self,&nbsp;arm:&nbsp;&quot;Vector2&quot;)&nbsp;-&gt;&nbsp;&quot;Screw2&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Alias&nbsp;for&nbsp;force_carry.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.force_carry(arm)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(ang=self.ang,&nbsp;lin=trans.transform_vector(self.lin))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotated_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(ang=self.ang,&nbsp;lin=trans.rotate_vector(self.lin))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(ang=self.ang,&nbsp;lin=trans.inverse_transform_vector(self.lin))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_as_twist_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rlin&nbsp;=&nbsp;trans.transform_vector(self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=rlin&nbsp;+&nbsp;cross2d_xz(trans.lin,&nbsp;self.moment()),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.ang,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_as_twist_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.ang,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=trans.inverse_transform_vector(self.lin&nbsp;-&nbsp;cross2d_xz(trans.lin,&nbsp;self.moment()))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_as_wrench_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;wrench&nbsp;(moment&nbsp;+&nbsp;force)&nbsp;under&nbsp;SE(2)&nbsp;transform.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.ang&nbsp;+&nbsp;numpy.array([cross2d_scalar(trans.lin,&nbsp;self.lin)]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=trans.transform_vector(self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_as_wrench_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Inverse&nbsp;transform&nbsp;of&nbsp;a&nbsp;wrench&nbsp;under&nbsp;SE(2)&nbsp;transform.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.ang&nbsp;-&nbsp;numpy.array([cross2d_scalar(trans.lin,&nbsp;self.lin)]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=trans.inverse_transform_vector(self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__mul__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(self.ang&nbsp;*&nbsp;oth,&nbsp;self.lin&nbsp;*&nbsp;oth)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__add__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(self.ang&nbsp;+&nbsp;oth.ang,&nbsp;self.lin&nbsp;+&nbsp;oth.lin)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__sub__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(self.ang&nbsp;-&nbsp;oth.ang,&nbsp;self.lin&nbsp;-&nbsp;oth.lin)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_vector_vw_order(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;screw&nbsp;as&nbsp;a&nbsp;3x1&nbsp;array&nbsp;in&nbsp;[vx,&nbsp;vy,&nbsp;w]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([self.lin[0],&nbsp;self.lin[1],&nbsp;self.moment()],&nbsp;float)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_vector_wv_order(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;screw&nbsp;as&nbsp;a&nbsp;3x1&nbsp;array&nbsp;in&nbsp;[w,&nbsp;vx,&nbsp;vy]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([self.moment(),&nbsp;self.lin[0],&nbsp;self.lin[1]],&nbsp;float)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_vector_vw_order(vec:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;&quot;Screw2&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Screw2&nbsp;from&nbsp;a&nbsp;3x1&nbsp;array&nbsp;in&nbsp;[vx,&nbsp;vy,&nbsp;w]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vec.shape&nbsp;!=&nbsp;(3,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;Input&nbsp;vector&nbsp;must&nbsp;be&nbsp;of&nbsp;shape&nbsp;(3,)&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=numpy.array([vec[2]]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=numpy.array([vec[0],&nbsp;vec[1]])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_vector_wv_order(vec:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;&quot;Screw2&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Screw2&nbsp;from&nbsp;a&nbsp;3x1&nbsp;array&nbsp;in&nbsp;[w,&nbsp;vx,&nbsp;vy]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vec.shape&nbsp;!=&nbsp;(3,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;Input&nbsp;vector&nbsp;must&nbsp;be&nbsp;of&nbsp;shape&nbsp;(3,)&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=numpy.array([vec[0]]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=numpy.array([vec[1],&nbsp;vec[2]])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_pose(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Convert&nbsp;the&nbsp;screw&nbsp;to&nbsp;a&nbsp;Pose2&nbsp;representation&nbsp;(for&nbsp;small&nbsp;motions).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.moment(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+class&nbsp;Screw3(Screw):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;3D&nbsp;Screw&nbsp;specialized&nbsp;for&nbsp;spatial&nbsp;motions.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;ang:&nbsp;numpy.ndarray&nbsp;=&nbsp;numpy.array([0,0,0]),&nbsp;lin:&nbsp;numpy.ndarray&nbsp;=&nbsp;numpy.array([0,0,0])):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(ang=ang,&nbsp;lin=lin)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;moment(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;moment&nbsp;(bivector&nbsp;part)&nbsp;of&nbsp;the&nbsp;screw.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.ang<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;vector(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;vector&nbsp;part&nbsp;of&nbsp;the&nbsp;screw.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.lin<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;kinematic_carry(self,&nbsp;arm:&nbsp;&quot;Vector3&quot;)&nbsp;-&gt;&nbsp;&quot;Screw3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Twist&nbsp;transform.&nbsp;Carry&nbsp;the&nbsp;screw&nbsp;by&nbsp;arm.&nbsp;For&nbsp;pair&nbsp;of&nbsp;angular&nbsp;and&nbsp;linear&nbsp;speeds.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=self.lin&nbsp;+&nbsp;numpy.cross(self.ang,&nbsp;arm),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.ang)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;force_carry(self,&nbsp;arm:&nbsp;&quot;Vector3&quot;)&nbsp;-&gt;&nbsp;&quot;Screw3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Wrench&nbsp;transform.&nbsp;Carry&nbsp;the&nbsp;screw&nbsp;by&nbsp;arm.&nbsp;For&nbsp;pair&nbsp;of&nbsp;torques&nbsp;and&nbsp;forces.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.ang&nbsp;-&nbsp;numpy.cross(arm,&nbsp;self.lin),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=self.lin)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;twist_carry(self,&nbsp;arm:&nbsp;&quot;Vector3&quot;)&nbsp;-&gt;&nbsp;&quot;Screw3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Alias&nbsp;for&nbsp;kinematic_carry.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.kinematic_carry(arm)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;wrench_carry(self,&nbsp;arm:&nbsp;&quot;Vector3&quot;)&nbsp;-&gt;&nbsp;&quot;Screw3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Alias&nbsp;for&nbsp;force_carry.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.force_carry(arm)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=trans.transform_vector(self.ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=trans.transform_vector(self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotate_by(self,&nbsp;rot):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=rot.transform_vector(self.ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=rot.transform_vector(self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_rotate_by(self,&nbsp;rot):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=rot.inverse_transform_vector(self.ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=rot.inverse_transform_vector(self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=trans.inverse_transform_vector(self.ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=trans.inverse_transform_vector(self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_as_twist_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rang&nbsp;=&nbsp;trans.transform_vector(self.ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;rang,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin&nbsp;=&nbsp;trans.transform_vector(self.lin)&nbsp;+&nbsp;numpy.cross(trans.lin,&nbsp;rang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_as_twist_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;trans.inverse_transform_vector(self.ang),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin&nbsp;=&nbsp;trans.inverse_transform_vector(self.lin&nbsp;-&nbsp;numpy.cross(trans.lin,&nbsp;self.ang))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_as_wrench_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;wrench&nbsp;(moment&nbsp;+&nbsp;force)&nbsp;under&nbsp;SE(3)&nbsp;transform.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p&nbsp;=&nbsp;trans.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;trans.transform_vector(self.ang&nbsp;+&nbsp;numpy.cross(p,&nbsp;self.lin)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin&nbsp;=&nbsp;trans.transform_vector(self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_as_wrench_by(self,&nbsp;trans):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Inverse&nbsp;transform&nbsp;of&nbsp;a&nbsp;wrench&nbsp;under&nbsp;SE(3)&nbsp;transform.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p&nbsp;=&nbsp;trans.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;trans.inverse_transform_vector(self.ang&nbsp;-&nbsp;numpy.cross(p,&nbsp;self.lin)),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin&nbsp;=&nbsp;trans.inverse_transform_vector(self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;as_pose3(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Convert&nbsp;the&nbsp;screw&nbsp;to&nbsp;a&nbsp;Pose3&nbsp;representation&nbsp;(for&nbsp;small&nbsp;motions).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotangle&nbsp;=&nbsp;numpy.linalg.norm(self.ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rotangle&nbsp;&lt;&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Pure&nbsp;translation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;self.ang&nbsp;/&nbsp;rotangle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;half_angle&nbsp;=&nbsp;rotangle&nbsp;/&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis[0]&nbsp;*&nbsp;math.sin(half_angle),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis[1]&nbsp;*&nbsp;math.sin(half_angle),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis[2]&nbsp;*&nbsp;math.sin(half_angle),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;math.cos(half_angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=q,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__mul__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(self.ang&nbsp;*&nbsp;oth,&nbsp;self.lin&nbsp;*&nbsp;oth)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_vw_array(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;screw&nbsp;as&nbsp;a&nbsp;6x1&nbsp;array&nbsp;in&nbsp;[vx,&nbsp;vy,&nbsp;vz,&nbsp;wx,&nbsp;wy,&nbsp;wz]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.hstack([self.lin,&nbsp;self.ang])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_wv_array(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;screw&nbsp;as&nbsp;a&nbsp;6x1&nbsp;array&nbsp;in&nbsp;[wx,&nbsp;wy,&nbsp;wz,&nbsp;vx,&nbsp;vy,&nbsp;vz]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.hstack([self.ang,&nbsp;self.lin])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_vw_array(vec:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;&quot;Screw3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Screw3&nbsp;from&nbsp;a&nbsp;6x1&nbsp;array&nbsp;in&nbsp;[vx,&nbsp;vy,&nbsp;vz,&nbsp;wx,&nbsp;wy,&nbsp;wz]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vec.shape&nbsp;!=&nbsp;(6,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;Input&nbsp;vector&nbsp;must&nbsp;be&nbsp;of&nbsp;shape&nbsp;(6,)&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=vec[3:6],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=vec[0:3]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_wv_array(vec:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;&quot;Screw3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Screw3&nbsp;from&nbsp;a&nbsp;6x1&nbsp;array&nbsp;in&nbsp;[wx,&nbsp;wy,&nbsp;wz,&nbsp;vx,&nbsp;vy,&nbsp;vz]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vec.shape&nbsp;!=&nbsp;(6,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;Input&nbsp;vector&nbsp;must&nbsp;be&nbsp;of&nbsp;shape&nbsp;(6,)&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=vec[0:3],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=vec[3:6]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_pose(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Convert&nbsp;the&nbsp;screw&nbsp;to&nbsp;a&nbsp;Pose3&nbsp;representation&nbsp;(for&nbsp;small&nbsp;motions).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin&nbsp;=&nbsp;self.lin<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#exponential&nbsp;map&nbsp;for&nbsp;rotation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;theta&nbsp;=&nbsp;numpy.linalg.norm(self.ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;theta&nbsp;&lt;&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Pure&nbsp;translation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;self.ang&nbsp;/&nbsp;theta<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;half_angle&nbsp;=&nbsp;theta&nbsp;/&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis[0]&nbsp;*&nbsp;math.sin(half_angle),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis[1]&nbsp;*&nbsp;math.sin(half_angle),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis[2]&nbsp;*&nbsp;math.sin(half_angle),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;math.cos(half_angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=q,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_vector_vw_order(vec:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;&quot;Screw3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Screw3&nbsp;from&nbsp;a&nbsp;6x1&nbsp;array&nbsp;in&nbsp;[vx,&nbsp;vy,&nbsp;vz,&nbsp;wx,&nbsp;wy,&nbsp;wz]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vec.shape&nbsp;!=&nbsp;(6,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;Input&nbsp;vector&nbsp;must&nbsp;be&nbsp;of&nbsp;shape&nbsp;(6,)&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=vec[3:6],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=vec[0:3]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_vector_wv_order(vec:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;&quot;Screw3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Screw3&nbsp;from&nbsp;a&nbsp;6x1&nbsp;array&nbsp;in&nbsp;[wx,&nbsp;wy,&nbsp;wz,&nbsp;vx,&nbsp;vy,&nbsp;vz]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vec.shape&nbsp;!=&nbsp;(6,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;Input&nbsp;vector&nbsp;must&nbsp;be&nbsp;of&nbsp;shape&nbsp;(6,)&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=vec[0:3],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=vec[3:6]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_vector_vw_order(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;screw&nbsp;as&nbsp;a&nbsp;6x1&nbsp;array&nbsp;in&nbsp;[vx,&nbsp;vy,&nbsp;vz,&nbsp;wx,&nbsp;wy,&nbsp;wz]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([self.lin[0],&nbsp;self.lin[1],&nbsp;self.lin[2],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.ang[0],&nbsp;self.ang[1],&nbsp;self.ang[2]],&nbsp;float)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_vector_wv_order(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;screw&nbsp;as&nbsp;a&nbsp;6x1&nbsp;array&nbsp;in&nbsp;[wx,&nbsp;wy,&nbsp;wz,&nbsp;vx,&nbsp;vy,&nbsp;vz]&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([self.ang[0],&nbsp;self.ang[1],&nbsp;self.ang[2],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lin[0],&nbsp;self.lin[1],&nbsp;self.lin[2]],&nbsp;float)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

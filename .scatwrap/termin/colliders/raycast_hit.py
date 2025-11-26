@@ -6,22 +6,22 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-class RaycastHit:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Результат пересечения луча с объектом.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;def __init__(self, entity, component, point, collider_point, distance):<br>
-&#9;&#9;self.entity = entity<br>
-&#9;&#9;self.component = component<br>
-&#9;&#9;self.point = point<br>
-&#9;&#9;self.collider_point = collider_point<br>
-&#9;&#9;self.distance = float(distance)<br>
+class&nbsp;RaycastHit:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Результат&nbsp;пересечения&nbsp;луча&nbsp;с&nbsp;объектом.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;entity,&nbsp;component,&nbsp;point,&nbsp;collider_point,&nbsp;distance):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.entity&nbsp;=&nbsp;entity<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.component&nbsp;=&nbsp;component<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.point&nbsp;=&nbsp;point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.collider_point&nbsp;=&nbsp;collider_point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.distance&nbsp;=&nbsp;float(distance)<br>
 <br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return (f&quot;RaycastHit(entity={self.entity}, distance={self.distance}, &quot;<br>
-&#9;&#9;&#9;&#9;f&quot;point={self.point}, collider_point={self.collider_point})&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(f&quot;RaycastHit(entity={self.entity},&nbsp;distance={self.distance},&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;point={self.point},&nbsp;collider_point={self.collider_point})&quot;)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

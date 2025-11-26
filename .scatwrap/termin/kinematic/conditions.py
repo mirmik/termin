@@ -6,51 +6,51 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy<br>
-import termin.linalg.subspaces<br>
+import&nbsp;numpy<br>
+import&nbsp;termin.linalg.subspaces<br>
 <br>
 <br>
-class SymCondition:<br>
-&#9;def __init__(self, Ah, bh, weight=1.0):<br>
-&#9;&#9;self.Ah = Ah<br>
-&#9;&#9;self.bh = bh<br>
-&#9;&#9;self.weight = weight<br>
+class&nbsp;SymCondition:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;Ah,&nbsp;bh,&nbsp;weight=1.0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.Ah&nbsp;=&nbsp;Ah<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bh&nbsp;=&nbsp;bh<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.weight&nbsp;=&nbsp;weight<br>
 <br>
-&#9;def A(self):<br>
-&#9;&#9;return self.Ah.T.dot(self.Ah) * self.weight<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;A(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.Ah.T.dot(self.Ah)&nbsp;*&nbsp;self.weight<br>
 <br>
-&#9;def b(self):<br>
-&#9;&#9;return self.Ah.T.dot(self.bh) * self.weight<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;b(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.Ah.T.dot(self.bh)&nbsp;*&nbsp;self.weight<br>
 <br>
-&#9;def NullProj(self):<br>
-&#9;&#9;return termin.linalg.subspaces.nullspace_projector(self.Ah)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;NullProj(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;termin.linalg.subspaces.nullspace_projector(self.Ah)<br>
 <br>
 <br>
-class ConditionCollection:<br>
-&#9;def __init__(self):<br>
-&#9;&#9;self.rank = -1<br>
-&#9;&#9;self.conds = []<br>
-&#9;&#9;self.weights = []<br>
+class&nbsp;ConditionCollection:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rank&nbsp;=&nbsp;-1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.conds&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.weights&nbsp;=&nbsp;[]<br>
 <br>
-&#9;def add(self, cond, weight=None):<br>
-&#9;&#9;if weight is not None:<br>
-&#9;&#9;&#9;cond.weight = weight<br>
-&#9;&#9;if self.rank &lt; 0:<br>
-&#9;&#9;&#9;self.rank = cond.A().shape[0]<br>
-&#9;&#9;self.conds.append(cond)<br>
-&#9;&#9;self.weights.append(cond.weight)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add(self,&nbsp;cond,&nbsp;weight=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;weight&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cond.weight&nbsp;=&nbsp;weight<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.rank&nbsp;&lt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rank&nbsp;=&nbsp;cond.A().shape[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.conds.append(cond)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.weights.append(cond.weight)<br>
 <br>
-&#9;def A(self):<br>
-&#9;&#9;A_sum = numpy.zeros((self.rank, self.rank))<br>
-&#9;&#9;for cond in self.conds:<br>
-&#9;&#9;&#9;A_sum += cond.A()<br>
-&#9;&#9;return A_sum<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;A(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_sum&nbsp;=&nbsp;numpy.zeros((self.rank,&nbsp;self.rank))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;cond&nbsp;in&nbsp;self.conds:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_sum&nbsp;+=&nbsp;cond.A()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A_sum<br>
 <br>
-&#9;def b(self):<br>
-&#9;&#9;b_sum = numpy.zeros((self.rank,))<br>
-&#9;&#9;for cond in self.conds:<br>
-&#9;&#9;&#9;b_sum += cond.b()<br>
-&#9;&#9;return b_sum<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;b(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_sum&nbsp;=&nbsp;numpy.zeros((self.rank,))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;cond&nbsp;in&nbsp;self.conds:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_sum&nbsp;+=&nbsp;cond.b()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;b_sum<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

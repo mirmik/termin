@@ -6,425 +6,425 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from typing import List, Dict<br>
-import numpy as np<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Dict<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.fem.assembler import Variable, Contribution<br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.geombase.screw import Screw3<br>
-from termin.fem.inertia3d import SpatialInertia3D<br>
+from&nbsp;termin.fem.assembler&nbsp;import&nbsp;Variable,&nbsp;Contribution<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.geombase.screw&nbsp;import&nbsp;Screw3<br>
+from&nbsp;termin.fem.inertia3d&nbsp;import&nbsp;SpatialInertia3D<br>
 <br>
 <br>
 &quot;&quot;&quot;<br>
-Соглашение такое же, как в 2D-версии:<br>
+Соглашение&nbsp;такое&nbsp;же,&nbsp;как&nbsp;в&nbsp;2D-версии:<br>
 <br>
-Все уравнения собираются в локальной СК тела.<br>
-Глобальная поза тела хранится отдельно и используется только для обновления геометрии.<br>
+Все&nbsp;уравнения&nbsp;собираются&nbsp;в&nbsp;локальной&nbsp;СК&nbsp;тела.<br>
+Глобальная&nbsp;поза&nbsp;тела&nbsp;хранится&nbsp;отдельно&nbsp;и&nbsp;используется&nbsp;только&nbsp;для&nbsp;обновления&nbsp;геометрии.<br>
 <br>
-Преобразования следуют конвенции локальная система -&gt; мировая система:<br>
-&#9;p_world = P(q) @ p_local<br>
+Преобразования&nbsp;следуют&nbsp;конвенции&nbsp;локальная&nbsp;система&nbsp;-&gt;&nbsp;мировая&nbsp;система:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;p_world&nbsp;=&nbsp;P(q)&nbsp;@&nbsp;p_local<br>
 &quot;&quot;&quot;<br>
 <br>
-def _skew(r: np.ndarray) -&gt; np.ndarray:<br>
-&#9;&quot;&quot;&quot;Матрица векторного произведения:  r×x = skew(r) @ x.&quot;&quot;&quot;<br>
-&#9;rx, ry, rz = r<br>
-&#9;return np.array([<br>
-&#9;&#9;[   0.0, -rz,   ry],<br>
-&#9;&#9;[   rz,  0.0, -rx],<br>
-&#9;&#9;[  -ry,  rx,  0.0],<br>
-&#9;], dtype=float)<br>
-<br>
-def quat_normalize(q):<br>
-&#9;return q / np.linalg.norm(q)<br>
-<br>
-def quat_mul(q1, q2):<br>
-&#9;&quot;&quot;&quot;Кватернионное произведение q1*q2 (оба в формате [x,y,z,w]).&quot;&quot;&quot;<br>
-&#9;x1,y1,z1,w1 = q1<br>
-&#9;x2,y2,z2,w2 = q2<br>
-&#9;return np.array([<br>
-&#9;&#9;w1*x2 + x1*w2 + y1*z2 - z1*y2,<br>
-&#9;&#9;w1*y2 + y1*w2 + z1*x2 - x1*z2,<br>
-&#9;&#9;w1*z2 + z1*w2 + x1*y2 - y1*x2,<br>
-&#9;&#9;w1*w2 - x1*x2 - y1*y2 - z1*z2,<br>
-&#9;])<br>
-<br>
-def quat_from_small_angle(dθ):<br>
-&#9;&quot;&quot;&quot;Создать кватернион вращения из малого углового вектора dθ.&quot;&quot;&quot;<br>
-&#9;θ = np.linalg.norm(dθ)<br>
-&#9;if θ &lt; 1e-12:<br>
-&#9;&#9;# линеаризация<br>
-&#9;&#9;return quat_normalize(np.array([0.5*dθ[0], 0.5*dθ[1], 0.5*dθ[2], 1.0]))<br>
-&#9;axis = dθ / θ<br>
-&#9;s = np.sin(0.5 * θ)<br>
-&#9;return np.array([axis[0]*s, axis[1]*s, axis[2]*s, np.cos(0.5*θ)])<br>
-<br>
-<br>
-<br>
-class RigidBody3D(Contribution):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Твёрдое тело в 3D, все расчёты выполняются в локальной СК тела.<br>
-&#9;Глобальная поза хранится отдельно и используется только для обновления геометрии.<br>
-<br>
-&#9;Порядок пространственных векторов (vw_order):<br>
-&#9;&#9;[ v_x, v_y, v_z, ω_x, ω_y, ω_z ]<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;inertia: SpatialInertia3D,<br>
-&#9;&#9;gravity: np.ndarray = None,<br>
-&#9;&#9;assembler=None,<br>
-&#9;&#9;name: str = &quot;rbody3d&quot;,<br>
-&#9;&#9;angle_normalize: callable = None,<br>
-&#9;):<br>
-&#9;&#9;# [a_lin(3), α(3)] в локальной СК<br>
-&#9;&#9;self.acceleration_var = Variable(name + &quot;_acc&quot;, size=6, tag=&quot;acceleration&quot;)<br>
-&#9;&#9;# [v_lin(3), ω(3)] в локальной СК<br>
-&#9;&#9;self.velocity_var = Variable(name + &quot;_vel&quot;, size=6, tag=&quot;velocity&quot;)<br>
-&#9;&#9;# [Δx(3), Δφ(3)] локальная приращённая поза для интеграции<br>
-&#9;&#9;self.local_pose_var = Variable(name + &quot;_pos&quot;, size=6, tag=&quot;position&quot;)<br>
-<br>
-&#9;&#9;# глобальная поза тела<br>
-&#9;&#9;self.global_pose = Pose3(lin=np.zeros(3), ang=np.array([0.0, 0.0, 0.0, 1.0]))  # единичный кватернион<br>
-<br>
-&#9;&#9;self.inertia = inertia<br>
-&#9;&#9;self.angle_normalize = angle_normalize<br>
-<br>
-&#9;&#9;# сила тяжести задаётся в мировых координатах<br>
-&#9;&#9;# по аналогии с 2D: -g по оси y<br>
-&#9;&#9;if gravity is None:<br>
-&#9;&#9;&#9;self.gravity = np.array([0.0, -9.81, 0.0], dtype=float)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self.gravity = np.asarray(gravity, float).reshape(3)<br>
-<br>
-&#9;&#9;super().__init__([self.acceleration_var, self.velocity_var, self.local_pose_var],<br>
-&#9;&#9;&#9;&#9;&#9;&#9;assembler=assembler)<br>
-<br>
-&#9;# ---------- геттеры ----------<br>
-&#9;def pose(self) -&gt; Pose3:<br>
-&#9;&#9;return self.global_pose<br>
-<br>
-&#9;def set_pose(self, pose: Pose3):<br>
-&#9;&#9;self.global_pose = pose<br>
-<br>
-&#9;# ---------- вклад в систему ----------<br>
-&#9;def contribute(self, matrices, index_maps):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вклад тела в уравнения движения (в локальной СК):<br>
-&#9;&#9;&#9;I * a + v×* (I v) = F<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.contribute_to_mass_matrix(matrices, index_maps)<br>
-<br>
-&#9;&#9;b = matrices[&quot;load&quot;]<br>
-&#9;&#9;a_idx = index_maps[&quot;acceleration&quot;][self.acceleration_var]<br>
-<br>
-&#9;&#9;v_local = Screw3.from_vector_vw_order(self.velocity_var.value)<br>
-&#9;&#9;bias = self.inertia.bias_wrench(v_local)<br>
-<br>
-&#9;&#9;# гравитация в локальной СК тела<br>
-&#9;&#9;g_local = self.global_pose.inverse().rotate_vector(self.gravity)<br>
-&#9;&#9;grav = self.inertia.gravity_wrench(g_local)<br>
-<br>
-&#9;&#9;b[a_idx] += bias.to_vector_vw_order() + grav.to_vector_vw_order()<br>
-<br>
-&#9;def contribute_for_constraints_correction(self, matrices, index_maps):<br>
-&#9;&#9;self.contribute_to_mass_matrix(matrices, index_maps)<br>
-<br>
-&#9;def contribute_to_mass_matrix(self, matrices, index_maps):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Массовая матрица в локальной СК.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;A = matrices[&quot;mass&quot;]<br>
-&#9;&#9;a_idx = index_maps[&quot;acceleration&quot;][self.acceleration_var]<br>
-&#9;&#9;A[np.ix_(a_idx, a_idx)] += self.inertia.to_matrix_vw_order()<br>
-<br>
-&#9;# ---------- интеграция шага ----------<br>
-&#9;def finish_timestep(self, dt: float):<br>
-&#9;&#9;v = self.velocity_var.value<br>
-&#9;&#9;a = self.acceleration_var.value<br>
-&#9;&#9;v += a * dt<br>
-&#9;&#9;self.velocity_var.value = v<br>
-<br>
-&#9;&#9;# линейное смещение<br>
-&#9;&#9;v_lin = v[0:3]<br>
-&#9;&#9;dp_lin = v_lin * dt<br>
-<br>
-&#9;&#9;# угловое малое приращение через кватернион<br>
-&#9;&#9;v_ang = v[3:6]<br>
-&#9;&#9;dθ = v_ang * dt<br>
-&#9;&#9;q_delta = quat_from_small_angle(dθ)<br>
-<br>
-&#9;&#9;# обновляем глобальную позу<br>
-&#9;&#9;# pose.lin += R * dp_lin   (делает Pose3 оператор @)<br>
-&#9;&#9;# pose.ang = pose.ang * q_delta<br>
-&#9;&#9;delta_pose_local = Pose3(<br>
-&#9;&#9;&#9;lin=dp_lin,<br>
-&#9;&#9;&#9;ang=q_delta,<br>
-&#9;&#9;)<br>
-<br>
-&#9;&#9;self.global_pose = self.global_pose @ delta_pose_local<br>
-<br>
-&#9;&#9;# сбрасываем локальную позу<br>
-&#9;&#9;self.local_pose_var.value[:] = 0.0<br>
-<br>
-&#9;&#9;if self.angle_normalize is not None:<br>
-&#9;&#9;&#9;self.global_pose.ang = self.angle_normalize(self.global_pose.ang)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self.global_pose.ang = quat_normalize(self.global_pose.ang)<br>
-<br>
-&#9;def finish_correction_step(self):<br>
-&#9;&#9;dp = self.local_pose_var.value<br>
-<br>
-&#9;&#9;# линейная часть<br>
-&#9;&#9;dp_lin = dp[0:3]<br>
-<br>
-&#9;&#9;# угловая часть dp[3:6] — это снова угловой вектор, надо превращать в кватернион<br>
-&#9;&#9;dθ = dp[3:6]<br>
-&#9;&#9;q_delta = quat_from_small_angle(dθ)<br>
-<br>
-&#9;&#9;delta_pose_local = Pose3(<br>
-&#9;&#9;&#9;lin=dp_lin,<br>
-&#9;&#9;&#9;ang=q_delta,<br>
-&#9;&#9;)<br>
-<br>
-&#9;&#9;self.global_pose = self.global_pose @ delta_pose_local<br>
-&#9;&#9;self.local_pose_var.value[:] = 0.0<br>
-&#9;&#9;self.global_pose.ang = quat_normalize(self.global_pose.ang)<br>
-<br>
-<br>
-class ForceOnBody3D(Contribution):<br>
-&#9;&quot;&quot;&quot;Внешний пространственный винт (сила+момент) в локальной СК тела.&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self,<br>
-&#9;&#9;&#9;&#9;body: RigidBody3D,<br>
-&#9;&#9;&#9;&#9;wrench: Screw3,<br>
-&#9;&#9;&#9;&#9;in_local_frame: bool = True,<br>
-&#9;&#9;&#9;&#9;assembler=None):<br>
-&#9;&#9;self.body = body<br>
-&#9;&#9;self.acceleration = body.acceleration_var<br>
-&#9;&#9;self.wrench_local = wrench if in_local_frame else wrench.rotated_by(body.pose().inverse())<br>
-&#9;&#9;super().__init__([], assembler=assembler)<br>
-<br>
-&#9;def contribute(self, matrices, index_maps):<br>
-&#9;&#9;b = matrices[&quot;load&quot;]<br>
-&#9;&#9;a_indices = index_maps[&quot;acceleration&quot;][self.acceleration]<br>
-&#9;&#9;b[a_indices] += self.wrench_local.to_vector_vw_order()<br>
-<br>
-<br>
-class FixedRotationJoint3D(Contribution):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Ground-&quot;шарнир&quot;, фиксирующий линейное движение одной точки тела в мировой СК,<br>
-&#9;но не ограничивающий ориентацию тела.<br>
-<br>
-&#9;Как и в 2D-версии:<br>
-&#9;- всё формулируется в локальной СК тела;<br>
-&#9;- лямбда — линейная сила в локальной СК тела (3 компоненты).<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self,<br>
-&#9;&#9;&#9;&#9;body: RigidBody3D,<br>
-&#9;&#9;&#9;&#9;coords_of_joint: np.ndarray = None,<br>
-&#9;&#9;&#9;&#9;assembler=None):<br>
-&#9;&#9;self.body = body<br>
-&#9;&#9;self.internal_force = Variable(&quot;F_joint&quot;, size=3, tag=&quot;force&quot;)<br>
-<br>
-&#9;&#9;pose = self.body.pose()<br>
-&#9;&#9;self.coords_of_joint = coords_of_joint.copy() if coords_of_joint is not None else pose.lin.copy()<br>
-&#9;&#9;# фиксируем локальные координаты точки шарнира на теле<br>
-&#9;&#9;self.r_local = pose.inverse_transform_point(self.coords_of_joint)<br>
-<br>
-&#9;&#9;super().__init__([body.acceleration_var, self.internal_force], assembler=assembler)<br>
-<br>
-&#9;def contribute(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-&#9;&#9;# линейная часть (Якобиан) — в H<br>
-&#9;&#9;self.contribute_to_holonomic_matrix(matrices, index_maps)<br>
-<br>
-&#9;&#9;# правую часть — квадратичные (центростремительные) члены, тоже в локале<br>
-&#9;&#9;h = matrices[&quot;holonomic_rhs&quot;]<br>
-&#9;&#9;F_idx = index_maps[&quot;force&quot;][self.internal_force]<br>
-<br>
-&#9;&#9;omega = np.asarray(self.body.velocity_var.value[3:6], dtype=float)<br>
-&#9;&#9;# центростремительное ускорение точки: ω × (ω × r)<br>
-&#9;&#9;bias = np.cross(omega, np.cross(omega, self.r_local))<br>
-&#9;&#9;h[F_idx] += bias<br>
-<br>
-&#9;def radius(self) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Радиус-вектор точки шарнира в глобальной СК.&quot;&quot;&quot;<br>
-&#9;&#9;pose = self.body.pose()<br>
-&#9;&#9;return pose.rotate_vector(self.r_local)<br>
-<br>
-&#9;def contribute_to_holonomic_matrix(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Ограничение в локале тела:<br>
-&#9;&#9;a_lin + α×r_local + (квадр.члены) = 0<br>
-<br>
-&#9;&#9;В матрицу кладём линейную часть по ускорениям:<br>
-&#9;&#9;H * [a_lin(3), α(3)]^T  с блоком  -[ I_3,  -skew(r_local) ]<br>
-&#9;&#9;где α×r = -skew(r) α.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;H = matrices[&quot;holonomic&quot;]<br>
-&#9;&#9;a_idx = index_maps[&quot;acceleration&quot;][self.body.acceleration_var]<br>
-&#9;&#9;F_idx = index_maps[&quot;force&quot;][self.internal_force]<br>
-<br>
-&#9;&#9;r = self.r_local<br>
-&#9;&#9;J = np.hstack([<br>
-&#9;&#9;&#9;np.eye(3),<br>
-&#9;&#9;&#9;-_skew(r),<br>
-&#9;&#9;])  # 3×6<br>
-<br>
-&#9;&#9;H[np.ix_(F_idx, a_idx)] += -J  # как в 2D: минус перед блоком<br>
-<br>
-&#9;def contribute_for_constraints_correction(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Позиционная ошибка в локале тела:<br>
-&#9;&#9;φ_local = R^T (p - c_world) + r_local<br>
-&#9;&#9;где p — мировая позиция опорной точки тела, c_world — фиксированная мировая точка шарнира.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.contribute_to_holonomic_matrix(matrices, index_maps)<br>
-<br>
-&#9;&#9;poserr = matrices[&quot;position_error&quot;]<br>
-&#9;&#9;F_idx = index_maps[&quot;force&quot;][self.internal_force]<br>
-<br>
-&#9;&#9;pose = self.body.pose()<br>
-&#9;&#9;# предполагается, что Pose3 умеет выдавать матрицу поворота<br>
-&#9;&#9;R = pose.rotation_matrix()<br>
-&#9;&#9;R_T = R.T<br>
-<br>
-&#9;&#9;perr = R_T @ (pose.lin - self.coords_of_joint) + self.r_local<br>
-&#9;&#9;poserr[F_idx] -= perr<br>
-<br>
-<br>
-class RevoluteJoint3D(Contribution):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Двухтелый &quot;вращательный&quot; шарнир в духе 2D-кода, но в 3D:<br>
-&#9;связь формулируется в локальной СК тела A, и<br>
-&#9;ограничивает только относительное линейное движение точки шарнира,<br>
-&#9;ориентация тел не фиксируется.<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self,<br>
-&#9;&#9;&#9;&#9;bodyA: RigidBody3D,<br>
-&#9;&#9;&#9;&#9;bodyB: RigidBody3D,<br>
-&#9;&#9;&#9;&#9;coords_of_joint: np.ndarray = None,<br>
-&#9;&#9;&#9;&#9;assembler=None):<br>
-<br>
-&#9;&#9;cW = coords_of_joint.copy() if coords_of_joint is not None else bodyA.pose().lin.copy()<br>
-<br>
-&#9;&#9;self.bodyA = bodyA<br>
-&#9;&#9;self.bodyB = bodyB<br>
-<br>
-&#9;&#9;# 3-компонентная лямбда — сила в СК A<br>
-&#9;&#9;self.internal_force = Variable(&quot;F_rev&quot;, size=3, tag=&quot;force&quot;)<br>
-<br>
-&#9;&#9;poseA = self.bodyA.pose()<br>
-&#9;&#9;poseB = self.bodyB.pose()<br>
-<br>
-&#9;&#9;# локальные координаты точки шарнира на каждом теле<br>
-&#9;&#9;self.rA_local = poseA.inverse_transform_point(cW)  # в СК A<br>
-&#9;&#9;self.rB_local = poseB.inverse_transform_point(cW)  # в СК B<br>
-<br>
-&#9;&#9;# кэш для rB, выраженного в СК A, и для R_AB<br>
-&#9;&#9;self.R_AB = np.eye(3)<br>
-&#9;&#9;self.rB_in_A = self.rB_local.copy()<br>
-<br>
-&#9;&#9;self.update_local_view()<br>
-<br>
-&#9;&#9;super().__init__([bodyA.acceleration_var, bodyB.acceleration_var, self.internal_force],<br>
-&#9;&#9;&#9;&#9;&#9;&#9;assembler=assembler)<br>
-<br>
-&#9;def update_local_view(self):<br>
-&#9;&#9;&quot;&quot;&quot;Обновить R_AB и rB, выраженные в СК A.&quot;&quot;&quot;<br>
-&#9;&#9;poseA = self.bodyA.pose()<br>
-&#9;&#9;poseB = self.bodyB.pose()<br>
-<br>
-&#9;&#9;R_A = poseA.rotation_matrix()<br>
-&#9;&#9;R_B = poseB.rotation_matrix()<br>
-<br>
-&#9;&#9;self.R_AB = R_A.T @ R_B<br>
-&#9;&#9;self.rB_in_A = self.R_AB @ self.rB_local<br>
-<br>
-&#9;def contribute(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-&#9;&#9;self.update_local_view()<br>
-&#9;&#9;self.contribute_to_holonomic_matrix(matrices, index_maps)<br>
-<br>
-&#9;&#9;h = matrices[&quot;holonomic_rhs&quot;]<br>
-&#9;&#9;F = index_maps[&quot;force&quot;][self.internal_force]<br>
-<br>
-&#9;&#9;omegaA = np.asarray(self.bodyA.velocity_var.value[3:6], dtype=float)<br>
-&#9;&#9;omegaB = np.asarray(self.bodyB.velocity_var.value[3:6], dtype=float)<br>
-<br>
-&#9;&#9;# квадратичные члены (центростремительные), всё в СК A:<br>
-&#9;&#9;# bias = (ωA×(ωA×rA))  -  (ωB×(ωB×rB_A))<br>
-&#9;&#9;rA = self.rA_local<br>
-&#9;&#9;rB_A = self.rB_in_A<br>
-<br>
-&#9;&#9;biasA = np.cross(omegaA, np.cross(omegaA, rA))<br>
-&#9;&#9;biasB = np.cross(omegaB, np.cross(omegaB, rB_A))<br>
-&#9;&#9;bias = biasA - biasB<br>
-<br>
-&#9;&#9;# по принятой конвенции — добавляем -bias<br>
-&#9;&#9;h[F] += -bias<br>
-<br>
-&#9;def contribute_to_holonomic_matrix(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;В СК A:<br>
-&#9;&#9;aA_lin + αA×rA  -  R_AB (aB_lin + αB×rB)  + квадр.члены = 0<br>
-<br>
-&#9;&#9;Линейная часть по ускорениям:<br>
-&#9;&#9;H * [aA_lin(3), αA(3), aB_lin(3), αB(3)]^T<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;H = matrices[&quot;holonomic&quot;]<br>
-&#9;&#9;aA = index_maps[&quot;acceleration&quot;][self.bodyA.acceleration_var]<br>
-&#9;&#9;aB = index_maps[&quot;acceleration&quot;][self.bodyB.acceleration_var]<br>
-&#9;&#9;F  = index_maps[&quot;force&quot;][self.internal_force]  # 3 строки<br>
-<br>
-&#9;&#9;rA = self.rA_local<br>
-&#9;&#9;R = self.R_AB<br>
-<br>
-&#9;&#9;# блок по aA (в СК A): [ I, -skew(rA) ]<br>
-&#9;&#9;J_A = np.hstack([<br>
-&#9;&#9;&#9;np.eye(3),<br>
-&#9;&#9;&#9;-_skew(rA),<br>
-&#9;&#9;])  # 3×6<br>
-&#9;&#9;H[np.ix_(F, aA)] += J_A<br>
-<br>
-&#9;&#9;# блок по aB, выраженный в СК A:<br>
-&#9;&#9;# - R_AB (aB_lin + αB×rB) =<br>
-&#9;&#9;#   [ -R_AB,  R_AB * skew(rB_local) ] * [aB_lin, αB]^T<br>
-&#9;&#9;S_rB = _skew(self.rB_local)<br>
-&#9;&#9;col_alphaB = R @ S_rB  # 3×3<br>
-<br>
-&#9;&#9;J_B = np.hstack([<br>
-&#9;&#9;&#9;-R,<br>
-&#9;&#9;&#9;col_alphaB,<br>
-&#9;&#9;])  # 3×6<br>
-<br>
-&#9;&#9;H[np.ix_(F, aB)] += J_B<br>
-<br>
-&#9;def contribute_for_constraints_correction(self, matrices, index_maps):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Позиционная ошибка в СК A:<br>
-&#9;&#9;φ_A = R_A^T [ (pA + R_A rA) - (pB + R_B rB) ]<br>
-&#9;&#9;&#9;= R_A^T (pA - pB) + rA - R_AB rB<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.update_local_view()<br>
-&#9;&#9;self.contribute_to_holonomic_matrix(matrices, index_maps)<br>
-<br>
-&#9;&#9;poserr = matrices[&quot;position_error&quot;]<br>
-&#9;&#9;F = index_maps[&quot;force&quot;][self.internal_force]<br>
-<br>
-&#9;&#9;pA = self.bodyA.pose().lin<br>
-&#9;&#9;pB = self.bodyB.pose().lin<br>
-<br>
-&#9;&#9;poseA = self.bodyA.pose()<br>
-&#9;&#9;R_A = poseA.rotation_matrix()<br>
-&#9;&#9;R_A_T = R_A.T<br>
-<br>
-&#9;&#9;delta_p_A = R_A_T @ (pA - pB)<br>
-&#9;&#9;rA = self.rA_local<br>
-&#9;&#9;rB_A = self.rB_in_A<br>
-<br>
-&#9;&#9;poserr[F] += delta_p_A + rA - rB_A<br>
+def&nbsp;_skew(r:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Матрица&nbsp;векторного&nbsp;произведения:&nbsp;&nbsp;r×x&nbsp;=&nbsp;skew(r)&nbsp;@&nbsp;x.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rx,&nbsp;ry,&nbsp;rz&nbsp;=&nbsp;r<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;&nbsp;&nbsp;0.0,&nbsp;-rz,&nbsp;&nbsp;&nbsp;ry],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;&nbsp;&nbsp;rz,&nbsp;&nbsp;0.0,&nbsp;-rx],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;&nbsp;-ry,&nbsp;&nbsp;rx,&nbsp;&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;],&nbsp;dtype=float)<br>
+<br>
+def&nbsp;quat_normalize(q):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;q&nbsp;/&nbsp;np.linalg.norm(q)<br>
+<br>
+def&nbsp;quat_mul(q1,&nbsp;q2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Кватернионное&nbsp;произведение&nbsp;q1*q2&nbsp;(оба&nbsp;в&nbsp;формате&nbsp;[x,y,z,w]).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x1,y1,z1,w1&nbsp;=&nbsp;q1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x2,y2,z2,w2&nbsp;=&nbsp;q2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*x2&nbsp;+&nbsp;x1*w2&nbsp;+&nbsp;y1*z2&nbsp;-&nbsp;z1*y2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*y2&nbsp;+&nbsp;y1*w2&nbsp;+&nbsp;z1*x2&nbsp;-&nbsp;x1*z2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*z2&nbsp;+&nbsp;z1*w2&nbsp;+&nbsp;x1*y2&nbsp;-&nbsp;y1*x2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*w2&nbsp;-&nbsp;x1*x2&nbsp;-&nbsp;y1*y2&nbsp;-&nbsp;z1*z2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+<br>
+def&nbsp;quat_from_small_angle(dθ):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Создать&nbsp;кватернион&nbsp;вращения&nbsp;из&nbsp;малого&nbsp;углового&nbsp;вектора&nbsp;dθ.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;θ&nbsp;=&nbsp;np.linalg.norm(dθ)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;θ&nbsp;&lt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;линеаризация<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;quat_normalize(np.array([0.5*dθ[0],&nbsp;0.5*dθ[1],&nbsp;0.5*dθ[2],&nbsp;1.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;dθ&nbsp;/&nbsp;θ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;np.sin(0.5&nbsp;*&nbsp;θ)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.array([axis[0]*s,&nbsp;axis[1]*s,&nbsp;axis[2]*s,&nbsp;np.cos(0.5*θ)])<br>
+<br>
+<br>
+<br>
+class&nbsp;RigidBody3D(Contribution):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Твёрдое&nbsp;тело&nbsp;в&nbsp;3D,&nbsp;все&nbsp;расчёты&nbsp;выполняются&nbsp;в&nbsp;локальной&nbsp;СК&nbsp;тела.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Глобальная&nbsp;поза&nbsp;хранится&nbsp;отдельно&nbsp;и&nbsp;используется&nbsp;только&nbsp;для&nbsp;обновления&nbsp;геометрии.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Порядок&nbsp;пространственных&nbsp;векторов&nbsp;(vw_order):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;v_x,&nbsp;v_y,&nbsp;v_z,&nbsp;ω_x,&nbsp;ω_y,&nbsp;ω_z&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inertia:&nbsp;SpatialInertia3D,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gravity:&nbsp;np.ndarray&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;str&nbsp;=&nbsp;&quot;rbody3d&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle_normalize:&nbsp;callable&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;[a_lin(3),&nbsp;α(3)]&nbsp;в&nbsp;локальной&nbsp;СК<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.acceleration_var&nbsp;=&nbsp;Variable(name&nbsp;+&nbsp;&quot;_acc&quot;,&nbsp;size=6,&nbsp;tag=&quot;acceleration&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;[v_lin(3),&nbsp;ω(3)]&nbsp;в&nbsp;локальной&nbsp;СК<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.velocity_var&nbsp;=&nbsp;Variable(name&nbsp;+&nbsp;&quot;_vel&quot;,&nbsp;size=6,&nbsp;tag=&quot;velocity&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;[Δx(3),&nbsp;Δφ(3)]&nbsp;локальная&nbsp;приращённая&nbsp;поза&nbsp;для&nbsp;интеграции<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.local_pose_var&nbsp;=&nbsp;Variable(name&nbsp;+&nbsp;&quot;_pos&quot;,&nbsp;size=6,&nbsp;tag=&quot;position&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;глобальная&nbsp;поза&nbsp;тела<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.global_pose&nbsp;=&nbsp;Pose3(lin=np.zeros(3),&nbsp;ang=np.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0]))&nbsp;&nbsp;#&nbsp;единичный&nbsp;кватернион<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inertia&nbsp;=&nbsp;inertia<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.angle_normalize&nbsp;=&nbsp;angle_normalize<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;сила&nbsp;тяжести&nbsp;задаётся&nbsp;в&nbsp;мировых&nbsp;координатах<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;по&nbsp;аналогии&nbsp;с&nbsp;2D:&nbsp;-g&nbsp;по&nbsp;оси&nbsp;y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;gravity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gravity&nbsp;=&nbsp;np.array([0.0,&nbsp;-9.81,&nbsp;0.0],&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gravity&nbsp;=&nbsp;np.asarray(gravity,&nbsp;float).reshape(3)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__([self.acceleration_var,&nbsp;self.velocity_var,&nbsp;self.local_pose_var],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=assembler)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;----------&nbsp;геттеры&nbsp;----------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;pose(self)&nbsp;-&gt;&nbsp;Pose3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.global_pose<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_pose(self,&nbsp;pose:&nbsp;Pose3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.global_pose&nbsp;=&nbsp;pose<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;----------&nbsp;вклад&nbsp;в&nbsp;систему&nbsp;----------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute(self,&nbsp;matrices,&nbsp;index_maps):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вклад&nbsp;тела&nbsp;в&nbsp;уравнения&nbsp;движения&nbsp;(в&nbsp;локальной&nbsp;СК):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;I&nbsp;*&nbsp;a&nbsp;+&nbsp;v×*&nbsp;(I&nbsp;v)&nbsp;=&nbsp;F<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_mass_matrix(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;matrices[&quot;load&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_idx&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;][self.acceleration_var]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v_local&nbsp;=&nbsp;Screw3.from_vector_vw_order(self.velocity_var.value)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bias&nbsp;=&nbsp;self.inertia.bias_wrench(v_local)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;гравитация&nbsp;в&nbsp;локальной&nbsp;СК&nbsp;тела<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g_local&nbsp;=&nbsp;self.global_pose.inverse().rotate_vector(self.gravity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grav&nbsp;=&nbsp;self.inertia.gravity_wrench(g_local)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[a_idx]&nbsp;+=&nbsp;bias.to_vector_vw_order()&nbsp;+&nbsp;grav.to_vector_vw_order()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_for_constraints_correction(self,&nbsp;matrices,&nbsp;index_maps):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_mass_matrix(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_mass_matrix(self,&nbsp;matrices,&nbsp;index_maps):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Массовая&nbsp;матрица&nbsp;в&nbsp;локальной&nbsp;СК.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;matrices[&quot;mass&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_idx&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;][self.acceleration_var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[np.ix_(a_idx,&nbsp;a_idx)]&nbsp;+=&nbsp;self.inertia.to_matrix_vw_order()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;----------&nbsp;интеграция&nbsp;шага&nbsp;----------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;finish_timestep(self,&nbsp;dt:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;self.velocity_var.value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;self.acceleration_var.value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;+=&nbsp;a&nbsp;*&nbsp;dt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.velocity_var.value&nbsp;=&nbsp;v<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;линейное&nbsp;смещение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v_lin&nbsp;=&nbsp;v[0:3]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dp_lin&nbsp;=&nbsp;v_lin&nbsp;*&nbsp;dt<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;угловое&nbsp;малое&nbsp;приращение&nbsp;через&nbsp;кватернион<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v_ang&nbsp;=&nbsp;v[3:6]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dθ&nbsp;=&nbsp;v_ang&nbsp;*&nbsp;dt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_delta&nbsp;=&nbsp;quat_from_small_angle(dθ)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;обновляем&nbsp;глобальную&nbsp;позу<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;pose.lin&nbsp;+=&nbsp;R&nbsp;*&nbsp;dp_lin&nbsp;&nbsp;&nbsp;(делает&nbsp;Pose3&nbsp;оператор&nbsp;@)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;pose.ang&nbsp;=&nbsp;pose.ang&nbsp;*&nbsp;q_delta<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;delta_pose_local&nbsp;=&nbsp;Pose3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=dp_lin,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=q_delta,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.global_pose&nbsp;=&nbsp;self.global_pose&nbsp;@&nbsp;delta_pose_local<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;сбрасываем&nbsp;локальную&nbsp;позу<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.local_pose_var.value[:]&nbsp;=&nbsp;0.0<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.angle_normalize&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.global_pose.ang&nbsp;=&nbsp;self.angle_normalize(self.global_pose.ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.global_pose.ang&nbsp;=&nbsp;quat_normalize(self.global_pose.ang)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;finish_correction_step(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dp&nbsp;=&nbsp;self.local_pose_var.value<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;линейная&nbsp;часть<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dp_lin&nbsp;=&nbsp;dp[0:3]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;угловая&nbsp;часть&nbsp;dp[3:6]&nbsp;—&nbsp;это&nbsp;снова&nbsp;угловой&nbsp;вектор,&nbsp;надо&nbsp;превращать&nbsp;в&nbsp;кватернион<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dθ&nbsp;=&nbsp;dp[3:6]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_delta&nbsp;=&nbsp;quat_from_small_angle(dθ)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;delta_pose_local&nbsp;=&nbsp;Pose3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=dp_lin,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=q_delta,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.global_pose&nbsp;=&nbsp;self.global_pose&nbsp;@&nbsp;delta_pose_local<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.local_pose_var.value[:]&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.global_pose.ang&nbsp;=&nbsp;quat_normalize(self.global_pose.ang)<br>
+<br>
+<br>
+class&nbsp;ForceOnBody3D(Contribution):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Внешний&nbsp;пространственный&nbsp;винт&nbsp;(сила+момент)&nbsp;в&nbsp;локальной&nbsp;СК&nbsp;тела.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:&nbsp;RigidBody3D,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench:&nbsp;Screw3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;in_local_frame:&nbsp;bool&nbsp;=&nbsp;True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.body&nbsp;=&nbsp;body<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.acceleration&nbsp;=&nbsp;body.acceleration_var<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.wrench_local&nbsp;=&nbsp;wrench&nbsp;if&nbsp;in_local_frame&nbsp;else&nbsp;wrench.rotated_by(body.pose().inverse())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__([],&nbsp;assembler=assembler)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute(self,&nbsp;matrices,&nbsp;index_maps):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;matrices[&quot;load&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_indices&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;][self.acceleration]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[a_indices]&nbsp;+=&nbsp;self.wrench_local.to_vector_vw_order()<br>
+<br>
+<br>
+class&nbsp;FixedRotationJoint3D(Contribution):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Ground-&quot;шарнир&quot;,&nbsp;фиксирующий&nbsp;линейное&nbsp;движение&nbsp;одной&nbsp;точки&nbsp;тела&nbsp;в&nbsp;мировой&nbsp;СК,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;но&nbsp;не&nbsp;ограничивающий&nbsp;ориентацию&nbsp;тела.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Как&nbsp;и&nbsp;в&nbsp;2D-версии:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;всё&nbsp;формулируется&nbsp;в&nbsp;локальной&nbsp;СК&nbsp;тела;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;лямбда&nbsp;—&nbsp;линейная&nbsp;сила&nbsp;в&nbsp;локальной&nbsp;СК&nbsp;тела&nbsp;(3&nbsp;компоненты).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:&nbsp;RigidBody3D,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coords_of_joint:&nbsp;np.ndarray&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.body&nbsp;=&nbsp;body<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.internal_force&nbsp;=&nbsp;Variable(&quot;F_joint&quot;,&nbsp;size=3,&nbsp;tag=&quot;force&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose&nbsp;=&nbsp;self.body.pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.coords_of_joint&nbsp;=&nbsp;coords_of_joint.copy()&nbsp;if&nbsp;coords_of_joint&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;pose.lin.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;фиксируем&nbsp;локальные&nbsp;координаты&nbsp;точки&nbsp;шарнира&nbsp;на&nbsp;теле<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.r_local&nbsp;=&nbsp;pose.inverse_transform_point(self.coords_of_joint)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__([body.acceleration_var,&nbsp;self.internal_force],&nbsp;assembler=assembler)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;линейная&nbsp;часть&nbsp;(Якобиан)&nbsp;—&nbsp;в&nbsp;H<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_holonomic_matrix(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;правую&nbsp;часть&nbsp;—&nbsp;квадратичные&nbsp;(центростремительные)&nbsp;члены,&nbsp;тоже&nbsp;в&nbsp;локале<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;=&nbsp;matrices[&quot;holonomic_rhs&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F_idx&nbsp;=&nbsp;index_maps[&quot;force&quot;][self.internal_force]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;omega&nbsp;=&nbsp;np.asarray(self.body.velocity_var.value[3:6],&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;центростремительное&nbsp;ускорение&nbsp;точки:&nbsp;ω&nbsp;×&nbsp;(ω&nbsp;×&nbsp;r)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bias&nbsp;=&nbsp;np.cross(omega,&nbsp;np.cross(omega,&nbsp;self.r_local))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h[F_idx]&nbsp;+=&nbsp;bias<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;radius(self)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Радиус-вектор&nbsp;точки&nbsp;шарнира&nbsp;в&nbsp;глобальной&nbsp;СК.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose&nbsp;=&nbsp;self.body.pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;pose.rotate_vector(self.r_local)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_holonomic_matrix(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ограничение&nbsp;в&nbsp;локале&nbsp;тела:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_lin&nbsp;+&nbsp;α×r_local&nbsp;+&nbsp;(квадр.члены)&nbsp;=&nbsp;0<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;В&nbsp;матрицу&nbsp;кладём&nbsp;линейную&nbsp;часть&nbsp;по&nbsp;ускорениям:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;*&nbsp;[a_lin(3),&nbsp;α(3)]^T&nbsp;&nbsp;с&nbsp;блоком&nbsp;&nbsp;-[&nbsp;I_3,&nbsp;&nbsp;-skew(r_local)&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;α×r&nbsp;=&nbsp;-skew(r)&nbsp;α.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;matrices[&quot;holonomic&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_idx&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;][self.body.acceleration_var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F_idx&nbsp;=&nbsp;index_maps[&quot;force&quot;][self.internal_force]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;=&nbsp;self.r_local<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J&nbsp;=&nbsp;np.hstack([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.eye(3),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-_skew(r),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])&nbsp;&nbsp;#&nbsp;3×6<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H[np.ix_(F_idx,&nbsp;a_idx)]&nbsp;+=&nbsp;-J&nbsp;&nbsp;#&nbsp;как&nbsp;в&nbsp;2D:&nbsp;минус&nbsp;перед&nbsp;блоком<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_for_constraints_correction(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Позиционная&nbsp;ошибка&nbsp;в&nbsp;локале&nbsp;тела:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;φ_local&nbsp;=&nbsp;R^T&nbsp;(p&nbsp;-&nbsp;c_world)&nbsp;+&nbsp;r_local<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;p&nbsp;—&nbsp;мировая&nbsp;позиция&nbsp;опорной&nbsp;точки&nbsp;тела,&nbsp;c_world&nbsp;—&nbsp;фиксированная&nbsp;мировая&nbsp;точка&nbsp;шарнира.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_holonomic_matrix(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poserr&nbsp;=&nbsp;matrices[&quot;position_error&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F_idx&nbsp;=&nbsp;index_maps[&quot;force&quot;][self.internal_force]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose&nbsp;=&nbsp;self.body.pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;предполагается,&nbsp;что&nbsp;Pose3&nbsp;умеет&nbsp;выдавать&nbsp;матрицу&nbsp;поворота<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;pose.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R_T&nbsp;=&nbsp;R.T<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;perr&nbsp;=&nbsp;R_T&nbsp;@&nbsp;(pose.lin&nbsp;-&nbsp;self.coords_of_joint)&nbsp;+&nbsp;self.r_local<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poserr[F_idx]&nbsp;-=&nbsp;perr<br>
+<br>
+<br>
+class&nbsp;RevoluteJoint3D(Contribution):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Двухтелый&nbsp;&quot;вращательный&quot;&nbsp;шарнир&nbsp;в&nbsp;духе&nbsp;2D-кода,&nbsp;но&nbsp;в&nbsp;3D:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;связь&nbsp;формулируется&nbsp;в&nbsp;локальной&nbsp;СК&nbsp;тела&nbsp;A,&nbsp;и<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ограничивает&nbsp;только&nbsp;относительное&nbsp;линейное&nbsp;движение&nbsp;точки&nbsp;шарнира,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ориентация&nbsp;тел&nbsp;не&nbsp;фиксируется.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bodyA:&nbsp;RigidBody3D,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bodyB:&nbsp;RigidBody3D,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coords_of_joint:&nbsp;np.ndarray&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=None):<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cW&nbsp;=&nbsp;coords_of_joint.copy()&nbsp;if&nbsp;coords_of_joint&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;bodyA.pose().lin.copy()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bodyA&nbsp;=&nbsp;bodyA<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bodyB&nbsp;=&nbsp;bodyB<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;3-компонентная&nbsp;лямбда&nbsp;—&nbsp;сила&nbsp;в&nbsp;СК&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.internal_force&nbsp;=&nbsp;Variable(&quot;F_rev&quot;,&nbsp;size=3,&nbsp;tag=&quot;force&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poseA&nbsp;=&nbsp;self.bodyA.pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poseB&nbsp;=&nbsp;self.bodyB.pose()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;локальные&nbsp;координаты&nbsp;точки&nbsp;шарнира&nbsp;на&nbsp;каждом&nbsp;теле<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rA_local&nbsp;=&nbsp;poseA.inverse_transform_point(cW)&nbsp;&nbsp;#&nbsp;в&nbsp;СК&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rB_local&nbsp;=&nbsp;poseB.inverse_transform_point(cW)&nbsp;&nbsp;#&nbsp;в&nbsp;СК&nbsp;B<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;кэш&nbsp;для&nbsp;rB,&nbsp;выраженного&nbsp;в&nbsp;СК&nbsp;A,&nbsp;и&nbsp;для&nbsp;R_AB<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.R_AB&nbsp;=&nbsp;np.eye(3)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rB_in_A&nbsp;=&nbsp;self.rB_local.copy()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_local_view()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__([bodyA.acceleration_var,&nbsp;bodyB.acceleration_var,&nbsp;self.internal_force],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=assembler)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_local_view(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Обновить&nbsp;R_AB&nbsp;и&nbsp;rB,&nbsp;выраженные&nbsp;в&nbsp;СК&nbsp;A.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poseA&nbsp;=&nbsp;self.bodyA.pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poseB&nbsp;=&nbsp;self.bodyB.pose()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R_A&nbsp;=&nbsp;poseA.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R_B&nbsp;=&nbsp;poseB.rotation_matrix()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.R_AB&nbsp;=&nbsp;R_A.T&nbsp;@&nbsp;R_B<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rB_in_A&nbsp;=&nbsp;self.R_AB&nbsp;@&nbsp;self.rB_local<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_local_view()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_holonomic_matrix(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;=&nbsp;matrices[&quot;holonomic_rhs&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F&nbsp;=&nbsp;index_maps[&quot;force&quot;][self.internal_force]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;omegaA&nbsp;=&nbsp;np.asarray(self.bodyA.velocity_var.value[3:6],&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;omegaB&nbsp;=&nbsp;np.asarray(self.bodyB.velocity_var.value[3:6],&nbsp;dtype=float)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;квадратичные&nbsp;члены&nbsp;(центростремительные),&nbsp;всё&nbsp;в&nbsp;СК&nbsp;A:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;bias&nbsp;=&nbsp;(ωA×(ωA×rA))&nbsp;&nbsp;-&nbsp;&nbsp;(ωB×(ωB×rB_A))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rA&nbsp;=&nbsp;self.rA_local<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rB_A&nbsp;=&nbsp;self.rB_in_A<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;biasA&nbsp;=&nbsp;np.cross(omegaA,&nbsp;np.cross(omegaA,&nbsp;rA))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;biasB&nbsp;=&nbsp;np.cross(omegaB,&nbsp;np.cross(omegaB,&nbsp;rB_A))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bias&nbsp;=&nbsp;biasA&nbsp;-&nbsp;biasB<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;по&nbsp;принятой&nbsp;конвенции&nbsp;—&nbsp;добавляем&nbsp;-bias<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h[F]&nbsp;+=&nbsp;-bias<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_holonomic_matrix(self,&nbsp;matrices,&nbsp;index_maps:&nbsp;Dict[str,&nbsp;Dict[Variable,&nbsp;List[int]]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;В&nbsp;СК&nbsp;A:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aA_lin&nbsp;+&nbsp;αA×rA&nbsp;&nbsp;-&nbsp;&nbsp;R_AB&nbsp;(aB_lin&nbsp;+&nbsp;αB×rB)&nbsp;&nbsp;+&nbsp;квадр.члены&nbsp;=&nbsp;0<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Линейная&nbsp;часть&nbsp;по&nbsp;ускорениям:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;*&nbsp;[aA_lin(3),&nbsp;αA(3),&nbsp;aB_lin(3),&nbsp;αB(3)]^T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;matrices[&quot;holonomic&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aA&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;][self.bodyA.acceleration_var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aB&nbsp;=&nbsp;index_maps[&quot;acceleration&quot;][self.bodyB.acceleration_var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F&nbsp;&nbsp;=&nbsp;index_maps[&quot;force&quot;][self.internal_force]&nbsp;&nbsp;#&nbsp;3&nbsp;строки<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rA&nbsp;=&nbsp;self.rA_local<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.R_AB<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;блок&nbsp;по&nbsp;aA&nbsp;(в&nbsp;СК&nbsp;A):&nbsp;[&nbsp;I,&nbsp;-skew(rA)&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_A&nbsp;=&nbsp;np.hstack([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.eye(3),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-_skew(rA),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])&nbsp;&nbsp;#&nbsp;3×6<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H[np.ix_(F,&nbsp;aA)]&nbsp;+=&nbsp;J_A<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;блок&nbsp;по&nbsp;aB,&nbsp;выраженный&nbsp;в&nbsp;СК&nbsp;A:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-&nbsp;R_AB&nbsp;(aB_lin&nbsp;+&nbsp;αB×rB)&nbsp;=<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;[&nbsp;-R_AB,&nbsp;&nbsp;R_AB&nbsp;*&nbsp;skew(rB_local)&nbsp;]&nbsp;*&nbsp;[aB_lin,&nbsp;αB]^T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S_rB&nbsp;=&nbsp;_skew(self.rB_local)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;col_alphaB&nbsp;=&nbsp;R&nbsp;@&nbsp;S_rB&nbsp;&nbsp;#&nbsp;3×3<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_B&nbsp;=&nbsp;np.hstack([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-R,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;col_alphaB,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])&nbsp;&nbsp;#&nbsp;3×6<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H[np.ix_(F,&nbsp;aB)]&nbsp;+=&nbsp;J_B<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_for_constraints_correction(self,&nbsp;matrices,&nbsp;index_maps):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Позиционная&nbsp;ошибка&nbsp;в&nbsp;СК&nbsp;A:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;φ_A&nbsp;=&nbsp;R_A^T&nbsp;[&nbsp;(pA&nbsp;+&nbsp;R_A&nbsp;rA)&nbsp;-&nbsp;(pB&nbsp;+&nbsp;R_B&nbsp;rB)&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;R_A^T&nbsp;(pA&nbsp;-&nbsp;pB)&nbsp;+&nbsp;rA&nbsp;-&nbsp;R_AB&nbsp;rB<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_local_view()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contribute_to_holonomic_matrix(matrices,&nbsp;index_maps)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poserr&nbsp;=&nbsp;matrices[&quot;position_error&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F&nbsp;=&nbsp;index_maps[&quot;force&quot;][self.internal_force]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pA&nbsp;=&nbsp;self.bodyA.pose().lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pB&nbsp;=&nbsp;self.bodyB.pose().lin<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poseA&nbsp;=&nbsp;self.bodyA.pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R_A&nbsp;=&nbsp;poseA.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R_A_T&nbsp;=&nbsp;R_A.T<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;delta_p_A&nbsp;=&nbsp;R_A_T&nbsp;@&nbsp;(pA&nbsp;-&nbsp;pB)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rA&nbsp;=&nbsp;self.rA_local<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rB_A&nbsp;=&nbsp;self.rB_in_A<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;poserr[F]&nbsp;+=&nbsp;delta_p_A&nbsp;+&nbsp;rA&nbsp;-&nbsp;rB_A<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

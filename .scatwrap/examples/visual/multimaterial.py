@@ -9,295 +9,295 @@
 &quot;&quot;&quot;<br>
 demo_wire_cube.py<br>
 <br>
-Куб, рисуемый в два прохода:<br>
-1) обычный solid-шейдер<br>
-2) поверх него — wireframe через геометрический шейдер<br>
+Куб,&nbsp;рисуемый&nbsp;в&nbsp;два&nbsp;прохода:<br>
+1)&nbsp;обычный&nbsp;solid-шейдер<br>
+2)&nbsp;поверх&nbsp;него&nbsp;—&nbsp;wireframe&nbsp;через&nbsp;геометрический&nbsp;шейдер<br>
 <br>
-Толщина линий передаётся в шейдер как uniform u_line_width.<br>
-(Чтобы она реально влияла на визуал, нужно дописать более хитрый GS;<br>
-сейчас это просто пример того, как параметр уходит в материал/шейдер.)<br>
+Толщина&nbsp;линий&nbsp;передаётся&nbsp;в&nbsp;шейдер&nbsp;как&nbsp;uniform&nbsp;u_line_width.<br>
+(Чтобы&nbsp;она&nbsp;реально&nbsp;влияла&nbsp;на&nbsp;визуал,&nbsp;нужно&nbsp;дописать&nbsp;более&nbsp;хитрый&nbsp;GS;<br>
+сейчас&nbsp;это&nbsp;просто&nbsp;пример&nbsp;того,&nbsp;как&nbsp;параметр&nbsp;уходит&nbsp;в&nbsp;материал/шейдер.)<br>
 &quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.mesh.mesh import CubeMesh<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;CubeMesh<br>
 <br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;MeshDrawable,<br>
-&#9;Scene,<br>
-&#9;Material,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from termin.visualization.components import MeshRenderer<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
 <br>
-from termin.visualization.renderpass import RenderPass, RenderState<br>
+from&nbsp;termin.visualization.renderpass&nbsp;import&nbsp;RenderPass,&nbsp;RenderState<br>
 <br>
 <br>
-# ----------------------------------------------------------------------<br>
-# SOLID SHADER (почти твой исходный)<br>
-# ----------------------------------------------------------------------<br>
+#&nbsp;----------------------------------------------------------------------<br>
+#&nbsp;SOLID&nbsp;SHADER&nbsp;(почти&nbsp;твой&nbsp;исходный)<br>
+#&nbsp;----------------------------------------------------------------------<br>
 <br>
-SOLID_VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
+SOLID_VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-layout(location = 0) in vec3 a_position;<br>
-layout(location = 1) in vec3 a_normal;<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_normal;<br>
-out vec3 v_world_pos;<br>
+out&nbsp;vec3&nbsp;v_normal;<br>
+out&nbsp;vec3&nbsp;v_world_pos;<br>
 <br>
-void main() {<br>
-&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
-&#9;v_world_pos = world.xyz;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;world&nbsp;=&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_world_pos&nbsp;=&nbsp;world.xyz;<br>
 <br>
-&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
 <br>
-&#9;gl_Position = u_projection * u_view * world;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-SOLID_FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
+SOLID_FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-in vec3 v_normal;<br>
-in vec3 v_world_pos;<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
+in&nbsp;vec3&nbsp;v_world_pos;<br>
 <br>
-uniform vec4 u_color;<br>
-uniform vec3 u_light_dir;<br>
-uniform vec3 u_light_color;<br>
-uniform vec3 u_view_pos;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
+uniform&nbsp;vec3&nbsp;u_light_dir;<br>
+uniform&nbsp;vec3&nbsp;u_light_color;<br>
+uniform&nbsp;vec3&nbsp;u_view_pos;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;vec3 N = normalize(v_normal);<br>
-&#9;vec3 L = normalize(-u_light_dir);<br>
-&#9;vec3 V = normalize(u_view_pos - v_world_pos);<br>
-&#9;vec3 H = normalize(L + V);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;N&nbsp;=&nbsp;normalize(v_normal);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;L&nbsp;=&nbsp;normalize(-u_light_dir);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;V&nbsp;=&nbsp;normalize(u_view_pos&nbsp;-&nbsp;v_world_pos);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;H&nbsp;=&nbsp;normalize(L&nbsp;+&nbsp;V);<br>
 <br>
-&#9;const float ambientStrength  = 0.2;<br>
-&#9;const float diffuseStrength  = 0.8;<br>
-&#9;const float specularStrength = 0.4;<br>
-&#9;const float shininess        = 32.0;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;ambientStrength&nbsp;&nbsp;=&nbsp;0.2;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;diffuseStrength&nbsp;&nbsp;=&nbsp;0.8;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;specularStrength&nbsp;=&nbsp;0.4;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;shininess&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;32.0;<br>
 <br>
-&#9;vec3 ambient = ambientStrength * u_color.rgb;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;ambient&nbsp;=&nbsp;ambientStrength&nbsp;*&nbsp;u_color.rgb;<br>
 <br>
-&#9;float ndotl = max(dot(N, L), 0.0);<br>
-&#9;vec3 diffuse = diffuseStrength * ndotl * u_color.rgb;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(N,&nbsp;L),&nbsp;0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;diffuse&nbsp;=&nbsp;diffuseStrength&nbsp;*&nbsp;ndotl&nbsp;*&nbsp;u_color.rgb;<br>
 <br>
-&#9;float specFactor = 0.0;<br>
-&#9;if (ndotl &gt; 0.0) {<br>
-&#9;&#9;specFactor = pow(max(dot(N, H), 0.0), shininess);<br>
-&#9;}<br>
-&#9;vec3 specular = specularStrength * specFactor * u_light_color;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;specFactor&nbsp;=&nbsp;0.0;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(ndotl&nbsp;&gt;&nbsp;0.0)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;specFactor&nbsp;=&nbsp;pow(max(dot(N,&nbsp;H),&nbsp;0.0),&nbsp;shininess);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;specular&nbsp;=&nbsp;specularStrength&nbsp;*&nbsp;specFactor&nbsp;*&nbsp;u_light_color;<br>
 <br>
-&#9;vec3 color = (ambient + diffuse) * u_light_color + specular;<br>
-&#9;color = clamp(color, 0.0, 1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;color&nbsp;=&nbsp;(ambient&nbsp;+&nbsp;diffuse)&nbsp;*&nbsp;u_light_color&nbsp;+&nbsp;specular;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;color&nbsp;=&nbsp;clamp(color,&nbsp;0.0,&nbsp;1.0);<br>
 <br>
-&#9;FragColor = vec4(color, u_color.a);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(color,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-# ----------------------------------------------------------------------<br>
-# WIREFRAME SHADERS<br>
-# ----------------------------------------------------------------------<br>
+#&nbsp;----------------------------------------------------------------------<br>
+#&nbsp;WIREFRAME&nbsp;SHADERS<br>
+#&nbsp;----------------------------------------------------------------------<br>
 <br>
-# Вершинник — просто выдаём позицию в clip-space.<br>
-WIRE_VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location = 0) in vec3 a_position;<br>
+#&nbsp;Вершинник&nbsp;—&nbsp;просто&nbsp;выдаём&nbsp;позицию&nbsp;в&nbsp;clip-space.<br>
+WIRE_VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-void main() {<br>
-&#9;gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-# Геометрический шейдер: разворачивает треугольники в 3 линии.<br>
-# u_line_width сейчас просто существует как uniform (пример передачи параметра).<br>
-# Для реальной &quot;толстой&quot; линии нужен более сложный экранно-пространственный алгоритм.<br>
-WIRE_GEOM = &quot;&quot;&quot;<br>
-#version 330 core<br>
+#&nbsp;Геометрический&nbsp;шейдер:&nbsp;разворачивает&nbsp;треугольники&nbsp;в&nbsp;3&nbsp;линии.<br>
+#&nbsp;u_line_width&nbsp;сейчас&nbsp;просто&nbsp;существует&nbsp;как&nbsp;uniform&nbsp;(пример&nbsp;передачи&nbsp;параметра).<br>
+#&nbsp;Для&nbsp;реальной&nbsp;&quot;толстой&quot;&nbsp;линии&nbsp;нужен&nbsp;более&nbsp;сложный&nbsp;экранно-пространственный&nbsp;алгоритм.<br>
+WIRE_GEOM&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-layout(triangles) in;<br>
-layout(triangle_strip, max_vertices = 12) out;<br>
+layout(triangles)&nbsp;in;<br>
+layout(triangle_strip,&nbsp;max_vertices&nbsp;=&nbsp;12)&nbsp;out;<br>
 <br>
-// Толщина в NDC (0..1 примерно как половина экрана).<br>
-uniform float u_line_width;<br>
-uniform mat4 u_projection; // если понадобится что-то хитрее, можно использовать<br>
+//&nbsp;Толщина&nbsp;в&nbsp;NDC&nbsp;(0..1&nbsp;примерно&nbsp;как&nbsp;половина&nbsp;экрана).<br>
+uniform&nbsp;float&nbsp;u_line_width;<br>
+uniform&nbsp;mat4&nbsp;u_projection;&nbsp;//&nbsp;если&nbsp;понадобится&nbsp;что-то&nbsp;хитрее,&nbsp;можно&nbsp;использовать<br>
 <br>
-// Генерация &quot;толстой&quot; полоски вокруг отрезка p0-p1 в экранном пространстве<br>
-void emit_thick_segment(vec4 p0, vec4 p1)<br>
+//&nbsp;Генерация&nbsp;&quot;толстой&quot;&nbsp;полоски&nbsp;вокруг&nbsp;отрезка&nbsp;p0-p1&nbsp;в&nbsp;экранном&nbsp;пространстве<br>
+void&nbsp;emit_thick_segment(vec4&nbsp;p0,&nbsp;vec4&nbsp;p1)<br>
 {<br>
-&#9;// Вершины в NDC<br>
-&#9;vec2 ndc0 = p0.xy / p0.w;<br>
-&#9;vec2 ndc1 = p1.xy / p1.w;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Вершины&nbsp;в&nbsp;NDC<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;ndc0&nbsp;=&nbsp;p0.xy&nbsp;/&nbsp;p0.w;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;ndc1&nbsp;=&nbsp;p1.xy&nbsp;/&nbsp;p1.w;<br>
 <br>
-&#9;vec2 dir = ndc1 - ndc0;<br>
-&#9;float len2 = dot(dir, dir);<br>
-&#9;if (len2 &lt;= 1e-8)<br>
-&#9;&#9;return;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;dir&nbsp;=&nbsp;ndc1&nbsp;-&nbsp;ndc0;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;len2&nbsp;=&nbsp;dot(dir,&nbsp;dir);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(len2&nbsp;&lt;=&nbsp;1e-8)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;<br>
 <br>
-&#9;dir = normalize(dir);<br>
-&#9;vec2 n = vec2(-dir.y, dir.x);      // перпендикуляр<br>
-&#9;vec2 off = n * (u_line_width * 0.5);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dir&nbsp;=&nbsp;normalize(dir);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;n&nbsp;=&nbsp;vec2(-dir.y,&nbsp;dir.x);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;перпендикуляр<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;off&nbsp;=&nbsp;n&nbsp;*&nbsp;(u_line_width&nbsp;*&nbsp;0.5);<br>
 <br>
-&#9;vec2 ndc0a = ndc0 + off;<br>
-&#9;vec2 ndc0b = ndc0 - off;<br>
-&#9;vec2 ndc1a = ndc1 + off;<br>
-&#9;vec2 ndc1b = ndc1 - off;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;ndc0a&nbsp;=&nbsp;ndc0&nbsp;+&nbsp;off;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;ndc0b&nbsp;=&nbsp;ndc0&nbsp;-&nbsp;off;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;ndc1a&nbsp;=&nbsp;ndc1&nbsp;+&nbsp;off;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec2&nbsp;ndc1b&nbsp;=&nbsp;ndc1&nbsp;-&nbsp;off;<br>
 <br>
-&#9;// Обратно в clip-space<br>
-&#9;vec4 p0a = vec4(ndc0a * p0.w, p0.zw);<br>
-&#9;vec4 p0b = vec4(ndc0b * p0.w, p0.zw);<br>
-&#9;vec4 p1a = vec4(ndc1a * p1.w, p1.zw);<br>
-&#9;vec4 p1b = vec4(ndc1b * p1.w, p1.zw);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Обратно&nbsp;в&nbsp;clip-space<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;p0a&nbsp;=&nbsp;vec4(ndc0a&nbsp;*&nbsp;p0.w,&nbsp;p0.zw);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;p0b&nbsp;=&nbsp;vec4(ndc0b&nbsp;*&nbsp;p0.w,&nbsp;p0.zw);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;p1a&nbsp;=&nbsp;vec4(ndc1a&nbsp;*&nbsp;p1.w,&nbsp;p1.zw);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;p1b&nbsp;=&nbsp;vec4(ndc1b&nbsp;*&nbsp;p1.w,&nbsp;p1.zw);<br>
 <br>
-&#9;// Квад из двух треугольников (triangle_strip)<br>
-&#9;gl_Position = p0a; EmitVertex();<br>
-&#9;gl_Position = p0b; EmitVertex();<br>
-&#9;gl_Position = p1a; EmitVertex();<br>
-&#9;gl_Position = p1b; EmitVertex();<br>
-&#9;EndPrimitive();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Квад&nbsp;из&nbsp;двух&nbsp;треугольников&nbsp;(triangle_strip)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;p0a;&nbsp;EmitVertex();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;p0b;&nbsp;EmitVertex();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;p1a;&nbsp;EmitVertex();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;p1b;&nbsp;EmitVertex();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;EndPrimitive();<br>
 }<br>
 <br>
-void main()<br>
+void&nbsp;main()<br>
 {<br>
-&#9;vec4 p0 = gl_in[0].gl_Position;<br>
-&#9;vec4 p1 = gl_in[1].gl_Position;<br>
-&#9;vec4 p2 = gl_in[2].gl_Position;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;p0&nbsp;=&nbsp;gl_in[0].gl_Position;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;p1&nbsp;=&nbsp;gl_in[1].gl_Position;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;p2&nbsp;=&nbsp;gl_in[2].gl_Position;<br>
 <br>
-&#9;// три рёбра треугольника<br>
-&#9;emit_thick_segment(p0, p1);<br>
-&#9;emit_thick_segment(p1, p2);<br>
-&#9;emit_thick_segment(p2, p0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;три&nbsp;рёбра&nbsp;треугольника<br>
+&nbsp;&nbsp;&nbsp;&nbsp;emit_thick_segment(p0,&nbsp;p1);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;emit_thick_segment(p1,&nbsp;p2);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;emit_thick_segment(p2,&nbsp;p0);<br>
 }<br>
 <br>
 &quot;&quot;&quot;<br>
 <br>
-WIRE_FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
+WIRE_FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-uniform vec4 u_color;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;FragColor = u_color;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;u_color;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-# ----------------------------------------------------------------------<br>
-# SCENE BUILDING<br>
-# ----------------------------------------------------------------------<br>
+#&nbsp;----------------------------------------------------------------------<br>
+#&nbsp;SCENE&nbsp;BUILDING<br>
+#&nbsp;----------------------------------------------------------------------<br>
 <br>
-def build_scene(world: VisualizationWorld):<br>
-&#9;# Меш куба<br>
-&#9;cube_mesh = CubeMesh()<br>
-&#9;drawable = MeshDrawable(cube_mesh)<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Меш&nbsp;куба<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube_mesh&nbsp;=&nbsp;CubeMesh()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;drawable&nbsp;=&nbsp;MeshDrawable(cube_mesh)<br>
 <br>
-&#9;# --- Solid материал ---<br>
-&#9;solid_shader = ShaderProgram(SOLID_VERT, SOLID_FRAG)<br>
-&#9;solid_material = Material(<br>
-&#9;&#9;shader=solid_shader,<br>
-&#9;&#9;color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32),<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;Solid&nbsp;материал&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;solid_shader&nbsp;=&nbsp;ShaderProgram(SOLID_VERT,&nbsp;SOLID_FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;solid_material&nbsp;=&nbsp;Material(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader=solid_shader,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=np.array([0.8,&nbsp;0.3,&nbsp;0.3,&nbsp;1.0],&nbsp;dtype=np.float32),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;solid_pass = RenderPass(<br>
-&#9;&#9;material=solid_material,<br>
-&#9;&#9;state=RenderState(<br>
-&#9;&#9;&#9;polygon_mode=&quot;fill&quot;,<br>
-&#9;&#9;&#9;cull=True,<br>
-&#9;&#9;&#9;depth_test=True,<br>
-&#9;&#9;&#9;depth_write=True,<br>
-&#9;&#9;&#9;blend=False,<br>
-&#9;&#9;),<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;solid_pass&nbsp;=&nbsp;RenderPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material=solid_material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state=RenderState(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;polygon_mode=&quot;fill&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cull=True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;depth_test=True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;depth_write=True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blend=False,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;# --- Wireframe материал ---<br>
-&#9;wire_shader = ShaderProgram(<br>
-&#9;&#9;vertex_source=WIRE_VERT,<br>
-&#9;&#9;fragment_source=WIRE_FRAG,<br>
-&#9;&#9;geometry_source=WIRE_GEOM,<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;Wireframe&nbsp;материал&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;wire_shader&nbsp;=&nbsp;ShaderProgram(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex_source=WIRE_VERT,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fragment_source=WIRE_FRAG,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;geometry_source=WIRE_GEOM,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;wire_material = Material(<br>
-&#9;&#9;shader=wire_shader,<br>
-&#9;&#9;color=np.array([0.05, 0.05, 0.05, 1.0], dtype=np.float32),<br>
-&#9;&#9;uniforms={<br>
-&#9;&#9;&#9;# вот сюда можно подсунуть толщину, шейдер её получит:<br>
-&#9;&#9;&#9;&quot;u_line_width&quot;: 0.01,<br>
-&#9;&#9;},<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;wire_material&nbsp;=&nbsp;Material(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader=wire_shader,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=np.array([0.05,&nbsp;0.05,&nbsp;0.05,&nbsp;1.0],&nbsp;dtype=np.float32),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uniforms={<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;вот&nbsp;сюда&nbsp;можно&nbsp;подсунуть&nbsp;толщину,&nbsp;шейдер&nbsp;её&nbsp;получит:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;u_line_width&quot;:&nbsp;0.01,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;wire_pass = RenderPass(<br>
-&#9;material=wire_material,<br>
-&#9;&#9;state=RenderState(<br>
-&#9;&#9;&#9;polygon_mode=&quot;fill&quot;,   # &lt;-- ВАЖНО: теперь fill, не line<br>
-&#9;&#9;&#9;cull=False,<br>
-&#9;&#9;&#9;depth_test=True,<br>
-&#9;&#9;&#9;depth_write=False,<br>
-&#9;&#9;&#9;blend=False,<br>
-&#9;&#9;),<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;wire_pass&nbsp;=&nbsp;RenderPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material=wire_material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state=RenderState(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;polygon_mode=&quot;fill&quot;,&nbsp;&nbsp;&nbsp;#&nbsp;&lt;--&nbsp;ВАЖНО:&nbsp;теперь&nbsp;fill,&nbsp;не&nbsp;line<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cull=False,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;depth_test=True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;depth_write=False,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blend=False,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;# --- Entity с MeshRenderer, использующим два прохода ---<br>
-&#9;entity = Entity(pose=Pose3.identity(), name=&quot;wire_cube&quot;)<br>
-&#9;entity.add_component(<br>
-&#9;&#9;MeshRenderer(<br>
-&#9;&#9;&#9;mesh=drawable,<br>
-&#9;&#9;&#9;material=solid_material,          # основной материал (для обратной совместимости)<br>
-&#9;&#9;&#9;passes=[solid_pass, wire_pass],   # мультипасс<br>
-&#9;&#9;)<br>
-&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;Entity&nbsp;с&nbsp;MeshRenderer,&nbsp;использующим&nbsp;два&nbsp;прохода&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;wire_cube&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity.add_component(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MeshRenderer(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh=drawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material=solid_material,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;основной&nbsp;материал&nbsp;(для&nbsp;обратной&nbsp;совместимости)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;passes=[solid_pass,&nbsp;wire_pass],&nbsp;&nbsp;&nbsp;#&nbsp;мультипасс<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;# --- Scene + skybox + камера ---<br>
-&#9;scene = Scene()<br>
-&#9;scene.add(entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;Scene&nbsp;+&nbsp;skybox&nbsp;+&nbsp;камера&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(entity)<br>
 <br>
-&#9;skybox = SkyBoxEntity()<br>
-&#9;scene.add(skybox)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;skybox&nbsp;=&nbsp;SkyBoxEntity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(skybox)<br>
 <br>
-&#9;world.add_scene(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
-&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
-&#9;camera = PerspectiveCameraComponent()<br>
-&#9;camera_entity.add_component(camera)<br>
-&#9;camera_entity.add_component(OrbitCameraController())<br>
-&#9;scene.add(camera_entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(OrbitCameraController())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(camera_entity)<br>
 <br>
-&#9;return scene, camera<br>
-<br>
-<br>
-def main():<br>
-&#9;world = VisualizationWorld()<br>
-&#9;scene, camera = build_scene(world)<br>
-<br>
-&#9;window = world.create_window(title=&quot;termin wireframe demo&quot;)<br>
-&#9;window.add_viewport(scene, camera)<br>
-<br>
-&#9;world.run()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;camera<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;camera&nbsp;=&nbsp;build_scene(world)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;world.create_window(title=&quot;termin&nbsp;wireframe&nbsp;demo&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;camera)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

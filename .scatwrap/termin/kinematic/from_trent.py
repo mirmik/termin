@@ -6,36 +6,36 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from .transform import Transform3<br>
-from .kinematic import KinematicTransform3OneScrew, Rotator3, Actuator3<br>
-from termin.geombase import Pose3, Screw3<br>
-import numpy<br>
+from&nbsp;.transform&nbsp;import&nbsp;Transform3<br>
+from&nbsp;.kinematic&nbsp;import&nbsp;KinematicTransform3OneScrew,&nbsp;Rotator3,&nbsp;Actuator3<br>
+from&nbsp;termin.geombase&nbsp;import&nbsp;Pose3,&nbsp;Screw3<br>
+import&nbsp;numpy<br>
 <br>
-def from_trent(dct: dict) -&gt; Transform3:<br>
-&#9;&quot;&quot;&quot;Create a Transform3 or KinematicTransform3 from a Trent dictionary representation.&quot;&quot;&quot;<br>
-&#9;ttype = dct.get(&quot;type&quot;, &quot;transform&quot;)<br>
-&#9;local_pose_dict = dct.get(&quot;pose&quot;, {})<br>
-&#9;position = numpy.array(local_pose_dict.get(&quot;position&quot;, [0.0, 0.0, 0.0]))<br>
-&#9;orientation = numpy.array(local_pose_dict.get(&quot;orientation&quot;, [0.0, 0.0, 0.0, 1.0]))<br>
-&#9;local_pose = Pose3(lin=position, ang=orientation)<br>
-&#9;name = dct.get(&quot;name&quot;, &quot;&quot;)<br>
-&#9;<br>
-&#9;if ttype == &quot;transform&quot;:<br>
-&#9;&#9;transform = Transform3(local_pose=local_pose, name=name)<br>
-&#9;elif ttype == &quot;rotator&quot;:<br>
-&#9;&#9;axis = numpy.array(dct.get(&quot;axis&quot;, [0.0, 0.0, 1.0]))<br>
-&#9;&#9;transform = Rotator3(axis=axis, parent=None, name=name, local_pose=local_pose, manual_output=True)<br>
-&#9;elif ttype == &quot;actuator&quot;:<br>
-&#9;&#9;axis = numpy.array(dct.get(&quot;axis&quot;, [0.0, 0.0, 1.0]))<br>
-&#9;&#9;transform = Actuator3(axis=axis, parent=None, name=name, local_pose=local_pose, manual_output=True)<br>
-&#9;else:<br>
-&#9;&#9;raise ValueError(f&quot;Unknown transform type: {ttype}&quot;)<br>
-&#9;<br>
-&#9;for child_dct in dct.get(&quot;children&quot;, []):<br>
-&#9;&#9;child_transform = from_trent(child_dct)<br>
-&#9;&#9;transform.add_child(child_transform)<br>
-&#9;<br>
-&#9;return transform<br>
+def&nbsp;from_trent(dct:&nbsp;dict)&nbsp;-&gt;&nbsp;Transform3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Transform3&nbsp;or&nbsp;KinematicTransform3&nbsp;from&nbsp;a&nbsp;Trent&nbsp;dictionary&nbsp;representation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ttype&nbsp;=&nbsp;dct.get(&quot;type&quot;,&nbsp;&quot;transform&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;local_pose_dict&nbsp;=&nbsp;dct.get(&quot;pose&quot;,&nbsp;{})<br>
+&nbsp;&nbsp;&nbsp;&nbsp;position&nbsp;=&nbsp;numpy.array(local_pose_dict.get(&quot;position&quot;,&nbsp;[0.0,&nbsp;0.0,&nbsp;0.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;orientation&nbsp;=&nbsp;numpy.array(local_pose_dict.get(&quot;orientation&quot;,&nbsp;[0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;local_pose&nbsp;=&nbsp;Pose3(lin=position,&nbsp;ang=orientation)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;dct.get(&quot;name&quot;,&nbsp;&quot;&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ttype&nbsp;==&nbsp;&quot;transform&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;transform&nbsp;=&nbsp;Transform3(local_pose=local_pose,&nbsp;name=name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;ttype&nbsp;==&nbsp;&quot;rotator&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;numpy.array(dct.get(&quot;axis&quot;,&nbsp;[0.0,&nbsp;0.0,&nbsp;1.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;transform&nbsp;=&nbsp;Rotator3(axis=axis,&nbsp;parent=None,&nbsp;name=name,&nbsp;local_pose=local_pose,&nbsp;manual_output=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;ttype&nbsp;==&nbsp;&quot;actuator&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;numpy.array(dct.get(&quot;axis&quot;,&nbsp;[0.0,&nbsp;0.0,&nbsp;1.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;transform&nbsp;=&nbsp;Actuator3(axis=axis,&nbsp;parent=None,&nbsp;name=name,&nbsp;local_pose=local_pose,&nbsp;manual_output=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Unknown&nbsp;transform&nbsp;type:&nbsp;{ttype}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child_dct&nbsp;in&nbsp;dct.get(&quot;children&quot;,&nbsp;[]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_transform&nbsp;=&nbsp;from_trent(child_dct)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;transform.add_child(child_transform)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;transform<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

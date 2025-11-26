@@ -6,72 +6,72 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# termin/visualization/resources.py<br>
-from __future__ import annotations<br>
+#&nbsp;termin/visualization/resources.py<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from dataclasses import dataclass, field<br>
-from typing import Dict, Optional, TYPE_CHECKING<br>
+from&nbsp;dataclasses&nbsp;import&nbsp;dataclass,&nbsp;field<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;Optional,&nbsp;TYPE_CHECKING<br>
 <br>
-if TYPE_CHECKING:  # только для типов, чтобы не ловить циклы импортов<br>
-&#9;from .material import Material<br>
-&#9;from .mesh import MeshDrawable<br>
-&#9;from .texture import Texture<br>
-&#9;from .entity import Component<br>
+if&nbsp;TYPE_CHECKING:&nbsp;&nbsp;#&nbsp;только&nbsp;для&nbsp;типов,&nbsp;чтобы&nbsp;не&nbsp;ловить&nbsp;циклы&nbsp;импортов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.material&nbsp;import&nbsp;Material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.mesh&nbsp;import&nbsp;MeshDrawable<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.texture&nbsp;import&nbsp;Texture<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.entity&nbsp;import&nbsp;Component<br>
 <br>
 <br>
 <br>
 @dataclass<br>
-class ResourceManager:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Хранилище ресурсов, привязанное к конкретному редактору/сцене.<br>
-&#9;Никаких глобальных синглтонов.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;materials: Dict[str, &quot;Material&quot;] = field(default_factory=dict)<br>
-&#9;meshes: Dict[str, &quot;MeshDrawable&quot;] = field(default_factory=dict)<br>
-&#9;textures: Dict[str, &quot;Texture&quot;] = field(default_factory=dict)<br>
-&#9;components: Dict[str, type[&quot;Component&quot;]] = field(default_factory=dict)<br>
+class&nbsp;ResourceManager:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Хранилище&nbsp;ресурсов,&nbsp;привязанное&nbsp;к&nbsp;конкретному&nbsp;редактору/сцене.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Никаких&nbsp;глобальных&nbsp;синглтонов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;materials:&nbsp;Dict[str,&nbsp;&quot;Material&quot;]&nbsp;=&nbsp;field(default_factory=dict)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;meshes:&nbsp;Dict[str,&nbsp;&quot;MeshDrawable&quot;]&nbsp;=&nbsp;field(default_factory=dict)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;textures:&nbsp;Dict[str,&nbsp;&quot;Texture&quot;]&nbsp;=&nbsp;field(default_factory=dict)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;components:&nbsp;Dict[str,&nbsp;type[&quot;Component&quot;]]&nbsp;=&nbsp;field(default_factory=dict)<br>
 <br>
-&#9;# --------- Материалы ---------<br>
-&#9;def register_material(self, name: str, mat: &quot;Material&quot;):<br>
-&#9;&#9;self.materials[name] = mat<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---------&nbsp;Материалы&nbsp;---------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;register_material(self,&nbsp;name:&nbsp;str,&nbsp;mat:&nbsp;&quot;Material&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.materials[name]&nbsp;=&nbsp;mat<br>
 <br>
-&#9;def get_material(self, name: str) -&gt; Optional[&quot;Material&quot;]:<br>
-&#9;&#9;return self.materials.get(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_material(self,&nbsp;name:&nbsp;str)&nbsp;-&gt;&nbsp;Optional[&quot;Material&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.materials.get(name)<br>
 <br>
-&#9;def list_material_names(self) -&gt; list[str]:<br>
-&#9;&#9;return sorted(self.materials.keys())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;list_material_names(self)&nbsp;-&gt;&nbsp;list[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;sorted(self.materials.keys())<br>
 <br>
-&#9;def find_material_name(self, mat: &quot;Material&quot;) -&gt; Optional[str]:<br>
-&#9;&#9;for n, m in self.materials.items():<br>
-&#9;&#9;&#9;if m is mat:<br>
-&#9;&#9;&#9;&#9;return n<br>
-&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;find_material_name(self,&nbsp;mat:&nbsp;&quot;Material&quot;)&nbsp;-&gt;&nbsp;Optional[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;n,&nbsp;m&nbsp;in&nbsp;self.materials.items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;m&nbsp;is&nbsp;mat:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;n<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
-&#9;# --------- Меши ---------<br>
-&#9;def register_mesh(self, name: str, mesh: &quot;MeshDrawable&quot;):<br>
-&#9;&#9;self.meshes[name] = mesh<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---------&nbsp;Меши&nbsp;---------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;register_mesh(self,&nbsp;name:&nbsp;str,&nbsp;mesh:&nbsp;&quot;MeshDrawable&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.meshes[name]&nbsp;=&nbsp;mesh<br>
 <br>
-&#9;def get_mesh(self, name: str) -&gt; Optional[&quot;MeshDrawable&quot;]:<br>
-&#9;&#9;return self.meshes.get(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_mesh(self,&nbsp;name:&nbsp;str)&nbsp;-&gt;&nbsp;Optional[&quot;MeshDrawable&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.meshes.get(name)<br>
 <br>
-&#9;def list_mesh_names(self) -&gt; list[str]:<br>
-&#9;&#9;return sorted(self.meshes.keys())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;list_mesh_names(self)&nbsp;-&gt;&nbsp;list[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;sorted(self.meshes.keys())<br>
 <br>
-&#9;def find_mesh_name(self, mesh: &quot;MeshDrawable&quot;) -&gt; Optional[str]:<br>
-&#9;&#9;for n, m in self.meshes.items():<br>
-&#9;&#9;&#9;if m is mesh:<br>
-&#9;&#9;&#9;&#9;return n<br>
-&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;find_mesh_name(self,&nbsp;mesh:&nbsp;&quot;MeshDrawable&quot;)&nbsp;-&gt;&nbsp;Optional[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;n,&nbsp;m&nbsp;in&nbsp;self.meshes.items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;m&nbsp;is&nbsp;mesh:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;n<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
-&#9;# --------- Компоненты (на будущее) ---------<br>
-&#9;def register_component(self, name: str, cls: type[&quot;Component&quot;]):<br>
-&#9;&#9;self.components[name] = cls<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---------&nbsp;Компоненты&nbsp;(на&nbsp;будущее)&nbsp;---------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;register_component(self,&nbsp;name:&nbsp;str,&nbsp;cls:&nbsp;type[&quot;Component&quot;]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.components[name]&nbsp;=&nbsp;cls<br>
 <br>
-&#9;def get_component(self, name: str) -&gt; Optional[type[&quot;Component&quot;]]:<br>
-&#9;&#9;return self.components.get(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_component(self,&nbsp;name:&nbsp;str)&nbsp;-&gt;&nbsp;Optional[type[&quot;Component&quot;]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.components.get(name)<br>
 <br>
-&#9;def list_component_names(self) -&gt; list[str]:<br>
-&#9;&#9;return sorted(self.components.keys())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;list_component_names(self)&nbsp;-&gt;&nbsp;list[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;sorted(self.components.keys())<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

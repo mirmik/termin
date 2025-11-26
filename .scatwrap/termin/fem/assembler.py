@@ -6,1363 +6,1363 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-#!/usr/bin/env python3<br>
+#!/usr/bin/env&nbsp;python3<br>
 &quot;&quot;&quot;<br>
-Универсальная система сборки матриц для МКЭ и других задач.<br>
+Универсальная&nbsp;система&nbsp;сборки&nbsp;матриц&nbsp;для&nbsp;МКЭ&nbsp;и&nbsp;других&nbsp;задач.<br>
 <br>
-Основная идея: <br>
-- Система уравнений собирается из вкладов (contributions)<br>
-- Каждый вклад знает, какие переменные он затрагивает<br>
-- Итоговая система: A*x = b<br>
+Основная&nbsp;идея:&nbsp;<br>
+-&nbsp;Система&nbsp;уравнений&nbsp;собирается&nbsp;из&nbsp;вкладов&nbsp;(contributions)<br>
+-&nbsp;Каждый&nbsp;вклад&nbsp;знает,&nbsp;какие&nbsp;переменные&nbsp;он&nbsp;затрагивает<br>
+-&nbsp;Итоговая&nbsp;система:&nbsp;A*x&nbsp;=&nbsp;b<br>
 &quot;&quot;&quot;<br>
 <br>
-import numpy as np<br>
-from typing import List, Dict, Tuple, Optional<br>
-import numpy<br>
-from termin.geombase.pose3 import Pose3<br>
-<br>
-import termin.linalg.subspaces<br>
-<br>
-<br>
-class Variable:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Переменная (неизвестная величина) в системе уравнений.<br>
-&#9;<br>
-&#9;Может представлять:<br>
-&#9;- Перемещение узла в механике<br>
-&#9;- Напряжение в узле электрической цепи<br>
-&#9;- Температуру в узле тепловой задачи<br>
-&#9;- И т.д.<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self, name: str, size: int = 1, tag = None):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;name: Имя переменной (для отладки)<br>
-&#9;&#9;&#9;size: Размерность<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;<br>
-&#9;&#9;self.size = size<br>
-&#9;&#9;self.global_indices = []  # будет заполнено при сборке<br>
-&#9;&#9;self.tag = tag  # произвольный тег для пользователя<br>
-&#9;&#9;self._assembler = None  # ссылка на assembler, в котором зарегистрирована переменная<br>
-&#9;&#9;self.value = np.zeros(size)         # текущее значение переменной (обновляется после решения)<br>
-<br>
-&#9;&#9;self.name_list = []<br>
-&#9;&#9;if size == 1:<br>
-&#9;&#9;&#9;self.name_list.append(name)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;lst = [&quot;x&quot;, &quot;y&quot;, &quot;z&quot;, &quot;a&quot;, &quot;b&quot;, &quot;c&quot;, &quot;w&quot;]<br>
-&#9;&#9;&#9;for i in range(size):<br>
-&#9;&#9;&#9;&#9;vname = name + &quot;_&quot; + lst[i]<br>
-&#9;&#9;&#9;&#9;self.name_list.append(vname)<br>
-<br>
-&#9;&#9;print(self.name_list, self.size)<br>
-<br>
-&#9;def __str__(self):<br>
-&#9;&#9;return f&quot;{self.name_list}&quot;<br>
-<br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return f&quot;{self.name_list} (size={self.size})&quot;<br>
-<br>
-&#9;def names(self) -&gt; List[str]:<br>
-&#9;&#9;&quot;&quot;&quot;Вернуть список имен компонент переменной&quot;&quot;&quot;<br>
-&#9;&#9;return self.name_list<br>
-<br>
-&#9;def set_value(self, value: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Установить значение переменной<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;value: Значение для установки<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;&#9;if isinstance(value, list):<br>
-&#9;&#9;&#9;self.value = np.array(value)<br>
-&#9;&#9;elif isinstance(value, (int, float)):<br>
-&#9;&#9;&#9;self.value = np.array([value])<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;if value.shape != (self.size,):<br>
-&#9;&#9;&#9;&#9;raise ValueError(f&quot;Размер входного значения {value.shape} не соответствует размеру переменной {self.size}&quot;)<br>
-&#9;&#9;&#9;self.value = value <br>
-&#9;&#9;&#9;<br>
-&#9;<br>
-<br>
-<br>
-<br>
-class Contribution:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Базовый класс для вклада в систему уравнений.<br>
-&#9;<br>
-&#9;Вклад - это что-то, что добавляет элементы в матрицу A и/или вектор b.<br>
-&#9;Примеры:<br>
-&#9;- Уравнение стержня в механике<br>
-&#9;- Резистор в электрической цепи<br>
-&#9;- Граничное условие<br>
-&#9;- Уравнение связи между переменными<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, variables: List[Variable], domain = &quot;mechanic&quot;, assembler=None):<br>
-&#9;&#9;self.variables = variables<br>
-&#9;&#9;self._assembler = assembler  # ссылка на assembler, в котором зарегистрирован вклад<br>
-&#9;&#9;self.assembler = assembler<br>
-&#9;&#9;self.domain = domain<br>
-&#9;&#9;if assembler is not None:<br>
-&#9;&#9;&#9;assembler.add_contribution(self)<br>
-&#9;&#9;self._rank = self._evaluate_rank()<br>
-<br>
-&#9;&#9;if self.domain is None:<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Domain must be specified for {type(self)}&quot;)<br>
-<br>
-&#9;def _evaluate_rank(self) -&gt; int:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает размерность вклада (число уравнений, которые он добавляет)&quot;&quot;&quot;<br>
-&#9;&#9;total_size = sum(var.size for var in self.variables)<br>
-&#9;&#9;return total_size<br>
-<br>
-&#9;def get_variables(self) -&gt; List[Variable]:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает список переменных, которые затрагивает этот вклад&quot;&quot;&quot;<br>
-&#9;&#9;return self.variables<br>
-<br>
-&#9;def contribute_to_matrices(self, matrices, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в матрицы<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;pass  <br>
-&#9;<br>
-&#9;def contribute_to_mass(self, A: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в матрицу A<br>
-&#9;&#9;Уравнение: A*x_d2 + B*x_d + C*x = b<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;A: Глобальная матрица (изменяется in-place)<br>
-&#9;&#9;&#9;index_map: Отображение Variable -&gt; список глобальных индексов<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return np.zeros((self._rank, self._rank))<br>
-&#9;<br>
-&#9;def contribute_to_stiffness(self, K: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в матрицу K<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;A: Глобальная матрица (изменяется in-place)<br>
-&#9;&#9;&#9;index_map: Отображение Variable -&gt; список глобальных индексов<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return np.zeros((self._rank, self._rank))<br>
-<br>
-&#9;def contribute_to_damping(self, C: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в матрицу C<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;A: Глобальная матрица (изменяется in-place)<br>
-&#9;&#9;&#9;index_map: Отображение Variable -&gt; список глобальных индексов<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return np.zeros((self._rank, self._rank))<br>
-&#9;<br>
-&#9;def contribute_to_load(self, b: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в вектор правой части b<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;b: Глобальный вектор (изменяется in-place)<br>
-&#9;&#9;&#9;index_map: Отображение Variable -&gt; список глобальных индексов<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return np.zeros(self._rank)<br>
-<br>
-&#9;def finish_timestep(self, dt: float):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Завершить шаг по времени (обновить внутренние состояния, если нужно)<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;dt: Шаг по времени<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;pass<br>
-<br>
-<br>
-class Constraint:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Базовый класс для голономных связей (constraints).<br>
-&#9;<br>
-&#9;Связь ограничивает движение системы: C·x = d<br>
-&#9;<br>
-&#9;В отличие от Contribution (который добавляет вклад в A и b),<br>
-&#9;Constraint реализуется через множители Лагранжа и добавляет<br>
-&#9;строки в расширенную систему.<br>
-&#9;<br>
-&#9;Примеры:<br>
-&#9;- Фиксация точки в пространстве<br>
-&#9;- Шарнирное соединение тел<br>
-&#9;- Равенство переменных<br>
-&#9;- Кинематические ограничения<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, variables: List[Variable], <br>
-&#9;&#9;&#9;&#9;holonomic_lambdas: List[Variable], <br>
-&#9;&#9;&#9;&#9;nonholonomic_lambdas: List[Variable], <br>
-&#9;&#9;&#9;&#9;assembler=None):<br>
-&#9;&#9;self.variables = variables<br>
-&#9;&#9;self.holonomic_lambdas = holonomic_lambdas  # переменные для множителей Лагранжа<br>
-&#9;&#9;self.nonholonomic_lambdas = nonholonomic_lambdas  # переменные для множителей Лагранжа<br>
-&#9;&#9;self._assembler = assembler  # ссылка на assembler, в котором зарегистрирована связь<br>
-&#9;&#9;if assembler is not None:<br>
-&#9;&#9;&#9;assembler.add_constraint(self)<br>
-&#9;&#9;self._rank = self._evaluate_rank()<br>
-<br>
-&#9;&#9;self._rank_holonomic = sum(var.size for var in self.holonomic_lambdas)<br>
-&#9;&#9;self._rank_nonholonomic = sum(var.size for var in self.nonholonomic_lambdas)<br>
-<br>
-&#9;def _evaluate_rank(self) -&gt; int:<br>
-&#9;&#9;return sum(var.size for var in self.variables)<br>
-<br>
-&#9;def get_variables(self) -&gt; List[Variable]:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает список переменных, участвующих в связи&quot;&quot;&quot;<br>
-&#9;&#9;return self.variables<br>
-<br>
-&#9;def get_holonomic_lambdas(self) -&gt; List[Variable]:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает список переменных-множителей Лагранжа&quot;&quot;&quot;<br>
-&#9;&#9;return self.holonomic_lambdas<br>
-<br>
-&#9;def get_nonholonomic_lambdas(self) -&gt; List[Variable]:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает список переменных-множителей Лагранжа для неоголономных связей&quot;&quot;&quot;<br>
-&#9;&#9;return self.nonholonomic_lambdas<br>
-&#9;<br>
-&#9;def get_n_holonomic(self) -&gt; int:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает количество голономных уравнений связи&quot;&quot;&quot;<br>
-&#9;&#9;return self._rank_holonomic<br>
-<br>
-&#9;def get_n_nonholonomic(self) -&gt; int:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает количество неоголономных уравнений связи&quot;&quot;&quot;<br>
-&#9;&#9;return self._rank_nonholonomic<br>
-<br>
-&#9;def contribute_to_holonomic(self, H: np.ndarray, <br>
-&#9;&#9;&#9;&#9;&#9;index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в матрицу связей<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;H: Матрица связей (n_constraints_total × n_dofs)<br>
-&#9;&#9;&#9;index_map: Отображение Variable -&gt; список глобальных индексов<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return np.zeros((self.get_n_holonomic(), H.shape[1]))<br>
-&#9;<br>
-&#9;def contribute_to_nonholonomic(self, N: np.ndarray,                                    <br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;vars_index_map: Dict[Variable, List[int]],<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;lambdas_index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в матрицу связей для неограниченных связей<br>
-<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;N: Матрица связей (n_constraints_total × n_dofs)<br>
-&#9;&#9;&#9;index_map: Отображение Variable -&gt; список глобальных индексов<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return np.zeros((self.get_n_nonholonomic(), N.shape[1]))<br>
-<br>
-&#9;def contribute_to_holonomic_load(self, d: np.ndarray,  holonomic_index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в правую часть связей d<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;d: Вектор правой части связей<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return np.zeros(self.get_n_holonomic())<br>
-<br>
-&#9;def contribute_to_nonholonomic_load(self, d: np.ndarray,  lambdas_index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в правую часть связей d для неограниченных связей<br>
-<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;d: Вектор правой части связей<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return np.zeros(self.get_n_nonholonomic())<br>
-&#9;<br>
-<br>
-<br>
-<br>
-class MatrixAssembler:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Сборщик матриц из вкладов.<br>
-&#9;<br>
-&#9;Основной класс системы - собирает глобальную матрицу A и вектор b<br>
-&#9;из множества локальных вкладов.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self):<br>
-&#9;&#9;self._dirty_index_map = True<br>
-&#9;&#9;self.variables: List[Variable] = []<br>
-&#9;&#9;self.contributions: List[Contribution] = []<br>
-&#9;&#9;self.constraints: List[Constraint] = []  # Связи через множители Лагранжа<br>
-<br>
-&#9;&#9;self._full_index_map : Optional[Dict[Variable, List[int]]] = None<br>
-&#9;&#9;self._variables_index_map: Optional[Dict[Variable, List[int]]] = None<br>
-&#9;&#9;self._holonomic_index_map: Optional[Dict[Variable, List[int]]] = None<br>
-&#9;&#9;self._nonholonomic_index_map: Optional[Dict[Variable, List[int]]] = None<br>
-<br>
-&#9;&#9;self._holonomic_constraint_vars: List[Variable] = []  # Переменные для множителей Лагранжа<br>
-&#9;&#9;self._nonholonomic_constraint_vars: List[Variable] = []  # Переменные для множителей Лагранжа для неоголономных связей<br>
-<br>
-&#9;&#9;self._q = None  # Вектор состояний<br>
-&#9;&#9;self._q_dot = None  # Вектор скоростей состояний<br>
-&#9;&#9;self._q_ext_ddot = None  # Вектор ускорений состояний (расширенный)<br>
-&#9;&#9;self._q_ddot = None  # Вектор ускорений состояний<br>
-&#9;&#9;self._lambdas_holonomic = None  # Множители Лагранжа для голономных связей<br>
-&#9;&#9;self._lambdas_nonholonomic = None  # Множители Лагранжа для неограниченных связей<br>
-<br>
-&#9;&#9;self._variables_by_tag: Dict = {}  # Словарь переменных по тегам для быстрого доступа<br>
-&#9;&#9;<br>
-&#9;def add_variable(self, name: str, size: int = 1) -&gt; Variable:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить переменную в систему<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;name: Имя переменной<br>
-&#9;&#9;&#9;size: Размерность (1 для скаляра, 2/3 для вектора)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Созданная переменная<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;var = Variable(name, size)<br>
-&#9;&#9;self._register_variable(var)<br>
-&#9;&#9;return var<br>
-&#9;<br>
-&#9;def add_holonomic_constraint_variable(self, name: str, size: int = 1) -&gt; Variable:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить переменную-множитель Лагранжа в систему<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;name: Имя переменной<br>
-&#9;&#9;&#9;size: Размерность (1 для скаляра, 2/3 для вектора)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Созданная переменная<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;var = Variable(name, size)<br>
-&#9;&#9;self._register_holonomic_constraint_variable(var)<br>
-&#9;&#9;return var<br>
-&#9;<br>
-&#9;def add_nonholonomic_constraint_variable(self, name: str, size: int = 1) -&gt; Variable:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить переменную-множитель Лагранжа для неоголономных связей в систему<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;name: Имя переменной<br>
-&#9;&#9;&#9;size: Размерность (1 для скаляра, 2/3 для вектора)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Созданная переменная<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;var = Variable(name, size)<br>
-&#9;&#9;self._register_nonholonomic_constraint_variable(var)<br>
-&#9;&#9;return var<br>
-&#9;<br>
-&#9;def _register_variable(self, var: Variable):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Зарегистрировать переменную в assembler, если она еще не зарегистрирована<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;var: Переменная для регистрации<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if var._assembler is None:<br>
-&#9;&#9;&#9;var._assembler = self<br>
-&#9;&#9;&#9;self.variables.append(var)<br>
-&#9;&#9;&#9;self._dirty_index_map = True<br>
-&#9;&#9;&#9;if var.tag not in self._variables_by_tag:<br>
-&#9;&#9;&#9;&#9;self._variables_by_tag[var.tag] = []<br>
-&#9;&#9;&#9;self._variables_by_tag[var.tag].append(var)<br>
-&#9;&#9;elif var._assembler is not self:<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Переменная {var.name} уже зарегистрирована в другом assembler&quot;)<br>
-<br>
-&#9;def total_variables_by_tag(self, tag) -&gt; int:<br>
-&#9;&#9;&quot;&quot;&quot;Вернуть количество переменных с заданным тегом&quot;&quot;&quot;<br>
-&#9;&#9;if tag in self._variables_by_tag:<br>
-&#9;&#9;&#9;return sum(var.size for var in self._variables_by_tag[tag])<br>
-&#9;&#9;return 0<br>
-&#9;&#9;<br>
-&#9;def _register_holonomic_constraint_variable(self, var: Variable):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Зарегистрировать переменную-множитель Лагранжа в assembler, если она еще не зарегистрирована<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;var: Переменная для регистрации<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if var._assembler is None:<br>
-&#9;&#9;&#9;var._assembler = self<br>
-&#9;&#9;&#9;self._holonomic_constraint_vars.append(var)<br>
-&#9;&#9;&#9;self._dirty_index_map = True<br>
-&#9;&#9;elif var._assembler is not self:<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Переменная {var.name} уже зарегистрирована в другом assembler&quot;)<br>
-&#9;&#9;<br>
-&#9;def _register_nonholonomic_constraint_variable(self, var: Variable):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Зарегистрировать переменную-множитель Лагранжа в assembler, если она еще не зарегистрирована<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;var: Переменная для регистрации<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if var._assembler is None:<br>
-&#9;&#9;&#9;var._assembler = self<br>
-&#9;&#9;&#9;self._nonholonomic_constraint_vars.append(var)<br>
-&#9;&#9;&#9;self._dirty_index_map = True<br>
-&#9;&#9;elif var._assembler is not self:<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Переменная {var.name} уже зарегистрирована в другом assembler&quot;)<br>
-&#9;<br>
-&#9;def add_contribution(self, contribution: Contribution):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в систему<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;contribution: Вклад (уравнение, граничное условие, и т.д.)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Проверяем и регистрируем все переменные, используемые вкладом<br>
-&#9;&#9;for var in contribution.get_variables():<br>
-&#9;&#9;&#9;self._register_variable(var)<br>
-&#9;&#9;<br>
-&#9;&#9;contribution._assembler = self  # регистрируем assembler<br>
-&#9;&#9;self.contributions.append(contribution)<br>
-&#9;<br>
-&#9;def add_constraint(self, constraint: Constraint):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить связь в систему<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;constraint: Связь (кинематическое ограничение, и т.д.)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Проверяем и регистрируем все переменные, используемые связью<br>
-&#9;&#9;for lvar in constraint.get_holonomic_lambdas():<br>
-&#9;&#9;&#9;self._register_holonomic_constraint_variable(lvar)<br>
-<br>
-&#9;&#9;for nvar in constraint.get_nonholonomic_lambdas():<br>
-&#9;&#9;&#9;self._register_nonholonomic_constraint_variable(nvar)<br>
-<br>
-&#9;&#9;constraint._assembler = self  # регистрируем assembler<br>
-&#9;&#9;self.constraints.append(constraint)<br>
-<br>
-&#9;def _build_index_map(self, variables) -&gt; Dict[Variable, List[int]]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Построить отображение: Variable -&gt; глобальные индексы DOF<br>
-&#9;&#9;<br>
-&#9;&#9;Назначает каждой компоненте каждой переменной уникальный<br>
-&#9;&#9;глобальный индекс в системе.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;index_map = {}<br>
-&#9;&#9;current_index = 0<br>
-&#9;&#9;<br>
-&#9;&#9;for var in variables:<br>
-&#9;&#9;&#9;indices = list(range(current_index, current_index + var.size))<br>
-&#9;&#9;&#9;index_map[var] = indices<br>
-&#9;&#9;&#9;var.global_indices = indices<br>
-&#9;&#9;&#9;current_index += var.size<br>
-&#9;&#9;<br>
-&#9;&#9;return index_map<br>
-<br>
-&#9;def _build_full_index_map(self) -&gt; Dict[Variable, List[int]]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Построить полное отображение: Variable -&gt; глобальные индексы DOF<br>
-&#9;&#9;включая все переменные и переменные связей<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;full_variables = self.variables + self._holonomic_constraint_vars + self._nonholonomic_constraint_vars<br>
-&#9;&#9;full_index_map = {}<br>
-&#9;&#9;current_index = 0<br>
-&#9;&#9;<br>
-&#9;&#9;for var in full_variables:<br>
-&#9;&#9;&#9;indices = list(range(current_index, current_index + var.size))<br>
-&#9;&#9;&#9;full_index_map[var] = indices<br>
-&#9;&#9;&#9;current_index += var.size<br>
-&#9;&#9;<br>
-&#9;&#9;return full_index_map<br>
-<br>
-&#9;def _build_index_maps(self) -&gt; Dict[Variable, List[int]]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Построить отображение: Variable -&gt; глобальные индексы DOF<br>
-&#9;&#9;<br>
-&#9;&#9;Назначает каждой компоненте каждой переменной уникальный<br>
-&#9;&#9;глобальный индекс в системе.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self._index_map = self._build_index_map(self.variables)<br>
-&#9;&#9;self._holonomic_index_map = self._build_index_map(self._holonomic_constraint_vars)<br>
-&#9;&#9;self._nonholonomic_index_map = self._build_index_map(self._nonholonomic_constraint_vars)<br>
-<br>
-&#9;&#9;self._full_index_map = self._build_full_index_map()<br>
-<br>
-&#9;&#9;self._dirty_index_map = False<br>
-&#9;&#9;#self._rebuild_state_vectors()<br>
-&#9;<br>
-&#9;def index_map(self) -&gt; Dict[Variable, List[int]]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Получить текущее отображение Variable -&gt; глобальные индексы DOF<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if self._dirty_index_map:<br>
-&#9;&#9;&#9;self._build_index_maps()<br>
-&#9;&#9;return self._index_map<br>
-&#9;<br>
-&#9;def total_dofs(self) -&gt; int:<br>
-&#9;&#9;&quot;&quot;&quot;Общее количество степеней свободы в системе&quot;&quot;&quot;<br>
-&#9;&#9;return sum(var.size for var in self.variables)<br>
-&#9;<br>
-&#9;def assemble(self) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Собрать глобальную систему A*x = b<br>
-&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;(A, b): Матрица и вектор правой части<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Построить карту индексов<br>
-&#9;&#9;index_map = self.index_map()<br>
-&#9;&#9;<br>
-&#9;&#9;# Создать глобальные матрицу и вектор<br>
-&#9;&#9;n_dofs = self.total_dofs()<br>
-&#9;&#9;A = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;b = np.zeros(n_dofs)<br>
-&#9;&#9;<br>
-&#9;&#9;# Собрать вклады<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.contribute_to_stiffness(A, index_map)<br>
-&#9;&#9;&#9;contribution.contribute_to_load(b, index_map)<br>
-&#9;&#9;<br>
-&#9;&#9;return A, b<br>
-<br>
-&#9;def assemble_dynamic_system(self) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Собрать глобальную систему A*x'' + C*x' + K*x = b<br>
-&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;(A, C, K, b): Матрицы и вектор правой части<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Построить карту индексов<br>
-&#9;&#9;index_map = self.index_map()<br>
-<br>
-&#9;&#9;# Создать глобальные матрицы и вектор<br>
-&#9;&#9;n_dofs = self.total_dofs()<br>
-&#9;&#9;<br>
-&#9;&#9;A = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;C = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;K = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;b = np.zeros(n_dofs)<br>
-<br>
-&#9;&#9;matrices = {<br>
-&#9;&#9;&#9;&quot;mass&quot;: A,<br>
-&#9;&#9;&#9;&quot;damping&quot;: C,<br>
-&#9;&#9;&#9;&quot;stiffness&quot;: K,<br>
-&#9;&#9;&#9;&quot;load&quot;: b<br>
-&#9;&#9;}<br>
-<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.contribute(matrices, index_map)<br>
-<br>
-&#9;&#9;return matrices<br>
-<br>
-<br>
-&#9;def assemble_stiffness_problem(self) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Собрать глобальную систему K*x = b<br>
-<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;(K, b): Матрица и вектор правой части<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Построить карту индексов<br>
-&#9;&#9;index_map = self.index_map()<br>
-&#9;&#9;<br>
-&#9;&#9;# Создать глобальные матрицу и вектор<br>
-&#9;&#9;n_dofs = self.total_dofs()<br>
-&#9;&#9;K = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;b = np.zeros(n_dofs)<br>
-&#9;&#9;<br>
-&#9;&#9;# Собрать вклады<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.contribute_to_stiffness(K, index_map)<br>
-&#9;&#9;&#9;contribution.contribute_to_load(b, index_map)<br>
-&#9;&#9;<br>
-&#9;&#9;return K, b<br>
-&#9;<br>
-&#9;def assemble_static_problem(self) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Собрать глобальную систему K*x = b<br>
-<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;(K, b): Матрица и вектор правой части<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Построить карту индексов<br>
-&#9;&#9;index_map = self.index_map()<br>
-&#9;&#9;<br>
-&#9;&#9;# Создать глобальные матрицу и вектор<br>
-&#9;&#9;n_dofs = self.total_dofs()<br>
-&#9;&#9;K = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;b = np.zeros(n_dofs)<br>
-&#9;&#9;<br>
-&#9;&#9;# Собрать вклады<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.contribute_to_mass(K, index_map)<br>
-&#9;&#9;&#9;contribution.contribute_to_load(b, index_map)<br>
-&#9;&#9;<br>
-&#9;&#9;return K, b<br>
-&#9;<br>
-&#9;def assemble_dynamic_problem(self) -&gt; Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Собрать глобальную систему Ad·x'' + C·x' + K·x = b<br>
-&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;(Ad, C, K, b): Матрицы и вектор правой части<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Построить карту индексов<br>
-&#9;&#9;index_map = self.index_map()<br>
-<br>
-&#9;&#9;# Создать глобальные матрицы и вектор<br>
-&#9;&#9;n_dofs = self.total_dofs()<br>
-&#9;&#9;A = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;C = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;K = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;b = np.zeros(n_dofs)<br>
-&#9;&#9;<br>
-&#9;&#9;# Собрать вклады<br>
-&#9;&#9;for contribution in self.contributions:<br>
-&#9;&#9;&#9;contribution.contribute_to_mass(A, index_map)<br>
-&#9;&#9;&#9;contribution.contribute_to_damping(C, index_map)<br>
-&#9;&#9;&#9;contribution.contribute_to_stiffness(K, index_map)<br>
-&#9;&#9;&#9;contribution.contribute_to_load(b, index_map)<br>
-<br>
-&#9;&#9;return A, C, K, b<br>
-<br>
-&#9;def assemble_constraints(self) -&gt; Tuple[np.ndarray, np.ndarray]:    <br>
-&#9;&#9;index_map = self.index_map()<br>
-<br>
-&#9;&#9;# Подсчитать общее количество связей<br>
-&#9;&#9;n_hconstraints = sum(constraint.get_n_holonomic() for constraint in self.constraints)<br>
-&#9;&#9;n_nhconstraints = sum(constraint.get_n_nonholonomic() for constraint in self.constraints)<br>
-&#9;&#9;n_dofs = self.total_dofs()<br>
-<br>
-&#9;&#9;# Создать матрицу связей (n_constraints × n_dofs)<br>
-&#9;&#9;H = np.zeros((n_hconstraints, n_dofs))<br>
-&#9;&#9;N = np.zeros((n_nhconstraints, n_dofs))<br>
-&#9;&#9;dH = np.zeros(n_hconstraints)<br>
-&#9;&#9;dN = np.zeros(n_nhconstraints)<br>
-<br>
-&#9;&#9;# Заполнить матрицу связей<br>
-&#9;&#9;for constraint in self.constraints:<br>
-&#9;&#9;&#9;constraint.contribute_to_holonomic(H, index_map, self._holonomic_index_map)<br>
-&#9;&#9;&#9;constraint.contribute_to_nonholonomic(N, index_map, self._nonholonomic_index_map)<br>
-&#9;&#9;&#9;constraint.contribute_to_holonomic_load(dH, self._holonomic_index_map)<br>
-<br>
-&#9;&#9;return H, N, dH, dN<br>
-<br>
-&#9;def make_extended_system(<br>
-&#9;&#9;&#9;self, A, C, K, b, H, N, dH, dN, q, q_d) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Собрать расширенную систему с множителями Лагранжа<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;n_dofs = A.shape[0] + H.shape[0] + N.shape[0]<br>
-<br>
-&#9;&#9;A_ext = np.zeros((n_dofs, n_dofs))<br>
-&#9;&#9;b_ext = np.zeros(n_dofs)<br>
-<br>
-&#9;&#9;#[ A H.T N.T ]<br>
-&#9;&#9;#[ H 0   0   ]<br>
-&#9;&#9;#[ N 0   0   ]<br>
-<br>
-&#9;&#9;r0 = A.shape[0]<br>
-&#9;&#9;r1 = A.shape[0] + H.shape[0]<br>
-&#9;&#9;r2 = A.shape[0] + H.shape[0] + N.shape[0]<br>
-<br>
-&#9;&#9;c0 = A.shape[1]<br>
-&#9;&#9;c1 = A.shape[1] + H.shape[0]<br>
-&#9;&#9;c2 = A.shape[1] + H.shape[0] + N.shape[0]<br>
-<br>
-&#9;&#9;A_ext[0:r0, 0:c0] = A<br>
-&#9;&#9;A_ext[0:r0, c0:c1] = H.T<br>
-&#9;&#9;A_ext[0:r0, c1:c2] = N.T<br>
-<br>
-&#9;&#9;A_ext[r0:r1, 0:c0] = H<br>
-&#9;&#9;A_ext[r1:r2, 0:c0] = N<br>
-<br>
-&#9;&#9;b_ext[0:r0] = b - C @ q_d - K @ q<br>
-&#9;&#9;b_ext[r0:r1] = dH<br>
-&#9;&#9;b_ext[r1:r2] = dN<br>
-<br>
-&#9;&#9;return A_ext, b_ext<br>
-<br>
-&#9;def extended_dynamic_system_size(self) -&gt; int:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Получить размер расширенной системы с учетом связей<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Размер расширенной системы<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;n_dofs = self.total_dofs()<br>
-&#9;&#9;n_hconstraints = sum(constraint.get_n_holonomic() for constraint in self.constraints)<br>
-&#9;&#9;n_nhconstraints = sum(constraint.get_n_nonholonomic() for constraint in self.constraints)<br>
-&#9;&#9;return n_dofs + n_hconstraints + n_nhconstraints<br>
-<br>
-&#9;def simulation_step_dynamic_with_constraints(self,<br>
-&#9;&#9;&#9;dt: float,<br>
-&#9;&#9;&#9;check_conditioning: bool = True,<br>
-&#9;&#9;&#9;use_least_squares: bool = False) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Выполнить шаг динамического решения с учетом связей<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;dt: Шаг времени<br>
-&#9;&#9;&#9;check_conditioning: Проверить обусловленность матрицы и выдать предупреждение<br>
-&#9;&#9;&#9;use_least_squares: Использовать lstsq вместо solve (робастнее, но медленнее)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self._q_ext_ddot, A, C, K, b, H, N, dH, dN = (<br>
-&#9;&#9;&#9;self.solve_Ad2x_Cdx_Kx_b_with_constraints(<br>
-&#9;&#9;&#9;&#9;check_conditioning=check_conditioning,<br>
-&#9;&#9;&#9;&#9;use_least_squares=use_least_squares<br>
-&#9;&#9;))<br>
-<br>
-&#9;&#9;self._q_ddot = self._q_ext_ddot[:self.total_dofs()]<br>
-&#9;&#9;self._lambdas_holonomic = self._q_ext_ddot[self.total_dofs():<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;self.total_dofs() + sum(constraint.get_n_holonomic() for constraint in self.constraints)]<br>
-&#9;&#9;self._lambdas_nonholonomic = self._q_ext_ddot[self.total_dofs() + sum(constraint.get_n_holonomic() for constraint in self.constraints):]<br>
-<br>
-&#9;&#9;# Обновить переменные<br>
-&#9;&#9;self._q_dot += self._q_ddot * dt<br>
-&#9;&#9;H_add_N_T = H.T + N.T<br>
-<br>
-&#9;&#9;q_dot_violation = termin.linalg.subspaces.rowspace(H_add_N_T) @ self._q_dot<br>
-&#9;&#9;self._q_dot -= q_dot_violation<br>
-<br>
-&#9;&#9;self._q += self._q_dot * dt + 0.5 * self._q_ddot * dt * dt<br>
-&#9;&#9;q_violation = termin.linalg.subspaces.rowspace(H) @ self._q<br>
-&#9;&#9;self._q -= q_violation<br>
-<br>
-&#9;&#9;self._update_variables_from_state_vectors()<br>
-<br>
-<br>
-&#9;# def _update_variables_from_state_vectors(self):<br>
-&#9;#     &quot;&quot;&quot;Обновить значения переменных из внутренних векторов состояния q и q_dot&quot;&quot;&quot;<br>
-&#9;#     index_map = self.index_map()<br>
-&#9;#     for var in self.variables:<br>
-&#9;#         indices = index_map[var]<br>
-&#9;#         var.value = self._q[indices]<br>
-&#9;#         var.value_dot = self._q_dot[indices]<br>
-&#9;#         var.nonlinear_integral()<br>
-<br>
-<br>
-&#9;def _solve_system(self, A, b, <br>
-&#9;&#9;&#9;&#9;&#9;check_conditioning: bool = True, <br>
-&#9;&#9;&#9;use_least_squares: bool = False) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Решить систему A*x = b<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;A: Матрица системы<br>
-&#9;&#9;&#9;b: Вектор правой части<br>
-&#9;&#9;&#9;check_conditioning: Проверить обусловленность матрицы и выдать предупреждение<br>
-&#9;&#9;&#9;use_least_squares: Использовать lstsq вместо solve (робастнее, но медленнее)<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;x: Вектор решения<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Проверка обусловленности<br>
-&#9;&#9;if check_conditioning:<br>
-&#9;&#9;&#9;cond_number = np.linalg.cond(A)<br>
-&#9;&#9;&#9;if cond_number &gt; 1e10:<br>
-&#9;&#9;&#9;&#9;import warnings<br>
-&#9;&#9;&#9;&#9;warnings.warn(<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;Матрица плохо обусловлена: cond(A) = {cond_number:.2e}. &quot;<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;Это может быть из-за penalty method в граничных условиях. &quot;<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;Рассмотрите использование use_least_squares=True&quot;,<br>
-&#9;&#9;&#9;&#9;&#9;RuntimeWarning<br>
-&#9;&#9;&#9;&#9;)<br>
-&#9;&#9;&#9;elif cond_number &gt; 1e6:<br>
-&#9;&#9;&#9;&#9;import warnings<br>
-&#9;&#9;&#9;&#9;warnings.warn(<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;Матрица имеет высокое число обусловленности: cond(A) = {cond_number:.2e}&quot;,<br>
-&#9;&#9;&#9;&#9;&#9;RuntimeWarning<br>
-&#9;&#9;&#9;&#9;)<br>
-<br>
-&#9;&#9;# Решение системы<br>
-&#9;&#9;if use_least_squares:<br>
-&#9;&#9;&#9;# Метод наименьших квадратов - более робастный<br>
-&#9;&#9;&#9;x, residuals, rank, s = np.linalg.lstsq(A, b, rcond=None)<br>
-&#9;&#9;&#9;if check_conditioning and rank &lt; len(b):<br>
-&#9;&#9;&#9;&#9;import warnings<br>
-&#9;&#9;&#9;&#9;warnings.warn(<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;Матрица вырожденная или близка к вырожденной: &quot;<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;rank(A) = {rank}, expected {len(b)}&quot;,<br>
-&#9;&#9;&#9;&#9;&#9;RuntimeWarning<br>
-&#9;&#9;&#9;&#9;)<br>
-&#9;&#9;&#9;elif check_conditioning and rank &lt; len(b):<br>
-&#9;&#9;&#9;&#9;import warnings<br>
-&#9;&#9;&#9;&#9;warnings.warn(<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;Матрица вырожденная или близка к вырожденной: &quot;<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;rank(A) = {rank}, expected {len(b)}&quot;,<br>
-&#9;&#9;&#9;&#9;&#9;RuntimeWarning<br>
-&#9;&#9;&#9;&#9;)<br>
-<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;# Прямое решение - быстрее, но менее робастное<br>
-&#9;&#9;&#9;try:<br>
-&#9;&#9;&#9;&#9;x = np.linalg.solve(A, b)<br>
-&#9;&#9;&#9;except np.linalg.LinAlgError as e:<br>
-&#9;&#9;&#9;&#9;raise RuntimeError(<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;Не удалось решить систему: {e}. &quot;<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;Возможно, матрица вырожденная (не хватает граничных условий?) &quot;<br>
-&#9;&#9;&#9;&#9;&#9;f&quot;или плохо обусловлена. Попробуйте use_least_squares=True&quot;<br>
-&#9;&#9;&#9;&#9;) from e<br>
-&#9;&#9;<br>
-&#9;&#9;return x<br>
-<br>
-&#9;# def state_vectors(self) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;#     &quot;&quot;&quot;<br>
-&#9;#     Собрать векторы состояния x и x_dot из текущих значений переменных<br>
-&#9;&#9;<br>
-&#9;#     Returns:<br>
-&#9;#         x: Вектор состояний<br>
-&#9;#         x_dot: Вектор скоростей состояний<br>
-&#9;#     &quot;&quot;&quot;<br>
-&#9;#     if self._index_map is None:<br>
-&#9;#         raise RuntimeError(&quot;Система не собрана. Вызовите assemble() перед получением векторов состояния.&quot;)<br>
-&#9;&#9;<br>
-&#9;#     n_dofs = self.total_dofs()<br>
-&#9;#     x = np.zeros(n_dofs)<br>
-&#9;#     x_dot = np.zeros(n_dofs)<br>
-&#9;&#9;<br>
-&#9;#     for var in self.variables:<br>
-&#9;#         indices = self._index_map[var]<br>
-&#9;#         value, value_dot = var.state_for_assembler()<br>
-&#9;#         x[indices] = value<br>
-&#9;#         x_dot[indices] = value_dot<br>
-&#9;&#9;<br>
-&#9;#     return x, x_dot<br>
-<br>
-&#9;def solve_Adxx_Cdx_Kx_b(self, x_dot: np.ndarray, x: np.ndarray,<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;check_conditioning: bool = True,<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;use_least_squares: bool = False) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Решить систему Ad·x'' + C·x' + K·x = b<br>
-<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;x_dot: Вектор скоростей состояний<br>
-&#9;&#9;&#9;x: Вектор состояний<br>
-&#9;&#9;&#9;check_conditioning: Проверить обусловленность матрицы<br>
-&#9;&#9;&#9;use_least_squares: Использовать lstsq вместо solve<br>
-&#9;&#9;&#9;b: Вектор правой части<br>
-&#9;&#9;&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;&#9;Ad, C, K, b = self.assemble_Adxx_Cdx_Kx_b()<br>
-&#9;&#9;v, v_dot = self.state_vectors()<br>
-<br>
-&#9;&#9;# Собрать левую часть<br>
-&#9;&#9;A_eff = Ad<br>
-&#9;&#9;A_eff += C @ x_dot<br>
-&#9;&#9;A_eff += K @ x<br>
-<br>
-&#9;&#9;# Правая часть<br>
-&#9;&#9;b_eff = b<br>
-<br>
-&#9;&#9;return self.solve(check_conditioning=check_conditioning,<br>
-&#9;&#9;&#9;&#9;&#9;&#9;use_least_squares=use_least_squares,<br>
-&#9;&#9;&#9;&#9;&#9;&#9;use_constraints=False)<br>
-<br>
-&#9;<br>
-&#9;def set_solution_to_variables(self, x: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Сохранить решение в объекты Variable<br>
-&#9;&#9;<br>
-&#9;&#9;После вызова этого метода каждая переменная будет иметь атрибут value<br>
-&#9;&#9;с решением (скаляр или numpy array).<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;x: Вектор решения<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if self._index_map is None:<br>
-&#9;&#9;&#9;raise RuntimeError(&quot;Система не собрана. Вызовите assemble() или solve()&quot;)<br>
-&#9;&#9;<br>
-&#9;&#9;for var in self.variables:<br>
-&#9;&#9;&#9;indices = self._index_map[var]<br>
-&#9;&#9;&#9;if len(indices) &gt; 1:<br>
-&#9;&#9;&#9;&#9;var.value = x[indices]<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;var.value = x[indices[0]]<br>
-&#9;<br>
-&#9;def solve_stiffness_problem(self, check_conditioning: bool = True, <br>
-&#9;&#9;&#9;&#9;&#9;use_least_squares: bool = False,<br>
-&#9;&#9;&#9;&#9;&#9;use_constraints: bool = True) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Решить систему и сохранить результат в переменные<br>
-&#9;&#9;<br>
-&#9;&#9;Удобный метод, который объединяет solve() и set_solution_to_variables().<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;check_conditioning: Проверить обусловленность матрицы<br>
-&#9;&#9;&#9;use_least_squares: Использовать lstsq вместо solve<br>
-&#9;&#9;&#9;use_constraints: Использовать множители Лагранжа для связей<br>
-&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;x: Вектор решения (также сохранен в переменных)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# x = self.solve(check_conditioning=check_conditioning, <br>
-&#9;&#9;#                use_least_squares=use_least_squares,<br>
-&#9;&#9;#                use_constraints=use_constraints)<br>
-<br>
-&#9;&#9;K, b = self.assemble_stiffness_problem()<br>
-<br>
-&#9;&#9;x = self._solve_system(A=K, b=b, check_conditioning=check_conditioning,<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;use_least_squares=use_least_squares)<br>
-<br>
-&#9;&#9;self.set_solution_to_variables(x)<br>
-&#9;&#9;return x<br>
-&#9;<br>
-&#9;def get_lagrange_multipliers(self) -&gt; Optional[np.ndarray]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Получить множители Лагранжа после решения системы с связями<br>
-&#9;&#9;<br>
-&#9;&#9;Множители Лагранжа представляют собой силы реакции связей.<br>
-&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Массив множителей Лагранжа или None, если система решалась без связей<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return getattr(self, '_lagrange_multipliers', None)<br>
-&#9;<br>
-&#9;def diagnose_matrix(self) -&gt; Dict[str, any]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Диагностика собранной матрицы системы<br>
-&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Словарь с информацией о матрице:<br>
-&#9;&#9;&#9;- condition_number: число обусловленности<br>
-&#9;&#9;&#9;- is_symmetric: симметричность<br>
-&#9;&#9;&#9;- is_positive_definite: положительная определённость<br>
-&#9;&#9;&#9;- rank: ранг матрицы<br>
-&#9;&#9;&#9;- min_eigenvalue: минимальное собственное значение<br>
-&#9;&#9;&#9;- max_eigenvalue: максимальное собственное значение<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;A, b = self.assemble()<br>
-&#9;&#9;<br>
-&#9;&#9;info = {}<br>
-&#9;&#9;<br>
-&#9;&#9;# Число обусловленности<br>
-&#9;&#9;info['condition_number'] = np.linalg.cond(A)<br>
-&#9;&#9;<br>
-&#9;&#9;# Симметричность<br>
-&#9;&#9;info['is_symmetric'] = np.allclose(A, A.T)<br>
-&#9;&#9;<br>
-&#9;&#9;# Ранг<br>
-&#9;&#9;info['rank'] = np.linalg.matrix_rank(A)<br>
-&#9;&#9;info['expected_rank'] = len(A)<br>
-&#9;&#9;info['is_full_rank'] = info['rank'] == info['expected_rank']<br>
-&#9;&#9;<br>
-&#9;&#9;# Собственные значения (только для небольших матриц)<br>
-&#9;&#9;if len(A) &lt;= 100:<br>
-&#9;&#9;&#9;eigenvalues = np.linalg.eigvalsh(A) if info['is_symmetric'] else np.linalg.eigvals(A)<br>
-&#9;&#9;&#9;eigenvalues = np.real(eigenvalues)<br>
-&#9;&#9;&#9;info['min_eigenvalue'] = np.min(eigenvalues)<br>
-&#9;&#9;&#9;info['max_eigenvalue'] = np.max(eigenvalues)<br>
-&#9;&#9;&#9;info['is_positive_definite'] = np.all(eigenvalues &gt; 0)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;info['eigenvalues'] = 'Skipped (matrix too large)'<br>
-&#9;&#9;&#9;info['is_positive_definite'] = None<br>
-&#9;&#9;<br>
-&#9;&#9;# Оценка качества<br>
-&#9;&#9;cond = info['condition_number']<br>
-&#9;&#9;if cond &lt; 100:<br>
-&#9;&#9;&#9;info['quality'] = 'excellent'<br>
-&#9;&#9;elif cond &lt; 1e4:<br>
-&#9;&#9;&#9;info['quality'] = 'good'<br>
-&#9;&#9;elif cond &lt; 1e8:<br>
-&#9;&#9;&#9;info['quality'] = 'acceptable'<br>
-&#9;&#9;elif cond &lt; 1e12:<br>
-&#9;&#9;&#9;info['quality'] = 'poor'<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;info['quality'] = 'very_poor'<br>
-&#9;&#9;<br>
-&#9;&#9;return info<br>
-&#9;<br>
-&#9;@staticmethod<br>
-&#9;def system_to_human_readable(<br>
-&#9;&#9;A_ext: np.ndarray, <br>
-&#9;&#9;b_ext: np.ndarray, <br>
-&#9;&#9;variables: List[Variable]) -&gt; str:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Преобразовать расширенную систему в человекочитаемый формат<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;A_ext: Расширенная матрица системы<br>
-&#9;&#9;&#9;b_ext: Расширенный вектор правой части<br>
-&#9;&#9;&#9;variables: Список переменных системы<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Строковое представление системы<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;lines = []<br>
-&#9;&#9;n_vars = len(variables)<br>
-&#9;&#9;<br>
-&#9;&#9;for i in range(A_ext.shape[0]):<br>
-&#9;&#9;&#9;row_terms = []<br>
-<br>
-&#9;&#9;&#9;count_of_nonzero = 0<br>
-&#9;&#9;&#9;for j in range(A_ext.shape[1]):<br>
-&#9;&#9;&#9;&#9;coeff = A_ext[i, j]<br>
-&#9;&#9;&#9;&#9;if abs(coeff) &gt; 1e-12:<br>
-&#9;&#9;&#9;&#9;&#9;var_name = variables[j]<br>
-&#9;&#9;&#9;&#9;&#9;count_of_nonzero += 1<br>
-<br>
-&#9;&#9;&#9;&#9;&#9;if (np.isclose(coeff, 1.0)):<br>
-&#9;&#9;&#9;&#9;&#9;&#9;row_terms.append(f&quot;{var_name}&quot;)<br>
-&#9;&#9;&#9;&#9;&#9;elif (np.isclose(coeff, -1.0)):<br>
-&#9;&#9;&#9;&#9;&#9;&#9;row_terms.append(f&quot;-{var_name}&quot;)<br>
-&#9;&#9;&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;&#9;&#9;row_terms.append(f&quot;{coeff}*{var_name}&quot;)<br>
-&#9;&#9;&#9;row_str = &quot; &quot;<br>
-&#9;&#9;&#9;row_str += &quot; + &quot;.join(row_terms)<br>
-&#9;&#9;&#9;row_str += f&quot; = {b_ext[i]}&quot;<br>
-<br>
-&#9;&#9;&#9;if count_of_nonzero == 0:<br>
-&#9;&#9;&#9;&#9;row_str = f&quot; 0 = {b_ext[i]}&quot;<br>
-<br>
-&#9;&#9;&#9;lines.append(row_str)<br>
-&#9;&#9;<br>
-&#9;&#9;return &quot;\n&quot;.join(lines)<br>
-<br>
-&#9;def result_to_human_readable(self, x_ext: np.ndarray, variables: List[Variable]) -&gt; str:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Преобразовать вектор решения в человекочитаемый формат<br>
-<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;x_ext: Вектор решения<br>
-&#9;&#9;&#9;variables: Список переменных системы<br>
-<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Строковое представление решения<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;lines = []<br>
-<br>
-&#9;&#9;for i, var in enumerate(variables):<br>
-&#9;&#9;&#9;lines.append(f&quot; {var} = {x_ext[i]}&quot;)<br>
-&#9;&#9;return &quot;\n&quot;.join(lines)<br>
-<br>
-&#9;@staticmethod<br>
-&#9;def matrix_diagnosis(A, tol=1e-10):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Анализирует матрицу A_ext:<br>
-&#9;&#9;- вычисляет ранг<br>
-&#9;&#9;- определяет нулевое подпространство<br>
-&#9;&#9;- сообщает, какая часть системы линейно зависима<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;import numpy as np<br>
-<br>
-&#9;&#9;U, S, Vt = np.linalg.svd(A)<br>
-&#9;&#9;rank = np.sum(S &gt; tol)<br>
-&#9;&#9;nullity = A.shape[0] - rank<br>
-<br>
-&#9;&#9;return {<br>
-&#9;&#9;&#9;&quot;size&quot;: A.shape,<br>
-&#9;&#9;&#9;&quot;rank&quot;: rank,<br>
-&#9;&#9;&#9;&quot;nullity&quot;: nullity,<br>
-&#9;&#9;&#9;&quot;singular&quot;: nullity &gt; 0,<br>
-&#9;&#9;&#9;&quot;small_singular_values&quot;: S[S &lt; tol],<br>
-&#9;&#9;&#9;&quot;condition_number&quot;: S.max() / S.min() if S.min() &gt; 0 else np.inf<br>
-&#9;&#9;}<br>
-<br>
-&#9;def print_diagnose(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Print human-readable matrix diagnostics<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;info = self.diagnose_matrix()<br>
-&#9;&#9;<br>
-&#9;&#9;print(&quot;=&quot; * 70)<br>
-&#9;&#9;print(&quot;MATRIX SYSTEM DIAGNOSTICS&quot;)<br>
-&#9;&#9;print(&quot;=&quot; * 70)<br>
-&#9;&#9;<br>
-&#9;&#9;# Dimensions<br>
-&#9;&#9;print(f&quot;\nSystem dimensions:&quot;)<br>
-&#9;&#9;print(f&quot;  Number of variables: {len(self.variables)}&quot;)<br>
-&#9;&#9;print(f&quot;  Degrees of freedom (DOF): {self.total_dofs()}&quot;)<br>
-&#9;&#9;<br>
-&#9;&#9;# Matrix rank<br>
-&#9;&#9;print(f&quot;\nMatrix rank:&quot;)<br>
-&#9;&#9;print(f&quot;  Current rank: {info['rank']}&quot;)<br>
-&#9;&#9;print(f&quot;  Expected rank: {info['expected_rank']}&quot;)<br>
-&#9;&#9;if info['is_full_rank']:<br>
-&#9;&#9;&#9;print(f&quot;  [OK] Matrix has full rank&quot;)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;print(f&quot;  [PROBLEM] Matrix is singular (rank deficient)&quot;)<br>
-&#9;&#9;&#9;print(f&quot;    Possibly missing boundary conditions&quot;)<br>
-&#9;&#9;<br>
-&#9;&#9;# Symmetry<br>
-&#9;&#9;print(f&quot;\nSymmetry:&quot;)<br>
-&#9;&#9;if info['is_symmetric']:<br>
-&#9;&#9;&#9;print(f&quot;  [OK] Matrix is symmetric&quot;)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;print(f&quot;  [PROBLEM] Matrix is not symmetric&quot;)<br>
-&#9;&#9;&#9;print(f&quot;    This may indicate an error in contributions&quot;)<br>
-&#9;&#9;<br>
-&#9;&#9;# Conditioning<br>
-&#9;&#9;print(f&quot;\nConditioning:&quot;)<br>
-&#9;&#9;print(f&quot;  Condition number: {info['condition_number']:.2e}&quot;)<br>
-&#9;&#9;print(f&quot;  Quality assessment: {info['quality']}&quot;)<br>
-&#9;&#9;<br>
-&#9;&#9;quality_desc = {<br>
-&#9;&#9;&#9;'excellent': '[OK] Excellent - matrix is very well conditioned',<br>
-&#9;&#9;&#9;'good': '[OK] Good - matrix is well conditioned',<br>
-&#9;&#9;&#9;'acceptable': '[WARNING] Acceptable - may have small numerical errors',<br>
-&#9;&#9;&#9;'poor': '[PROBLEM] Poor - high risk of numerical errors',<br>
-&#9;&#9;&#9;'very_poor': '[PROBLEM] Very poor - solution may be inaccurate'<br>
-&#9;&#9;}<br>
-&#9;&#9;print(f&quot;  {quality_desc.get(info['quality'], '')}&quot;)<br>
-&#9;&#9;<br>
-&#9;&#9;if info['quality'] in ['poor', 'very_poor']:<br>
-&#9;&#9;&#9;print(f&quot;\n  Recommendations:&quot;)<br>
-&#9;&#9;&#9;print(f&quot;    - Reduce penalty in boundary conditions (try 1e8)&quot;)<br>
-&#9;&#9;&#9;print(f&quot;    - Use use_least_squares=True when solving&quot;)<br>
-&#9;&#9;&#9;print(f&quot;    - Check the scales of quantities in the problem&quot;)<br>
-&#9;&#9;<br>
-&#9;&#9;# Eigenvalues<br>
-&#9;&#9;if info.get('min_eigenvalue') is not None:<br>
-&#9;&#9;&#9;print(f&quot;\nEigenvalues:&quot;)<br>
-&#9;&#9;&#9;print(f&quot;  Minimum: {info['min_eigenvalue']:.2e}&quot;)<br>
-&#9;&#9;&#9;print(f&quot;  Maximum: {info['max_eigenvalue']:.2e}&quot;)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;if info.get('is_positive_definite'):<br>
-&#9;&#9;&#9;&#9;print(f&quot;  [OK] Matrix is positive definite&quot;)<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;print(f&quot;  [PROBLEM] Matrix is not positive definite&quot;)<br>
-&#9;&#9;&#9;&#9;if info['min_eigenvalue'] &lt;= 0:<br>
-&#9;&#9;&#9;&#9;&#9;print(f&quot;    Has non-positive eigenvalues&quot;)<br>
-&#9;&#9;<br>
-&#9;&#9;# Final recommendation<br>
-&#9;&#9;print(f&quot;\n&quot; + &quot;=&quot; * 70)<br>
-&#9;&#9;if info['is_full_rank'] and info['is_symmetric'] and info['quality'] in ['excellent', 'good', 'acceptable']:<br>
-&#9;&#9;&#9;print(&quot;SUMMARY: [OK] System is ready to solve&quot;)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;print(&quot;SUMMARY: [WARNING] Problems detected, attention required&quot;)<br>
-&#9;&#9;print(&quot;=&quot; * 70)<br>
-<br>
-<br>
-<br>
-<br>
-# ============================================================================<br>
-# Примеры конкретных вкладов<br>
-# ============================================================================<br>
-<br>
-class BilinearContribution(Contribution):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Билинейный вклад: связь двух переменных через локальную матрицу<br>
-&#9;<br>
-&#9;Пример: стержень, пружина, резистор<br>
-&#9;Вклад в A: A[i,j] += K_local[i,j] для пар индексов переменных<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, variables: List[Variable], K_local: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;variables: Список переменных (например, [u1, u2] для стержня)<br>
-&#9;&#9;&#9;K_local: Локальная матрица вклада<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.variables = variables<br>
-&#9;&#9;self.K_local = np.array(K_local)<br>
-&#9;&#9;<br>
-&#9;&#9;# Проверка размерности<br>
-&#9;&#9;expected_size = sum(v.size for v in variables)<br>
-&#9;&#9;if self.K_local.shape != (expected_size, expected_size):<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Размер K_local {self.K_local.shape} не соответствует &quot;<br>
-&#9;&#9;&#9;&#9;&#9;&#9;f&quot;суммарному размеру переменных {expected_size}&quot;)<br>
-&#9;&#9;<br>
-&#9;def contribute_to_stiffness(self, A: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;# Собрать глобальные индексы всех переменных<br>
-&#9;&#9;global_indices = []<br>
-&#9;&#9;for var in self.variables:<br>
-&#9;&#9;&#9;global_indices.extend(index_map[var])<br>
-&#9;&#9;<br>
-&#9;&#9;# Добавить локальную матрицу в глобальную<br>
-&#9;&#9;for i, gi in enumerate(global_indices):<br>
-&#9;&#9;&#9;for j, gj in enumerate(global_indices):<br>
-&#9;&#9;&#9;&#9;A[gi, gj] += self.K_local[i, j]<br>
-&#9;<br>
-&#9;def contribute_to_load(self, b: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;# Этот тип вклада не влияет на правую часть<br>
-&#9;&#9;pass<br>
-<br>
-<br>
-class LoadContribution(Contribution):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Вклад нагрузки/источника в правую часть<br>
-&#9;<br>
-&#9;Пример: приложенная сила, источник тока, тепловой источник<br>
-&#9;Вклад в b: b[i] += F[i]<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, variable: Variable, load: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;variable: Переменная, к которой приложена нагрузка<br>
-&#9;&#9;&#9;load: Вектор нагрузки (размера variable.size)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.variable = variable<br>
-&#9;&#9;self.load = np.atleast_1d(load)<br>
-&#9;&#9;<br>
-&#9;&#9;if len(self.load) != variable.size:<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Размер нагрузки {len(self.load)} не соответствует &quot;<br>
-&#9;&#9;&#9;&#9;&#9;&#9;f&quot;размеру переменной {variable.size}&quot;)<br>
-&#9;<br>
-&#9;def get_variables(self) -&gt; List[Variable]:<br>
-&#9;&#9;return [self.variable]<br>
-&#9;<br>
-&#9;def contribute_to_stiffness(self, A: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;# Не влияет на матрицу<br>
-&#9;&#9;pass<br>
-&#9;<br>
-&#9;def contribute_to_load(self, b: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;indices = index_map[self.variable]<br>
-&#9;&#9;for i, idx in enumerate(indices):<br>
-&#9;&#9;&#9;b[idx] += self.load[i]<br>
-<br>
-<br>
-class ConstraintContribution(Contribution):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Граничное условие: фиксированное значение переменной<br>
-&#9;<br>
-&#9;Пример: u1 = 0 (закрепленный узел), V1 = 5 (источник напряжения)<br>
-&#9;<br>
-&#9;Реализовано через penalty method:<br>
-&#9;A[i,i] += penalty<br>
-&#9;b[i] += penalty * prescribed_value<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, variable: Variable, value: float, <br>
-&#9;&#9;&#9;&#9;component: int = 0, penalty: float = 1e10):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;variable: Переменная для ограничения<br>
-&#9;&#9;&#9;value: Предписанное значение<br>
-&#9;&#9;&#9;component: Компонента переменной (0 для скаляра)<br>
-&#9;&#9;&#9;penalty: Штрафной коэффициент (большое число)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.variable = variable<br>
-&#9;&#9;self.value = value<br>
-&#9;&#9;self.component = component<br>
-&#9;&#9;self.penalty = penalty<br>
-&#9;&#9;<br>
-&#9;&#9;if component &gt;= variable.size:<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Компонента {component} вне диапазона для переменной &quot;<br>
-&#9;&#9;&#9;&#9;&#9;&#9;f&quot;размера {variable.size}&quot;)<br>
-&#9;<br>
-&#9;def get_variables(self) -&gt; List[Variable]:<br>
-&#9;&#9;return [self.variable]<br>
-&#9;<br>
-&#9;def contribute_to_stiffness(self, A: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;indices = index_map[self.variable]<br>
-&#9;&#9;idx = indices[self.component]<br>
-&#9;&#9;A[idx, idx] += self.penalty<br>
-&#9;<br>
-&#9;def contribute_to_load(self, b: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;indices = index_map[self.variable]<br>
-&#9;&#9;idx = indices[self.component]<br>
-&#9;&#9;b[idx] += self.penalty * self.value<br>
-<br>
-<br>
-class LagrangeConstraint(Constraint):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Голономная связь, реализованная через множители Лагранжа.<br>
-&#9;<br>
-&#9;Связь имеет вид: C·x = d<br>
-&#9;<br>
-&#9;где C - матрица коэффициентов связи, d - правая часть.<br>
-&#9;<br>
-&#9;Для решения системы с связями используется расширенная матрица:<br>
-&#9;[ A   C^T ] [ x ]   [ b ]<br>
-&#9;[ C    0  ] [ λ ] = [ d ]<br>
-&#9;<br>
-&#9;Примеры:<br>
-&#9;- Фиксация точки: vx = 0, vy = 0<br>
-&#9;- Шарнирная связь: v + ω × r = 0<br>
-&#9;- Равенство переменных: u1 = u2<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, variables: List[Variable], <br>
-&#9;&#9;&#9;&#9;coefficients: List[np.ndarray], <br>
-&#9;&#9;&#9;&#9;rhs: np.ndarray = None):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;variables: Список переменных, участвующих в связи<br>
-&#9;&#9;&#9;coefficients: Список матриц коэффициентов для каждой переменной<br>
-&#9;&#9;&#9;&#9;&#9;&#9;coefficients[i] имеет форму (n_constraints, variables[i].size)<br>
-&#9;&#9;&#9;rhs: Правая часть связи (вектор размера n_constraints), по умолчанию 0<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.variables = variables<br>
-&#9;&#9;self.coefficients = [np.atleast_2d(c) for c in coefficients]<br>
-&#9;&#9;<br>
-&#9;&#9;# Проверка размерностей<br>
-&#9;&#9;n_constraints = self.coefficients[0].shape[0]<br>
-&#9;&#9;for i, (var, coef) in enumerate(zip(variables, self.coefficients)):<br>
-&#9;&#9;&#9;if coef.shape[0] != n_constraints:<br>
-&#9;&#9;&#9;&#9;raise ValueError(f&quot;Все матрицы коэффициентов должны иметь одинаковое &quot;<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;f&quot;количество строк (связей)&quot;)<br>
-&#9;&#9;&#9;if coef.shape[1] != var.size:<br>
-&#9;&#9;&#9;&#9;raise ValueError(f&quot;Матрица коэффициентов {i} имеет {coef.shape[1]} столбцов, &quot;<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;f&quot;ожидалось {var.size}&quot;)<br>
-&#9;&#9;<br>
-&#9;&#9;self.n_constraints = n_constraints<br>
-<br>
-&#9;&#9;self.lambdas = Variable(name=&quot;lambda_constraint&quot;, size=n_constraints)<br>
-&#9;&#9;super().__init__([self.variables[0]], [self.lambdas], [])  # Инициализация базового класса Constraint<br>
-&#9;&#9;<br>
-&#9;&#9;if rhs is None:<br>
-&#9;&#9;&#9;self.rhs = np.zeros(n_constraints)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self.rhs = np.atleast_1d(rhs)<br>
-&#9;&#9;&#9;if len(self.rhs) != n_constraints:<br>
-&#9;&#9;&#9;&#9;raise ValueError(f&quot;Размер правой части {len(self.rhs)} не соответствует &quot;<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;f&quot;количеству связей {n_constraints}&quot;)<br>
-&#9;<br>
-<br>
-&#9;def contribute_to_holonomic(self, C: np.ndarray, <br>
-&#9;&#9;&#9;&#9;&#9;index_map: Dict[Variable, List[int]],<br>
-&#9;&#9;&#9;&#9;&#9;lambdas_index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в матрицу связей C<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;C: Матрица связей (n_constraints_total × n_dofs)<br>
-&#9;&#9;&#9;index_map: Отображение Variable -&gt; список глобальных индексов<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# for var, coef in zip(self.variables, self.coefficients):<br>
-&#9;&#9;#     var_indices = index_map[var]<br>
-&#9;&#9;#     for i in range(self.n_constraints):<br>
-&#9;&#9;#         for j, global_idx in enumerate(var_indices):<br>
-&#9;&#9;#             C[i, global_idx] += coef[i, j]<br>
-&#9;&#9;indices = index_map[self.variables[0]]<br>
-&#9;&#9;contr_indicies = lambdas_index_map[self.lambdas]<br>
-&#9;&#9;for i in range(self.n_constraints):<br>
-&#9;&#9;&#9;for var, coef in zip(self.variables, self.coefficients):<br>
-&#9;&#9;&#9;&#9;var_indices = index_map[var]<br>
-&#9;&#9;&#9;&#9;for j, global_idx in enumerate(var_indices):<br>
-&#9;&#9;&#9;&#9;&#9;C[contr_indicies[i], global_idx] += coef[i, j]<br>
-<br>
-&#9;def contribute_to_holonomic_load(self, d: np.ndarray,  holonomic_index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить вклад в правую часть связей d<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;d: Вектор правой части связей<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;for var in self.variables:<br>
-&#9;&#9;&#9;index = holonomic_index_map[var][0]<br>
-&#9;&#9;&#9;d[index] += self.rhs<br>
-<br>
-# ============================================================================<br>
-# Вспомогательные функции для удобства<br>
-# ============================================================================<br>
-<br>
-def spring_element(u1: Variable, u2: Variable, stiffness: float) -&gt; BilinearContribution:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Создать вклад пружины/стержня между двумя скалярными переменными<br>
-&#9;<br>
-&#9;Уравнение: F = k*(u2-u1)<br>
-&#9;Матрица:  [[k, -k],<br>
-&#9;&#9;&#9;[-k, k]]<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;K = stiffness * np.array([<br>
-&#9;&#9;[ 1, -1],<br>
-&#9;&#9;[-1,  1]<br>
-&#9;])<br>
-&#9;return BilinearContribution([u1, u2], K)<br>
-<br>
-<br>
-def conductance_element(V1: Variable, V2: Variable, conductance: float) -&gt; BilinearContribution:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Создать вклад проводимости (резистор) между двумя узлами<br>
-&#9;<br>
-&#9;То же самое что spring_element, но с другим физическим смыслом<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;return spring_element(V1, V2, conductance)<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Dict,&nbsp;Tuple,&nbsp;Optional<br>
+import&nbsp;numpy<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+<br>
+import&nbsp;termin.linalg.subspaces<br>
+<br>
+<br>
+class&nbsp;Variable:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Переменная&nbsp;(неизвестная&nbsp;величина)&nbsp;в&nbsp;системе&nbsp;уравнений.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Может&nbsp;представлять:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Перемещение&nbsp;узла&nbsp;в&nbsp;механике<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Напряжение&nbsp;в&nbsp;узле&nbsp;электрической&nbsp;цепи<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Температуру&nbsp;в&nbsp;узле&nbsp;тепловой&nbsp;задачи<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;И&nbsp;т.д.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;name:&nbsp;str,&nbsp;size:&nbsp;int&nbsp;=&nbsp;1,&nbsp;tag&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;Имя&nbsp;переменной&nbsp;(для&nbsp;отладки)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;Размерность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.size&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.global_indices&nbsp;=&nbsp;[]&nbsp;&nbsp;#&nbsp;будет&nbsp;заполнено&nbsp;при&nbsp;сборке<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.tag&nbsp;=&nbsp;tag&nbsp;&nbsp;#&nbsp;произвольный&nbsp;тег&nbsp;для&nbsp;пользователя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._assembler&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;ссылка&nbsp;на&nbsp;assembler,&nbsp;в&nbsp;котором&nbsp;зарегистрирована&nbsp;переменная<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.value&nbsp;=&nbsp;np.zeros(size)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;текущее&nbsp;значение&nbsp;переменной&nbsp;(обновляется&nbsp;после&nbsp;решения)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name_list&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;size&nbsp;==&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name_list.append(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lst&nbsp;=&nbsp;[&quot;x&quot;,&nbsp;&quot;y&quot;,&nbsp;&quot;z&quot;,&nbsp;&quot;a&quot;,&nbsp;&quot;b&quot;,&nbsp;&quot;c&quot;,&nbsp;&quot;w&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(size):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vname&nbsp;=&nbsp;name&nbsp;+&nbsp;&quot;_&quot;&nbsp;+&nbsp;lst[i]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name_list.append(vname)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(self.name_list,&nbsp;self.size)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__str__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;{self.name_list}&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;{self.name_list}&nbsp;(size={self.size})&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;names(self)&nbsp;-&gt;&nbsp;List[str]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Вернуть&nbsp;список&nbsp;имен&nbsp;компонент&nbsp;переменной&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.name_list<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_value(self,&nbsp;value:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Установить&nbsp;значение&nbsp;переменной<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;value:&nbsp;Значение&nbsp;для&nbsp;установки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(value,&nbsp;list):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.value&nbsp;=&nbsp;np.array(value)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(value,&nbsp;(int,&nbsp;float)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.value&nbsp;=&nbsp;np.array([value])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;value.shape&nbsp;!=&nbsp;(self.size,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Размер&nbsp;входного&nbsp;значения&nbsp;{value.shape}&nbsp;не&nbsp;соответствует&nbsp;размеру&nbsp;переменной&nbsp;{self.size}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.value&nbsp;=&nbsp;value&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+<br>
+<br>
+<br>
+class&nbsp;Contribution:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Базовый&nbsp;класс&nbsp;для&nbsp;вклада&nbsp;в&nbsp;систему&nbsp;уравнений.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Вклад&nbsp;-&nbsp;это&nbsp;что-то,&nbsp;что&nbsp;добавляет&nbsp;элементы&nbsp;в&nbsp;матрицу&nbsp;A&nbsp;и/или&nbsp;вектор&nbsp;b.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Примеры:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Уравнение&nbsp;стержня&nbsp;в&nbsp;механике<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Резистор&nbsp;в&nbsp;электрической&nbsp;цепи<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Граничное&nbsp;условие<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Уравнение&nbsp;связи&nbsp;между&nbsp;переменными<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;variables:&nbsp;List[Variable],&nbsp;domain&nbsp;=&nbsp;&quot;mechanic&quot;,&nbsp;assembler=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.variables&nbsp;=&nbsp;variables<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._assembler&nbsp;=&nbsp;assembler&nbsp;&nbsp;#&nbsp;ссылка&nbsp;на&nbsp;assembler,&nbsp;в&nbsp;котором&nbsp;зарегистрирован&nbsp;вклад<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.assembler&nbsp;=&nbsp;assembler<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.domain&nbsp;=&nbsp;domain<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;assembler&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler.add_contribution(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rank&nbsp;=&nbsp;self._evaluate_rank()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.domain&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Domain&nbsp;must&nbsp;be&nbsp;specified&nbsp;for&nbsp;{type(self)}&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_evaluate_rank(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;размерность&nbsp;вклада&nbsp;(число&nbsp;уравнений,&nbsp;которые&nbsp;он&nbsp;добавляет)&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total_size&nbsp;=&nbsp;sum(var.size&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;total_size<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_variables(self)&nbsp;-&gt;&nbsp;List[Variable]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;список&nbsp;переменных,&nbsp;которые&nbsp;затрагивает&nbsp;этот&nbsp;вклад&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.variables<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_matrices(self,&nbsp;matrices,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_mass(self,&nbsp;A:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицу&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Уравнение:&nbsp;A*x_d2&nbsp;+&nbsp;B*x_d&nbsp;+&nbsp;C*x&nbsp;=&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Глобальная&nbsp;матрица&nbsp;(изменяется&nbsp;in-place)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;Variable&nbsp;-&gt;&nbsp;список&nbsp;глобальных&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.zeros((self._rank,&nbsp;self._rank))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_stiffness(self,&nbsp;K:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицу&nbsp;K<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Глобальная&nbsp;матрица&nbsp;(изменяется&nbsp;in-place)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;Variable&nbsp;-&gt;&nbsp;список&nbsp;глобальных&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.zeros((self._rank,&nbsp;self._rank))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_damping(self,&nbsp;C:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицу&nbsp;C<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Глобальная&nbsp;матрица&nbsp;(изменяется&nbsp;in-place)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;Variable&nbsp;-&gt;&nbsp;список&nbsp;глобальных&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.zeros((self._rank,&nbsp;self._rank))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_load(self,&nbsp;b:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;вектор&nbsp;правой&nbsp;части&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b:&nbsp;Глобальный&nbsp;вектор&nbsp;(изменяется&nbsp;in-place)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;Variable&nbsp;-&gt;&nbsp;список&nbsp;глобальных&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.zeros(self._rank)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;finish_timestep(self,&nbsp;dt:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Завершить&nbsp;шаг&nbsp;по&nbsp;времени&nbsp;(обновить&nbsp;внутренние&nbsp;состояния,&nbsp;если&nbsp;нужно)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dt:&nbsp;Шаг&nbsp;по&nbsp;времени<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+<br>
+class&nbsp;Constraint:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Базовый&nbsp;класс&nbsp;для&nbsp;голономных&nbsp;связей&nbsp;(constraints).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Связь&nbsp;ограничивает&nbsp;движение&nbsp;системы:&nbsp;C·x&nbsp;=&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;В&nbsp;отличие&nbsp;от&nbsp;Contribution&nbsp;(который&nbsp;добавляет&nbsp;вклад&nbsp;в&nbsp;A&nbsp;и&nbsp;b),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Constraint&nbsp;реализуется&nbsp;через&nbsp;множители&nbsp;Лагранжа&nbsp;и&nbsp;добавляет<br>
+&nbsp;&nbsp;&nbsp;&nbsp;строки&nbsp;в&nbsp;расширенную&nbsp;систему.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Примеры:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Фиксация&nbsp;точки&nbsp;в&nbsp;пространстве<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Шарнирное&nbsp;соединение&nbsp;тел<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Равенство&nbsp;переменных<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Кинематические&nbsp;ограничения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;variables:&nbsp;List[Variable],&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;holonomic_lambdas:&nbsp;List[Variable],&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nonholonomic_lambdas:&nbsp;List[Variable],&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.variables&nbsp;=&nbsp;variables<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.holonomic_lambdas&nbsp;=&nbsp;holonomic_lambdas&nbsp;&nbsp;#&nbsp;переменные&nbsp;для&nbsp;множителей&nbsp;Лагранжа<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.nonholonomic_lambdas&nbsp;=&nbsp;nonholonomic_lambdas&nbsp;&nbsp;#&nbsp;переменные&nbsp;для&nbsp;множителей&nbsp;Лагранжа<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._assembler&nbsp;=&nbsp;assembler&nbsp;&nbsp;#&nbsp;ссылка&nbsp;на&nbsp;assembler,&nbsp;в&nbsp;котором&nbsp;зарегистрирована&nbsp;связь<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;assembler&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler.add_constraint(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rank&nbsp;=&nbsp;self._evaluate_rank()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rank_holonomic&nbsp;=&nbsp;sum(var.size&nbsp;for&nbsp;var&nbsp;in&nbsp;self.holonomic_lambdas)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rank_nonholonomic&nbsp;=&nbsp;sum(var.size&nbsp;for&nbsp;var&nbsp;in&nbsp;self.nonholonomic_lambdas)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_evaluate_rank(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;sum(var.size&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_variables(self)&nbsp;-&gt;&nbsp;List[Variable]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;список&nbsp;переменных,&nbsp;участвующих&nbsp;в&nbsp;связи&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.variables<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_holonomic_lambdas(self)&nbsp;-&gt;&nbsp;List[Variable]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;список&nbsp;переменных-множителей&nbsp;Лагранжа&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.holonomic_lambdas<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_nonholonomic_lambdas(self)&nbsp;-&gt;&nbsp;List[Variable]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;список&nbsp;переменных-множителей&nbsp;Лагранжа&nbsp;для&nbsp;неоголономных&nbsp;связей&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.nonholonomic_lambdas<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_n_holonomic(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;количество&nbsp;голономных&nbsp;уравнений&nbsp;связи&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._rank_holonomic<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_n_nonholonomic(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;количество&nbsp;неоголономных&nbsp;уравнений&nbsp;связи&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._rank_nonholonomic<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_holonomic(self,&nbsp;H:&nbsp;np.ndarray,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицу&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H:&nbsp;Матрица&nbsp;связей&nbsp;(n_constraints_total&nbsp;×&nbsp;n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;Variable&nbsp;-&gt;&nbsp;список&nbsp;глобальных&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.zeros((self.get_n_holonomic(),&nbsp;H.shape[1]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_nonholonomic(self,&nbsp;N:&nbsp;np.ndarray,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vars_index_map:&nbsp;Dict[Variable,&nbsp;List[int]],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lambdas_index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицу&nbsp;связей&nbsp;для&nbsp;неограниченных&nbsp;связей<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;N:&nbsp;Матрица&nbsp;связей&nbsp;(n_constraints_total&nbsp;×&nbsp;n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;Variable&nbsp;-&gt;&nbsp;список&nbsp;глобальных&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.zeros((self.get_n_nonholonomic(),&nbsp;N.shape[1]))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_holonomic_load(self,&nbsp;d:&nbsp;np.ndarray,&nbsp;&nbsp;holonomic_index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;правую&nbsp;часть&nbsp;связей&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d:&nbsp;Вектор&nbsp;правой&nbsp;части&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.zeros(self.get_n_holonomic())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_nonholonomic_load(self,&nbsp;d:&nbsp;np.ndarray,&nbsp;&nbsp;lambdas_index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;правую&nbsp;часть&nbsp;связей&nbsp;d&nbsp;для&nbsp;неограниченных&nbsp;связей<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d:&nbsp;Вектор&nbsp;правой&nbsp;части&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.zeros(self.get_n_nonholonomic())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+<br>
+<br>
+<br>
+class&nbsp;MatrixAssembler:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Сборщик&nbsp;матриц&nbsp;из&nbsp;вкладов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Основной&nbsp;класс&nbsp;системы&nbsp;-&nbsp;собирает&nbsp;глобальную&nbsp;матрицу&nbsp;A&nbsp;и&nbsp;вектор&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;из&nbsp;множества&nbsp;локальных&nbsp;вкладов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dirty_index_map&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.variables:&nbsp;List[Variable]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contributions:&nbsp;List[Contribution]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.constraints:&nbsp;List[Constraint]&nbsp;=&nbsp;[]&nbsp;&nbsp;#&nbsp;Связи&nbsp;через&nbsp;множители&nbsp;Лагранжа<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._full_index_map&nbsp;:&nbsp;Optional[Dict[Variable,&nbsp;List[int]]]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._variables_index_map:&nbsp;Optional[Dict[Variable,&nbsp;List[int]]]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._holonomic_index_map:&nbsp;Optional[Dict[Variable,&nbsp;List[int]]]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._nonholonomic_index_map:&nbsp;Optional[Dict[Variable,&nbsp;List[int]]]&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._holonomic_constraint_vars:&nbsp;List[Variable]&nbsp;=&nbsp;[]&nbsp;&nbsp;#&nbsp;Переменные&nbsp;для&nbsp;множителей&nbsp;Лагранжа<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._nonholonomic_constraint_vars:&nbsp;List[Variable]&nbsp;=&nbsp;[]&nbsp;&nbsp;#&nbsp;Переменные&nbsp;для&nbsp;множителей&nbsp;Лагранжа&nbsp;для&nbsp;неоголономных&nbsp;связей<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Вектор&nbsp;состояний<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q_dot&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Вектор&nbsp;скоростей&nbsp;состояний<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q_ext_ddot&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Вектор&nbsp;ускорений&nbsp;состояний&nbsp;(расширенный)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q_ddot&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Вектор&nbsp;ускорений&nbsp;состояний<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._lambdas_holonomic&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Множители&nbsp;Лагранжа&nbsp;для&nbsp;голономных&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._lambdas_nonholonomic&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Множители&nbsp;Лагранжа&nbsp;для&nbsp;неограниченных&nbsp;связей<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._variables_by_tag:&nbsp;Dict&nbsp;=&nbsp;{}&nbsp;&nbsp;#&nbsp;Словарь&nbsp;переменных&nbsp;по&nbsp;тегам&nbsp;для&nbsp;быстрого&nbsp;доступа<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_variable(self,&nbsp;name:&nbsp;str,&nbsp;size:&nbsp;int&nbsp;=&nbsp;1)&nbsp;-&gt;&nbsp;Variable:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;переменную&nbsp;в&nbsp;систему<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;Имя&nbsp;переменной<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;Размерность&nbsp;(1&nbsp;для&nbsp;скаляра,&nbsp;2/3&nbsp;для&nbsp;вектора)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Созданная&nbsp;переменная<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var&nbsp;=&nbsp;Variable(name,&nbsp;size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._register_variable(var)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;var<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_holonomic_constraint_variable(self,&nbsp;name:&nbsp;str,&nbsp;size:&nbsp;int&nbsp;=&nbsp;1)&nbsp;-&gt;&nbsp;Variable:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;переменную-множитель&nbsp;Лагранжа&nbsp;в&nbsp;систему<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;Имя&nbsp;переменной<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;Размерность&nbsp;(1&nbsp;для&nbsp;скаляра,&nbsp;2/3&nbsp;для&nbsp;вектора)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Созданная&nbsp;переменная<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var&nbsp;=&nbsp;Variable(name,&nbsp;size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._register_holonomic_constraint_variable(var)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;var<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_nonholonomic_constraint_variable(self,&nbsp;name:&nbsp;str,&nbsp;size:&nbsp;int&nbsp;=&nbsp;1)&nbsp;-&gt;&nbsp;Variable:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;переменную-множитель&nbsp;Лагранжа&nbsp;для&nbsp;неоголономных&nbsp;связей&nbsp;в&nbsp;систему<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;Имя&nbsp;переменной<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;Размерность&nbsp;(1&nbsp;для&nbsp;скаляра,&nbsp;2/3&nbsp;для&nbsp;вектора)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Созданная&nbsp;переменная<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var&nbsp;=&nbsp;Variable(name,&nbsp;size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._register_nonholonomic_constraint_variable(var)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;var<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_register_variable(self,&nbsp;var:&nbsp;Variable):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Зарегистрировать&nbsp;переменную&nbsp;в&nbsp;assembler,&nbsp;если&nbsp;она&nbsp;еще&nbsp;не&nbsp;зарегистрирована<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var:&nbsp;Переменная&nbsp;для&nbsp;регистрации<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var._assembler&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var._assembler&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.variables.append(var)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dirty_index_map&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var.tag&nbsp;not&nbsp;in&nbsp;self._variables_by_tag:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._variables_by_tag[var.tag]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._variables_by_tag[var.tag].append(var)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;var._assembler&nbsp;is&nbsp;not&nbsp;self:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Переменная&nbsp;{var.name}&nbsp;уже&nbsp;зарегистрирована&nbsp;в&nbsp;другом&nbsp;assembler&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;total_variables_by_tag(self,&nbsp;tag)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Вернуть&nbsp;количество&nbsp;переменных&nbsp;с&nbsp;заданным&nbsp;тегом&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;tag&nbsp;in&nbsp;self._variables_by_tag:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;sum(var.size&nbsp;for&nbsp;var&nbsp;in&nbsp;self._variables_by_tag[tag])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_register_holonomic_constraint_variable(self,&nbsp;var:&nbsp;Variable):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Зарегистрировать&nbsp;переменную-множитель&nbsp;Лагранжа&nbsp;в&nbsp;assembler,&nbsp;если&nbsp;она&nbsp;еще&nbsp;не&nbsp;зарегистрирована<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var:&nbsp;Переменная&nbsp;для&nbsp;регистрации<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var._assembler&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var._assembler&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._holonomic_constraint_vars.append(var)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dirty_index_map&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;var._assembler&nbsp;is&nbsp;not&nbsp;self:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Переменная&nbsp;{var.name}&nbsp;уже&nbsp;зарегистрирована&nbsp;в&nbsp;другом&nbsp;assembler&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_register_nonholonomic_constraint_variable(self,&nbsp;var:&nbsp;Variable):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Зарегистрировать&nbsp;переменную-множитель&nbsp;Лагранжа&nbsp;в&nbsp;assembler,&nbsp;если&nbsp;она&nbsp;еще&nbsp;не&nbsp;зарегистрирована<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var:&nbsp;Переменная&nbsp;для&nbsp;регистрации<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;var._assembler&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var._assembler&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._nonholonomic_constraint_vars.append(var)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dirty_index_map&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;var._assembler&nbsp;is&nbsp;not&nbsp;self:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Переменная&nbsp;{var.name}&nbsp;уже&nbsp;зарегистрирована&nbsp;в&nbsp;другом&nbsp;assembler&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_contribution(self,&nbsp;contribution:&nbsp;Contribution):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;систему<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution:&nbsp;Вклад&nbsp;(уравнение,&nbsp;граничное&nbsp;условие,&nbsp;и&nbsp;т.д.)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверяем&nbsp;и&nbsp;регистрируем&nbsp;все&nbsp;переменные,&nbsp;используемые&nbsp;вкладом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;contribution.get_variables():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._register_variable(var)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution._assembler&nbsp;=&nbsp;self&nbsp;&nbsp;#&nbsp;регистрируем&nbsp;assembler<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.contributions.append(contribution)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_constraint(self,&nbsp;constraint:&nbsp;Constraint):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;связь&nbsp;в&nbsp;систему<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;constraint:&nbsp;Связь&nbsp;(кинематическое&nbsp;ограничение,&nbsp;и&nbsp;т.д.)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверяем&nbsp;и&nbsp;регистрируем&nbsp;все&nbsp;переменные,&nbsp;используемые&nbsp;связью<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;lvar&nbsp;in&nbsp;constraint.get_holonomic_lambdas():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._register_holonomic_constraint_variable(lvar)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;nvar&nbsp;in&nbsp;constraint.get_nonholonomic_lambdas():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._register_nonholonomic_constraint_variable(nvar)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;constraint._assembler&nbsp;=&nbsp;self&nbsp;&nbsp;#&nbsp;регистрируем&nbsp;assembler<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.constraints.append(constraint)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_build_index_map(self,&nbsp;variables)&nbsp;-&gt;&nbsp;Dict[Variable,&nbsp;List[int]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Построить&nbsp;отображение:&nbsp;Variable&nbsp;-&gt;&nbsp;глобальные&nbsp;индексы&nbsp;DOF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Назначает&nbsp;каждой&nbsp;компоненте&nbsp;каждой&nbsp;переменной&nbsp;уникальный<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;глобальный&nbsp;индекс&nbsp;в&nbsp;системе.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current_index&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;list(range(current_index,&nbsp;current_index&nbsp;+&nbsp;var.size))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map[var]&nbsp;=&nbsp;indices<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.global_indices&nbsp;=&nbsp;indices<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current_index&nbsp;+=&nbsp;var.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;index_map<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_build_full_index_map(self)&nbsp;-&gt;&nbsp;Dict[Variable,&nbsp;List[int]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Построить&nbsp;полное&nbsp;отображение:&nbsp;Variable&nbsp;-&gt;&nbsp;глобальные&nbsp;индексы&nbsp;DOF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;включая&nbsp;все&nbsp;переменные&nbsp;и&nbsp;переменные&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;full_variables&nbsp;=&nbsp;self.variables&nbsp;+&nbsp;self._holonomic_constraint_vars&nbsp;+&nbsp;self._nonholonomic_constraint_vars<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;full_index_map&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current_index&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;full_variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;list(range(current_index,&nbsp;current_index&nbsp;+&nbsp;var.size))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;full_index_map[var]&nbsp;=&nbsp;indices<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current_index&nbsp;+=&nbsp;var.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;full_index_map<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_build_index_maps(self)&nbsp;-&gt;&nbsp;Dict[Variable,&nbsp;List[int]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Построить&nbsp;отображение:&nbsp;Variable&nbsp;-&gt;&nbsp;глобальные&nbsp;индексы&nbsp;DOF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Назначает&nbsp;каждой&nbsp;компоненте&nbsp;каждой&nbsp;переменной&nbsp;уникальный<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;глобальный&nbsp;индекс&nbsp;в&nbsp;системе.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._index_map&nbsp;=&nbsp;self._build_index_map(self.variables)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._holonomic_index_map&nbsp;=&nbsp;self._build_index_map(self._holonomic_constraint_vars)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._nonholonomic_index_map&nbsp;=&nbsp;self._build_index_map(self._nonholonomic_constraint_vars)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._full_index_map&nbsp;=&nbsp;self._build_full_index_map()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dirty_index_map&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#self._rebuild_state_vectors()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;index_map(self)&nbsp;-&gt;&nbsp;Dict[Variable,&nbsp;List[int]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Получить&nbsp;текущее&nbsp;отображение&nbsp;Variable&nbsp;-&gt;&nbsp;глобальные&nbsp;индексы&nbsp;DOF<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._dirty_index_map:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._build_index_maps()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._index_map<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;total_dofs(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Общее&nbsp;количество&nbsp;степеней&nbsp;свободы&nbsp;в&nbsp;системе&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;sum(var.size&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble(self)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собрать&nbsp;глобальную&nbsp;систему&nbsp;A*x&nbsp;=&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(A,&nbsp;b):&nbsp;Матрица&nbsp;и&nbsp;вектор&nbsp;правой&nbsp;части<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Построить&nbsp;карту&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_map()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;глобальные&nbsp;матрицу&nbsp;и&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_dofs()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;np.zeros(n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собрать&nbsp;вклады<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_stiffness(A,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_load(b,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A,&nbsp;b<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_dynamic_system(self)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собрать&nbsp;глобальную&nbsp;систему&nbsp;A*x''&nbsp;+&nbsp;C*x'&nbsp;+&nbsp;K*x&nbsp;=&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(A,&nbsp;C,&nbsp;K,&nbsp;b):&nbsp;Матрицы&nbsp;и&nbsp;вектор&nbsp;правой&nbsp;части<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Построить&nbsp;карту&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_map()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;глобальные&nbsp;матрицы&nbsp;и&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_dofs()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;K&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;np.zeros(n_dofs)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrices&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mass&quot;:&nbsp;A,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;damping&quot;:&nbsp;C,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;stiffness&quot;:&nbsp;K,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;load&quot;:&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute(matrices,&nbsp;index_map)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;matrices<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_stiffness_problem(self)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собрать&nbsp;глобальную&nbsp;систему&nbsp;K*x&nbsp;=&nbsp;b<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(K,&nbsp;b):&nbsp;Матрица&nbsp;и&nbsp;вектор&nbsp;правой&nbsp;части<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Построить&nbsp;карту&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_map()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;глобальные&nbsp;матрицу&nbsp;и&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_dofs()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;K&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;np.zeros(n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собрать&nbsp;вклады<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_stiffness(K,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_load(b,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;K,&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_static_problem(self)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собрать&nbsp;глобальную&nbsp;систему&nbsp;K*x&nbsp;=&nbsp;b<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(K,&nbsp;b):&nbsp;Матрица&nbsp;и&nbsp;вектор&nbsp;правой&nbsp;части<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Построить&nbsp;карту&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_map()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;глобальные&nbsp;матрицу&nbsp;и&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_dofs()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;K&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;np.zeros(n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собрать&nbsp;вклады<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_mass(K,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_load(b,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;K,&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_dynamic_problem(self)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray,&nbsp;np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собрать&nbsp;глобальную&nbsp;систему&nbsp;Ad·x''&nbsp;+&nbsp;C·x'&nbsp;+&nbsp;K·x&nbsp;=&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Ad,&nbsp;C,&nbsp;K,&nbsp;b):&nbsp;Матрицы&nbsp;и&nbsp;вектор&nbsp;правой&nbsp;части<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Построить&nbsp;карту&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_map()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;глобальные&nbsp;матрицы&nbsp;и&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_dofs()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;K&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;np.zeros(n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собрать&nbsp;вклады<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;contribution&nbsp;in&nbsp;self.contributions:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_mass(A,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_damping(C,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_stiffness(K,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contribution.contribute_to_load(b,&nbsp;index_map)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A,&nbsp;C,&nbsp;K,&nbsp;b<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;assemble_constraints(self)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_map()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Подсчитать&nbsp;общее&nbsp;количество&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_hconstraints&nbsp;=&nbsp;sum(constraint.get_n_holonomic()&nbsp;for&nbsp;constraint&nbsp;in&nbsp;self.constraints)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_nhconstraints&nbsp;=&nbsp;sum(constraint.get_n_nonholonomic()&nbsp;for&nbsp;constraint&nbsp;in&nbsp;self.constraints)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_dofs()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создать&nbsp;матрицу&nbsp;связей&nbsp;(n_constraints&nbsp;×&nbsp;n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;np.zeros((n_hconstraints,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;N&nbsp;=&nbsp;np.zeros((n_nhconstraints,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dH&nbsp;=&nbsp;np.zeros(n_hconstraints)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dN&nbsp;=&nbsp;np.zeros(n_nhconstraints)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Заполнить&nbsp;матрицу&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;constraint&nbsp;in&nbsp;self.constraints:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;constraint.contribute_to_holonomic(H,&nbsp;index_map,&nbsp;self._holonomic_index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;constraint.contribute_to_nonholonomic(N,&nbsp;index_map,&nbsp;self._nonholonomic_index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;constraint.contribute_to_holonomic_load(dH,&nbsp;self._holonomic_index_map)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;H,&nbsp;N,&nbsp;dH,&nbsp;dN<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;make_extended_system(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,&nbsp;A,&nbsp;C,&nbsp;K,&nbsp;b,&nbsp;H,&nbsp;N,&nbsp;dH,&nbsp;dN,&nbsp;q,&nbsp;q_d)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собрать&nbsp;расширенную&nbsp;систему&nbsp;с&nbsp;множителями&nbsp;Лагранжа<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;A.shape[0]&nbsp;+&nbsp;H.shape[0]&nbsp;+&nbsp;N.shape[0]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext&nbsp;=&nbsp;np.zeros((n_dofs,&nbsp;n_dofs))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext&nbsp;=&nbsp;np.zeros(n_dofs)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#[&nbsp;A&nbsp;H.T&nbsp;N.T&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#[&nbsp;H&nbsp;0&nbsp;&nbsp;&nbsp;0&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#[&nbsp;N&nbsp;0&nbsp;&nbsp;&nbsp;0&nbsp;&nbsp;&nbsp;]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r0&nbsp;=&nbsp;A.shape[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r1&nbsp;=&nbsp;A.shape[0]&nbsp;+&nbsp;H.shape[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r2&nbsp;=&nbsp;A.shape[0]&nbsp;+&nbsp;H.shape[0]&nbsp;+&nbsp;N.shape[0]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c0&nbsp;=&nbsp;A.shape[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c1&nbsp;=&nbsp;A.shape[1]&nbsp;+&nbsp;H.shape[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c2&nbsp;=&nbsp;A.shape[1]&nbsp;+&nbsp;H.shape[0]&nbsp;+&nbsp;N.shape[0]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[0:r0,&nbsp;0:c0]&nbsp;=&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[0:r0,&nbsp;c0:c1]&nbsp;=&nbsp;H.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[0:r0,&nbsp;c1:c2]&nbsp;=&nbsp;N.T<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r0:r1,&nbsp;0:c0]&nbsp;=&nbsp;H<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext[r1:r2,&nbsp;0:c0]&nbsp;=&nbsp;N<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[0:r0]&nbsp;=&nbsp;b&nbsp;-&nbsp;C&nbsp;@&nbsp;q_d&nbsp;-&nbsp;K&nbsp;@&nbsp;q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[r0:r1]&nbsp;=&nbsp;dH<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext[r1:r2]&nbsp;=&nbsp;dN<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A_ext,&nbsp;b_ext<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;extended_dynamic_system_size(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Получить&nbsp;размер&nbsp;расширенной&nbsp;системы&nbsp;с&nbsp;учетом&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Размер&nbsp;расширенной&nbsp;системы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_dofs()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_hconstraints&nbsp;=&nbsp;sum(constraint.get_n_holonomic()&nbsp;for&nbsp;constraint&nbsp;in&nbsp;self.constraints)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_nhconstraints&nbsp;=&nbsp;sum(constraint.get_n_nonholonomic()&nbsp;for&nbsp;constraint&nbsp;in&nbsp;self.constraints)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;n_dofs&nbsp;+&nbsp;n_hconstraints&nbsp;+&nbsp;n_nhconstraints<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;simulation_step_dynamic_with_constraints(self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dt:&nbsp;float,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check_conditioning:&nbsp;bool&nbsp;=&nbsp;True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares:&nbsp;bool&nbsp;=&nbsp;False)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Выполнить&nbsp;шаг&nbsp;динамического&nbsp;решения&nbsp;с&nbsp;учетом&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dt:&nbsp;Шаг&nbsp;времени<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check_conditioning:&nbsp;Проверить&nbsp;обусловленность&nbsp;матрицы&nbsp;и&nbsp;выдать&nbsp;предупреждение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares:&nbsp;Использовать&nbsp;lstsq&nbsp;вместо&nbsp;solve&nbsp;(робастнее,&nbsp;но&nbsp;медленнее)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q_ext_ddot,&nbsp;A,&nbsp;C,&nbsp;K,&nbsp;b,&nbsp;H,&nbsp;N,&nbsp;dH,&nbsp;dN&nbsp;=&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.solve_Ad2x_Cdx_Kx_b_with_constraints(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check_conditioning=check_conditioning,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares=use_least_squares<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q_ddot&nbsp;=&nbsp;self._q_ext_ddot[:self.total_dofs()]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._lambdas_holonomic&nbsp;=&nbsp;self._q_ext_ddot[self.total_dofs():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.total_dofs()&nbsp;+&nbsp;sum(constraint.get_n_holonomic()&nbsp;for&nbsp;constraint&nbsp;in&nbsp;self.constraints)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._lambdas_nonholonomic&nbsp;=&nbsp;self._q_ext_ddot[self.total_dofs()&nbsp;+&nbsp;sum(constraint.get_n_holonomic()&nbsp;for&nbsp;constraint&nbsp;in&nbsp;self.constraints):]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обновить&nbsp;переменные<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q_dot&nbsp;+=&nbsp;self._q_ddot&nbsp;*&nbsp;dt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H_add_N_T&nbsp;=&nbsp;H.T&nbsp;+&nbsp;N.T<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_dot_violation&nbsp;=&nbsp;termin.linalg.subspaces.rowspace(H_add_N_T)&nbsp;@&nbsp;self._q_dot<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q_dot&nbsp;-=&nbsp;q_dot_violation<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q&nbsp;+=&nbsp;self._q_dot&nbsp;*&nbsp;dt&nbsp;+&nbsp;0.5&nbsp;*&nbsp;self._q_ddot&nbsp;*&nbsp;dt&nbsp;*&nbsp;dt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_violation&nbsp;=&nbsp;termin.linalg.subspaces.rowspace(H)&nbsp;@&nbsp;self._q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._q&nbsp;-=&nbsp;q_violation<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_variables_from_state_vectors()<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;def&nbsp;_update_variables_from_state_vectors(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Обновить&nbsp;значения&nbsp;переменных&nbsp;из&nbsp;внутренних&nbsp;векторов&nbsp;состояния&nbsp;q&nbsp;и&nbsp;q_dot&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map&nbsp;=&nbsp;self.index_map()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.value&nbsp;=&nbsp;self._q[indices]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.value_dot&nbsp;=&nbsp;self._q_dot[indices]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.nonlinear_integral()<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_solve_system(self,&nbsp;A,&nbsp;b,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check_conditioning:&nbsp;bool&nbsp;=&nbsp;True,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares:&nbsp;bool&nbsp;=&nbsp;False)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Решить&nbsp;систему&nbsp;A*x&nbsp;=&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;системы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b:&nbsp;Вектор&nbsp;правой&nbsp;части<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check_conditioning:&nbsp;Проверить&nbsp;обусловленность&nbsp;матрицы&nbsp;и&nbsp;выдать&nbsp;предупреждение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares:&nbsp;Использовать&nbsp;lstsq&nbsp;вместо&nbsp;solve&nbsp;(робастнее,&nbsp;но&nbsp;медленнее)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x:&nbsp;Вектор&nbsp;решения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверка&nbsp;обусловленности<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;check_conditioning:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cond_number&nbsp;=&nbsp;np.linalg.cond(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;cond_number&nbsp;&gt;&nbsp;1e10:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import&nbsp;warnings<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;warnings.warn(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Матрица&nbsp;плохо&nbsp;обусловлена:&nbsp;cond(A)&nbsp;=&nbsp;{cond_number:.2e}.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Это&nbsp;может&nbsp;быть&nbsp;из-за&nbsp;penalty&nbsp;method&nbsp;в&nbsp;граничных&nbsp;условиях.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Рассмотрите&nbsp;использование&nbsp;use_least_squares=True&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RuntimeWarning<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;cond_number&nbsp;&gt;&nbsp;1e6:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import&nbsp;warnings<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;warnings.warn(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Матрица&nbsp;имеет&nbsp;высокое&nbsp;число&nbsp;обусловленности:&nbsp;cond(A)&nbsp;=&nbsp;{cond_number:.2e}&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RuntimeWarning<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Решение&nbsp;системы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;use_least_squares:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Метод&nbsp;наименьших&nbsp;квадратов&nbsp;-&nbsp;более&nbsp;робастный<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;residuals,&nbsp;rank,&nbsp;s&nbsp;=&nbsp;np.linalg.lstsq(A,&nbsp;b,&nbsp;rcond=None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;check_conditioning&nbsp;and&nbsp;rank&nbsp;&lt;&nbsp;len(b):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import&nbsp;warnings<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;warnings.warn(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Матрица&nbsp;вырожденная&nbsp;или&nbsp;близка&nbsp;к&nbsp;вырожденной:&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;rank(A)&nbsp;=&nbsp;{rank},&nbsp;expected&nbsp;{len(b)}&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RuntimeWarning<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;check_conditioning&nbsp;and&nbsp;rank&nbsp;&lt;&nbsp;len(b):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import&nbsp;warnings<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;warnings.warn(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Матрица&nbsp;вырожденная&nbsp;или&nbsp;близка&nbsp;к&nbsp;вырожденной:&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;rank(A)&nbsp;=&nbsp;{rank},&nbsp;expected&nbsp;{len(b)}&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RuntimeWarning<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Прямое&nbsp;решение&nbsp;-&nbsp;быстрее,&nbsp;но&nbsp;менее&nbsp;робастное<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;np.linalg.solve(A,&nbsp;b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;np.linalg.LinAlgError&nbsp;as&nbsp;e:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Не&nbsp;удалось&nbsp;решить&nbsp;систему:&nbsp;{e}.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Возможно,&nbsp;матрица&nbsp;вырожденная&nbsp;(не&nbsp;хватает&nbsp;граничных&nbsp;условий?)&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;или&nbsp;плохо&nbsp;обусловлена.&nbsp;Попробуйте&nbsp;use_least_squares=True&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;from&nbsp;e<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;x<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;def&nbsp;state_vectors(self)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собрать&nbsp;векторы&nbsp;состояния&nbsp;x&nbsp;и&nbsp;x_dot&nbsp;из&nbsp;текущих&nbsp;значений&nbsp;переменных<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x:&nbsp;Вектор&nbsp;состояний<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_dot:&nbsp;Вектор&nbsp;скоростей&nbsp;состояний<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._index_map&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;Система&nbsp;не&nbsp;собрана.&nbsp;Вызовите&nbsp;assemble()&nbsp;перед&nbsp;получением&nbsp;векторов&nbsp;состояния.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dofs&nbsp;=&nbsp;self.total_dofs()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;np.zeros(n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_dot&nbsp;=&nbsp;np.zeros(n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;self._index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;value,&nbsp;value_dot&nbsp;=&nbsp;var.state_for_assembler()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x[indices]&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_dot[indices]&nbsp;=&nbsp;value_dot<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;x,&nbsp;x_dot<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;solve_Adxx_Cdx_Kx_b(self,&nbsp;x_dot:&nbsp;np.ndarray,&nbsp;x:&nbsp;np.ndarray,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check_conditioning:&nbsp;bool&nbsp;=&nbsp;True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares:&nbsp;bool&nbsp;=&nbsp;False)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Решить&nbsp;систему&nbsp;Ad·x''&nbsp;+&nbsp;C·x'&nbsp;+&nbsp;K·x&nbsp;=&nbsp;b<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_dot:&nbsp;Вектор&nbsp;скоростей&nbsp;состояний<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x:&nbsp;Вектор&nbsp;состояний<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check_conditioning:&nbsp;Проверить&nbsp;обусловленность&nbsp;матрицы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares:&nbsp;Использовать&nbsp;lstsq&nbsp;вместо&nbsp;solve<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b:&nbsp;Вектор&nbsp;правой&nbsp;части<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ad,&nbsp;C,&nbsp;K,&nbsp;b&nbsp;=&nbsp;self.assemble_Adxx_Cdx_Kx_b()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v,&nbsp;v_dot&nbsp;=&nbsp;self.state_vectors()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собрать&nbsp;левую&nbsp;часть<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_eff&nbsp;=&nbsp;Ad<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_eff&nbsp;+=&nbsp;C&nbsp;@&nbsp;x_dot<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_eff&nbsp;+=&nbsp;K&nbsp;@&nbsp;x<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Правая&nbsp;часть<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_eff&nbsp;=&nbsp;b<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.solve(check_conditioning=check_conditioning,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares=use_least_squares,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_constraints=False)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_solution_to_variables(self,&nbsp;x:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Сохранить&nbsp;решение&nbsp;в&nbsp;объекты&nbsp;Variable<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;После&nbsp;вызова&nbsp;этого&nbsp;метода&nbsp;каждая&nbsp;переменная&nbsp;будет&nbsp;иметь&nbsp;атрибут&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;с&nbsp;решением&nbsp;(скаляр&nbsp;или&nbsp;numpy&nbsp;array).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x:&nbsp;Вектор&nbsp;решения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._index_map&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;Система&nbsp;не&nbsp;собрана.&nbsp;Вызовите&nbsp;assemble()&nbsp;или&nbsp;solve()&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;self._index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(indices)&nbsp;&gt;&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.value&nbsp;=&nbsp;x[indices]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.value&nbsp;=&nbsp;x[indices[0]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;solve_stiffness_problem(self,&nbsp;check_conditioning:&nbsp;bool&nbsp;=&nbsp;True,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares:&nbsp;bool&nbsp;=&nbsp;False,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_constraints:&nbsp;bool&nbsp;=&nbsp;True)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Решить&nbsp;систему&nbsp;и&nbsp;сохранить&nbsp;результат&nbsp;в&nbsp;переменные<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Удобный&nbsp;метод,&nbsp;который&nbsp;объединяет&nbsp;solve()&nbsp;и&nbsp;set_solution_to_variables().<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check_conditioning:&nbsp;Проверить&nbsp;обусловленность&nbsp;матрицы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares:&nbsp;Использовать&nbsp;lstsq&nbsp;вместо&nbsp;solve<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_constraints:&nbsp;Использовать&nbsp;множители&nbsp;Лагранжа&nbsp;для&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x:&nbsp;Вектор&nbsp;решения&nbsp;(также&nbsp;сохранен&nbsp;в&nbsp;переменных)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;x&nbsp;=&nbsp;self.solve(check_conditioning=check_conditioning,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares=use_least_squares,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_constraints=use_constraints)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;K,&nbsp;b&nbsp;=&nbsp;self.assemble_stiffness_problem()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;self._solve_system(A=K,&nbsp;b=b,&nbsp;check_conditioning=check_conditioning,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use_least_squares=use_least_squares)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_solution_to_variables(x)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;x<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_lagrange_multipliers(self)&nbsp;-&gt;&nbsp;Optional[np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Получить&nbsp;множители&nbsp;Лагранжа&nbsp;после&nbsp;решения&nbsp;системы&nbsp;с&nbsp;связями<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Множители&nbsp;Лагранжа&nbsp;представляют&nbsp;собой&nbsp;силы&nbsp;реакции&nbsp;связей.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Массив&nbsp;множителей&nbsp;Лагранжа&nbsp;или&nbsp;None,&nbsp;если&nbsp;система&nbsp;решалась&nbsp;без&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;getattr(self,&nbsp;'_lagrange_multipliers',&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;diagnose_matrix(self)&nbsp;-&gt;&nbsp;Dict[str,&nbsp;any]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Диагностика&nbsp;собранной&nbsp;матрицы&nbsp;системы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Словарь&nbsp;с&nbsp;информацией&nbsp;о&nbsp;матрице:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;condition_number:&nbsp;число&nbsp;обусловленности<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;is_symmetric:&nbsp;симметричность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;is_positive_definite:&nbsp;положительная&nbsp;определённость<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;rank:&nbsp;ранг&nbsp;матрицы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;min_eigenvalue:&nbsp;минимальное&nbsp;собственное&nbsp;значение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;max_eigenvalue:&nbsp;максимальное&nbsp;собственное&nbsp;значение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A,&nbsp;b&nbsp;=&nbsp;self.assemble()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Число&nbsp;обусловленности<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['condition_number']&nbsp;=&nbsp;np.linalg.cond(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Симметричность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['is_symmetric']&nbsp;=&nbsp;np.allclose(A,&nbsp;A.T)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ранг<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['rank']&nbsp;=&nbsp;np.linalg.matrix_rank(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['expected_rank']&nbsp;=&nbsp;len(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['is_full_rank']&nbsp;=&nbsp;info['rank']&nbsp;==&nbsp;info['expected_rank']<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собственные&nbsp;значения&nbsp;(только&nbsp;для&nbsp;небольших&nbsp;матриц)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(A)&nbsp;&lt;=&nbsp;100:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eigenvalues&nbsp;=&nbsp;np.linalg.eigvalsh(A)&nbsp;if&nbsp;info['is_symmetric']&nbsp;else&nbsp;np.linalg.eigvals(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eigenvalues&nbsp;=&nbsp;np.real(eigenvalues)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['min_eigenvalue']&nbsp;=&nbsp;np.min(eigenvalues)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['max_eigenvalue']&nbsp;=&nbsp;np.max(eigenvalues)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['is_positive_definite']&nbsp;=&nbsp;np.all(eigenvalues&nbsp;&gt;&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['eigenvalues']&nbsp;=&nbsp;'Skipped&nbsp;(matrix&nbsp;too&nbsp;large)'<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['is_positive_definite']&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Оценка&nbsp;качества<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cond&nbsp;=&nbsp;info['condition_number']<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;cond&nbsp;&lt;&nbsp;100:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['quality']&nbsp;=&nbsp;'excellent'<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;cond&nbsp;&lt;&nbsp;1e4:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['quality']&nbsp;=&nbsp;'good'<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;cond&nbsp;&lt;&nbsp;1e8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['quality']&nbsp;=&nbsp;'acceptable'<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;cond&nbsp;&lt;&nbsp;1e12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['quality']&nbsp;=&nbsp;'poor'<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info['quality']&nbsp;=&nbsp;'very_poor'<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;info<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;system_to_human_readable(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext:&nbsp;np.ndarray,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext:&nbsp;np.ndarray,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables:&nbsp;List[Variable])&nbsp;-&gt;&nbsp;str:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Преобразовать&nbsp;расширенную&nbsp;систему&nbsp;в&nbsp;человекочитаемый&nbsp;формат<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_ext:&nbsp;Расширенная&nbsp;матрица&nbsp;системы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ext:&nbsp;Расширенный&nbsp;вектор&nbsp;правой&nbsp;части<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables:&nbsp;Список&nbsp;переменных&nbsp;системы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Строковое&nbsp;представление&nbsp;системы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lines&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_vars&nbsp;=&nbsp;len(variables)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(A_ext.shape[0]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row_terms&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;count_of_nonzero&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;range(A_ext.shape[1]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coeff&nbsp;=&nbsp;A_ext[i,&nbsp;j]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;abs(coeff)&nbsp;&gt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var_name&nbsp;=&nbsp;variables[j]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;count_of_nonzero&nbsp;+=&nbsp;1<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(np.isclose(coeff,&nbsp;1.0)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row_terms.append(f&quot;{var_name}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;(np.isclose(coeff,&nbsp;-1.0)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row_terms.append(f&quot;-{var_name}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row_terms.append(f&quot;{coeff}*{var_name}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row_str&nbsp;=&nbsp;&quot;&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row_str&nbsp;+=&nbsp;&quot;&nbsp;+&nbsp;&quot;.join(row_terms)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row_str&nbsp;+=&nbsp;f&quot;&nbsp;=&nbsp;{b_ext[i]}&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;count_of_nonzero&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row_str&nbsp;=&nbsp;f&quot;&nbsp;0&nbsp;=&nbsp;{b_ext[i]}&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lines.append(row_str)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;&quot;\n&quot;.join(lines)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;result_to_human_readable(self,&nbsp;x_ext:&nbsp;np.ndarray,&nbsp;variables:&nbsp;List[Variable])&nbsp;-&gt;&nbsp;str:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Преобразовать&nbsp;вектор&nbsp;решения&nbsp;в&nbsp;человекочитаемый&nbsp;формат<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_ext:&nbsp;Вектор&nbsp;решения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables:&nbsp;Список&nbsp;переменных&nbsp;системы<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Строковое&nbsp;представление&nbsp;решения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lines&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;var&nbsp;in&nbsp;enumerate(variables):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lines.append(f&quot;&nbsp;{var}&nbsp;=&nbsp;{x_ext[i]}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;&quot;\n&quot;.join(lines)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;matrix_diagnosis(A,&nbsp;tol=1e-10):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Анализирует&nbsp;матрицу&nbsp;A_ext:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;вычисляет&nbsp;ранг<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;определяет&nbsp;нулевое&nbsp;подпространство<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;сообщает,&nbsp;какая&nbsp;часть&nbsp;системы&nbsp;линейно&nbsp;зависима<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import&nbsp;numpy&nbsp;as&nbsp;np<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;U,&nbsp;S,&nbsp;Vt&nbsp;=&nbsp;np.linalg.svd(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;np.sum(S&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nullity&nbsp;=&nbsp;A.shape[0]&nbsp;-&nbsp;rank<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;size&quot;:&nbsp;A.shape,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;rank&quot;:&nbsp;rank,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;nullity&quot;:&nbsp;nullity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;singular&quot;:&nbsp;nullity&nbsp;&gt;&nbsp;0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;small_singular_values&quot;:&nbsp;S[S&nbsp;&lt;&nbsp;tol],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;condition_number&quot;:&nbsp;S.max()&nbsp;/&nbsp;S.min()&nbsp;if&nbsp;S.min()&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;np.inf<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;print_diagnose(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Print&nbsp;human-readable&nbsp;matrix&nbsp;diagnostics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;info&nbsp;=&nbsp;self.diagnose_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;=&quot;&nbsp;*&nbsp;70)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;MATRIX&nbsp;SYSTEM&nbsp;DIAGNOSTICS&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;=&quot;&nbsp;*&nbsp;70)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Dimensions<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;\nSystem&nbsp;dimensions:&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;Number&nbsp;of&nbsp;variables:&nbsp;{len(self.variables)}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;Degrees&nbsp;of&nbsp;freedom&nbsp;(DOF):&nbsp;{self.total_dofs()}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Matrix&nbsp;rank<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;\nMatrix&nbsp;rank:&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;Current&nbsp;rank:&nbsp;{info['rank']}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;Expected&nbsp;rank:&nbsp;{info['expected_rank']}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;info['is_full_rank']:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;[OK]&nbsp;Matrix&nbsp;has&nbsp;full&nbsp;rank&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;[PROBLEM]&nbsp;Matrix&nbsp;is&nbsp;singular&nbsp;(rank&nbsp;deficient)&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;&nbsp;&nbsp;Possibly&nbsp;missing&nbsp;boundary&nbsp;conditions&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Symmetry<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;\nSymmetry:&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;info['is_symmetric']:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;[OK]&nbsp;Matrix&nbsp;is&nbsp;symmetric&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;[PROBLEM]&nbsp;Matrix&nbsp;is&nbsp;not&nbsp;symmetric&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;&nbsp;&nbsp;This&nbsp;may&nbsp;indicate&nbsp;an&nbsp;error&nbsp;in&nbsp;contributions&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Conditioning<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;\nConditioning:&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;Condition&nbsp;number:&nbsp;{info['condition_number']:.2e}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;Quality&nbsp;assessment:&nbsp;{info['quality']}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;quality_desc&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'excellent':&nbsp;'[OK]&nbsp;Excellent&nbsp;-&nbsp;matrix&nbsp;is&nbsp;very&nbsp;well&nbsp;conditioned',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'good':&nbsp;'[OK]&nbsp;Good&nbsp;-&nbsp;matrix&nbsp;is&nbsp;well&nbsp;conditioned',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'acceptable':&nbsp;'[WARNING]&nbsp;Acceptable&nbsp;-&nbsp;may&nbsp;have&nbsp;small&nbsp;numerical&nbsp;errors',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'poor':&nbsp;'[PROBLEM]&nbsp;Poor&nbsp;-&nbsp;high&nbsp;risk&nbsp;of&nbsp;numerical&nbsp;errors',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'very_poor':&nbsp;'[PROBLEM]&nbsp;Very&nbsp;poor&nbsp;-&nbsp;solution&nbsp;may&nbsp;be&nbsp;inaccurate'<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;{quality_desc.get(info['quality'],&nbsp;'')}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;info['quality']&nbsp;in&nbsp;['poor',&nbsp;'very_poor']:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;\n&nbsp;&nbsp;Recommendations:&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Reduce&nbsp;penalty&nbsp;in&nbsp;boundary&nbsp;conditions&nbsp;(try&nbsp;1e8)&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Use&nbsp;use_least_squares=True&nbsp;when&nbsp;solving&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Check&nbsp;the&nbsp;scales&nbsp;of&nbsp;quantities&nbsp;in&nbsp;the&nbsp;problem&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Eigenvalues<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;info.get('min_eigenvalue')&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;\nEigenvalues:&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;Minimum:&nbsp;{info['min_eigenvalue']:.2e}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;Maximum:&nbsp;{info['max_eigenvalue']:.2e}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;info.get('is_positive_definite'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;[OK]&nbsp;Matrix&nbsp;is&nbsp;positive&nbsp;definite&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;[PROBLEM]&nbsp;Matrix&nbsp;is&nbsp;not&nbsp;positive&nbsp;definite&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;info['min_eigenvalue']&nbsp;&lt;=&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;&nbsp;&nbsp;&nbsp;&nbsp;Has&nbsp;non-positive&nbsp;eigenvalues&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Final&nbsp;recommendation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;\n&quot;&nbsp;+&nbsp;&quot;=&quot;&nbsp;*&nbsp;70)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;info['is_full_rank']&nbsp;and&nbsp;info['is_symmetric']&nbsp;and&nbsp;info['quality']&nbsp;in&nbsp;['excellent',&nbsp;'good',&nbsp;'acceptable']:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;SUMMARY:&nbsp;[OK]&nbsp;System&nbsp;is&nbsp;ready&nbsp;to&nbsp;solve&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;SUMMARY:&nbsp;[WARNING]&nbsp;Problems&nbsp;detected,&nbsp;attention&nbsp;required&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;=&quot;&nbsp;*&nbsp;70)<br>
+<br>
+<br>
+<br>
+<br>
+#&nbsp;============================================================================<br>
+#&nbsp;Примеры&nbsp;конкретных&nbsp;вкладов<br>
+#&nbsp;============================================================================<br>
+<br>
+class&nbsp;BilinearContribution(Contribution):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Билинейный&nbsp;вклад:&nbsp;связь&nbsp;двух&nbsp;переменных&nbsp;через&nbsp;локальную&nbsp;матрицу<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Пример:&nbsp;стержень,&nbsp;пружина,&nbsp;резистор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Вклад&nbsp;в&nbsp;A:&nbsp;A[i,j]&nbsp;+=&nbsp;K_local[i,j]&nbsp;для&nbsp;пар&nbsp;индексов&nbsp;переменных<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;variables:&nbsp;List[Variable],&nbsp;K_local:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables:&nbsp;Список&nbsp;переменных&nbsp;(например,&nbsp;[u1,&nbsp;u2]&nbsp;для&nbsp;стержня)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;K_local:&nbsp;Локальная&nbsp;матрица&nbsp;вклада<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.variables&nbsp;=&nbsp;variables<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.K_local&nbsp;=&nbsp;np.array(K_local)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверка&nbsp;размерности<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;expected_size&nbsp;=&nbsp;sum(v.size&nbsp;for&nbsp;v&nbsp;in&nbsp;variables)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.K_local.shape&nbsp;!=&nbsp;(expected_size,&nbsp;expected_size):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Размер&nbsp;K_local&nbsp;{self.K_local.shape}&nbsp;не&nbsp;соответствует&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;суммарному&nbsp;размеру&nbsp;переменных&nbsp;{expected_size}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_stiffness(self,&nbsp;A:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собрать&nbsp;глобальные&nbsp;индексы&nbsp;всех&nbsp;переменных<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;global_indices&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;global_indices.extend(index_map[var])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Добавить&nbsp;локальную&nbsp;матрицу&nbsp;в&nbsp;глобальную<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;gi&nbsp;in&nbsp;enumerate(global_indices):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j,&nbsp;gj&nbsp;in&nbsp;enumerate(global_indices):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[gi,&nbsp;gj]&nbsp;+=&nbsp;self.K_local[i,&nbsp;j]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_load(self,&nbsp;b:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Этот&nbsp;тип&nbsp;вклада&nbsp;не&nbsp;влияет&nbsp;на&nbsp;правую&nbsp;часть<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+<br>
+class&nbsp;LoadContribution(Contribution):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Вклад&nbsp;нагрузки/источника&nbsp;в&nbsp;правую&nbsp;часть<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Пример:&nbsp;приложенная&nbsp;сила,&nbsp;источник&nbsp;тока,&nbsp;тепловой&nbsp;источник<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Вклад&nbsp;в&nbsp;b:&nbsp;b[i]&nbsp;+=&nbsp;F[i]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;variable:&nbsp;Variable,&nbsp;load:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variable:&nbsp;Переменная,&nbsp;к&nbsp;которой&nbsp;приложена&nbsp;нагрузка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;load:&nbsp;Вектор&nbsp;нагрузки&nbsp;(размера&nbsp;variable.size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.variable&nbsp;=&nbsp;variable<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.load&nbsp;=&nbsp;np.atleast_1d(load)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(self.load)&nbsp;!=&nbsp;variable.size:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Размер&nbsp;нагрузки&nbsp;{len(self.load)}&nbsp;не&nbsp;соответствует&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;размеру&nbsp;переменной&nbsp;{variable.size}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_variables(self)&nbsp;-&gt;&nbsp;List[Variable]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[self.variable]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_stiffness(self,&nbsp;A:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Не&nbsp;влияет&nbsp;на&nbsp;матрицу<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_load(self,&nbsp;b:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[self.variable]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;idx&nbsp;in&nbsp;enumerate(indices):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[idx]&nbsp;+=&nbsp;self.load[i]<br>
+<br>
+<br>
+class&nbsp;ConstraintContribution(Contribution):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Граничное&nbsp;условие:&nbsp;фиксированное&nbsp;значение&nbsp;переменной<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Пример:&nbsp;u1&nbsp;=&nbsp;0&nbsp;(закрепленный&nbsp;узел),&nbsp;V1&nbsp;=&nbsp;5&nbsp;(источник&nbsp;напряжения)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Реализовано&nbsp;через&nbsp;penalty&nbsp;method:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A[i,i]&nbsp;+=&nbsp;penalty<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b[i]&nbsp;+=&nbsp;penalty&nbsp;*&nbsp;prescribed_value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;variable:&nbsp;Variable,&nbsp;value:&nbsp;float,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component:&nbsp;int&nbsp;=&nbsp;0,&nbsp;penalty:&nbsp;float&nbsp;=&nbsp;1e10):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variable:&nbsp;Переменная&nbsp;для&nbsp;ограничения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;value:&nbsp;Предписанное&nbsp;значение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component:&nbsp;Компонента&nbsp;переменной&nbsp;(0&nbsp;для&nbsp;скаляра)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;penalty:&nbsp;Штрафной&nbsp;коэффициент&nbsp;(большое&nbsp;число)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.variable&nbsp;=&nbsp;variable<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.value&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.component&nbsp;=&nbsp;component<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.penalty&nbsp;=&nbsp;penalty<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;component&nbsp;&gt;=&nbsp;variable.size:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Компонента&nbsp;{component}&nbsp;вне&nbsp;диапазона&nbsp;для&nbsp;переменной&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;размера&nbsp;{variable.size}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_variables(self)&nbsp;-&gt;&nbsp;List[Variable]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[self.variable]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_stiffness(self,&nbsp;A:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[self.variable]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;indices[self.component]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[idx,&nbsp;idx]&nbsp;+=&nbsp;self.penalty<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_load(self,&nbsp;b:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[self.variable]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;indices[self.component]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[idx]&nbsp;+=&nbsp;self.penalty&nbsp;*&nbsp;self.value<br>
+<br>
+<br>
+class&nbsp;LagrangeConstraint(Constraint):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Голономная&nbsp;связь,&nbsp;реализованная&nbsp;через&nbsp;множители&nbsp;Лагранжа.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Связь&nbsp;имеет&nbsp;вид:&nbsp;C·x&nbsp;=&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;C&nbsp;-&nbsp;матрица&nbsp;коэффициентов&nbsp;связи,&nbsp;d&nbsp;-&nbsp;правая&nbsp;часть.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;решения&nbsp;системы&nbsp;с&nbsp;связями&nbsp;используется&nbsp;расширенная&nbsp;матрица:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;A&nbsp;&nbsp;&nbsp;C^T&nbsp;]&nbsp;[&nbsp;x&nbsp;]&nbsp;&nbsp;&nbsp;[&nbsp;b&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;C&nbsp;&nbsp;&nbsp;&nbsp;0&nbsp;&nbsp;]&nbsp;[&nbsp;λ&nbsp;]&nbsp;=&nbsp;[&nbsp;d&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Примеры:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Фиксация&nbsp;точки:&nbsp;vx&nbsp;=&nbsp;0,&nbsp;vy&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Шарнирная&nbsp;связь:&nbsp;v&nbsp;+&nbsp;ω&nbsp;×&nbsp;r&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Равенство&nbsp;переменных:&nbsp;u1&nbsp;=&nbsp;u2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;variables:&nbsp;List[Variable],&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coefficients:&nbsp;List[np.ndarray],&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rhs:&nbsp;np.ndarray&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables:&nbsp;Список&nbsp;переменных,&nbsp;участвующих&nbsp;в&nbsp;связи<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coefficients:&nbsp;Список&nbsp;матриц&nbsp;коэффициентов&nbsp;для&nbsp;каждой&nbsp;переменной<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coefficients[i]&nbsp;имеет&nbsp;форму&nbsp;(n_constraints,&nbsp;variables[i].size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rhs:&nbsp;Правая&nbsp;часть&nbsp;связи&nbsp;(вектор&nbsp;размера&nbsp;n_constraints),&nbsp;по&nbsp;умолчанию&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.variables&nbsp;=&nbsp;variables<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.coefficients&nbsp;=&nbsp;[np.atleast_2d(c)&nbsp;for&nbsp;c&nbsp;in&nbsp;coefficients]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверка&nbsp;размерностей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_constraints&nbsp;=&nbsp;self.coefficients[0].shape[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;(var,&nbsp;coef)&nbsp;in&nbsp;enumerate(zip(variables,&nbsp;self.coefficients)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;coef.shape[0]&nbsp;!=&nbsp;n_constraints:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Все&nbsp;матрицы&nbsp;коэффициентов&nbsp;должны&nbsp;иметь&nbsp;одинаковое&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;количество&nbsp;строк&nbsp;(связей)&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;coef.shape[1]&nbsp;!=&nbsp;var.size:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Матрица&nbsp;коэффициентов&nbsp;{i}&nbsp;имеет&nbsp;{coef.shape[1]}&nbsp;столбцов,&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;ожидалось&nbsp;{var.size}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.n_constraints&nbsp;=&nbsp;n_constraints<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lambdas&nbsp;=&nbsp;Variable(name=&quot;lambda_constraint&quot;,&nbsp;size=n_constraints)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__([self.variables[0]],&nbsp;[self.lambdas],&nbsp;[])&nbsp;&nbsp;#&nbsp;Инициализация&nbsp;базового&nbsp;класса&nbsp;Constraint<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rhs&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rhs&nbsp;=&nbsp;np.zeros(n_constraints)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rhs&nbsp;=&nbsp;np.atleast_1d(rhs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(self.rhs)&nbsp;!=&nbsp;n_constraints:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Размер&nbsp;правой&nbsp;части&nbsp;{len(self.rhs)}&nbsp;не&nbsp;соответствует&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;количеству&nbsp;связей&nbsp;{n_constraints}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_holonomic(self,&nbsp;C:&nbsp;np.ndarray,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lambdas_index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;матрицу&nbsp;связей&nbsp;C<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C:&nbsp;Матрица&nbsp;связей&nbsp;(n_constraints_total&nbsp;×&nbsp;n_dofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;Variable&nbsp;-&gt;&nbsp;список&nbsp;глобальных&nbsp;индексов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;for&nbsp;var,&nbsp;coef&nbsp;in&nbsp;zip(self.variables,&nbsp;self.coefficients):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var_indices&nbsp;=&nbsp;index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(self.n_constraints):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j,&nbsp;global_idx&nbsp;in&nbsp;enumerate(var_indices):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C[i,&nbsp;global_idx]&nbsp;+=&nbsp;coef[i,&nbsp;j]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;indices&nbsp;=&nbsp;index_map[self.variables[0]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;contr_indicies&nbsp;=&nbsp;lambdas_index_map[self.lambdas]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(self.n_constraints):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var,&nbsp;coef&nbsp;in&nbsp;zip(self.variables,&nbsp;self.coefficients):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var_indices&nbsp;=&nbsp;index_map[var]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j,&nbsp;global_idx&nbsp;in&nbsp;enumerate(var_indices):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C[contr_indicies[i],&nbsp;global_idx]&nbsp;+=&nbsp;coef[i,&nbsp;j]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_holonomic_load(self,&nbsp;d:&nbsp;np.ndarray,&nbsp;&nbsp;holonomic_index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;вклад&nbsp;в&nbsp;правую&nbsp;часть&nbsp;связей&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d:&nbsp;Вектор&nbsp;правой&nbsp;части&nbsp;связей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;var&nbsp;in&nbsp;self.variables:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index&nbsp;=&nbsp;holonomic_index_map[var][0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d[index]&nbsp;+=&nbsp;self.rhs<br>
+<br>
+#&nbsp;============================================================================<br>
+#&nbsp;Вспомогательные&nbsp;функции&nbsp;для&nbsp;удобства<br>
+#&nbsp;============================================================================<br>
+<br>
+def&nbsp;spring_element(u1:&nbsp;Variable,&nbsp;u2:&nbsp;Variable,&nbsp;stiffness:&nbsp;float)&nbsp;-&gt;&nbsp;BilinearContribution:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Создать&nbsp;вклад&nbsp;пружины/стержня&nbsp;между&nbsp;двумя&nbsp;скалярными&nbsp;переменными<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Уравнение:&nbsp;F&nbsp;=&nbsp;k*(u2-u1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Матрица:&nbsp;&nbsp;[[k,&nbsp;-k],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-k,&nbsp;k]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;K&nbsp;=&nbsp;stiffness&nbsp;*&nbsp;np.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;1,&nbsp;-1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-1,&nbsp;&nbsp;1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;BilinearContribution([u1,&nbsp;u2],&nbsp;K)<br>
+<br>
+<br>
+def&nbsp;conductance_element(V1:&nbsp;Variable,&nbsp;V2:&nbsp;Variable,&nbsp;conductance:&nbsp;float)&nbsp;-&gt;&nbsp;BilinearContribution:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Создать&nbsp;вклад&nbsp;проводимости&nbsp;(резистор)&nbsp;между&nbsp;двумя&nbsp;узлами<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;То&nbsp;же&nbsp;самое&nbsp;что&nbsp;spring_element,&nbsp;но&nbsp;с&nbsp;другим&nbsp;физическим&nbsp;смыслом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;spring_element(V1,&nbsp;V2,&nbsp;conductance)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

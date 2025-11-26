@@ -6,45 +6,45 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from termin.colliders.collider import Collider<br>
-import numpy<br>
+from&nbsp;termin.colliders.collider&nbsp;import&nbsp;Collider<br>
+import&nbsp;numpy<br>
 <br>
-class UnionCollider(Collider):<br>
-&#9;def closest_to_ray(self, ray: &quot;Ray3&quot;):<br>
-&#9;&#9;min_dist = float(&quot;inf&quot;)<br>
-&#9;&#9;best_p = None<br>
-&#9;&#9;best_q = None<br>
+class&nbsp;UnionCollider(Collider):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_ray(self,&nbsp;ray:&nbsp;&quot;Ray3&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_dist&nbsp;=&nbsp;float(&quot;inf&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_p&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_q&nbsp;=&nbsp;None<br>
 <br>
-&#9;&#9;for col in self.colliders:<br>
-&#9;&#9;&#9;p, q, d = col.closest_to_ray(ray)<br>
-&#9;&#9;&#9;if d &lt; min_dist:<br>
-&#9;&#9;&#9;&#9;min_dist = d<br>
-&#9;&#9;&#9;&#9;best_p = p<br>
-&#9;&#9;&#9;&#9;best_q = q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;col&nbsp;in&nbsp;self.colliders:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p,&nbsp;q,&nbsp;d&nbsp;=&nbsp;col.closest_to_ray(ray)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;d&nbsp;&lt;&nbsp;min_dist:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_dist&nbsp;=&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_p&nbsp;=&nbsp;p<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_q&nbsp;=&nbsp;q<br>
 <br>
-&#9;&#9;return best_p, best_q, min_dist<br>
-&#9;def __init__(self, colliders):<br>
-&#9;&#9;self.colliders = colliders<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;best_p,&nbsp;best_q,&nbsp;min_dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;colliders):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.colliders&nbsp;=&nbsp;colliders<br>
 <br>
-&#9;def transform_by(self, transform: 'Pose3'):<br>
-&#9;&#9;&quot;&quot;&quot;Return a new UnionCollider transformed by the given Transform3.&quot;&quot;&quot;<br>
-&#9;&#9;transformed_colliders = [collider.transform_by(transform) for collider in self.colliders]<br>
-&#9;&#9;return UnionCollider(transformed_colliders)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_by(self,&nbsp;transform:&nbsp;'Pose3'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;a&nbsp;new&nbsp;UnionCollider&nbsp;transformed&nbsp;by&nbsp;the&nbsp;given&nbsp;Transform3.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;transformed_colliders&nbsp;=&nbsp;[collider.transform_by(transform)&nbsp;for&nbsp;collider&nbsp;in&nbsp;self.colliders]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;UnionCollider(transformed_colliders)<br>
 <br>
-&#9;def closest_to_collider(self, other: &quot;Collider&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;Return the closest points and distance between this union collider and another collider.&quot;&quot;&quot;<br>
-&#9;&#9;min_dist = float('inf')<br>
-&#9;&#9;closest_p = None<br>
-&#9;&#9;closest_q = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_collider(self,&nbsp;other:&nbsp;&quot;Collider&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;closest&nbsp;points&nbsp;and&nbsp;distance&nbsp;between&nbsp;this&nbsp;union&nbsp;collider&nbsp;and&nbsp;another&nbsp;collider.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_dist&nbsp;=&nbsp;float('inf')<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_p&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_q&nbsp;=&nbsp;None<br>
 <br>
-&#9;&#9;for collider in self.colliders:<br>
-&#9;&#9;&#9;p_near, q_near, dist = collider.closest_to_collider(other)<br>
-&#9;&#9;&#9;if dist &lt; min_dist:<br>
-&#9;&#9;&#9;&#9;min_dist = dist<br>
-&#9;&#9;&#9;&#9;closest_p = p_near<br>
-&#9;&#9;&#9;&#9;closest_q = q_near<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;collider&nbsp;in&nbsp;self.colliders:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_near,&nbsp;q_near,&nbsp;dist&nbsp;=&nbsp;collider.closest_to_collider(other)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dist&nbsp;&lt;&nbsp;min_dist:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_dist&nbsp;=&nbsp;dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_p&nbsp;=&nbsp;p_near<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_q&nbsp;=&nbsp;q_near<br>
 <br>
-&#9;&#9;return closest_p, closest_q, min_dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;closest_p,&nbsp;closest_q,&nbsp;min_dist<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

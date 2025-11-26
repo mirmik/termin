@@ -6,550 +6,550 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;OpenGL-based graphics backend.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;OpenGL-based&nbsp;graphics&nbsp;backend.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import ctypes<br>
-from typing import Dict, Tuple<br>
+import&nbsp;ctypes<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;Tuple<br>
 <br>
-import numpy as np<br>
-from OpenGL import GL as gl<br>
-from OpenGL import GL as GL<br>
-from OpenGL.raw.GL.VERSION.GL_2_0 import glVertexAttribPointer as _gl_vertex_attrib_pointer<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;OpenGL&nbsp;import&nbsp;GL&nbsp;as&nbsp;gl<br>
+from&nbsp;OpenGL&nbsp;import&nbsp;GL&nbsp;as&nbsp;GL<br>
+from&nbsp;OpenGL.raw.GL.VERSION.GL_2_0&nbsp;import&nbsp;glVertexAttribPointer&nbsp;as&nbsp;_gl_vertex_attrib_pointer<br>
 <br>
-from termin.mesh.mesh import Mesh, VertexAttribType<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;Mesh,&nbsp;VertexAttribType<br>
 <br>
-from .base import (<br>
-&#9;GraphicsBackend,<br>
-&#9;MeshHandle,<br>
-&#9;PolylineHandle,<br>
-&#9;ShaderHandle,<br>
-&#9;TextureHandle,<br>
-&#9;FramebufferHandle,<br>
+from&nbsp;.base&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;GraphicsBackend,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PolylineHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ShaderHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;TextureHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FramebufferHandle,<br>
 )<br>
 <br>
-_OPENGL_INITED = False<br>
+_OPENGL_INITED&nbsp;=&nbsp;False<br>
 <br>
 <br>
-def _compile_shader(source: str, shader_type: int) -&gt; int:<br>
-&#9;shader = gl.glCreateShader(shader_type)<br>
-&#9;gl.glShaderSource(shader, source)<br>
-&#9;gl.glCompileShader(shader)<br>
-&#9;status = gl.glGetShaderiv(shader, gl.GL_COMPILE_STATUS)<br>
-&#9;if not status:<br>
-&#9;&#9;log = gl.glGetShaderInfoLog(shader)<br>
-&#9;&#9;raise RuntimeError(log.decode(&quot;utf-8&quot;) if isinstance(log, bytes) else str(log))<br>
-&#9;return shader<br>
+def&nbsp;_compile_shader(source:&nbsp;str,&nbsp;shader_type:&nbsp;int)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;gl.glCreateShader(shader_type)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl.glShaderSource(shader,&nbsp;source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl.glCompileShader(shader)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;status&nbsp;=&nbsp;gl.glGetShaderiv(shader,&nbsp;gl.GL_COMPILE_STATUS)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;status:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;=&nbsp;gl.glGetShaderInfoLog(shader)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(log.decode(&quot;utf-8&quot;)&nbsp;if&nbsp;isinstance(log,&nbsp;bytes)&nbsp;else&nbsp;str(log))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;shader<br>
 <br>
 <br>
-def _link_program(shaders: list[int]) -&gt; int:<br>
-&#9;program = gl.glCreateProgram()<br>
-&#9;<br>
-&#9;for shader in shaders:<br>
-&#9;&#9;gl.glAttachShader(program, shader)<br>
-&#9;<br>
-&#9;gl.glLinkProgram(program)<br>
-&#9;status = gl.glGetProgramiv(program, gl.GL_LINK_STATUS)<br>
-&#9;if not status:<br>
-&#9;&#9;log = gl.glGetProgramInfoLog(program)<br>
-&#9;&#9;raise RuntimeError(log.decode(&quot;utf-8&quot;) if isinstance(log, bytes) else str(log))<br>
-&#9;<br>
-&#9;for shader in shaders:<br>
-&#9;&#9;gl.glDetachShader(program, shader)<br>
-&#9;&#9;gl.glDeleteShader(shader)<br>
+def&nbsp;_link_program(shaders:&nbsp;list[int])&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;program&nbsp;=&nbsp;gl.glCreateProgram()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;shader&nbsp;in&nbsp;shaders:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glAttachShader(program,&nbsp;shader)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl.glLinkProgram(program)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;status&nbsp;=&nbsp;gl.glGetProgramiv(program,&nbsp;gl.GL_LINK_STATUS)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;status:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;=&nbsp;gl.glGetProgramInfoLog(program)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(log.decode(&quot;utf-8&quot;)&nbsp;if&nbsp;isinstance(log,&nbsp;bytes)&nbsp;else&nbsp;str(log))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;shader&nbsp;in&nbsp;shaders:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDetachShader(program,&nbsp;shader)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteShader(shader)<br>
 <br>
-&#9;return program<br>
-<br>
-<br>
-class OpenGLShaderHandle(ShaderHandle):<br>
-&#9;def __init__(self, vertex_source: str, fragment_source: str, geometry_source: str | None = None):<br>
-&#9;&#9;self.vertex_source = vertex_source<br>
-&#9;&#9;self.fragment_source = fragment_source<br>
-&#9;&#9;self.geometry_source = geometry_source<br>
-&#9;&#9;self.program: int | None = None<br>
-&#9;&#9;self._uniform_cache: Dict[str, int] = {}<br>
-<br>
-&#9;def _ensure_compiled(self):<br>
-&#9;&#9;if self.program is not None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;shaders = []<br>
-&#9;&#9;vert = _compile_shader(self.vertex_source, gl.GL_VERTEX_SHADER)<br>
-&#9;&#9;shaders.append(vert)<br>
-<br>
-&#9;&#9;if self.geometry_source:<br>
-&#9;&#9;&#9;geom = _compile_shader(self.geometry_source, gl.GL_GEOMETRY_SHADER)<br>
-&#9;&#9;&#9;shaders.append(geom)<br>
-<br>
-&#9;&#9;frag = _compile_shader(self.fragment_source, gl.GL_FRAGMENT_SHADER)<br>
-&#9;&#9;shaders.append(frag)<br>
-&#9;&#9;self.program = _link_program(shaders)<br>
-<br>
-&#9;def use(self):<br>
-&#9;&#9;self._ensure_compiled()<br>
-&#9;&#9;gl.glUseProgram(self.program)<br>
-<br>
-&#9;def stop(self):<br>
-&#9;&#9;gl.glUseProgram(0)<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;if self.program is not None:<br>
-&#9;&#9;&#9;gl.glDeleteProgram(self.program)<br>
-&#9;&#9;&#9;self.program = None<br>
-&#9;&#9;self._uniform_cache.clear()<br>
-<br>
-&#9;def _uniform_location(self, name: str) -&gt; int:<br>
-&#9;&#9;if name not in self._uniform_cache:<br>
-&#9;&#9;&#9;location = gl.glGetUniformLocation(self.program, name.encode(&quot;utf-8&quot;))<br>
-&#9;&#9;&#9;self._uniform_cache[name] = location<br>
-&#9;&#9;return self._uniform_cache[name]<br>
-<br>
-&#9;def set_uniform_matrix4(self, name: str, matrix):<br>
-&#9;&#9;self._ensure_compiled()<br>
-&#9;&#9;mat = np.asarray(matrix, dtype=np.float32)<br>
-&#9;&#9;gl.glUniformMatrix4fv(self._uniform_location(name), 1, True, mat.ctypes.data_as(ctypes.POINTER(ctypes.c_float)))<br>
-<br>
-&#9;def set_uniform_vec2(self, name: str, vector):<br>
-&#9;&#9;self._ensure_compiled()<br>
-&#9;&#9;vec = np.asarray(vector, dtype=np.float32)<br>
-&#9;&#9;gl.glUniform2f(self._uniform_location(name), float(vec[0]), float(vec[1]))<br>
-<br>
-&#9;def set_uniform_vec3(self, name: str, vector):<br>
-&#9;&#9;self._ensure_compiled()<br>
-&#9;&#9;vec = np.asarray(vector, dtype=np.float32)<br>
-&#9;&#9;gl.glUniform3f(self._uniform_location(name), float(vec[0]), float(vec[1]), float(vec[2]))<br>
-<br>
-&#9;def set_uniform_vec4(self, name: str, vector):<br>
-&#9;&#9;self._ensure_compiled()<br>
-&#9;&#9;vec = np.asarray(vector, dtype=np.float32)<br>
-&#9;&#9;gl.glUniform4f(self._uniform_location(name), float(vec[0]), float(vec[1]), float(vec[2]), float(vec[3]))<br>
-<br>
-&#9;def set_uniform_float(self, name: str, value: float):<br>
-&#9;&#9;self._ensure_compiled()<br>
-&#9;&#9;gl.glUniform1f(self._uniform_location(name), float(value))<br>
-<br>
-&#9;def set_uniform_int(self, name: str, value: int):<br>
-&#9;&#9;self._ensure_compiled()<br>
-&#9;&#9;gl.glUniform1i(self._uniform_location(name), int(value))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;program<br>
 <br>
 <br>
-GL_TYPE_MAP = {<br>
-&#9;VertexAttribType.FLOAT32: gl.GL_FLOAT,<br>
-&#9;VertexAttribType.INT32:   gl.GL_INT,<br>
-&#9;VertexAttribType.UINT32:  gl.GL_UNSIGNED_INT,<br>
+class&nbsp;OpenGLShaderHandle(ShaderHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;vertex_source:&nbsp;str,&nbsp;fragment_source:&nbsp;str,&nbsp;geometry_source:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vertex_source&nbsp;=&nbsp;vertex_source<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.fragment_source&nbsp;=&nbsp;fragment_source<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.geometry_source&nbsp;=&nbsp;geometry_source<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.program:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._uniform_cache:&nbsp;Dict[str,&nbsp;int]&nbsp;=&nbsp;{}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_ensure_compiled(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.program&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shaders&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vert&nbsp;=&nbsp;_compile_shader(self.vertex_source,&nbsp;gl.GL_VERTEX_SHADER)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shaders.append(vert)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.geometry_source:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;geom&nbsp;=&nbsp;_compile_shader(self.geometry_source,&nbsp;gl.GL_GEOMETRY_SHADER)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shaders.append(geom)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;frag&nbsp;=&nbsp;_compile_shader(self.fragment_source,&nbsp;gl.GL_FRAGMENT_SHADER)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shaders.append(frag)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.program&nbsp;=&nbsp;_link_program(shaders)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;use(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_compiled()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glUseProgram(self.program)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;stop(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glUseProgram(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.program&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteProgram(self.program)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.program&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._uniform_cache.clear()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_uniform_location(self,&nbsp;name:&nbsp;str)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;name&nbsp;not&nbsp;in&nbsp;self._uniform_cache:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;location&nbsp;=&nbsp;gl.glGetUniformLocation(self.program,&nbsp;name.encode(&quot;utf-8&quot;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._uniform_cache[name]&nbsp;=&nbsp;location<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._uniform_cache[name]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_matrix4(self,&nbsp;name:&nbsp;str,&nbsp;matrix):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_compiled()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat&nbsp;=&nbsp;np.asarray(matrix,&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glUniformMatrix4fv(self._uniform_location(name),&nbsp;1,&nbsp;True,&nbsp;mat.ctypes.data_as(ctypes.POINTER(ctypes.c_float)))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_vec2(self,&nbsp;name:&nbsp;str,&nbsp;vector):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_compiled()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vec&nbsp;=&nbsp;np.asarray(vector,&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glUniform2f(self._uniform_location(name),&nbsp;float(vec[0]),&nbsp;float(vec[1]))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_vec3(self,&nbsp;name:&nbsp;str,&nbsp;vector):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_compiled()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vec&nbsp;=&nbsp;np.asarray(vector,&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glUniform3f(self._uniform_location(name),&nbsp;float(vec[0]),&nbsp;float(vec[1]),&nbsp;float(vec[2]))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_vec4(self,&nbsp;name:&nbsp;str,&nbsp;vector):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_compiled()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vec&nbsp;=&nbsp;np.asarray(vector,&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glUniform4f(self._uniform_location(name),&nbsp;float(vec[0]),&nbsp;float(vec[1]),&nbsp;float(vec[2]),&nbsp;float(vec[3]))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_float(self,&nbsp;name:&nbsp;str,&nbsp;value:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_compiled()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glUniform1f(self._uniform_location(name),&nbsp;float(value))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_int(self,&nbsp;name:&nbsp;str,&nbsp;value:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ensure_compiled()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glUniform1i(self._uniform_location(name),&nbsp;int(value))<br>
+<br>
+<br>
+GL_TYPE_MAP&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VertexAttribType.FLOAT32:&nbsp;gl.GL_FLOAT,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VertexAttribType.INT32:&nbsp;&nbsp;&nbsp;gl.GL_INT,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VertexAttribType.UINT32:&nbsp;&nbsp;gl.GL_UNSIGNED_INT,<br>
 }<br>
 <br>
-class OpenGLMeshHandle(MeshHandle):<br>
-&#9;def __init__(self, mesh: Mesh):<br>
-&#9;&#9;self._mesh = mesh<br>
-&#9;&#9;if self._mesh.type == &quot;triangles&quot;:<br>
-&#9;&#9;&#9;if self._mesh.vertex_normals is None:<br>
-&#9;&#9;&#9;&#9;self._mesh.compute_vertex_normals()<br>
-&#9;&#9;self._vao: int | None = None<br>
-&#9;&#9;self._vbo: int | None = None<br>
-&#9;&#9;self._ebo: int | None = None<br>
-&#9;&#9;self._index_count = self._mesh.indices.size<br>
-&#9;&#9;self._upload()<br>
-<br>
-&#9;def _upload(self):<br>
-&#9;&#9;buf = self._mesh.interleaved_buffer()<br>
-&#9;&#9;layout = self._mesh.get_vertex_layout()<br>
-<br>
-&#9;&#9;self._vao = gl.glGenVertexArrays(1)<br>
-&#9;&#9;self._vbo = gl.glGenBuffers(1)<br>
-&#9;&#9;self._ebo = gl.glGenBuffers(1)<br>
-<br>
-&#9;&#9;gl.glBindVertexArray(self._vao)<br>
-<br>
-&#9;&#9;gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self._vbo)<br>
-&#9;&#9;gl.glBufferData(gl.GL_ARRAY_BUFFER, buf.nbytes, buf, gl.GL_STATIC_DRAW)<br>
-<br>
-&#9;&#9;gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self._ebo)<br>
-&#9;&#9;gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, self._mesh.indices.nbytes, self._mesh.indices, gl.GL_STATIC_DRAW)<br>
-<br>
-<br>
-&#9;&#9;for index, attr in enumerate(layout.attributes):<br>
-&#9;&#9;&#9;gl_type = GL_TYPE_MAP[attr.vtype]<br>
-&#9;&#9;&#9;gl.glEnableVertexAttribArray(index)<br>
-&#9;&#9;&#9;_gl_vertex_attrib_pointer(<br>
-&#9;&#9;&#9;&#9;index,<br>
-&#9;&#9;&#9;&#9;attr.size,<br>
-&#9;&#9;&#9;&#9;gl_type,<br>
-&#9;&#9;&#9;&#9;gl.GL_FALSE,<br>
-&#9;&#9;&#9;&#9;layout.stride,<br>
-&#9;&#9;&#9;&#9;ctypes.c_void_p(attr.offset),<br>
-&#9;&#9;&#9;)<br>
-<br>
-&#9;&#9;gl.glBindVertexArray(0)<br>
-<br>
-<br>
-&#9;def draw(self):<br>
-&#9;&#9;gl.glEnable(gl.GL_DEPTH_TEST)<br>
-&#9;&#9;gl.glBindVertexArray(self._vao or 0)<br>
-<br>
-&#9;&#9;mode = gl.GL_TRIANGLES<br>
-&#9;&#9;if getattr(self._mesh, &quot;type&quot;, &quot;triangles&quot;) == &quot;lines&quot;:<br>
-&#9;&#9;&#9;mode = gl.GL_LINES<br>
-<br>
-&#9;&#9;gl.glDrawElements(mode, self._index_count, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))<br>
-&#9;&#9;gl.glBindVertexArray(0)<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;if self._vao is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;gl.glDeleteVertexArrays(1, [self._vao])<br>
-&#9;&#9;gl.glDeleteBuffers(1, [self._vbo])<br>
-&#9;&#9;gl.glDeleteBuffers(1, [self._ebo])<br>
-&#9;&#9;self._vao = self._vbo = self._ebo = None<br>
-<br>
-<br>
-class OpenGLPolylineHandle(PolylineHandle):<br>
-&#9;def __init__(self, vertices: np.ndarray, indices: np.ndarray | None, is_strip: bool):<br>
-&#9;&#9;self._vertices = vertices.astype(np.float32)<br>
-&#9;&#9;self._indices = indices.astype(np.uint32) if indices is not None else None<br>
-&#9;&#9;self._is_strip = is_strip<br>
-&#9;&#9;self._vao: int | None = None<br>
-&#9;&#9;self._vbo: int | None = None<br>
-&#9;&#9;self._ebo: int | None = None<br>
-&#9;&#9;self._upload()<br>
-<br>
-&#9;def _upload(self):<br>
-&#9;&#9;vertex_block = self._vertices.ravel()<br>
-&#9;&#9;self._vao = gl.glGenVertexArrays(1)<br>
-&#9;&#9;self._vbo = gl.glGenBuffers(1)<br>
-&#9;&#9;gl.glBindVertexArray(self._vao)<br>
-&#9;&#9;gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self._vbo)<br>
-&#9;&#9;gl.glBufferData(gl.GL_ARRAY_BUFFER, vertex_block.nbytes, vertex_block, gl.GL_STATIC_DRAW)<br>
-&#9;&#9;if self._indices is not None:<br>
-&#9;&#9;&#9;self._ebo = gl.glGenBuffers(1)<br>
-&#9;&#9;&#9;gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self._ebo)<br>
-&#9;&#9;&#9;gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, self._indices.nbytes, self._indices, gl.GL_STATIC_DRAW)<br>
-&#9;&#9;stride = 3 * 4<br>
-&#9;&#9;gl.glEnableVertexAttribArray(0)<br>
-&#9;&#9;_gl_vertex_attrib_pointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(0))<br>
-&#9;&#9;gl.glBindVertexArray(0)<br>
-<br>
-&#9;def draw(self):<br>
-&#9;&#9;mode = gl.GL_LINE_STRIP if self._is_strip else gl.GL_LINES<br>
-&#9;&#9;gl.glBindVertexArray(self._vao or 0)<br>
-&#9;&#9;gl.glEnable(gl.GL_DEPTH_TEST)<br>
-&#9;&#9;if self._indices is not None:<br>
-&#9;&#9;&#9;gl.glDrawElements(mode, self._indices.size, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;gl.glDrawArrays(mode, 0, self._vertices.shape[0])<br>
-&#9;&#9;gl.glBindVertexArray(0)<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;if self._vao is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;gl.glDeleteVertexArrays(1, [self._vao])<br>
-&#9;&#9;gl.glDeleteBuffers(1, [self._vbo])<br>
-&#9;&#9;if self._ebo is not None:<br>
-&#9;&#9;&#9;gl.glDeleteBuffers(1, [self._ebo])<br>
-&#9;&#9;self._vao = self._vbo = self._ebo = None<br>
-<br>
-<br>
-class OpenGLTextureHandle(TextureHandle):<br>
-&#9;def __init__(self, image_data: np.ndarray, size: Tuple[int, int], channels: int = 4, mipmap: bool = True, clamp: bool = False):<br>
-&#9;&#9;self._handle: int | None = None<br>
-&#9;&#9;self._channels = channels<br>
-&#9;&#9;self._data = image_data<br>
-&#9;&#9;self._size = size<br>
-&#9;&#9;self._mipmap = mipmap<br>
-&#9;&#9;self._clamp = clamp<br>
-&#9;&#9;self._upload()<br>
-<br>
-&#9;def _upload(self):<br>
-&#9;&#9;self._handle = gl.glGenTextures(1)<br>
-&#9;&#9;gl.glBindTexture(gl.GL_TEXTURE_2D, self._handle)<br>
-&#9;&#9;internal_format = gl.GL_RGBA if self._channels != 1 else gl.GL_RED<br>
-&#9;&#9;gl_format = internal_format<br>
-&#9;&#9;gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, internal_format, self._size[0], self._size[1], 0, gl_format, gl.GL_UNSIGNED_BYTE, self._data)<br>
-&#9;&#9;if self._mipmap:<br>
-&#9;&#9;&#9;gl.glGenerateMipmap(gl.GL_TEXTURE_2D)<br>
-&#9;&#9;min_filter = gl.GL_LINEAR_MIPMAP_LINEAR if self._mipmap else gl.GL_LINEAR<br>
-&#9;&#9;gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, min_filter)<br>
-&#9;&#9;gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)<br>
-&#9;&#9;wrap_mode = gl.GL_CLAMP_TO_EDGE if self._clamp else gl.GL_REPEAT<br>
-&#9;&#9;gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, wrap_mode)<br>
-&#9;&#9;gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, wrap_mode)<br>
-&#9;&#9;if self._channels == 1:<br>
-&#9;&#9;&#9;swizzle = np.array([gl.GL_RED, gl.GL_RED, gl.GL_RED, gl.GL_RED], dtype=np.int32)<br>
-&#9;&#9;&#9;gl.glTexParameteriv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_SWIZZLE_RGBA, swizzle)<br>
-<br>
-&#9;def bind(self, unit: int = 0):<br>
-&#9;&#9;gl.glActiveTexture(gl.GL_TEXTURE0 + unit)<br>
-&#9;&#9;gl.glBindTexture(gl.GL_TEXTURE_2D, self._handle or 0)<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;if self._handle is not None:<br>
-&#9;&#9;&#9;gl.glDeleteTextures(1, [self._handle])<br>
-&#9;&#9;&#9;self._handle = None<br>
-<br>
-<br>
-class OpenGLGraphicsBackend(GraphicsBackend):<br>
-&#9;def __init__(self):<br>
-&#9;&#9;self._ui_buffers: Dict[int, Tuple[int, int]] = {}<br>
-<br>
-&#9;def ensure_ready(self):<br>
-&#9;&#9;global _OPENGL_INITED<br>
-&#9;&#9;if _OPENGL_INITED:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;gl.glEnable(gl.GL_DEPTH_TEST)<br>
-&#9;&#9;gl.glEnable(gl.GL_CULL_FACE)<br>
-&#9;&#9;gl.glCullFace(gl.GL_BACK)<br>
-&#9;&#9;gl.glFrontFace(gl.GL_CCW)<br>
-&#9;&#9;_OPENGL_INITED = True<br>
-<br>
-&#9;def read_pixel(self, framebuffer, x: int, y: int):<br>
-&#9;&#9;# привязываем FBO, из которого читаем<br>
-&#9;&#9;self.bind_framebuffer(framebuffer)<br>
-&#9;&#9;#print(&quot;Reading pixel at:&quot;, x, y, &quot;from framebuffer:&quot;, framebuffer._fbo)  # --- DEBUG ---<br>
-<br>
-&#9;&#9;data = GL.glReadPixels(x, y, 1, 1, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE)<br>
-&#9;&#9;# data = 4 байта<br>
-&#9;&#9;if isinstance(data, (bytes, bytearray)):<br>
-&#9;&#9;&#9;arr = np.frombuffer(data, dtype=np.uint8)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;arr = np.array(data, dtype=np.uint8)<br>
-<br>
-&#9;&#9;r, g, b, a = arr<br>
-&#9;&#9;return r / 255.0, g / 255.0, b / 255.0, a / 255.0<br>
-<br>
-&#9;def set_viewport(self, x: int, y: int, w: int, h: int):<br>
-&#9;&#9;gl.glViewport(x, y, w, h)<br>
-<br>
-&#9;def enable_scissor(self, x: int, y: int, w: int, h: int):<br>
-&#9;&#9;gl.glEnable(gl.GL_SCISSOR_TEST)<br>
-&#9;&#9;gl.glScissor(x, y, w, h)<br>
-<br>
-&#9;def disable_scissor(self):<br>
-&#9;&#9;gl.glDisable(gl.GL_SCISSOR_TEST)<br>
-<br>
-&#9;def clear_color_depth(self, color):<br>
-&#9;&#9;gl.glClearColor(float(color[0]), float(color[1]), float(color[2]), float(color[3]))<br>
-&#9;&#9;gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)<br>
-<br>
-&#9;def set_depth_test(self, enabled: bool):<br>
-&#9;&#9;if enabled:<br>
-&#9;&#9;&#9;gl.glEnable(gl.GL_DEPTH_TEST)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;gl.glDisable(gl.GL_DEPTH_TEST)<br>
-<br>
-&#9;def set_depth_mask(self, enabled: bool):<br>
-&#9;&#9;gl.glDepthMask(gl.GL_TRUE if enabled else gl.GL_FALSE)<br>
-<br>
-&#9;def set_depth_func(self, func: str):<br>
-&#9;&#9;mapping = {&quot;less&quot;: gl.GL_LESS, &quot;lequal&quot;: gl.GL_LEQUAL}<br>
-&#9;&#9;gl.glDepthFunc(mapping.get(func, gl.GL_LESS))<br>
-<br>
-&#9;def set_cull_face(self, enabled: bool):<br>
-&#9;&#9;if enabled:<br>
-&#9;&#9;&#9;gl.glEnable(gl.GL_CULL_FACE)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;gl.glDisable(gl.GL_CULL_FACE)<br>
-<br>
-&#9;def set_blend(self, enabled: bool):<br>
-&#9;&#9;if enabled:<br>
-&#9;&#9;&#9;gl.glEnable(gl.GL_BLEND)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;gl.glDisable(gl.GL_BLEND)<br>
-<br>
-&#9;def set_blend_func(self, src: str, dst: str):<br>
-&#9;&#9;mapping = {<br>
-&#9;&#9;&#9;&quot;src_alpha&quot;: gl.GL_SRC_ALPHA,<br>
-&#9;&#9;&#9;&quot;one_minus_src_alpha&quot;: gl.GL_ONE_MINUS_SRC_ALPHA,<br>
-&#9;&#9;&#9;&quot;one&quot;: gl.GL_ONE,<br>
-&#9;&#9;&#9;&quot;zero&quot;: gl.GL_ZERO,<br>
-&#9;&#9;}<br>
-&#9;&#9;gl.glBlendFunc(mapping.get(src, gl.GL_SRC_ALPHA), mapping.get(dst, gl.GL_ONE_MINUS_SRC_ALPHA))<br>
-<br>
-&#9;def create_shader(self, vertex_source: str, fragment_source: str, geometry_source: str | None = None) -&gt; ShaderHandle:<br>
-&#9;&#9;return OpenGLShaderHandle(vertex_source, fragment_source, geometry_source)<br>
-<br>
-&#9;def create_mesh(self, mesh: Mesh) -&gt; MeshHandle:<br>
-&#9;&#9;return OpenGLMeshHandle(mesh)<br>
-<br>
-&#9;def create_polyline(self, polyline) -&gt; PolylineHandle:<br>
-&#9;&#9;return OpenGLPolylineHandle(polyline.vertices, polyline.indices, polyline.is_strip)<br>
-<br>
-&#9;def create_texture(self, image_data, size: Tuple[int, int], channels: int = 4, mipmap: bool = True, clamp: bool = False) -&gt; TextureHandle:<br>
-&#9;&#9;return OpenGLTextureHandle(image_data, size, channels=channels, mipmap=mipmap, clamp=clamp)<br>
-<br>
-&#9;def draw_ui_vertices(self, context_key: int, vertices):<br>
-&#9;&#9;vao, vbo = self._ui_buffers.get(context_key, (None, None))<br>
-&#9;&#9;if vao is None:<br>
-&#9;&#9;&#9;vao = gl.glGenVertexArrays(1)<br>
-&#9;&#9;&#9;vbo = gl.glGenBuffers(1)<br>
-&#9;&#9;&#9;self._ui_buffers[context_key] = (vao, vbo)<br>
-&#9;&#9;gl.glBindVertexArray(vao)<br>
-&#9;&#9;gl.glBindBuffer(gl.GL_ARRAY_BUFFER, vbo)<br>
-&#9;&#9;gl.glBufferData(gl.GL_ARRAY_BUFFER, vertices.nbytes, vertices, gl.GL_DYNAMIC_DRAW)<br>
-&#9;&#9;gl.glEnableVertexAttribArray(0)<br>
-&#9;&#9;_gl_vertex_attrib_pointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, 0, ctypes.c_void_p(0))<br>
-&#9;&#9;gl.glDisableVertexAttribArray(1)<br>
-&#9;&#9;gl.glDrawArrays(gl.GL_TRIANGLE_STRIP, 0, 4)<br>
-&#9;&#9;gl.glBindVertexArray(0)<br>
-<br>
-&#9;FS_VERTS = np.array(<br>
-&#9;[<br>
-&#9;&#9;[-1, -1, 0, 0],<br>
-&#9;&#9;[ 1, -1, 1, 0],<br>
-&#9;&#9;[-1,  1, 0, 1],<br>
-&#9;&#9;[ 1,  1, 1, 1],<br>
-&#9;],<br>
-&#9;dtype=np.float32,<br>
-&#9;)<br>
-<br>
-&#9;def draw_ui_textured_quad(self, context_key: int):<br>
-&#9;&#9;vao, vbo = self._ui_buffers.get(context_key, (None, None))<br>
-&#9;&#9;if vao is None:<br>
-&#9;&#9;&#9;vao = gl.glGenVertexArrays(1)<br>
-&#9;&#9;&#9;vbo = gl.glGenBuffers(1)<br>
-&#9;&#9;&#9;self._ui_buffers[context_key] = (vao, vbo)<br>
-&#9;&#9;gl.glBindVertexArray(vao)<br>
-&#9;&#9;gl.glBindBuffer(gl.GL_ARRAY_BUFFER, vbo)<br>
-&#9;&#9;gl.glBufferData(gl.GL_ARRAY_BUFFER, self.FS_VERTS.nbytes, self.FS_VERTS, gl.GL_DYNAMIC_DRAW)<br>
-&#9;&#9;stride = 4 * 4<br>
-&#9;&#9;gl.glEnableVertexAttribArray(0)<br>
-&#9;&#9;_gl_vertex_attrib_pointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(0))<br>
-&#9;&#9;gl.glEnableVertexAttribArray(1)<br>
-&#9;&#9;_gl_vertex_attrib_pointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(8))<br>
-&#9;&#9;gl.glDrawArrays(gl.GL_TRIANGLE_STRIP, 0, 4)<br>
-&#9;&#9;gl.glBindVertexArray(0)<br>
-<br>
-&#9;def set_polygon_mode(self, mode: str):<br>
-&#9;&#9;from OpenGL import GL as gl<br>
-&#9;&#9;if mode == &quot;line&quot;:<br>
-&#9;&#9;&#9;gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)<br>
-<br>
-&#9;def set_cull_face_enabled(self, enabled: bool):<br>
-&#9;&#9;from OpenGL import GL as gl<br>
-&#9;&#9;if enabled:<br>
-&#9;&#9;&#9;gl.glEnable(gl.GL_CULL_FACE)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;gl.glDisable(gl.GL_CULL_FACE)<br>
-<br>
-&#9;def set_depth_test_enabled(self, enabled: bool):<br>
-&#9;&#9;from OpenGL import GL as gl<br>
-&#9;&#9;if enabled:<br>
-&#9;&#9;&#9;gl.glEnable(gl.GL_DEPTH_TEST)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;gl.glDisable(gl.GL_DEPTH_TEST)<br>
-<br>
-&#9;def set_depth_write_enabled(self, enabled: bool):<br>
-&#9;&#9;from OpenGL import GL as gl<br>
-&#9;&#9;gl.glDepthMask(gl.GL_TRUE if enabled else gl.GL_FALSE)<br>
-<br>
-&#9;def create_framebuffer(self, size: Tuple[int, int]) -&gt; FramebufferHandle:<br>
-&#9;&#9;return OpenGLFramebufferHandle(size)<br>
-<br>
-&#9;def bind_framebuffer(self, framebuffer: FramebufferHandle | None):<br>
-&#9;&#9;if framebuffer is None:<br>
-&#9;&#9;&#9;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;assert isinstance(framebuffer, OpenGLFramebufferHandle)<br>
-&#9;&#9;&#9;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, framebuffer._fbo or 0)<br>
-<br>
-class _OpenGLColorTextureHandle(TextureHandle):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Лёгкая обёртка над уже созданной GL-текстурой.<br>
-&#9;Жизненный цикл управляется фреймбуфером, delete() ничего не делает.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;def __init__(self, tex_id: int):<br>
-&#9;&#9;self._tex_id = tex_id<br>
-<br>
-&#9;def bind(self, unit: int = 0):<br>
-&#9;&#9;gl.glActiveTexture(gl.GL_TEXTURE0 + unit)<br>
-&#9;&#9;gl.glBindTexture(gl.GL_TEXTURE_2D, self._tex_id or 0)<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;# Фактическое удаление делает владелец FBO<br>
-&#9;&#9;pass<br>
-<br>
-&#9;def _set_tex_id(self, tex_id: int):<br>
-&#9;&#9;self._tex_id = tex_id<br>
-<br>
-class OpenGLFramebufferHandle(FramebufferHandle):<br>
-&#9;def __init__(self, size: Tuple[int, int]):<br>
-&#9;&#9;self._size = size<br>
-&#9;&#9;self._fbo: int | None = None<br>
-&#9;&#9;self._color_tex: int | None = None<br>
-&#9;&#9;self._depth_rb: int | None = None<br>
-&#9;&#9;self._color_handle = _OpenGLColorTextureHandle(0)<br>
-&#9;&#9;self._create()<br>
-<br>
-&#9;def _create(self):<br>
-&#9;&#9;w, h = self._size<br>
-<br>
-&#9;&#9;# создаём FBO<br>
-&#9;&#9;self._fbo = gl.glGenFramebuffers(1)<br>
-&#9;&#9;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self._fbo)<br>
-<br>
-&#9;&#9;# цветовой attachment (RGBA8)<br>
-&#9;&#9;self._color_tex = gl.glGenTextures(1)<br>
-&#9;&#9;gl.glBindTexture(gl.GL_TEXTURE_2D, self._color_tex)<br>
-&#9;&#9;gl.glTexImage2D(<br>
-&#9;&#9;&#9;gl.GL_TEXTURE_2D, 0, gl.GL_RGBA8,<br>
-&#9;&#9;&#9;w, h, 0,<br>
-&#9;&#9;&#9;gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, None<br>
-&#9;&#9;)<br>
-&#9;&#9;gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)<br>
-&#9;&#9;gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)<br>
-&#9;&#9;gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE)<br>
-&#9;&#9;gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)<br>
-<br>
-&#9;&#9;gl.glFramebufferTexture2D(<br>
-&#9;&#9;&#9;gl.GL_FRAMEBUFFER,<br>
-&#9;&#9;&#9;gl.GL_COLOR_ATTACHMENT0,<br>
-&#9;&#9;&#9;gl.GL_TEXTURE_2D,<br>
-&#9;&#9;&#9;self._color_tex,<br>
-&#9;&#9;&#9;0,<br>
-&#9;&#9;)<br>
-<br>
-&#9;&#9;# depth renderbuffer<br>
-&#9;&#9;self._depth_rb = gl.glGenRenderbuffers(1)<br>
-&#9;&#9;gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self._depth_rb)<br>
-&#9;&#9;gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, w, h)<br>
-&#9;&#9;gl.glFramebufferRenderbuffer(<br>
-&#9;&#9;&#9;gl.GL_FRAMEBUFFER,<br>
-&#9;&#9;&#9;gl.GL_DEPTH_ATTACHMENT,<br>
-&#9;&#9;&#9;gl.GL_RENDERBUFFER,<br>
-&#9;&#9;&#9;self._depth_rb,<br>
-&#9;&#9;)<br>
-<br>
-&#9;&#9;status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)<br>
-&#9;&#9;if status != gl.GL_FRAMEBUFFER_COMPLETE:<br>
-&#9;&#9;&#9;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)<br>
-&#9;&#9;&#9;raise RuntimeError(f&quot;Framebuffer is incomplete: 0x{status:X}&quot;)<br>
-<br>
-&#9;&#9;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)<br>
-<br>
-&#9;&#9;# обновляем handle текстуры<br>
-&#9;&#9;self._color_handle._set_tex_id(self._color_tex)<br>
-<br>
-&#9;def resize(self, size: Tuple[int, int]):<br>
-&#9;&#9;if size == self._size and self._fbo is not None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;self.delete()<br>
-&#9;&#9;self._size = size<br>
-&#9;&#9;self._create()<br>
-<br>
-&#9;def color_texture(self) -&gt; TextureHandle:<br>
-&#9;&#9;return self._color_handle<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;if self._fbo is not None:<br>
-&#9;&#9;&#9;gl.glDeleteFramebuffers(1, [self._fbo])<br>
-&#9;&#9;&#9;self._fbo = None<br>
-&#9;&#9;if self._color_tex is not None:<br>
-&#9;&#9;&#9;gl.glDeleteTextures(1, [self._color_tex])<br>
-&#9;&#9;&#9;self._color_tex = None<br>
-&#9;&#9;if self._depth_rb is not None:<br>
-&#9;&#9;&#9;gl.glDeleteRenderbuffers(1, [self._depth_rb])<br>
-&#9;&#9;&#9;self._depth_rb = None<br>
+class&nbsp;OpenGLMeshHandle(MeshHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;mesh:&nbsp;Mesh):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mesh&nbsp;=&nbsp;mesh<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._mesh.type&nbsp;==&nbsp;&quot;triangles&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._mesh.vertex_normals&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mesh.compute_vertex_normals()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vao:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vbo:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ebo:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._index_count&nbsp;=&nbsp;self._mesh.indices.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._upload()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_upload(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buf&nbsp;=&nbsp;self._mesh.interleaved_buffer()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;self._mesh.get_vertex_layout()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vao&nbsp;=&nbsp;gl.glGenVertexArrays(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vbo&nbsp;=&nbsp;gl.glGenBuffers(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ebo&nbsp;=&nbsp;gl.glGenBuffers(1)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(self._vao)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindBuffer(gl.GL_ARRAY_BUFFER,&nbsp;self._vbo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBufferData(gl.GL_ARRAY_BUFFER,&nbsp;buf.nbytes,&nbsp;buf,&nbsp;gl.GL_STATIC_DRAW)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER,&nbsp;self._ebo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER,&nbsp;self._mesh.indices.nbytes,&nbsp;self._mesh.indices,&nbsp;gl.GL_STATIC_DRAW)<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;index,&nbsp;attr&nbsp;in&nbsp;enumerate(layout.attributes):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_type&nbsp;=&nbsp;GL_TYPE_MAP[attr.vtype]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnableVertexAttribArray(index)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_gl_vertex_attrib_pointer(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;attr.size,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_type,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_FALSE,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.stride,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctypes.c_void_p(attr.offset),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(0)<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_DEPTH_TEST)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(self._vao&nbsp;or&nbsp;0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mode&nbsp;=&nbsp;gl.GL_TRIANGLES<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;getattr(self._mesh,&nbsp;&quot;type&quot;,&nbsp;&quot;triangles&quot;)&nbsp;==&nbsp;&quot;lines&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mode&nbsp;=&nbsp;gl.GL_LINES<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDrawElements(mode,&nbsp;self._index_count,&nbsp;gl.GL_UNSIGNED_INT,&nbsp;ctypes.c_void_p(0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._vao&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteVertexArrays(1,&nbsp;[self._vao])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteBuffers(1,&nbsp;[self._vbo])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteBuffers(1,&nbsp;[self._ebo])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vao&nbsp;=&nbsp;self._vbo&nbsp;=&nbsp;self._ebo&nbsp;=&nbsp;None<br>
+<br>
+<br>
+class&nbsp;OpenGLPolylineHandle(PolylineHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;vertices:&nbsp;np.ndarray,&nbsp;indices:&nbsp;np.ndarray&nbsp;|&nbsp;None,&nbsp;is_strip:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vertices&nbsp;=&nbsp;vertices.astype(np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._indices&nbsp;=&nbsp;indices.astype(np.uint32)&nbsp;if&nbsp;indices&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._is_strip&nbsp;=&nbsp;is_strip<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vao:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vbo:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ebo:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._upload()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_upload(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex_block&nbsp;=&nbsp;self._vertices.ravel()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vao&nbsp;=&nbsp;gl.glGenVertexArrays(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vbo&nbsp;=&nbsp;gl.glGenBuffers(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(self._vao)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindBuffer(gl.GL_ARRAY_BUFFER,&nbsp;self._vbo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBufferData(gl.GL_ARRAY_BUFFER,&nbsp;vertex_block.nbytes,&nbsp;vertex_block,&nbsp;gl.GL_STATIC_DRAW)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._indices&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ebo&nbsp;=&nbsp;gl.glGenBuffers(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER,&nbsp;self._ebo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER,&nbsp;self._indices.nbytes,&nbsp;self._indices,&nbsp;gl.GL_STATIC_DRAW)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stride&nbsp;=&nbsp;3&nbsp;*&nbsp;4<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnableVertexAttribArray(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_gl_vertex_attrib_pointer(0,&nbsp;3,&nbsp;gl.GL_FLOAT,&nbsp;gl.GL_FALSE,&nbsp;stride,&nbsp;ctypes.c_void_p(0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mode&nbsp;=&nbsp;gl.GL_LINE_STRIP&nbsp;if&nbsp;self._is_strip&nbsp;else&nbsp;gl.GL_LINES<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(self._vao&nbsp;or&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_DEPTH_TEST)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._indices&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDrawElements(mode,&nbsp;self._indices.size,&nbsp;gl.GL_UNSIGNED_INT,&nbsp;ctypes.c_void_p(0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDrawArrays(mode,&nbsp;0,&nbsp;self._vertices.shape[0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._vao&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteVertexArrays(1,&nbsp;[self._vao])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteBuffers(1,&nbsp;[self._vbo])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._ebo&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteBuffers(1,&nbsp;[self._ebo])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vao&nbsp;=&nbsp;self._vbo&nbsp;=&nbsp;self._ebo&nbsp;=&nbsp;None<br>
+<br>
+<br>
+class&nbsp;OpenGLTextureHandle(TextureHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;image_data:&nbsp;np.ndarray,&nbsp;size:&nbsp;Tuple[int,&nbsp;int],&nbsp;channels:&nbsp;int&nbsp;=&nbsp;4,&nbsp;mipmap:&nbsp;bool&nbsp;=&nbsp;True,&nbsp;clamp:&nbsp;bool&nbsp;=&nbsp;False):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._channels&nbsp;=&nbsp;channels<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._data&nbsp;=&nbsp;image_data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._size&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mipmap&nbsp;=&nbsp;mipmap<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._clamp&nbsp;=&nbsp;clamp<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._upload()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_upload(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle&nbsp;=&nbsp;gl.glGenTextures(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindTexture(gl.GL_TEXTURE_2D,&nbsp;self._handle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal_format&nbsp;=&nbsp;gl.GL_RGBA&nbsp;if&nbsp;self._channels&nbsp;!=&nbsp;1&nbsp;else&nbsp;gl.GL_RED<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_format&nbsp;=&nbsp;internal_format<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexImage2D(gl.GL_TEXTURE_2D,&nbsp;0,&nbsp;internal_format,&nbsp;self._size[0],&nbsp;self._size[1],&nbsp;0,&nbsp;gl_format,&nbsp;gl.GL_UNSIGNED_BYTE,&nbsp;self._data)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._mipmap:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glGenerateMipmap(gl.GL_TEXTURE_2D)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_filter&nbsp;=&nbsp;gl.GL_LINEAR_MIPMAP_LINEAR&nbsp;if&nbsp;self._mipmap&nbsp;else&nbsp;gl.GL_LINEAR<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexParameteri(gl.GL_TEXTURE_2D,&nbsp;gl.GL_TEXTURE_MIN_FILTER,&nbsp;min_filter)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexParameteri(gl.GL_TEXTURE_2D,&nbsp;gl.GL_TEXTURE_MAG_FILTER,&nbsp;gl.GL_LINEAR)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrap_mode&nbsp;=&nbsp;gl.GL_CLAMP_TO_EDGE&nbsp;if&nbsp;self._clamp&nbsp;else&nbsp;gl.GL_REPEAT<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexParameteri(gl.GL_TEXTURE_2D,&nbsp;gl.GL_TEXTURE_WRAP_S,&nbsp;wrap_mode)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexParameteri(gl.GL_TEXTURE_2D,&nbsp;gl.GL_TEXTURE_WRAP_T,&nbsp;wrap_mode)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._channels&nbsp;==&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;swizzle&nbsp;=&nbsp;np.array([gl.GL_RED,&nbsp;gl.GL_RED,&nbsp;gl.GL_RED,&nbsp;gl.GL_RED],&nbsp;dtype=np.int32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexParameteriv(gl.GL_TEXTURE_2D,&nbsp;gl.GL_TEXTURE_SWIZZLE_RGBA,&nbsp;swizzle)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind(self,&nbsp;unit:&nbsp;int&nbsp;=&nbsp;0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glActiveTexture(gl.GL_TEXTURE0&nbsp;+&nbsp;unit)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindTexture(gl.GL_TEXTURE_2D,&nbsp;self._handle&nbsp;or&nbsp;0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._handle&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteTextures(1,&nbsp;[self._handle])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle&nbsp;=&nbsp;None<br>
+<br>
+<br>
+class&nbsp;OpenGLGraphicsBackend(GraphicsBackend):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ui_buffers:&nbsp;Dict[int,&nbsp;Tuple[int,&nbsp;int]]&nbsp;=&nbsp;{}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;ensure_ready(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;global&nbsp;_OPENGL_INITED<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;_OPENGL_INITED:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_DEPTH_TEST)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_CULL_FACE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glCullFace(gl.GL_BACK)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glFrontFace(gl.GL_CCW)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_OPENGL_INITED&nbsp;=&nbsp;True<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;read_pixel(self,&nbsp;framebuffer,&nbsp;x:&nbsp;int,&nbsp;y:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;привязываем&nbsp;FBO,&nbsp;из&nbsp;которого&nbsp;читаем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bind_framebuffer(framebuffer)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#print(&quot;Reading&nbsp;pixel&nbsp;at:&quot;,&nbsp;x,&nbsp;y,&nbsp;&quot;from&nbsp;framebuffer:&quot;,&nbsp;framebuffer._fbo)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;data&nbsp;=&nbsp;GL.glReadPixels(x,&nbsp;y,&nbsp;1,&nbsp;1,&nbsp;GL.GL_RGBA,&nbsp;GL.GL_UNSIGNED_BYTE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;data&nbsp;=&nbsp;4&nbsp;байта<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(data,&nbsp;(bytes,&nbsp;bytearray)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr&nbsp;=&nbsp;np.frombuffer(data,&nbsp;dtype=np.uint8)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr&nbsp;=&nbsp;np.array(data,&nbsp;dtype=np.uint8)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r,&nbsp;g,&nbsp;b,&nbsp;a&nbsp;=&nbsp;arr<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;r&nbsp;/&nbsp;255.0,&nbsp;g&nbsp;/&nbsp;255.0,&nbsp;b&nbsp;/&nbsp;255.0,&nbsp;a&nbsp;/&nbsp;255.0<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_viewport(self,&nbsp;x:&nbsp;int,&nbsp;y:&nbsp;int,&nbsp;w:&nbsp;int,&nbsp;h:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glViewport(x,&nbsp;y,&nbsp;w,&nbsp;h)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;enable_scissor(self,&nbsp;x:&nbsp;int,&nbsp;y:&nbsp;int,&nbsp;w:&nbsp;int,&nbsp;h:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_SCISSOR_TEST)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glScissor(x,&nbsp;y,&nbsp;w,&nbsp;h)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;disable_scissor(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDisable(gl.GL_SCISSOR_TEST)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;clear_color_depth(self,&nbsp;color):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClearColor(float(color[0]),&nbsp;float(color[1]),&nbsp;float(color[2]),&nbsp;float(color[3]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClear(gl.GL_COLOR_BUFFER_BIT&nbsp;|&nbsp;gl.GL_DEPTH_BUFFER_BIT)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_test(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;enabled:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_DEPTH_TEST)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDisable(gl.GL_DEPTH_TEST)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_mask(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDepthMask(gl.GL_TRUE&nbsp;if&nbsp;enabled&nbsp;else&nbsp;gl.GL_FALSE)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_func(self,&nbsp;func:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mapping&nbsp;=&nbsp;{&quot;less&quot;:&nbsp;gl.GL_LESS,&nbsp;&quot;lequal&quot;:&nbsp;gl.GL_LEQUAL}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDepthFunc(mapping.get(func,&nbsp;gl.GL_LESS))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_cull_face(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;enabled:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_CULL_FACE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDisable(gl.GL_CULL_FACE)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_blend(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;enabled:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_BLEND)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDisable(gl.GL_BLEND)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_blend_func(self,&nbsp;src:&nbsp;str,&nbsp;dst:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mapping&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;src_alpha&quot;:&nbsp;gl.GL_SRC_ALPHA,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;one_minus_src_alpha&quot;:&nbsp;gl.GL_ONE_MINUS_SRC_ALPHA,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;one&quot;:&nbsp;gl.GL_ONE,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;zero&quot;:&nbsp;gl.GL_ZERO,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBlendFunc(mapping.get(src,&nbsp;gl.GL_SRC_ALPHA),&nbsp;mapping.get(dst,&nbsp;gl.GL_ONE_MINUS_SRC_ALPHA))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_shader(self,&nbsp;vertex_source:&nbsp;str,&nbsp;fragment_source:&nbsp;str,&nbsp;geometry_source:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None)&nbsp;-&gt;&nbsp;ShaderHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;OpenGLShaderHandle(vertex_source,&nbsp;fragment_source,&nbsp;geometry_source)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_mesh(self,&nbsp;mesh:&nbsp;Mesh)&nbsp;-&gt;&nbsp;MeshHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;OpenGLMeshHandle(mesh)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_polyline(self,&nbsp;polyline)&nbsp;-&gt;&nbsp;PolylineHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;OpenGLPolylineHandle(polyline.vertices,&nbsp;polyline.indices,&nbsp;polyline.is_strip)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_texture(self,&nbsp;image_data,&nbsp;size:&nbsp;Tuple[int,&nbsp;int],&nbsp;channels:&nbsp;int&nbsp;=&nbsp;4,&nbsp;mipmap:&nbsp;bool&nbsp;=&nbsp;True,&nbsp;clamp:&nbsp;bool&nbsp;=&nbsp;False)&nbsp;-&gt;&nbsp;TextureHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;OpenGLTextureHandle(image_data,&nbsp;size,&nbsp;channels=channels,&nbsp;mipmap=mipmap,&nbsp;clamp=clamp)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw_ui_vertices(self,&nbsp;context_key:&nbsp;int,&nbsp;vertices):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vao,&nbsp;vbo&nbsp;=&nbsp;self._ui_buffers.get(context_key,&nbsp;(None,&nbsp;None))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vao&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vao&nbsp;=&nbsp;gl.glGenVertexArrays(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vbo&nbsp;=&nbsp;gl.glGenBuffers(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ui_buffers[context_key]&nbsp;=&nbsp;(vao,&nbsp;vbo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(vao)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindBuffer(gl.GL_ARRAY_BUFFER,&nbsp;vbo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBufferData(gl.GL_ARRAY_BUFFER,&nbsp;vertices.nbytes,&nbsp;vertices,&nbsp;gl.GL_DYNAMIC_DRAW)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnableVertexAttribArray(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_gl_vertex_attrib_pointer(0,&nbsp;2,&nbsp;gl.GL_FLOAT,&nbsp;gl.GL_FALSE,&nbsp;0,&nbsp;ctypes.c_void_p(0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDisableVertexAttribArray(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDrawArrays(gl.GL_TRIANGLE_STRIP,&nbsp;0,&nbsp;4)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FS_VERTS&nbsp;=&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-1,&nbsp;-1,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;1,&nbsp;-1,&nbsp;1,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-1,&nbsp;&nbsp;1,&nbsp;0,&nbsp;1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;1,&nbsp;&nbsp;1,&nbsp;1,&nbsp;1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dtype=np.float32,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw_ui_textured_quad(self,&nbsp;context_key:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vao,&nbsp;vbo&nbsp;=&nbsp;self._ui_buffers.get(context_key,&nbsp;(None,&nbsp;None))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vao&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vao&nbsp;=&nbsp;gl.glGenVertexArrays(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vbo&nbsp;=&nbsp;gl.glGenBuffers(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ui_buffers[context_key]&nbsp;=&nbsp;(vao,&nbsp;vbo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(vao)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindBuffer(gl.GL_ARRAY_BUFFER,&nbsp;vbo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBufferData(gl.GL_ARRAY_BUFFER,&nbsp;self.FS_VERTS.nbytes,&nbsp;self.FS_VERTS,&nbsp;gl.GL_DYNAMIC_DRAW)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stride&nbsp;=&nbsp;4&nbsp;*&nbsp;4<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnableVertexAttribArray(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_gl_vertex_attrib_pointer(0,&nbsp;2,&nbsp;gl.GL_FLOAT,&nbsp;gl.GL_FALSE,&nbsp;stride,&nbsp;ctypes.c_void_p(0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnableVertexAttribArray(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_gl_vertex_attrib_pointer(1,&nbsp;2,&nbsp;gl.GL_FLOAT,&nbsp;gl.GL_FALSE,&nbsp;stride,&nbsp;ctypes.c_void_p(8))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDrawArrays(gl.GL_TRIANGLE_STRIP,&nbsp;0,&nbsp;4)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_polygon_mode(self,&nbsp;mode:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;OpenGL&nbsp;import&nbsp;GL&nbsp;as&nbsp;gl<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mode&nbsp;==&nbsp;&quot;line&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glPolygonMode(gl.GL_FRONT_AND_BACK,&nbsp;gl.GL_LINE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glPolygonMode(gl.GL_FRONT_AND_BACK,&nbsp;gl.GL_FILL)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_cull_face_enabled(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;OpenGL&nbsp;import&nbsp;GL&nbsp;as&nbsp;gl<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;enabled:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_CULL_FACE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDisable(gl.GL_CULL_FACE)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_test_enabled(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;OpenGL&nbsp;import&nbsp;GL&nbsp;as&nbsp;gl<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;enabled:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_DEPTH_TEST)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDisable(gl.GL_DEPTH_TEST)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_write_enabled(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;OpenGL&nbsp;import&nbsp;GL&nbsp;as&nbsp;gl<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDepthMask(gl.GL_TRUE&nbsp;if&nbsp;enabled&nbsp;else&nbsp;gl.GL_FALSE)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_framebuffer(self,&nbsp;size:&nbsp;Tuple[int,&nbsp;int])&nbsp;-&gt;&nbsp;FramebufferHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;OpenGLFramebufferHandle(size)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind_framebuffer(self,&nbsp;framebuffer:&nbsp;FramebufferHandle&nbsp;|&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;framebuffer&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert&nbsp;isinstance(framebuffer,&nbsp;OpenGLFramebufferHandle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER,&nbsp;framebuffer._fbo&nbsp;or&nbsp;0)<br>
+<br>
+class&nbsp;_OpenGLColorTextureHandle(TextureHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Лёгкая&nbsp;обёртка&nbsp;над&nbsp;уже&nbsp;созданной&nbsp;GL-текстурой.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Жизненный&nbsp;цикл&nbsp;управляется&nbsp;фреймбуфером,&nbsp;delete()&nbsp;ничего&nbsp;не&nbsp;делает.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;tex_id:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._tex_id&nbsp;=&nbsp;tex_id<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind(self,&nbsp;unit:&nbsp;int&nbsp;=&nbsp;0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glActiveTexture(gl.GL_TEXTURE0&nbsp;+&nbsp;unit)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindTexture(gl.GL_TEXTURE_2D,&nbsp;self._tex_id&nbsp;or&nbsp;0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Фактическое&nbsp;удаление&nbsp;делает&nbsp;владелец&nbsp;FBO<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_set_tex_id(self,&nbsp;tex_id:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._tex_id&nbsp;=&nbsp;tex_id<br>
+<br>
+class&nbsp;OpenGLFramebufferHandle(FramebufferHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;size:&nbsp;Tuple[int,&nbsp;int]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._size&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._fbo:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._color_tex:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._depth_rb:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._color_handle&nbsp;=&nbsp;_OpenGLColorTextureHandle(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._create()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_create(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;self._size<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;создаём&nbsp;FBO<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._fbo&nbsp;=&nbsp;gl.glGenFramebuffers(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER,&nbsp;self._fbo)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;цветовой&nbsp;attachment&nbsp;(RGBA8)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._color_tex&nbsp;=&nbsp;gl.glGenTextures(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindTexture(gl.GL_TEXTURE_2D,&nbsp;self._color_tex)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexImage2D(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_TEXTURE_2D,&nbsp;0,&nbsp;gl.GL_RGBA8,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h,&nbsp;0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_RGBA,&nbsp;gl.GL_UNSIGNED_BYTE,&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexParameteri(gl.GL_TEXTURE_2D,&nbsp;gl.GL_TEXTURE_MIN_FILTER,&nbsp;gl.GL_LINEAR)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexParameteri(gl.GL_TEXTURE_2D,&nbsp;gl.GL_TEXTURE_MAG_FILTER,&nbsp;gl.GL_LINEAR)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexParameteri(gl.GL_TEXTURE_2D,&nbsp;gl.GL_TEXTURE_WRAP_S,&nbsp;gl.GL_CLAMP_TO_EDGE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glTexParameteri(gl.GL_TEXTURE_2D,&nbsp;gl.GL_TEXTURE_WRAP_T,&nbsp;gl.GL_CLAMP_TO_EDGE)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glFramebufferTexture2D(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_FRAMEBUFFER,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_COLOR_ATTACHMENT0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_TEXTURE_2D,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._color_tex,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;depth&nbsp;renderbuffer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._depth_rb&nbsp;=&nbsp;gl.glGenRenderbuffers(1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindRenderbuffer(gl.GL_RENDERBUFFER,&nbsp;self._depth_rb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glRenderbufferStorage(gl.GL_RENDERBUFFER,&nbsp;gl.GL_DEPTH_COMPONENT24,&nbsp;w,&nbsp;h)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glFramebufferRenderbuffer(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_FRAMEBUFFER,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_DEPTH_ATTACHMENT,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_RENDERBUFFER,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._depth_rb,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;status&nbsp;=&nbsp;gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;status&nbsp;!=&nbsp;gl.GL_FRAMEBUFFER_COMPLETE:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(f&quot;Framebuffer&nbsp;is&nbsp;incomplete:&nbsp;0x{status:X}&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindFramebuffer(gl.GL_FRAMEBUFFER,&nbsp;0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;обновляем&nbsp;handle&nbsp;текстуры<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._color_handle._set_tex_id(self._color_tex)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;resize(self,&nbsp;size:&nbsp;Tuple[int,&nbsp;int]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;size&nbsp;==&nbsp;self._size&nbsp;and&nbsp;self._fbo&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.delete()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._size&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._create()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;color_texture(self)&nbsp;-&gt;&nbsp;TextureHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._color_handle<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._fbo&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteFramebuffers(1,&nbsp;[self._fbo])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._fbo&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._color_tex&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteTextures(1,&nbsp;[self._color_tex])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._color_tex&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._depth_rb&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDeleteRenderbuffers(1,&nbsp;[self._depth_rb])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._depth_rb&nbsp;=&nbsp;None<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

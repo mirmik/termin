@@ -6,117 +6,117 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import sys<br>
-from PyQt5.QtWidgets import QApplication<br>
-from PyQt5.QtGui import QPalette, QColor<br>
+import&nbsp;sys<br>
+from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;QApplication<br>
+from&nbsp;PyQt5.QtGui&nbsp;import&nbsp;QPalette,&nbsp;QColor<br>
 <br>
-from termin.visualization.backends import QtWindowBackend, OpenGLGraphicsBackend, set_default_graphics_backend, set_default_window_backend<br>
-from termin.visualization.world import VisualizationWorld<br>
+from&nbsp;termin.visualization.backends&nbsp;import&nbsp;QtWindowBackend,&nbsp;OpenGLGraphicsBackend,&nbsp;set_default_graphics_backend,&nbsp;set_default_window_backend<br>
+from&nbsp;termin.visualization.world&nbsp;import&nbsp;VisualizationWorld<br>
 <br>
-from editor_window import EditorWindow<br>
-<br>
-<br>
+from&nbsp;editor_window&nbsp;import&nbsp;EditorWindow<br>
 <br>
 <br>
-from termin.mesh.mesh import CubeMesh, CylinderMesh, Mesh3<br>
-from termin.visualization.entity import Entity<br>
-from termin.visualization.components import MeshRenderer<br>
-from termin.visualization.world import VisualizationWorld<br>
-from termin.visualization.mesh import MeshDrawable<br>
-from termin.visualization.material import Material<br>
-from termin.visualization.scene import Scene<br>
-import numpy as np<br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
-from termin.visualization.camera import PerspectiveCameraComponent, OrbitCameraController<br>
-<br>
-def build_scene(world):<br>
-<br>
-&#9;cube_mesh = CubeMesh()<br>
-&#9;cyl_mesh = CylinderMesh(radius=0.5, height=2.0)<br>
-&#9;drawable = MeshDrawable(cube_mesh)<br>
-&#9;drawable_cyl = MeshDrawable(cyl_mesh)<br>
-&#9;red_material = Material(color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))<br>
-&#9;blue_material = Material(color=np.array([0.3, 0.3, 0.8, 1.0], dtype=np.float32))<br>
-&#9;green_material = Material(color=np.array([0.3, 0.8, 0.3, 1.0], dtype=np.float32))<br>
-<br>
-&#9;scene = Scene()<br>
 <br>
 <br>
-&#9;entity_cyl = Entity(pose=Pose3.identity(), name=&quot;cylinder&quot;)<br>
-&#9;entity_cyl.add_component(MeshRenderer(drawable_cyl, green_material))<br>
-&#9;entity_cyl.transform.relocate(Pose3(lin=np.array([-2.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))<br>
-&#9;scene.add(entity_cyl)<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;CubeMesh,&nbsp;CylinderMesh,&nbsp;Mesh3<br>
+from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Entity<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.world&nbsp;import&nbsp;VisualizationWorld<br>
+from&nbsp;termin.visualization.mesh&nbsp;import&nbsp;MeshDrawable<br>
+from&nbsp;termin.visualization.material&nbsp;import&nbsp;Material<br>
+from&nbsp;termin.visualization.scene&nbsp;import&nbsp;Scene<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.camera&nbsp;import&nbsp;PerspectiveCameraComponent,&nbsp;OrbitCameraController<br>
 <br>
-&#9;entity = Entity(pose=Pose3.identity(), name=&quot;cube1&quot;)<br>
-&#9;entity.add_component(MeshRenderer(drawable, red_material))<br>
-&#9;scene.add(entity)<br>
+def&nbsp;build_scene(world):<br>
 <br>
-&#9;entity2 = Entity(pose=Pose3.identity(), name=&quot;cube2&quot;)<br>
-&#9;entity2.add_component(MeshRenderer(drawable, blue_material))<br>
-&#9;entity2.transform.relocate(Pose3(lin=np.array([3.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))<br>
-&#9;scene.add(entity2)<br>
-<br>
-<br>
-&#9;skybox = SkyBoxEntity()<br>
-&#9;scene.add(skybox)<br>
-<br>
-&#9;world.add_scene(scene)<br>
-<br>
-&#9;return scene<br>
-<br>
-<br>
-def apply_dark_palette(app: QApplication):<br>
-&#9;app.setStyle(&quot;Fusion&quot;)  # более аккуратный стиль, чем дефолтный<br>
-<br>
-&#9;palette = QPalette()<br>
-<br>
-&#9;# Базовые цвета<br>
-&#9;bg      = QColor(30, 30, 30)<br>
-&#9;window  = QColor(37, 37, 38)<br>
-&#9;base    = QColor(45, 45, 48)<br>
-&#9;text    = QColor(220, 220, 220)<br>
-&#9;disabled_text = QColor(128, 128, 128)<br>
-&#9;highlight = QColor(0, 120, 215)<br>
-<br>
-&#9;palette.setColor(QPalette.Window, window)<br>
-&#9;palette.setColor(QPalette.WindowText, text)<br>
-&#9;palette.setColor(QPalette.Base, base)<br>
-&#9;palette.setColor(QPalette.AlternateBase, bg)<br>
-&#9;palette.setColor(QPalette.ToolTipBase, base)<br>
-&#9;palette.setColor(QPalette.ToolTipText, text)<br>
-&#9;palette.setColor(QPalette.Text, text)<br>
-&#9;palette.setColor(QPalette.Button, window)<br>
-&#9;palette.setColor(QPalette.ButtonText, text)<br>
-&#9;palette.setColor(QPalette.BrightText, QColor(255, 0, 0))<br>
-<br>
-&#9;palette.setColor(QPalette.Highlight, highlight)<br>
-&#9;palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))<br>
-<br>
-&#9;# Отключённые элементы<br>
-&#9;palette.setColor(QPalette.Disabled, QPalette.Text, disabled_text)<br>
-&#9;palette.setColor(QPalette.Disabled, QPalette.ButtonText, disabled_text)<br>
-&#9;palette.setColor(QPalette.Disabled, QPalette.WindowText, disabled_text)<br>
-<br>
-&#9;app.setPalette(palette)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube_mesh&nbsp;=&nbsp;CubeMesh()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cyl_mesh&nbsp;=&nbsp;CylinderMesh(radius=0.5,&nbsp;height=2.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;drawable&nbsp;=&nbsp;MeshDrawable(cube_mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;drawable_cyl&nbsp;=&nbsp;MeshDrawable(cyl_mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;red_material&nbsp;=&nbsp;Material(color=np.array([0.8,&nbsp;0.3,&nbsp;0.3,&nbsp;1.0],&nbsp;dtype=np.float32))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;blue_material&nbsp;=&nbsp;Material(color=np.array([0.3,&nbsp;0.3,&nbsp;0.8,&nbsp;1.0],&nbsp;dtype=np.float32))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;green_material&nbsp;=&nbsp;Material(color=np.array([0.3,&nbsp;0.8,&nbsp;0.3,&nbsp;1.0],&nbsp;dtype=np.float32))<br>
+&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
 <br>
 <br>
-def run_editor():<br>
-&#9;set_default_graphics_backend(OpenGLGraphicsBackend())<br>
-&#9;set_default_window_backend(QtWindowBackend())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity_cyl&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;cylinder&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity_cyl.add_component(MeshRenderer(drawable_cyl,&nbsp;green_material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity_cyl.transform.relocate(Pose3(lin=np.array([-2.0,&nbsp;0.0,&nbsp;0.0]),&nbsp;ang=np.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0])))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(entity_cyl)<br>
 <br>
-&#9;world = VisualizationWorld()<br>
-&#9;scene = build_scene(world)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;cube1&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity.add_component(MeshRenderer(drawable,&nbsp;red_material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(entity)<br>
 <br>
-&#9;app = QApplication(sys.argv)<br>
-&#9;apply_dark_palette(app)<br>
-&#9;win = EditorWindow(world, scene)<br>
-&#9;win.show()<br>
-&#9;app.exec_()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity2&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;cube2&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity2.add_component(MeshRenderer(drawable,&nbsp;blue_material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entity2.transform.relocate(Pose3(lin=np.array([3.0,&nbsp;0.0,&nbsp;0.0]),&nbsp;ang=np.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0])))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(entity2)<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;run_editor()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;skybox&nbsp;=&nbsp;SkyBoxEntity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(skybox)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene<br>
+<br>
+<br>
+def&nbsp;apply_dark_palette(app:&nbsp;QApplication):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;app.setStyle(&quot;Fusion&quot;)&nbsp;&nbsp;#&nbsp;более&nbsp;аккуратный&nbsp;стиль,&nbsp;чем&nbsp;дефолтный<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette&nbsp;=&nbsp;QPalette()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Базовые&nbsp;цвета<br>
+&nbsp;&nbsp;&nbsp;&nbsp;bg&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;QColor(30,&nbsp;30,&nbsp;30)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;&nbsp;=&nbsp;QColor(37,&nbsp;37,&nbsp;38)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;base&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;QColor(45,&nbsp;45,&nbsp;48)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;text&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;QColor(220,&nbsp;220,&nbsp;220)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;disabled_text&nbsp;=&nbsp;QColor(128,&nbsp;128,&nbsp;128)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;highlight&nbsp;=&nbsp;QColor(0,&nbsp;120,&nbsp;215)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.Window,&nbsp;window)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.WindowText,&nbsp;text)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.Base,&nbsp;base)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.AlternateBase,&nbsp;bg)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.ToolTipBase,&nbsp;base)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.ToolTipText,&nbsp;text)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.Text,&nbsp;text)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.Button,&nbsp;window)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.ButtonText,&nbsp;text)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.BrightText,&nbsp;QColor(255,&nbsp;0,&nbsp;0))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.Highlight,&nbsp;highlight)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.HighlightedText,&nbsp;QColor(255,&nbsp;255,&nbsp;255))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Отключённые&nbsp;элементы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.Disabled,&nbsp;QPalette.Text,&nbsp;disabled_text)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.Disabled,&nbsp;QPalette.ButtonText,&nbsp;disabled_text)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;palette.setColor(QPalette.Disabled,&nbsp;QPalette.WindowText,&nbsp;disabled_text)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;app.setPalette(palette)<br>
+<br>
+<br>
+def&nbsp;run_editor():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;set_default_graphics_backend(OpenGLGraphicsBackend())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;set_default_window_backend(QtWindowBackend())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;build_scene(world)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;app&nbsp;=&nbsp;QApplication(sys.argv)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;apply_dark_palette(app)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;win&nbsp;=&nbsp;EditorWindow(world,&nbsp;scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;win.show()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;app.exec_()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;run_editor()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

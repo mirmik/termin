@@ -7,65 +7,65 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 &quot;&quot;&quot;<br>
-Visualization package providing a minimal rendering stack with pluggable backends.<br>
+Visualization&nbsp;package&nbsp;providing&nbsp;a&nbsp;minimal&nbsp;rendering&nbsp;stack&nbsp;with&nbsp;pluggable&nbsp;backends.<br>
 <br>
-The module exposes abstractions for window/context management, scene graphs,<br>
-camera models and GPU resources such as meshes, shaders, materials and textures.<br>
+The&nbsp;module&nbsp;exposes&nbsp;abstractions&nbsp;for&nbsp;window/context&nbsp;management,&nbsp;scene&nbsp;graphs,<br>
+camera&nbsp;models&nbsp;and&nbsp;GPU&nbsp;resources&nbsp;such&nbsp;as&nbsp;meshes,&nbsp;shaders,&nbsp;materials&nbsp;and&nbsp;textures.<br>
 &quot;&quot;&quot;<br>
 <br>
-from .window import Window, GLWindow<br>
-from .renderer import Renderer<br>
-from .scene import Scene<br>
-from .entity import Entity, Component, InputComponent, RenderContext<br>
-from .camera import (<br>
-&#9;CameraComponent,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrthographicCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;.window&nbsp;import&nbsp;Window,&nbsp;GLWindow<br>
+from&nbsp;.renderer&nbsp;import&nbsp;Renderer<br>
+from&nbsp;.scene&nbsp;import&nbsp;Scene<br>
+from&nbsp;.entity&nbsp;import&nbsp;Entity,&nbsp;Component,&nbsp;InputComponent,&nbsp;RenderContext<br>
+from&nbsp;.camera&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;CameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrthographicCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from .mesh import MeshDrawable<br>
-from .material import Material<br>
-from .shader import ShaderProgram<br>
-from .texture import Texture<br>
-from .components import MeshRenderer<br>
-from .ui import Canvas, UIElement, UIRectangle<br>
-from .world import VisualizationWorld<br>
-from .backends.base import GraphicsBackend, WindowBackend, MouseButton, Key, Action<br>
-from .backends.opengl import OpenGLGraphicsBackend<br>
-from .backends.glfw import GLFWWindowBackend<br>
-from .backends.qt import QtWindowBackend, QtGLWindowHandle<br>
+from&nbsp;.mesh&nbsp;import&nbsp;MeshDrawable<br>
+from&nbsp;.material&nbsp;import&nbsp;Material<br>
+from&nbsp;.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;.texture&nbsp;import&nbsp;Texture<br>
+from&nbsp;.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;.ui&nbsp;import&nbsp;Canvas,&nbsp;UIElement,&nbsp;UIRectangle<br>
+from&nbsp;.world&nbsp;import&nbsp;VisualizationWorld<br>
+from&nbsp;.backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;WindowBackend,&nbsp;MouseButton,&nbsp;Key,&nbsp;Action<br>
+from&nbsp;.backends.opengl&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
+from&nbsp;.backends.glfw&nbsp;import&nbsp;GLFWWindowBackend<br>
+from&nbsp;.backends.qt&nbsp;import&nbsp;QtWindowBackend,&nbsp;QtGLWindowHandle<br>
 <br>
-__all__ = [<br>
-&#9;&quot;Window&quot;,<br>
-&#9;&quot;GLWindow&quot;,<br>
-&#9;&quot;Renderer&quot;,<br>
-&#9;&quot;Scene&quot;,<br>
-&#9;&quot;Entity&quot;,<br>
-&#9;&quot;Component&quot;,<br>
-&#9;&quot;InputComponent&quot;,<br>
-&#9;&quot;RenderContext&quot;,<br>
-&#9;&quot;CameraComponent&quot;,<br>
-&#9;&quot;PerspectiveCameraComponent&quot;,<br>
-&#9;&quot;OrthographicCameraComponent&quot;,<br>
-&#9;&quot;OrbitCameraController&quot;,<br>
-&#9;&quot;MeshDrawable&quot;,<br>
-&#9;&quot;MeshRenderer&quot;,<br>
-&#9;&quot;Canvas&quot;,<br>
-&#9;&quot;UIElement&quot;,<br>
-&#9;&quot;UIRectangle&quot;,<br>
-&#9;&quot;Material&quot;,<br>
-&#9;&quot;ShaderProgram&quot;,<br>
-&#9;&quot;Texture&quot;,<br>
-&#9;&quot;VisualizationWorld&quot;,<br>
-&#9;&quot;GraphicsBackend&quot;,<br>
-&#9;&quot;WindowBackend&quot;,<br>
-&#9;&quot;MouseButton&quot;,<br>
-&#9;&quot;Key&quot;,<br>
-&#9;&quot;Action&quot;,<br>
-&#9;&quot;OpenGLGraphicsBackend&quot;,<br>
-&#9;&quot;GLFWWindowBackend&quot;,<br>
-&#9;&quot;QtWindowBackend&quot;,<br>
-&#9;&quot;QtGLWindowHandle&quot;,<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Window&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;GLWindow&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Renderer&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Scene&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Entity&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Component&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;InputComponent&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;RenderContext&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;CameraComponent&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;PerspectiveCameraComponent&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;OrthographicCameraComponent&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;OrbitCameraController&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;MeshDrawable&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;MeshRenderer&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Canvas&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;UIElement&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;UIRectangle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Material&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;ShaderProgram&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Texture&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;VisualizationWorld&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;GraphicsBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;WindowBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;MouseButton&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Key&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Action&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;OpenGLGraphicsBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;GLFWWindowBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;QtWindowBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;QtGLWindowHandle&quot;,<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

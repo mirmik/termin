@@ -7,126 +7,126 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-from __future__ import annotations<br>
-from typing import Iterable<br>
-import numpy as np<br>
-from ..entity import Component, RenderContext<br>
-from ..material import Material<br>
-from ..mesh import Mesh2Drawable<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.mesh.mesh import Mesh2<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+from&nbsp;typing&nbsp;import&nbsp;Iterable<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;..entity&nbsp;import&nbsp;Component,&nbsp;RenderContext<br>
+from&nbsp;..material&nbsp;import&nbsp;Material<br>
+from&nbsp;..mesh&nbsp;import&nbsp;Mesh2Drawable<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;Mesh2<br>
 <br>
 <br>
 <br>
-# =============================<br>
-#   Vertex Shader<br>
-# =============================<br>
-vert = &quot;&quot;&quot;<br>
-#version 330 core<br>
+#&nbsp;=============================<br>
+#&nbsp;&nbsp;&nbsp;Vertex&nbsp;Shader<br>
+#&nbsp;=============================<br>
+vert&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-layout(location = 0) in vec3 a_position;<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_pos_world;<br>
+out&nbsp;vec3&nbsp;v_pos_world;<br>
 <br>
-void main() {<br>
-&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
-&#9;v_pos_world = world.xyz;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;world&nbsp;=&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_pos_world&nbsp;=&nbsp;world.xyz;<br>
 <br>
-&#9;gl_Position = u_projection * u_view * world;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-# =============================<br>
-#   Geometry Shader (line generation)<br>
-# =============================<br>
-# geom = &quot;&quot;&quot;<br>
-# #version 330 core<br>
+#&nbsp;=============================<br>
+#&nbsp;&nbsp;&nbsp;Geometry&nbsp;Shader&nbsp;(line&nbsp;generation)<br>
+#&nbsp;=============================<br>
+#&nbsp;geom&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#&nbsp;#version&nbsp;330&nbsp;core<br>
 <br>
-# layout(triangles) in;<br>
-# layout(line_strip, max_vertices = 6) out;<br>
+#&nbsp;layout(triangles)&nbsp;in;<br>
+#&nbsp;layout(line_strip,&nbsp;max_vertices&nbsp;=&nbsp;6)&nbsp;out;<br>
 <br>
-# in vec3 v_pos_world[];<br>
+#&nbsp;in&nbsp;vec3&nbsp;v_pos_world[];<br>
 <br>
-# out vec3 g_pos_world;<br>
+#&nbsp;out&nbsp;vec3&nbsp;g_pos_world;<br>
 <br>
-# void main() {<br>
-#     // три вершины входного треугольника<br>
-#     for (int i = 0; i &lt; 3; i++) {<br>
-#         int j = (i + 1) % 3;<br>
+#&nbsp;void&nbsp;main()&nbsp;{<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;три&nbsp;вершины&nbsp;входного&nbsp;треугольника<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;(int&nbsp;i&nbsp;=&nbsp;0;&nbsp;i&nbsp;&lt;&nbsp;3;&nbsp;i++)&nbsp;{<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;j&nbsp;=&nbsp;(i&nbsp;+&nbsp;1)&nbsp;%&nbsp;3;<br>
 <br>
-#         g_pos_world = v_pos_world[i];<br>
-#         gl_Position = gl_in[i].gl_Position;<br>
-#         EmitVertex();<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g_pos_world&nbsp;=&nbsp;v_pos_world[i];<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;gl_in[i].gl_Position;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EmitVertex();<br>
 <br>
-#         g_pos_world = v_pos_world[j];<br>
-#         gl_Position = gl_in[j].gl_Position;<br>
-#         EmitVertex();<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g_pos_world&nbsp;=&nbsp;v_pos_world[j];<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;gl_in[j].gl_Position;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EmitVertex();<br>
 <br>
-#         EndPrimitive();<br>
-#     }<br>
-# }<br>
-# &quot;&quot;&quot;<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EndPrimitive();<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+#&nbsp;}<br>
+#&nbsp;&quot;&quot;&quot;<br>
 <br>
 <br>
-# =============================<br>
-#   Fragment Shader<br>
-# =============================<br>
-frag = &quot;&quot;&quot;<br>
-#version 330 core<br>
+#&nbsp;=============================<br>
+#&nbsp;&nbsp;&nbsp;Fragment&nbsp;Shader<br>
+#&nbsp;=============================<br>
+frag&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
 <br>
-in vec3 g_pos_world;<br>
+in&nbsp;vec3&nbsp;g_pos_world;<br>
 <br>
-uniform vec4 u_color;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;// просто цвет линий<br>
-&#9;FragColor = vec4(u_color.rgb, u_color.a);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;просто&nbsp;цвет&nbsp;линий<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(u_color.rgb,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-class LineRenderer(Component):<br>
+class&nbsp;LineRenderer(Component):<br>
 <br>
-&#9;def __init__(self, points: Iterable[tuple[float, float, float]], color: tuple[float, float, float, float], width: float = 1.0):<br>
-&#9;&#9;super().__init__(enabled=True)<br>
-&#9;&#9;self.points = list(points)<br>
-&#9;&#9;self.color = color<br>
-&#9;&#9;self.width = width<br>
-&#9;&#9;self.shader = ShaderProgram(<br>
-&#9;&#9;&#9;vertex_source=vert, <br>
-&#9;&#9;&#9;#geometry_source=geom, <br>
-&#9;&#9;&#9;fragment_source=frag)<br>
-&#9;&#9;self.material = Material(shader=self.shader, color=self.color)<br>
-&#9;&#9;<br>
-&#9;&#9;self.mesh2 = Mesh2.from_lists(self.points, [[i, i + 1] for i in range(0, len(self.points) - 1)])<br>
-&#9;&#9;self.drawable = Mesh2Drawable(self.mesh2)<br>
-&#9;&#9;<br>
-&#9;def required_shaders(self):<br>
-&#9;&#9;yield self.shader<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;points:&nbsp;Iterable[tuple[float,&nbsp;float,&nbsp;float]],&nbsp;color:&nbsp;tuple[float,&nbsp;float,&nbsp;float,&nbsp;float],&nbsp;width:&nbsp;float&nbsp;=&nbsp;1.0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(enabled=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.points&nbsp;=&nbsp;list(points)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.color&nbsp;=&nbsp;color<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.width&nbsp;=&nbsp;width<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader&nbsp;=&nbsp;ShaderProgram(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex_source=vert,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#geometry_source=geom,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fragment_source=frag)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.material&nbsp;=&nbsp;Material(shader=self.shader,&nbsp;color=self.color)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.mesh2&nbsp;=&nbsp;Mesh2.from_lists(self.points,&nbsp;[[i,&nbsp;i&nbsp;+&nbsp;1]&nbsp;for&nbsp;i&nbsp;in&nbsp;range(0,&nbsp;len(self.points)&nbsp;-&nbsp;1)])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.drawable&nbsp;=&nbsp;Mesh2Drawable(self.mesh2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;required_shaders(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;self.shader<br>
 <br>
-&#9;def draw(self, context: RenderContext):<br>
-&#9;&#9;if self.entity is None:<br>
-&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;context:&nbsp;RenderContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.entity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
 <br>
-&#9;&#9;# Рендерим линии<br>
-&#9;&#9;model = self.entity.model_matrix()<br>
-&#9;&#9;view  = context.view<br>
-&#9;&#9;proj  = context.projection<br>
-&#9;&#9;gfx   = context.graphics<br>
-&#9;&#9;key   = context.context_key<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Рендерим&nbsp;линии<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;model&nbsp;=&nbsp;self.entity.model_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;view&nbsp;&nbsp;=&nbsp;context.view<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;proj&nbsp;&nbsp;=&nbsp;context.projection<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;&nbsp;&nbsp;=&nbsp;context.graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;&nbsp;&nbsp;=&nbsp;context.context_key<br>
 <br>
-&#9;&#9;print(&quot;Drawing lines with color:&quot;, self.color, &quot;and width:&quot;, self.width)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Drawing&nbsp;lines&nbsp;with&nbsp;color:&quot;,&nbsp;self.color,&nbsp;&quot;and&nbsp;width:&quot;,&nbsp;self.width)<br>
 <br>
-&#9;&#9;self.material.apply(model, view, proj, graphics=gfx, context_key=key)<br>
-&#9;&#9;self.drawable.draw(context)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.material.apply(model,&nbsp;view,&nbsp;proj,&nbsp;graphics=gfx,&nbsp;context_key=key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.drawable.draw(context)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

@@ -6,496 +6,496 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# termin/visualization/framegraph.py<br>
+#&nbsp;termin/visualization/framegraph.py<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from dataclasses import dataclass, field<br>
-from typing import Dict, Iterable, List, Set, Any, Optional, Tuple<br>
-from collections import deque<br>
-from termin.visualization.shader import ShaderProgram<br>
-from .picking import rgb_to_id<br>
-from .components import MeshRenderer<br>
+from&nbsp;dataclasses&nbsp;import&nbsp;dataclass,&nbsp;field<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;Iterable,&nbsp;List,&nbsp;Set,&nbsp;Any,&nbsp;Optional,&nbsp;Tuple<br>
+from&nbsp;collections&nbsp;import&nbsp;deque<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;.picking&nbsp;import&nbsp;rgb_to_id<br>
+from&nbsp;.components&nbsp;import&nbsp;MeshRenderer<br>
 <br>
 <br>
 @dataclass<br>
-class FramePass:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Логический проход кадра.<br>
+class&nbsp;FramePass:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Логический&nbsp;проход&nbsp;кадра.<br>
 <br>
-&#9;reads  – какие ресурсы этот проход читает (по именам).<br>
-&#9;writes – какие ресурсы он пишет.<br>
-&#9;inplace – модифицирующий ли это проход (in-place по смыслу).<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;pass_name: str<br>
-&#9;reads: Set[str] = field(default_factory=set)<br>
-&#9;writes: Set[str] = field(default_factory=set)<br>
-&#9;inplace: bool = False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;reads&nbsp;&nbsp;–&nbsp;какие&nbsp;ресурсы&nbsp;этот&nbsp;проход&nbsp;читает&nbsp;(по&nbsp;именам).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;writes&nbsp;–&nbsp;какие&nbsp;ресурсы&nbsp;он&nbsp;пишет.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;inplace&nbsp;–&nbsp;модифицирующий&nbsp;ли&nbsp;это&nbsp;проход&nbsp;(in-place&nbsp;по&nbsp;смыслу).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;pass_name:&nbsp;str<br>
+&nbsp;&nbsp;&nbsp;&nbsp;reads:&nbsp;Set[str]&nbsp;=&nbsp;field(default_factory=set)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;writes:&nbsp;Set[str]&nbsp;=&nbsp;field(default_factory=set)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;inplace:&nbsp;bool&nbsp;=&nbsp;False<br>
 <br>
-&#9;def __repr__(self) -&gt; str:<br>
-&#9;&#9;return f&quot;FramePass({self.pass_name!r})&quot;<br>
-<br>
-<br>
-class FrameGraphError(Exception):<br>
-&#9;&quot;&quot;&quot;Базовая ошибка графа кадра.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self)&nbsp;-&gt;&nbsp;str:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;FramePass({self.pass_name!r})&quot;<br>
 <br>
 <br>
-class FrameGraphMultiWriterError(FrameGraphError):<br>
-&#9;&quot;&quot;&quot;Один и тот же ресурс пишут несколько пассов.&quot;&quot;&quot;<br>
+class&nbsp;FrameGraphError(Exception):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Базовая&nbsp;ошибка&nbsp;графа&nbsp;кадра.&quot;&quot;&quot;<br>
 <br>
 <br>
-class FrameGraphCycleError(FrameGraphError):<br>
-&#9;&quot;&quot;&quot;В графе зависимостей обнаружен цикл.&quot;&quot;&quot;<br>
+class&nbsp;FrameGraphMultiWriterError(FrameGraphError):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Один&nbsp;и&nbsp;тот&nbsp;же&nbsp;ресурс&nbsp;пишут&nbsp;несколько&nbsp;пассов.&quot;&quot;&quot;<br>
 <br>
 <br>
-class FrameGraph:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Простейший frame graph: на вход – набор FramePass,<br>
-&#9;на выход – топологически отсортированный список пассов.<br>
-&#9;&quot;&quot;&quot;<br>
+class&nbsp;FrameGraphCycleError(FrameGraphError):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;В&nbsp;графе&nbsp;зависимостей&nbsp;обнаружен&nbsp;цикл.&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, passes: Iterable[FramePass]):<br>
-&#9;&#9;self._passes: List[FramePass] = list(passes)<br>
-&#9;&#9;# карта &quot;ресурс -&gt; каноническое имя&quot; (на будущее — для дебага / инспекции)<br>
-&#9;&#9;self._canonical_resources: Dict[str, str] = {}<br>
 <br>
-&#9;# ------------------------------------------------------------------ #<br>
-&#9;# ВНУТРЕННЕЕ ПРЕДСТАВЛЕНИЕ ГРАФА ЗАВИСИМОСТЕЙ<br>
-&#9;# ------------------------------------------------------------------ #<br>
-&#9;# Всё строим на ИНДЕКСАХ пассов (0..N-1), а не на самих объектах,<br>
-&#9;# чтобы вообще не зависеть от их hash/eq.<br>
-&#9;# ------------------------------------------------------------------ #<br>
+class&nbsp;FrameGraph:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Простейший&nbsp;frame&nbsp;graph:&nbsp;на&nbsp;вход&nbsp;–&nbsp;набор&nbsp;FramePass,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;на&nbsp;выход&nbsp;–&nbsp;топологически&nbsp;отсортированный&nbsp;список&nbsp;пассов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def _build_dependency_graph(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Строит граф зависимостей между пассами.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;passes:&nbsp;Iterable[FramePass]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._passes:&nbsp;List[FramePass]&nbsp;=&nbsp;list(passes)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;карта&nbsp;&quot;ресурс&nbsp;-&gt;&nbsp;каноническое&nbsp;имя&quot;&nbsp;(на&nbsp;будущее&nbsp;—&nbsp;для&nbsp;дебага&nbsp;/&nbsp;инспекции)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._canonical_resources:&nbsp;Dict[str,&nbsp;str]&nbsp;=&nbsp;{}<br>
 <br>
-&#9;&#9;Возвращает:<br>
-&#9;&#9;&#9;adjacency: dict[int, list[int]]<br>
-&#9;&#9;&#9;&#9;для каждого индекса пасса – список индексов пассов,<br>
-&#9;&#9;&#9;&#9;которые зависят от него (есть ребро writer -&gt; reader).<br>
-&#9;&#9;&#9;in_degree: dict[int, int]<br>
-&#9;&#9;&#9;&#9;количество входящих рёбер для каждого пасса.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;writer_for: Dict[str, int] = {}          # ресурс -&gt; индекс писателя<br>
-&#9;&#9;readers_for: Dict[str, List[int]] = {}   # ресурс -&gt; список индексов читателей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------------&nbsp;#<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;ВНУТРЕННЕЕ&nbsp;ПРЕДСТАВЛЕНИЕ&nbsp;ГРАФА&nbsp;ЗАВИСИМОСТЕЙ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------------&nbsp;#<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Всё&nbsp;строим&nbsp;на&nbsp;ИНДЕКСАХ&nbsp;пассов&nbsp;(0..N-1),&nbsp;а&nbsp;не&nbsp;на&nbsp;самих&nbsp;объектах,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;чтобы&nbsp;вообще&nbsp;не&nbsp;зависеть&nbsp;от&nbsp;их&nbsp;hash/eq.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------------&nbsp;#<br>
 <br>
-&#9;&#9;# для in-place логики<br>
-&#9;&#9;modified_inputs: Set[str] = set()        # какие имена уже были входом inplace-пасса<br>
-&#9;&#9;canonical: Dict[str, str] = {}           # локальная карта канонических имён<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_build_dependency_graph(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Строит&nbsp;граф&nbsp;зависимостей&nbsp;между&nbsp;пассами.<br>
 <br>
-&#9;&#9;n = len(self._passes)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;adjacency:&nbsp;dict[int,&nbsp;list[int]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;для&nbsp;каждого&nbsp;индекса&nbsp;пасса&nbsp;–&nbsp;список&nbsp;индексов&nbsp;пассов,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;которые&nbsp;зависят&nbsp;от&nbsp;него&nbsp;(есть&nbsp;ребро&nbsp;writer&nbsp;-&gt;&nbsp;reader).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;in_degree:&nbsp;dict[int,&nbsp;int]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;количество&nbsp;входящих&nbsp;рёбер&nbsp;для&nbsp;каждого&nbsp;пасса.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writer_for:&nbsp;Dict[str,&nbsp;int]&nbsp;=&nbsp;{}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;ресурс&nbsp;-&gt;&nbsp;индекс&nbsp;писателя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;readers_for:&nbsp;Dict[str,&nbsp;List[int]]&nbsp;=&nbsp;{}&nbsp;&nbsp;&nbsp;#&nbsp;ресурс&nbsp;-&gt;&nbsp;список&nbsp;индексов&nbsp;читателей<br>
 <br>
-&#9;&#9;# 1) собираем writer-ов, reader-ов и валидируем inplace-пассы<br>
-&#9;&#9;for idx, p in enumerate(self._passes):<br>
-&#9;&#9;&#9;# --- валидация inplace-пассов ---<br>
-&#9;&#9;&#9;if p.inplace:<br>
-&#9;&#9;&#9;&#9;if len(p.reads) != 1 or len(p.writes) != 1:<br>
-&#9;&#9;&#9;&#9;&#9;raise FrameGraphError(<br>
-&#9;&#9;&#9;&#9;&#9;&#9;f&quot;Inplace pass {p.pass_name!r} must have exactly 1 read and 1 write, &quot;<br>
-&#9;&#9;&#9;&#9;&#9;&#9;f&quot;got reads={p.reads}, writes={p.writes}&quot;<br>
-&#9;&#9;&#9;&#9;&#9;)<br>
-&#9;&#9;&#9;&#9;(src,) = p.reads<br>
-&#9;&#9;&#9;&#9;if src in modified_inputs:<br>
-&#9;&#9;&#9;&#9;&#9;# этот ресурс уже модифицировался другим inplace-пассом<br>
-&#9;&#9;&#9;&#9;&#9;raise FrameGraphError(<br>
-&#9;&#9;&#9;&#9;&#9;&#9;f&quot;Resource {src!r} is already modified by another inplace pass&quot;<br>
-&#9;&#9;&#9;&#9;&#9;)<br>
-&#9;&#9;&#9;&#9;modified_inputs.add(src)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;для&nbsp;in-place&nbsp;логики<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;modified_inputs:&nbsp;Set[str]&nbsp;=&nbsp;set()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;какие&nbsp;имена&nbsp;уже&nbsp;были&nbsp;входом&nbsp;inplace-пасса<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canonical:&nbsp;Dict[str,&nbsp;str]&nbsp;=&nbsp;{}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;локальная&nbsp;карта&nbsp;канонических&nbsp;имён<br>
 <br>
-&#9;&#9;&#9;# --- writer-ы ---<br>
-&#9;&#9;&#9;for res in p.writes:<br>
-&#9;&#9;&#9;&#9;if res in writer_for:<br>
-&#9;&#9;&#9;&#9;&#9;other_idx = writer_for[res]<br>
-&#9;&#9;&#9;&#9;&#9;other = self._passes[other_idx]<br>
-&#9;&#9;&#9;&#9;&#9;raise FrameGraphMultiWriterError(<br>
-&#9;&#9;&#9;&#9;&#9;&#9;f&quot;Resource {res!r} is written by multiple passes: &quot;<br>
-&#9;&#9;&#9;&#9;&#9;&#9;f&quot;{other.pass_name!r} and {p.pass_name!r}&quot;<br>
-&#9;&#9;&#9;&#9;&#9;)<br>
-&#9;&#9;&#9;&#9;writer_for[res] = idx<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;len(self._passes)<br>
 <br>
-&#9;&#9;&#9;&#9;# каноническое имя: первое появление ресурса как writer<br>
-&#9;&#9;&#9;&#9;canonical.setdefault(res, res)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;1)&nbsp;собираем&nbsp;writer-ов,&nbsp;reader-ов&nbsp;и&nbsp;валидируем&nbsp;inplace-пассы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;idx,&nbsp;p&nbsp;in&nbsp;enumerate(self._passes):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;валидация&nbsp;inplace-пассов&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;p.inplace:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(p.reads)&nbsp;!=&nbsp;1&nbsp;or&nbsp;len(p.writes)&nbsp;!=&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;FrameGraphError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Inplace&nbsp;pass&nbsp;{p.pass_name!r}&nbsp;must&nbsp;have&nbsp;exactly&nbsp;1&nbsp;read&nbsp;and&nbsp;1&nbsp;write,&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;got&nbsp;reads={p.reads},&nbsp;writes={p.writes}&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(src,)&nbsp;=&nbsp;p.reads<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;src&nbsp;in&nbsp;modified_inputs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;этот&nbsp;ресурс&nbsp;уже&nbsp;модифицировался&nbsp;другим&nbsp;inplace-пассом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;FrameGraphError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Resource&nbsp;{src!r}&nbsp;is&nbsp;already&nbsp;modified&nbsp;by&nbsp;another&nbsp;inplace&nbsp;pass&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;modified_inputs.add(src)<br>
 <br>
-&#9;&#9;&#9;# --- reader-ы ---<br>
-&#9;&#9;&#9;for res in p.reads:<br>
-&#9;&#9;&#9;&#9;lst = readers_for.setdefault(res, [])<br>
-&#9;&#9;&#9;&#9;if idx not in lst:<br>
-&#9;&#9;&#9;&#9;&#9;lst.append(idx)<br>
-&#9;&#9;&#9;&#9;# если ресурс нигде не писали, но читают — считаем внешним входом<br>
-&#9;&#9;&#9;&#9;canonical.setdefault(res, res)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;writer-ы&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;res&nbsp;in&nbsp;p.writes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;res&nbsp;in&nbsp;writer_for:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;other_idx&nbsp;=&nbsp;writer_for[res]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;other&nbsp;=&nbsp;self._passes[other_idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;FrameGraphMultiWriterError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Resource&nbsp;{res!r}&nbsp;is&nbsp;written&nbsp;by&nbsp;multiple&nbsp;passes:&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;{other.pass_name!r}&nbsp;and&nbsp;{p.pass_name!r}&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writer_for[res]&nbsp;=&nbsp;idx<br>
 <br>
-&#9;&#9;# 2) обработка алиасов для inplace-пассов<br>
-&#9;&#9;# (это чисто справочная штука, на граф зависимостей не влияет)<br>
-&#9;&#9;for p in self._passes:<br>
-&#9;&#9;&#9;if not p.inplace:<br>
-&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;(src,) = p.reads<br>
-&#9;&#9;&#9;(dst,) = p.writes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;каноническое&nbsp;имя:&nbsp;первое&nbsp;появление&nbsp;ресурса&nbsp;как&nbsp;writer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canonical.setdefault(res,&nbsp;res)<br>
 <br>
-&#9;&#9;&#9;src_canon = canonical.get(src, src)<br>
-&#9;&#9;&#9;# выходу назначаем каноническое имя входа:<br>
-&#9;&#9;&#9;# даже если у dst уже было &quot;своё&quot;, переопределяем —<br>
-&#9;&#9;&#9;# мы сознательно объявляем их синонимами.<br>
-&#9;&#9;&#9;canonical[dst] = src_canon<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;reader-ы&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;res&nbsp;in&nbsp;p.reads:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lst&nbsp;=&nbsp;readers_for.setdefault(res,&nbsp;[])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;idx&nbsp;not&nbsp;in&nbsp;lst:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lst.append(idx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;ресурс&nbsp;нигде&nbsp;не&nbsp;писали,&nbsp;но&nbsp;читают&nbsp;—&nbsp;считаем&nbsp;внешним&nbsp;входом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canonical.setdefault(res,&nbsp;res)<br>
 <br>
-&#9;&#9;# сохраним карту канонических имён (вдруг пригодится снаружи)<br>
-&#9;&#9;self._canonical_resources = canonical<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;2)&nbsp;обработка&nbsp;алиасов&nbsp;для&nbsp;inplace-пассов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;(это&nbsp;чисто&nbsp;справочная&nbsp;штука,&nbsp;на&nbsp;граф&nbsp;зависимостей&nbsp;не&nbsp;влияет)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;p&nbsp;in&nbsp;self._passes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;p.inplace:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(src,)&nbsp;=&nbsp;p.reads<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(dst,)&nbsp;=&nbsp;p.writes<br>
 <br>
-&#9;&#9;# 3) adjacency и in_degree по индексам<br>
-&#9;&#9;adjacency: Dict[int, List[int]] = {i: [] for i in range(n)}<br>
-&#9;&#9;in_degree: Dict[int, int] = {i: 0 for i in range(n)}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;src_canon&nbsp;=&nbsp;canonical.get(src,&nbsp;src)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;выходу&nbsp;назначаем&nbsp;каноническое&nbsp;имя&nbsp;входа:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;даже&nbsp;если&nbsp;у&nbsp;dst&nbsp;уже&nbsp;было&nbsp;&quot;своё&quot;,&nbsp;переопределяем&nbsp;—<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;мы&nbsp;сознательно&nbsp;объявляем&nbsp;их&nbsp;синонимами.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canonical[dst]&nbsp;=&nbsp;src_canon<br>
 <br>
-&#9;&#9;# Для каждого ресурса: writer -&gt; все его reader-ы<br>
-&#9;&#9;for res, w_idx in writer_for.items():<br>
-&#9;&#9;&#9;for r_idx in readers_for.get(res, ()):<br>
-&#9;&#9;&#9;&#9;if r_idx == w_idx:<br>
-&#9;&#9;&#9;&#9;&#9;continue  # на всякий случай, не создаём петли writer-&gt;writer<br>
-&#9;&#9;&#9;&#9;if r_idx not in adjacency[w_idx]:<br>
-&#9;&#9;&#9;&#9;&#9;adjacency[w_idx].append(r_idx)<br>
-&#9;&#9;&#9;&#9;&#9;in_degree[r_idx] += 1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;сохраним&nbsp;карту&nbsp;канонических&nbsp;имён&nbsp;(вдруг&nbsp;пригодится&nbsp;снаружи)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._canonical_resources&nbsp;=&nbsp;canonical<br>
 <br>
-&#9;&#9;return adjacency, in_degree<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;3)&nbsp;adjacency&nbsp;и&nbsp;in_degree&nbsp;по&nbsp;индексам<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;adjacency:&nbsp;Dict[int,&nbsp;List[int]]&nbsp;=&nbsp;{i:&nbsp;[]&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n)}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;in_degree:&nbsp;Dict[int,&nbsp;int]&nbsp;=&nbsp;{i:&nbsp;0&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n)}<br>
 <br>
-&#9;# ------------------------------------------------------------------ #<br>
-&#9;# ТОПОЛОГИЧЕСКАЯ СОРТИРОВКА (Kahn с приоритетом обычных пассов)<br>
-&#9;# ------------------------------------------------------------------ #<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Для&nbsp;каждого&nbsp;ресурса:&nbsp;writer&nbsp;-&gt;&nbsp;все&nbsp;его&nbsp;reader-ы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;res,&nbsp;w_idx&nbsp;in&nbsp;writer_for.items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;r_idx&nbsp;in&nbsp;readers_for.get(res,&nbsp;()):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;r_idx&nbsp;==&nbsp;w_idx:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue&nbsp;&nbsp;#&nbsp;на&nbsp;всякий&nbsp;случай,&nbsp;не&nbsp;создаём&nbsp;петли&nbsp;writer-&gt;writer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;r_idx&nbsp;not&nbsp;in&nbsp;adjacency[w_idx]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;adjacency[w_idx].append(r_idx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;in_degree[r_idx]&nbsp;+=&nbsp;1<br>
 <br>
-&#9;def build_schedule(self) -&gt; List[FramePass]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает список пассов в порядке выполнения,<br>
-&#9;&#9;учитывая зависимости read-after-write.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;adjacency,&nbsp;in_degree<br>
 <br>
-&#9;&#9;Бросает:<br>
-&#9;&#9;&#9;- FrameGraphMultiWriterError, если один ресурс пишут несколько пассов.<br>
-&#9;&#9;&#9;- FrameGraphCycleError, если обнаружен цикл.<br>
-&#9;&#9;&#9;- FrameGraphError, если нарушены правила inplace-пассов.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;adjacency, in_degree = self._build_dependency_graph()<br>
-&#9;&#9;n = len(self._passes)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------------&nbsp;#<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;ТОПОЛОГИЧЕСКАЯ&nbsp;СОРТИРОВКА&nbsp;(Kahn&nbsp;с&nbsp;приоритетом&nbsp;обычных&nbsp;пассов)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------------&nbsp;#<br>
 <br>
-&#9;&#9;is_inplace = [p.inplace for p in self._passes]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;build_schedule(self)&nbsp;-&gt;&nbsp;List[FramePass]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;список&nbsp;пассов&nbsp;в&nbsp;порядке&nbsp;выполнения,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;учитывая&nbsp;зависимости&nbsp;read-after-write.<br>
 <br>
-&#9;&#9;# две очереди:<br>
-&#9;&#9;#   обычные пассы — в ready_normal<br>
-&#9;&#9;#   inplace-пассы — в ready_inplace<br>
-&#9;&#9;ready_normal: deque[int] = deque()<br>
-&#9;&#9;ready_inplace: deque[int] = deque()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Бросает:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;FrameGraphMultiWriterError,&nbsp;если&nbsp;один&nbsp;ресурс&nbsp;пишут&nbsp;несколько&nbsp;пассов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;FrameGraphCycleError,&nbsp;если&nbsp;обнаружен&nbsp;цикл.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;FrameGraphError,&nbsp;если&nbsp;нарушены&nbsp;правила&nbsp;inplace-пассов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;adjacency,&nbsp;in_degree&nbsp;=&nbsp;self._build_dependency_graph()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;len(self._passes)<br>
 <br>
-&#9;&#9;for i in range(n):<br>
-&#9;&#9;&#9;if in_degree[i] == 0:<br>
-&#9;&#9;&#9;&#9;if is_inplace[i]:<br>
-&#9;&#9;&#9;&#9;&#9;ready_inplace.append(i)<br>
-&#9;&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;&#9;ready_normal.append(i)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;is_inplace&nbsp;=&nbsp;[p.inplace&nbsp;for&nbsp;p&nbsp;in&nbsp;self._passes]<br>
 <br>
-&#9;&#9;schedule_indices: List[int] = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;две&nbsp;очереди:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;обычные&nbsp;пассы&nbsp;—&nbsp;в&nbsp;ready_normal<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;inplace-пассы&nbsp;—&nbsp;в&nbsp;ready_inplace<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ready_normal:&nbsp;deque[int]&nbsp;=&nbsp;deque()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ready_inplace:&nbsp;deque[int]&nbsp;=&nbsp;deque()<br>
 <br>
-&#9;&#9;while ready_normal or ready_inplace:<br>
-&#9;&#9;&#9;# приоритет обычных пассов<br>
-&#9;&#9;&#9;if ready_normal:<br>
-&#9;&#9;&#9;&#9;idx = ready_normal.popleft()<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;idx = ready_inplace.popleft()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;in_degree[i]&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;is_inplace[i]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ready_inplace.append(i)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ready_normal.append(i)<br>
 <br>
-&#9;&#9;&#9;schedule_indices.append(idx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;schedule_indices:&nbsp;List[int]&nbsp;=&nbsp;[]<br>
 <br>
-&#9;&#9;&#9;for dep in adjacency[idx]:<br>
-&#9;&#9;&#9;&#9;in_degree[dep] -= 1<br>
-&#9;&#9;&#9;&#9;if in_degree[dep] == 0:<br>
-&#9;&#9;&#9;&#9;&#9;if is_inplace[dep]:<br>
-&#9;&#9;&#9;&#9;&#9;&#9;ready_inplace.append(dep)<br>
-&#9;&#9;&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;&#9;&#9;ready_normal.append(dep)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;ready_normal&nbsp;or&nbsp;ready_inplace:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;приоритет&nbsp;обычных&nbsp;пассов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ready_normal:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;ready_normal.popleft()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;ready_inplace.popleft()<br>
 <br>
-&#9;&#9;if len(schedule_indices) != n:<br>
-&#9;&#9;&#9;# Остались вершины с in_degree &gt; 0 → цикл<br>
-&#9;&#9;&#9;problematic = [self._passes[i].pass_name for i, deg in in_degree.items() if deg &gt; 0]<br>
-&#9;&#9;&#9;raise FrameGraphCycleError(<br>
-&#9;&#9;&#9;&#9;&quot;Frame graph contains a dependency cycle involving passes: &quot;<br>
-&#9;&#9;&#9;&#9;+ &quot;, &quot;.join(problematic)<br>
-&#9;&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;schedule_indices.append(idx)<br>
 <br>
-&#9;&#9;# Конвертируем индексы обратно в реальные пассы<br>
-&#9;&#9;return [self._passes[i] for i in schedule_indices]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;dep&nbsp;in&nbsp;adjacency[idx]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;in_degree[dep]&nbsp;-=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;in_degree[dep]&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;is_inplace[dep]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ready_inplace.append(dep)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ready_normal.append(dep)<br>
 <br>
-&#9;# опционально — геттер канонического имени ресурса (на будущее)<br>
-&#9;def canonical_resource(self, name: str) -&gt; str:<br>
-&#9;&#9;return self._canonical_resources.get(name, name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(schedule_indices)&nbsp;!=&nbsp;n:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Остались&nbsp;вершины&nbsp;с&nbsp;in_degree&nbsp;&gt;&nbsp;0&nbsp;→&nbsp;цикл<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;problematic&nbsp;=&nbsp;[self._passes[i].pass_name&nbsp;for&nbsp;i,&nbsp;deg&nbsp;in&nbsp;in_degree.items()&nbsp;if&nbsp;deg&nbsp;&gt;&nbsp;0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;FrameGraphCycleError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Frame&nbsp;graph&nbsp;contains&nbsp;a&nbsp;dependency&nbsp;cycle&nbsp;involving&nbsp;passes:&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+&nbsp;&quot;,&nbsp;&quot;.join(problematic)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Конвертируем&nbsp;индексы&nbsp;обратно&nbsp;в&nbsp;реальные&nbsp;пассы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[self._passes[i]&nbsp;for&nbsp;i&nbsp;in&nbsp;schedule_indices]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;опционально&nbsp;—&nbsp;геттер&nbsp;канонического&nbsp;имени&nbsp;ресурса&nbsp;(на&nbsp;будущее)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;canonical_resource(self,&nbsp;name:&nbsp;str)&nbsp;-&gt;&nbsp;str:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._canonical_resources.get(name,&nbsp;name)<br>
 <br>
 @dataclass<br>
-class FrameExecutionContext:<br>
-&#9;graphics: GraphicsBackend<br>
-&#9;window: &quot;Window&quot;<br>
-&#9;viewport: &quot;Viewport&quot;<br>
-&#9;rect: Tuple[int, int, int, int]  # (px, py, pw, ph)<br>
-&#9;context_key: int<br>
+class&nbsp;FrameExecutionContext:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;graphics:&nbsp;GraphicsBackend<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window:&nbsp;&quot;Window&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;viewport:&nbsp;&quot;Viewport&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rect:&nbsp;Tuple[int,&nbsp;int,&nbsp;int,&nbsp;int]&nbsp;&nbsp;#&nbsp;(px,&nbsp;py,&nbsp;pw,&nbsp;ph)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;context_key:&nbsp;int<br>
 <br>
-&#9;# карта ресурс -&gt; FBO (или None, если это swapchain/экран)<br>
-&#9;fbos: Dict[str, FramebufferHandle | None]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;карта&nbsp;ресурс&nbsp;-&gt;&nbsp;FBO&nbsp;(или&nbsp;None,&nbsp;если&nbsp;это&nbsp;swapchain/экран)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;fbos:&nbsp;Dict[str,&nbsp;FramebufferHandle&nbsp;|&nbsp;None]<br>
 <br>
-class RenderFramePass(FramePass):<br>
-&#9;def execute(self, ctx: FrameExecutionContext):<br>
-&#9;&#9;raise NotImplementedError<br>
-<br>
-<br>
-class ColorPass(RenderFramePass):<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;input_res: str = &quot;empty&quot;,<br>
-&#9;&#9;output_res: str = &quot;color&quot;,<br>
-&#9;&#9;pass_name: str = &quot;Color&quot;,<br>
-&#9;):<br>
-&#9;&#9;super().__init__(<br>
-&#9;&#9;&#9;pass_name=pass_name,<br>
-&#9;&#9;&#9;reads={input_res},<br>
-&#9;&#9;&#9;writes={output_res},<br>
-&#9;&#9;&#9;inplace=True,  # логически — модификатор состояния ресурса<br>
-&#9;&#9;)<br>
-&#9;&#9;self.input_res = input_res<br>
-&#9;&#9;self.output_res = output_res<br>
-<br>
-&#9;def execute(self, ctx: FrameContext):<br>
-&#9;&#9;gfx      = ctx.graphics<br>
-&#9;&#9;window   = ctx.window<br>
-&#9;&#9;viewport = ctx.viewport<br>
-&#9;&#9;scene    = viewport.scene<br>
-&#9;&#9;camera   = viewport.camera<br>
-&#9;&#9;px, py, pw, ph = ctx.rect<br>
-&#9;&#9;key      = ctx.context_key<br>
-<br>
-&#9;&#9;fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))<br>
-&#9;&#9;ctx.fbos[self.output_res] = fb<br>
-<br>
-&#9;&#9;gfx.bind_framebuffer(fb)<br>
-&#9;&#9;gfx.set_viewport(0, 0, pw, ph)<br>
-&#9;&#9;gfx.clear_color_depth(scene.background_color)<br>
-<br>
-&#9;&#9;window.renderer.render_viewport(<br>
-&#9;&#9;&#9;scene,<br>
-&#9;&#9;&#9;camera,<br>
-&#9;&#9;&#9;(0, 0, pw, ph),<br>
-&#9;&#9;&#9;key,<br>
-&#9;&#9;)<br>
+class&nbsp;RenderFramePass(FramePass):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(self,&nbsp;ctx:&nbsp;FrameExecutionContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError<br>
 <br>
 <br>
+class&nbsp;ColorPass(RenderFramePass):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;input_res:&nbsp;str&nbsp;=&nbsp;&quot;empty&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output_res:&nbsp;str&nbsp;=&nbsp;&quot;color&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name:&nbsp;str&nbsp;=&nbsp;&quot;Color&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads={input_res},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes={output_res},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=True,&nbsp;&nbsp;#&nbsp;логически&nbsp;—&nbsp;модификатор&nbsp;состояния&nbsp;ресурса<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.input_res&nbsp;=&nbsp;input_res<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output_res&nbsp;=&nbsp;output_res<br>
 <br>
-def blit_fbo_to_fbo(<br>
-&#9;gfx: &quot;GraphicsBackend&quot;,<br>
-&#9;src_fb,<br>
-&#9;dst_fb,<br>
-&#9;size: tuple[int, int],<br>
-&#9;context_key: int,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(self,&nbsp;ctx:&nbsp;FrameContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;ctx.graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;&nbsp;&nbsp;=&nbsp;ctx.window<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;ctx.viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;viewport.scene<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;&nbsp;&nbsp;=&nbsp;viewport.camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;ctx.rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;ctx.context_key<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb&nbsp;=&nbsp;window.get_viewport_fbo(viewport,&nbsp;self.output_res,&nbsp;(pw,&nbsp;ph))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctx.fbos[self.output_res]&nbsp;=&nbsp;fb<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.bind_framebuffer(fb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_viewport(0,&nbsp;0,&nbsp;pw,&nbsp;ph)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.clear_color_depth(scene.background_color)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.renderer.render_viewport(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(0,&nbsp;0,&nbsp;pw,&nbsp;ph),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+<br>
+<br>
+def&nbsp;blit_fbo_to_fbo(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gfx:&nbsp;&quot;GraphicsBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;src_fb,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dst_fb,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;tuple[int,&nbsp;int],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;context_key:&nbsp;int,<br>
 ):<br>
-&#9;w, h = size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;size<br>
 <br>
-&#9;# целевой FBO<br>
-&#9;gfx.bind_framebuffer(dst_fb)<br>
-&#9;gfx.set_viewport(0, 0, w, h)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;целевой&nbsp;FBO<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gfx.bind_framebuffer(dst_fb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_viewport(0,&nbsp;0,&nbsp;w,&nbsp;h)<br>
 <br>
-&#9;# глубина нам не нужна<br>
-&#9;gfx.set_depth_test(False)<br>
-&#9;gfx.set_depth_mask(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;глубина&nbsp;нам&nbsp;не&nbsp;нужна<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_test(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_mask(False)<br>
 <br>
-&#9;# берём ту же фуллскрин-квад-программу, что и PresentToScreenPass<br>
-&#9;shader = PresentToScreenPass._get_shader()<br>
-&#9;shader.ensure_ready(gfx)<br>
-&#9;shader.use()<br>
-&#9;shader.set_uniform_int(&quot;u_tex&quot;, 0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;берём&nbsp;ту&nbsp;же&nbsp;фуллскрин-квад-программу,&nbsp;что&nbsp;и&nbsp;PresentToScreenPass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;PresentToScreenPass._get_shader()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader.ensure_ready(gfx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader.use()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_tex&quot;,&nbsp;0)<br>
 <br>
-&#9;tex = src_fb.color_texture()<br>
-&#9;tex.bind(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tex&nbsp;=&nbsp;src_fb.color_texture()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tex.bind(0)<br>
 <br>
-&#9;gfx.draw_ui_textured_quad(context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gfx.draw_ui_textured_quad(context_key)<br>
 <br>
-&#9;gfx.set_depth_test(True)<br>
-&#9;gfx.set_depth_mask(True)<br>
-<br>
-<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_test(True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_mask(True)<br>
 <br>
 <br>
 <br>
-FSQ_VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location = 0) in vec2 a_pos;<br>
-layout(location = 1) in vec2 a_uv;<br>
 <br>
-out vec2 v_uv;<br>
 <br>
-void main() {<br>
-&#9;v_uv = a_uv;<br>
-&#9;gl_Position = vec4(a_pos, 0.0, 1.0);<br>
+FSQ_VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec2&nbsp;a_pos;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec2&nbsp;a_uv;<br>
+<br>
+out&nbsp;vec2&nbsp;v_uv;<br>
+<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_uv&nbsp;=&nbsp;a_uv;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;vec4(a_pos,&nbsp;0.0,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-FSQ_FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-in vec2 v_uv;<br>
-out vec4 FragColor;<br>
+FSQ_FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+in&nbsp;vec2&nbsp;v_uv;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-uniform sampler2D u_tex;<br>
+uniform&nbsp;sampler2D&nbsp;u_tex;<br>
 <br>
-void main() {<br>
-&#9;FragColor = texture(u_tex, v_uv);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;texture(u_tex,&nbsp;v_uv);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-class PresentToScreenPass(RenderFramePass):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Берёт текстуру из ресурса input_res и выводит её на экран<br>
-&#9;фуллскрин-квадом.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;_shader: ShaderProgram | None = None<br>
+class&nbsp;PresentToScreenPass(RenderFramePass):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Берёт&nbsp;текстуру&nbsp;из&nbsp;ресурса&nbsp;input_res&nbsp;и&nbsp;выводит&nbsp;её&nbsp;на&nbsp;экран<br>
+&nbsp;&nbsp;&nbsp;&nbsp;фуллскрин-квадом.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;_shader:&nbsp;ShaderProgram&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
-&#9;def __init__(self, input_res: str, pass_name: str = &quot;PresentToScreen&quot;):<br>
-&#9;&#9;super().__init__(<br>
-&#9;&#9;&#9;pass_name=pass_name,<br>
-&#9;&#9;&#9;reads={input_res},<br>
-&#9;&#9;&#9;writes=set(),  # экран считаем внешним<br>
-&#9;&#9;&#9;inplace=False,<br>
-&#9;&#9;)<br>
-&#9;&#9;self.input_res = input_res<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;input_res:&nbsp;str,&nbsp;pass_name:&nbsp;str&nbsp;=&nbsp;&quot;PresentToScreen&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads={input_res},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes=set(),&nbsp;&nbsp;#&nbsp;экран&nbsp;считаем&nbsp;внешним<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=False,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.input_res&nbsp;=&nbsp;input_res<br>
 <br>
-&#9;@classmethod<br>
-&#9;def _get_shader(cls) -&gt; ShaderProgram:<br>
-&#9;&#9;if cls._shader is None:<br>
-&#9;&#9;&#9;cls._shader = ShaderProgram(FSQ_VERT, FSQ_FRAG)<br>
-&#9;&#9;return cls._shader<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@classmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_get_shader(cls)&nbsp;-&gt;&nbsp;ShaderProgram:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;cls._shader&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cls._shader&nbsp;=&nbsp;ShaderProgram(FSQ_VERT,&nbsp;FSQ_FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;cls._shader<br>
 <br>
-&#9;def execute(self, ctx: FrameContext):<br>
-&#9;&#9;gfx = ctx.graphics<br>
-&#9;&#9;window = ctx.window<br>
-&#9;&#9;px, py, pw, ph = ctx.rect<br>
-&#9;&#9;key = ctx.context_key<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(self,&nbsp;ctx:&nbsp;FrameContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;=&nbsp;ctx.graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;ctx.window<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;ctx.rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;=&nbsp;ctx.context_key<br>
 <br>
-&#9;&#9;fb_in = ctx.fbos.get(self.input_res)<br>
-&#9;&#9;if fb_in is None:<br>
-&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_in&nbsp;=&nbsp;ctx.fbos.get(self.input_res)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fb_in&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;&#9;tex_in = fb_in.color_texture()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tex_in&nbsp;=&nbsp;fb_in.color_texture()<br>
 <br>
-&#9;&#9;window.handle.bind_window_framebuffer()<br>
-&#9;&#9;gfx.set_viewport(px, py, pw, ph)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.handle.bind_window_framebuffer()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_viewport(px,&nbsp;py,&nbsp;pw,&nbsp;ph)<br>
 <br>
-&#9;&#9;gfx.set_depth_test(False)<br>
-&#9;&#9;gfx.set_depth_mask(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_test(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_mask(False)<br>
 <br>
-&#9;&#9;shader = self._get_shader()<br>
-&#9;&#9;shader.ensure_ready(gfx)<br>
-&#9;&#9;shader.use()<br>
-&#9;&#9;shader.set_uniform_int(&quot;u_tex&quot;, 0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;self._get_shader()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.ensure_ready(gfx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.use()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_tex&quot;,&nbsp;0)<br>
 <br>
-&#9;&#9;tex_in.bind(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tex_in.bind(0)<br>
 <br>
-&#9;&#9;gfx.draw_ui_textured_quad(key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.draw_ui_textured_quad(key)<br>
 <br>
-&#9;&#9;gfx.set_depth_test(True)<br>
-&#9;&#9;gfx.set_depth_mask(True)<br>
-<br>
-<br>
-class CanvasPass(RenderFramePass):<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;src: str = &quot;screen&quot;,<br>
-&#9;&#9;dst: str = &quot;screen+ui&quot;,<br>
-&#9;&#9;pass_name: str = &quot;Canvas&quot;,<br>
-&#9;):<br>
-&#9;&#9;super().__init__(<br>
-&#9;&#9;&#9;pass_name=pass_name,<br>
-&#9;&#9;&#9;reads={src},<br>
-&#9;&#9;&#9;writes={dst},<br>
-&#9;&#9;&#9;inplace=True,  # &lt;- ключевое: модифицирующий пасс<br>
-&#9;&#9;)<br>
-&#9;&#9;self.src = src<br>
-&#9;&#9;self.dst = dst<br>
-<br>
-&#9;def execute(self, ctx: FrameContext):<br>
-&#9;&#9;gfx = ctx.graphics<br>
-&#9;&#9;window = ctx.window<br>
-&#9;&#9;viewport = ctx.viewport<br>
-&#9;&#9;px, py, pw, ph = ctx.rect<br>
-&#9;&#9;key = ctx.context_key<br>
-<br>
-&#9;&#9;# Пытаемся взять FBO исходного ресурса<br>
-&#9;&#9;fb_in = ctx.fbos.get(self.src)<br>
-<br>
-&#9;&#9;if fb_in is not None:<br>
-&#9;&#9;&#9;# inplace по сути: переиспользуем тот же FBO<br>
-&#9;&#9;&#9;fb_out = fb_in<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;# src – внешний ресурс / никем не создан:<br>
-&#9;&#9;&#9;# делаем новый FBO под dst<br>
-&#9;&#9;&#9;fb_out = window.get_viewport_fbo(viewport, self.dst, (pw, ph))<br>
-<br>
-&#9;&#9;# публикуем его под именем dst<br>
-&#9;&#9;ctx.fbos[self.dst] = fb_out<br>
-<br>
-&#9;&#9;gfx.bind_framebuffer(fb_out)<br>
-&#9;&#9;gfx.set_viewport(0, 0, pw, ph)<br>
-<br>
-&#9;&#9;# Ничего не чистим, не копируем: если там уже есть картинка —<br>
-&#9;&#9;# рисуем UI поверх неё.<br>
-&#9;&#9;if viewport.canvas:<br>
-&#9;&#9;&#9;viewport.canvas.render(gfx, key, (0, 0, pw, ph))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_test(True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_depth_mask(True)<br>
 <br>
 <br>
+class&nbsp;CanvasPass(RenderFramePass):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;src:&nbsp;str&nbsp;=&nbsp;&quot;screen&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dst:&nbsp;str&nbsp;=&nbsp;&quot;screen+ui&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name:&nbsp;str&nbsp;=&nbsp;&quot;Canvas&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads={src},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes={dst},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=True,&nbsp;&nbsp;#&nbsp;&lt;-&nbsp;ключевое:&nbsp;модифицирующий&nbsp;пасс<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.src&nbsp;=&nbsp;src<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.dst&nbsp;=&nbsp;dst<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(self,&nbsp;ctx:&nbsp;FrameContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;=&nbsp;ctx.graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;ctx.window<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;ctx.viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;ctx.rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;=&nbsp;ctx.context_key<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пытаемся&nbsp;взять&nbsp;FBO&nbsp;исходного&nbsp;ресурса<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_in&nbsp;=&nbsp;ctx.fbos.get(self.src)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fb_in&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;inplace&nbsp;по&nbsp;сути:&nbsp;переиспользуем&nbsp;тот&nbsp;же&nbsp;FBO<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_out&nbsp;=&nbsp;fb_in<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;src&nbsp;–&nbsp;внешний&nbsp;ресурс&nbsp;/&nbsp;никем&nbsp;не&nbsp;создан:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;делаем&nbsp;новый&nbsp;FBO&nbsp;под&nbsp;dst<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_out&nbsp;=&nbsp;window.get_viewport_fbo(viewport,&nbsp;self.dst,&nbsp;(pw,&nbsp;ph))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;публикуем&nbsp;его&nbsp;под&nbsp;именем&nbsp;dst<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctx.fbos[self.dst]&nbsp;=&nbsp;fb_out<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.bind_framebuffer(fb_out)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_viewport(0,&nbsp;0,&nbsp;pw,&nbsp;ph)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ничего&nbsp;не&nbsp;чистим,&nbsp;не&nbsp;копируем:&nbsp;если&nbsp;там&nbsp;уже&nbsp;есть&nbsp;картинка&nbsp;—<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;рисуем&nbsp;UI&nbsp;поверх&nbsp;неё.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport.canvas:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.canvas.render(gfx,&nbsp;key,&nbsp;(0,&nbsp;0,&nbsp;pw,&nbsp;ph))<br>
 <br>
 <br>
-from .components import MeshRenderer<br>
-from .picking import id_to_rgb<br>
 <br>
-class IdPass(RenderFramePass):<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;input_res: str = &quot;empty&quot;,<br>
-&#9;&#9;output_res: str = &quot;id&quot;,<br>
-&#9;&#9;pass_name: str = &quot;IdPass&quot;,<br>
-&#9;):<br>
-&#9;&#9;super().__init__(<br>
-&#9;&#9;&#9;pass_name=pass_name,<br>
-&#9;&#9;&#9;reads={input_res},<br>
-&#9;&#9;&#9;writes={output_res},<br>
-&#9;&#9;&#9;inplace=True,<br>
-&#9;&#9;)<br>
-&#9;&#9;self.input_res = input_res<br>
-&#9;&#9;self.output_res = output_res<br>
 <br>
-&#9;def execute(self, ctx: FrameContext):<br>
-&#9;&#9;gfx      = ctx.graphics<br>
-&#9;&#9;window   = ctx.window<br>
-&#9;&#9;viewport = ctx.viewport<br>
-&#9;&#9;scene    = viewport.scene<br>
-&#9;&#9;camera   = viewport.camera<br>
-&#9;&#9;px, py, pw, ph = ctx.rect<br>
-&#9;&#9;key      = ctx.context_key<br>
+from&nbsp;.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;.picking&nbsp;import&nbsp;id_to_rgb<br>
 <br>
-&#9;&#9;fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))<br>
-&#9;&#9;ctx.fbos[self.output_res] = fb<br>
+class&nbsp;IdPass(RenderFramePass):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;input_res:&nbsp;str&nbsp;=&nbsp;&quot;empty&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output_res:&nbsp;str&nbsp;=&nbsp;&quot;id&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name:&nbsp;str&nbsp;=&nbsp;&quot;IdPass&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads={input_res},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes={output_res},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.input_res&nbsp;=&nbsp;input_res<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output_res&nbsp;=&nbsp;output_res<br>
 <br>
-&#9;&#9;gfx.bind_framebuffer(fb)<br>
-&#9;&#9;gfx.set_viewport(0, 0, pw, ph)<br>
-&#9;&#9;gfx.clear_color_depth((0.0, 0.0, 0.0, 0.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(self,&nbsp;ctx:&nbsp;FrameContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;ctx.graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;&nbsp;&nbsp;=&nbsp;ctx.window<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;ctx.viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;viewport.scene<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;&nbsp;&nbsp;=&nbsp;viewport.camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;ctx.rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;ctx.context_key<br>
 <br>
-&#9;&#9;pick_ids = {}<br>
-&#9;&#9;for ent in scene.entities:<br>
-&#9;&#9;&#9;if not ent.is_pickable():<br>
-&#9;&#9;&#9;&#9;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb&nbsp;=&nbsp;window.get_viewport_fbo(viewport,&nbsp;self.output_res,&nbsp;(pw,&nbsp;ph))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctx.fbos[self.output_res]&nbsp;=&nbsp;fb<br>
 <br>
-&#9;&#9;&#9;mr = ent.get_component(MeshRenderer)<br>
-&#9;&#9;&#9;if mr is None:<br>
-&#9;&#9;&#9;&#9;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.bind_framebuffer(fb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_viewport(0,&nbsp;0,&nbsp;pw,&nbsp;ph)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.clear_color_depth((0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;0.0))<br>
 <br>
-&#9;&#9;&#9;pid = window._get_pick_id_for_entity(ent)<br>
-&#9;&#9;&#9;pick_ids[ent] = pid<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_ids&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ent&nbsp;in&nbsp;scene.entities:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;ent.is_pickable():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
 <br>
-&#9;&#9;window.renderer.render_viewport_pick(<br>
-&#9;&#9;&#9;scene,<br>
-&#9;&#9;&#9;camera,<br>
-&#9;&#9;&#9;(0, 0, pw, ph),<br>
-&#9;&#9;&#9;key,<br>
-&#9;&#9;&#9;pick_ids,<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mr&nbsp;=&nbsp;ent.get_component(MeshRenderer)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mr&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pid&nbsp;=&nbsp;window._get_pick_id_for_entity(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_ids[ent]&nbsp;=&nbsp;pid<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.renderer.render_viewport_pick(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(0,&nbsp;0,&nbsp;pw,&nbsp;ph),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_ids,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
 <br>
 <br>
@@ -504,14 +504,14 @@ class IdPass(RenderFramePass):<br>
 <br>
 <br>
 @dataclass<br>
-class FrameContext:<br>
-&#9;window: &quot;Window&quot;<br>
-&#9;viewport: &quot;Viewport&quot;<br>
-&#9;rect: Tuple[int, int, int, int]<br>
-&#9;size: Tuple[int, int]<br>
-&#9;context_key: int<br>
-&#9;graphics: &quot;GraphicsBackend&quot;<br>
-&#9;fbos: Dict[str, Any] = field(default_factory=dict)<br>
+class&nbsp;FrameContext:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window:&nbsp;&quot;Window&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;viewport:&nbsp;&quot;Viewport&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rect:&nbsp;Tuple[int,&nbsp;int,&nbsp;int,&nbsp;int]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;Tuple[int,&nbsp;int]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;context_key:&nbsp;int<br>
+&nbsp;&nbsp;&nbsp;&nbsp;graphics:&nbsp;&quot;GraphicsBackend&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;fbos:&nbsp;Dict[str,&nbsp;Any]&nbsp;=&nbsp;field(default_factory=dict)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

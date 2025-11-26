@@ -7,14 +7,14 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-from .mesh_renderer import MeshRenderer<br>
-from .skybox_renderer import SkyboxRenderer<br>
-from .line_renderer import LineRenderer<br>
+from&nbsp;.mesh_renderer&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;.skybox_renderer&nbsp;import&nbsp;SkyboxRenderer<br>
+from&nbsp;.line_renderer&nbsp;import&nbsp;LineRenderer<br>
 <br>
-__all__ = [<br>
-&#9;&quot;MeshRenderer&quot;,<br>
-&#9;&quot;SkyboxRenderer&quot;,<br>
-&#9;&quot;LineRenderer&quot;,<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;MeshRenderer&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;SkyboxRenderer&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;LineRenderer&quot;,<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

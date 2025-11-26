@@ -6,66 +6,68 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import math<br>
-import numpy<br>
+import&nbsp;math<br>
+import&nbsp;numpy<br>
 <br>
-def qmul(q1: numpy.ndarray, q2: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&quot;&quot;&quot;Multiply two quaternions.&quot;&quot;&quot;<br>
-&#9;x1, y1, z1, w1 = q1<br>
-&#9;x2, y2, z2, w2 = q2<br>
-&#9;return numpy.array([<br>
-&#9;&#9;w1*x2 + x1*w2 + y1*z2 - z1*y2,<br>
-&#9;&#9;w1*y2 - x1*z2 + y1*w2 + z1*x2,<br>
-&#9;&#9;w1*z2 + x1*y2 - y1*x2 + z1*w2,<br>
-&#9;&#9;w1*w2 - x1*x2 - y1*y2 - z1*z2<br>
-&#9;])<br>
+def&nbsp;qmul(q1:&nbsp;numpy.ndarray,&nbsp;q2:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Multiply&nbsp;two&nbsp;quaternions.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x1,&nbsp;y1,&nbsp;z1,&nbsp;w1&nbsp;=&nbsp;q1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x2,&nbsp;y2,&nbsp;z2,&nbsp;w2&nbsp;=&nbsp;q2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*x2&nbsp;+&nbsp;x1*w2&nbsp;+&nbsp;y1*z2&nbsp;-&nbsp;z1*y2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*y2&nbsp;-&nbsp;x1*z2&nbsp;+&nbsp;y1*w2&nbsp;+&nbsp;z1*x2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*z2&nbsp;+&nbsp;x1*y2&nbsp;-&nbsp;y1*x2&nbsp;+&nbsp;z1*w2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*w2&nbsp;-&nbsp;x1*x2&nbsp;-&nbsp;y1*y2&nbsp;-&nbsp;z1*z2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;])<br>
 <br>
-def qmul_vector(q: numpy.ndarray, v: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;x1, y1, z1, w1 = q<br>
-&#9;x2, y2, z2 = v<br>
-&#9;return numpy.array([<br>
-&#9;&#9;w1*x2         + y1*z2 - z1*y2,<br>
-&#9;&#9;w1*y2 - x1*z2         + z1*x2,<br>
-&#9;&#9;w1*z2 + x1*y2 - y1*x2,<br>
-&#9;&#9;&#9;- x1*x2 - y1*y2 - z1*z2<br>
-&#9;])<br>
+def&nbsp;qmul_vector(q:&nbsp;numpy.ndarray,&nbsp;v:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x1,&nbsp;y1,&nbsp;z1,&nbsp;w1&nbsp;=&nbsp;q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x2,&nbsp;y2,&nbsp;z2&nbsp;=&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*x2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+&nbsp;y1*z2&nbsp;-&nbsp;z1*y2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*y2&nbsp;-&nbsp;x1*z2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+&nbsp;z1*x2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1*z2&nbsp;+&nbsp;x1*y2&nbsp;-&nbsp;y1*x2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;x1*x2&nbsp;-&nbsp;y1*y2&nbsp;-&nbsp;z1*z2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;])<br>
 <br>
 <br>
-def qrot(q: numpy.ndarray, v: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&quot;&quot;&quot;Rotate vector v by quaternion q.&quot;&quot;&quot;<br>
-&#9;q_conj = numpy.array([-q[0], -q[1], -q[2], q[3]])<br>
-&#9;rotated_v = qmul(qmul_vector(q, v), q_conj)<br>
-&#9;return rotated_v[:3]<br>
+def&nbsp;qrot(q:&nbsp;numpy.ndarray,&nbsp;v:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Rotate&nbsp;vector&nbsp;v&nbsp;by&nbsp;quaternion&nbsp;q.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;q_conj&nbsp;=&nbsp;numpy.array([-q[0],&nbsp;-q[1],&nbsp;-q[2],&nbsp;q[3]])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rotated_v&nbsp;=&nbsp;qmul(qmul_vector(q,&nbsp;v),&nbsp;q_conj)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;rotated_v[:3]<br>
 <br>
-def qslerp(q1: numpy.ndarray, q2: numpy.ndarray, t: float) -&gt; numpy.ndarray:<br>
-&#9;&quot;&quot;&quot;Spherical linear interpolation between two quaternions.&quot;&quot;&quot;<br>
-&#9;dot = numpy.dot(q1, q2)<br>
-&#9;if dot &lt; 0.0:<br>
-&#9;&#9;q2 = -q2<br>
-&#9;&#9;dot = -dot<br>
+def&nbsp;qslerp(q1:&nbsp;numpy.ndarray,&nbsp;q2:&nbsp;numpy.ndarray,&nbsp;t:&nbsp;float)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Spherical&nbsp;linear&nbsp;interpolation&nbsp;between&nbsp;two&nbsp;quaternions.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dot&nbsp;=&nbsp;numpy.dot(q1,&nbsp;q2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dot&nbsp;&lt;&nbsp;0.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q2&nbsp;=&nbsp;-q2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dot&nbsp;=&nbsp;-dot<br>
 <br>
-&#9;DOT_THRESHOLD = 0.9995<br>
-&#9;if dot &gt; DOT_THRESHOLD:<br>
-&#9;&#9;result = q1 + t * (q2 - q1)<br>
-&#9;&#9;return result / numpy.linalg.norm(result)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;DOT_THRESHOLD&nbsp;=&nbsp;0.9995<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dot&nbsp;&gt;&nbsp;DOT_THRESHOLD:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result&nbsp;=&nbsp;q1&nbsp;+&nbsp;t&nbsp;*&nbsp;(q2&nbsp;-&nbsp;q1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;result&nbsp;/&nbsp;numpy.linalg.norm(result)<br>
 <br>
-&#9;theta_0 = math.acos(dot)<br>
-&#9;theta = theta_0 * t<br>
-&#9;sin_theta = math.sin(theta)<br>
-&#9;sin_theta_0 = math.sin(theta_0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;theta_0&nbsp;=&nbsp;math.acos(dot)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;theta&nbsp;=&nbsp;theta_0&nbsp;*&nbsp;t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sin_theta&nbsp;=&nbsp;math.sin(theta)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sin_theta_0&nbsp;=&nbsp;math.sin(theta_0)<br>
 <br>
-&#9;s1 = math.cos(theta) - dot * sin_theta / sin_theta_0<br>
-&#9;s2 = sin_theta / sin_theta_0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;s1&nbsp;=&nbsp;math.cos(theta)&nbsp;-&nbsp;dot&nbsp;*&nbsp;sin_theta&nbsp;/&nbsp;sin_theta_0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;s2&nbsp;=&nbsp;sin_theta&nbsp;/&nbsp;sin_theta_0<br>
 <br>
-&#9;return (s1 * q1) + (s2 * q2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(s1&nbsp;*&nbsp;q1)&nbsp;+&nbsp;(s2&nbsp;*&nbsp;q2)<br>
 <br>
-def deg2rad(deg):<br>
-&#9;return deg / 180.0 * math.pi<br>
+def&nbsp;deg2rad(deg):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;deg&nbsp;/&nbsp;180.0&nbsp;*&nbsp;math.pi<br>
 <br>
-def qinv(q: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&quot;&quot;&quot;Compute the inverse of a quaternion.&quot;&quot;&quot;<br>
-&#9;return numpy.array([-q[0], -q[1], -q[2], q[3]])<br>
-&#9;<br>
+def&nbsp;qinv(q:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compute&nbsp;the&nbsp;inverse&nbsp;of&nbsp;a&nbsp;quaternion.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([-q[0],&nbsp;-q[1],&nbsp;-q[2],&nbsp;q[3]])<br>
+<br>
+<br>
+<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

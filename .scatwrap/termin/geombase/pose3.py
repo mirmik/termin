@@ -6,396 +6,396 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import math<br>
-import numpy<br>
-import numpy as np<br>
-from termin.util import qmul, qrot, qslerp, qinv<br>
+import&nbsp;math<br>
+import&nbsp;numpy<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;termin.util&nbsp;import&nbsp;qmul,&nbsp;qrot,&nbsp;qslerp,&nbsp;qinv<br>
 <br>
-class Pose3:<br>
-&#9;&quot;&quot;&quot;A 3D Pose represented by rotation quaternion and translation vector.&quot;&quot;&quot;<br>
+class&nbsp;Pose3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;3D&nbsp;Pose&nbsp;represented&nbsp;by&nbsp;rotation&nbsp;quaternion&nbsp;and&nbsp;translation&nbsp;vector.&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, ang: numpy.ndarray = None, lin: numpy.ndarray = None):<br>
-&#9;&#9;if ang is None:<br>
-&#9;&#9;&#9;ang = numpy.array([0.0, 0.0, 0.0, 1.0])<br>
-&#9;&#9;if lin is None:<br>
-&#9;&#9;&#9;lin = numpy.array([0.0, 0.0, 0.0])<br>
-&#9;&#9;self._ang = ang<br>
-&#9;&#9;self._lin = lin<br>
-&#9;&#9;self._rot_matrix = None  # Lazy computation<br>
-&#9;&#9;self._mat = None  # Lazy computation<br>
-&#9;&#9;self._mat34 = None  # Lazy computation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;ang:&nbsp;numpy.ndarray&nbsp;=&nbsp;None,&nbsp;lin:&nbsp;numpy.ndarray&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ang&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;numpy.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lin&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin&nbsp;=&nbsp;numpy.array([0.0,&nbsp;0.0,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._ang&nbsp;=&nbsp;ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._lin&nbsp;=&nbsp;lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot_matrix&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Lazy&nbsp;computation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Lazy&nbsp;computation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat34&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Lazy&nbsp;computation<br>
 <br>
-&#9;@property<br>
-&#9;def ang(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Get the rotation quaternion.&quot;&quot;&quot;<br>
-&#9;&#9;return self._ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;ang(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;rotation&nbsp;quaternion.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._ang<br>
 <br>
-&#9;@property<br>
-&#9;def lin(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Get the translation vector.&quot;&quot;&quot;<br>
-&#9;&#9;return self._lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;lin(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;translation&nbsp;vector.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._lin<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def identity():<br>
-&#9;&#9;return Pose3(<br>
-&#9;&#9;&#9;ang=numpy.array([0.0, 0.0, 0.0, 1.0]),<br>
-&#9;&#9;&#9;lin=numpy.array([0.0, 0.0, 0.0])<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;identity():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def rotation_matrix(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get the 3x3 rotation matrix corresponding to the pose's orientation.&quot;&quot;&quot;<br>
-&#9;&#9;if self._rot_matrix is None:<br>
-&#9;&#9;&#9;x, y, z, w = self.ang<br>
-&#9;&#9;&#9;self._rot_matrix = numpy.array([<br>
-&#9;&#9;&#9;&#9;[1 - 2*(y**2 + z**2), 2*(x*y - z*w), 2*(x*z + y*w)],<br>
-&#9;&#9;&#9;&#9;[2*(x*y + z*w), 1 - 2*(x**2 + z**2), 2*(y*z - x*w)],<br>
-&#9;&#9;&#9;&#9;[2*(x*z - y*w), 2*(y*z + x*w), 1 - 2*(x**2 + y**2)]<br>
-&#9;&#9;&#9;])<br>
-&#9;&#9;return self._rot_matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotation_matrix(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;3x3&nbsp;rotation&nbsp;matrix&nbsp;corresponding&nbsp;to&nbsp;the&nbsp;pose's&nbsp;orientation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._rot_matrix&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y,&nbsp;z,&nbsp;w&nbsp;=&nbsp;self.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot_matrix&nbsp;=&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1&nbsp;-&nbsp;2*(y**2&nbsp;+&nbsp;z**2),&nbsp;2*(x*y&nbsp;-&nbsp;z*w),&nbsp;2*(x*z&nbsp;+&nbsp;y*w)],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2*(x*y&nbsp;+&nbsp;z*w),&nbsp;1&nbsp;-&nbsp;2*(x**2&nbsp;+&nbsp;z**2),&nbsp;2*(y*z&nbsp;-&nbsp;x*w)],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2*(x*z&nbsp;-&nbsp;y*w),&nbsp;2*(y*z&nbsp;+&nbsp;x*w),&nbsp;1&nbsp;-&nbsp;2*(x**2&nbsp;+&nbsp;y**2)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._rot_matrix<br>
 <br>
-&#9;def as_matrix(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get the 4x4 transformation matrix corresponding to the pose.&quot;&quot;&quot;<br>
-&#9;&#9;if self._mat is None:<br>
-&#9;&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;&#9;t = self.lin<br>
-&#9;&#9;&#9;self._mat = numpy.eye(4)<br>
-&#9;&#9;&#9;self._mat[:3, :3] = R<br>
-&#9;&#9;&#9;self._mat[:3, 3] = t<br>
-&#9;&#9;return self._mat<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;as_matrix(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;4x4&nbsp;transformation&nbsp;matrix&nbsp;corresponding&nbsp;to&nbsp;the&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._mat&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;numpy.eye(4)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat[:3,&nbsp;:3]&nbsp;=&nbsp;R<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat[:3,&nbsp;3]&nbsp;=&nbsp;t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._mat<br>
 <br>
-&#9;def as_matrix34(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get the 3x4 transformation matrix corresponding to the pose.&quot;&quot;&quot;<br>
-&#9;&#9;if self._mat34 is None:<br>
-&#9;&#9;&#9;R = self.rotation_matrix()<br>
-&#9;&#9;&#9;t = self.lin<br>
-&#9;&#9;&#9;self._mat34 = numpy.zeros((3, 4))<br>
-&#9;&#9;&#9;self._mat34[:, :3] = R<br>
-&#9;&#9;&#9;self._mat34[:, 3] = t<br>
-&#9;&#9;return self._mat34<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;as_matrix34(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;3x4&nbsp;transformation&nbsp;matrix&nbsp;corresponding&nbsp;to&nbsp;the&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._mat34&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat34&nbsp;=&nbsp;numpy.zeros((3,&nbsp;4))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat34[:,&nbsp;:3]&nbsp;=&nbsp;R<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat34[:,&nbsp;3]&nbsp;=&nbsp;t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._mat34<br>
 <br>
-&#9;def inverse(self):<br>
-&#9;&#9;&quot;&quot;&quot;Compute the inverse of the pose.&quot;&quot;&quot;<br>
-&#9;&#9;x, y, z, w = self.ang<br>
-&#9;&#9;tx, ty, tz = self.lin<br>
-&#9;&#9;inv_ang = numpy.array([-x, -y, -z, w])<br>
-&#9;&#9;inv_lin = qrot(inv_ang, -self.lin)<br>
-&#9;&#9;return Pose3(inv_ang, inv_lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compute&nbsp;the&nbsp;inverse&nbsp;of&nbsp;the&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y,&nbsp;z,&nbsp;w&nbsp;=&nbsp;self.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tx,&nbsp;ty,&nbsp;tz&nbsp;=&nbsp;self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inv_ang&nbsp;=&nbsp;numpy.array([-x,&nbsp;-y,&nbsp;-z,&nbsp;w])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inv_lin&nbsp;=&nbsp;qrot(inv_ang,&nbsp;-self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(inv_ang,&nbsp;inv_lin)<br>
 <br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return f&quot;Pose3(ang={self.ang}, lin={self.lin})&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;Pose3(ang={self.ang},&nbsp;lin={self.lin})&quot;<br>
 <br>
-&#9;def transform_point(self, point: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a 3D point using the pose.&quot;&quot;&quot;<br>
-&#9;&#9;return qrot(self.ang, point) + self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_point(self,&nbsp;point:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;3D&nbsp;point&nbsp;using&nbsp;the&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;qrot(self.ang,&nbsp;point)&nbsp;+&nbsp;self.lin<br>
 <br>
-&#9;def rotate_point(self, point: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Rotate a 3D point using the pose (ignoring translation).&quot;&quot;&quot;<br>
-&#9;&#9;return qrot(self.ang, point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotate_point(self,&nbsp;point:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Rotate&nbsp;a&nbsp;3D&nbsp;point&nbsp;using&nbsp;the&nbsp;pose&nbsp;(ignoring&nbsp;translation).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;qrot(self.ang,&nbsp;point)<br>
 <br>
-&#9;def transform_vector(self, vector: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform a 3D vector using the pose (ignoring translation).&quot;&quot;&quot;<br>
-&#9;&#9;return qrot(self.ang, vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_vector(self,&nbsp;vector:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;a&nbsp;3D&nbsp;vector&nbsp;using&nbsp;the&nbsp;pose&nbsp;(ignoring&nbsp;translation).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;qrot(self.ang,&nbsp;vector)<br>
 <br>
-&#9;def inverse_transform_point(self, pnt):<br>
-&#9;&#9;return qrot(qinv(self.ang), pnt - self.lin)<br>
-&#9;<br>
-&#9;def inverse_transform_vector(self, vec):<br>
-&#9;&#9;return qrot(qinv(self.ang), vec)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_point(self,&nbsp;pnt):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;qrot(qinv(self.ang),&nbsp;pnt&nbsp;-&nbsp;self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_vector(self,&nbsp;vec):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;qrot(qinv(self.ang),&nbsp;vec)<br>
 <br>
-&#9;def __mul__(self, other):<br>
-&#9;&#9;&quot;&quot;&quot;Compose this pose with another pose.&quot;&quot;&quot;<br>
-&#9;&#9;if not isinstance(other, Pose3):<br>
-&#9;&#9;&#9;raise TypeError(&quot;Can only multiply Pose3 with Pose3&quot;)<br>
-&#9;&#9;q = qmul(self.ang, other.ang)<br>
-&#9;&#9;t = self.lin + qrot(self.ang, other.lin)<br>
-&#9;&#9;return Pose3(ang=q, lin=t)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__mul__(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compose&nbsp;this&nbsp;pose&nbsp;with&nbsp;another&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(other,&nbsp;Pose3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;TypeError(&quot;Can&nbsp;only&nbsp;multiply&nbsp;Pose3&nbsp;with&nbsp;Pose3&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;qmul(self.ang,&nbsp;other.ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;self.lin&nbsp;+&nbsp;qrot(self.ang,&nbsp;other.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=q,&nbsp;lin=t)<br>
 <br>
-&#9;def __matmul__(self, other):<br>
-&#9;&#9;&quot;&quot;&quot;Compose this pose with another pose using @ operator.&quot;&quot;&quot;<br>
-&#9;&#9;return self * other<br>
-&#9;<br>
-&#9;def compose(self, other: 'Pose3') -&gt; 'Pose3':<br>
-&#9;&#9;&quot;&quot;&quot;Compose this pose with another pose.&quot;&quot;&quot;<br>
-&#9;&#9;return self * other<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__matmul__(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compose&nbsp;this&nbsp;pose&nbsp;with&nbsp;another&nbsp;pose&nbsp;using&nbsp;@&nbsp;operator.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self&nbsp;*&nbsp;other<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;compose(self,&nbsp;other:&nbsp;'Pose3')&nbsp;-&gt;&nbsp;'Pose3':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compose&nbsp;this&nbsp;pose&nbsp;with&nbsp;another&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self&nbsp;*&nbsp;other<br>
 <br>
-&#9;def with_rotation(self, ang: numpy.ndarray) -&gt; 'Pose3':<br>
-&#9;&#9;&quot;&quot;&quot;Return a new Pose3 with the given rotation and the same translation.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose3(ang=ang, lin=self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;with_rotation(self,&nbsp;ang:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;'Pose3':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;a&nbsp;new&nbsp;Pose3&nbsp;with&nbsp;the&nbsp;given&nbsp;rotation&nbsp;and&nbsp;the&nbsp;same&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=ang,&nbsp;lin=self.lin)<br>
 <br>
-&#9;def with_translation(self, lin: numpy.ndarray) -&gt; 'Pose3':<br>
-&#9;&#9;&quot;&quot;&quot;Return a new Pose3 with the given translation and the same rotation.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose3(ang=self.ang, lin=lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;with_translation(self,&nbsp;lin:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;'Pose3':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;a&nbsp;new&nbsp;Pose3&nbsp;with&nbsp;the&nbsp;given&nbsp;translation&nbsp;and&nbsp;the&nbsp;same&nbsp;rotation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=self.ang,&nbsp;lin=lin)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def rotation(axis: numpy.ndarray, angle: float):<br>
-&#9;&#9;&quot;&quot;&quot;Create a rotation pose around a given axis by a given angle.&quot;&quot;&quot;<br>
-&#9;&#9;axis = axis / numpy.linalg.norm(axis)<br>
-&#9;&#9;s = math.sin(angle / 2)<br>
-&#9;&#9;c = math.cos(angle / 2)<br>
-&#9;&#9;q = numpy.array([axis[0] * s, axis[1] * s, axis[2] * s, c])<br>
-&#9;&#9;print(&quot;Rotation axis:&quot;, axis)<br>
-&#9;&#9;print(&quot;Rotation angle (radians):&quot;, angle)<br>
-&#9;&#9;print(&quot;Rotation sin(angle/2):&quot;, s)<br>
-&#9;&#9;print(&quot;Rotation cos(angle/2):&quot;, c)<br>
-&#9;&#9;print(&quot;Rotation quaternion:&quot;, q)<br>
-&#9;&#9;return Pose3(ang=q, lin=numpy.array([0.0, 0.0, 0.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotation(axis:&nbsp;numpy.ndarray,&nbsp;angle:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;rotation&nbsp;pose&nbsp;around&nbsp;a&nbsp;given&nbsp;axis&nbsp;by&nbsp;a&nbsp;given&nbsp;angle.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;axis&nbsp;/&nbsp;numpy.linalg.norm(axis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;math.sin(angle&nbsp;/&nbsp;2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;math.cos(angle&nbsp;/&nbsp;2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;numpy.array([axis[0]&nbsp;*&nbsp;s,&nbsp;axis[1]&nbsp;*&nbsp;s,&nbsp;axis[2]&nbsp;*&nbsp;s,&nbsp;c])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;axis:&quot;,&nbsp;axis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;angle&nbsp;(radians):&quot;,&nbsp;angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;sin(angle/2):&quot;,&nbsp;s)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;cos(angle/2):&quot;,&nbsp;c)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;quaternion:&quot;,&nbsp;q)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=q,&nbsp;lin=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0]))<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def translation(x: float, y: float, z: float):<br>
-&#9;&#9;&quot;&quot;&quot;Create a translation pose.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose3(ang=numpy.array([0.0, 0.0, 0.0, 1.0]), lin=numpy.array([x, y, z]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;translation(x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;z:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;translation&nbsp;pose.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0]),&nbsp;lin=numpy.array([x,&nbsp;y,&nbsp;z]))<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def rotateX(angle: float):<br>
-&#9;&#9;&quot;&quot;&quot;Create a rotation pose around the X axis.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose3.rotation(numpy.array([1.0, 0.0, 0.0]), angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotateX(angle:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;rotation&nbsp;pose&nbsp;around&nbsp;the&nbsp;X&nbsp;axis.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.rotation(numpy.array([1.0,&nbsp;0.0,&nbsp;0.0]),&nbsp;angle)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def rotateY(angle: float):<br>
-&#9;&#9;&quot;&quot;&quot;Create a rotation pose around the Y axis.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose3.rotation(numpy.array([0.0, 1.0, 0.0]), angle)<br>
-&#9;<br>
-&#9;@staticmethod<br>
-&#9;def rotateZ(angle: float):<br>
-&#9;&#9;&quot;&quot;&quot;Create a rotation pose around the Z axis.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose3.rotation(numpy.array([0.0, 0.0, 1.0]), angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotateY(angle:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;rotation&nbsp;pose&nbsp;around&nbsp;the&nbsp;Y&nbsp;axis.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.rotation(numpy.array([0.0,&nbsp;1.0,&nbsp;0.0]),&nbsp;angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotateZ(angle:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;rotation&nbsp;pose&nbsp;around&nbsp;the&nbsp;Z&nbsp;axis.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.rotation(numpy.array([0.0,&nbsp;0.0,&nbsp;1.0]),&nbsp;angle)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def move(dx: float, dy: float, dz: float):<br>
-&#9;&#9;&quot;&quot;&quot;Move the pose by given deltas in local coordinates.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose3.translation(dx, dy, dz)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;move(dx:&nbsp;float,&nbsp;dy:&nbsp;float,&nbsp;dz:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Move&nbsp;the&nbsp;pose&nbsp;by&nbsp;given&nbsp;deltas&nbsp;in&nbsp;local&nbsp;coordinates.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.translation(dx,&nbsp;dy,&nbsp;dz)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def moveX(distance: float):<br>
-&#9;&#9;return Pose3.move(distance, 0.0, 0.0)<br>
-&#9;<br>
-&#9;@staticmethod<br>
-&#9;def moveY(distance: float):<br>
-&#9;&#9;return Pose3.move(0.0, distance, 0.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;moveX(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.move(distance,&nbsp;0.0,&nbsp;0.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;moveY(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.move(0.0,&nbsp;distance,&nbsp;0.0)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def moveZ(distance: float):<br>
-&#9;&#9;return Pose3.move(0.0, 0.0, distance)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;moveZ(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.move(0.0,&nbsp;0.0,&nbsp;distance)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def right(distance: float):<br>
-&#9;&#9;return Pose3.move(distance, 0.0, 0.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;right(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.move(distance,&nbsp;0.0,&nbsp;0.0)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def forward(distance: float):<br>
-&#9;&#9;return Pose3.move(0.0, distance, 0.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;forward(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.move(0.0,&nbsp;distance,&nbsp;0.0)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def up(distance: float):<br>
-&#9;&#9;return Pose3.move(0.0, 0.0, distance)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;up(distance:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.move(0.0,&nbsp;0.0,&nbsp;distance)<br>
 <br>
 <br>
-&#9;@staticmethod<br>
-&#9;def lerp(pose1: 'Pose3', pose2: 'Pose3', t: float) -&gt; 'Pose3':<br>
-&#9;&#9;&quot;&quot;&quot;Linearly interpolate between two poses.&quot;&quot;&quot;<br>
-&#9;&#9;lerped_ang = qslerp(pose1.ang, pose2.ang, t)<br>
-&#9;&#9;lerped_lin = (1 - t) * pose1.lin + t * pose2.lin<br>
-&#9;&#9;return Pose3(ang=lerped_ang, lin=lerped_lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;lerp(pose1:&nbsp;'Pose3',&nbsp;pose2:&nbsp;'Pose3',&nbsp;t:&nbsp;float)&nbsp;-&gt;&nbsp;'Pose3':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Linearly&nbsp;interpolate&nbsp;between&nbsp;two&nbsp;poses.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lerped_ang&nbsp;=&nbsp;qslerp(pose1.ang,&nbsp;pose2.ang,&nbsp;t)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lerped_lin&nbsp;=&nbsp;(1&nbsp;-&nbsp;t)&nbsp;*&nbsp;pose1.lin&nbsp;+&nbsp;t&nbsp;*&nbsp;pose2.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=lerped_ang,&nbsp;lin=lerped_lin)<br>
 <br>
-&#9;# def normalize(self):<br>
-&#9;#     &quot;&quot;&quot;Normalize the quaternion to unit length.&quot;&quot;&quot;<br>
-&#9;#     norm = numpy.linalg.norm(self.ang)<br>
-&#9;#     if norm &gt; 0:<br>
-&#9;#         self.ang = self.ang / norm<br>
-&#9;#         self._rot_matrix = None<br>
-&#9;#         self._mat = None<br>
-&#9;#         self._mat34 = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;def&nbsp;normalize(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Normalize&nbsp;the&nbsp;quaternion&nbsp;to&nbsp;unit&nbsp;length.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;norm&nbsp;=&nbsp;numpy.linalg.norm(self.ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;norm&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.ang&nbsp;=&nbsp;self.ang&nbsp;/&nbsp;norm<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot_matrix&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat34&nbsp;=&nbsp;None<br>
 <br>
-&#9;def normalized(self) -&gt; 'Pose3':<br>
-&#9;&#9;&quot;&quot;&quot;Return a new Pose3 with normalized quaternion.&quot;&quot;&quot;<br>
-&#9;&#9;norm = numpy.linalg.norm(self.ang)<br>
-&#9;&#9;if norm &gt; 0:<br>
-&#9;&#9;&#9;ang = self.ang / norm<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;ang = self.ang<br>
-&#9;&#9;return Pose3(ang=ang, lin=self.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;normalized(self)&nbsp;-&gt;&nbsp;'Pose3':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;a&nbsp;new&nbsp;Pose3&nbsp;with&nbsp;normalized&nbsp;quaternion.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;norm&nbsp;=&nbsp;numpy.linalg.norm(self.ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;norm&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;self.ang&nbsp;/&nbsp;norm<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;self.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=ang,&nbsp;lin=self.lin)<br>
 <br>
-&#9;def distance(self, other: 'Pose3') -&gt; float:<br>
-&#9;&#9;&quot;&quot;&quot;Calculate Euclidean distance between the translation parts of two poses.&quot;&quot;&quot;<br>
-&#9;&#9;return numpy.linalg.norm(self.lin - other.lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;distance(self,&nbsp;other:&nbsp;'Pose3')&nbsp;-&gt;&nbsp;float:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Calculate&nbsp;Euclidean&nbsp;distance&nbsp;between&nbsp;the&nbsp;translation&nbsp;parts&nbsp;of&nbsp;two&nbsp;poses.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.linalg.norm(self.lin&nbsp;-&nbsp;other.lin)<br>
 <br>
-&#9;def to_axis_angle(self):<br>
-&#9;&#9;&quot;&quot;&quot;Convert quaternion to axis-angle representation.<br>
-&#9;&#9;Returns: (axis, angle) where axis is a 3D unit vector and angle is in radians.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;x, y, z, w = self.ang<br>
-&#9;&#9;angle = 2 * math.acos(numpy.clip(w, -1.0, 1.0))<br>
-&#9;&#9;s = math.sqrt(1 - w*w)<br>
-&#9;&#9;if s &lt; 0.001:  # If angle is close to 0<br>
-&#9;&#9;&#9;axis = numpy.array([1.0, 0.0, 0.0])<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;axis = numpy.array([x / s, y / s, z / s])<br>
-&#9;&#9;return axis, angle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_axis_angle(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Convert&nbsp;quaternion&nbsp;to&nbsp;axis-angle&nbsp;representation.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:&nbsp;(axis,&nbsp;angle)&nbsp;where&nbsp;axis&nbsp;is&nbsp;a&nbsp;3D&nbsp;unit&nbsp;vector&nbsp;and&nbsp;angle&nbsp;is&nbsp;in&nbsp;radians.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y,&nbsp;z,&nbsp;w&nbsp;=&nbsp;self.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle&nbsp;=&nbsp;2&nbsp;*&nbsp;math.acos(numpy.clip(w,&nbsp;-1.0,&nbsp;1.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;math.sqrt(1&nbsp;-&nbsp;w*w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;s&nbsp;&lt;&nbsp;0.001:&nbsp;&nbsp;#&nbsp;If&nbsp;angle&nbsp;is&nbsp;close&nbsp;to&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;numpy.array([1.0,&nbsp;0.0,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;numpy.array([x&nbsp;/&nbsp;s,&nbsp;y&nbsp;/&nbsp;s,&nbsp;z&nbsp;/&nbsp;s])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;axis,&nbsp;angle<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def from_axis_angle(axis: numpy.ndarray, angle: float):<br>
-&#9;&#9;&quot;&quot;&quot;Create a Pose3 from axis-angle representation.&quot;&quot;&quot;<br>
-&#9;&#9;return Pose3.rotation(axis, angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_axis_angle(axis:&nbsp;numpy.ndarray,&nbsp;angle:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Pose3&nbsp;from&nbsp;axis-angle&nbsp;representation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3.rotation(axis,&nbsp;angle)<br>
 <br>
-&#9;def to_euler(self, order: str = 'xyz'):<br>
-&#9;&#9;&quot;&quot;&quot;Convert quaternion to Euler angles.<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;order: String specifying rotation order (e.g., 'xyz', 'zyx')<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;numpy array of three angles in radians<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;x, y, z, w = self.ang<br>
-&#9;&#9;<br>
-&#9;&#9;if order == 'xyz':<br>
-&#9;&#9;&#9;# Roll (x-axis rotation)<br>
-&#9;&#9;&#9;sinr_cosp = 2 * (w * x + y * z)<br>
-&#9;&#9;&#9;cosr_cosp = 1 - 2 * (x * x + y * y)<br>
-&#9;&#9;&#9;roll = math.atan2(sinr_cosp, cosr_cosp)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;# Pitch (y-axis rotation)<br>
-&#9;&#9;&#9;sinp = 2 * (w * y - z * x)<br>
-&#9;&#9;&#9;sinp = numpy.clip(sinp, -1.0, 1.0)<br>
-&#9;&#9;&#9;pitch = math.asin(sinp)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;# Yaw (z-axis rotation)<br>
-&#9;&#9;&#9;siny_cosp = 2 * (w * z + x * y)<br>
-&#9;&#9;&#9;cosy_cosp = 1 - 2 * (y * y + z * z)<br>
-&#9;&#9;&#9;yaw = math.atan2(siny_cosp, cosy_cosp)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;return numpy.array([roll, pitch, yaw])<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;raise NotImplementedError(f&quot;Euler order '{order}' not implemented&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_euler(self,&nbsp;order:&nbsp;str&nbsp;=&nbsp;'xyz'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Convert&nbsp;quaternion&nbsp;to&nbsp;Euler&nbsp;angles.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;order:&nbsp;String&nbsp;specifying&nbsp;rotation&nbsp;order&nbsp;(e.g.,&nbsp;'xyz',&nbsp;'zyx')<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;numpy&nbsp;array&nbsp;of&nbsp;three&nbsp;angles&nbsp;in&nbsp;radians<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y,&nbsp;z,&nbsp;w&nbsp;=&nbsp;self.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;order&nbsp;==&nbsp;'xyz':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Roll&nbsp;(x-axis&nbsp;rotation)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sinr_cosp&nbsp;=&nbsp;2&nbsp;*&nbsp;(w&nbsp;*&nbsp;x&nbsp;+&nbsp;y&nbsp;*&nbsp;z)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cosr_cosp&nbsp;=&nbsp;1&nbsp;-&nbsp;2&nbsp;*&nbsp;(x&nbsp;*&nbsp;x&nbsp;+&nbsp;y&nbsp;*&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;roll&nbsp;=&nbsp;math.atan2(sinr_cosp,&nbsp;cosr_cosp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Pitch&nbsp;(y-axis&nbsp;rotation)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sinp&nbsp;=&nbsp;2&nbsp;*&nbsp;(w&nbsp;*&nbsp;y&nbsp;-&nbsp;z&nbsp;*&nbsp;x)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sinp&nbsp;=&nbsp;numpy.clip(sinp,&nbsp;-1.0,&nbsp;1.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pitch&nbsp;=&nbsp;math.asin(sinp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Yaw&nbsp;(z-axis&nbsp;rotation)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;siny_cosp&nbsp;=&nbsp;2&nbsp;*&nbsp;(w&nbsp;*&nbsp;z&nbsp;+&nbsp;x&nbsp;*&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cosy_cosp&nbsp;=&nbsp;1&nbsp;-&nbsp;2&nbsp;*&nbsp;(y&nbsp;*&nbsp;y&nbsp;+&nbsp;z&nbsp;*&nbsp;z)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yaw&nbsp;=&nbsp;math.atan2(siny_cosp,&nbsp;cosy_cosp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([roll,&nbsp;pitch,&nbsp;yaw])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(f&quot;Euler&nbsp;order&nbsp;'{order}'&nbsp;not&nbsp;implemented&quot;)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def from_euler(roll: float, pitch: float, yaw: float, order: str = 'xyz'):<br>
-&#9;&#9;&quot;&quot;&quot;Create a Pose3 from Euler angles.<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;roll, pitch, yaw: Rotation angles in radians<br>
-&#9;&#9;&#9;order: String specifying rotation order (default: 'xyz')<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if order == 'xyz':<br>
-&#9;&#9;&#9;# Compute half angles<br>
-&#9;&#9;&#9;cr = math.cos(roll * 0.5)<br>
-&#9;&#9;&#9;sr = math.sin(roll * 0.5)<br>
-&#9;&#9;&#9;cp = math.cos(pitch * 0.5)<br>
-&#9;&#9;&#9;sp = math.sin(pitch * 0.5)<br>
-&#9;&#9;&#9;cy = math.cos(yaw * 0.5)<br>
-&#9;&#9;&#9;sy = math.sin(yaw * 0.5)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;# Compute quaternion<br>
-&#9;&#9;&#9;qx = sr * cp * cy - cr * sp * sy<br>
-&#9;&#9;&#9;qy = cr * sp * cy + sr * cp * sy<br>
-&#9;&#9;&#9;qz = cr * cp * sy - sr * sp * cy<br>
-&#9;&#9;&#9;qw = cr * cp * cy + sr * sp * sy<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;return Pose3(ang=numpy.array([qx, qy, qz, qw]), lin=numpy.array([0.0, 0.0, 0.0]))<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;raise NotImplementedError(f&quot;Euler order '{order}' not implemented&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_euler(roll:&nbsp;float,&nbsp;pitch:&nbsp;float,&nbsp;yaw:&nbsp;float,&nbsp;order:&nbsp;str&nbsp;=&nbsp;'xyz'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Pose3&nbsp;from&nbsp;Euler&nbsp;angles.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;roll,&nbsp;pitch,&nbsp;yaw:&nbsp;Rotation&nbsp;angles&nbsp;in&nbsp;radians<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;order:&nbsp;String&nbsp;specifying&nbsp;rotation&nbsp;order&nbsp;(default:&nbsp;'xyz')<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;order&nbsp;==&nbsp;'xyz':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Compute&nbsp;half&nbsp;angles<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cr&nbsp;=&nbsp;math.cos(roll&nbsp;*&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sr&nbsp;=&nbsp;math.sin(roll&nbsp;*&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cp&nbsp;=&nbsp;math.cos(pitch&nbsp;*&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sp&nbsp;=&nbsp;math.sin(pitch&nbsp;*&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cy&nbsp;=&nbsp;math.cos(yaw&nbsp;*&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sy&nbsp;=&nbsp;math.sin(yaw&nbsp;*&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Compute&nbsp;quaternion<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qx&nbsp;=&nbsp;sr&nbsp;*&nbsp;cp&nbsp;*&nbsp;cy&nbsp;-&nbsp;cr&nbsp;*&nbsp;sp&nbsp;*&nbsp;sy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qy&nbsp;=&nbsp;cr&nbsp;*&nbsp;sp&nbsp;*&nbsp;cy&nbsp;+&nbsp;sr&nbsp;*&nbsp;cp&nbsp;*&nbsp;sy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qz&nbsp;=&nbsp;cr&nbsp;*&nbsp;cp&nbsp;*&nbsp;sy&nbsp;-&nbsp;sr&nbsp;*&nbsp;sp&nbsp;*&nbsp;cy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qw&nbsp;=&nbsp;cr&nbsp;*&nbsp;cp&nbsp;*&nbsp;cy&nbsp;+&nbsp;sr&nbsp;*&nbsp;sp&nbsp;*&nbsp;sy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=numpy.array([qx,&nbsp;qy,&nbsp;qz,&nbsp;qw]),&nbsp;lin=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(f&quot;Euler&nbsp;order&nbsp;'{order}'&nbsp;not&nbsp;implemented&quot;)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def looking_at(eye: numpy.ndarray, target: numpy.ndarray, up: numpy.ndarray = numpy.array([0.0, 0.0, 1.0])):<br>
-&#9;&#9;&quot;&quot;&quot;Create a pose at 'eye' position looking towards 'target'.<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;eye: Position of the pose<br>
-&#9;&#9;&#9;target: Point to look at<br>
-&#9;&#9;&#9;up: Up vector (default: z-axis)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;forward = target - eye<br>
-&#9;&#9;forward = forward / numpy.linalg.norm(forward)<br>
-&#9;&#9;<br>
-&#9;&#9;right = numpy.cross(forward, up)<br>
-&#9;&#9;right = right / numpy.linalg.norm(right)<br>
-&#9;&#9;<br>
-&#9;&#9;up_corrected = numpy.cross(right, forward)<br>
-&#9;&#9;<br>
-&#9;&#9;# Build rotation matrix<br>
-&#9;&#9;rot_mat = numpy.column_stack([right, up_corrected, -forward])<br>
-&#9;&#9;<br>
-&#9;&#9;# Convert rotation matrix to quaternion<br>
-&#9;&#9;trace = numpy.trace(rot_mat)<br>
-&#9;&#9;if trace &gt; 0:<br>
-&#9;&#9;&#9;s = 0.5 / math.sqrt(trace + 1.0)<br>
-&#9;&#9;&#9;qw = 0.25 / s<br>
-&#9;&#9;&#9;qx = (rot_mat[2, 1] - rot_mat[1, 2]) * s<br>
-&#9;&#9;&#9;qy = (rot_mat[0, 2] - rot_mat[2, 0]) * s<br>
-&#9;&#9;&#9;qz = (rot_mat[1, 0] - rot_mat[0, 1]) * s<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;if rot_mat[0, 0] &gt; rot_mat[1, 1] and rot_mat[0, 0] &gt; rot_mat[2, 2]:<br>
-&#9;&#9;&#9;&#9;s = 2.0 * math.sqrt(1.0 + rot_mat[0, 0] - rot_mat[1, 1] - rot_mat[2, 2])<br>
-&#9;&#9;&#9;&#9;qw = (rot_mat[2, 1] - rot_mat[1, 2]) / s<br>
-&#9;&#9;&#9;&#9;qx = 0.25 * s<br>
-&#9;&#9;&#9;&#9;qy = (rot_mat[0, 1] + rot_mat[1, 0]) / s<br>
-&#9;&#9;&#9;&#9;qz = (rot_mat[0, 2] + rot_mat[2, 0]) / s<br>
-&#9;&#9;&#9;elif rot_mat[1, 1] &gt; rot_mat[2, 2]:<br>
-&#9;&#9;&#9;&#9;s = 2.0 * math.sqrt(1.0 + rot_mat[1, 1] - rot_mat[0, 0] - rot_mat[2, 2])<br>
-&#9;&#9;&#9;&#9;qw = (rot_mat[0, 2] - rot_mat[2, 0]) / s<br>
-&#9;&#9;&#9;&#9;qx = (rot_mat[0, 1] + rot_mat[1, 0]) / s<br>
-&#9;&#9;&#9;&#9;qy = 0.25 * s<br>
-&#9;&#9;&#9;&#9;qz = (rot_mat[1, 2] + rot_mat[2, 1]) / s<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;s = 2.0 * math.sqrt(1.0 + rot_mat[2, 2] - rot_mat[0, 0] - rot_mat[1, 1])<br>
-&#9;&#9;&#9;&#9;qw = (rot_mat[1, 0] - rot_mat[0, 1]) / s<br>
-&#9;&#9;&#9;&#9;qx = (rot_mat[0, 2] + rot_mat[2, 0]) / s<br>
-&#9;&#9;&#9;&#9;qy = (rot_mat[1, 2] + rot_mat[2, 1]) / s<br>
-&#9;&#9;&#9;&#9;qz = 0.25 * s<br>
-&#9;&#9;<br>
-&#9;&#9;return Pose3(ang=numpy.array([qx, qy, qz, qw]), lin=eye)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;looking_at(eye:&nbsp;numpy.ndarray,&nbsp;target:&nbsp;numpy.ndarray,&nbsp;up:&nbsp;numpy.ndarray&nbsp;=&nbsp;numpy.array([0.0,&nbsp;0.0,&nbsp;1.0])):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;pose&nbsp;at&nbsp;'eye'&nbsp;position&nbsp;looking&nbsp;towards&nbsp;'target'.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eye:&nbsp;Position&nbsp;of&nbsp;the&nbsp;pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;target:&nbsp;Point&nbsp;to&nbsp;look&nbsp;at<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;up:&nbsp;Up&nbsp;vector&nbsp;(default:&nbsp;z-axis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;forward&nbsp;=&nbsp;target&nbsp;-&nbsp;eye<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;forward&nbsp;=&nbsp;forward&nbsp;/&nbsp;numpy.linalg.norm(forward)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;right&nbsp;=&nbsp;numpy.cross(forward,&nbsp;up)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;right&nbsp;=&nbsp;right&nbsp;/&nbsp;numpy.linalg.norm(right)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;up_corrected&nbsp;=&nbsp;numpy.cross(right,&nbsp;forward)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Build&nbsp;rotation&nbsp;matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rot_mat&nbsp;=&nbsp;numpy.column_stack([right,&nbsp;up_corrected,&nbsp;-forward])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Convert&nbsp;rotation&nbsp;matrix&nbsp;to&nbsp;quaternion<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;trace&nbsp;=&nbsp;numpy.trace(rot_mat)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;trace&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;0.5&nbsp;/&nbsp;math.sqrt(trace&nbsp;+&nbsp;1.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qw&nbsp;=&nbsp;0.25&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qx&nbsp;=&nbsp;(rot_mat[2,&nbsp;1]&nbsp;-&nbsp;rot_mat[1,&nbsp;2])&nbsp;*&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qy&nbsp;=&nbsp;(rot_mat[0,&nbsp;2]&nbsp;-&nbsp;rot_mat[2,&nbsp;0])&nbsp;*&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qz&nbsp;=&nbsp;(rot_mat[1,&nbsp;0]&nbsp;-&nbsp;rot_mat[0,&nbsp;1])&nbsp;*&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rot_mat[0,&nbsp;0]&nbsp;&gt;&nbsp;rot_mat[1,&nbsp;1]&nbsp;and&nbsp;rot_mat[0,&nbsp;0]&nbsp;&gt;&nbsp;rot_mat[2,&nbsp;2]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;2.0&nbsp;*&nbsp;math.sqrt(1.0&nbsp;+&nbsp;rot_mat[0,&nbsp;0]&nbsp;-&nbsp;rot_mat[1,&nbsp;1]&nbsp;-&nbsp;rot_mat[2,&nbsp;2])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qw&nbsp;=&nbsp;(rot_mat[2,&nbsp;1]&nbsp;-&nbsp;rot_mat[1,&nbsp;2])&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qx&nbsp;=&nbsp;0.25&nbsp;*&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qy&nbsp;=&nbsp;(rot_mat[0,&nbsp;1]&nbsp;+&nbsp;rot_mat[1,&nbsp;0])&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qz&nbsp;=&nbsp;(rot_mat[0,&nbsp;2]&nbsp;+&nbsp;rot_mat[2,&nbsp;0])&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;rot_mat[1,&nbsp;1]&nbsp;&gt;&nbsp;rot_mat[2,&nbsp;2]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;2.0&nbsp;*&nbsp;math.sqrt(1.0&nbsp;+&nbsp;rot_mat[1,&nbsp;1]&nbsp;-&nbsp;rot_mat[0,&nbsp;0]&nbsp;-&nbsp;rot_mat[2,&nbsp;2])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qw&nbsp;=&nbsp;(rot_mat[0,&nbsp;2]&nbsp;-&nbsp;rot_mat[2,&nbsp;0])&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qx&nbsp;=&nbsp;(rot_mat[0,&nbsp;1]&nbsp;+&nbsp;rot_mat[1,&nbsp;0])&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qy&nbsp;=&nbsp;0.25&nbsp;*&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qz&nbsp;=&nbsp;(rot_mat[1,&nbsp;2]&nbsp;+&nbsp;rot_mat[2,&nbsp;1])&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;2.0&nbsp;*&nbsp;math.sqrt(1.0&nbsp;+&nbsp;rot_mat[2,&nbsp;2]&nbsp;-&nbsp;rot_mat[0,&nbsp;0]&nbsp;-&nbsp;rot_mat[1,&nbsp;1])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qw&nbsp;=&nbsp;(rot_mat[1,&nbsp;0]&nbsp;-&nbsp;rot_mat[0,&nbsp;1])&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qx&nbsp;=&nbsp;(rot_mat[0,&nbsp;2]&nbsp;+&nbsp;rot_mat[2,&nbsp;0])&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qy&nbsp;=&nbsp;(rot_mat[1,&nbsp;2]&nbsp;+&nbsp;rot_mat[2,&nbsp;1])&nbsp;/&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;qz&nbsp;=&nbsp;0.25&nbsp;*&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=numpy.array([qx,&nbsp;qy,&nbsp;qz,&nbsp;qw]),&nbsp;lin=eye)<br>
 <br>
-&#9;@property<br>
-&#9;def x(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get X coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;return self.lin[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;x(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;X&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.lin[0]<br>
 <br>
-&#9;@property<br>
-&#9;def y(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get Y coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;return self.lin[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;y(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;Y&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.lin[1]<br>
 <br>
-&#9;@property<br>
-&#9;def z(self):<br>
-&#9;&#9;&quot;&quot;&quot;Get Z coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;return self.lin[2]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;z(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;Z&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.lin[2]<br>
 <br>
-&#9;@x.setter<br>
-&#9;def x(self, value: float):<br>
-&#9;&#9;&quot;&quot;&quot;Set X coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;self.lin[0] = value<br>
-&#9;&#9;self._mat = None<br>
-&#9;&#9;self._mat34 = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@x.setter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;x(self,&nbsp;value:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Set&nbsp;X&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lin[0]&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat34&nbsp;=&nbsp;None<br>
 <br>
-&#9;@y.setter<br>
-&#9;def y(self, value: float):<br>
-&#9;&#9;&quot;&quot;&quot;Set Y coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;self.lin[1] = value<br>
-&#9;&#9;self._mat = None<br>
-&#9;&#9;self._mat34 = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@y.setter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;y(self,&nbsp;value:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Set&nbsp;Y&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lin[1]&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat34&nbsp;=&nbsp;None<br>
 <br>
-&#9;@z.setter<br>
-&#9;def z(self, value: float):<br>
-&#9;&#9;&quot;&quot;&quot;Set Z coordinate of translation.&quot;&quot;&quot;<br>
-&#9;&#9;self.lin[2] = value<br>
-&#9;&#9;self._mat = None<br>
-&#9;&#9;self._mat34 = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@z.setter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;z(self,&nbsp;value:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Set&nbsp;Z&nbsp;coordinate&nbsp;of&nbsp;translation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lin[2]&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat34&nbsp;=&nbsp;None<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def from_vector_vw_order(vec: numpy.ndarray) -&gt; 'Pose3':<br>
-&#9;&#9;&quot;&quot;&quot;Create Pose3 from a 7D vector in (vx, vy, vz, wx, wy, wz, w) order.&quot;&quot;&quot;<br>
-&#9;&#9;if vec.shape != (7,):<br>
-&#9;&#9;&#9;raise ValueError(&quot;Input vector must be of shape (7,)&quot;)<br>
-&#9;&#9;ang = vec[3:7]<br>
-&#9;&#9;lin = vec[0:3]<br>
-&#9;&#9;return Pose3(ang=ang, lin=lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_vector_vw_order(vec:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;'Pose3':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;Pose3&nbsp;from&nbsp;a&nbsp;7D&nbsp;vector&nbsp;in&nbsp;(vx,&nbsp;vy,&nbsp;vz,&nbsp;wx,&nbsp;wy,&nbsp;wz,&nbsp;w)&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vec.shape&nbsp;!=&nbsp;(7,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Input&nbsp;vector&nbsp;must&nbsp;be&nbsp;of&nbsp;shape&nbsp;(7,)&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;=&nbsp;vec[3:7]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin&nbsp;=&nbsp;vec[0:3]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=ang,&nbsp;lin=lin)<br>
 <br>
-&#9;def to_vector_vw_order(self) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Convert Pose3 to a 7D vector in (vx, vy, vz, wx, wy, wz, w) order.&quot;&quot;&quot;<br>
-&#9;&#9;vec = numpy.zeros(7)<br>
-&#9;&#9;vec[0:3] = self.lin<br>
-&#9;&#9;vec[3:7] = self.ang<br>
-&#9;&#9;return vec<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_vector_vw_order(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Convert&nbsp;Pose3&nbsp;to&nbsp;a&nbsp;7D&nbsp;vector&nbsp;in&nbsp;(vx,&nbsp;vy,&nbsp;vz,&nbsp;wx,&nbsp;wy,&nbsp;wz,&nbsp;w)&nbsp;order.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vec&nbsp;=&nbsp;numpy.zeros(7)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vec[0:3]&nbsp;=&nbsp;self.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vec[3:7]&nbsp;=&nbsp;self.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;vec<br>
 <br>
-&#9;def rotate_vector(self, vec: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Rotate a 3D vector using the pose's rotation.&quot;&quot;&quot;<br>
-&#9;&#9;return qrot(self.ang, vec)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotate_vector(self,&nbsp;vec:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Rotate&nbsp;a&nbsp;3D&nbsp;vector&nbsp;using&nbsp;the&nbsp;pose's&nbsp;rotation.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;qrot(self.ang,&nbsp;vec)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

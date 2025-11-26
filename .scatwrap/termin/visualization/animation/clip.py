@@ -6,78 +6,78 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from __future__ import annotations<br>
-from typing import Dict<br>
-from .channel import AnimationChannel<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict<br>
+from&nbsp;.channel&nbsp;import&nbsp;AnimationChannel<br>
 <br>
 <br>
-class AnimationClip:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;channels: { node_name : AnimationChannel }<br>
-&#9;duration: секунды<br>
-&#9;tps: ticks per second<br>
-&#9;&quot;&quot;&quot;<br>
+class&nbsp;AnimationClip:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;channels:&nbsp;{&nbsp;node_name&nbsp;:&nbsp;AnimationChannel&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;duration:&nbsp;секунды<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tps:&nbsp;ticks&nbsp;per&nbsp;second<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, name: str, channels: Dict[str, AnimationChannel], tps: float, loop=True):<br>
-&#9;&#9;self.name = name<br>
-&#9;&#9;self.channels = channels<br>
-&#9;&#9;self.loop = loop<br>
-&#9;&#9;self.tps = tps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;name:&nbsp;str,&nbsp;channels:&nbsp;Dict[str,&nbsp;AnimationChannel],&nbsp;tps:&nbsp;float,&nbsp;loop=True):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.channels&nbsp;=&nbsp;channels<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.loop&nbsp;=&nbsp;loop<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.tps&nbsp;=&nbsp;tps<br>
 <br>
-&#9;&#9;# переводим тики → секунды<br>
-&#9;&#9;max_ticks = 0.0<br>
-&#9;&#9;for ch in channels.values():<br>
-&#9;&#9;&#9;max_ticks = max(max_ticks, ch.duration)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;переводим&nbsp;тики&nbsp;→&nbsp;секунды<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max_ticks&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ch&nbsp;in&nbsp;channels.values():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max_ticks&nbsp;=&nbsp;max(max_ticks,&nbsp;ch.duration)<br>
 <br>
-&#9;&#9;self.duration = max_ticks / tps if tps &gt; 0 else 0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.duration&nbsp;=&nbsp;max_ticks&nbsp;/&nbsp;tps&nbsp;if&nbsp;tps&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;0.0<br>
 <br>
-&#9;# --------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;--------------------------------------------<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def _to_str(x):<br>
-&#9;&#9;if isinstance(x, str): return x<br>
-&#9;&#9;if hasattr(x, &quot;data&quot;): return x.data<br>
-&#9;&#9;return str(x)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_to_str(x):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(x,&nbsp;str):&nbsp;return&nbsp;x<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(x,&nbsp;&quot;data&quot;):&nbsp;return&nbsp;x.data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;str(x)<br>
 <br>
-&#9;# --------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;--------------------------------------------<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def from_assimp_clip(assimp_clip):<br>
-&#9;&#9;tps = getattr(assimp_clip, &quot;tickspersecond&quot;, 0.0) or 30.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_assimp_clip(assimp_clip):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tps&nbsp;=&nbsp;getattr(assimp_clip,&nbsp;&quot;tickspersecond&quot;,&nbsp;0.0)&nbsp;or&nbsp;30.0<br>
 <br>
-&#9;&#9;channels = {}<br>
-&#9;&#9;for ch in assimp_clip.channels:<br>
-&#9;&#9;&#9;node_name = AnimationClip._to_str(ch.node_name)<br>
-&#9;&#9;&#9;channels[node_name] = AnimationChannel.from_assimp_channel(ch)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;channels&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ch&nbsp;in&nbsp;assimp_clip.channels:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node_name&nbsp;=&nbsp;AnimationClip._to_str(ch.node_name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;channels[node_name]&nbsp;=&nbsp;AnimationChannel.from_assimp_channel(ch)<br>
 <br>
-&#9;&#9;return AnimationClip(<br>
-&#9;&#9;&#9;name=AnimationClip._to_str(assimp_clip.name),<br>
-&#9;&#9;&#9;channels=channels,<br>
-&#9;&#9;&#9;tps=tps,<br>
-&#9;&#9;&#9;loop=True<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;AnimationClip(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name=AnimationClip._to_str(assimp_clip.name),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;channels=channels,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tps=tps,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop=True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;# --------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;--------------------------------------------<br>
 <br>
-&#9;def sample(self, t_seconds: float):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;sample в секундах (как в движке).<br>
-&#9;&#9;Возвращает dict:<br>
-&#9;&#9;&#9;{ node_name : (tr, rot, sc) }<br>
-&#9;&#9;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;sample(self,&nbsp;t_seconds:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sample&nbsp;в&nbsp;секундах&nbsp;(как&nbsp;в&nbsp;движке).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;dict:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;node_name&nbsp;:&nbsp;(tr,&nbsp;rot,&nbsp;sc)&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;&#9;if self.loop and self.duration &gt; 0:<br>
-&#9;&#9;&#9;t_seconds = t_seconds % self.duration<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.loop&nbsp;and&nbsp;self.duration&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_seconds&nbsp;=&nbsp;t_seconds&nbsp;%&nbsp;self.duration<br>
 <br>
-&#9;&#9;# переводим секунды → тики<br>
-&#9;&#9;t_ticks = t_seconds * self.tps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;переводим&nbsp;секунды&nbsp;→&nbsp;тики<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_ticks&nbsp;=&nbsp;t_seconds&nbsp;*&nbsp;self.tps<br>
 <br>
-&#9;&#9;return { node: ch.sample(t_ticks) for node, ch in self.channels.items() }<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{&nbsp;node:&nbsp;ch.sample(t_ticks)&nbsp;for&nbsp;node,&nbsp;ch&nbsp;in&nbsp;self.channels.items()&nbsp;}<br>
 <br>
-&#9;# --------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;--------------------------------------------<br>
 <br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return f&quot;&lt;AnimationClip name={self.name} duration={self.duration:.2f}s channels={len(self.channels)}&gt;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;&lt;AnimationClip&nbsp;name={self.name}&nbsp;duration={self.duration:.2f}s&nbsp;channels={len(self.channels)}&gt;&quot;<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

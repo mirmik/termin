@@ -6,134 +6,134 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from .transform import Transform3<br>
-from termin.geombase import Pose3, Screw3<br>
-import numpy<br>
+from&nbsp;.transform&nbsp;import&nbsp;Transform3<br>
+from&nbsp;termin.geombase&nbsp;import&nbsp;Pose3,&nbsp;Screw3<br>
+import&nbsp;numpy<br>
 <br>
-class KinematicTransform3(Transform3):<br>
-&#9;&quot;&quot;&quot;A Transform3 specialized for kinematic chains.&quot;&quot;&quot;<br>
-&#9;def __init__(self, name=&quot;ktrans&quot;, parent: Transform3 = None, manual_output: bool = False, local_pose=Pose3.identity()):<br>
-&#9;&#9;super().__init__(parent=None, name=name, local_pose=local_pose)<br>
+class&nbsp;KinematicTransform3(Transform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;Transform3&nbsp;specialized&nbsp;for&nbsp;kinematic&nbsp;chains.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;name=&quot;ktrans&quot;,&nbsp;parent:&nbsp;Transform3&nbsp;=&nbsp;None,&nbsp;manual_output:&nbsp;bool&nbsp;=&nbsp;False,&nbsp;local_pose=Pose3.identity()):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent=None,&nbsp;name=name,&nbsp;local_pose=local_pose)<br>
 <br>
-&#9;&#9;if not manual_output:<br>
-&#9;&#9;&#9;self.output = Transform3(parent=self, name=f&quot;{name}_output&quot;, local_pose=Pose3.identity())<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self.output = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;manual_output:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output&nbsp;=&nbsp;Transform3(parent=self,&nbsp;name=f&quot;{name}_output&quot;,&nbsp;local_pose=Pose3.identity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output&nbsp;=&nbsp;None<br>
 <br>
-&#9;&#9;self.kinematic_parent = None<br>
-&#9;&#9;if parent:<br>
-&#9;&#9;&#9;parent.link(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.kinematic_parent&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;parent:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent.link(self)<br>
 <br>
-&#9;def init_output(self, output: Transform3):<br>
-&#9;&#9;&quot;&quot;&quot;Initialize the output Transform3 if manual_output was set to True.&quot;&quot;&quot;<br>
-&#9;&#9;if self.output is not None:<br>
-&#9;&#9;&#9;raise RuntimeError(&quot;Output Transform3 is already initialized.&quot;)<br>
-&#9;&#9;self.output = output<br>
-&#9;&#9;self.add_child(self.output)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;init_output(self,&nbsp;output:&nbsp;Transform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Initialize&nbsp;the&nbsp;output&nbsp;Transform3&nbsp;if&nbsp;manual_output&nbsp;was&nbsp;set&nbsp;to&nbsp;True.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.output&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;Output&nbsp;Transform3&nbsp;is&nbsp;already&nbsp;initialized.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output&nbsp;=&nbsp;output<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.add_child(self.output)<br>
 <br>
-&#9;def senses(self) -&gt; [Screw3]:<br>
-&#9;&#9;&quot;&quot;&quot;Return the list of screws representing the sensitivities of this kinematic transform.<br>
-&#9;&#9;Для совместимости с KinematicChain3 чувствительности возвращаются в порядке от дистального к проксимальному.&quot;&quot;&quot;<br>
-&#9;&#9;raise NotImplementedError(&quot;senses method must be implemented by subclasses.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;senses(self)&nbsp;-&gt;&nbsp;[Screw3]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;list&nbsp;of&nbsp;screws&nbsp;representing&nbsp;the&nbsp;sensitivities&nbsp;of&nbsp;this&nbsp;kinematic&nbsp;transform.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;совместимости&nbsp;с&nbsp;KinematicChain3&nbsp;чувствительности&nbsp;возвращаются&nbsp;в&nbsp;порядке&nbsp;от&nbsp;дистального&nbsp;к&nbsp;проксимальному.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(&quot;senses&nbsp;method&nbsp;must&nbsp;be&nbsp;implemented&nbsp;by&nbsp;subclasses.&quot;)<br>
 <br>
-&#9;def link(self, child: 'Transform3'):<br>
-&#9;&#9;&quot;&quot;&quot;Link a child Transform3 to this KinematicTransform3 output.&quot;&quot;&quot;<br>
-&#9;&#9;self.output.add_child(child)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;link(self,&nbsp;child:&nbsp;'Transform3'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Link&nbsp;a&nbsp;child&nbsp;Transform3&nbsp;to&nbsp;this&nbsp;KinematicTransform3&nbsp;output.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output.add_child(child)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def found_first_kinematic_unit_in_parent_tree(body, ignore_self: bool = True) -&gt; 'KinematicTransform3':<br>
-&#9;&#9;if ignore_self:<br>
-&#9;&#9;&#9;body = body.parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;found_first_kinematic_unit_in_parent_tree(body,&nbsp;ignore_self:&nbsp;bool&nbsp;=&nbsp;True)&nbsp;-&gt;&nbsp;'KinematicTransform3':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ignore_self:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body&nbsp;=&nbsp;body.parent<br>
 <br>
-&#9;&#9;link = body<br>
-&#9;&#9;while link is not None:<br>
-&#9;&#9;&#9;if isinstance(link, KinematicTransform3):<br>
-&#9;&#9;&#9;&#9;return link<br>
-&#9;&#9;&#9;link = link.parent<br>
-&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;link&nbsp;=&nbsp;body<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;link&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(link,&nbsp;KinematicTransform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;link<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;link&nbsp;=&nbsp;link.parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
-&#9;def update_kinematic_parent(self):<br>
-&#9;&#9;&quot;&quot;&quot;Update the kinematic parent of this transform.&quot;&quot;&quot;<br>
-&#9;&#9;self.kinematic_parent = KinematicTransform3.found_first_kinematic_unit_in_parent_tree(self, ignore_self=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_kinematic_parent(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Update&nbsp;the&nbsp;kinematic&nbsp;parent&nbsp;of&nbsp;this&nbsp;transform.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.kinematic_parent&nbsp;=&nbsp;KinematicTransform3.found_first_kinematic_unit_in_parent_tree(self,&nbsp;ignore_self=True)<br>
 <br>
-&#9;def update_kinematic_parent_recursively(self):<br>
-&#9;&#9;&quot;&quot;&quot;Recursively update the kinematic parent for this transform and its children.&quot;&quot;&quot;<br>
-&#9;&#9;self.update_kinematic_parent()<br>
-&#9;&#9;if self.kinematic_parent is not None:<br>
-&#9;&#9;&#9;self.kinematic_parent.update_kinematic_parent_recursively()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_kinematic_parent_recursively(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Recursively&nbsp;update&nbsp;the&nbsp;kinematic&nbsp;parent&nbsp;for&nbsp;this&nbsp;transform&nbsp;and&nbsp;its&nbsp;children.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_kinematic_parent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.kinematic_parent&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.kinematic_parent.update_kinematic_parent_recursively()<br>
 <br>
-&#9;def to_trent_with_children(self) -&gt; str:<br>
-&#9;&#9;dct = {<br>
-&#9;&#9;&#9;&quot;type&quot; : &quot;transform&quot;,<br>
-&#9;&#9;&#9;&quot;pose&quot; : {<br>
-&#9;&#9;&#9;&#9;&quot;position&quot;: self._local_pose.lin.tolist(),<br>
-&#9;&#9;&#9;&#9;&quot;orientation&quot;: self._local_pose.ang.tolist()<br>
-&#9;&#9;&#9;},<br>
-&#9;&#9;&#9;&quot;name&quot;: self.name,<br>
-&#9;&#9;&#9;&quot;children&quot;: [child.to_trent_with_children(top_without_pose=True) for child in self.children]<br>
-&#9;&#9;}<br>
-&#9;&#9;return dct<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_trent_with_children(self)&nbsp;-&gt;&nbsp;str:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dct&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;type&quot;&nbsp;:&nbsp;&quot;transform&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;pose&quot;&nbsp;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;position&quot;:&nbsp;self._local_pose.lin.tolist(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;orientation&quot;:&nbsp;self._local_pose.ang.tolist()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;name&quot;:&nbsp;self.name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;children&quot;:&nbsp;[child.to_trent_with_children(top_without_pose=True)&nbsp;for&nbsp;child&nbsp;in&nbsp;self.children]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;dct<br>
 <br>
-class KinematicTransform3OneScrew(KinematicTransform3):<br>
-&#9;&quot;&quot;&quot;A Transform3 specialized for 1-DOF kinematic chains.&quot;&quot;&quot;<br>
-&#9;def __init__(self, parent: Transform3 = None, name=&quot;kunit_oa&quot;, manual_output: bool = False, local_pose=Pose3.identity()):<br>
-&#9;&#9;super().__init__(parent=parent, manual_output=manual_output, name=name, local_pose=local_pose)<br>
-&#9;&#9;self._sens = None  # To be defined in subclasses<br>
-&#9;&#9;self._coord = 0.0  # Current coordinate value<br>
+class&nbsp;KinematicTransform3OneScrew(KinematicTransform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;Transform3&nbsp;specialized&nbsp;for&nbsp;1-DOF&nbsp;kinematic&nbsp;chains.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;parent:&nbsp;Transform3&nbsp;=&nbsp;None,&nbsp;name=&quot;kunit_oa&quot;,&nbsp;manual_output:&nbsp;bool&nbsp;=&nbsp;False,&nbsp;local_pose=Pose3.identity()):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent=parent,&nbsp;manual_output=manual_output,&nbsp;name=name,&nbsp;local_pose=local_pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._sens&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;To&nbsp;be&nbsp;defined&nbsp;in&nbsp;subclasses<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._coord&nbsp;=&nbsp;0.0&nbsp;&nbsp;#&nbsp;Current&nbsp;coordinate&nbsp;value<br>
 <br>
-&#9;def sensitivity_for_basis(self, basis: numpy.ndarray) -&gt; Screw3:<br>
-&#9;&#9;&quot;&quot;&quot;Описывает, как влияет изменение координаты влияет на тело связанное с системой basis в системе отсчета самого basis.&quot;&quot;&quot;<br>
-&#9;&#9;my_pose = self.global_pose()<br>
-&#9;&#9;my_pose_in_basis = basis.inverse() * my_pose<br>
-&#9;&#9;return self._sens.transform_as_twist_by(my_pose_in_basis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;sensitivity_for_basis(self,&nbsp;basis:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;Screw3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Описывает,&nbsp;как&nbsp;влияет&nbsp;изменение&nbsp;координаты&nbsp;влияет&nbsp;на&nbsp;тело&nbsp;связанное&nbsp;с&nbsp;системой&nbsp;basis&nbsp;в&nbsp;системе&nbsp;отсчета&nbsp;самого&nbsp;basis.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;my_pose&nbsp;=&nbsp;self.global_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;my_pose_in_basis&nbsp;=&nbsp;basis.inverse()&nbsp;*&nbsp;my_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._sens.transform_as_twist_by(my_pose_in_basis)<br>
 <br>
-&#9;def senses(self) -&gt; [Screw3]:<br>
-&#9;&#9;return [self._sens]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;senses(self)&nbsp;-&gt;&nbsp;[Screw3]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[self._sens]<br>
 <br>
-&#9;def senses_for_basis(self, basis: numpy.ndarray) -&gt; [Screw3]:<br>
-&#9;&#9;return [self.sensitivity_for_basis(basis)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;senses_for_basis(self,&nbsp;basis:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;[Screw3]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[self.sensitivity_for_basis(basis)]<br>
 <br>
-&#9;def sensivity(self) -&gt; Screw3:<br>
-&#9;&#9;&quot;&quot;&quot;Return the screw representing the sensitivity of this kinematic transform.&quot;&quot;&quot;<br>
-&#9;&#9;return self._sens<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;sensivity(self)&nbsp;-&gt;&nbsp;Screw3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;screw&nbsp;representing&nbsp;the&nbsp;sensitivity&nbsp;of&nbsp;this&nbsp;kinematic&nbsp;transform.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._sens<br>
 <br>
-&#9;def set_coord(self, coord: float):<br>
-&#9;&#9;&quot;&quot;&quot;Set the coordinate of this kinematic transform.&quot;&quot;&quot;<br>
-&#9;&#9;self.output.relocate((self._sens * coord).as_pose3())<br>
-&#9;&#9;self._coord = coord<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_coord(self,&nbsp;coord:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Set&nbsp;the&nbsp;coordinate&nbsp;of&nbsp;this&nbsp;kinematic&nbsp;transform.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output.relocate((self._sens&nbsp;*&nbsp;coord).as_pose3())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._coord&nbsp;=&nbsp;coord<br>
 <br>
-&#9;def coord(self) -&gt; float:<br>
-&#9;&#9;&quot;&quot;&quot;Get the current coordinate of this kinematic transform.&quot;&quot;&quot;<br>
-&#9;&#9;return self._coord<br>
-&#9;<br>
-&#9;def get_coord(self) -&gt; float:<br>
-&#9;&#9;&quot;&quot;&quot;Get the current coordinate of this kinematic transform.&quot;&quot;&quot;<br>
-&#9;&#9;return self._coord<br>
-&#9;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;coord(self)&nbsp;-&gt;&nbsp;float:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;current&nbsp;coordinate&nbsp;of&nbsp;this&nbsp;kinematic&nbsp;transform.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._coord<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_coord(self)&nbsp;-&gt;&nbsp;float:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;current&nbsp;coordinate&nbsp;of&nbsp;this&nbsp;kinematic&nbsp;transform.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._coord<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
 <br>
-class Rotator3(KinematicTransform3OneScrew):<br>
-&#9;def __init__(self, axis: numpy.ndarray, parent: Transform3 = None, manual_output: bool = False, name=&quot;rotator&quot;, local_pose=Pose3.identity()):<br>
-&#9;&#9;&quot;&quot;&quot;Initialize a Rotator that rotates around a given axis by angle_rad.&quot;&quot;&quot;<br>
-&#9;&#9;super().__init__(parent=parent, manual_output=manual_output, name=name, local_pose=local_pose)<br>
-&#9;&#9;self._sens = Screw3(ang=numpy.array(axis), lin=numpy.array([0.0, 0.0, 0.0]))<br>
+class&nbsp;Rotator3(KinematicTransform3OneScrew):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;axis:&nbsp;numpy.ndarray,&nbsp;parent:&nbsp;Transform3&nbsp;=&nbsp;None,&nbsp;manual_output:&nbsp;bool&nbsp;=&nbsp;False,&nbsp;name=&quot;rotator&quot;,&nbsp;local_pose=Pose3.identity()):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Initialize&nbsp;a&nbsp;Rotator&nbsp;that&nbsp;rotates&nbsp;around&nbsp;a&nbsp;given&nbsp;axis&nbsp;by&nbsp;angle_rad.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent=parent,&nbsp;manual_output=manual_output,&nbsp;name=name,&nbsp;local_pose=local_pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._sens&nbsp;=&nbsp;Screw3(ang=numpy.array(axis),&nbsp;lin=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0]))<br>
 <br>
-&#9;def to_trent_with_children(self):<br>
-&#9;&#9;dct = super().to_trent_with_children()<br>
-&#9;&#9;dct[&quot;type&quot;] = &quot;rotator&quot;<br>
-&#9;&#9;dct[&quot;axis&quot;] = self._sens.ang.tolist()<br>
-&#9;&#9;return dct<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_trent_with_children(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dct&nbsp;=&nbsp;super().to_trent_with_children()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dct[&quot;type&quot;]&nbsp;=&nbsp;&quot;rotator&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dct[&quot;axis&quot;]&nbsp;=&nbsp;self._sens.ang.tolist()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;dct<br>
 <br>
-class Actuator3(KinematicTransform3OneScrew):<br>
-&#9;def __init__(self, axis: numpy.ndarray, parent: Transform3 = None, manual_output: bool = False, name=&quot;actuator&quot;, local_pose=Pose3.identity()):<br>
-&#9;&#9;&quot;&quot;&quot;Initialize an Actuator that moves along a given screw.&quot;&quot;&quot;<br>
-&#9;&#9;super().__init__(parent=parent, manual_output=manual_output, name=name, local_pose=local_pose)<br>
-&#9;&#9;self._sens = Screw3(lin=numpy.array(axis), ang=numpy.array([0.0, 0.0, 0.0]))<br>
+class&nbsp;Actuator3(KinematicTransform3OneScrew):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;axis:&nbsp;numpy.ndarray,&nbsp;parent:&nbsp;Transform3&nbsp;=&nbsp;None,&nbsp;manual_output:&nbsp;bool&nbsp;=&nbsp;False,&nbsp;name=&quot;actuator&quot;,&nbsp;local_pose=Pose3.identity()):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Initialize&nbsp;an&nbsp;Actuator&nbsp;that&nbsp;moves&nbsp;along&nbsp;a&nbsp;given&nbsp;screw.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent=parent,&nbsp;manual_output=manual_output,&nbsp;name=name,&nbsp;local_pose=local_pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._sens&nbsp;=&nbsp;Screw3(lin=numpy.array(axis),&nbsp;ang=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0]))<br>
 <br>
-&#9;def to_trent_with_children(self):<br>
-&#9;&#9;dct = super().to_trent_with_children()<br>
-&#9;&#9;dct[&quot;type&quot;] = &quot;actuator&quot;<br>
-&#9;&#9;dct[&quot;axis&quot;] = self._sens.lin.tolist()<br>
-&#9;&#9;return dct<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_trent_with_children(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dct&nbsp;=&nbsp;super().to_trent_with_children()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dct[&quot;type&quot;]&nbsp;=&nbsp;&quot;actuator&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dct[&quot;axis&quot;]&nbsp;=&nbsp;self._sens.lin.tolist()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;dct<br>
 <br>
 <!-- END SCAT CODE -->
 </body>

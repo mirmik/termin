@@ -9,25 +9,25 @@
 <br>
 <br>
 <br>
-class Magnitude:<br>
-&#9;def __init__(self, v, w):<br>
-&#9;&#9;self.v = v<br>
-&#9;&#9;self.w = w<br>
+class&nbsp;Magnitude:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;v,&nbsp;w):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.v&nbsp;=&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.w&nbsp;=&nbsp;w<br>
 <br>
-&#9;def __str__(self):<br>
-&#9;&#9;return str((self.v, self.w))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__str__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;str((self.v,&nbsp;self.w))<br>
 <br>
-&#9;def unitize(self):<br>
-&#9;&#9;return Magnitude(<br>
-&#9;&#9;&#9;self.v / self.w,<br>
-&#9;&#9;&#9;1<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;unitize(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Magnitude(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.v&nbsp;/&nbsp;self.w,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;def to_float(self):<br>
-&#9;&#9;return self.v / self.w<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_float(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.v&nbsp;/&nbsp;self.w<br>
 <br>
-&#9;def __abs__(self):<br>
-&#9;&#9;return Magnitude(abs(self.v), abs(self.w))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__abs__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Magnitude(abs(self.v),&nbsp;abs(self.w))<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

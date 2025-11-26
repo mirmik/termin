@@ -6,120 +6,120 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Animated cube demo: simple rotation driven by a custom component.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Animated&nbsp;cube&nbsp;demo:&nbsp;simple&nbsp;rotation&nbsp;driven&nbsp;by&nbsp;a&nbsp;custom&nbsp;component.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.mesh.mesh import CubeMesh<br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;MeshDrawable,<br>
-&#9;Scene,<br>
-&#9;Material,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
-&#9;Component,<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;CubeMesh<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Component,<br>
 )<br>
-from termin.visualization.components import MeshRenderer<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
-from termin.visualization.camera import CameraController<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.camera&nbsp;import&nbsp;CameraController<br>
 <br>
-VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location = 0) in vec3 a_position;<br>
-layout(location = 1) in vec3 a_normal;<br>
+VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_normal;<br>
-out vec3 v_world_pos;<br>
+out&nbsp;vec3&nbsp;v_normal;<br>
+out&nbsp;vec3&nbsp;v_world_pos;<br>
 <br>
-void main() {<br>
-&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
-&#9;v_world_pos = world.xyz;<br>
-&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-&#9;gl_Position = u_projection * u_view * world;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;world&nbsp;=&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_world_pos&nbsp;=&nbsp;world.xyz;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-in vec3 v_normal;<br>
+FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
 <br>
-uniform vec4 u_color;<br>
-uniform vec3 u_light_dir;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
+uniform&nbsp;vec3&nbsp;u_light_dir;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;vec3 N = normalize(v_normal);<br>
-&#9;float ndotl = max(dot(N, -normalize(u_light_dir)), 0.0);<br>
-&#9;vec3 color = u_color.rgb * (0.2 + 0.8 * ndotl);<br>
-&#9;FragColor = vec4(color, u_color.a);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;N&nbsp;=&nbsp;normalize(v_normal);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(N,&nbsp;-normalize(u_light_dir)),&nbsp;0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;color&nbsp;=&nbsp;u_color.rgb&nbsp;*&nbsp;(0.2&nbsp;+&nbsp;0.8&nbsp;*&nbsp;ndotl);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(color,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-class RotateComponent(Component):<br>
-&#9;&quot;&quot;&quot;Simple component that rotates its entity around a fixed axis.&quot;&quot;&quot;<br>
+class&nbsp;RotateComponent(Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Simple&nbsp;component&nbsp;that&nbsp;rotates&nbsp;its&nbsp;entity&nbsp;around&nbsp;a&nbsp;fixed&nbsp;axis.&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, axis: np.ndarray = np.array([0.0, 1.0, 0.0]), speed: float = 1.0):<br>
-&#9;&#9;super().__init__(enabled=True)<br>
-&#9;&#9;axis = np.asarray(axis, dtype=float)<br>
-&#9;&#9;norm = np.linalg.norm(axis)<br>
-&#9;&#9;self.axis = axis / norm if norm &gt; 0 else np.array([0.0, 1.0, 0.0])<br>
-&#9;&#9;self.speed = speed<br>
-&#9;&#9;self.angle = 0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;axis:&nbsp;np.ndarray&nbsp;=&nbsp;np.array([0.0,&nbsp;1.0,&nbsp;0.0]),&nbsp;speed:&nbsp;float&nbsp;=&nbsp;1.0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(enabled=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;=&nbsp;np.asarray(axis,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;norm&nbsp;=&nbsp;np.linalg.norm(axis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.axis&nbsp;=&nbsp;axis&nbsp;/&nbsp;norm&nbsp;if&nbsp;norm&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;np.array([0.0,&nbsp;1.0,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.speed&nbsp;=&nbsp;speed<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.angle&nbsp;=&nbsp;0.0<br>
 <br>
-&#9;def update(self, dt: float):<br>
-&#9;&#9;if self.entity is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;self.angle += self.speed * dt<br>
-&#9;&#9;rot_pose = Pose3.rotation(self.axis, self.angle)<br>
-&#9;&#9;translation = self.entity.transform.global_pose().lin.copy()<br>
-&#9;&#9;self.entity.transform.relocate(Pose3(ang=rot_pose.ang.copy(), lin=translation))<br>
-<br>
-<br>
-def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent]:<br>
-&#9;mesh = MeshDrawable(CubeMesh(size=1.0))<br>
-&#9;shader = ShaderProgram(VERT, FRAG)<br>
-&#9;material = Material(shader=shader, color=np.array([0.3, 0.7, 0.9, 1.0], dtype=np.float32))<br>
-<br>
-&#9;cube = Entity(pose=Pose3.identity(), name=&quot;cube&quot;)<br>
-&#9;cube.add_component(MeshRenderer(mesh, material))<br>
-&#9;cube.add_component(RotateComponent(axis=np.array([0.2, 1.0, 0.3]), speed=1.5))<br>
-<br>
-&#9;scene = Scene()<br>
-&#9;scene.add(cube)<br>
-&#9;scene.add(SkyBoxEntity())<br>
-&#9;world.add_scene(scene)<br>
-<br>
-&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
-&#9;camera = PerspectiveCameraComponent()<br>
-&#9;camera_entity.add_component(camera)<br>
-&#9;camera_entity.add_component(OrbitCameraController(radius=5.0, elevation=30.0))<br>
-&#9;scene.add(camera_entity)<br>
-<br>
-&#9;return scene, camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update(self,&nbsp;dt:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.entity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.angle&nbsp;+=&nbsp;self.speed&nbsp;*&nbsp;dt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rot_pose&nbsp;=&nbsp;Pose3.rotation(self.axis,&nbsp;self.angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translation&nbsp;=&nbsp;self.entity.transform.global_pose().lin.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.entity.transform.relocate(Pose3(ang=rot_pose.ang.copy(),&nbsp;lin=translation))<br>
 <br>
 <br>
-def main():<br>
-&#9;world = VisualizationWorld()<br>
-&#9;scene, camera = build_scene(world)<br>
-&#9;window = world.create_window(title=&quot;termin animated cube&quot;)<br>
-&#9;window.add_viewport(scene, camera)<br>
-&#9;world.run()<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld)&nbsp;-&gt;&nbsp;tuple[Scene,&nbsp;PerspectiveCameraComponent]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;MeshDrawable(CubeMesh(size=1.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;ShaderProgram(VERT,&nbsp;FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;Material(shader=shader,&nbsp;color=np.array([0.3,&nbsp;0.7,&nbsp;0.9,&nbsp;1.0],&nbsp;dtype=np.float32))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;cube&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube.add_component(MeshRenderer(mesh,&nbsp;material))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cube.add_component(RotateComponent(axis=np.array([0.2,&nbsp;1.0,&nbsp;0.3]),&nbsp;speed=1.5))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(cube)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(SkyBoxEntity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(OrbitCameraController(radius=5.0,&nbsp;elevation=30.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(camera_entity)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;camera<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;camera&nbsp;=&nbsp;build_scene(world)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;world.create_window(title=&quot;termin&nbsp;animated&nbsp;cube&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

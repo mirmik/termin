@@ -6,50 +6,50 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from __future__ import annotations<br>
-from termin.visualization.material import Material<br>
-from termin.visualization.shader import ShaderProgram<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+from&nbsp;termin.visualization.material&nbsp;import&nbsp;Material<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
 <br>
-ColorMaterial_VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location = 0) in vec3 a_position;<br>
-layout(location = 1) in vec3 a_normal;<br>
+ColorMaterial_VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-out vec3 v_normal;<br>
+out&nbsp;vec3&nbsp;v_normal;<br>
 <br>
-void main() {<br>
-&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
-&#9;gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-ColorMaterial_FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-in vec3 v_normal;<br>
-uniform vec4 u_color;<br>
+ColorMaterial_FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;vec3 n = normalize(v_normal);<br>
-&#9;float ndotl = max(dot(n, vec3(0.2, 0.6, 0.5)), 0.0);<br>
-&#9;vec3 color = u_color.rgb * (0.25 + 0.75 * ndotl);<br>
-&#9;FragColor = vec4(color, u_color.a);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;n&nbsp;=&nbsp;normalize(v_normal);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(n,&nbsp;vec3(0.2,&nbsp;0.6,&nbsp;0.5)),&nbsp;0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;color&nbsp;=&nbsp;u_color.rgb&nbsp;*&nbsp;(0.25&nbsp;+&nbsp;0.75&nbsp;*&nbsp;ndotl);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(color,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-class ColorMaterial(Material):<br>
-&#9;def __init__(self, color: tuple[float, float, float, float]):<br>
-&#9;&#9;self.color = color<br>
-&#9;&#9;self.shader = ShaderProgram(ColorMaterial_VERT, ColorMaterial_FRAG)<br>
-&#9;&#9;super().__init__(shader=self.shader, color=color)<br>
+class&nbsp;ColorMaterial(Material):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;color:&nbsp;tuple[float,&nbsp;float,&nbsp;float,&nbsp;float]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.color&nbsp;=&nbsp;color<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader&nbsp;=&nbsp;ShaderProgram(ColorMaterial_VERT,&nbsp;ColorMaterial_FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(shader=self.shader,&nbsp;color=color)<br>
 <br>
-&#9;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

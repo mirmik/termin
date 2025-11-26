@@ -6,508 +6,508 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Window abstraction delegating platform details to a backend.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Window&nbsp;abstraction&nbsp;delegating&nbsp;platform&nbsp;details&nbsp;to&nbsp;a&nbsp;backend.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from dataclasses import dataclass<br>
-from typing import List, Optional, Tuple<br>
+from&nbsp;dataclasses&nbsp;import&nbsp;dataclass<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Optional,&nbsp;Tuple<br>
 <br>
-from .camera import CameraComponent<br>
-from .renderer import Renderer<br>
-from .scene import Scene<br>
-from .backends.base import (<br>
-&#9;Action,<br>
-&#9;GraphicsBackend,<br>
-&#9;Key,<br>
-&#9;MouseButton,<br>
-&#9;WindowBackend,<br>
-&#9;BackendWindow,<br>
+from&nbsp;.camera&nbsp;import&nbsp;CameraComponent<br>
+from&nbsp;.renderer&nbsp;import&nbsp;Renderer<br>
+from&nbsp;.scene&nbsp;import&nbsp;Scene<br>
+from&nbsp;.backends.base&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Action,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;GraphicsBackend,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Key,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MouseButton,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;WindowBackend,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;BackendWindow,<br>
 )<br>
-from .viewport import Viewport<br>
-from .ui.canvas import Canvas<br>
-from .picking import rgb_to_id<br>
-from .components import MeshRenderer<br>
-from .framegraph import FrameGraph, FrameContext, RenderFramePass, IdPass<br>
-from .postprocess import PostProcessPass<br>
-from .posteffects.highlight import HighlightEffect<br>
-from .posteffects.gray import GrayscaleEffect<br>
-<br>
-class Window:<br>
-&#9;&quot;&quot;&quot;Manages a platform window and a set of viewports.&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self, width: int, height: int, title: str, renderer: Renderer, graphics: GraphicsBackend, window_backend: WindowBackend, share=None, **backend_kwargs):<br>
-&#9;&#9;self.renderer = renderer<br>
-&#9;&#9;self.graphics = graphics<br>
-&#9;&#9;self.generate_default_pipeline = True<br>
-&#9;&#9;share_handle = None<br>
-&#9;&#9;if isinstance(share, Window):<br>
-&#9;&#9;&#9;share_handle = share.handle<br>
-&#9;&#9;elif isinstance(share, BackendWindow):<br>
-&#9;&#9;&#9;share_handle = share<br>
-<br>
-&#9;&#9;self.window_backend = window_backend<br>
-&#9;&#9;self.handle: BackendWindow = self.window_backend.create_window(width, height, title, share=share_handle, **backend_kwargs)<br>
-<br>
-&#9;&#9;self.viewports: List[Viewport] = []<br>
-&#9;&#9;self._active_viewport: Optional[Viewport] = None<br>
-&#9;&#9;self._last_cursor: Optional[Tuple[float, float]] = None<br>
-<br>
-&#9;&#9;self.handle.set_user_pointer(self)<br>
-&#9;&#9;self.handle.set_framebuffer_size_callback(self._handle_framebuffer_resize)<br>
-&#9;&#9;self.handle.set_cursor_pos_callback(self._handle_cursor_pos)<br>
-&#9;&#9;self.handle.set_scroll_callback(self._handle_scroll)<br>
-&#9;&#9;self.handle.set_mouse_button_callback(self._handle_mouse_button)<br>
-&#9;&#9;self.handle.set_key_callback(self._handle_key)<br>
-<br>
-&#9;&#9;self.on_mouse_button_event : Optional[callable(MouseButton, MouseAction, x, y, Viewport)] = None<br>
-&#9;&#9;self.on_mouse_move_event = None  # callable(x: float, y: float, viewport: Optional[Viewport])<br>
-&#9;&#9;self.after_render_handler = None  # type: Optional[Callable[[&quot;Window&quot;], None]]<br>
-<br>
-&#9;&#9;self._world_mode = &quot;game&quot;  # or &quot;editor&quot;<br>
-<br>
-&#9;&#9;# picking support<br>
-&#9;&#9;self.selection_handler = None    # редактор подпишется сюда<br>
-&#9;&#9;self._pick_requests = {}         # viewport -&gt; (mouse_x, mouse_y)<br>
-&#9;&#9;self._pick_id_counter = 1<br>
-&#9;&#9;self._pick_entity_by_id = {}<br>
-&#9;&#9;self._pick_id_by_entity = {}<br>
-<br>
-&#9;def set_selection_handler(self, handler):<br>
-&#9;&#9;self.selection_handler = handler<br>
-<br>
-&#9;def set_world_mode(self, mode: str):<br>
-&#9;&#9;self._world_mode = mode<br>
-<br>
-&#9;def _get_pick_id_for_entity(self, entity):<br>
-&#9;&#9;pid = self._pick_id_by_entity.get(entity)<br>
-&#9;&#9;if pid is not None:<br>
-&#9;&#9;&#9;return pid<br>
-&#9;&#9;pid = self._pick_id_counter<br>
-&#9;&#9;self._pick_id_counter += 1<br>
-&#9;&#9;self._pick_id_by_entity[entity] = pid<br>
-&#9;&#9;self._pick_entity_by_id[pid] = entity<br>
-&#9;&#9;return pid     <br>
-<br>
-&#9;def close(self):<br>
-&#9;&#9;if self.handle:<br>
-&#9;&#9;&#9;self.handle.close()<br>
-&#9;&#9;&#9;self.handle = None<br>
-<br>
-&#9;@property<br>
-&#9;def should_close(self) -&gt; bool:<br>
-&#9;&#9;return self.handle is None or self.handle.should_close()<br>
-<br>
-&#9;def make_current(self):<br>
-&#9;&#9;if self.handle is not None:<br>
-&#9;&#9;&#9;self.handle.make_current()<br>
-<br>
-&#9;def add_viewport(self, scene: Scene, camera: CameraComponent, rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0), canvas: Optional[Canvas] = None) -&gt; Viewport:<br>
-&#9;&#9;if not self.handle.drives_render():<br>
-&#9;&#9;&#9;self.make_current()<br>
-&#9;&#9;scene.ensure_ready(self.graphics)<br>
-&#9;&#9;viewport = Viewport(scene=scene, camera=camera, rect=rect, canvas=canvas, window=self)<br>
-&#9;&#9;camera.viewport = viewport<br>
-&#9;&#9;self.viewports.append(viewport)<br>
-<br>
-&#9;&#9;if self.generate_default_pipeline:<br>
-&#9;&#9;&#9;# собираем дефолтный пайплайн<br>
-&#9;&#9;&#9;pipeline = viewport.make_default_pipeline()<br>
-&#9;&#9;&#9;viewport.set_render_pipeline(pipeline)<br>
-<br>
-&#9;&#9;# if viewport.frame_passes == []:<br>
-&#9;&#9;#     # Если никто не добавил пассы, добавим дефолтный main-pass + present<br>
-&#9;&#9;#     from .framegraph import ColorPass, PresentToScreenPass, CanvasPass<br>
-<br>
-&#9;&#9;&#9;# viewport.frame_passes.append(ColorPass(input_res=&quot;empty&quot;,    output_res=&quot;color&quot;, pass_name=&quot;Color&quot;))<br>
-&#9;&#9;&#9;# viewport.frame_passes.append(IdPass   (input_res=&quot;empty_id&quot;, output_res=&quot;id&quot;,    pass_name=&quot;Id&quot;))<br>
-&#9;&#9;&#9;# # viewport.frame_passes.append(PostProcessPass(<br>
-&#9;&#9;&#9;# #     effects=[HighlightEffect(lambda: editor.selected_entity_id)],<br>
-&#9;&#9;&#9;# #     input_res=&quot;color&quot;,<br>
-&#9;&#9;&#9;# #     output_res=&quot;color_pp&quot;,<br>
-&#9;&#9;&#9;# #     pass_name=&quot;PostFX&quot;,<br>
-&#9;&#9;&#9;# # ))<br>
-&#9;&#9;&#9;# viewport.frame_passes.append(PostProcessPass(<br>
-&#9;&#9;&#9;#     effects=[GrayscaleEffect()],<br>
-&#9;&#9;&#9;#     input_res=&quot;color&quot;,<br>
-&#9;&#9;&#9;#     output_res=&quot;color_pp&quot;,<br>
-&#9;&#9;&#9;#     pass_name=&quot;PostFX&quot;,<br>
-&#9;&#9;&#9;# ))<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;# viewport.frame_passes.append(CanvasPass(src=&quot;color_pp&quot;, dst=&quot;color+ui&quot;, pass_name=&quot;Canvas&quot;))<br>
-&#9;&#9;&#9;# viewport.frame_passes.append(PresentToScreenPass(input_res=&quot;color+ui&quot;, pass_name=&quot;Present&quot;))<br>
+from&nbsp;.viewport&nbsp;import&nbsp;Viewport<br>
+from&nbsp;.ui.canvas&nbsp;import&nbsp;Canvas<br>
+from&nbsp;.picking&nbsp;import&nbsp;rgb_to_id<br>
+from&nbsp;.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;.framegraph&nbsp;import&nbsp;FrameGraph,&nbsp;FrameContext,&nbsp;RenderFramePass,&nbsp;IdPass<br>
+from&nbsp;.postprocess&nbsp;import&nbsp;PostProcessPass<br>
+from&nbsp;.posteffects.highlight&nbsp;import&nbsp;HighlightEffect<br>
+from&nbsp;.posteffects.gray&nbsp;import&nbsp;GrayscaleEffect<br>
+<br>
+class&nbsp;Window:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Manages&nbsp;a&nbsp;platform&nbsp;window&nbsp;and&nbsp;a&nbsp;set&nbsp;of&nbsp;viewports.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;width:&nbsp;int,&nbsp;height:&nbsp;int,&nbsp;title:&nbsp;str,&nbsp;renderer:&nbsp;Renderer,&nbsp;graphics:&nbsp;GraphicsBackend,&nbsp;window_backend:&nbsp;WindowBackend,&nbsp;share=None,&nbsp;**backend_kwargs):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.renderer&nbsp;=&nbsp;renderer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics&nbsp;=&nbsp;graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.generate_default_pipeline&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;share_handle&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(share,&nbsp;Window):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;share_handle&nbsp;=&nbsp;share.handle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(share,&nbsp;BackendWindow):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;share_handle&nbsp;=&nbsp;share<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.window_backend&nbsp;=&nbsp;window_backend<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle:&nbsp;BackendWindow&nbsp;=&nbsp;self.window_backend.create_window(width,&nbsp;height,&nbsp;title,&nbsp;share=share_handle,&nbsp;**backend_kwargs)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewports:&nbsp;List[Viewport]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._active_viewport:&nbsp;Optional[Viewport]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._last_cursor:&nbsp;Optional[Tuple[float,&nbsp;float]]&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.set_user_pointer(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.set_framebuffer_size_callback(self._handle_framebuffer_resize)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.set_cursor_pos_callback(self._handle_cursor_pos)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.set_scroll_callback(self._handle_scroll)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.set_mouse_button_callback(self._handle_mouse_button)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.set_key_callback(self._handle_key)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_mouse_button_event&nbsp;:&nbsp;Optional[callable(MouseButton,&nbsp;MouseAction,&nbsp;x,&nbsp;y,&nbsp;Viewport)]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_mouse_move_event&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;callable(x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;viewport:&nbsp;Optional[Viewport])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.after_render_handler&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;type:&nbsp;Optional[Callable[[&quot;Window&quot;],&nbsp;None]]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._world_mode&nbsp;=&nbsp;&quot;game&quot;&nbsp;&nbsp;#&nbsp;or&nbsp;&quot;editor&quot;<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;picking&nbsp;support<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.selection_handler&nbsp;=&nbsp;None&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;редактор&nbsp;подпишется&nbsp;сюда<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pick_requests&nbsp;=&nbsp;{}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;viewport&nbsp;-&gt;&nbsp;(mouse_x,&nbsp;mouse_y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pick_id_counter&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pick_entity_by_id&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pick_id_by_entity&nbsp;=&nbsp;{}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_selection_handler(self,&nbsp;handler):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.selection_handler&nbsp;=&nbsp;handler<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_world_mode(self,&nbsp;mode:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._world_mode&nbsp;=&nbsp;mode<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_get_pick_id_for_entity(self,&nbsp;entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pid&nbsp;=&nbsp;self._pick_id_by_entity.get(entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pid&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;pid<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pid&nbsp;=&nbsp;self._pick_id_counter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pick_id_counter&nbsp;+=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pick_id_by_entity[entity]&nbsp;=&nbsp;pid<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pick_entity_by_id[pid]&nbsp;=&nbsp;entity<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;pid&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;close(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.close()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;should_close(self)&nbsp;-&gt;&nbsp;bool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.handle&nbsp;is&nbsp;None&nbsp;or&nbsp;self.handle.should_close()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;make_current(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.make_current()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_viewport(self,&nbsp;scene:&nbsp;Scene,&nbsp;camera:&nbsp;CameraComponent,&nbsp;rect:&nbsp;Tuple[float,&nbsp;float,&nbsp;float,&nbsp;float]&nbsp;=&nbsp;(0.0,&nbsp;0.0,&nbsp;1.0,&nbsp;1.0),&nbsp;canvas:&nbsp;Optional[Canvas]&nbsp;=&nbsp;None)&nbsp;-&gt;&nbsp;Viewport:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;self.handle.drives_render():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.make_current()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene.ensure_ready(self.graphics)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;Viewport(scene=scene,&nbsp;camera=camera,&nbsp;rect=rect,&nbsp;canvas=canvas,&nbsp;window=self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera.viewport&nbsp;=&nbsp;viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.viewports.append(viewport)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.generate_default_pipeline:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;собираем&nbsp;дефолтный&nbsp;пайплайн<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pipeline&nbsp;=&nbsp;viewport.make_default_pipeline()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.set_render_pipeline(pipeline)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;if&nbsp;viewport.frame_passes&nbsp;==&nbsp;[]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;никто&nbsp;не&nbsp;добавил&nbsp;пассы,&nbsp;добавим&nbsp;дефолтный&nbsp;main-pass&nbsp;+&nbsp;present<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.framegraph&nbsp;import&nbsp;ColorPass,&nbsp;PresentToScreenPass,&nbsp;CanvasPass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;viewport.frame_passes.append(ColorPass(input_res=&quot;empty&quot;,&nbsp;&nbsp;&nbsp;&nbsp;output_res=&quot;color&quot;,&nbsp;pass_name=&quot;Color&quot;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;viewport.frame_passes.append(IdPass&nbsp;&nbsp;&nbsp;(input_res=&quot;empty_id&quot;,&nbsp;output_res=&quot;id&quot;,&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;Id&quot;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;#&nbsp;viewport.frame_passes.append(PostProcessPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;effects=[HighlightEffect(lambda:&nbsp;editor.selected_entity_id)],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;input_res=&quot;color&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output_res=&quot;color_pp&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;PostFX&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;#&nbsp;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;viewport.frame_passes.append(PostProcessPass(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;effects=[GrayscaleEffect()],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;input_res=&quot;color&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output_res=&quot;color_pp&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;PostFX&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;viewport.frame_passes.append(CanvasPass(src=&quot;color_pp&quot;,&nbsp;dst=&quot;color+ui&quot;,&nbsp;pass_name=&quot;Canvas&quot;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;viewport.frame_passes.append(PresentToScreenPass(input_res=&quot;color+ui&quot;,&nbsp;pass_name=&quot;Present&quot;))<br>
 <br>
-&#9;&#9;&#9;# viewport.frame_passes.append(PresentToScreenPass(input_res=&quot;id&quot;, pass_name=&quot;Present&quot;))<br>
-&#9;&#9;&#9;# viewport.frame_passes.append(IdPass(input_res=&quot;empty_id&quot;, output_res=&quot;id&quot;, pass_name=&quot;IdPass&quot;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;viewport.frame_passes.append(PresentToScreenPass(input_res=&quot;id&quot;,&nbsp;pass_name=&quot;Present&quot;))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;viewport.frame_passes.append(IdPass(input_res=&quot;empty_id&quot;,&nbsp;output_res=&quot;id&quot;,&nbsp;pass_name=&quot;IdPass&quot;))<br>
 <br>
-&#9;&#9;return viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;viewport<br>
 <br>
-&#9;def update(self, dt: float):<br>
-&#9;&#9;# Reserved for future per-window updates.<br>
-&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update(self,&nbsp;dt:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Reserved&nbsp;for&nbsp;future&nbsp;per-window&nbsp;updates.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;def render(self):<br>
-&#9;&#9;self._render_core(from_backend=False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;render(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._render_core(from_backend=False)<br>
 <br>
-&#9;def viewport_rect_to_pixels(self, viewport: Viewport) -&gt; Tuple[int, int, int, int]:<br>
-&#9;&#9;if self.handle is None:<br>
-&#9;&#9;&#9;return (0, 0, 0, 0)<br>
-&#9;&#9;width, height = self.handle.framebuffer_size()<br>
-&#9;&#9;vx, vy, vw, vh = viewport.rect<br>
-&#9;&#9;px = vx * width<br>
-&#9;&#9;py = vy * height<br>
-&#9;&#9;pw = vw * width<br>
-&#9;&#9;ph = vh * height<br>
-&#9;&#9;return px, py, pw, ph<br>
-&#9;&#9;<br>
-<br>
-&#9;# Event handlers -----------------------------------------------------<br>
-<br>
-&#9;def _handle_framebuffer_resize(self, window, width, height):<br>
-&#9;&#9;return<br>
-<br>
-<br>
-&#9;from typing import Optional<br>
-&#9;from termin.visualization.entity import Entity<br>
-<br>
-&#9;def pick_entity_at(self, x: float, y: float, viewport: Viewport = None) -&gt; Optional[Entity]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вернёт entity под пикселем (x, y) в координатах виджета (origin сверху-слева),<br>
-&#9;&#9;используя id-карту, нарисованную IdPass в FBO с ключом 'id'.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if self.handle is None:<br>
-&#9;&#9;&#9;return None<br>
-<br>
-&#9;&#9;# Определяем вьюпорт, если не передали явно<br>
-&#9;&#9;if viewport is None:<br>
-&#9;&#9;&#9;viewport = self._viewport_under_cursor(x, y)<br>
-&#9;&#9;&#9;if viewport is None:<br>
-&#9;&#9;&#9;&#9;return None<br>
-<br>
-&#9;&#9;win_w, win_h = self.handle.window_size()       # логические пиксели<br>
-&#9;&#9;fb_w, fb_h = self.handle.framebuffer_size()    # физические пиксели (GL)<br>
-<br>
-&#9;&#9;if win_w &lt;= 0 or win_h &lt;= 0 or fb_w &lt;= 0 or fb_h &lt;= 0:<br>
-&#9;&#9;&#9;return None<br>
-<br>
-&#9;&#9;# --- 1) координаты viewport'а в физических пикселях (как при рендере) ---<br>
-&#9;&#9;px, py, pw, ph = self.viewport_rect_to_pixels(viewport)<br>
-&#9;&#9;# viewport_rect_to_pixels уже использует framebuffer_size()<br>
-<br>
-<br>
-&#9;&#9;# --- 2) переводим координаты мыши из логических в физические ---<br>
-&#9;&#9;sx = fb_w / float(win_w)<br>
-&#9;&#9;sy = fb_h / float(win_h)<br>
-<br>
-&#9;&#9;x_phys = x * sx<br>
-&#9;&#9;y_phys = y * sy<br>
-<br>
-&#9;&#9;# --- 3) локальные координаты внутри viewport'а ---<br>
-&#9;&#9;vx = x_phys - px<br>
-&#9;&#9;vy = y_phys - py<br>
-<br>
-<br>
-&#9;&#9;if vx &lt; 0 or vy &lt; 0 or vx &gt;= pw or vy &gt;= ph:<br>
-&#9;&#9;&#9;return None<br>
-<br>
-&#9;&#9;# --- 4) перевод в координаты FBO (origin снизу-слева) ---<br>
-&#9;&#9;read_x = int(vx)<br>
-&#9;&#9;read_y = int(ph - vy - 1)   # инверсия Y, как в старом _do_pick_pass<br>
-<br>
-&#9;&#9;# Берём FBO с id-картой<br>
-&#9;&#9;fbo_pool = getattr(viewport, &quot;_fbo_pool&quot;, None)<br>
-&#9;&#9;if not fbo_pool:<br>
-&#9;&#9;&#9;return None<br>
-<br>
-&#9;&#9;fb_id = fbo_pool.get(&quot;id&quot;)<br>
-&#9;&#9;if fb_id is None:<br>
-&#9;&#9;&#9;return None<br>
-<br>
-<br>
-&#9;&#9;r, g, b, a = self.graphics.read_pixel(fb_id, read_x, read_y)<br>
-&#9;&#9;self.handle.bind_window_framebuffer()<br>
-<br>
-&#9;&#9;pid = rgb_to_id(r, g, b)<br>
-<br>
-&#9;&#9;if pid == 0:<br>
-&#9;&#9;&#9;return None<br>
-<br>
-&#9;&#9;entity = self._pick_entity_by_id.get(pid)<br>
-<br>
-&#9;&#9;return entity<br>
-<br>
-<br>
-&#9;def _handle_mouse_button_game_mode(self, window, button: MouseButton, action: Action, mods):<br>
-&#9;&#9;if self.handle is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;x, y = self.handle.get_cursor_pos()<br>
-&#9;&#9;viewport = self._viewport_under_cursor(x, y)<br>
-<br>
-&#9;&#9;# ---- UI click handling ----<br>
-&#9;&#9;if viewport and viewport.canvas:<br>
-&#9;&#9;&#9;if action == Action.PRESS:<br>
-&#9;&#9;&#9;&#9;interrupt = viewport.canvas.mouse_down(x, y, self.viewport_rect_to_pixels(viewport))<br>
-&#9;&#9;&#9;&#9;if interrupt:<br>
-&#9;&#9;&#9;&#9;&#9;return<br>
-&#9;&#9;&#9;elif action == Action.RELEASE:<br>
-&#9;&#9;&#9;&#9;interrupt = viewport.canvas.mouse_up(x, y, self.viewport_rect_to_pixels(viewport))<br>
-&#9;&#9;&#9;&#9;if interrupt:<br>
-&#9;&#9;&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;# Обработка 3D сцены (сперва глобальная)<br>
-&#9;&#9;if action == Action.PRESS:<br>
-&#9;&#9;&#9;self._active_viewport = viewport<br>
-&#9;&#9;if action == Action.RELEASE:<br>
-&#9;&#9;&#9;self._last_cursor = None<br>
-&#9;&#9;&#9;if viewport is None:<br>
-&#9;&#9;&#9;&#9;viewport = self._active_viewport<br>
-&#9;&#9;&#9;self._active_viewport = None<br>
-&#9;&#9;if viewport is not None:<br>
-&#9;&#9;&#9;viewport.scene.dispatch_input(viewport, &quot;on_mouse_button&quot;, button=button, action=action, mods=mods)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;# Теперь обработка кликов по объектам сцены<br>
-&#9;&#9;if viewport is not None:<br>
-&#9;&#9;&#9;if action == Action.PRESS and button == MouseButton.LEFT:<br>
-&#9;&#9;&#9;&#9;cam = viewport.camera<br>
-&#9;&#9;&#9;&#9;if cam is not None:<br>
-&#9;&#9;&#9;&#9;&#9;ray = cam.screen_point_to_ray(x, y, viewport_rect=self.viewport_rect_to_pixels(viewport))   # функция построения Ray3<br>
-&#9;&#9;&#9;&#9;&#9;hit = viewport.scene.raycast(ray)<br>
-&#9;&#9;&#9;&#9;&#9;print(&quot;Raycast hit:&quot;, hit)  # --- DEBUG ---<br>
-&#9;&#9;&#9;&#9;&#9;if hit is not None:<br>
-&#9;&#9;&#9;&#9;&#9;&#9;# Диспатчим on_click в компоненты<br>
-&#9;&#9;&#9;&#9;&#9;&#9;entity = hit.entity<br>
-&#9;&#9;&#9;&#9;&#9;&#9;for comp in entity.components:<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;if hasattr(comp, &quot;on_click&quot;):  # или isinstance(comp, Clickable)<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;comp.on_click(hit, button)<br>
-<br>
-&#9;&#9;self._request_update()<br>
-<br>
-&#9;def _handle_mouse_button_editor_mode(self, window, button: MouseButton, action: Action, mods):<br>
-&#9;&#9;if self.handle is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;x, y = self.handle.get_cursor_pos()<br>
-&#9;&#9;viewport = self._viewport_under_cursor(x, y)<br>
-<br>
-&#9;&#9;if viewport is not None:<br>
-&#9;&#9;&#9;if action == Action.PRESS and button == MouseButton.LEFT:<br>
-&#9;&#9;&#9;&#9;# запоминаем, где кликнули, для этого viewport<br>
-&#9;&#9;&#9;&#9;self._pick_requests[id(viewport)] = (x, y)   <br>
-<br>
-&#9;&#9;# Обработка 3D сцены<br>
-&#9;&#9;if action == Action.PRESS:<br>
-&#9;&#9;&#9;self._active_viewport = viewport<br>
-&#9;&#9;if action == Action.RELEASE:<br>
-&#9;&#9;&#9;self._last_cursor = None<br>
-&#9;&#9;&#9;if viewport is None:<br>
-&#9;&#9;&#9;&#9;viewport = self._active_viewport<br>
-&#9;&#9;&#9;self._active_viewport = None<br>
-&#9;&#9;if viewport is not None:<br>
-&#9;&#9;&#9;#print(&quot;Dispatching mouse button to scene&quot;)  # --- DEBUG ---<br>
-&#9;&#9;&#9;viewport.scene.dispatch_input(viewport, &quot;on_mouse_button&quot;, button=button, action=action, mods=mods)  <br>
-<br>
-&#9;&#9;if self.on_mouse_button_event:<br>
-&#9;&#9;&#9;self.on_mouse_button_event(button, action, x, y, viewport)   <br>
-<br>
-&#9;&#9;self._request_update()<br>
-<br>
-&#9;def _handle_mouse_button(self, window, button: MouseButton, action: Action, mods):<br>
-&#9;&#9;if self._world_mode == &quot;game&quot;:<br>
-&#9;&#9;&#9;self._handle_mouse_button_game_mode(window, button, action, mods)<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;elif self._world_mode == &quot;editor&quot;:<br>
-&#9;&#9;&#9;self._handle_mouse_button_editor_mode(window, button, action, mods)<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;def _handle_cursor_pos(self, window, x, y):<br>
-&#9;&#9;if self.handle is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;<br>
-&#9;&#9;if self._last_cursor is None:<br>
-&#9;&#9;&#9;dx = dy = 0.0<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;dx = x - self._last_cursor[0]<br>
-&#9;&#9;&#9;dy = y - self._last_cursor[1]<br>
-&#9;&#9;<br>
-&#9;&#9;self._last_cursor = (x, y)<br>
-&#9;&#9;viewport = self._active_viewport or self._viewport_under_cursor(x, y)<br>
-<br>
-&#9;&#9;if viewport and viewport.canvas:<br>
-&#9;&#9;&#9;viewport.canvas.mouse_move(x, y, self.viewport_rect_to_pixels(viewport))<br>
-<br>
-&#9;&#9;if viewport is not None:<br>
-&#9;&#9;&#9;viewport.scene.dispatch_input(viewport, &quot;on_mouse_move&quot;, x=x, y=y, dx=dx, dy=dy)<br>
-<br>
-&#9;&#9;# пробрасываем инфу наверх (редактору), без знания про idmap и hover<br>
-&#9;&#9;if self.on_mouse_move_event is not None:<br>
-&#9;&#9;&#9;self.on_mouse_move_event(x, y, viewport)<br>
-<br>
-&#9;&#9;self._request_update()<br>
-<br>
-&#9;def _handle_scroll(self, window, xoffset, yoffset):<br>
-&#9;&#9;if self.handle is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;x, y = self.handle.get_cursor_pos()<br>
-&#9;&#9;viewport = self._viewport_under_cursor(x, y) or self._active_viewport<br>
-&#9;&#9;if viewport is not None:<br>
-&#9;&#9;&#9;viewport.scene.dispatch_input(viewport, &quot;on_scroll&quot;, xoffset=xoffset, yoffset=yoffset)<br>
-<br>
-&#9;&#9;self._request_update()<br>
-<br>
-&#9;def _handle_key(self, window, key: Key, scancode: int, action: Action, mods):<br>
-&#9;&#9;if key == Key.ESCAPE and action == Action.PRESS and self.handle is not None:<br>
-&#9;&#9;&#9;self.handle.set_should_close(True)<br>
-&#9;&#9;viewport = self._active_viewport or (self.viewports[0] if self.viewports else None)<br>
-&#9;&#9;if viewport is not None:<br>
-&#9;&#9;&#9;viewport.scene.dispatch_input(viewport, &quot;on_key&quot;, key=key, scancode=scancode, action=action, mods=mods)<br>
-<br>
-&#9;&#9;self._request_update()<br>
-<br>
-&#9;def _viewport_under_cursor(self, x: float, y: float) -&gt; Optional[Viewport]:<br>
-&#9;&#9;if self.handle is None or not self.viewports:<br>
-&#9;&#9;&#9;return None<br>
-&#9;&#9;win_w, win_h = self.handle.window_size()<br>
-&#9;&#9;if win_w == 0 or win_h == 0:<br>
-&#9;&#9;&#9;return None<br>
-&#9;&#9;nx = x / win_w<br>
-&#9;&#9;ny = 1.0 - (y / win_h)<br>
-&#9;&#9;for viewport in self.viewports:<br>
-&#9;&#9;&#9;vx, vy, vw, vh = viewport.rect<br>
-&#9;&#9;&#9;if vx &lt;= nx &lt;= vx + vw and vy &lt;= ny &lt;= vy + vh:<br>
-&#9;&#9;&#9;&#9;return viewport<br>
-&#9;&#9;return None<br>
-<br>
-&#9;def get_viewport_fbo(self, viewport, key, size):<br>
-&#9;&#9;d = viewport.__dict__.setdefault(&quot;_fbo_pool&quot;, {})<br>
-&#9;&#9;fb = d.get(key)<br>
-&#9;&#9;if fb is None:<br>
-&#9;&#9;&#9;fb = self.graphics.create_framebuffer(size)<br>
-&#9;&#9;&#9;d[key] = fb<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;fb.resize(size)<br>
-&#9;&#9;return fb<br>
-<br>
-&#9;def _render_core(self, from_backend: bool):<br>
-&#9;&#9;if self.handle is None:<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;self.graphics.ensure_ready()<br>
-<br>
-&#9;&#9;if not from_backend:<br>
-&#9;&#9;&#9;self.make_current()<br>
-<br>
-&#9;&#9;context_key = id(self)<br>
-&#9;&#9;width, height = self.handle.framebuffer_size()<br>
-<br>
-&#9;&#9;for viewport in self.viewports:<br>
-&#9;&#9;&#9;vx, vy, vw, vh = viewport.rect<br>
-&#9;&#9;&#9;px = int(vx * width)<br>
-&#9;&#9;&#9;py = int(vy * height)<br>
-&#9;&#9;&#9;pw = max(1, int(vw * width))<br>
-&#9;&#9;&#9;ph = max(1, int(vh * height))<br>
-<br>
-&#9;&#9;&#9;# Обновляем аспект камеры<br>
-&#9;&#9;&#9;viewport.camera.set_aspect(pw / float(max(1, ph)))<br>
-<br>
-&#9;&#9;&#9;# Берём список пассов, который кто-то заранее повесил на viewport<br>
-&#9;&#9;&#9;frame_passes = viewport.frame_passes<br>
-&#9;&#9;&#9;if not frame_passes:<br>
-&#9;&#9;&#9;&#9;# Нечего рендерить — пропускаем<br>
-&#9;&#9;&#9;&#9;continue<br>
-<br>
-&#9;&#9;&#9;# Контекст для пассов<br>
-&#9;&#9;&#9;ctx = FrameContext(<br>
-&#9;&#9;&#9;&#9;window=self,<br>
-&#9;&#9;&#9;&#9;viewport=viewport,<br>
-&#9;&#9;&#9;&#9;rect=(px, py, pw, ph),<br>
-&#9;&#9;&#9;&#9;size=(pw, ph),<br>
-&#9;&#9;&#9;&#9;context_key=context_key,<br>
-&#9;&#9;&#9;&#9;graphics=self.graphics,<br>
-&#9;&#9;&#9;)<br>
-<br>
-&#9;&#9;&#9;# Строим и исполняем граф<br>
-&#9;&#9;&#9;graph = FrameGraph(frame_passes)<br>
-&#9;&#9;&#9;schedule = graph.build_schedule()<br>
-<br>
-&#9;&#9;&#9;for p in schedule:<br>
-&#9;&#9;&#9;&#9;p.execute(ctx)<br>
-<br>
-&#9;&#9;if self.after_render_handler is not None:<br>
-&#9;&#9;&#9;self.after_render_handler(self)<br>
-<br>
-&#9;&#9;if not from_backend:<br>
-&#9;&#9;&#9;self.handle.swap_buffers()<br>
-<br>
-&#9;def _request_update(self):<br>
-&#9;&#9;if self.handle is not None:<br>
-&#9;&#9;&#9;self.handle.request_update()<br>
-<br>
-&#9;# def _do_pick_pass(self, viewport, px, py, pw, ph, mouse_x, mouse_y, context_key):<br>
-&#9;#     print(f&quot;Doing pick pass at mouse ({mouse_x}, {mouse_y}) in viewport rect px={px},py={py},pw={pw},ph={ph}&quot;)  # --- DEBUG ---<br>
-<br>
-&#9;#     # 1) FBO для picking<br>
-&#9;#     fb_pick = self.get_viewport_fbo(viewport, &quot;PICK&quot;, (pw, ph))<br>
-&#9;&#9;<br>
-&#9;#     print(&quot;Picking FBO:&quot;, fb_pick._fbo)  # --- DEBUG ---<br>
-&#9;#     self.graphics.bind_framebuffer(fb_pick)<br>
-&#9;#     self.graphics.set_viewport(0, 0, pw, ph)<br>
-&#9;#     self.graphics.clear_color_depth((0.0, 0.0, 0.0, 0.0))<br>
-<br>
-&#9;#     # 2) карта entity -&gt; id для этой сцены<br>
-&#9;#     pick_ids = {}<br>
-&#9;#     for ent in viewport.scene.entities:<br>
-&#9;#         if not ent.is_pickable():<br>
-&#9;#             continue<br>
-<br>
-&#9;#         mr = ent.get_component(MeshRenderer)<br>
-&#9;#         if mr is None:<br>
-&#9;#             continue<br>
-<br>
-&#9;#         # можешь фильтровать по наличию MeshRenderer<br>
-&#9;#         pick_ids[ent] = self._get_pick_id_for_entity(ent)<br>
-<br>
-&#9;#     # 3) рендерим специальным пассом<br>
-&#9;#     self.renderer.render_viewport_pick(<br>
-&#9;#         viewport.scene,<br>
-&#9;#         viewport.camera,<br>
-&#9;#         (0, 0, pw, ph),<br>
-&#9;#         context_key,<br>
-&#9;#         pick_ids,<br>
-&#9;#     )<br>
-<br>
-&#9;#     # 4) вычисляем координаты пикселя относительно FBO<br>
-&#9;#     win_w, win_h = self.handle.window_size()<br>
-&#9;#     if win_w == 0 or win_h == 0:<br>
-&#9;#         return<br>
-<br>
-&#9;#     vx = mouse_x - px<br>
-&#9;#     vy = mouse_y - py<br>
-&#9;#     if vx &lt; 0 or vy &lt; 0 or vx &gt;= pw or vy &gt;= ph:<br>
-&#9;#         return<br>
-<br>
-&#9;#     read_x = int(vx)<br>
-&#9;#     read_y = ph - int(vy) - 1  # инверсия по Y<br>
-<br>
-&#9;#     print(&quot;Reading pixel at FBO coords:&quot;, read_x, read_y)  # --- DEBUG ---<br>
-<br>
-&#9;#     r, g, b, a = self.graphics.read_pixel(fb_pick, read_x, read_y)<br>
-&#9;#     print(&quot;Picked color RGBA:&quot;, r, g, b, a)  # --- DEBUG ---<br>
-&#9;#     pid = rgb_to_id(r, g, b)<br>
-&#9;#     print(f&quot;Picked ID: {pid}&quot;)  # --- DEBUG ---<br>
-&#9;#     if pid == 0:<br>
-&#9;#         return<br>
-<br>
-&#9;#     entity = self._pick_entity_by_id.get(pid)<br>
-&#9;#     if entity is not None and self.selection_handler is not None:<br>
-&#9;#         self.selection_handler(entity)<br>
-<br>
-&#9;#     # вернёмся к обычному framebuffer'у<br>
-&#9;#     self.graphics.bind_framebuffer(None)<br>
-<br>
-<br>
-<br>
-# Backwards compatibility<br>
-GLWindow = Window<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;viewport_rect_to_pixels(self,&nbsp;viewport:&nbsp;Viewport)&nbsp;-&gt;&nbsp;Tuple[int,&nbsp;int,&nbsp;int,&nbsp;int]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(0,&nbsp;0,&nbsp;0,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width,&nbsp;height&nbsp;=&nbsp;self.handle.framebuffer_size()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vx,&nbsp;vy,&nbsp;vw,&nbsp;vh&nbsp;=&nbsp;viewport.rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px&nbsp;=&nbsp;vx&nbsp;*&nbsp;width<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;py&nbsp;=&nbsp;vy&nbsp;*&nbsp;height<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pw&nbsp;=&nbsp;vw&nbsp;*&nbsp;width<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ph&nbsp;=&nbsp;vh&nbsp;*&nbsp;height<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Event&nbsp;handlers&nbsp;-----------------------------------------------------<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_handle_framebuffer_resize(self,&nbsp;window,&nbsp;width,&nbsp;height):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;typing&nbsp;import&nbsp;Optional<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Entity<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;pick_entity_at(self,&nbsp;x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;viewport:&nbsp;Viewport&nbsp;=&nbsp;None)&nbsp;-&gt;&nbsp;Optional[Entity]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вернёт&nbsp;entity&nbsp;под&nbsp;пикселем&nbsp;(x,&nbsp;y)&nbsp;в&nbsp;координатах&nbsp;виджета&nbsp;(origin&nbsp;сверху-слева),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;используя&nbsp;id-карту,&nbsp;нарисованную&nbsp;IdPass&nbsp;в&nbsp;FBO&nbsp;с&nbsp;ключом&nbsp;'id'.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;вьюпорт,&nbsp;если&nbsp;не&nbsp;передали&nbsp;явно<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;self._viewport_under_cursor(x,&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;win_w,&nbsp;win_h&nbsp;=&nbsp;self.handle.window_size()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;логические&nbsp;пиксели<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_w,&nbsp;fb_h&nbsp;=&nbsp;self.handle.framebuffer_size()&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;физические&nbsp;пиксели&nbsp;(GL)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;win_w&nbsp;&lt;=&nbsp;0&nbsp;or&nbsp;win_h&nbsp;&lt;=&nbsp;0&nbsp;or&nbsp;fb_w&nbsp;&lt;=&nbsp;0&nbsp;or&nbsp;fb_h&nbsp;&lt;=&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;1)&nbsp;координаты&nbsp;viewport'а&nbsp;в&nbsp;физических&nbsp;пикселях&nbsp;(как&nbsp;при&nbsp;рендере)&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;self.viewport_rect_to_pixels(viewport)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;viewport_rect_to_pixels&nbsp;уже&nbsp;использует&nbsp;framebuffer_size()<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;2)&nbsp;переводим&nbsp;координаты&nbsp;мыши&nbsp;из&nbsp;логических&nbsp;в&nbsp;физические&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sx&nbsp;=&nbsp;fb_w&nbsp;/&nbsp;float(win_w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sy&nbsp;=&nbsp;fb_h&nbsp;/&nbsp;float(win_h)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_phys&nbsp;=&nbsp;x&nbsp;*&nbsp;sx<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y_phys&nbsp;=&nbsp;y&nbsp;*&nbsp;sy<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;3)&nbsp;локальные&nbsp;координаты&nbsp;внутри&nbsp;viewport'а&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vx&nbsp;=&nbsp;x_phys&nbsp;-&nbsp;px<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vy&nbsp;=&nbsp;y_phys&nbsp;-&nbsp;py<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vx&nbsp;&lt;&nbsp;0&nbsp;or&nbsp;vy&nbsp;&lt;&nbsp;0&nbsp;or&nbsp;vx&nbsp;&gt;=&nbsp;pw&nbsp;or&nbsp;vy&nbsp;&gt;=&nbsp;ph:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;4)&nbsp;перевод&nbsp;в&nbsp;координаты&nbsp;FBO&nbsp;(origin&nbsp;снизу-слева)&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;read_x&nbsp;=&nbsp;int(vx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;read_y&nbsp;=&nbsp;int(ph&nbsp;-&nbsp;vy&nbsp;-&nbsp;1)&nbsp;&nbsp;&nbsp;#&nbsp;инверсия&nbsp;Y,&nbsp;как&nbsp;в&nbsp;старом&nbsp;_do_pick_pass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Берём&nbsp;FBO&nbsp;с&nbsp;id-картой<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fbo_pool&nbsp;=&nbsp;getattr(viewport,&nbsp;&quot;_fbo_pool&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;fbo_pool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_id&nbsp;=&nbsp;fbo_pool.get(&quot;id&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fb_id&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r,&nbsp;g,&nbsp;b,&nbsp;a&nbsp;=&nbsp;self.graphics.read_pixel(fb_id,&nbsp;read_x,&nbsp;read_y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.bind_window_framebuffer()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pid&nbsp;=&nbsp;rgb_to_id(r,&nbsp;g,&nbsp;b)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pid&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entity&nbsp;=&nbsp;self._pick_entity_by_id.get(pid)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;entity<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_handle_mouse_button_game_mode(self,&nbsp;window,&nbsp;button:&nbsp;MouseButton,&nbsp;action:&nbsp;Action,&nbsp;mods):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y&nbsp;=&nbsp;self.handle.get_cursor_pos()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;self._viewport_under_cursor(x,&nbsp;y)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;----&nbsp;UI&nbsp;click&nbsp;handling&nbsp;----<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;and&nbsp;viewport.canvas:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;action&nbsp;==&nbsp;Action.PRESS:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interrupt&nbsp;=&nbsp;viewport.canvas.mouse_down(x,&nbsp;y,&nbsp;self.viewport_rect_to_pixels(viewport))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;interrupt:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;action&nbsp;==&nbsp;Action.RELEASE:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interrupt&nbsp;=&nbsp;viewport.canvas.mouse_up(x,&nbsp;y,&nbsp;self.viewport_rect_to_pixels(viewport))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;interrupt:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обработка&nbsp;3D&nbsp;сцены&nbsp;(сперва&nbsp;глобальная)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;action&nbsp;==&nbsp;Action.PRESS:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._active_viewport&nbsp;=&nbsp;viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;action&nbsp;==&nbsp;Action.RELEASE:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._last_cursor&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;self._active_viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._active_viewport&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.scene.dispatch_input(viewport,&nbsp;&quot;on_mouse_button&quot;,&nbsp;button=button,&nbsp;action=action,&nbsp;mods=mods)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Теперь&nbsp;обработка&nbsp;кликов&nbsp;по&nbsp;объектам&nbsp;сцены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;action&nbsp;==&nbsp;Action.PRESS&nbsp;and&nbsp;button&nbsp;==&nbsp;MouseButton.LEFT:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cam&nbsp;=&nbsp;viewport.camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;cam&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ray&nbsp;=&nbsp;cam.screen_point_to_ray(x,&nbsp;y,&nbsp;viewport_rect=self.viewport_rect_to_pixels(viewport))&nbsp;&nbsp;&nbsp;#&nbsp;функция&nbsp;построения&nbsp;Ray3<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hit&nbsp;=&nbsp;viewport.scene.raycast(ray)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Raycast&nbsp;hit:&quot;,&nbsp;hit)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hit&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Диспатчим&nbsp;on_click&nbsp;в&nbsp;компоненты<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entity&nbsp;=&nbsp;hit.entity<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;comp&nbsp;in&nbsp;entity.components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(comp,&nbsp;&quot;on_click&quot;):&nbsp;&nbsp;#&nbsp;или&nbsp;isinstance(comp,&nbsp;Clickable)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp.on_click(hit,&nbsp;button)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_handle_mouse_button_editor_mode(self,&nbsp;window,&nbsp;button:&nbsp;MouseButton,&nbsp;action:&nbsp;Action,&nbsp;mods):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y&nbsp;=&nbsp;self.handle.get_cursor_pos()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;self._viewport_under_cursor(x,&nbsp;y)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;action&nbsp;==&nbsp;Action.PRESS&nbsp;and&nbsp;button&nbsp;==&nbsp;MouseButton.LEFT:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;запоминаем,&nbsp;где&nbsp;кликнули,&nbsp;для&nbsp;этого&nbsp;viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pick_requests[id(viewport)]&nbsp;=&nbsp;(x,&nbsp;y)&nbsp;&nbsp;&nbsp;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обработка&nbsp;3D&nbsp;сцены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;action&nbsp;==&nbsp;Action.PRESS:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._active_viewport&nbsp;=&nbsp;viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;action&nbsp;==&nbsp;Action.RELEASE:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._last_cursor&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;self._active_viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._active_viewport&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#print(&quot;Dispatching&nbsp;mouse&nbsp;button&nbsp;to&nbsp;scene&quot;)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.scene.dispatch_input(viewport,&nbsp;&quot;on_mouse_button&quot;,&nbsp;button=button,&nbsp;action=action,&nbsp;mods=mods)&nbsp;&nbsp;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.on_mouse_button_event:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_mouse_button_event(button,&nbsp;action,&nbsp;x,&nbsp;y,&nbsp;viewport)&nbsp;&nbsp;&nbsp;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_handle_mouse_button(self,&nbsp;window,&nbsp;button:&nbsp;MouseButton,&nbsp;action:&nbsp;Action,&nbsp;mods):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._world_mode&nbsp;==&nbsp;&quot;game&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle_mouse_button_game_mode(window,&nbsp;button,&nbsp;action,&nbsp;mods)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;self._world_mode&nbsp;==&nbsp;&quot;editor&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle_mouse_button_editor_mode(window,&nbsp;button,&nbsp;action,&nbsp;mods)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_handle_cursor_pos(self,&nbsp;window,&nbsp;x,&nbsp;y):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._last_cursor&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dx&nbsp;=&nbsp;dy&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dx&nbsp;=&nbsp;x&nbsp;-&nbsp;self._last_cursor[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dy&nbsp;=&nbsp;y&nbsp;-&nbsp;self._last_cursor[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._last_cursor&nbsp;=&nbsp;(x,&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;self._active_viewport&nbsp;or&nbsp;self._viewport_under_cursor(x,&nbsp;y)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;and&nbsp;viewport.canvas:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.canvas.mouse_move(x,&nbsp;y,&nbsp;self.viewport_rect_to_pixels(viewport))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.scene.dispatch_input(viewport,&nbsp;&quot;on_mouse_move&quot;,&nbsp;x=x,&nbsp;y=y,&nbsp;dx=dx,&nbsp;dy=dy)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;пробрасываем&nbsp;инфу&nbsp;наверх&nbsp;(редактору),&nbsp;без&nbsp;знания&nbsp;про&nbsp;idmap&nbsp;и&nbsp;hover<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.on_mouse_move_event&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_mouse_move_event(x,&nbsp;y,&nbsp;viewport)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_handle_scroll(self,&nbsp;window,&nbsp;xoffset,&nbsp;yoffset):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y&nbsp;=&nbsp;self.handle.get_cursor_pos()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;self._viewport_under_cursor(x,&nbsp;y)&nbsp;or&nbsp;self._active_viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.scene.dispatch_input(viewport,&nbsp;&quot;on_scroll&quot;,&nbsp;xoffset=xoffset,&nbsp;yoffset=yoffset)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_handle_key(self,&nbsp;window,&nbsp;key:&nbsp;Key,&nbsp;scancode:&nbsp;int,&nbsp;action:&nbsp;Action,&nbsp;mods):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;key&nbsp;==&nbsp;Key.ESCAPE&nbsp;and&nbsp;action&nbsp;==&nbsp;Action.PRESS&nbsp;and&nbsp;self.handle&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.set_should_close(True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;self._active_viewport&nbsp;or&nbsp;(self.viewports[0]&nbsp;if&nbsp;self.viewports&nbsp;else&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.scene.dispatch_input(viewport,&nbsp;&quot;on_key&quot;,&nbsp;key=key,&nbsp;scancode=scancode,&nbsp;action=action,&nbsp;mods=mods)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_viewport_under_cursor(self,&nbsp;x:&nbsp;float,&nbsp;y:&nbsp;float)&nbsp;-&gt;&nbsp;Optional[Viewport]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;None&nbsp;or&nbsp;not&nbsp;self.viewports:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;win_w,&nbsp;win_h&nbsp;=&nbsp;self.handle.window_size()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;win_w&nbsp;==&nbsp;0&nbsp;or&nbsp;win_h&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nx&nbsp;=&nbsp;x&nbsp;/&nbsp;win_w<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ny&nbsp;=&nbsp;1.0&nbsp;-&nbsp;(y&nbsp;/&nbsp;win_h)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;viewport&nbsp;in&nbsp;self.viewports:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vx,&nbsp;vy,&nbsp;vw,&nbsp;vh&nbsp;=&nbsp;viewport.rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vx&nbsp;&lt;=&nbsp;nx&nbsp;&lt;=&nbsp;vx&nbsp;+&nbsp;vw&nbsp;and&nbsp;vy&nbsp;&lt;=&nbsp;ny&nbsp;&lt;=&nbsp;vy&nbsp;+&nbsp;vh:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_viewport_fbo(self,&nbsp;viewport,&nbsp;key,&nbsp;size):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;viewport.__dict__.setdefault(&quot;_fbo_pool&quot;,&nbsp;{})<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb&nbsp;=&nbsp;d.get(key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fb&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb&nbsp;=&nbsp;self.graphics.create_framebuffer(size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d[key]&nbsp;=&nbsp;fb<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb.resize(size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;fb<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_render_core(self,&nbsp;from_backend:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics.ensure_ready()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;from_backend:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.make_current()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context_key&nbsp;=&nbsp;id(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width,&nbsp;height&nbsp;=&nbsp;self.handle.framebuffer_size()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;viewport&nbsp;in&nbsp;self.viewports:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vx,&nbsp;vy,&nbsp;vw,&nbsp;vh&nbsp;=&nbsp;viewport.rect<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px&nbsp;=&nbsp;int(vx&nbsp;*&nbsp;width)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;py&nbsp;=&nbsp;int(vy&nbsp;*&nbsp;height)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pw&nbsp;=&nbsp;max(1,&nbsp;int(vw&nbsp;*&nbsp;width))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ph&nbsp;=&nbsp;max(1,&nbsp;int(vh&nbsp;*&nbsp;height))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обновляем&nbsp;аспект&nbsp;камеры<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.camera.set_aspect(pw&nbsp;/&nbsp;float(max(1,&nbsp;ph)))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Берём&nbsp;список&nbsp;пассов,&nbsp;который&nbsp;кто-то&nbsp;заранее&nbsp;повесил&nbsp;на&nbsp;viewport<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;frame_passes&nbsp;=&nbsp;viewport.frame_passes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;frame_passes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нечего&nbsp;рендерить&nbsp;—&nbsp;пропускаем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Контекст&nbsp;для&nbsp;пассов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctx&nbsp;=&nbsp;FrameContext(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window=self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport=viewport,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rect=(px,&nbsp;py,&nbsp;pw,&nbsp;ph),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size=(pw,&nbsp;ph),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context_key=context_key,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;graphics=self.graphics,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Строим&nbsp;и&nbsp;исполняем&nbsp;граф<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;graph&nbsp;=&nbsp;FrameGraph(frame_passes)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;schedule&nbsp;=&nbsp;graph.build_schedule()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;p&nbsp;in&nbsp;schedule:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p.execute(ctx)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.after_render_handler&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.after_render_handler(self)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;from_backend:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.swap_buffers()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_request_update(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.request_update()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;def&nbsp;_do_pick_pass(self,&nbsp;viewport,&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph,&nbsp;mouse_x,&nbsp;mouse_y,&nbsp;context_key):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;Doing&nbsp;pick&nbsp;pass&nbsp;at&nbsp;mouse&nbsp;({mouse_x},&nbsp;{mouse_y})&nbsp;in&nbsp;viewport&nbsp;rect&nbsp;px={px},py={py},pw={pw},ph={ph}&quot;)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;1)&nbsp;FBO&nbsp;для&nbsp;picking<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_pick&nbsp;=&nbsp;self.get_viewport_fbo(viewport,&nbsp;&quot;PICK&quot;,&nbsp;(pw,&nbsp;ph))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Picking&nbsp;FBO:&quot;,&nbsp;fb_pick._fbo)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics.bind_framebuffer(fb_pick)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics.set_viewport(0,&nbsp;0,&nbsp;pw,&nbsp;ph)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics.clear_color_depth((0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;0.0))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;2)&nbsp;карта&nbsp;entity&nbsp;-&gt;&nbsp;id&nbsp;для&nbsp;этой&nbsp;сцены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_ids&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ent&nbsp;in&nbsp;viewport.scene.entities:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;ent.is_pickable():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mr&nbsp;=&nbsp;ent.get_component(MeshRenderer)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mr&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;можешь&nbsp;фильтровать&nbsp;по&nbsp;наличию&nbsp;MeshRenderer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_ids[ent]&nbsp;=&nbsp;self._get_pick_id_for_entity(ent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;3)&nbsp;рендерим&nbsp;специальным&nbsp;пассом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.renderer.render_viewport_pick(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.camera,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(0,&nbsp;0,&nbsp;pw,&nbsp;ph),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context_key,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_ids,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;4)&nbsp;вычисляем&nbsp;координаты&nbsp;пикселя&nbsp;относительно&nbsp;FBO<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;win_w,&nbsp;win_h&nbsp;=&nbsp;self.handle.window_size()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;win_w&nbsp;==&nbsp;0&nbsp;or&nbsp;win_h&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vx&nbsp;=&nbsp;mouse_x&nbsp;-&nbsp;px<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vy&nbsp;=&nbsp;mouse_y&nbsp;-&nbsp;py<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vx&nbsp;&lt;&nbsp;0&nbsp;or&nbsp;vy&nbsp;&lt;&nbsp;0&nbsp;or&nbsp;vx&nbsp;&gt;=&nbsp;pw&nbsp;or&nbsp;vy&nbsp;&gt;=&nbsp;ph:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;read_x&nbsp;=&nbsp;int(vx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;read_y&nbsp;=&nbsp;ph&nbsp;-&nbsp;int(vy)&nbsp;-&nbsp;1&nbsp;&nbsp;#&nbsp;инверсия&nbsp;по&nbsp;Y<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Reading&nbsp;pixel&nbsp;at&nbsp;FBO&nbsp;coords:&quot;,&nbsp;read_x,&nbsp;read_y)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r,&nbsp;g,&nbsp;b,&nbsp;a&nbsp;=&nbsp;self.graphics.read_pixel(fb_pick,&nbsp;read_x,&nbsp;read_y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Picked&nbsp;color&nbsp;RGBA:&quot;,&nbsp;r,&nbsp;g,&nbsp;b,&nbsp;a)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pid&nbsp;=&nbsp;rgb_to_id(r,&nbsp;g,&nbsp;b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;Picked&nbsp;ID:&nbsp;{pid}&quot;)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pid&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entity&nbsp;=&nbsp;self._pick_entity_by_id.get(pid)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;entity&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;self.selection_handler&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.selection_handler(entity)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;вернёмся&nbsp;к&nbsp;обычному&nbsp;framebuffer'у<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics.bind_framebuffer(None)<br>
+<br>
+<br>
+<br>
+#&nbsp;Backwards&nbsp;compatibility<br>
+GLWindow&nbsp;=&nbsp;Window<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

@@ -6,141 +6,141 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-def _dot(a, b): return float(np.dot(a, b))<br>
+def&nbsp;_dot(a,&nbsp;b):&nbsp;return&nbsp;float(np.dot(a,&nbsp;b))<br>
 <br>
-def _project_point_to_segment(p, a, b):<br>
-&#9;# возвращает (t_clamped, closest_point)<br>
-&#9;ab = b - a<br>
-&#9;denom = _dot(ab, ab)<br>
-&#9;if denom &lt; 1e-12:<br>
-&#9;&#9;return 0.0, a  # вырожденный отрезок<br>
-&#9;t = _dot(p - a, ab) / denom<br>
-&#9;t_clamped = max(0.0, min(1.0, t))<br>
-&#9;return t_clamped, a + t_clamped * ab<br>
+def&nbsp;_project_point_to_segment(p,&nbsp;a,&nbsp;b):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;возвращает&nbsp;(t_clamped,&nbsp;closest_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ab&nbsp;=&nbsp;b&nbsp;-&nbsp;a<br>
+&nbsp;&nbsp;&nbsp;&nbsp;denom&nbsp;=&nbsp;_dot(ab,&nbsp;ab)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;denom&nbsp;&lt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;0.0,&nbsp;a&nbsp;&nbsp;#&nbsp;вырожденный&nbsp;отрезок<br>
+&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;_dot(p&nbsp;-&nbsp;a,&nbsp;ab)&nbsp;/&nbsp;denom<br>
+&nbsp;&nbsp;&nbsp;&nbsp;t_clamped&nbsp;=&nbsp;max(0.0,&nbsp;min(1.0,&nbsp;t))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;t_clamped,&nbsp;a&nbsp;+&nbsp;t_clamped&nbsp;*&nbsp;ab<br>
 <br>
-def closest_points_between_segments(p0, p1, q0, q1, eps=1e-12):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Возвращает (p_near, q_near, dist) — ближайшие точки на отрезках [p0,p1] и [q0,q1] и расстояние.<br>
-&#9;Корректно обрабатывает границы и вырожденные случаи.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;u = p1 - p0<br>
-&#9;v = q1 - q0<br>
-&#9;w0 = p0 - q0<br>
+def&nbsp;closest_points_between_segments(p0,&nbsp;p1,&nbsp;q0,&nbsp;q1,&nbsp;eps=1e-12):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;(p_near,&nbsp;q_near,&nbsp;dist)&nbsp;—&nbsp;ближайшие&nbsp;точки&nbsp;на&nbsp;отрезках&nbsp;[p0,p1]&nbsp;и&nbsp;[q0,q1]&nbsp;и&nbsp;расстояние.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Корректно&nbsp;обрабатывает&nbsp;границы&nbsp;и&nbsp;вырожденные&nbsp;случаи.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u&nbsp;=&nbsp;p1&nbsp;-&nbsp;p0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;q1&nbsp;-&nbsp;q0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;w0&nbsp;=&nbsp;p0&nbsp;-&nbsp;q0<br>
 <br>
-&#9;a = _dot(u, u)<br>
-&#9;b = _dot(u, v)<br>
-&#9;c = _dot(v, v)<br>
-&#9;d = _dot(u, w0)<br>
-&#9;e = _dot(v, w0)<br>
-&#9;D = a * c - b * b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;_dot(u,&nbsp;u)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;_dot(u,&nbsp;v)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;_dot(v,&nbsp;v)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;_dot(u,&nbsp;w0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;e&nbsp;=&nbsp;_dot(v,&nbsp;w0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;D&nbsp;=&nbsp;a&nbsp;*&nbsp;c&nbsp;-&nbsp;b&nbsp;*&nbsp;b<br>
 <br>
-&#9;candidates = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;candidates&nbsp;=&nbsp;[]<br>
 <br>
-&#9;# Алгоритм ищет минимум на квадрате (s,t):([0,1],[0,1])<br>
-&#9;# 1) Внутренний кандидат<br>
-&#9;if D &gt; eps:<br>
-&#9;&#9;s = (b * e - c * d) / D<br>
-&#9;&#9;t = (a * e - b * d) / D<br>
-&#9;&#9;if 0.0 &lt;= s &lt;= 1.0 and 0.0 &lt;= t &lt;= 1.0:<br>
-&#9;&#9;&#9;p_int = p0 + s * u<br>
-&#9;&#9;&#9;q_int = q0 + t * v<br>
-&#9;&#9;&#9;candidates.append((p_int, q_int))<br>
-&#9;# Если прямые параллельны (D&lt;eps), то решений множество и одно из них <br>
-&#9;# лежит на рёбрах, поэтому ничего не делаем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Алгоритм&nbsp;ищет&nbsp;минимум&nbsp;на&nbsp;квадрате&nbsp;(s,t):([0,1],[0,1])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;1)&nbsp;Внутренний&nbsp;кандидат<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;D&nbsp;&gt;&nbsp;eps:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;(b&nbsp;*&nbsp;e&nbsp;-&nbsp;c&nbsp;*&nbsp;d)&nbsp;/&nbsp;D<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;(a&nbsp;*&nbsp;e&nbsp;-&nbsp;b&nbsp;*&nbsp;d)&nbsp;/&nbsp;D<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;0.0&nbsp;&lt;=&nbsp;s&nbsp;&lt;=&nbsp;1.0&nbsp;and&nbsp;0.0&nbsp;&lt;=&nbsp;t&nbsp;&lt;=&nbsp;1.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_int&nbsp;=&nbsp;p0&nbsp;+&nbsp;s&nbsp;*&nbsp;u<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_int&nbsp;=&nbsp;q0&nbsp;+&nbsp;t&nbsp;*&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates.append((p_int,&nbsp;q_int))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;прямые&nbsp;параллельны&nbsp;(D&lt;eps),&nbsp;то&nbsp;решений&nbsp;множество&nbsp;и&nbsp;одно&nbsp;из&nbsp;них&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;лежит&nbsp;на&nbsp;рёбрах,&nbsp;поэтому&nbsp;ничего&nbsp;не&nbsp;делаем<br>
 <br>
-&#9;# 2) Рёбра и углы (фиксируем одну переменную и оптимизируем другую)<br>
-&#9;# t = 0  (Q = q0) -&gt; проектируем q0 на P<br>
-&#9;s_t0, p_t0 = _project_point_to_segment(q0, p0, p1)<br>
-&#9;candidates.append((p_t0, q0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;2)&nbsp;Рёбра&nbsp;и&nbsp;углы&nbsp;(фиксируем&nbsp;одну&nbsp;переменную&nbsp;и&nbsp;оптимизируем&nbsp;другую)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;t&nbsp;=&nbsp;0&nbsp;&nbsp;(Q&nbsp;=&nbsp;q0)&nbsp;-&gt;&nbsp;проектируем&nbsp;q0&nbsp;на&nbsp;P<br>
+&nbsp;&nbsp;&nbsp;&nbsp;s_t0,&nbsp;p_t0&nbsp;=&nbsp;_project_point_to_segment(q0,&nbsp;p0,&nbsp;p1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;candidates.append((p_t0,&nbsp;q0))<br>
 <br>
-&#9;# t = 1  (Q = q1) -&gt; проектируем q1 на P<br>
-&#9;s_t1, p_t1 = _project_point_to_segment(q1, p0, p1)<br>
-&#9;candidates.append((p_t1, q1))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;t&nbsp;=&nbsp;1&nbsp;&nbsp;(Q&nbsp;=&nbsp;q1)&nbsp;-&gt;&nbsp;проектируем&nbsp;q1&nbsp;на&nbsp;P<br>
+&nbsp;&nbsp;&nbsp;&nbsp;s_t1,&nbsp;p_t1&nbsp;=&nbsp;_project_point_to_segment(q1,&nbsp;p0,&nbsp;p1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;candidates.append((p_t1,&nbsp;q1))<br>
 <br>
-&#9;# s = 0  (P = p0) -&gt; проектируем p0 на Q<br>
-&#9;t_s0, q_s0 = _project_point_to_segment(p0, q0, q1)<br>
-&#9;candidates.append((p0, q_s0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;s&nbsp;=&nbsp;0&nbsp;&nbsp;(P&nbsp;=&nbsp;p0)&nbsp;-&gt;&nbsp;проектируем&nbsp;p0&nbsp;на&nbsp;Q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;t_s0,&nbsp;q_s0&nbsp;=&nbsp;_project_point_to_segment(p0,&nbsp;q0,&nbsp;q1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;candidates.append((p0,&nbsp;q_s0))<br>
 <br>
-&#9;# s = 1  (P = p1) -&gt; проектируем p1 на Q<br>
-&#9;t_s1, q_s1 = _project_point_to_segment(p1, q0, q1)<br>
-&#9;candidates.append((p1, q_s1))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;s&nbsp;=&nbsp;1&nbsp;&nbsp;(P&nbsp;=&nbsp;p1)&nbsp;-&gt;&nbsp;проектируем&nbsp;p1&nbsp;на&nbsp;Q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;t_s1,&nbsp;q_s1&nbsp;=&nbsp;_project_point_to_segment(p1,&nbsp;q0,&nbsp;q1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;candidates.append((p1,&nbsp;q_s1))<br>
 <br>
-&#9;# 3) Выбор лучшего кандидата<br>
-&#9;best = None<br>
-&#9;best_d2 = float(&quot;inf&quot;)<br>
-&#9;for P, Q in candidates:<br>
-&#9;&#9;d2 = _dot(P - Q, P - Q)<br>
-&#9;&#9;if d2 &lt; best_d2:<br>
-&#9;&#9;&#9;best_d2 = d2<br>
-&#9;&#9;&#9;best = (P, Q)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;3)&nbsp;Выбор&nbsp;лучшего&nbsp;кандидата<br>
+&nbsp;&nbsp;&nbsp;&nbsp;best&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;best_d2&nbsp;=&nbsp;float(&quot;inf&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;P,&nbsp;Q&nbsp;in&nbsp;candidates:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d2&nbsp;=&nbsp;_dot(P&nbsp;-&nbsp;Q,&nbsp;P&nbsp;-&nbsp;Q)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;d2&nbsp;&lt;&nbsp;best_d2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_d2&nbsp;=&nbsp;d2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best&nbsp;=&nbsp;(P,&nbsp;Q)<br>
 <br>
-&#9;p_near, q_near = best<br>
-&#9;return p_near, q_near, float(np.sqrt(best_d2))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;p_near,&nbsp;q_near&nbsp;=&nbsp;best<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p_near,&nbsp;q_near,&nbsp;float(np.sqrt(best_d2))<br>
 <br>
-def closest_points_between_capsules(p0, p1, r1, q0, q1, r2):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Возвращает ближайшие точки на поверхностях двух капсул и расстояние между ними.<br>
-&#9;Капсулы заданы своими осями (отрезками [p0,p1] и [q0,q1]) и радиусами r1, r2.<br>
-&#9;&quot;&quot;&quot;<br>
+def&nbsp;closest_points_between_capsules(p0,&nbsp;p1,&nbsp;r1,&nbsp;q0,&nbsp;q1,&nbsp;r2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;ближайшие&nbsp;точки&nbsp;на&nbsp;поверхностях&nbsp;двух&nbsp;капсул&nbsp;и&nbsp;расстояние&nbsp;между&nbsp;ними.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Капсулы&nbsp;заданы&nbsp;своими&nbsp;осями&nbsp;(отрезками&nbsp;[p0,p1]&nbsp;и&nbsp;[q0,q1])&nbsp;и&nbsp;радиусами&nbsp;r1,&nbsp;r2.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;# Используем уже реализованный поиск ближайших точек между отрезками<br>
-&#9;p, q, dist_axis = closest_points_between_segments(p0, p1, q0, q1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Используем&nbsp;уже&nbsp;реализованный&nbsp;поиск&nbsp;ближайших&nbsp;точек&nbsp;между&nbsp;отрезками<br>
+&nbsp;&nbsp;&nbsp;&nbsp;p,&nbsp;q,&nbsp;dist_axis&nbsp;=&nbsp;closest_points_between_segments(p0,&nbsp;p1,&nbsp;q0,&nbsp;q1)<br>
 <br>
-&#9;# Если оси почти совпадают (вектор нулевой)<br>
-&#9;diff = p - q<br>
-&#9;dist = np.linalg.norm(diff)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;оси&nbsp;почти&nbsp;совпадают&nbsp;(вектор&nbsp;нулевой)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;diff&nbsp;=&nbsp;p&nbsp;-&nbsp;q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dist&nbsp;=&nbsp;np.linalg.norm(diff)<br>
 <br>
-&#9;# Если оси пересекаются или капсулы перекрываются<br>
-&#9;penetration = r1 + r2 - dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;оси&nbsp;пересекаются&nbsp;или&nbsp;капсулы&nbsp;перекрываются<br>
+&nbsp;&nbsp;&nbsp;&nbsp;penetration&nbsp;=&nbsp;r1&nbsp;+&nbsp;r2&nbsp;-&nbsp;dist<br>
 <br>
-&#9;if penetration &gt;= 0.0:<br>
-&#9;&#9;# Пересекаются<br>
-&#9;&#9;# Поскольку множество точек имеют расстояние 0.0 до коллайдера-антагонистa.<br>
-&#9;&#9;# Выбор решения осуществляется из соображения наибольшей плавности.<br>
-&#9;&#9;k = r1 / (r1 + r2) if (r1 + r2) &gt; 1e-12 else 0.5<br>
-&#9;&#9;p_surface = p - diff * k<br>
-&#9;&#9;q_surface = q + diff * (1 - k)<br>
-&#9;&#9;distance = 0.0<br>
-&#9;else:<br>
-&#9;&#9;# Разделены<br>
-&#9;&#9;direction = diff / dist<br>
-&#9;&#9;p_surface = p - direction * r1<br>
-&#9;&#9;q_surface = q + direction * r2<br>
-&#9;&#9;distance = dist - (r1 + r2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;penetration&nbsp;&gt;=&nbsp;0.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пересекаются<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Поскольку&nbsp;множество&nbsp;точек&nbsp;имеют&nbsp;расстояние&nbsp;0.0&nbsp;до&nbsp;коллайдера-антагонистa.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Выбор&nbsp;решения&nbsp;осуществляется&nbsp;из&nbsp;соображения&nbsp;наибольшей&nbsp;плавности.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k&nbsp;=&nbsp;r1&nbsp;/&nbsp;(r1&nbsp;+&nbsp;r2)&nbsp;if&nbsp;(r1&nbsp;+&nbsp;r2)&nbsp;&gt;&nbsp;1e-12&nbsp;else&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_surface&nbsp;=&nbsp;p&nbsp;-&nbsp;diff&nbsp;*&nbsp;k<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_surface&nbsp;=&nbsp;q&nbsp;+&nbsp;diff&nbsp;*&nbsp;(1&nbsp;-&nbsp;k)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;distance&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Разделены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;diff&nbsp;/&nbsp;dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_surface&nbsp;=&nbsp;p&nbsp;-&nbsp;direction&nbsp;*&nbsp;r1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_surface&nbsp;=&nbsp;q&nbsp;+&nbsp;direction&nbsp;*&nbsp;r2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;distance&nbsp;=&nbsp;dist&nbsp;-&nbsp;(r1&nbsp;+&nbsp;r2)<br>
 <br>
-&#9;return p_surface, q_surface, distance<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p_surface,&nbsp;q_surface,&nbsp;distance<br>
 <br>
-def closest_points_between_capsule_and_sphere(capsule_a, capsule_b, capsule_r, sphere_center, sphere_r):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Возвращает ближайшие точки на поверхности капсулы и сферы, а также расстояние между ними.<br>
-&#9;Капсула задана своими концами (отрезком [capsule_a, capsule_b]) и радиусом capsule_r.<br>
-&#9;Сфера задана центром sphere_center и радиусом sphere_r.<br>
-&#9;&quot;&quot;&quot;<br>
+def&nbsp;closest_points_between_capsule_and_sphere(capsule_a,&nbsp;capsule_b,&nbsp;capsule_r,&nbsp;sphere_center,&nbsp;sphere_r):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;ближайшие&nbsp;точки&nbsp;на&nbsp;поверхности&nbsp;капсулы&nbsp;и&nbsp;сферы,&nbsp;а&nbsp;также&nbsp;расстояние&nbsp;между&nbsp;ними.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Капсула&nbsp;задана&nbsp;своими&nbsp;концами&nbsp;(отрезком&nbsp;[capsule_a,&nbsp;capsule_b])&nbsp;и&nbsp;радиусом&nbsp;capsule_r.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Сфера&nbsp;задана&nbsp;центром&nbsp;sphere_center&nbsp;и&nbsp;радиусом&nbsp;sphere_r.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;# Используем уже реализованный поиск ближайших точек между отрезком и точкой<br>
-&#9;t, p = _project_point_to_segment(sphere_center, capsule_a, capsule_b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Используем&nbsp;уже&nbsp;реализованный&nbsp;поиск&nbsp;ближайших&nbsp;точек&nbsp;между&nbsp;отрезком&nbsp;и&nbsp;точкой<br>
+&nbsp;&nbsp;&nbsp;&nbsp;t,&nbsp;p&nbsp;=&nbsp;_project_point_to_segment(sphere_center,&nbsp;capsule_a,&nbsp;capsule_b)<br>
 <br>
-&#9;diff = p - sphere_center<br>
-&#9;dist = np.linalg.norm(diff)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;diff&nbsp;=&nbsp;p&nbsp;-&nbsp;sphere_center<br>
+&nbsp;&nbsp;&nbsp;&nbsp;dist&nbsp;=&nbsp;np.linalg.norm(diff)<br>
 <br>
-&#9;penetration = capsule_r + sphere_r - dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;penetration&nbsp;=&nbsp;capsule_r&nbsp;+&nbsp;sphere_r&nbsp;-&nbsp;dist<br>
 <br>
-&#9;if penetration &gt;= 0.0:<br>
-&#9;&#9;# Пересекаются<br>
-&#9;&#9;k = capsule_r / (capsule_r + sphere_r) if (capsule_r + sphere_r) &gt; 1e-12 else 0.5<br>
-&#9;&#9;p_surface = p - diff * k<br>
-&#9;&#9;q_surface = sphere_center + diff * (1 - k)<br>
-&#9;&#9;distance = 0.0<br>
-&#9;else:<br>
-&#9;&#9;# Разделены<br>
-&#9;&#9;direction = diff / dist<br>
-&#9;&#9;p_surface = p - direction * capsule_r<br>
-&#9;&#9;q_surface = sphere_center + direction * sphere_r<br>
-&#9;&#9;distance = dist - (capsule_r + sphere_r)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;penetration&nbsp;&gt;=&nbsp;0.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пересекаются<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k&nbsp;=&nbsp;capsule_r&nbsp;/&nbsp;(capsule_r&nbsp;+&nbsp;sphere_r)&nbsp;if&nbsp;(capsule_r&nbsp;+&nbsp;sphere_r)&nbsp;&gt;&nbsp;1e-12&nbsp;else&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_surface&nbsp;=&nbsp;p&nbsp;-&nbsp;diff&nbsp;*&nbsp;k<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_surface&nbsp;=&nbsp;sphere_center&nbsp;+&nbsp;diff&nbsp;*&nbsp;(1&nbsp;-&nbsp;k)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;distance&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Разделены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;diff&nbsp;/&nbsp;dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_surface&nbsp;=&nbsp;p&nbsp;-&nbsp;direction&nbsp;*&nbsp;capsule_r<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q_surface&nbsp;=&nbsp;sphere_center&nbsp;+&nbsp;direction&nbsp;*&nbsp;sphere_r<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;distance&nbsp;=&nbsp;dist&nbsp;-&nbsp;(capsule_r&nbsp;+&nbsp;sphere_r)<br>
 <br>
-&#9;return p_surface, q_surface, max(0.0, distance)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p_surface,&nbsp;q_surface,&nbsp;max(0.0,&nbsp;distance)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

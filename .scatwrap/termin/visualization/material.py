@@ -6,96 +6,96 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Material keeps shader reference and static uniform parameters.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Material&nbsp;keeps&nbsp;shader&nbsp;reference&nbsp;and&nbsp;static&nbsp;uniform&nbsp;parameters.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import Any, Dict, Iterable<br>
+from&nbsp;typing&nbsp;import&nbsp;Any,&nbsp;Dict,&nbsp;Iterable<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from .shader import ShaderProgram<br>
-from .texture import Texture<br>
-from .backends.base import GraphicsBackend<br>
-<br>
-<br>
-class Material:<br>
-&#9;&quot;&quot;&quot;Collection of shader parameters applied before drawing a mesh.&quot;&quot;&quot;<br>
-<br>
-&#9;@staticmethod<br>
-&#9;def _rgba(vec: Iterable[float]) -&gt; np.ndarray:<br>
-&#9;&#9;arr = np.asarray(vec, dtype=np.float32)<br>
-&#9;&#9;if arr.shape != (4,):<br>
-&#9;&#9;&#9;raise ValueError(&quot;Color must be an RGBA quadruplet.&quot;)<br>
-&#9;&#9;return arr<br>
-<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;shader: ShaderProgram = None,<br>
-&#9;&#9;color: np.ndarray | None = None,<br>
-&#9;&#9;textures: Dict[str, Texture] | None = None,<br>
-&#9;&#9;uniforms: Dict[str, Any] | None = None,<br>
-&#9;&#9;name: str | None = None,<br>
-&#9;):<br>
-&#9;&#9;if shader is None:<br>
-&#9;&#9;&#9;shader = ShaderProgram.default_shader()<br>
-<br>
-&#9;&#9;if color is None:<br>
-&#9;&#9;&#9;color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;color = self._rgba(color)<br>
-<br>
-&#9;&#9;self.shader = shader<br>
-&#9;&#9;self.color = color<br>
-&#9;&#9;self.textures = textures if textures is not None else {}<br>
-&#9;&#9;self.uniforms = uniforms if uniforms is not None else {}<br>
-&#9;&#9;self.name = name<br>
-<br>
-&#9;&#9;if self.uniforms.get(&quot;u_color&quot;) is None:<br>
-&#9;&#9;&#9;self.uniforms[&quot;u_color&quot;] = color<br>
-<br>
-&#9;def set_param(self, name: str, value: Any):<br>
-&#9;&#9;&quot;&quot;&quot;Удобный метод задания параметров шейдера.&quot;&quot;&quot;<br>
-&#9;&#9;self.uniforms[name] = value<br>
-<br>
-&#9;def update_color(self, rgba):<br>
-&#9;&#9;rgba = self._rgba(rgba)<br>
-&#9;&#9;self.color = rgba<br>
-&#9;&#9;self.uniforms[&quot;u_color&quot;] = rgba<br>
+from&nbsp;.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;.texture&nbsp;import&nbsp;Texture<br>
+from&nbsp;.backends.base&nbsp;import&nbsp;GraphicsBackend<br>
 <br>
 <br>
-&#9;def apply(self, model: np.ndarray, view: np.ndarray, projection: np.ndarray, graphics: GraphicsBackend, context_key: int | None = None):<br>
-&#9;&#9;&quot;&quot;&quot;Bind shader, upload MVP matrices and all statically defined uniforms.&quot;&quot;&quot;<br>
-&#9;&#9;self.shader.ensure_ready(graphics)<br>
-&#9;&#9;self.shader.use()<br>
-&#9;&#9;self.shader.set_uniform_matrix4(&quot;u_model&quot;, model)<br>
-&#9;&#9;self.shader.set_uniform_matrix4(&quot;u_view&quot;, view)<br>
-&#9;&#9;self.shader.set_uniform_matrix4(&quot;u_projection&quot;, projection)<br>
+class&nbsp;Material:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Collection&nbsp;of&nbsp;shader&nbsp;parameters&nbsp;applied&nbsp;before&nbsp;drawing&nbsp;a&nbsp;mesh.&quot;&quot;&quot;<br>
 <br>
-&#9;&#9;texture_slots = enumerate(self.textures.items())<br>
-&#9;&#9;for unit, (uniform_name, texture) in texture_slots:<br>
-&#9;&#9;&#9;texture.bind(graphics, unit, context_key=context_key)<br>
-&#9;&#9;&#9;self.shader.set_uniform_int(uniform_name, unit)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_rgba(vec:&nbsp;Iterable[float])&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr&nbsp;=&nbsp;np.asarray(vec,&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;arr.shape&nbsp;!=&nbsp;(4,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Color&nbsp;must&nbsp;be&nbsp;an&nbsp;RGBA&nbsp;quadruplet.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;arr<br>
 <br>
-&#9;&#9;for name, value in self.uniforms.items():<br>
-&#9;&#9;&#9;self.shader.set_uniform_auto(name, value)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader:&nbsp;ShaderProgram&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color:&nbsp;np.ndarray&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;textures:&nbsp;Dict[str,&nbsp;Texture]&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uniforms:&nbsp;Dict[str,&nbsp;Any]&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;shader&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;ShaderProgram.default_shader()<br>
 <br>
-&#9;def serialize(self):<br>
-&#9;&#9;return {<br>
-&#9;&#9;&#9;&quot;shader&quot;: self.shader.source_path,<br>
-&#9;&#9;&#9;&quot;color&quot;: self.color.tolist(),<br>
-&#9;&#9;&#9;&quot;textures&quot;: {k: tex.source_path for k, tex in self.textures.items()},<br>
-&#9;&#9;&#9;&quot;uniforms&quot;: self.uniforms,<br>
-&#9;&#9;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;color&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color&nbsp;=&nbsp;np.array([1.0,&nbsp;1.0,&nbsp;1.0,&nbsp;1.0],&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color&nbsp;=&nbsp;self._rgba(color)<br>
 <br>
-&#9;@classmethod<br>
-&#9;def deserialize(cls, data, context):<br>
-&#9;&#9;shader = context.load_shader(data[&quot;shader&quot;])<br>
-&#9;&#9;mat = cls(shader, data[&quot;color&quot;])<br>
-&#9;&#9;for k, p in data[&quot;textures&quot;].items():<br>
-&#9;&#9;&#9;mat.textures[k] = context.load_texture(p)<br>
-&#9;&#9;mat.uniforms.update(data[&quot;uniforms&quot;])<br>
-&#9;&#9;return mat<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader&nbsp;=&nbsp;shader<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.color&nbsp;=&nbsp;color<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.textures&nbsp;=&nbsp;textures&nbsp;if&nbsp;textures&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.uniforms&nbsp;=&nbsp;uniforms&nbsp;if&nbsp;uniforms&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;name<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.uniforms.get(&quot;u_color&quot;)&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.uniforms[&quot;u_color&quot;]&nbsp;=&nbsp;color<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_param(self,&nbsp;name:&nbsp;str,&nbsp;value:&nbsp;Any):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Удобный&nbsp;метод&nbsp;задания&nbsp;параметров&nbsp;шейдера.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.uniforms[name]&nbsp;=&nbsp;value<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_color(self,&nbsp;rgba):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rgba&nbsp;=&nbsp;self._rgba(rgba)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.color&nbsp;=&nbsp;rgba<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.uniforms[&quot;u_color&quot;]&nbsp;=&nbsp;rgba<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;apply(self,&nbsp;model:&nbsp;np.ndarray,&nbsp;view:&nbsp;np.ndarray,&nbsp;projection:&nbsp;np.ndarray,&nbsp;graphics:&nbsp;GraphicsBackend,&nbsp;context_key:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Bind&nbsp;shader,&nbsp;upload&nbsp;MVP&nbsp;matrices&nbsp;and&nbsp;all&nbsp;statically&nbsp;defined&nbsp;uniforms.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.ensure_ready(graphics)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.use()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.set_uniform_matrix4(&quot;u_model&quot;,&nbsp;model)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.set_uniform_matrix4(&quot;u_view&quot;,&nbsp;view)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.set_uniform_matrix4(&quot;u_projection&quot;,&nbsp;projection)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;texture_slots&nbsp;=&nbsp;enumerate(self.textures.items())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;unit,&nbsp;(uniform_name,&nbsp;texture)&nbsp;in&nbsp;texture_slots:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;texture.bind(graphics,&nbsp;unit,&nbsp;context_key=context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.set_uniform_int(uniform_name,&nbsp;unit)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;name,&nbsp;value&nbsp;in&nbsp;self.uniforms.items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shader.set_uniform_auto(name,&nbsp;value)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;serialize(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;shader&quot;:&nbsp;self.shader.source_path,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;color&quot;:&nbsp;self.color.tolist(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;textures&quot;:&nbsp;{k:&nbsp;tex.source_path&nbsp;for&nbsp;k,&nbsp;tex&nbsp;in&nbsp;self.textures.items()},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;uniforms&quot;:&nbsp;self.uniforms,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@classmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;deserialize(cls,&nbsp;data,&nbsp;context):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;context.load_shader(data[&quot;shader&quot;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat&nbsp;=&nbsp;cls(shader,&nbsp;data[&quot;color&quot;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k,&nbsp;p&nbsp;in&nbsp;data[&quot;textures&quot;].items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat.textures[k]&nbsp;=&nbsp;context.load_texture(p)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat.uniforms.update(data[&quot;uniforms&quot;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;mat<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

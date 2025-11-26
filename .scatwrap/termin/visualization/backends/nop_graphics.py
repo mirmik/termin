@@ -6,219 +6,219 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# termin/visualization/backends/nop.py<br>
-from __future__ import annotations<br>
+#&nbsp;termin/visualization/backends/nop.py<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import Any, Optional, Tuple<br>
+from&nbsp;typing&nbsp;import&nbsp;Any,&nbsp;Optional,&nbsp;Tuple<br>
 <br>
-from .base import (<br>
-&#9;Action,<br>
-&#9;BackendWindow,<br>
-&#9;FramebufferHandle,<br>
-&#9;GraphicsBackend,<br>
-&#9;Key,<br>
-&#9;MeshHandle,<br>
-&#9;MouseButton,<br>
-&#9;PolylineHandle,<br>
-&#9;ShaderHandle,<br>
-&#9;TextureHandle,<br>
-&#9;WindowBackend,<br>
+from&nbsp;.base&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Action,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;BackendWindow,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FramebufferHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;GraphicsBackend,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Key,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MouseButton,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PolylineHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ShaderHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;TextureHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;WindowBackend,<br>
 )<br>
 <br>
 <br>
-# --- NOP-обёртки для GPU-ресурсов ---------------------------------------<br>
+#&nbsp;---&nbsp;NOP-обёртки&nbsp;для&nbsp;GPU-ресурсов&nbsp;---------------------------------------<br>
 <br>
 <br>
-class NOPShaderHandle(ShaderHandle):<br>
-&#9;&quot;&quot;&quot;Шейдер, который &quot;существует&quot;, но ничего не делает.&quot;&quot;&quot;<br>
+class&nbsp;NOPShaderHandle(ShaderHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Шейдер,&nbsp;который&nbsp;&quot;существует&quot;,&nbsp;но&nbsp;ничего&nbsp;не&nbsp;делает.&quot;&quot;&quot;<br>
 <br>
-&#9;def use(self):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;use(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def stop(self):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;stop(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def delete(self):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def set_uniform_matrix4(self, name: str, matrix):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_matrix4(self,&nbsp;name:&nbsp;str,&nbsp;matrix):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def set_uniform_vec2(self, name: str, vector):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_vec2(self,&nbsp;name:&nbsp;str,&nbsp;vector):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def set_uniform_vec3(self, name: str, vector):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_vec3(self,&nbsp;name:&nbsp;str,&nbsp;vector):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def set_uniform_vec4(self, name: str, vector):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_vec4(self,&nbsp;name:&nbsp;str,&nbsp;vector):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def set_uniform_float(self, name: str, value: float):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_float(self,&nbsp;name:&nbsp;str,&nbsp;value:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def set_uniform_int(self, name: str, value: int):<br>
-&#9;&#9;pass<br>
-<br>
-<br>
-class NOPMeshHandle(MeshHandle):<br>
-&#9;&quot;&quot;&quot;Меш-хэндл (указатель на геометрию), который ничего не рисует.&quot;&quot;&quot;<br>
-<br>
-&#9;def draw(self):<br>
-&#9;&#9;pass<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_int(self,&nbsp;name:&nbsp;str,&nbsp;value:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
 <br>
-class NOPPolylineHandle(PolylineHandle):<br>
-&#9;&quot;&quot;&quot;Полилиния, которая тоже ничего не рисует.&quot;&quot;&quot;<br>
+class&nbsp;NOPMeshHandle(MeshHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Меш-хэндл&nbsp;(указатель&nbsp;на&nbsp;геометрию),&nbsp;который&nbsp;ничего&nbsp;не&nbsp;рисует.&quot;&quot;&quot;<br>
 <br>
-&#9;def draw(self):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def delete(self):<br>
-&#9;&#9;pass<br>
-<br>
-<br>
-class NOPTextureHandle(TextureHandle):<br>
-&#9;&quot;&quot;&quot;Текстура-заглушка.&quot;&quot;&quot;<br>
-<br>
-&#9;def bind(self, unit: int = 0):<br>
-&#9;&#9;pass<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
 <br>
-class NOPFramebufferHandle(FramebufferHandle):<br>
-&#9;&quot;&quot;&quot;Фреймбуфер (offscreen буфер), который не привязан к реальному GPU.&quot;&quot;&quot;<br>
+class&nbsp;NOPPolylineHandle(PolylineHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Полилиния,&nbsp;которая&nbsp;тоже&nbsp;ничего&nbsp;не&nbsp;рисует.&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, size: Tuple[int, int]):<br>
-&#9;&#9;self._size = size<br>
-&#9;&#9;# Отдаём какую-то текстуру, чтобы postprocess не падал<br>
-&#9;&#9;self._color_tex = NOPTextureHandle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def resize(self, size: Tuple[int, int]):<br>
-&#9;&#9;self._size = size<br>
-<br>
-&#9;def color_texture(self) -&gt; TextureHandle:<br>
-&#9;&#9;return self._color_tex<br>
-<br>
-&#9;def delete(self):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
 <br>
-# --- Графический бэкенд без реального рендера ---------------------------<br>
+class&nbsp;NOPTextureHandle(TextureHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Текстура-заглушка.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind(self,&nbsp;unit:&nbsp;int&nbsp;=&nbsp;0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
 <br>
-class NOPGraphicsBackend(GraphicsBackend):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;GraphicsBackend, который удовлетворяет интерфейсу, но:<br>
-&#9;- ничего не рисует;<br>
-&#9;- не инициализирует OpenGL (или любой другой API);<br>
-&#9;- годится для юнит-тестов и проверки примеров.<br>
-&#9;&quot;&quot;&quot;<br>
+class&nbsp;NOPFramebufferHandle(FramebufferHandle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Фреймбуфер&nbsp;(offscreen&nbsp;буфер),&nbsp;который&nbsp;не&nbsp;привязан&nbsp;к&nbsp;реальному&nbsp;GPU.&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self):<br>
-&#9;&#9;self._viewport: Tuple[int, int, int, int] = (0, 0, 0, 0)<br>
-&#9;&#9;# Можно хранить последнее состояние рендера, если захочешь дебажить<br>
-&#9;&#9;self._state = {}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;size:&nbsp;Tuple[int,&nbsp;int]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._size&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Отдаём&nbsp;какую-то&nbsp;текстуру,&nbsp;чтобы&nbsp;postprocess&nbsp;не&nbsp;падал<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._color_tex&nbsp;=&nbsp;NOPTextureHandle()<br>
 <br>
-&#9;def ensure_ready(self):<br>
-&#9;&#9;# Никакой инициализации не требуется<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;resize(self,&nbsp;size:&nbsp;Tuple[int,&nbsp;int]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._size&nbsp;=&nbsp;size<br>
 <br>
-&#9;def set_viewport(self, x: int, y: int, w: int, h: int):<br>
-&#9;&#9;self._viewport = (x, y, w, h)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;color_texture(self)&nbsp;-&gt;&nbsp;TextureHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._color_tex<br>
 <br>
-&#9;def enable_scissor(self, x: int, y: int, w: int, h: int):<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def disable_scissor(self):<br>
-&#9;&#9;pass<br>
 <br>
-&#9;def clear_color_depth(self, color):<br>
-&#9;&#9;# Никакого чистки буферов — просто заглушка<br>
-&#9;&#9;pass<br>
+#&nbsp;---&nbsp;Графический&nbsp;бэкенд&nbsp;без&nbsp;реального&nbsp;рендера&nbsp;---------------------------<br>
 <br>
-&#9;def set_depth_test(self, enabled: bool):<br>
-&#9;&#9;self._state[&quot;depth_test&quot;] = enabled<br>
 <br>
-&#9;def set_depth_mask(self, enabled: bool):<br>
-&#9;&#9;self._state[&quot;depth_mask&quot;] = enabled<br>
+class&nbsp;NOPGraphicsBackend(GraphicsBackend):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;GraphicsBackend,&nbsp;который&nbsp;удовлетворяет&nbsp;интерфейсу,&nbsp;но:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;ничего&nbsp;не&nbsp;рисует;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;не&nbsp;инициализирует&nbsp;OpenGL&nbsp;(или&nbsp;любой&nbsp;другой&nbsp;API);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;годится&nbsp;для&nbsp;юнит-тестов&nbsp;и&nbsp;проверки&nbsp;примеров.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def set_depth_func(self, func: str):<br>
-&#9;&#9;self._state[&quot;depth_func&quot;] = func<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._viewport:&nbsp;Tuple[int,&nbsp;int,&nbsp;int,&nbsp;int]&nbsp;=&nbsp;(0,&nbsp;0,&nbsp;0,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Можно&nbsp;хранить&nbsp;последнее&nbsp;состояние&nbsp;рендера,&nbsp;если&nbsp;захочешь&nbsp;дебажить<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state&nbsp;=&nbsp;{}<br>
 <br>
-&#9;def set_cull_face(self, enabled: bool):<br>
-&#9;&#9;self._state[&quot;cull_face&quot;] = enabled<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;ensure_ready(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Никакой&nbsp;инициализации&nbsp;не&nbsp;требуется<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def set_blend(self, enabled: bool):<br>
-&#9;&#9;self._state[&quot;blend&quot;] = enabled<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_viewport(self,&nbsp;x:&nbsp;int,&nbsp;y:&nbsp;int,&nbsp;w:&nbsp;int,&nbsp;h:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._viewport&nbsp;=&nbsp;(x,&nbsp;y,&nbsp;w,&nbsp;h)<br>
 <br>
-&#9;def set_blend_func(self, src: str, dst: str):<br>
-&#9;&#9;self._state[&quot;blend_func&quot;] = (src, dst)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;enable_scissor(self,&nbsp;x:&nbsp;int,&nbsp;y:&nbsp;int,&nbsp;w:&nbsp;int,&nbsp;h:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def create_shader(<br>
-&#9;&#9;self,<br>
-&#9;&#9;vertex_source: str,<br>
-&#9;&#9;fragment_source: str,<br>
-&#9;&#9;geometry_source: str | None = None,<br>
-&#9;) -&gt; ShaderHandle:<br>
-&#9;&#9;# Можно сохранять исходники, если нужно для отладки<br>
-&#9;&#9;return NOPShaderHandle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;disable_scissor(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def create_mesh(self, mesh) -&gt; MeshHandle:<br>
-&#9;&#9;return NOPMeshHandle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;clear_color_depth(self,&nbsp;color):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Никакого&nbsp;чистки&nbsp;буферов&nbsp;—&nbsp;просто&nbsp;заглушка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def create_polyline(self, polyline) -&gt; PolylineHandle:<br>
-&#9;&#9;return NOPPolylineHandle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_test(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;depth_test&quot;]&nbsp;=&nbsp;enabled<br>
 <br>
-&#9;def create_texture(<br>
-&#9;&#9;self,<br>
-&#9;&#9;image_data,<br>
-&#9;&#9;size: Tuple[int, int],<br>
-&#9;&#9;channels: int = 4,<br>
-&#9;&#9;mipmap: bool = True,<br>
-&#9;&#9;clamp: bool = False,<br>
-&#9;) -&gt; TextureHandle:<br>
-&#9;&#9;return NOPTextureHandle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_mask(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;depth_mask&quot;]&nbsp;=&nbsp;enabled<br>
 <br>
-&#9;def draw_ui_vertices(self, context_key: int, vertices):<br>
-&#9;&#9;# Ничего не рисуем<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_func(self,&nbsp;func:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;depth_func&quot;]&nbsp;=&nbsp;func<br>
 <br>
-&#9;def draw_ui_textured_quad(self, context_key: int, vertices=None):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Обрати внимание: здесь параметр vertices сделан опциональным.<br>
-&#9;&#9;Это чтобы пережить оба варианта вызова:<br>
-&#9;&#9;- draw_ui_textured_quad(context_key)<br>
-&#9;&#9;- draw_ui_textured_quad(context_key, vertices)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_cull_face(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;cull_face&quot;]&nbsp;=&nbsp;enabled<br>
 <br>
-&#9;def set_polygon_mode(self, mode: str):<br>
-&#9;&#9;self._state[&quot;polygon_mode&quot;] = mode<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_blend(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;blend&quot;]&nbsp;=&nbsp;enabled<br>
 <br>
-&#9;def set_cull_face_enabled(self, enabled: bool):<br>
-&#9;&#9;self._state[&quot;cull_face&quot;] = enabled<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_blend_func(self,&nbsp;src:&nbsp;str,&nbsp;dst:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;blend_func&quot;]&nbsp;=&nbsp;(src,&nbsp;dst)<br>
 <br>
-&#9;def set_depth_test_enabled(self, enabled: bool):<br>
-&#9;&#9;self._state[&quot;depth_test&quot;] = enabled<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_shader(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex_source:&nbsp;str,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fragment_source:&nbsp;str,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;geometry_source:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;ShaderHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Можно&nbsp;сохранять&nbsp;исходники,&nbsp;если&nbsp;нужно&nbsp;для&nbsp;отладки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;NOPShaderHandle()<br>
 <br>
-&#9;def set_depth_write_enabled(self, enabled: bool):<br>
-&#9;&#9;self._state[&quot;depth_mask&quot;] = enabled<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_mesh(self,&nbsp;mesh)&nbsp;-&gt;&nbsp;MeshHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;NOPMeshHandle()<br>
 <br>
-&#9;def create_framebuffer(self, size: Tuple[int, int]) -&gt; FramebufferHandle:<br>
-&#9;&#9;return NOPFramebufferHandle(size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_polyline(self,&nbsp;polyline)&nbsp;-&gt;&nbsp;PolylineHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;NOPPolylineHandle()<br>
 <br>
-&#9;def bind_framebuffer(self, framebuffer: FramebufferHandle | None):<br>
-&#9;&#9;# Можно сохранить ссылку, если нужно для отладки<br>
-&#9;&#9;self._state[&quot;bound_fbo&quot;] = framebuffer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_texture(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image_data,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size:&nbsp;Tuple[int,&nbsp;int],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;channels:&nbsp;int&nbsp;=&nbsp;4,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mipmap:&nbsp;bool&nbsp;=&nbsp;True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clamp:&nbsp;bool&nbsp;=&nbsp;False,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;TextureHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;NOPTextureHandle()<br>
 <br>
-&#9;def read_pixel(self, x: int, y: int) -&gt; Any:<br>
-&#9;&#9;# Возвращаем пустые данные<br>
-&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw_ui_vertices(self,&nbsp;context_key:&nbsp;int,&nbsp;vertices):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ничего&nbsp;не&nbsp;рисуем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw_ui_textured_quad(self,&nbsp;context_key:&nbsp;int,&nbsp;vertices=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Обрати&nbsp;внимание:&nbsp;здесь&nbsp;параметр&nbsp;vertices&nbsp;сделан&nbsp;опциональным.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Это&nbsp;чтобы&nbsp;пережить&nbsp;оба&nbsp;варианта&nbsp;вызова:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;draw_ui_textured_quad(context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;draw_ui_textured_quad(context_key,&nbsp;vertices)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_polygon_mode(self,&nbsp;mode:&nbsp;str):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;polygon_mode&quot;]&nbsp;=&nbsp;mode<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_cull_face_enabled(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;cull_face&quot;]&nbsp;=&nbsp;enabled<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_test_enabled(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;depth_test&quot;]&nbsp;=&nbsp;enabled<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_write_enabled(self,&nbsp;enabled:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;depth_mask&quot;]&nbsp;=&nbsp;enabled<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_framebuffer(self,&nbsp;size:&nbsp;Tuple[int,&nbsp;int])&nbsp;-&gt;&nbsp;FramebufferHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;NOPFramebufferHandle(size)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind_framebuffer(self,&nbsp;framebuffer:&nbsp;FramebufferHandle&nbsp;|&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Можно&nbsp;сохранить&nbsp;ссылку,&nbsp;если&nbsp;нужно&nbsp;для&nbsp;отладки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;bound_fbo&quot;]&nbsp;=&nbsp;framebuffer<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;read_pixel(self,&nbsp;x:&nbsp;int,&nbsp;y:&nbsp;int)&nbsp;-&gt;&nbsp;Any:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Возвращаем&nbsp;пустые&nbsp;данные<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

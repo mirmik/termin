@@ -6,140 +6,140 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import Iterable, Optional<br>
+from&nbsp;typing&nbsp;import&nbsp;Iterable,&nbsp;Optional<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from ..entity import Component, RenderContext<br>
-from ..mesh import MeshDrawable<br>
-from termin.mesh.mesh import Mesh3<br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.visualization.renderpass import RenderState, RenderPass<br>
-from termin.visualization.inspect import InspectField<br>
-from termin.visualization.material import Material<br>
+from&nbsp;..entity&nbsp;import&nbsp;Component,&nbsp;RenderContext<br>
+from&nbsp;..mesh&nbsp;import&nbsp;MeshDrawable<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;Mesh3<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.visualization.renderpass&nbsp;import&nbsp;RenderState,&nbsp;RenderPass<br>
+from&nbsp;termin.visualization.inspect&nbsp;import&nbsp;InspectField<br>
+from&nbsp;termin.visualization.material&nbsp;import&nbsp;Material<br>
 <br>
-class MeshRenderer(Component):<br>
-&#9;&quot;&quot;&quot;Renderer component that draws MeshDrawable with one or multiple passes.&quot;&quot;&quot;<br>
+class&nbsp;MeshRenderer(Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Renderer&nbsp;component&nbsp;that&nbsp;draws&nbsp;MeshDrawable&nbsp;with&nbsp;one&nbsp;or&nbsp;multiple&nbsp;passes.&quot;&quot;&quot;<br>
 <br>
-&#9;inspect_fields = {<br>
-&#9;&#9;# mesh-инспект мы уже добавляли раньше<br>
-&#9;&#9;&quot;mesh&quot;: InspectField(<br>
-&#9;&#9;&#9;path=&quot;mesh&quot;,<br>
-&#9;&#9;&#9;label=&quot;Mesh&quot;,<br>
-&#9;&#9;&#9;kind=&quot;mesh&quot;,<br>
-&#9;&#9;&#9;# можно прямое присваивание, можно отдельный метод<br>
-&#9;&#9;&#9;setter=lambda obj, value: obj.update_mesh(value),<br>
-&#9;&#9;),<br>
-&#9;&#9;&quot;material&quot;: InspectField(<br>
-&#9;&#9;&#9;path=&quot;material&quot;,<br>
-&#9;&#9;&#9;label=&quot;Material&quot;,<br>
-&#9;&#9;&#9;kind=&quot;material&quot;,<br>
-&#9;&#9;&#9;setter=lambda obj, value: obj.update_material(value),<br>
-&#9;&#9;),<br>
-&#9;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;inspect_fields&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;mesh-инспект&nbsp;мы&nbsp;уже&nbsp;добавляли&nbsp;раньше<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;mesh&quot;:&nbsp;InspectField(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path=&quot;mesh&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label=&quot;Mesh&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind=&quot;mesh&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;можно&nbsp;прямое&nbsp;присваивание,&nbsp;можно&nbsp;отдельный&nbsp;метод<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setter=lambda&nbsp;obj,&nbsp;value:&nbsp;obj.update_mesh(value),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;material&quot;:&nbsp;InspectField(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path=&quot;material&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label=&quot;Material&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind=&quot;material&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setter=lambda&nbsp;obj,&nbsp;value:&nbsp;obj.update_material(value),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
 <br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;mesh: MeshDrawable | None = None,<br>
-&#9;&#9;material: Material | None = None,<br>
-&#9;&#9;passes: list[RenderPass] | None = None,<br>
-&#9;):<br>
-&#9;&#9;super().__init__(enabled=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh:&nbsp;MeshDrawable&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material:&nbsp;Material&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;passes:&nbsp;list[RenderPass]&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(enabled=True)<br>
 <br>
-&#9;&#9;if isinstance(mesh, Mesh3):<br>
-&#9;&#9;&#9;mesh = MeshDrawable(mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(mesh,&nbsp;Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;MeshDrawable(mesh)<br>
 <br>
-&#9;&#9;self.mesh = mesh<br>
-&#9;&#9;self.material = material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.mesh&nbsp;=&nbsp;mesh<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.material&nbsp;=&nbsp;material<br>
 <br>
-&#9;&#9;self.passes: list[RenderPass] = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.passes:&nbsp;list[RenderPass]&nbsp;=&nbsp;[]<br>
 <br>
-&#9;&#9;if passes is not None:<br>
-&#9;&#9;&#9;# нормализация списка переданных проходов<br>
-&#9;&#9;&#9;for p in passes:<br>
-&#9;&#9;&#9;&#9;if isinstance(p, RenderPass):<br>
-&#9;&#9;&#9;&#9;&#9;self.passes.append(p)<br>
-&#9;&#9;&#9;&#9;elif isinstance(p, Material):<br>
-&#9;&#9;&#9;&#9;&#9;self.passes.append(RenderPass(material=p, state=RenderState()))<br>
-&#9;&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;&#9;raise TypeError(&quot;passes must contain Material or RenderPass&quot;)<br>
-&#9;&#9;elif material is not None:<br>
-&#9;&#9;&#9;# если материал задан в конструкторе — как раньше: один проход<br>
-&#9;&#9;&#9;self.passes.append(RenderPass(material=material, state=RenderState()))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;passes&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;нормализация&nbsp;списка&nbsp;переданных&nbsp;проходов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;p&nbsp;in&nbsp;passes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(p,&nbsp;RenderPass):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.passes.append(p)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(p,&nbsp;Material):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.passes.append(RenderPass(material=p,&nbsp;state=RenderState()))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;TypeError(&quot;passes&nbsp;must&nbsp;contain&nbsp;Material&nbsp;or&nbsp;RenderPass&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;material&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;материал&nbsp;задан&nbsp;в&nbsp;конструкторе&nbsp;—&nbsp;как&nbsp;раньше:&nbsp;один&nbsp;проход<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.passes.append(RenderPass(material=material,&nbsp;state=RenderState()))<br>
 <br>
-&#9;def update_mesh(self, mesh: MeshDrawable | None):<br>
-&#9;&#9;self.mesh = mesh<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_mesh(self,&nbsp;mesh:&nbsp;MeshDrawable&nbsp;|&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.mesh&nbsp;=&nbsp;mesh<br>
 <br>
-&#9;def update_material(self, material: Material | None):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вызывается инспектором при смене материала (и конструктором — косвенно).<br>
-&#9;&#9;Гарантируем, что если появился материал, будет хотя бы один RenderPass.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.material = material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_material(self,&nbsp;material:&nbsp;Material&nbsp;|&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вызывается&nbsp;инспектором&nbsp;при&nbsp;смене&nbsp;материала&nbsp;(и&nbsp;конструктором&nbsp;—&nbsp;косвенно).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Гарантируем,&nbsp;что&nbsp;если&nbsp;появился&nbsp;материал,&nbsp;будет&nbsp;хотя&nbsp;бы&nbsp;один&nbsp;RenderPass.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.material&nbsp;=&nbsp;material<br>
 <br>
-&#9;&#9;if material is None:<br>
-&#9;&#9;&#9;# Можно:<br>
-&#9;&#9;&#9;#  - либо очищать материал у всех проходов,<br>
-&#9;&#9;&#9;#  - либо вообще ничего не делать (но draw тогда должен уметь жить с этим).<br>
-&#9;&#9;&#9;# Я бы для простоты просто обнулил материал в одиночном проходе.<br>
-&#9;&#9;&#9;if len(self.passes) == 1:<br>
-&#9;&#9;&#9;&#9;self.passes[0].material = None<br>
-&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;material&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Можно:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;-&nbsp;либо&nbsp;очищать&nbsp;материал&nbsp;у&nbsp;всех&nbsp;проходов,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;-&nbsp;либо&nbsp;вообще&nbsp;ничего&nbsp;не&nbsp;делать&nbsp;(но&nbsp;draw&nbsp;тогда&nbsp;должен&nbsp;уметь&nbsp;жить&nbsp;с&nbsp;этим).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Я&nbsp;бы&nbsp;для&nbsp;простоты&nbsp;просто&nbsp;обнулил&nbsp;материал&nbsp;в&nbsp;одиночном&nbsp;проходе.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(self.passes)&nbsp;==&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.passes[0].material&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;&#9;if not self.passes:<br>
-&#9;&#9;&#9;# Новый компонент, до этого не было проходов —<br>
-&#9;&#9;&#9;# создаём дефолтный.<br>
-&#9;&#9;&#9;self.passes.append(RenderPass(material=material, state=RenderState()))<br>
-&#9;&#9;elif len(self.passes) == 1:<br>
-&#9;&#9;&#9;# старый режим: один проход → просто обновляем материал<br>
-&#9;&#9;&#9;self.passes[0].material = material<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;# мультипасс — решай сам, как надо делать:<br>
-&#9;&#9;&#9;# можно менять только первый проход, можно все, можно вообще не трогать.<br>
-&#9;&#9;&#9;self.passes[0].material = material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;self.passes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Новый&nbsp;компонент,&nbsp;до&nbsp;этого&nbsp;не&nbsp;было&nbsp;проходов&nbsp;—<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;создаём&nbsp;дефолтный.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.passes.append(RenderPass(material=material,&nbsp;state=RenderState()))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;len(self.passes)&nbsp;==&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;старый&nbsp;режим:&nbsp;один&nbsp;проход&nbsp;→&nbsp;просто&nbsp;обновляем&nbsp;материал<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.passes[0].material&nbsp;=&nbsp;material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;мультипасс&nbsp;—&nbsp;решай&nbsp;сам,&nbsp;как&nbsp;надо&nbsp;делать:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;можно&nbsp;менять&nbsp;только&nbsp;первый&nbsp;проход,&nbsp;можно&nbsp;все,&nbsp;можно&nbsp;вообще&nbsp;не&nbsp;трогать.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.passes[0].material&nbsp;=&nbsp;material<br>
 <br>
-&#9;# --- рендеринг ---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;рендеринг&nbsp;---<br>
 <br>
-&#9;def required_shaders(self):<br>
-&#9;&#9;if self.material is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;for p in self.passes:<br>
-&#9;&#9;&#9;yield p.material.shader<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;required_shaders(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.material&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;p&nbsp;in&nbsp;self.passes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;p.material.shader<br>
 <br>
-&#9;def draw(self, context: RenderContext):<br>
-&#9;&#9;if self.entity is None:<br>
-&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;context:&nbsp;RenderContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.entity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;&#9;if self.mesh is None:<br>
-&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.mesh&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;&#9;if self.material is None:<br>
-&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.material&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;&#9;model = self.entity.model_matrix()<br>
-&#9;&#9;view = context.view<br>
-&#9;&#9;proj = context.projection<br>
-&#9;&#9;gfx = context.graphics<br>
-&#9;&#9;key = context.context_key<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;model&nbsp;=&nbsp;self.entity.model_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;view&nbsp;=&nbsp;context.view<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;proj&nbsp;=&nbsp;context.projection<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;=&nbsp;context.graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;=&nbsp;context.context_key<br>
 <br>
-&#9;&#9;for p in self.passes:<br>
-&#9;&#9;&#9;gfx.apply_render_state(p.state)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;p&nbsp;in&nbsp;self.passes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.apply_render_state(p.state)<br>
 <br>
-&#9;&#9;&#9;mat = p.material<br>
-&#9;&#9;&#9;mat.apply(model, view, proj, graphics=gfx, context_key=key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat&nbsp;=&nbsp;p.material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat.apply(model,&nbsp;view,&nbsp;proj,&nbsp;graphics=gfx,&nbsp;context_key=key)<br>
 <br>
-&#9;&#9;&#9;shader = mat.shader<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;mat.shader<br>
 <br>
-&#9;&#9;&#9;if hasattr(context.scene, &quot;light_direction&quot;):<br>
-&#9;&#9;&#9;&#9;shader.set_uniform_vec3(&quot;u_light_dir&quot;, context.scene.light_direction)<br>
-&#9;&#9;&#9;if hasattr(context.scene, &quot;light_color&quot;):<br>
-&#9;&#9;&#9;&#9;shader.set_uniform_vec3(&quot;u_light_color&quot;, context.scene.light_color)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(context.scene,&nbsp;&quot;light_direction&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec3(&quot;u_light_dir&quot;,&nbsp;context.scene.light_direction)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(context.scene,&nbsp;&quot;light_color&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec3(&quot;u_light_color&quot;,&nbsp;context.scene.light_color)<br>
 <br>
-&#9;&#9;&#9;self.mesh.draw(context)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.mesh.draw(context)<br>
 <br>
-&#9;&#9;gfx.apply_render_state(RenderState())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.apply_render_state(RenderState())<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

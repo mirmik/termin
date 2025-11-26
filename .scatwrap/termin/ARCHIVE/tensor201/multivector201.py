@@ -6,103 +6,103 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-#!/usr/bin/env python3<br>
+#!/usr/bin/env&nbsp;python3<br>
 <br>
-import torch<br>
+import&nbsp;torch<br>
 <br>
-geomproduct_left_operator_template = torch.tensor([<br>
-&#9;[<br>
-&#9;&#9;[1, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;&#9;[0, 1, 0, 0, 0, 0, 0, 0],<br>
-&#9;&#9;[0, 0, 1, 0, 0, 0, 0, 0],<br>
-&#9;&#9;[0, 0, 0, 1, 0, 0, 0, 0],<br>
-&#9;&#9;[0, 0, 0, 0, 1, 0, 0, 0],<br>
-&#9;&#9;[0, 0, 0, 0, 0, 1, 0, 0],<br>
-&#9;&#9;[0, 0, 0, -2, 0, 0, 1, 0],<br>
-&#9;&#9;[0, 0, 0, 0, 0, 0, 0, 1],<br>
-&#9;]<br>
+geomproduct_left_operator_template&nbsp;=&nbsp;torch.tensor([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;1,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;1,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;1,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;1,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;1,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;-2,&nbsp;0,&nbsp;0,&nbsp;1,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;]<br>
 ])<br>
-geomproduct_left_operator_sign = geomproduct_left_operator_template.sign()<br>
-geomproduct_left_operator_indexes = geomproduct_left_operator_template.abs()<br>
+geomproduct_left_operator_sign&nbsp;=&nbsp;geomproduct_left_operator_template.sign()<br>
+geomproduct_left_operator_indexes&nbsp;=&nbsp;geomproduct_left_operator_template.abs()<br>
 <br>
 <br>
-def multivector(e=0, e1=0, e2=0, e3=0, e23=0, e31=0, e12=0, e321=0):<br>
-&#9;return torch.tensor([e, e1, e2, e3, e23, e31, e12, e321])<br>
+def&nbsp;multivector(e=0,&nbsp;e1=0,&nbsp;e2=0,&nbsp;e3=0,&nbsp;e23=0,&nbsp;e31=0,&nbsp;e12=0,&nbsp;e321=0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;torch.tensor([e,&nbsp;e1,&nbsp;e2,&nbsp;e3,&nbsp;e23,&nbsp;e31,&nbsp;e12,&nbsp;e321])<br>
 <br>
 <br>
-def vector(x, y, z=0):<br>
-&#9;return multivector(e1=x, e2=y, e3=z)<br>
+def&nbsp;vector(x,&nbsp;y,&nbsp;z=0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e1=x,&nbsp;e2=y,&nbsp;e3=z)<br>
 <br>
 <br>
-def realbivector(x, y):<br>
-&#9;return multivector(e23=x, e31=y)<br>
+def&nbsp;realbivector(x,&nbsp;y):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e23=x,&nbsp;e31=y)<br>
 <br>
 <br>
-def dualbivector(x, y):<br>
-&#9;return multivector(e31=x, e32=y)<br>
+def&nbsp;dualbivector(x,&nbsp;y):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e31=x,&nbsp;e32=y)<br>
 <br>
 <br>
-def bivector(rx, ry, dx, dy):<br>
-&#9;return realbivector(rx, ry) + dualbivector(dx, dy)<br>
+def&nbsp;bivector(rx,&nbsp;ry,&nbsp;dx,&nbsp;dy):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;realbivector(rx,&nbsp;ry)&nbsp;+&nbsp;dualbivector(dx,&nbsp;dy)<br>
 <br>
 <br>
-def scalar(s):<br>
-&#9;return multivector(e=s)<br>
+def&nbsp;scalar(s):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e=s)<br>
 <br>
 <br>
-def pseudoscalar(p):<br>
-&#9;return multivector(e321=p)<br>
+def&nbsp;pseudoscalar(p):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e321=p)<br>
 <br>
 <br>
-def geomproduct_left_operator(m):<br>
-&#9;return m[geomproduct_left_operator_indexes] * geomproduct_left_operator_sign<br>
+def&nbsp;geomproduct_left_operator(m):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;m[geomproduct_left_operator_indexes]&nbsp;*&nbsp;geomproduct_left_operator_sign<br>
 <br>
 <br>
-def geomprod(a, b):<br>
-&#9;return geomproduct_left_operator(a) @ b<br>
+def&nbsp;geomprod(a,&nbsp;b):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;geomproduct_left_operator(a)&nbsp;@&nbsp;b<br>
 <br>
 <br>
-#print(geomprod(vector(1, 4, 3), vector(1, 2, 3)))<br>
+#print(geomprod(vector(1,&nbsp;4,&nbsp;3),&nbsp;vector(1,&nbsp;2,&nbsp;3)))<br>
 <br>
 <br>
-A = torch.tensor(<br>
-&#9;[<br>
-&#9;&#9;[<br>
-&#9;&#9;&#9;[1, 0, 2],<br>
-&#9;&#9;&#9;[0, 1, 0],<br>
-&#9;&#9;&#9;[0, 0, 1]<br>
-&#9;&#9;],<br>
-&#9;&#9;[<br>
-&#9;&#9;&#9;[1, 0, 0],<br>
-&#9;&#9;&#9;[0, 0, 0],<br>
-&#9;&#9;&#9;[0, 0, 0]<br>
-&#9;&#9;],<br>
+A&nbsp;=&nbsp;torch.tensor(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;0,&nbsp;2],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;1,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
 <br>
-&#9;&#9;[<br>
-&#9;&#9;&#9;[1, 0, 0],<br>
-&#9;&#9;&#9;[0, 0, 0],<br>
-&#9;&#9;&#9;[0, 0, 0]<br>
-&#9;&#9;]<br>
-&#9;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;],<br>
 )<br>
 <br>
 print(A.shape)<br>
 <br>
-a = torch.tensor([<br>
-&#9;[1, 1, 1],<br>
-&#9;[0, 1, 0]<br>
+a&nbsp;=&nbsp;torch.tensor([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;1,&nbsp;1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;1,&nbsp;0]<br>
 ])<br>
-b = torch.tensor([<br>
-&#9;[1, 1, 1],<br>
-&#9;[10, 10, 10]<br>
-]).permute(1, 0)<br>
+b&nbsp;=&nbsp;torch.tensor([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;1,&nbsp;1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[10,&nbsp;10,&nbsp;10]<br>
+]).permute(1,&nbsp;0)<br>
 <br>
 print(&quot;a@A&quot;)<br>
 print(a@A)<br>
 print(&quot;A@b&quot;)<br>
 print(A@b)<br>
 print(&quot;a@A@b&quot;)<br>
-print((a@A@b).permute(2, 1, 0))<br>
+print((a@A@b).permute(2,&nbsp;1,&nbsp;0))<br>
 print((a@A@b).shape)<br>
 <!-- END SCAT CODE -->
 </body>

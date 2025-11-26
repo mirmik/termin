@@ -6,173 +6,173 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Shader wrapper delegating compilation and uniform uploads to a graphics backend.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Shader&nbsp;wrapper&nbsp;delegating&nbsp;compilation&nbsp;and&nbsp;uniform&nbsp;uploads&nbsp;to&nbsp;a&nbsp;graphics&nbsp;backend.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from pathlib import Path<br>
-from typing import Any, Optional<br>
+from&nbsp;pathlib&nbsp;import&nbsp;Path<br>
+from&nbsp;typing&nbsp;import&nbsp;Any,&nbsp;Optional<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from .backends import get_default_graphics_backend<br>
-from .backends.base import GraphicsBackend, ShaderHandle<br>
-<br>
-<br>
-class ShaderCompilationError(RuntimeError):<br>
-&#9;&quot;&quot;&quot;Raised when GLSL compilation or program linking fails.&quot;&quot;&quot;<br>
+from&nbsp;.backends&nbsp;import&nbsp;get_default_graphics_backend<br>
+from&nbsp;.backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;ShaderHandle<br>
 <br>
 <br>
-class ShaderProgram:<br>
-&#9;&quot;&quot;&quot;A GLSL shader program (vertex + fragment).<br>
+class&nbsp;ShaderCompilationError(RuntimeError):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Raised&nbsp;when&nbsp;GLSL&nbsp;compilation&nbsp;or&nbsp;program&nbsp;linking&nbsp;fails.&quot;&quot;&quot;<br>
 <br>
-&#9;Uniform setters inside the class assume column-major matrices and they set the<br>
-&#9;combined MVP transform ``P * V * M`` in homogeneous coordinates.<br>
-&#9;&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;vertex_source: str,<br>
-&#9;&#9;fragment_source: str,<br>
-&#9;&#9;geometry_source: str | None = None<br>
-&#9;):<br>
-&#9;&#9;self.vertex_source = vertex_source<br>
-&#9;&#9;self.fragment_source = fragment_source<br>
-&#9;&#9;self.geometry_source = geometry_source<br>
-&#9;&#9;self._compiled = False<br>
-&#9;&#9;self._handle: ShaderHandle | None = None<br>
-&#9;&#9;self._backend: GraphicsBackend | None = None<br>
+class&nbsp;ShaderProgram:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;GLSL&nbsp;shader&nbsp;program&nbsp;(vertex&nbsp;+&nbsp;fragment).<br>
 <br>
-&#9;def __post_init__(self):<br>
-&#9;&#9;self._handle = None<br>
-&#9;&#9;self._backend = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Uniform&nbsp;setters&nbsp;inside&nbsp;the&nbsp;class&nbsp;assume&nbsp;column-major&nbsp;matrices&nbsp;and&nbsp;they&nbsp;set&nbsp;the<br>
+&nbsp;&nbsp;&nbsp;&nbsp;combined&nbsp;MVP&nbsp;transform&nbsp;``P&nbsp;*&nbsp;V&nbsp;*&nbsp;M``&nbsp;in&nbsp;homogeneous&nbsp;coordinates.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def default_shader() -&gt; &quot;ShaderProgram&quot;:<br>
-&#9;&#9;vert = &quot;&quot;&quot;#version 330 core<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex_source:&nbsp;str,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fragment_source:&nbsp;str,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;geometry_source:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vertex_source&nbsp;=&nbsp;vertex_source<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.fragment_source&nbsp;=&nbsp;fragment_source<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.geometry_source&nbsp;=&nbsp;geometry_source<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._compiled&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle:&nbsp;ShaderHandle&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._backend:&nbsp;GraphicsBackend&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
-layout(location = 0) in vec3 a_position;<br>
-layout(location = 1) in vec3 a_normal;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__post_init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._backend&nbsp;=&nbsp;None<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;default_shader()&nbsp;-&gt;&nbsp;&quot;ShaderProgram&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vert&nbsp;=&nbsp;&quot;&quot;&quot;#version&nbsp;330&nbsp;core<br>
 <br>
-out vec3 v_normal;     // n_world = (M^{-1})^T * n_model<br>
-out vec3 v_world_pos;  // p_world = M * p_model<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+layout(location&nbsp;=&nbsp;1)&nbsp;in&nbsp;vec3&nbsp;a_normal;<br>
 <br>
-void main() {<br>
-&#9;vec4 world = u_model * vec4(a_position, 1.0);<br>
-&#9;v_world_pos = world.xyz;<br>
-&#9;v_normal = mat3(transpose(inverse(u_model))) * a_normal;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-&#9;gl_Position = u_projection * u_view * world;<br>
+out&nbsp;vec3&nbsp;v_normal;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;n_world&nbsp;=&nbsp;(M^{-1})^T&nbsp;*&nbsp;n_model<br>
+out&nbsp;vec3&nbsp;v_world_pos;&nbsp;&nbsp;//&nbsp;p_world&nbsp;=&nbsp;M&nbsp;*&nbsp;p_model<br>
+<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec4&nbsp;world&nbsp;=&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_world_pos&nbsp;=&nbsp;world.xyz;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v_normal&nbsp;=&nbsp;mat3(transpose(inverse(u_model)))&nbsp;*&nbsp;a_normal;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;world;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-&#9;&#9;frag = &quot;&quot;&quot;#version 330 core<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;frag&nbsp;=&nbsp;&quot;&quot;&quot;#version&nbsp;330&nbsp;core<br>
 <br>
-in vec3 v_normal;<br>
-in vec3 v_world_pos;<br>
+in&nbsp;vec3&nbsp;v_normal;<br>
+in&nbsp;vec3&nbsp;v_world_pos;<br>
 <br>
-uniform vec4 u_color;        // base material color (RGBA)<br>
-uniform vec3 u_light_dir;    // direction from light to object (world space)<br>
-uniform vec3 u_light_color;  // light tint<br>
+uniform&nbsp;vec4&nbsp;u_color;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;base&nbsp;material&nbsp;color&nbsp;(RGBA)<br>
+uniform&nbsp;vec3&nbsp;u_light_dir;&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;direction&nbsp;from&nbsp;light&nbsp;to&nbsp;object&nbsp;(world&nbsp;space)<br>
+uniform&nbsp;vec3&nbsp;u_light_color;&nbsp;&nbsp;//&nbsp;light&nbsp;tint<br>
 <br>
-out vec4 FragColor;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;vec3 N = normalize(v_normal);<br>
-&#9;vec3 L = normalize(-u_light_dir);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;N&nbsp;=&nbsp;normalize(v_normal);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;L&nbsp;=&nbsp;normalize(-u_light_dir);<br>
 <br>
-&#9;// Lambertian diffuse term: I_diffuse = max(dot(N, L), 0)<br>
-&#9;float ndotl = max(dot(N, L), 0.0);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Lambertian&nbsp;diffuse&nbsp;term:&nbsp;I_diffuse&nbsp;=&nbsp;max(dot(N,&nbsp;L),&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;ndotl&nbsp;=&nbsp;max(dot(N,&nbsp;L),&nbsp;0.0);<br>
 <br>
-&#9;const float ambient_strength = 0.2;<br>
-&#9;const float diffuse_strength = 0.8;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;ambient_strength&nbsp;=&nbsp;0.2;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const&nbsp;float&nbsp;diffuse_strength&nbsp;=&nbsp;0.8;<br>
 <br>
-&#9;vec3 ambient = ambient_strength * u_color.rgb;<br>
-&#9;vec3 diffuse = diffuse_strength * ndotl * u_color.rgb;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;ambient&nbsp;=&nbsp;ambient_strength&nbsp;*&nbsp;u_color.rgb;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;diffuse&nbsp;=&nbsp;diffuse_strength&nbsp;*&nbsp;ndotl&nbsp;*&nbsp;u_color.rgb;<br>
 <br>
-&#9;vec3 color = (ambient + diffuse) * u_light_color;<br>
-&#9;FragColor = vec4(color, u_color.a);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec3&nbsp;color&nbsp;=&nbsp;(ambient&nbsp;+&nbsp;diffuse)&nbsp;*&nbsp;u_light_color;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(color,&nbsp;u_color.a);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
-&#9;&#9;return ShaderProgram(vertex_source=vert, fragment_source=frag)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;ShaderProgram(vertex_source=vert,&nbsp;fragment_source=frag)<br>
 <br>
-&#9;def ensure_ready(self, graphics: GraphicsBackend | None = None):<br>
-&#9;&#9;if self._compiled:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;backend = graphics or self._backend or get_default_graphics_backend()<br>
-&#9;&#9;if backend is None:<br>
-&#9;&#9;&#9;raise RuntimeError(&quot;Graphics backend is not available for shader compilation.&quot;)<br>
-&#9;&#9;self._backend = backend<br>
-&#9;&#9;self._handle = backend.create_shader(self.vertex_source, self.fragment_source, self.geometry_source)<br>
-&#9;&#9;self._compiled = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;ensure_ready(self,&nbsp;graphics:&nbsp;GraphicsBackend&nbsp;|&nbsp;None&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._compiled:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;backend&nbsp;=&nbsp;graphics&nbsp;or&nbsp;self._backend&nbsp;or&nbsp;get_default_graphics_backend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;backend&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;Graphics&nbsp;backend&nbsp;is&nbsp;not&nbsp;available&nbsp;for&nbsp;shader&nbsp;compilation.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._backend&nbsp;=&nbsp;backend<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle&nbsp;=&nbsp;backend.create_shader(self.vertex_source,&nbsp;self.fragment_source,&nbsp;self.geometry_source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._compiled&nbsp;=&nbsp;True<br>
 <br>
-&#9;def _require_handle(self) -&gt; ShaderHandle:<br>
-&#9;&#9;if self._handle is None:<br>
-&#9;&#9;&#9;raise RuntimeError(&quot;ShaderProgram is not compiled. Call ensure_ready() first.&quot;)<br>
-&#9;&#9;return self._handle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_require_handle(self)&nbsp;-&gt;&nbsp;ShaderHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._handle&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;ShaderProgram&nbsp;is&nbsp;not&nbsp;compiled.&nbsp;Call&nbsp;ensure_ready()&nbsp;first.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._handle<br>
 <br>
-&#9;def use(self):<br>
-&#9;&#9;self._require_handle().use()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;use(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._require_handle().use()<br>
 <br>
-&#9;def stop(self):<br>
-&#9;&#9;if self._handle:<br>
-&#9;&#9;&#9;self._handle.stop()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;stop(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._handle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle.stop()<br>
 <br>
-&#9;def delete(self):<br>
-&#9;&#9;if self._handle:<br>
-&#9;&#9;&#9;self._handle.delete()<br>
-&#9;&#9;&#9;self._handle = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;delete(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._handle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle.delete()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handle&nbsp;=&nbsp;None<br>
 <br>
-&#9;def set_uniform_matrix4(self, name: str, matrix: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;Upload a 4x4 matrix (float32) to uniform ``name``.&quot;&quot;&quot;<br>
-&#9;&#9;self._require_handle().set_uniform_matrix4(name, matrix)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_matrix4(self,&nbsp;name:&nbsp;str,&nbsp;matrix:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Upload&nbsp;a&nbsp;4x4&nbsp;matrix&nbsp;(float32)&nbsp;to&nbsp;uniform&nbsp;``name``.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._require_handle().set_uniform_matrix4(name,&nbsp;matrix)<br>
 <br>
-&#9;def set_uniform_vec2(self, name: str, vector: np.ndarray):<br>
-&#9;&#9;self._require_handle().set_uniform_vec2(name, vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_vec2(self,&nbsp;name:&nbsp;str,&nbsp;vector:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._require_handle().set_uniform_vec2(name,&nbsp;vector)<br>
 <br>
-&#9;def set_uniform_vec3(self, name: str, vector: np.ndarray):<br>
-&#9;&#9;self._require_handle().set_uniform_vec3(name, vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_vec3(self,&nbsp;name:&nbsp;str,&nbsp;vector:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._require_handle().set_uniform_vec3(name,&nbsp;vector)<br>
 <br>
-&#9;def set_uniform_vec4(self, name: str, vector: np.ndarray):<br>
-&#9;&#9;self._require_handle().set_uniform_vec4(name, vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_vec4(self,&nbsp;name:&nbsp;str,&nbsp;vector:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._require_handle().set_uniform_vec4(name,&nbsp;vector)<br>
 <br>
-&#9;def set_uniform_float(self, name: str, value: float):<br>
-&#9;&#9;self._require_handle().set_uniform_float(name, value)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_float(self,&nbsp;name:&nbsp;str,&nbsp;value:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._require_handle().set_uniform_float(name,&nbsp;value)<br>
 <br>
-&#9;def set_uniform_int(self, name: str, value: int):<br>
-&#9;&#9;self._require_handle().set_uniform_int(name, value)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_int(self,&nbsp;name:&nbsp;str,&nbsp;value:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._require_handle().set_uniform_int(name,&nbsp;value)<br>
 <br>
-&#9;def set_uniform_auto(self, name: str, value: Any):<br>
-&#9;&#9;&quot;&quot;&quot;Best-effort setter that infers uniform type based on ``value``.&quot;&quot;&quot;<br>
-&#9;&#9;if isinstance(value, (list, tuple, np.ndarray)):<br>
-&#9;&#9;&#9;arr = np.asarray(value)<br>
-&#9;&#9;&#9;if arr.shape == (4, 4):<br>
-&#9;&#9;&#9;&#9;self.set_uniform_matrix4(name, arr)<br>
-&#9;&#9;&#9;elif arr.shape == (2,):<br>
-&#9;&#9;&#9;&#9;self.set_uniform_vec2(name, arr)<br>
-&#9;&#9;&#9;elif arr.shape == (3,):<br>
-&#9;&#9;&#9;&#9;self.set_uniform_vec3(name, arr)<br>
-&#9;&#9;&#9;elif arr.shape == (4,):<br>
-&#9;&#9;&#9;&#9;self.set_uniform_vec4(name, arr)<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;raise ValueError(f&quot;Unsupported uniform array shape for {name}: {arr.shape}&quot;)<br>
-&#9;&#9;elif isinstance(value, bool):<br>
-&#9;&#9;&#9;self.set_uniform_int(name, int(value))<br>
-&#9;&#9;elif isinstance(value, int):<br>
-&#9;&#9;&#9;self.set_uniform_int(name, value)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self.set_uniform_float(name, float(value))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_uniform_auto(self,&nbsp;name:&nbsp;str,&nbsp;value:&nbsp;Any):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Best-effort&nbsp;setter&nbsp;that&nbsp;infers&nbsp;uniform&nbsp;type&nbsp;based&nbsp;on&nbsp;``value``.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(value,&nbsp;(list,&nbsp;tuple,&nbsp;np.ndarray)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr&nbsp;=&nbsp;np.asarray(value)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;arr.shape&nbsp;==&nbsp;(4,&nbsp;4):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_uniform_matrix4(name,&nbsp;arr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;arr.shape&nbsp;==&nbsp;(2,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_uniform_vec2(name,&nbsp;arr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;arr.shape&nbsp;==&nbsp;(3,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_uniform_vec3(name,&nbsp;arr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;arr.shape&nbsp;==&nbsp;(4,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_uniform_vec4(name,&nbsp;arr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Unsupported&nbsp;uniform&nbsp;array&nbsp;shape&nbsp;for&nbsp;{name}:&nbsp;{arr.shape}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(value,&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_uniform_int(name,&nbsp;int(value))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(value,&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_uniform_int(name,&nbsp;value)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_uniform_float(name,&nbsp;float(value))<br>
 <br>
-&#9;@classmethod<br>
-&#9;def from_files(cls, vertex_path: str | Path, fragment_path: str | Path) -&gt; &quot;ShaderProgram&quot;:<br>
-&#9;&#9;vertex_source = Path(vertex_path).read_text(encoding=&quot;utf-8&quot;)<br>
-&#9;&#9;fragment_source = Path(fragment_path).read_text(encoding=&quot;utf-8&quot;)<br>
-&#9;&#9;return cls(vertex_source=vertex_source, fragment_source=fragment_source)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@classmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_files(cls,&nbsp;vertex_path:&nbsp;str&nbsp;|&nbsp;Path,&nbsp;fragment_path:&nbsp;str&nbsp;|&nbsp;Path)&nbsp;-&gt;&nbsp;&quot;ShaderProgram&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex_source&nbsp;=&nbsp;Path(vertex_path).read_text(encoding=&quot;utf-8&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fragment_source&nbsp;=&nbsp;Path(fragment_path).read_text(encoding=&quot;utf-8&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;cls(vertex_source=vertex_source,&nbsp;fragment_source=fragment_source)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

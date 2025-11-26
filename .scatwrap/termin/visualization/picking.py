@@ -7,38 +7,38 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-def hash_int(i):<br>
-&#9;&quot;&quot;&quot;A simple integer hash function.&quot;&quot;&quot;<br>
-&#9;i = ((i &gt;&gt; 16) ^ i) * 0x45d9f3b<br>
-&#9;i = ((i &gt;&gt; 16) ^ i) * 0x45d9f3b<br>
-&#9;i = (i &gt;&gt; 16) ^ i<br>
-&#9;return i<br>
+def&nbsp;hash_int(i):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;A&nbsp;simple&nbsp;integer&nbsp;hash&nbsp;function.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;=&nbsp;((i&nbsp;&gt;&gt;&nbsp;16)&nbsp;^&nbsp;i)&nbsp;*&nbsp;0x45d9f3b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;=&nbsp;((i&nbsp;&gt;&gt;&nbsp;16)&nbsp;^&nbsp;i)&nbsp;*&nbsp;0x45d9f3b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;=&nbsp;(i&nbsp;&gt;&gt;&nbsp;16)&nbsp;^&nbsp;i<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;i<br>
 <br>
-id_by_rgb_cache = {}<br>
+id_by_rgb_cache&nbsp;=&nbsp;{}<br>
 <br>
-def id_to_rgb(in_pid: int):<br>
-&#9;&quot;&quot;&quot;pack int id (1..16M) into RGB [0,1]. 0 = 'ничего не попали'.&quot;&quot;&quot;<br>
-&#9;pid = hash_int(in_pid) # для пестроты картинки<br>
+def&nbsp;id_to_rgb(in_pid:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;pack&nbsp;int&nbsp;id&nbsp;(1..16M)&nbsp;into&nbsp;RGB&nbsp;[0,1].&nbsp;0&nbsp;=&nbsp;'ничего&nbsp;не&nbsp;попали'.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;pid&nbsp;=&nbsp;hash_int(in_pid)&nbsp;#&nbsp;для&nbsp;пестроты&nbsp;картинки<br>
 <br>
-&#9;r = (pid &amp; 0x000000FF) / 255.0<br>
-&#9;g = ((pid &amp; 0x0000FF00) &gt;&gt; 8) / 255.0<br>
-&#9;b = ((pid &amp; 0x00FF0000) &gt;&gt; 16) / 255.0<br>
-&#9;#print(&quot;Converted id&quot;, pid, &quot;to color:&quot;, (r, g, b))  # --- DEBUG ---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;=&nbsp;(pid&nbsp;&amp;&nbsp;0x000000FF)&nbsp;/&nbsp;255.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;g&nbsp;=&nbsp;((pid&nbsp;&amp;&nbsp;0x0000FF00)&nbsp;&gt;&gt;&nbsp;8)&nbsp;/&nbsp;255.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;((pid&nbsp;&amp;&nbsp;0x00FF0000)&nbsp;&gt;&gt;&nbsp;16)&nbsp;/&nbsp;255.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#print(&quot;Converted&nbsp;id&quot;,&nbsp;pid,&nbsp;&quot;to&nbsp;color:&quot;,&nbsp;(r,&nbsp;g,&nbsp;b))&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
 <br>
-&#9;id_by_rgb_cache[(r, g, b)] = in_pid<br>
-&#9;return (r, g, b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;id_by_rgb_cache[(r,&nbsp;g,&nbsp;b)]&nbsp;=&nbsp;in_pid<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(r,&nbsp;g,&nbsp;b)<br>
 <br>
-def rgb_to_id(r: float, g: float, b: float) -&gt; int:<br>
-&#9;# ri = int(r * 255 + 0.5)<br>
-&#9;# gi = int(g * 255 + 0.5)<br>
-&#9;# bi = int(b * 255 + 0.5)<br>
-&#9;# #print(&quot;Converted color&quot;, (r, g, b), &quot;to id:&quot;, ri | (gi &lt;&lt; 8) | (bi &lt;&lt; 16))  # --- DEBUG ---<br>
-&#9;# return ri | (gi &lt;&lt; 8) | (bi &lt;&lt; 16)<br>
-&#9;key = (r, g, b)<br>
-&#9;if key in id_by_rgb_cache:<br>
-&#9;&#9;return id_by_rgb_cache[key]<br>
-&#9;else:<br>
-&#9;&#9;return 0<br>
+def&nbsp;rgb_to_id(r:&nbsp;float,&nbsp;g:&nbsp;float,&nbsp;b:&nbsp;float)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;ri&nbsp;=&nbsp;int(r&nbsp;*&nbsp;255&nbsp;+&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;gi&nbsp;=&nbsp;int(g&nbsp;*&nbsp;255&nbsp;+&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;bi&nbsp;=&nbsp;int(b&nbsp;*&nbsp;255&nbsp;+&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;#print(&quot;Converted&nbsp;color&quot;,&nbsp;(r,&nbsp;g,&nbsp;b),&nbsp;&quot;to&nbsp;id:&quot;,&nbsp;ri&nbsp;|&nbsp;(gi&nbsp;&lt;&lt;&nbsp;8)&nbsp;|&nbsp;(bi&nbsp;&lt;&lt;&nbsp;16))&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;return&nbsp;ri&nbsp;|&nbsp;(gi&nbsp;&lt;&lt;&nbsp;8)&nbsp;|&nbsp;(bi&nbsp;&lt;&lt;&nbsp;16)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;=&nbsp;(r,&nbsp;g,&nbsp;b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;key&nbsp;in&nbsp;id_by_rgb_cache:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;id_by_rgb_cache[key]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;0<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

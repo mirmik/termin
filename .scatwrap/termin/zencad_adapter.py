@@ -6,111 +6,111 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-#!/usr/bin/env python3<br>
+#!/usr/bin/env&nbsp;python3<br>
 <br>
-import numpy<br>
-import numpy as np<br>
-import zencad<br>
-import zencad.assemble<br>
-import termin.ga201.point as point<br>
-import termin.ga201.join as join<br>
-import termin.ga201.screw as screw<br>
-import termin.ga201.motor as motor<br>
+import&nbsp;numpy<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+import&nbsp;zencad<br>
+import&nbsp;zencad.assemble<br>
+import&nbsp;termin.ga201.point&nbsp;as&nbsp;point<br>
+import&nbsp;termin.ga201.join&nbsp;as&nbsp;join<br>
+import&nbsp;termin.ga201.screw&nbsp;as&nbsp;screw<br>
+import&nbsp;termin.ga201.motor&nbsp;as&nbsp;motor<br>
 <br>
-from scipy.spatial import ConvexHull<br>
-<br>
-<br>
-class VectorsOfJacobian:<br>
-&#9;def __init__(self, indexes, sensivities):<br>
-&#9;&#9;self.indexes = indexes<br>
-&#9;&#9;self.sensivities = sensivities<br>
+from&nbsp;scipy.spatial&nbsp;import&nbsp;ConvexHull<br>
 <br>
 <br>
-def draw_line2_positive(line, step=1, length=0.1):<br>
-&#9;min = -100<br>
-&#9;max = 100<br>
-&#9;for i in numpy.arange(min, max, step):<br>
-&#9;&#9;x = line.x<br>
-&#9;&#9;y = line.y<br>
-&#9;&#9;d = point.Point2(x, y, 0) * length<br>
-&#9;&#9;a = line.parameter_point(i) + d<br>
-&#9;&#9;b = line.parameter_point(i)<br>
-&#9;&#9;zencad.display(zencad.segment(zencad.point3(<br>
-&#9;&#9;&#9;a.x, a.y, 0), zencad.point3(b.x, b.y, 0)))<br>
+class&nbsp;VectorsOfJacobian:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;indexes,&nbsp;sensivities):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.indexes&nbsp;=&nbsp;indexes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.sensivities&nbsp;=&nbsp;sensivities<br>
 <br>
 <br>
-def draw_line2(line):<br>
-&#9;unitized_line = line.unitized()<br>
-&#9;a = unitized_line.parameter_point(-100)<br>
-&#9;b = unitized_line.parameter_point(100)<br>
-&#9;return zencad.display(zencad.segment(zencad.point3(a.x, a.y, 0), zencad.point3(b.x, b.y, 0)))<br>
+def&nbsp;draw_line2_positive(line,&nbsp;step=1,&nbsp;length=0.1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;min&nbsp;=&nbsp;-100<br>
+&nbsp;&nbsp;&nbsp;&nbsp;max&nbsp;=&nbsp;100<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;numpy.arange(min,&nbsp;max,&nbsp;step):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;line.x<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;line.y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;point.Point2(x,&nbsp;y,&nbsp;0)&nbsp;*&nbsp;length<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;line.parameter_point(i)&nbsp;+&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;line.parameter_point(i)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;zencad.display(zencad.segment(zencad.point3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a.x,&nbsp;a.y,&nbsp;0),&nbsp;zencad.point3(b.x,&nbsp;b.y,&nbsp;0)))<br>
 <br>
 <br>
-def draw_point2(point):<br>
-&#9;point = point.unitized()<br>
-&#9;return zencad.display(zencad.point3(point.x, point.y, 0))<br>
+def&nbsp;draw_line2(line):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;unitized_line&nbsp;=&nbsp;line.unitized()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;unitized_line.parameter_point(-100)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;unitized_line.parameter_point(100)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;zencad.display(zencad.segment(zencad.point3(a.x,&nbsp;a.y,&nbsp;0),&nbsp;zencad.point3(b.x,&nbsp;b.y,&nbsp;0)))<br>
 <br>
 <br>
-def draw_body2(body):<br>
-&#9;cpnts = [(p.x, p.y) for p in [p.unitized() for p in body.vertices()]]<br>
-&#9;c = ConvexHull(cpnts)<br>
-&#9;zpoints = [zencad.point3(cpnts[i][0], cpnts[i][1]) for i in c.vertices]<br>
-&#9;return zencad.display(zencad.polygon(zpoints))<br>
+def&nbsp;draw_point2(point):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;point&nbsp;=&nbsp;point.unitized()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;zencad.display(zencad.point3(point.x,&nbsp;point.y,&nbsp;0))<br>
 <br>
 <br>
-def zencad_sensivity_to_screw2(sensivity):<br>
-&#9;a = sensivity[0]<br>
-&#9;l = sensivity[1]<br>
-&#9;return screw.Screw2(v=numpy.array([l.x, l.y], dtype=numpy.float64), m=a.z)<br>
+def&nbsp;draw_body2(body):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cpnts&nbsp;=&nbsp;[(p.x,&nbsp;p.y)&nbsp;for&nbsp;p&nbsp;in&nbsp;[p.unitized()&nbsp;for&nbsp;p&nbsp;in&nbsp;body.vertices()]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;ConvexHull(cpnts)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;zpoints&nbsp;=&nbsp;[zencad.point3(cpnts[i][0],&nbsp;cpnts[i][1])&nbsp;for&nbsp;i&nbsp;in&nbsp;c.vertices]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;zencad.display(zencad.polygon(zpoints))<br>
 <br>
 <br>
-def zencad_transform_to_motor2(transform):<br>
-&#9;l = transform.translation()<br>
-&#9;a = transform.rotation_quat()<br>
-&#9;return motor.Motor2(l[0], l[1], 0, 1) * motor.Motor2(0, 0, a.z, a.w)<br>
+def&nbsp;zencad_sensivity_to_screw2(sensivity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;sensivity[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;l&nbsp;=&nbsp;sensivity[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;screw.Screw2(v=numpy.array([l.x,&nbsp;l.y],&nbsp;dtype=numpy.float64),&nbsp;m=a.z)<br>
 <br>
 <br>
-def right_sensivity_screw2_of_kinunit(kinunit, senunit):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает правую чувствительность сенсорного фрейма <br>
-&#9;&#9;к изменению координаты кинематического фрэйма.<br>
-<br>
-&#9;&#9;H=KRS<br>
-&#9;&#9;K - кинематический юнит<br>
-&#9;&#9;R - мотор выхода юнита ко входу<br>
-&#9;&#9;H - сенсорный фрейм<br>
-&#9;&#9;S - относительный мотор сенсорного фрейма<br>
-<br>
-&#9;&#9;-&gt;<br>
-&#9;&#9;V_H = [H^-1 * KR]V_R<br>
-&#9;&#9;carried = (senmotor.inverse() * kinmotor).carry(sensivity) <br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;sensivity = zencad_sensivity_to_screw2(kinunit.sensivity())<br>
-&#9;kinout = kinunit.output<br>
-&#9;kinmotor = zencad_transform_to_motor2(kinout.global_location)<br>
-&#9;senmotor = zencad_transform_to_motor2(senunit.global_location)<br>
-&#9;motor = senmotor.inverse() * kinmotor<br>
-&#9;carried = sensivity.kinematic_carry(motor)<br>
-&#9;return carried<br>
+def&nbsp;zencad_transform_to_motor2(transform):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;l&nbsp;=&nbsp;transform.translation()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;transform.rotation_quat()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;motor.Motor2(l[0],&nbsp;l[1],&nbsp;0,&nbsp;1)&nbsp;*&nbsp;motor.Motor2(0,&nbsp;0,&nbsp;a.z,&nbsp;a.w)<br>
 <br>
 <br>
-def indexes_of_kinunits(arr):<br>
-&#9;return [id(a) for a in arr]<br>
+def&nbsp;right_sensivity_screw2_of_kinunit(kinunit,&nbsp;senunit):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;правую&nbsp;чувствительность&nbsp;сенсорного&nbsp;фрейма&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;к&nbsp;изменению&nbsp;координаты&nbsp;кинематического&nbsp;фрэйма.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H=KRS<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;K&nbsp;-&nbsp;кинематический&nbsp;юнит<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;-&nbsp;мотор&nbsp;выхода&nbsp;юнита&nbsp;ко&nbsp;входу<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;-&nbsp;сенсорный&nbsp;фрейм<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S&nbsp;-&nbsp;относительный&nbsp;мотор&nbsp;сенсорного&nbsp;фрейма<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;V_H&nbsp;=&nbsp;[H^-1&nbsp;*&nbsp;KR]V_R<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;carried&nbsp;=&nbsp;(senmotor.inverse()&nbsp;*&nbsp;kinmotor).carry(sensivity)&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sensivity&nbsp;=&nbsp;zencad_sensivity_to_screw2(kinunit.sensivity())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;kinout&nbsp;=&nbsp;kinunit.output<br>
+&nbsp;&nbsp;&nbsp;&nbsp;kinmotor&nbsp;=&nbsp;zencad_transform_to_motor2(kinout.global_location)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;senmotor&nbsp;=&nbsp;zencad_transform_to_motor2(senunit.global_location)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;motor&nbsp;=&nbsp;senmotor.inverse()&nbsp;*&nbsp;kinmotor<br>
+&nbsp;&nbsp;&nbsp;&nbsp;carried&nbsp;=&nbsp;sensivity.kinematic_carry(motor)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;carried<br>
 <br>
 <br>
-def right_jacobi_matrix_lin2(kinunits, senunit):<br>
-&#9;sensivities = [right_sensivity_screw2_of_kinunit(<br>
-&#9;&#9;k, senunit) for k in kinunits]<br>
-&#9;mat = np.concatenate([k.vector().reshape(2, 1) for k in sensivities], axis=1)<br>
-&#9;return mat<br>
+def&nbsp;indexes_of_kinunits(arr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[id(a)&nbsp;for&nbsp;a&nbsp;in&nbsp;arr]<br>
 <br>
 <br>
-def right_jacobi_matrix_lin2_by_indexes(kinunits, senunit):<br>
-&#9;indexes = indexes_of_kinunits(kinunits)<br>
-&#9;sensivities = [right_sensivity_screw2_of_kinunit(<br>
-&#9;&#9;k, senunit) for k in kinunits]<br>
-&#9;return VectorsOfJacobian(indexes, sensivities)<br>
+def&nbsp;right_jacobi_matrix_lin2(kinunits,&nbsp;senunit):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sensivities&nbsp;=&nbsp;[right_sensivity_screw2_of_kinunit(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k,&nbsp;senunit)&nbsp;for&nbsp;k&nbsp;in&nbsp;kinunits]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mat&nbsp;=&nbsp;np.concatenate([k.vector().reshape(2,&nbsp;1)&nbsp;for&nbsp;k&nbsp;in&nbsp;sensivities],&nbsp;axis=1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;mat<br>
+<br>
+<br>
+def&nbsp;right_jacobi_matrix_lin2_by_indexes(kinunits,&nbsp;senunit):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;indexes&nbsp;=&nbsp;indexes_of_kinunits(kinunits)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sensivities&nbsp;=&nbsp;[right_sensivity_screw2_of_kinunit(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k,&nbsp;senunit)&nbsp;for&nbsp;k&nbsp;in&nbsp;kinunits]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;VectorsOfJacobian(indexes,&nbsp;sensivities)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

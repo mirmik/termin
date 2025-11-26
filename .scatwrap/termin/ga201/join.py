@@ -6,69 +6,69 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-#!/usr/bin/env python3<br>
+#!/usr/bin/env&nbsp;python3<br>
 <br>
-from termin.ga201.point import Point2<br>
-from termin.ga201.line import Line2<br>
-from termin.ga201.magnitude import Magnitude<br>
-import math<br>
+from&nbsp;termin.ga201.point&nbsp;import&nbsp;Point2<br>
+from&nbsp;termin.ga201.line&nbsp;import&nbsp;Line2<br>
+from&nbsp;termin.ga201.magnitude&nbsp;import&nbsp;Magnitude<br>
+import&nbsp;math<br>
 <br>
-def join_point_point(p, q):<br>
-&#9;return Line2(<br>
-&#9;&#9;p.y*q.z - q.y*p.z,<br>
-&#9;&#9;q.x*p.z - p.x*q.z,<br>
-&#9;&#9;p.x*q.y - q.x*p.y<br>
-&#9;)<br>
+def&nbsp;join_point_point(p,&nbsp;q):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Line2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p.y*q.z&nbsp;-&nbsp;q.y*p.z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q.x*p.z&nbsp;-&nbsp;p.x*q.z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p.x*q.y&nbsp;-&nbsp;q.x*p.y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-def projection_point_line(p, l):<br>
-&#9;a = (l.x*l.x + l.y*l.y)<br>
-&#9;b = (l.x*p.x + l.y*p.y + l.z*p.z)<br>
-&#9;return Point2(<br>
-&#9;&#9;a * p.x - b * l.x,<br>
-&#9;&#9;a * p.y - b * l.y,<br>
-&#9;&#9;a * p.z<br>
-&#9;)<br>
+def&nbsp;projection_point_line(p,&nbsp;l):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;(l.x*l.x&nbsp;+&nbsp;l.y*l.y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;(l.x*p.x&nbsp;+&nbsp;l.y*p.y&nbsp;+&nbsp;l.z*p.z)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Point2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;*&nbsp;p.x&nbsp;-&nbsp;b&nbsp;*&nbsp;l.x,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;*&nbsp;p.y&nbsp;-&nbsp;b&nbsp;*&nbsp;l.y,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;*&nbsp;p.z<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-def point_projection(p, l):<br>
-&#9;if isinstance(l, Point2):<br>
-&#9;&#9;return l<br>
-&#9;if isinstance(l, Line2):<br>
-&#9;&#9;return projection_point_line(p, l)<br>
+def&nbsp;point_projection(p,&nbsp;l):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(l,&nbsp;Point2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;l<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(l,&nbsp;Line2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;projection_point_line(p,&nbsp;l)<br>
 <br>
-def meet(l, k):<br>
-&#9;return Point2(<br>
-&#9;&#9;l.y*k.z - k.y*l.z,<br>
-&#9;&#9;k.x*l.z - l.x*k.z,<br>
-&#9;&#9;l.x*k.y - k.x*l.y<br>
-&#9;)<br>
+def&nbsp;meet(l,&nbsp;k):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Point2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;l.y*k.z&nbsp;-&nbsp;k.y*l.z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k.x*l.z&nbsp;-&nbsp;l.x*k.z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;l.x*k.y&nbsp;-&nbsp;k.x*l.y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-def oriented_distance_point_line(p,l):<br>
-&#9;return Magnitude(<br>
-&#9;&#9;p.x*l.x + p.y*l.y + p.z*l.z, <br>
-&#9;&#9;p.z*math.sqrt(l.x*l.x + l.y*l.y))<br>
+def&nbsp;oriented_distance_point_line(p,l):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Magnitude(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p.x*l.x&nbsp;+&nbsp;p.y*l.y&nbsp;+&nbsp;p.z*l.z,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p.z*math.sqrt(l.x*l.x&nbsp;+&nbsp;l.y*l.y))<br>
 <br>
-def distance_point_point(p, q):<br>
-&#9;return Magnitude(<br>
-&#9;&#9;math.sqrt((q.x*p.z - p.x*q.z)**2 + (q.y*p.z - p.y*q.z)**2),<br>
-&#9;&#9;abs(p.z*q.z)<br>
-&#9;)<br>
+def&nbsp;distance_point_point(p,&nbsp;q):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Magnitude(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;math.sqrt((q.x*p.z&nbsp;-&nbsp;p.x*q.z)**2&nbsp;+&nbsp;(q.y*p.z&nbsp;-&nbsp;p.y*q.z)**2),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abs(p.z*q.z)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-def oriented_distance(a, b):<br>
-&#9;if isinstance(b, Line2):<br>
-&#9;&#9;return oriented_distance_point_line(a, b)<br>
-&#9;raise Exception(&quot;Oriented distance allowed only for hyperplanes&quot;)<br>
-&#9;<br>
+def&nbsp;oriented_distance(a,&nbsp;b):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(b,&nbsp;Line2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;oriented_distance_point_line(a,&nbsp;b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;Oriented&nbsp;distance&nbsp;allowed&nbsp;only&nbsp;for&nbsp;hyperplanes&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
 <br>
-def distance(p, l):<br>
-&#9;return abs(oriented_distance(p, l))<br>
+def&nbsp;distance(p,&nbsp;l):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;abs(oriented_distance(p,&nbsp;l))<br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;p = Point2(1, 1)<br>
-&#9;q = Point2(1, 0)<br>
-&#9;print(join_point_point(p, q))<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;p&nbsp;=&nbsp;Point2(1,&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;Point2(1,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;print(join_point_point(p,&nbsp;q))<br>
 <br>
-&#9;l = Line2(1, 1, -1)<br>
-&#9;print(projection_point_line(Point2(1, 1), l))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;l&nbsp;=&nbsp;Line2(1,&nbsp;1,&nbsp;-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;print(projection_point_line(Point2(1,&nbsp;1),&nbsp;l))<br>
 <br>
 <!-- END SCAT CODE -->
 </body>

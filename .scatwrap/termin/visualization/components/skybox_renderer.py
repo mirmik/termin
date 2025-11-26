@@ -6,35 +6,35 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from __future__ import annotations<br>
-from typing import Optional<br>
-import numpy as np<br>
-from ..entity import RenderContext<br>
-from ..material import Material<br>
-from ..mesh import MeshDrawable<br>
-from ..entity import Component<br>
-from .mesh_renderer import MeshRenderer<br>
-from termin.geombase.pose3 import Pose3<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;..entity&nbsp;import&nbsp;RenderContext<br>
+from&nbsp;..material&nbsp;import&nbsp;Material<br>
+from&nbsp;..mesh&nbsp;import&nbsp;MeshDrawable<br>
+from&nbsp;..entity&nbsp;import&nbsp;Component<br>
+from&nbsp;.mesh_renderer&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
 <br>
-class SkyboxRenderer(MeshRenderer):<br>
-&#9;&quot;&quot;&quot;Specialized renderer for skyboxes (no depth writes and view without translation).&quot;&quot;&quot;<br>
+class&nbsp;SkyboxRenderer(MeshRenderer):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Specialized&nbsp;renderer&nbsp;for&nbsp;skyboxes&nbsp;(no&nbsp;depth&nbsp;writes&nbsp;and&nbsp;view&nbsp;without&nbsp;translation).&quot;&quot;&quot;<br>
 <br>
-&#9;def draw(self, context: RenderContext):<br>
-&#9;&#9;if self.entity is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;camera_entity = context.camera.entity if context.camera is not None else None<br>
-&#9;&#9;if camera_entity is not None:<br>
-&#9;&#9;&#9;#self.entity.transform.local_pose.lin = camera_entity.transform.global_pose().lin.copy()<br>
-&#9;&#9;&#9;self.entity.transform.relocate(Pose3(lin = camera_entity.transform.global_pose().lin))<br>
-&#9;&#9;original_view = context.view<br>
-&#9;&#9;view_no_translation = np.array(original_view, copy=True)<br>
-&#9;&#9;view_no_translation[:3, 3] = 0.0<br>
-&#9;&#9;context.graphics.set_depth_mask(False)<br>
-&#9;&#9;context.graphics.set_depth_func(&quot;lequal&quot;)<br>
-&#9;&#9;self.material.apply(self.entity.model_matrix(), view_no_translation, context.projection, graphics=context.graphics, context_key=context.context_key)<br>
-&#9;&#9;self.mesh.draw(context)<br>
-&#9;&#9;context.graphics.set_depth_func(&quot;less&quot;)<br>
-&#9;&#9;context.graphics.set_depth_mask(True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;context:&nbsp;RenderContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.entity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera_entity&nbsp;=&nbsp;context.camera.entity&nbsp;if&nbsp;context.camera&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;camera_entity&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#self.entity.transform.local_pose.lin&nbsp;=&nbsp;camera_entity.transform.global_pose().lin.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.entity.transform.relocate(Pose3(lin&nbsp;=&nbsp;camera_entity.transform.global_pose().lin))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;original_view&nbsp;=&nbsp;context.view<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;view_no_translation&nbsp;=&nbsp;np.array(original_view,&nbsp;copy=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;view_no_translation[:3,&nbsp;3]&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context.graphics.set_depth_mask(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context.graphics.set_depth_func(&quot;lequal&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.material.apply(self.entity.model_matrix(),&nbsp;view_no_translation,&nbsp;context.projection,&nbsp;graphics=context.graphics,&nbsp;context_key=context.context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.mesh.draw(context)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context.graphics.set_depth_func(&quot;less&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context.graphics.set_depth_mask(True)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

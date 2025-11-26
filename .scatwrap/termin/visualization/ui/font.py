@@ -6,106 +6,106 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# termin/visualization/ui/font.py<br>
-from PIL import Image, ImageDraw, ImageFont<br>
-import numpy as np<br>
+#&nbsp;termin/visualization/ui/font.py<br>
+from&nbsp;PIL&nbsp;import&nbsp;Image,&nbsp;ImageDraw,&nbsp;ImageFont<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-import os<br>
-from ..backends.base import GraphicsBackend, TextureHandle<br>
+import&nbsp;os<br>
+from&nbsp;..backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;TextureHandle<br>
 <br>
-class FontTextureAtlas:<br>
-&#9;def __init__(self, path: str, size: int = 32):<br>
-&#9;&#9;if not os.path.exists(path):<br>
-&#9;&#9;&#9;raise FileNotFoundError(f&quot;Font file not found: {path}&quot;)<br>
-&#9;&#9;self.font = ImageFont.truetype(path, size)<br>
-&#9;&#9;self.size = size<br>
-&#9;&#9;self.glyphs = {}<br>
-&#9;&#9;self._handles: dict[int | None, TextureHandle] = {}<br>
-&#9;&#9;self._atlas_data = None<br>
-&#9;&#9;self.tex_w = 0<br>
-&#9;&#9;self.tex_h = 0<br>
-&#9;&#9;self._build_atlas()<br>
+class&nbsp;FontTextureAtlas:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;path:&nbsp;str,&nbsp;size:&nbsp;int&nbsp;=&nbsp;32):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;os.path.exists(path):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;FileNotFoundError(f&quot;Font&nbsp;file&nbsp;not&nbsp;found:&nbsp;{path}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.font&nbsp;=&nbsp;ImageFont.truetype(path,&nbsp;size)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.size&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.glyphs&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handles:&nbsp;dict[int&nbsp;|&nbsp;None,&nbsp;TextureHandle]&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._atlas_data&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.tex_w&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.tex_h&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._build_atlas()<br>
 <br>
-&#9;@property<br>
-&#9;def texture(self) -&gt; TextureHandle | None:<br>
-&#9;&#9;&quot;&quot;&quot;Backend texture handle (uploaded lazily once a context exists).&quot;&quot;&quot;<br>
-&#9;&#9;return self._handles.get(None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;texture(self)&nbsp;-&gt;&nbsp;TextureHandle&nbsp;|&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Backend&nbsp;texture&nbsp;handle&nbsp;(uploaded&nbsp;lazily&nbsp;once&nbsp;a&nbsp;context&nbsp;exists).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._handles.get(None)<br>
 <br>
-&#9;def ensure_texture(self, graphics: GraphicsBackend, context_key: int | None = None) -&gt; TextureHandle:<br>
-&#9;&#9;&quot;&quot;&quot;Uploads atlas into the current graphics backend if not done yet.&quot;&quot;&quot;<br>
-&#9;&#9;handle = self._handles.get(context_key)<br>
-&#9;&#9;if handle is None:<br>
-&#9;&#9;&#9;handle = self._upload_texture(graphics)<br>
-&#9;&#9;&#9;self._handles[context_key] = handle<br>
-&#9;&#9;return handle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;ensure_texture(self,&nbsp;graphics:&nbsp;GraphicsBackend,&nbsp;context_key:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None)&nbsp;-&gt;&nbsp;TextureHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Uploads&nbsp;atlas&nbsp;into&nbsp;the&nbsp;current&nbsp;graphics&nbsp;backend&nbsp;if&nbsp;not&nbsp;done&nbsp;yet.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;self._handles.get(context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;handle&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;self._upload_texture(graphics)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handles[context_key]&nbsp;=&nbsp;handle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;handle<br>
 <br>
-&#9;def _build_atlas(self):<br>
-&#9;&#9;chars = [chr(i) for i in range(32, 127)]<br>
-&#9;&#9;padding = 2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_build_atlas(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;chars&nbsp;=&nbsp;[chr(i)&nbsp;for&nbsp;i&nbsp;in&nbsp;range(32,&nbsp;127)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;padding&nbsp;=&nbsp;2<br>
 <br>
-&#9;&#9;ascent, descent = self.font.getmetrics()<br>
-&#9;&#9;line_height = ascent + descent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ascent,&nbsp;descent&nbsp;=&nbsp;self.font.getmetrics()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line_height&nbsp;=&nbsp;ascent&nbsp;+&nbsp;descent<br>
 <br>
-&#9;&#9;max_w = 0<br>
-&#9;&#9;max_h = 0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max_w&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max_h&nbsp;=&nbsp;0<br>
 <br>
-&#9;&#9;glyph_images = []<br>
-&#9;&#9;for ch in chars:<br>
-&#9;&#9;&#9;try:<br>
-&#9;&#9;&#9;&#9;bbox = self.font.getbbox(ch)<br>
-&#9;&#9;&#9;&#9;w = bbox[2] - bbox[0]<br>
-&#9;&#9;&#9;&#9;h = bbox[3] - bbox[1]<br>
-&#9;&#9;&#9;except:<br>
-&#9;&#9;&#9;&#9;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glyph_images&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ch&nbsp;in&nbsp;chars:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bbox&nbsp;=&nbsp;self.font.getbbox(ch)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w&nbsp;=&nbsp;bbox[2]&nbsp;-&nbsp;bbox[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;=&nbsp;bbox[3]&nbsp;-&nbsp;bbox[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;except:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
 <br>
-&#9;&#9;&#9;# создаём глиф высотой всей строки<br>
-&#9;&#9;&#9;img = Image.new(&quot;L&quot;, (w, line_height))<br>
-&#9;&#9;&#9;draw = ImageDraw.Draw(img)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;создаём&nbsp;глиф&nbsp;высотой&nbsp;всей&nbsp;строки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;img&nbsp;=&nbsp;Image.new(&quot;L&quot;,&nbsp;(w,&nbsp;line_height))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;draw&nbsp;=&nbsp;ImageDraw.Draw(img)<br>
 <br>
-&#9;&#9;&#9;# вертикальное смещение так, чтобы bbox правильно лег на baseline<br>
-&#9;&#9;&#9;offset_x = -bbox[0]<br>
-&#9;&#9;&#9;offset_y = ascent - bbox[3]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;вертикальное&nbsp;смещение&nbsp;так,&nbsp;чтобы&nbsp;bbox&nbsp;правильно&nbsp;лег&nbsp;на&nbsp;baseline<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offset_x&nbsp;=&nbsp;-bbox[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offset_y&nbsp;=&nbsp;ascent&nbsp;-&nbsp;bbox[3]<br>
 <br>
-&#9;&#9;&#9;draw.text((offset_x, offset_y), ch, fill=255, font=self.font)<br>
-&#9;&#9;&#9;glyph_images.append((ch, img))<br>
-&#9;&#9;&#9;max_w = max(max_w, w)<br>
-&#9;&#9;&#9;max_h = max(max_h, h)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;draw.text((offset_x,&nbsp;offset_y),&nbsp;ch,&nbsp;fill=255,&nbsp;font=self.font)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;glyph_images.append((ch,&nbsp;img))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max_w&nbsp;=&nbsp;max(max_w,&nbsp;w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max_h&nbsp;=&nbsp;max(max_h,&nbsp;h)<br>
 <br>
-&#9;&#9;cols = 16<br>
-&#9;&#9;rows = (len(chars) + cols - 1) // cols<br>
-&#9;&#9;atlas_w = cols * (max_w + padding)<br>
-&#9;&#9;atlas_h = rows * (max_h + padding)<br>
-&#9;&#9;self.tex_w = atlas_w<br>
-&#9;&#9;self.tex_h = atlas_h<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cols&nbsp;=&nbsp;16<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rows&nbsp;=&nbsp;(len(chars)&nbsp;+&nbsp;cols&nbsp;-&nbsp;1)&nbsp;//&nbsp;cols<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;atlas_w&nbsp;=&nbsp;cols&nbsp;*&nbsp;(max_w&nbsp;+&nbsp;padding)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;atlas_h&nbsp;=&nbsp;rows&nbsp;*&nbsp;(max_h&nbsp;+&nbsp;padding)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.tex_w&nbsp;=&nbsp;atlas_w<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.tex_h&nbsp;=&nbsp;atlas_h<br>
 <br>
-&#9;&#9;atlas = Image.new(&quot;L&quot;, (atlas_w, atlas_h))<br>
-&#9;&#9;draw = ImageDraw.Draw(atlas)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;atlas&nbsp;=&nbsp;Image.new(&quot;L&quot;,&nbsp;(atlas_w,&nbsp;atlas_h))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;draw&nbsp;=&nbsp;ImageDraw.Draw(atlas)<br>
 <br>
-&#9;&#9;x = y = 0<br>
-&#9;&#9;for i, (ch, img) in enumerate(glyph_images):<br>
-&#9;&#9;&#9;atlas.paste(img, (x, y))<br>
-&#9;&#9;&#9;w, h = img.size<br>
-&#9;&#9;&#9;self.glyphs[ch] = {<br>
-&#9;&#9;&#9;&#9;&quot;uv&quot;: (<br>
-&#9;&#9;&#9;&#9;&#9;x / atlas_w,<br>
-&#9;&#9;&#9;&#9;&#9;y / atlas_h,<br>
-&#9;&#9;&#9;&#9;&#9;(x + w) / atlas_w,<br>
-&#9;&#9;&#9;&#9;&#9;(y + h) / atlas_h<br>
-&#9;&#9;&#9;&#9;),<br>
-&#9;&#9;&#9;&#9;&quot;size&quot;: (w, h)<br>
-&#9;&#9;&#9;}<br>
-&#9;&#9;&#9;x += max_w + padding<br>
-&#9;&#9;&#9;if (i + 1) % cols == 0:<br>
-&#9;&#9;&#9;&#9;x = 0<br>
-&#9;&#9;&#9;&#9;y += max_h + padding<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;y&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;(ch,&nbsp;img)&nbsp;in&nbsp;enumerate(glyph_images):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;atlas.paste(img,&nbsp;(x,&nbsp;y))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;img.size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.glyphs[ch]&nbsp;=&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;uv&quot;:&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;/&nbsp;atlas_w,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;/&nbsp;atlas_h,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(x&nbsp;+&nbsp;w)&nbsp;/&nbsp;atlas_w,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(y&nbsp;+&nbsp;h)&nbsp;/&nbsp;atlas_h<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;size&quot;:&nbsp;(w,&nbsp;h)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;+=&nbsp;max_w&nbsp;+&nbsp;padding<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(i&nbsp;+&nbsp;1)&nbsp;%&nbsp;cols&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;+=&nbsp;max_h&nbsp;+&nbsp;padding<br>
 <br>
-&#9;&#9;# Keep CPU-side atlas; upload to GPU later when a graphics context is guaranteed.<br>
-&#9;&#9;self._atlas_data = np.array(atlas, dtype=np.uint8)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Keep&nbsp;CPU-side&nbsp;atlas;&nbsp;upload&nbsp;to&nbsp;GPU&nbsp;later&nbsp;when&nbsp;a&nbsp;graphics&nbsp;context&nbsp;is&nbsp;guaranteed.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._atlas_data&nbsp;=&nbsp;np.array(atlas,&nbsp;dtype=np.uint8)<br>
 <br>
-&#9;def _upload_texture(self, graphics: GraphicsBackend) -&gt; TextureHandle:<br>
-&#9;&#9;if self._atlas_data is None:<br>
-&#9;&#9;&#9;raise RuntimeError(&quot;Font atlas data is missing; cannot upload texture.&quot;)<br>
-&#9;&#9;return graphics.create_texture(self._atlas_data, (self.tex_w, self.tex_h), channels=1, mipmap=False, clamp=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_upload_texture(self,&nbsp;graphics:&nbsp;GraphicsBackend)&nbsp;-&gt;&nbsp;TextureHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._atlas_data&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;Font&nbsp;atlas&nbsp;data&nbsp;is&nbsp;missing;&nbsp;cannot&nbsp;upload&nbsp;texture.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;graphics.create_texture(self._atlas_data,&nbsp;(self.tex_w,&nbsp;self.tex_h),&nbsp;channels=1,&nbsp;mipmap=False,&nbsp;clamp=True)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

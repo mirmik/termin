@@ -6,195 +6,195 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy as np<br>
-from typing import List, Optional, Tuple<br>
-from termin.linalg.solve import solve_qp_active_set<br>
-from termin.linalg.subspaces import nullspace_basis_qr<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Optional,&nbsp;Tuple<br>
+from&nbsp;termin.linalg.solve&nbsp;import&nbsp;solve_qp_active_set<br>
+from&nbsp;termin.linalg.subspaces&nbsp;import&nbsp;nullspace_basis_qr<br>
 <br>
 <br>
-# ========= ТИПЫ ЗАДАЧ ================================================<br>
+#&nbsp;=========&nbsp;ТИПЫ&nbsp;ЗАДАЧ&nbsp;================================================<br>
 <br>
-class QuadraticTask:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Задача вида:<br>
-&#9;&#9;min || J x - v ||_W^2<br>
+class&nbsp;QuadraticTask:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Задача&nbsp;вида:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min&nbsp;||&nbsp;J&nbsp;x&nbsp;-&nbsp;v&nbsp;||_W^2<br>
 <br>
-&#9;Дает:<br>
-&#9;&#9;H = J^T W J<br>
-&#9;&#9;g = -J^T W v<br>
-&#9;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Дает:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;J^T&nbsp;W&nbsp;J<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g&nbsp;=&nbsp;-J^T&nbsp;W&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, J: np.ndarray, v: np.ndarray, W: Optional[np.ndarray] = None):<br>
-&#9;&#9;self.J = J.copy()<br>
-&#9;&#9;self.v = v.copy()<br>
-&#9;&#9;self.W = np.eye(J.shape[0]) if W is None else W.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;J:&nbsp;np.ndarray,&nbsp;v:&nbsp;np.ndarray,&nbsp;W:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.J&nbsp;=&nbsp;J.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.v&nbsp;=&nbsp;v.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.W&nbsp;=&nbsp;np.eye(J.shape[0])&nbsp;if&nbsp;W&nbsp;is&nbsp;None&nbsp;else&nbsp;W.copy()<br>
 <br>
-&#9;def build_H_g(self) -&gt; Tuple[np.ndarray, np.ndarray]:<br>
-&#9;&#9;H = self.J.T @ self.W @ self.J<br>
-&#9;&#9;g = -self.J.T @ self.W @ self.v<br>
-&#9;&#9;return H, g<br>
-<br>
-<br>
-class EqualityConstraint:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Жёсткое равенство A x = b<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self, A: np.ndarray, b: np.ndarray):<br>
-&#9;&#9;self.A = A.copy()<br>
-&#9;&#9;self.b = b.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;build_H_g(self)&nbsp;-&gt;&nbsp;Tuple[np.ndarray,&nbsp;np.ndarray]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;self.J.T&nbsp;@&nbsp;self.W&nbsp;@&nbsp;self.J<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g&nbsp;=&nbsp;-self.J.T&nbsp;@&nbsp;self.W&nbsp;@&nbsp;self.v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;H,&nbsp;g<br>
 <br>
 <br>
-class InequalityConstraint:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Неравенство C x &lt;= d<br>
-&#9;&quot;&quot;&quot;<br>
+class&nbsp;EqualityConstraint:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Жёсткое&nbsp;равенство&nbsp;A&nbsp;x&nbsp;=&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, C: np.ndarray, d: np.ndarray):<br>
-&#9;&#9;self.C = C.copy()<br>
-&#9;&#9;self.d = d.copy()<br>
-<br>
-<br>
-# ========= УРОВЕНЬ HQP ===============================================<br>
-<br>
-class Level:<br>
-&#9;def __init__(self, priority: int):<br>
-&#9;&#9;self.priority = priority<br>
-&#9;&#9;self.tasks: List[QuadraticTask] = []<br>
-&#9;&#9;self.equalities: List[EqualityConstraint] = []<br>
-&#9;&#9;self.inequalities: List[InequalityConstraint] = []<br>
-<br>
-&#9;def add_task(self, task: QuadraticTask):<br>
-&#9;&#9;self.tasks.append(task)<br>
-<br>
-&#9;def add_equality(self, eq: EqualityConstraint):<br>
-&#9;&#9;self.equalities.append(eq)<br>
-<br>
-&#9;def add_inequality(self, ineq: InequalityConstraint):<br>
-&#9;&#9;self.inequalities.append(ineq)<br>
-<br>
-&#9;def build_qp(self, n_vars: int):<br>
-&#9;&#9;&quot;&quot;&quot; Формируем агрегированную задачу уровня:<br>
-<br>
-&#9;&#9;&#9;min_x ½ <br>
-&#9;&#9;&#9;&#9;x^T H x + g^T x  <br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;при <br>
-&#9;&#9;&#9;&#9;A_eq x = b_eq,  C x ≤ d,<br>
-&#9;&#9;&#9;где <br>
-&#9;&#9;&#9;&#9;H = Σ_i J_i^T W_i J_i и g = Σ_i (-J_i^T W_i v_i). <br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;H = np.zeros((n_vars, n_vars))<br>
-&#9;&#9;g = np.zeros(n_vars)<br>
-&#9;&#9;if self.tasks:<br>
-&#9;&#9;&#9;J_stack = np.vstack([t.J for t in self.tasks])<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;J_stack = np.zeros((0, n_vars))<br>
-<br>
-&#9;&#9;for t in self.tasks:<br>
-&#9;&#9;&#9;H_t, g_t = t.build_H_g()<br>
-&#9;&#9;&#9;H += H_t<br>
-&#9;&#9;&#9;g += g_t<br>
-<br>
-&#9;&#9;if self.equalities:<br>
-&#9;&#9;&#9;A_eq = np.vstack([e.A for e in self.equalities])<br>
-&#9;&#9;&#9;b_eq = np.concatenate([e.b for e in self.equalities])<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;A_eq = np.zeros((0, n_vars))<br>
-&#9;&#9;&#9;b_eq = np.zeros(0)<br>
-<br>
-&#9;&#9;if self.inequalities:<br>
-&#9;&#9;&#9;C = np.vstack([c.C for c in self.inequalities])<br>
-&#9;&#9;&#9;d = np.concatenate([c.d for c in self.inequalities])<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;C = np.zeros((0, n_vars))<br>
-&#9;&#9;&#9;d = np.zeros(0)<br>
-<br>
-&#9;&#9;return H, g, A_eq, b_eq, C, d, J_stack<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;A:&nbsp;np.ndarray,&nbsp;b:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.A&nbsp;=&nbsp;A.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.b&nbsp;=&nbsp;b.copy()<br>
 <br>
 <br>
-# ========= ИЕРАРХИЧЕСКИЙ РЕШАТЕЛЬ ===================================<br>
+class&nbsp;InequalityConstraint:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Неравенство&nbsp;C&nbsp;x&nbsp;&lt;=&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-class HQPSolver:<br>
-&#9;def __init__(self, n_vars: int):<br>
-&#9;&#9;self.n_vars = n_vars<br>
-&#9;&#9;self.levels: List[Level] = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;C:&nbsp;np.ndarray,&nbsp;d:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.C&nbsp;=&nbsp;C.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.d&nbsp;=&nbsp;d.copy()<br>
 <br>
-&#9;def add_level(self, level: Level):<br>
-&#9;&#9;self.levels.append(level)<br>
-&#9;&#9;self.levels.sort(key=lambda L: L.priority)<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def _transform_qp_to_nullspace(H, g, A_eq, b_eq, C, d, x_base, N):<br>
-&#9;&#9;H_z = N.T @ H @ N<br>
-&#9;&#9;g_z = N.T @ (H @ x_base + g)<br>
+#&nbsp;=========&nbsp;УРОВЕНЬ&nbsp;HQP&nbsp;===============================================<br>
 <br>
-&#9;&#9;if A_eq.size &gt; 0:<br>
-&#9;&#9;&#9;A_eq_z = A_eq @ N<br>
-&#9;&#9;&#9;b_eq_z = b_eq - A_eq @ x_base<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;A_eq_z = np.zeros((0, N.shape[1]))<br>
-&#9;&#9;&#9;b_eq_z = np.zeros(0)<br>
+class&nbsp;Level:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;priority:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.priority&nbsp;=&nbsp;priority<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.tasks:&nbsp;List[QuadraticTask]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.equalities:&nbsp;List[EqualityConstraint]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inequalities:&nbsp;List[InequalityConstraint]&nbsp;=&nbsp;[]<br>
 <br>
-&#9;&#9;if C.size &gt; 0:<br>
-&#9;&#9;&#9;C_z = C @ N<br>
-&#9;&#9;&#9;d_z = d - C @ x_base<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;C_z = np.zeros((0, N.shape[1]))<br>
-&#9;&#9;&#9;d_z = np.zeros(0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_task(self,&nbsp;task:&nbsp;QuadraticTask):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.tasks.append(task)<br>
 <br>
-&#9;&#9;return H_z, g_z, A_eq_z, b_eq_z, C_z, d_z<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_equality(self,&nbsp;eq:&nbsp;EqualityConstraint):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.equalities.append(eq)<br>
 <br>
-&#9;def solve(self, x0: Optional[np.ndarray] = None) -&gt; np.ndarray:<br>
-&#9;&#9;n = self.n_vars<br>
-&#9;&#9;x = np.zeros(n) if x0 is None else x0.copy()<br>
-&#9;&#9;N = np.eye(n)  # Базис допустимых направлений после предыдущих уровней (изначально всё пространство)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_inequality(self,&nbsp;ineq:&nbsp;InequalityConstraint):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inequalities.append(ineq)<br>
 <br>
-&#9;&#9;for level in self.levels:<br>
-&#9;&#9;&#9;H, g, A_eq, b_eq, C, d, J_stack = level.build_qp(n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;build_qp(self,&nbsp;n_vars:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;&nbsp;Формируем&nbsp;агрегированную&nbsp;задачу&nbsp;уровня:<br>
 <br>
-&#9;&#9;&#9;if N.shape[1] == 0:<br>
-&#9;&#9;&#9;&#9;break  # Нет свободных степеней: последующие уровни ничего не добавят<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_x&nbsp;½&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x^T&nbsp;H&nbsp;x&nbsp;+&nbsp;g^T&nbsp;x&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;при&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_eq&nbsp;x&nbsp;=&nbsp;b_eq,&nbsp;&nbsp;C&nbsp;x&nbsp;≤&nbsp;d,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;Σ_i&nbsp;J_i^T&nbsp;W_i&nbsp;J_i&nbsp;и&nbsp;g&nbsp;=&nbsp;Σ_i&nbsp;(-J_i^T&nbsp;W_i&nbsp;v_i).&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;=&nbsp;np.zeros((n_vars,&nbsp;n_vars))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g&nbsp;=&nbsp;np.zeros(n_vars)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.tasks:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_stack&nbsp;=&nbsp;np.vstack([t.J&nbsp;for&nbsp;t&nbsp;in&nbsp;self.tasks])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_stack&nbsp;=&nbsp;np.zeros((0,&nbsp;n_vars))<br>
 <br>
-&#9;&#9;&#9;# Проецируем текущий QP в координаты z, живущие в столбцовом пространстве N.<br>
-&#9;&#9;&#9;H_z, g_z, A_eq_z, b_eq_z, C_z, d_z = self._transform_qp_to_nullspace(<br>
-&#9;&#9;&#9;&#9;H, g, A_eq, b_eq, C, d, x, N<br>
-&#9;&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;t&nbsp;in&nbsp;self.tasks:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H_t,&nbsp;g_t&nbsp;=&nbsp;t.build_H_g()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;+=&nbsp;H_t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g&nbsp;+=&nbsp;g_t<br>
 <br>
-&#9;&#9;&#9;# Решаем QP текущего уровня в координатах z.<br>
-&#9;&#9;&#9;z, lam_eq, lam_ineq, active_set, iters = solve_qp_active_set(<br>
-&#9;&#9;&#9;&#9;H_z, g_z, A_eq_z, b_eq_z, C_z, d_z,<br>
-&#9;&#9;&#9;&#9;x0=None, active0=None<br>
-&#9;&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.equalities:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_eq&nbsp;=&nbsp;np.vstack([e.A&nbsp;for&nbsp;e&nbsp;in&nbsp;self.equalities])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_eq&nbsp;=&nbsp;np.concatenate([e.b&nbsp;for&nbsp;e&nbsp;in&nbsp;self.equalities])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_eq&nbsp;=&nbsp;np.zeros((0,&nbsp;n_vars))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_eq&nbsp;=&nbsp;np.zeros(0)<br>
 <br>
-&#9;&#9;&#9;# Возвращаемся в исходное пространство: x ← x + N z.<br>
-&#9;&#9;&#9;x = x + N @ z<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.inequalities:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;=&nbsp;np.vstack([c.C&nbsp;for&nbsp;c&nbsp;in&nbsp;self.inequalities])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;np.concatenate([c.d&nbsp;for&nbsp;c&nbsp;in&nbsp;self.inequalities])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;=&nbsp;np.zeros((0,&nbsp;n_vars))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;np.zeros(0)<br>
 <br>
-&#9;&#9;&#9;grad = H @ x + g  # Градиент уровня нужен, чтобы закрепить найденное решение при переходе выше.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;H,&nbsp;g,&nbsp;A_eq,&nbsp;b_eq,&nbsp;C,&nbsp;d,&nbsp;J_stack<br>
 <br>
-&#9;&#9;&#9;# Формируем совокупный якобиан ограничений текущего уровня,<br>
-&#9;&#9;&#9;# действующих внутри текущего nullspace.<br>
-&#9;&#9;&#9;J_prior_blocks = []<br>
-&#9;&#9;&#9;if A_eq.size &gt; 0:<br>
-&#9;&#9;&#9;&#9;J_prior_blocks.append(A_eq)<br>
-&#9;&#9;&#9;if J_stack.size &gt; 0:<br>
-&#9;&#9;&#9;&#9;J_prior_blocks.append(J_stack)<br>
-&#9;&#9;&#9;if np.linalg.norm(grad) &gt; 1e-12:<br>
-&#9;&#9;&#9;&#9;J_prior_blocks.append(grad[None, :])<br>
-&#9;&#9;&#9;if J_prior_blocks:<br>
-&#9;&#9;&#9;&#9;J_prior = np.vstack(J_prior_blocks)<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;J_prior = np.zeros((0, n))<br>
 <br>
-&#9;&#9;&#9;if J_prior.size &gt; 0 and N.shape[1] &gt; 0:<br>
-&#9;&#9;&#9;&#9;A_red = J_prior @ N<br>
-&#9;&#9;&#9;&#9;# Столбцы nullspace_basis_qr(A_red) образуют базис ker(A_red) = V⊥,<br>
-&#9;&#9;&#9;&#9;# где V = rowspace(A_red) — ограничения текущего уровня внутри подпространства N.<br>
-&#9;&#9;&#9;&#9;N_red = nullspace_basis_qr(A_red)<br>
-&#9;&#9;&#9;&#9;# Обновляем глобальный базис допустимых направлений: следующий уровень живёт в подпространстве N @ N_red.<br>
-&#9;&#9;&#9;&#9;N = N @ N_red<br>
+#&nbsp;=========&nbsp;ИЕРАРХИЧЕСКИЙ&nbsp;РЕШАТЕЛЬ&nbsp;===================================<br>
 <br>
-&#9;&#9;return x<br>
+class&nbsp;HQPSolver:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;n_vars:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.n_vars&nbsp;=&nbsp;n_vars<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.levels:&nbsp;List[Level]&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_level(self,&nbsp;level:&nbsp;Level):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.levels.append(level)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.levels.sort(key=lambda&nbsp;L:&nbsp;L.priority)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_transform_qp_to_nullspace(H,&nbsp;g,&nbsp;A_eq,&nbsp;b_eq,&nbsp;C,&nbsp;d,&nbsp;x_base,&nbsp;N):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H_z&nbsp;=&nbsp;N.T&nbsp;@&nbsp;H&nbsp;@&nbsp;N<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g_z&nbsp;=&nbsp;N.T&nbsp;@&nbsp;(H&nbsp;@&nbsp;x_base&nbsp;+&nbsp;g)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;A_eq.size&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_eq_z&nbsp;=&nbsp;A_eq&nbsp;@&nbsp;N<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_eq_z&nbsp;=&nbsp;b_eq&nbsp;-&nbsp;A_eq&nbsp;@&nbsp;x_base<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_eq_z&nbsp;=&nbsp;np.zeros((0,&nbsp;N.shape[1]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_eq_z&nbsp;=&nbsp;np.zeros(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;C.size&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C_z&nbsp;=&nbsp;C&nbsp;@&nbsp;N<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d_z&nbsp;=&nbsp;d&nbsp;-&nbsp;C&nbsp;@&nbsp;x_base<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C_z&nbsp;=&nbsp;np.zeros((0,&nbsp;N.shape[1]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d_z&nbsp;=&nbsp;np.zeros(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;H_z,&nbsp;g_z,&nbsp;A_eq_z,&nbsp;b_eq_z,&nbsp;C_z,&nbsp;d_z<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;solve(self,&nbsp;x0:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;self.n_vars<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;np.zeros(n)&nbsp;if&nbsp;x0&nbsp;is&nbsp;None&nbsp;else&nbsp;x0.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;N&nbsp;=&nbsp;np.eye(n)&nbsp;&nbsp;#&nbsp;Базис&nbsp;допустимых&nbsp;направлений&nbsp;после&nbsp;предыдущих&nbsp;уровней&nbsp;(изначально&nbsp;всё&nbsp;пространство)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;level&nbsp;in&nbsp;self.levels:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H,&nbsp;g,&nbsp;A_eq,&nbsp;b_eq,&nbsp;C,&nbsp;d,&nbsp;J_stack&nbsp;=&nbsp;level.build_qp(n)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;N.shape[1]&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break&nbsp;&nbsp;#&nbsp;Нет&nbsp;свободных&nbsp;степеней:&nbsp;последующие&nbsp;уровни&nbsp;ничего&nbsp;не&nbsp;добавят<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проецируем&nbsp;текущий&nbsp;QP&nbsp;в&nbsp;координаты&nbsp;z,&nbsp;живущие&nbsp;в&nbsp;столбцовом&nbsp;пространстве&nbsp;N.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H_z,&nbsp;g_z,&nbsp;A_eq_z,&nbsp;b_eq_z,&nbsp;C_z,&nbsp;d_z&nbsp;=&nbsp;self._transform_qp_to_nullspace(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H,&nbsp;g,&nbsp;A_eq,&nbsp;b_eq,&nbsp;C,&nbsp;d,&nbsp;x,&nbsp;N<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Решаем&nbsp;QP&nbsp;текущего&nbsp;уровня&nbsp;в&nbsp;координатах&nbsp;z.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z,&nbsp;lam_eq,&nbsp;lam_ineq,&nbsp;active_set,&nbsp;iters&nbsp;=&nbsp;solve_qp_active_set(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H_z,&nbsp;g_z,&nbsp;A_eq_z,&nbsp;b_eq_z,&nbsp;C_z,&nbsp;d_z,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x0=None,&nbsp;active0=None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Возвращаемся&nbsp;в&nbsp;исходное&nbsp;пространство:&nbsp;x&nbsp;←&nbsp;x&nbsp;+&nbsp;N&nbsp;z.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;x&nbsp;+&nbsp;N&nbsp;@&nbsp;z<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grad&nbsp;=&nbsp;H&nbsp;@&nbsp;x&nbsp;+&nbsp;g&nbsp;&nbsp;#&nbsp;Градиент&nbsp;уровня&nbsp;нужен,&nbsp;чтобы&nbsp;закрепить&nbsp;найденное&nbsp;решение&nbsp;при&nbsp;переходе&nbsp;выше.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Формируем&nbsp;совокупный&nbsp;якобиан&nbsp;ограничений&nbsp;текущего&nbsp;уровня,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;действующих&nbsp;внутри&nbsp;текущего&nbsp;nullspace.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_prior_blocks&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;A_eq.size&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_prior_blocks.append(A_eq)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;J_stack.size&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_prior_blocks.append(J_stack)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;np.linalg.norm(grad)&nbsp;&gt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_prior_blocks.append(grad[None,&nbsp;:])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;J_prior_blocks:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_prior&nbsp;=&nbsp;np.vstack(J_prior_blocks)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J_prior&nbsp;=&nbsp;np.zeros((0,&nbsp;n))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;J_prior.size&nbsp;&gt;&nbsp;0&nbsp;and&nbsp;N.shape[1]&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_red&nbsp;=&nbsp;J_prior&nbsp;@&nbsp;N<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Столбцы&nbsp;nullspace_basis_qr(A_red)&nbsp;образуют&nbsp;базис&nbsp;ker(A_red)&nbsp;=&nbsp;V⊥,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;где&nbsp;V&nbsp;=&nbsp;rowspace(A_red)&nbsp;—&nbsp;ограничения&nbsp;текущего&nbsp;уровня&nbsp;внутри&nbsp;подпространства&nbsp;N.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;N_red&nbsp;=&nbsp;nullspace_basis_qr(A_red)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обновляем&nbsp;глобальный&nbsp;базис&nbsp;допустимых&nbsp;направлений:&nbsp;следующий&nbsp;уровень&nbsp;живёт&nbsp;в&nbsp;подпространстве&nbsp;N&nbsp;@&nbsp;N_red.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;N&nbsp;=&nbsp;N&nbsp;@&nbsp;N_red<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;x<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

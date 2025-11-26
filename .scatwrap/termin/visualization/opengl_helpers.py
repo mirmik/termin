@@ -8,25 +8,25 @@
 <!-- BEGIN SCAT CODE -->
 <br>
 <br>
-from OpenGL import GL as gl<br>
+from&nbsp;OpenGL&nbsp;import&nbsp;GL&nbsp;as&nbsp;gl<br>
 <br>
-_OPENGL_INITED = False<br>
+_OPENGL_INITED&nbsp;=&nbsp;False<br>
 <br>
-def init_opengl():<br>
-&#9;&quot;&quot;&quot;Initializes OpenGL state.&quot;&quot;&quot;<br>
-&#9;global _OPENGL_INITED<br>
-&#9;if _OPENGL_INITED:<br>
-&#9;&#9;return<br>
+def&nbsp;init_opengl():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Initializes&nbsp;OpenGL&nbsp;state.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;global&nbsp;_OPENGL_INITED<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;_OPENGL_INITED:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;gl.glEnable(gl.GL_DEPTH_TEST)<br>
-&#9;gl.glEnable(gl.GL_CULL_FACE)<br>
-&#9;gl.glCullFace(gl.GL_BACK)<br>
-&#9;gl.glFrontFace(gl.GL_CCW)<br>
-&#9;_OPENGL_INITED = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_DEPTH_TEST)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_CULL_FACE)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl.glCullFace(gl.GL_BACK)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl.glFrontFace(gl.GL_CCW)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;_OPENGL_INITED&nbsp;=&nbsp;True<br>
 <br>
-def opengl_is_inited() -&gt; bool:<br>
-&#9;&quot;&quot;&quot;Checks if OpenGL has been initialized.&quot;&quot;&quot;<br>
-&#9;return _OPENGL_INITED<br>
+def&nbsp;opengl_is_inited()&nbsp;-&gt;&nbsp;bool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Checks&nbsp;if&nbsp;OpenGL&nbsp;has&nbsp;been&nbsp;initialized.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;_OPENGL_INITED<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

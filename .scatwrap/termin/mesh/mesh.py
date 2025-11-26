@@ -7,630 +7,630 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-import numpy as np<br>
-from enum import Enum<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;enum&nbsp;import&nbsp;Enum<br>
 <br>
-# CubeMesh, UVSphereMesh, IcoSphereMesh, PlaneMesh, CylinderMesh, ConeMesh<br>
+#&nbsp;CubeMesh,&nbsp;UVSphereMesh,&nbsp;IcoSphereMesh,&nbsp;PlaneMesh,&nbsp;CylinderMesh,&nbsp;ConeMesh<br>
 <br>
-# GPU COMPATIBILITY<br>
+#&nbsp;GPU&nbsp;COMPATIBILITY<br>
 <br>
-class VertexAttribType(Enum):<br>
-&#9;FLOAT32 = &quot;float32&quot;<br>
-&#9;INT32 = &quot;int32&quot;<br>
-&#9;UINT32 = &quot;uint32&quot;<br>
+class&nbsp;VertexAttribType(Enum):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FLOAT32&nbsp;=&nbsp;&quot;float32&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;INT32&nbsp;=&nbsp;&quot;int32&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;UINT32&nbsp;=&nbsp;&quot;uint32&quot;<br>
 <br>
-class VertexAttribute:<br>
-&#9;def __init__(self, name, size, vtype: VertexAttribType, offset):<br>
-&#9;&#9;self.name = name<br>
-&#9;&#9;self.size = size<br>
-&#9;&#9;self.vtype = vtype<br>
-&#9;&#9;self.offset = offset<br>
-<br>
-<br>
-<br>
-class VertexLayout:<br>
-&#9;def __init__(self, stride, attributes):<br>
-&#9;&#9;self.stride = stride    # размер одной вершины в байтах<br>
-&#9;&#9;self.attributes = attributes  # список VertexAttribute<br>
-<br>
-<br>
-class Mesh:<br>
-&#9;def __init__(self, vertices: np.ndarray, indices: np.ndarray):<br>
-&#9;&#9;self.vertices = np.asarray(vertices, dtype=np.float32)<br>
-&#9;&#9;self.indices  = np.asarray(indices,  dtype=np.uint32)<br>
-&#9;&#9;self.type = &quot;triangles&quot; if indices.shape[1] == 3 else &quot;lines&quot;<br>
-&#9;&#9;self._inter = None<br>
-<br>
-&#9;def get_vertex_layout(self) -&gt; VertexLayout:<br>
-&#9;&#9;raise NotImplementedError(&quot;get_vertex_layout must be implemented in subclasses.&quot;)<br>
-<br>
-<br>
-<br>
-class Mesh2(Mesh):<br>
-&#9;&quot;&quot;&quot;Simple triangle mesh storing vertex positions and triangle indices.&quot;&quot;&quot;<br>
-<br>
-&#9;@staticmethod<br>
-&#9;def from_lists(vertices: list[tuple[float, float]], indices: list[tuple[int, int]]) -&gt; &quot;Mesh2&quot;:<br>
-&#9;&#9;verts = np.asarray(vertices, dtype=float)<br>
-&#9;&#9;idx = np.asarray(indices, dtype=int)<br>
-&#9;&#9;return Mesh2(verts, idx)<br>
-<br>
-&#9;def __init__(self, vertices: np.ndarray, indices: np.ndarray):<br>
-&#9;&#9;super().__init__(vertices, indices)<br>
-&#9;&#9;self._validate_mesh()<br>
-<br>
-&#9;def _validate_mesh(self):<br>
-&#9;&#9;&quot;&quot;&quot;Ensure that the vertex/index arrays have correct shapes and bounds.&quot;&quot;&quot;<br>
-&#9;&#9;if self.vertices.ndim != 2 or self.vertices.shape[1] != 3:<br>
-&#9;&#9;&#9;raise ValueError(&quot;Vertices must be a Nx3 array.&quot;)<br>
-&#9;&#9;if self.indices.ndim != 2 or self.indices.shape[1] != 2:<br>
-&#9;&#9;&#9;raise ValueError(&quot;Indices must be a Mx2 array.&quot;)<br>
-<br>
-&#9;def interleaved_buffer(self):<br>
-&#9;&#9;return self.vertices.astype(np.float32)<br>
-<br>
-&#9;def get_vertex_layout(self):<br>
-&#9;&#9;return VertexLayout(<br>
-&#9;&#9;&#9;stride=3*4,<br>
-&#9;&#9;&#9;attributes=[<br>
-&#9;&#9;&#9;&#9;VertexAttribute(&quot;position&quot;, 3, VertexAttribType.FLOAT32, 0)<br>
-&#9;&#9;&#9;]<br>
-&#9;&#9;)<br>
-<br>
-<br>
-class Mesh3(Mesh):<br>
-&#9;&quot;&quot;&quot;Simple triangle mesh storing vertex positions and triangle indices.&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self, vertices: np.ndarray, triangles: np.ndarray, uvs: np.ndarray | None = None):<br>
-&#9;&#9;super().__init__(vertices, triangles)<br>
-<br>
-&#9;&#9;self.uv = np.asarray(uvs, dtype=float) if uvs is not None else None<br>
-&#9;&#9;self._validate_mesh()<br>
-&#9;&#9;self.vertex_normals = None<br>
-&#9;&#9;self.face_normals = None<br>
-<br>
-&#9;def build_interleaved_buffer(self):<br>
-&#9;&#9;# позиции — всегда есть<br>
-&#9;&#9;pos = self.vertices.astype(np.float32)<br>
-<br>
-&#9;&#9;# нормали — если нет, генерим нули<br>
-&#9;&#9;if self.vertex_normals is None:<br>
-&#9;&#9;&#9;normals = np.zeros_like(self.vertices, dtype=np.float32)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;normals = self.vertex_normals.astype(np.float32)<br>
-<br>
-&#9;&#9;# uv — если нет, ставим (0,0)<br>
-&#9;&#9;if self.uv is None:<br>
-&#9;&#9;&#9;uvs = np.zeros((self.vertices.shape[0], 2), dtype=np.float32)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;uvs = self.uv.astype(np.float32)<br>
-<br>
-&#9;&#9;return np.hstack([pos, normals, uvs])<br>
-<br>
-&#9;def interleaved_buffer(self):<br>
-&#9;&#9;if self._inter == None:<br>
-&#9;&#9;&#9;self._inter = self.build_interleaved_buffer()<br>
-&#9;&#9;return self._inter<br>
-<br>
-&#9;@property<br>
-&#9;def triangles(self):<br>
-&#9;&#9;return self.indices<br>
-&#9;<br>
-&#9;@triangles.setter<br>
-&#9;def triangles(self, value):<br>
-&#9;&#9;self.indices = value<br>
-<br>
-&#9;def get_vertex_layout(self) -&gt; VertexLayout:<br>
-&#9;&#9;return VertexLayout(<br>
-&#9;&#9;&#9;stride=8 * 4,  # всегда: pos(3) + normal(3) + uv(2)<br>
-&#9;&#9;&#9;attributes=[<br>
-&#9;&#9;&#9;&#9;VertexAttribute(&quot;position&quot;, 3, VertexAttribType.FLOAT32, 0),<br>
-&#9;&#9;&#9;&#9;VertexAttribute(&quot;normal&quot;,   3, VertexAttribType.FLOAT32, 12),<br>
-&#9;&#9;&#9;&#9;VertexAttribute(&quot;uv&quot;,       2, VertexAttribType.FLOAT32, 24),<br>
-&#9;&#9;&#9;]<br>
-&#9;&#9;)<br>
-<br>
-&#9;def _validate_mesh(self):<br>
-&#9;&#9;&quot;&quot;&quot;Ensure that the vertex/index arrays have correct shapes and bounds.&quot;&quot;&quot;<br>
-&#9;&#9;if self.vertices.ndim != 2 or self.vertices.shape[1] != 3:<br>
-&#9;&#9;&#9;raise ValueError(&quot;Vertices must be a Nx3 array.&quot;)<br>
-&#9;&#9;if self.triangles.ndim != 2 or self.triangles.shape[1] != 3:<br>
-&#9;&#9;&#9;raise ValueError(&quot;Triangles must be a Mx3 array.&quot;)<br>
-&#9;&#9;if np.any(self.triangles &lt; 0) or np.any(self.triangles &gt;= self.vertices.shape[0]):<br>
-&#9;&#9;&#9;raise ValueError(&quot;Triangle indices must be valid vertex indices.&quot;)<br>
-<br>
-&#9;def translate(self, offset: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;Apply translation by vector ``offset`` to all vertices.&quot;&quot;&quot;<br>
-&#9;&#9;offset = np.asarray(offset, dtype=float)<br>
-&#9;&#9;if offset.shape != (3,):<br>
-&#9;&#9;&#9;raise ValueError(&quot;Offset must be a 3-dimensional vector.&quot;)<br>
-&#9;&#9;self.vertices += offset<br>
-<br>
-&#9;def show(self):<br>
-&#9;&#9;&quot;&quot;&quot;Show the mesh in a simple viewer application.&quot;&quot;&quot;<br>
-&#9;&#9;from .mesh_viewer_miniapp import show_mesh_app<br>
-&#9;&#9;show_mesh_app(self)<br>
-<br>
-&#9;@staticmethod<br>
-&#9;def from_assimp_mesh(assimp_mesh) -&gt; &quot;Mesh&quot;:<br>
-&#9;&#9;&#9;verts = np.asarray(assimp_mesh.vertices, dtype=float)<br>
-&#9;&#9;&#9;idx = np.asarray(assimp_mesh.indices, dtype=int).reshape(-1, 3)<br>
-<br>
-&#9;&#9;&#9;if assimp_mesh.uvs is not None:<br>
-&#9;&#9;&#9;&#9;uvs = np.asarray(assimp_mesh.uvs, dtype=float)<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;uvs = None<br>
-<br>
-&#9;&#9;&#9;mesh = Mesh3(vertices=verts, triangles=idx, uvs=uvs)<br>
-<br>
-&#9;&#9;&#9;# если нормали есть – присвоим<br>
-&#9;&#9;&#9;if assimp_mesh.normals is not None:<br>
-&#9;&#9;&#9;&#9;mesh.vertex_normals = np.asarray(assimp_mesh.normals, dtype=float)<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;mesh.compute_vertex_normals()<br>
-<br>
-&#9;&#9;&#9;return mesh<br>
-<br>
-<br>
-&#9;def scale(self, factor: float):<br>
-&#9;&#9;&quot;&quot;&quot;Uniformly scale vertex positions by ``factor``.&quot;&quot;&quot;<br>
-&#9;&#9;self.vertices *= factor<br>
-<br>
-&#9;def get_vertex_count(self) -&gt; int:<br>
-&#9;&#9;return self.vertices.shape[0]<br>
-<br>
-&#9;def get_face_count(self) -&gt; int:<br>
-&#9;&#9;return self.triangles.shape[0]<br>
-<br>
-&#9;def compute_faces_normals(self):<br>
-&#9;&#9;&quot;&quot;&quot;Compute per-face normals ``n = (v1-v0) × (v2-v0) / ||...||``.&quot;&quot;&quot;<br>
-&#9;&#9;v0 = self.vertices[self.triangles[:, 0], :]<br>
-&#9;&#9;v1 = self.vertices[self.triangles[:, 1], :]<br>
-&#9;&#9;v2 = self.vertices[self.triangles[:, 2], :]<br>
-&#9;&#9;normals = np.cross(v1 - v0, v2 - v0)<br>
-&#9;&#9;norms = np.linalg.norm(normals, axis=1, keepdims=True)<br>
-&#9;&#9;norms[norms == 0] = 1  # Prevent division by zero<br>
-&#9;&#9;self.face_normals = normals / norms<br>
-&#9;&#9;return self.face_normals<br>
-<br>
-&#9;def compute_vertex_normals(self):<br>
-&#9;&#9;&quot;&quot;&quot;Compute area-weighted vertex normals: ``n_v = sum_{t∈F(v)} ( (v1-v0) × (v2-v0) ).``&quot;&quot;&quot;<br>
-&#9;&#9;normals = np.zeros_like(self.vertices, dtype=np.float64)<br>
-&#9;&#9;v0 = self.vertices[self.triangles[:, 0], :]<br>
-&#9;&#9;v1 = self.vertices[self.triangles[:, 1], :]<br>
-&#9;&#9;v2 = self.vertices[self.triangles[:, 2], :]<br>
-&#9;&#9;face_normals = np.cross(v1 - v0, v2 - v0)<br>
-&#9;&#9;for face, normal in zip(self.triangles, face_normals):<br>
-&#9;&#9;&#9;normals[face] += normal<br>
-&#9;&#9;norms = np.linalg.norm(normals, axis=1)<br>
-&#9;&#9;norms[norms == 0] = 1.0<br>
-&#9;&#9;self.vertex_normals = (normals.T / norms).T.astype(np.float32)<br>
-&#9;&#9;return self.vertex_normals<br>
-<br>
-&#9;@staticmethod<br>
-&#9;def from_convex_hull(hull) -&gt; &quot;Mesh3&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;Create a Mesh from a scipy.spatial.ConvexHull object.&quot;&quot;&quot;<br>
-&#9;&#9;vertices = hull.points<br>
-&#9;&#9;triangles = hull.simplices<br>
-<br>
-&#9;&#9;center = np.mean(vertices, axis=0)<br>
-<br>
-&#9;&#9;for i in range(triangles.shape[0]):<br>
-&#9;&#9;&#9;v0 = vertices[triangles[i, 0]]<br>
-&#9;&#9;&#9;v1 = vertices[triangles[i, 1]]<br>
-&#9;&#9;&#9;v2 = vertices[triangles[i, 2]]<br>
-&#9;&#9;&#9;normal = np.cross(v1 - v0, v2 - v0)<br>
-&#9;&#9;&#9;to_center = center - v0<br>
-&#9;&#9;&#9;if np.dot(normal, to_center) &gt; 0:<br>
-&#9;&#9;&#9;&#9;triangles[i, [1, 2]] = triangles[i, [2, 1]]<br>
-<br>
-&#9;&#9;return Mesh3(vertices=vertices, triangles=triangles)<br>
-<br>
-class CubeMesh(Mesh3):<br>
-&#9;def __init__(self, size: float = 1.0, y: float = None, z: float = None):<br>
-&#9;&#9;x = size<br>
-&#9;&#9;if y is None:<br>
-&#9;&#9;&#9;y = x<br>
-&#9;&#9;if z is None:<br>
-&#9;&#9;&#9;z = x<br>
-&#9;&#9;s_x = x * 0.5<br>
-&#9;&#9;s_y = y * 0.5<br>
-&#9;&#9;s_z = z * 0.5<br>
-&#9;&#9;vertices = np.array(<br>
-&#9;&#9;&#9;[<br>
-&#9;&#9;&#9;&#9;[-s_x, -s_y, -s_z],<br>
-&#9;&#9;&#9;&#9;[s_x, -s_y, -s_z],<br>
-&#9;&#9;&#9;&#9;[s_x, s_y, -s_z],<br>
-&#9;&#9;&#9;&#9;[-s_x, s_y, -s_z],<br>
-&#9;&#9;&#9;&#9;[-s_x, -s_y, s_z],<br>
-&#9;&#9;&#9;&#9;[s_x, -s_y, s_z],<br>
-&#9;&#9;&#9;&#9;[s_x, s_y, s_z],<br>
-&#9;&#9;&#9;&#9;[-s_x, s_y, s_z],<br>
-&#9;&#9;&#9;],<br>
-&#9;&#9;&#9;dtype=float,<br>
-&#9;&#9;)<br>
-&#9;&#9;triangles = np.array(<br>
-&#9;&#9;&#9;[<br>
-&#9;&#9;&#9;&#9;[1, 0, 2],<br>
-&#9;&#9;&#9;&#9;[2, 0, 3],<br>
-&#9;&#9;&#9;&#9;[4, 5, 7],<br>
-&#9;&#9;&#9;&#9;[5, 6, 7],<br>
-&#9;&#9;&#9;&#9;[0, 1, 4],<br>
-&#9;&#9;&#9;&#9;[1, 5, 4],<br>
-&#9;&#9;&#9;&#9;[2, 3, 6],<br>
-&#9;&#9;&#9;&#9;[3, 7, 6],<br>
-&#9;&#9;&#9;&#9;[3, 0, 4],<br>
-&#9;&#9;&#9;&#9;[7, 3, 4],<br>
-&#9;&#9;&#9;&#9;[1, 2, 5],<br>
-&#9;&#9;&#9;&#9;[2, 6, 5],<br>
-&#9;&#9;&#9;],<br>
-&#9;&#9;&#9;dtype=int,<br>
-&#9;&#9;)<br>
-&#9;&#9;uvs = np.array([<br>
-&#9;&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;&#9;[1.0, 0.0],<br>
-&#9;&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;&#9;[0.0, 1.0],<br>
-&#9;&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;&#9;[1.0, 0.0],<br>
-&#9;&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;&#9;[0.0, 1.0],<br>
-&#9;&#9;], dtype=float)<br>
-&#9;&#9;super().__init__(vertices=vertices, triangles=triangles, uvs=uvs)<br>
-<br>
-<br>
-class TexturedCubeMesh(Mesh3):<br>
-&#9;def __init__(self, size: float = 1.0, y: float = None, z: float = None):<br>
-&#9;&#9;x = size<br>
-&#9;&#9;if y is None:<br>
-&#9;&#9;&#9;y = x<br>
-&#9;&#9;if z is None:<br>
-&#9;&#9;&#9;z = x<br>
-&#9;&#9;s_x = x * 0.5<br>
-&#9;&#9;s_y = y * 0.5<br>
-&#9;&#9;s_z = z * 0.5<br>
-&#9;&#9;vertices = np.array([<br>
-&#9;&#9;[-0.5, -0.5, -0.5],  #0.0f, 0.0f,<br>
-&#9;&#9;[0.5, -0.5, -0.5],  #1.0f, 0.0f,<br>
-&#9;&#9;[0.5,  0.5, -0.5],  #1.0f, 1.0f,<br>
-&#9;&#9;[ 0.5,  0.5, -0.5],  #1.0f, 1.0f,<br>
-&#9;&#9;[-0.5,  0.5, -0.5],  #0.0f, 1.0f,<br>
-&#9;&#9;[-0.5, -0.5, -0.5],  #0.0f, 0.0f,<br>
-<br>
-&#9;&#9;[-0.5, -0.5,  0.5],  #0.0f, 0.0f,<br>
-&#9;&#9;[0.5, -0.5,  0.5],  #1.0f, 0.0f,<br>
-&#9;&#9;[0.5,  0.5,  0.5],  #1.0f, 1.0f,<br>
-&#9;&#9;[0.5,  0.5,  0.5],  #1.0f, 1.0f,<br>
-&#9;&#9;[-0.5,  0.5,  0.5],  #0.0f, 1.0f,<br>
-&#9;&#9;[-0.5, -0.5,  0.5],  #0.0f, 0.0f,<br>
-<br>
-&#9;&#9;[-0.5,  0.5,  0.5],  #1.0f, 0.0f,<br>
-&#9;&#9;[-0.5,  0.5, -0.5],  #1.0f, 1.0f,<br>
-&#9;&#9;[-0.5, -0.5, -0.5],  #0.0f, 1.0f,<br>
-&#9;&#9;[-0.5, -0.5, -0.5],  #0.0f, 1.0f,<br>
-&#9;&#9;[-0.5, -0.5,  0.5],  #0.0f, 0.0f,<br>
-&#9;&#9;[-0.5,  0.5,  0.5],  #1.0f, 0.0f,<br>
-<br>
-&#9;&#9;[0.5,  0.5,  0.5],  #1.0f, 0.0f,<br>
-&#9;&#9;[0.5,  0.5, -0.5],  #1.0f, 1.0f,<br>
-&#9;&#9;[0.5, -0.5, -0.5],  #0.0f, 1.0f,<br>
-&#9;&#9;[0.5, -0.5, -0.5],  #0.0f, 1.0f,<br>
-&#9;&#9;[0.5, -0.5,  0.5],  #0.0f, 0.0f,<br>
-&#9;&#9;[0.5,  0.5,  0.5],  #1.0f, 0.0f,<br>
-<br>
-&#9;&#9;[-0.5, -0.5, -0.5],  #0.0f, 1.0f,<br>
-&#9;&#9;[0.5, -0.5, -0.5],  #1.0f, 1.0f,<br>
-&#9;&#9;[0.5, -0.5,  0.5],  #1.0f, 0.0f,<br>
-&#9;&#9;[0.5, -0.5,  0.5],  #1.0f, 0.0f,<br>
-&#9;&#9;[-0.5, -0.5,  0.5],  #0.0f, 0.0f,<br>
-&#9;&#9;[-0.5, -0.5, -0.5],  #0.0f, 1.0f,<br>
-<br>
-&#9;&#9;[-0.5,  0.5, -0.5],  #0.0f, 1.0f,<br>
-&#9;&#9;[0.5,  0.5, -0.5],  #1.0f, 1.0f,<br>
-&#9;&#9;[0.5,  0.5,  0.5],  #1.0f, 0.0f,<br>
-&#9;&#9;[0.5,  0.5,  0.5],  #1.0f, 0.0f,<br>
-&#9;&#9;[-0.5,  0.5,  0.5],  #0.0f, 0.0f,<br>
-&#9;&#9;[-0.5,  0.5, -0.5],  #0.0f, 1.0f<br>
-&#9;&#9;&#9;])<br>
-<br>
-&#9;&#9;uvs = np.array([<br>
-&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;[1.0, 0.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[0.0, 1.0],<br>
-&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;<br>
-&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;[1.0, 0.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[0.0, 1.0],<br>
-&#9;&#9;[0.0, 0.0],<br>
-<br>
-&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;[1.0, 0.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[0.0, 1.0],<br>
-&#9;&#9;[0.0, 0.0],<br>
-<br>
-&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;[1.0, 0.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[0.0, 1.0],<br>
-&#9;&#9;[0.0, 0.0],<br>
-<br>
-&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;[1.0, 0.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[0.0, 1.0],<br>
-&#9;&#9;[0.0, 0.0],<br>
-<br>
-&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;[1.0, 0.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[1.0, 1.0],<br>
-&#9;&#9;[0.0, 1.0],<br>
-&#9;&#9;[0.0, 0.0],<br>
-&#9;&#9;&#9;])<br>
-<br>
-&#9;&#9;triangles = np.array([<br>
-&#9;&#9;[1, 0, 2],<br>
-&#9;&#9;[4, 3, 5],<br>
-&#9;&#9;[6, 7, 8],<br>
-&#9;&#9;[9, 10,11],<br>
-&#9;&#9;[12,13,14],<br>
-&#9;&#9;[15,16,17],<br>
-&#9;&#9;[19,18,20],<br>
-&#9;&#9;[22,21,23],<br>
-&#9;&#9;[24,25,26],<br>
-&#9;&#9;[27,28,29],<br>
-&#9;&#9;[31,30,32],<br>
-&#9;&#9;[34,33,35],<br>
-&#9;&#9;&#9;])<br>
-&#9;&#9;super().__init__(vertices=vertices, triangles=triangles, uvs=uvs)<br>
-<br>
-<br>
-class UVSphereMesh(Mesh3):<br>
-&#9;def __init__(self, radius: float = 1.0, n_meridians: int = 16, n_parallels: int = 16):<br>
-&#9;&#9;rings = n_parallels<br>
-&#9;&#9;segments = n_meridians<br>
-&#9;&#9;<br>
-&#9;&#9;vertices = []<br>
-&#9;&#9;triangles = []<br>
-&#9;&#9;for r in range(rings + 1):<br>
-&#9;&#9;&#9;theta = r * np.pi / rings<br>
-&#9;&#9;&#9;sin_theta = np.sin(theta)<br>
-&#9;&#9;&#9;cos_theta = np.cos(theta)<br>
-&#9;&#9;&#9;for s in range(segments):<br>
-&#9;&#9;&#9;&#9;phi = s * 2 * np.pi / segments<br>
-&#9;&#9;&#9;&#9;x = radius * sin_theta * np.cos(phi)<br>
-&#9;&#9;&#9;&#9;y = radius * sin_theta * np.sin(phi)<br>
-&#9;&#9;&#9;&#9;z = radius * cos_theta<br>
-&#9;&#9;&#9;&#9;vertices.append([x, y, z])<br>
-&#9;&#9;for r in range(rings):<br>
-&#9;&#9;&#9;for s in range(segments):<br>
-&#9;&#9;&#9;&#9;next_r = r + 1<br>
-&#9;&#9;&#9;&#9;next_s = (s + 1) % segments<br>
-&#9;&#9;&#9;&#9;triangles.append([r * segments + s, next_r * segments + s, next_r * segments + next_s])<br>
-&#9;&#9;&#9;&#9;triangles.append([r * segments + s, next_r * segments + next_s, r * segments + next_s])<br>
-&#9;&#9;super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))<br>
-<br>
-class IcoSphereMesh(Mesh3):<br>
-&#9;def __init__(self, radius: float = 1.0, subdivisions: int = 2):<br>
-&#9;&#9;t = (1.0 + np.sqrt(5.0)) / 2.0<br>
-&#9;&#9;vertices = np.array(<br>
-&#9;&#9;&#9;[<br>
-&#9;&#9;&#9;&#9;[-1, t, 0],<br>
-&#9;&#9;&#9;&#9;[1, t, 0],<br>
-&#9;&#9;&#9;&#9;[-1, -t, 0],<br>
-&#9;&#9;&#9;&#9;[1, -t, 0],<br>
-&#9;&#9;&#9;&#9;[0, -1, t],<br>
-&#9;&#9;&#9;&#9;[0, 1, t],<br>
-&#9;&#9;&#9;&#9;[0, -1, -t],<br>
-&#9;&#9;&#9;&#9;[0, 1, -t],<br>
-&#9;&#9;&#9;&#9;[t, 0, -1],<br>
-&#9;&#9;&#9;&#9;[t, 0, 1],<br>
-&#9;&#9;&#9;&#9;[-t, 0, -1],<br>
-&#9;&#9;&#9;&#9;[-t, 0, 1],<br>
-&#9;&#9;&#9;],<br>
-&#9;&#9;&#9;dtype=float,<br>
-&#9;&#9;)<br>
-&#9;&#9;vertices /= np.linalg.norm(vertices[0])<br>
-&#9;&#9;vertices *= radius<br>
-&#9;&#9;triangles = np.array(<br>
-&#9;&#9;&#9;[<br>
-&#9;&#9;&#9;&#9;[0, 11, 5],<br>
-&#9;&#9;&#9;&#9;[0, 5, 1],<br>
-&#9;&#9;&#9;&#9;[0, 1, 7],<br>
-&#9;&#9;&#9;&#9;[0, 7, 10],<br>
-&#9;&#9;&#9;&#9;[0, 10, 11],<br>
-&#9;&#9;&#9;&#9;[1, 5, 9],<br>
-&#9;&#9;&#9;&#9;[5, 11, 4],<br>
-&#9;&#9;&#9;&#9;[11, 10, 2],<br>
-&#9;&#9;&#9;&#9;[10, 7, 6],<br>
-&#9;&#9;&#9;&#9;[7, 1, 8],<br>
-&#9;&#9;&#9;&#9;[3, 9, 4],<br>
-&#9;&#9;&#9;&#9;[3, 4, 2],<br>
-&#9;&#9;&#9;&#9;[3, 2, 6],<br>
-&#9;&#9;&#9;&#9;[3, 6, 8],<br>
-&#9;&#9;&#9;&#9;[3, 8, 9],<br>
-&#9;&#9;&#9;&#9;[4, 9, 5],<br>
-&#9;&#9;&#9;&#9;[2, 4, 11],<br>
-&#9;&#9;&#9;&#9;[6, 2, 10],<br>
-&#9;&#9;&#9;&#9;[8, 6, 7],<br>
-&#9;&#9;&#9;&#9;[9, 8, 1],<br>
-&#9;&#9;&#9;],<br>
-&#9;&#9;&#9;dtype=int,<br>
-&#9;&#9;)<br>
-&#9;&#9;super().__init__(vertices=vertices, triangles=triangles)<br>
-&#9;&#9;for _ in range(subdivisions):<br>
-&#9;&#9;&#9;self._subdivide()<br>
-<br>
-&#9;def _subdivide(self):<br>
-&#9;&#9;midpoint_cache = {}<br>
-<br>
-&#9;&#9;def get_midpoint(v1_idx, v2_idx):<br>
-&#9;&#9;&#9;key = tuple(sorted((v1_idx, v2_idx)))<br>
-&#9;&#9;&#9;if key in midpoint_cache:<br>
-&#9;&#9;&#9;&#9;return midpoint_cache[key]<br>
-&#9;&#9;&#9;v1 = self.vertices[v1_idx]<br>
-&#9;&#9;&#9;v2 = self.vertices[v2_idx]<br>
-&#9;&#9;&#9;midpoint = (v1 + v2) / 2.0<br>
-&#9;&#9;&#9;midpoint /= np.linalg.norm(midpoint)<br>
-&#9;&#9;&#9;midpoint *= np.linalg.norm(v1)<br>
-&#9;&#9;&#9;self.vertices = np.vstack((self.vertices, midpoint))<br>
-&#9;&#9;&#9;mid_idx = self.vertices.shape[0] - 1<br>
-&#9;&#9;&#9;midpoint_cache[key] = mid_idx<br>
-&#9;&#9;&#9;return mid_idx<br>
-<br>
-&#9;&#9;new_triangles = []<br>
-&#9;&#9;for tri in self.triangles:<br>
-&#9;&#9;&#9;v0, v1, v2 = tri<br>
-&#9;&#9;&#9;a = get_midpoint(v0, v1)<br>
-&#9;&#9;&#9;b = get_midpoint(v1, v2)<br>
-&#9;&#9;&#9;c = get_midpoint(v2, v0)<br>
-&#9;&#9;&#9;new_triangles.append([v0, a, c])<br>
-&#9;&#9;&#9;new_triangles.append([v1, b, a])<br>
-&#9;&#9;&#9;new_triangles.append([v2, c, b])<br>
-&#9;&#9;&#9;new_triangles.append([a, b, c])<br>
-&#9;&#9;self.triangles = np.array(new_triangles, dtype=int)<br>
-<br>
-class PlaneMesh(Mesh3):<br>
-&#9;def __init__(self, width: float = 1.0, depth: float = 1.0, segments_w: int = 1, segments_d: int = 1):<br>
-&#9;&#9;vertices = []<br>
-&#9;&#9;triangles = []<br>
-&#9;&#9;for d in range(segments_d + 1):<br>
-&#9;&#9;&#9;z = (d / segments_d - 0.5) * depth<br>
-&#9;&#9;&#9;for w in range(segments_w + 1):<br>
-&#9;&#9;&#9;&#9;x = (w / segments_w - 0.5) * width<br>
-&#9;&#9;&#9;&#9;vertices.append([x, 0.0, z])<br>
-&#9;&#9;for d in range(segments_d):<br>
-&#9;&#9;&#9;for w in range(segments_w):<br>
-&#9;&#9;&#9;&#9;v0 = d * (segments_w + 1) + w<br>
-&#9;&#9;&#9;&#9;v1 = v0 + 1<br>
-&#9;&#9;&#9;&#9;v2 = v0 + (segments_w + 1)<br>
-&#9;&#9;&#9;&#9;v3 = v2 + 1<br>
-&#9;&#9;&#9;&#9;triangles.append([v0, v2, v1])<br>
-&#9;&#9;&#9;&#9;triangles.append([v1, v2, v3])<br>
-&#9;&#9;super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))<br>
-<br>
-class CylinderMesh(Mesh3):<br>
-&#9;def __init__(self, radius: float = 1.0, height: float = 1.0, segments: int = 16):<br>
-&#9;&#9;vertices = []<br>
-&#9;&#9;triangles = []<br>
-&#9;&#9;half_height = height * 0.5<br>
-&#9;&#9;for y in [-half_height, half_height]:<br>
-&#9;&#9;&#9;for s in range(segments):<br>
-&#9;&#9;&#9;&#9;theta = s * 2 * np.pi / segments<br>
-&#9;&#9;&#9;&#9;x = radius * np.cos(theta)<br>
-&#9;&#9;&#9;&#9;z = radius * np.sin(theta)<br>
-&#9;&#9;&#9;&#9;vertices.append([x, y, z])<br>
-&#9;&#9;for s in range(segments):<br>
-&#9;&#9;&#9;next_s = (s + 1) % segments<br>
-&#9;&#9;&#9;bottom0 = s<br>
-&#9;&#9;&#9;bottom1 = next_s<br>
-&#9;&#9;&#9;top0 = s + segments<br>
-&#9;&#9;&#9;top1 = next_s + segments<br>
-&#9;&#9;&#9;triangles.append([bottom0, top0, bottom1])<br>
-&#9;&#9;&#9;triangles.append([bottom1, top0, top1])<br>
-<br>
-&#9;&#9;# Add center vertices for bottom and top caps<br>
-&#9;&#9;bottom_center_idx = len(vertices)<br>
-&#9;&#9;vertices.append([0.0, -half_height, 0.0])<br>
-&#9;&#9;top_center_idx = len(vertices)<br>
-&#9;&#9;vertices.append([0.0, half_height, 0.0])<br>
-&#9;&#9;for s in range(segments):<br>
-&#9;&#9;&#9;next_s = (s + 1) % segments<br>
-&#9;&#9;&#9;bottom0 = s<br>
-&#9;&#9;&#9;bottom1 = next_s<br>
-&#9;&#9;&#9;top0 = s + segments<br>
-&#9;&#9;&#9;top1 = next_s + segments<br>
-&#9;&#9;&#9;triangles.append([bottom1, bottom_center_idx, bottom0])<br>
-&#9;&#9;&#9;triangles.append([top0, top_center_idx, top1])<br>
-<br>
-&#9;&#9;super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))<br>
-<br>
-class ConeMesh(Mesh3):<br>
-&#9;def __init__(self, radius: float = 1.0, height: float = 1.0, segments: int = 16):<br>
-&#9;&#9;vertices = []<br>
-&#9;&#9;triangles = []<br>
-&#9;&#9;half_height = height * 0.5<br>
-&#9;&#9;apex = [0.0, half_height, 0.0]<br>
-&#9;&#9;base_center = [0.0, -half_height, 0.0]<br>
-&#9;&#9;vertices.append(apex)<br>
-&#9;&#9;for s in range(segments):<br>
-&#9;&#9;&#9;theta = s * 2 * np.pi / segments<br>
-&#9;&#9;&#9;x = radius * np.cos(theta)<br>
-&#9;&#9;&#9;z = radius * np.sin(theta)<br>
-&#9;&#9;&#9;vertices.append([x, -half_height, z])<br>
-&#9;&#9;for s in range(segments):<br>
-&#9;&#9;&#9;next_s = (s + 1) % segments<br>
-&#9;&#9;&#9;base0 = s + 1<br>
-&#9;&#9;&#9;base1 = next_s + 1<br>
-&#9;&#9;&#9;triangles.append([0, base0, base1])<br>
-&#9;&#9;&#9;triangles.append([base0, base1, len(vertices)])<br>
-&#9;&#9;vertices.append(base_center)<br>
-&#9;&#9;super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))<br>
-<br>
-class RingMesh(Mesh3):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Плоское кольцо (annulus) в XZ-плоскости.<br>
-&#9;Нормаль смотрит вдоль +Y.<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(<br>
-&#9;&#9;self,<br>
-&#9;&#9;radius: float = 1.0,<br>
-&#9;&#9;thickness: float = 0.05,<br>
-&#9;&#9;segments: int = 32,<br>
-&#9;):<br>
-&#9;&#9;if segments &lt; 3:<br>
-&#9;&#9;&#9;raise ValueError(&quot;RingMesh: segments must be &gt;= 3&quot;)<br>
-<br>
-&#9;&#9;# внутренняя/внешняя окружности<br>
-&#9;&#9;inner_radius = max(radius - thickness * 0.5, 1e-4)<br>
-&#9;&#9;outer_radius = radius + thickness * 0.5<br>
-<br>
-&#9;&#9;vertices: list[list[float]] = []<br>
-&#9;&#9;triangles: list[list[int]] = []<br>
-<br>
-&#9;&#9;# вершины: [inner_i, outer_i] для каждого сегмента<br>
-&#9;&#9;for i in range(segments):<br>
-&#9;&#9;&#9;angle = 2.0 * np.pi * i / segments<br>
-&#9;&#9;&#9;c = np.cos(angle)<br>
-&#9;&#9;&#9;s = np.sin(angle)<br>
-<br>
-&#9;&#9;&#9;x_inner = inner_radius * c<br>
-&#9;&#9;&#9;z_inner = inner_radius * s<br>
-&#9;&#9;&#9;x_outer = outer_radius * c<br>
-&#9;&#9;&#9;z_outer = outer_radius * s<br>
-<br>
-&#9;&#9;&#9;vertices.append([x_inner, 0.0, z_inner])  # inner<br>
-&#9;&#9;&#9;vertices.append([x_outer, 0.0, z_outer])  # outer<br>
-<br>
-&#9;&#9;# индексы: два треугольника на &quot;квадратик&quot; между сегментами<br>
-&#9;&#9;for i in range(segments):<br>
-&#9;&#9;&#9;i_inner = 2 * i<br>
-&#9;&#9;&#9;i_outer = 2 * i + 1<br>
-&#9;&#9;&#9;next_i = (i + 1) % segments<br>
-&#9;&#9;&#9;n_inner = 2 * next_i<br>
-&#9;&#9;&#9;n_outer = 2 * next_i + 1<br>
-<br>
-&#9;&#9;&#9;# следим за порядком обхода, чтобы нормали смотрели в +Y<br>
-&#9;&#9;&#9;triangles.append([i_inner, n_inner, i_outer])<br>
-&#9;&#9;&#9;triangles.append([i_outer, n_inner, n_outer])<br>
-<br>
-&#9;&#9;vertices_np = np.asarray(vertices, dtype=float)<br>
-&#9;&#9;triangles_np = np.asarray(triangles, dtype=int)<br>
-<br>
-&#9;&#9;super().__init__(vertices=vertices_np, triangles=triangles_np, uvs=None)<br>
-<br>
-&#9;&#9;# для более внятного освещения, если оно у тебя есть<br>
-&#9;&#9;self.compute_vertex_normals()<br>
+class&nbsp;VertexAttribute:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;name,&nbsp;size,&nbsp;vtype:&nbsp;VertexAttribType,&nbsp;offset):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.size&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vtype&nbsp;=&nbsp;vtype<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.offset&nbsp;=&nbsp;offset<br>
+<br>
+<br>
+<br>
+class&nbsp;VertexLayout:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;stride,&nbsp;attributes):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.stride&nbsp;=&nbsp;stride&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;размер&nbsp;одной&nbsp;вершины&nbsp;в&nbsp;байтах<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.attributes&nbsp;=&nbsp;attributes&nbsp;&nbsp;#&nbsp;список&nbsp;VertexAttribute<br>
+<br>
+<br>
+class&nbsp;Mesh:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;vertices:&nbsp;np.ndarray,&nbsp;indices:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vertices&nbsp;=&nbsp;np.asarray(vertices,&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.indices&nbsp;&nbsp;=&nbsp;np.asarray(indices,&nbsp;&nbsp;dtype=np.uint32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.type&nbsp;=&nbsp;&quot;triangles&quot;&nbsp;if&nbsp;indices.shape[1]&nbsp;==&nbsp;3&nbsp;else&nbsp;&quot;lines&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._inter&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_vertex_layout(self)&nbsp;-&gt;&nbsp;VertexLayout:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(&quot;get_vertex_layout&nbsp;must&nbsp;be&nbsp;implemented&nbsp;in&nbsp;subclasses.&quot;)<br>
+<br>
+<br>
+<br>
+class&nbsp;Mesh2(Mesh):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Simple&nbsp;triangle&nbsp;mesh&nbsp;storing&nbsp;vertex&nbsp;positions&nbsp;and&nbsp;triangle&nbsp;indices.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_lists(vertices:&nbsp;list[tuple[float,&nbsp;float]],&nbsp;indices:&nbsp;list[tuple[int,&nbsp;int]])&nbsp;-&gt;&nbsp;&quot;Mesh2&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;verts&nbsp;=&nbsp;np.asarray(vertices,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;np.asarray(indices,&nbsp;dtype=int)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Mesh2(verts,&nbsp;idx)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;vertices:&nbsp;np.ndarray,&nbsp;indices:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices,&nbsp;indices)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._validate_mesh()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_validate_mesh(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Ensure&nbsp;that&nbsp;the&nbsp;vertex/index&nbsp;arrays&nbsp;have&nbsp;correct&nbsp;shapes&nbsp;and&nbsp;bounds.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.vertices.ndim&nbsp;!=&nbsp;2&nbsp;or&nbsp;self.vertices.shape[1]&nbsp;!=&nbsp;3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Vertices&nbsp;must&nbsp;be&nbsp;a&nbsp;Nx3&nbsp;array.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.indices.ndim&nbsp;!=&nbsp;2&nbsp;or&nbsp;self.indices.shape[1]&nbsp;!=&nbsp;2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Indices&nbsp;must&nbsp;be&nbsp;a&nbsp;Mx2&nbsp;array.&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;interleaved_buffer(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.vertices.astype(np.float32)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_vertex_layout(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;VertexLayout(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stride=3*4,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;attributes=[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;VertexAttribute(&quot;position&quot;,&nbsp;3,&nbsp;VertexAttribType.FLOAT32,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+<br>
+class&nbsp;Mesh3(Mesh):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Simple&nbsp;triangle&nbsp;mesh&nbsp;storing&nbsp;vertex&nbsp;positions&nbsp;and&nbsp;triangle&nbsp;indices.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;vertices:&nbsp;np.ndarray,&nbsp;triangles:&nbsp;np.ndarray,&nbsp;uvs:&nbsp;np.ndarray&nbsp;|&nbsp;None&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices,&nbsp;triangles)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.uv&nbsp;=&nbsp;np.asarray(uvs,&nbsp;dtype=float)&nbsp;if&nbsp;uvs&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._validate_mesh()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vertex_normals&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.face_normals&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;build_interleaved_buffer(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;позиции&nbsp;—&nbsp;всегда&nbsp;есть<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pos&nbsp;=&nbsp;self.vertices.astype(np.float32)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;нормали&nbsp;—&nbsp;если&nbsp;нет,&nbsp;генерим&nbsp;нули<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.vertex_normals&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normals&nbsp;=&nbsp;np.zeros_like(self.vertices,&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normals&nbsp;=&nbsp;self.vertex_normals.astype(np.float32)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;uv&nbsp;—&nbsp;если&nbsp;нет,&nbsp;ставим&nbsp;(0,0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.uv&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uvs&nbsp;=&nbsp;np.zeros((self.vertices.shape[0],&nbsp;2),&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uvs&nbsp;=&nbsp;self.uv.astype(np.float32)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.hstack([pos,&nbsp;normals,&nbsp;uvs])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;interleaved_buffer(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._inter&nbsp;==&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._inter&nbsp;=&nbsp;self.build_interleaved_buffer()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._inter<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;triangles(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.indices<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@triangles.setter<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;triangles(self,&nbsp;value):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.indices&nbsp;=&nbsp;value<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_vertex_layout(self)&nbsp;-&gt;&nbsp;VertexLayout:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;VertexLayout(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stride=8&nbsp;*&nbsp;4,&nbsp;&nbsp;#&nbsp;всегда:&nbsp;pos(3)&nbsp;+&nbsp;normal(3)&nbsp;+&nbsp;uv(2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;attributes=[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;VertexAttribute(&quot;position&quot;,&nbsp;3,&nbsp;VertexAttribType.FLOAT32,&nbsp;0),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;VertexAttribute(&quot;normal&quot;,&nbsp;&nbsp;&nbsp;3,&nbsp;VertexAttribType.FLOAT32,&nbsp;12),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;VertexAttribute(&quot;uv&quot;,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2,&nbsp;VertexAttribType.FLOAT32,&nbsp;24),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_validate_mesh(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Ensure&nbsp;that&nbsp;the&nbsp;vertex/index&nbsp;arrays&nbsp;have&nbsp;correct&nbsp;shapes&nbsp;and&nbsp;bounds.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.vertices.ndim&nbsp;!=&nbsp;2&nbsp;or&nbsp;self.vertices.shape[1]&nbsp;!=&nbsp;3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Vertices&nbsp;must&nbsp;be&nbsp;a&nbsp;Nx3&nbsp;array.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.triangles.ndim&nbsp;!=&nbsp;2&nbsp;or&nbsp;self.triangles.shape[1]&nbsp;!=&nbsp;3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Triangles&nbsp;must&nbsp;be&nbsp;a&nbsp;Mx3&nbsp;array.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;np.any(self.triangles&nbsp;&lt;&nbsp;0)&nbsp;or&nbsp;np.any(self.triangles&nbsp;&gt;=&nbsp;self.vertices.shape[0]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Triangle&nbsp;indices&nbsp;must&nbsp;be&nbsp;valid&nbsp;vertex&nbsp;indices.&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;translate(self,&nbsp;offset:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Apply&nbsp;translation&nbsp;by&nbsp;vector&nbsp;``offset``&nbsp;to&nbsp;all&nbsp;vertices.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offset&nbsp;=&nbsp;np.asarray(offset,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;offset.shape&nbsp;!=&nbsp;(3,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Offset&nbsp;must&nbsp;be&nbsp;a&nbsp;3-dimensional&nbsp;vector.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vertices&nbsp;+=&nbsp;offset<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;show(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Show&nbsp;the&nbsp;mesh&nbsp;in&nbsp;a&nbsp;simple&nbsp;viewer&nbsp;application.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.mesh_viewer_miniapp&nbsp;import&nbsp;show_mesh_app<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;show_mesh_app(self)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_assimp_mesh(assimp_mesh)&nbsp;-&gt;&nbsp;&quot;Mesh&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;verts&nbsp;=&nbsp;np.asarray(assimp_mesh.vertices,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;np.asarray(assimp_mesh.indices,&nbsp;dtype=int).reshape(-1,&nbsp;3)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;assimp_mesh.uvs&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uvs&nbsp;=&nbsp;np.asarray(assimp_mesh.uvs,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uvs&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;Mesh3(vertices=verts,&nbsp;triangles=idx,&nbsp;uvs=uvs)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;нормали&nbsp;есть&nbsp;–&nbsp;присвоим<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;assimp_mesh.normals&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh.vertex_normals&nbsp;=&nbsp;np.asarray(assimp_mesh.normals,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh.compute_vertex_normals()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;mesh<br>
+<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;scale(self,&nbsp;factor:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Uniformly&nbsp;scale&nbsp;vertex&nbsp;positions&nbsp;by&nbsp;``factor``.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vertices&nbsp;*=&nbsp;factor<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_vertex_count(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.vertices.shape[0]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_face_count(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.triangles.shape[0]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;compute_faces_normals(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compute&nbsp;per-face&nbsp;normals&nbsp;``n&nbsp;=&nbsp;(v1-v0)&nbsp;×&nbsp;(v2-v0)&nbsp;/&nbsp;||...||``.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v0&nbsp;=&nbsp;self.vertices[self.triangles[:,&nbsp;0],&nbsp;:]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v1&nbsp;=&nbsp;self.vertices[self.triangles[:,&nbsp;1],&nbsp;:]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v2&nbsp;=&nbsp;self.vertices[self.triangles[:,&nbsp;2],&nbsp;:]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normals&nbsp;=&nbsp;np.cross(v1&nbsp;-&nbsp;v0,&nbsp;v2&nbsp;-&nbsp;v0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;norms&nbsp;=&nbsp;np.linalg.norm(normals,&nbsp;axis=1,&nbsp;keepdims=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;norms[norms&nbsp;==&nbsp;0]&nbsp;=&nbsp;1&nbsp;&nbsp;#&nbsp;Prevent&nbsp;division&nbsp;by&nbsp;zero<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.face_normals&nbsp;=&nbsp;normals&nbsp;/&nbsp;norms<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.face_normals<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;compute_vertex_normals(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compute&nbsp;area-weighted&nbsp;vertex&nbsp;normals:&nbsp;``n_v&nbsp;=&nbsp;sum_{t∈F(v)}&nbsp;(&nbsp;(v1-v0)&nbsp;×&nbsp;(v2-v0)&nbsp;).``&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normals&nbsp;=&nbsp;np.zeros_like(self.vertices,&nbsp;dtype=np.float64)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v0&nbsp;=&nbsp;self.vertices[self.triangles[:,&nbsp;0],&nbsp;:]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v1&nbsp;=&nbsp;self.vertices[self.triangles[:,&nbsp;1],&nbsp;:]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v2&nbsp;=&nbsp;self.vertices[self.triangles[:,&nbsp;2],&nbsp;:]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;face_normals&nbsp;=&nbsp;np.cross(v1&nbsp;-&nbsp;v0,&nbsp;v2&nbsp;-&nbsp;v0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;face,&nbsp;normal&nbsp;in&nbsp;zip(self.triangles,&nbsp;face_normals):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normals[face]&nbsp;+=&nbsp;normal<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;norms&nbsp;=&nbsp;np.linalg.norm(normals,&nbsp;axis=1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;norms[norms&nbsp;==&nbsp;0]&nbsp;=&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vertex_normals&nbsp;=&nbsp;(normals.T&nbsp;/&nbsp;norms).T.astype(np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.vertex_normals<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_convex_hull(hull)&nbsp;-&gt;&nbsp;&quot;Mesh3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;Mesh&nbsp;from&nbsp;a&nbsp;scipy.spatial.ConvexHull&nbsp;object.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;hull.points<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles&nbsp;=&nbsp;hull.simplices<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center&nbsp;=&nbsp;np.mean(vertices,&nbsp;axis=0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(triangles.shape[0]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v0&nbsp;=&nbsp;vertices[triangles[i,&nbsp;0]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v1&nbsp;=&nbsp;vertices[triangles[i,&nbsp;1]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v2&nbsp;=&nbsp;vertices[triangles[i,&nbsp;2]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normal&nbsp;=&nbsp;np.cross(v1&nbsp;-&nbsp;v0,&nbsp;v2&nbsp;-&nbsp;v0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;to_center&nbsp;=&nbsp;center&nbsp;-&nbsp;v0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;np.dot(normal,&nbsp;to_center)&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles[i,&nbsp;[1,&nbsp;2]]&nbsp;=&nbsp;triangles[i,&nbsp;[2,&nbsp;1]]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Mesh3(vertices=vertices,&nbsp;triangles=triangles)<br>
+<br>
+class&nbsp;CubeMesh(Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;size:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;y:&nbsp;float&nbsp;=&nbsp;None,&nbsp;z:&nbsp;float&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;y&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;x<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;z&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;=&nbsp;x<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s_x&nbsp;=&nbsp;x&nbsp;*&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s_y&nbsp;=&nbsp;y&nbsp;*&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s_z&nbsp;=&nbsp;z&nbsp;*&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-s_x,&nbsp;-s_y,&nbsp;-s_z],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[s_x,&nbsp;-s_y,&nbsp;-s_z],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[s_x,&nbsp;s_y,&nbsp;-s_z],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-s_x,&nbsp;s_y,&nbsp;-s_z],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-s_x,&nbsp;-s_y,&nbsp;s_z],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[s_x,&nbsp;-s_y,&nbsp;s_z],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[s_x,&nbsp;s_y,&nbsp;s_z],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-s_x,&nbsp;s_y,&nbsp;s_z],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dtype=float,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles&nbsp;=&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;0,&nbsp;2],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2,&nbsp;0,&nbsp;3],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[4,&nbsp;5,&nbsp;7],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[5,&nbsp;6,&nbsp;7],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;1,&nbsp;4],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;5,&nbsp;4],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2,&nbsp;3,&nbsp;6],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[3,&nbsp;7,&nbsp;6],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[3,&nbsp;0,&nbsp;4],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[7,&nbsp;3,&nbsp;4],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;2,&nbsp;5],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2,&nbsp;6,&nbsp;5],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dtype=int,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uvs&nbsp;=&nbsp;np.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices=vertices,&nbsp;triangles=triangles,&nbsp;uvs=uvs)<br>
+<br>
+<br>
+class&nbsp;TexturedCubeMesh(Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;size:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;y:&nbsp;float&nbsp;=&nbsp;None,&nbsp;z:&nbsp;float&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;y&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;x<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;z&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;=&nbsp;x<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s_x&nbsp;=&nbsp;x&nbsp;*&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s_y&nbsp;=&nbsp;y&nbsp;*&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s_z&nbsp;=&nbsp;z&nbsp;*&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;np.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;&nbsp;0.5,&nbsp;-0.5],&nbsp;&nbsp;#1.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;0.5,&nbsp;&nbsp;0.5,&nbsp;-0.5],&nbsp;&nbsp;#1.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;&nbsp;0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;0.0f,<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#0.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;-0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#0.0f,&nbsp;0.0f,<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;&nbsp;0.5,&nbsp;-0.5],&nbsp;&nbsp;#1.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#0.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;&nbsp;0.5,&nbsp;-0.5],&nbsp;&nbsp;#1.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;-0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#0.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#1.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;-0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;-0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#0.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;-0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f,<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;&nbsp;0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;&nbsp;0.5,&nbsp;-0.5],&nbsp;&nbsp;#1.0f,&nbsp;1.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#1.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;&nbsp;0.5,&nbsp;&nbsp;0.5],&nbsp;&nbsp;#0.0f,&nbsp;0.0f,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-0.5,&nbsp;&nbsp;0.5,&nbsp;-0.5],&nbsp;&nbsp;#0.0f,&nbsp;1.0f<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uvs&nbsp;=&nbsp;np.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;1.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0,&nbsp;0.0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles&nbsp;=&nbsp;np.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;0,&nbsp;2],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[4,&nbsp;3,&nbsp;5],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[6,&nbsp;7,&nbsp;8],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[9,&nbsp;10,11],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[12,13,14],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[15,16,17],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[19,18,20],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[22,21,23],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[24,25,26],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[27,28,29],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[31,30,32],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[34,33,35],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices=vertices,&nbsp;triangles=triangles,&nbsp;uvs=uvs)<br>
+<br>
+<br>
+class&nbsp;UVSphereMesh(Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;radius:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;n_meridians:&nbsp;int&nbsp;=&nbsp;16,&nbsp;n_parallels:&nbsp;int&nbsp;=&nbsp;16):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rings&nbsp;=&nbsp;n_parallels<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;segments&nbsp;=&nbsp;n_meridians<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;r&nbsp;in&nbsp;range(rings&nbsp;+&nbsp;1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;theta&nbsp;=&nbsp;r&nbsp;*&nbsp;np.pi&nbsp;/&nbsp;rings<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sin_theta&nbsp;=&nbsp;np.sin(theta)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cos_theta&nbsp;=&nbsp;np.cos(theta)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;s&nbsp;in&nbsp;range(segments):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;phi&nbsp;=&nbsp;s&nbsp;*&nbsp;2&nbsp;*&nbsp;np.pi&nbsp;/&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;radius&nbsp;*&nbsp;sin_theta&nbsp;*&nbsp;np.cos(phi)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;radius&nbsp;*&nbsp;sin_theta&nbsp;*&nbsp;np.sin(phi)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;=&nbsp;radius&nbsp;*&nbsp;cos_theta<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append([x,&nbsp;y,&nbsp;z])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;r&nbsp;in&nbsp;range(rings):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;s&nbsp;in&nbsp;range(segments):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;next_r&nbsp;=&nbsp;r&nbsp;+&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;next_s&nbsp;=&nbsp;(s&nbsp;+&nbsp;1)&nbsp;%&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([r&nbsp;*&nbsp;segments&nbsp;+&nbsp;s,&nbsp;next_r&nbsp;*&nbsp;segments&nbsp;+&nbsp;s,&nbsp;next_r&nbsp;*&nbsp;segments&nbsp;+&nbsp;next_s])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([r&nbsp;*&nbsp;segments&nbsp;+&nbsp;s,&nbsp;next_r&nbsp;*&nbsp;segments&nbsp;+&nbsp;next_s,&nbsp;r&nbsp;*&nbsp;segments&nbsp;+&nbsp;next_s])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices=np.array(vertices,&nbsp;dtype=float),&nbsp;triangles=np.array(triangles,&nbsp;dtype=int))<br>
+<br>
+class&nbsp;IcoSphereMesh(Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;radius:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;subdivisions:&nbsp;int&nbsp;=&nbsp;2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;(1.0&nbsp;+&nbsp;np.sqrt(5.0))&nbsp;/&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-1,&nbsp;t,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;t,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-1,&nbsp;-t,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;-t,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;-1,&nbsp;t],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;1,&nbsp;t],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;-1,&nbsp;-t],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;1,&nbsp;-t],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[t,&nbsp;0,&nbsp;-1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[t,&nbsp;0,&nbsp;1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-t,&nbsp;0,&nbsp;-1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-t,&nbsp;0,&nbsp;1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dtype=float,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;/=&nbsp;np.linalg.norm(vertices[0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;*=&nbsp;radius<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles&nbsp;=&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;11,&nbsp;5],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;5,&nbsp;1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;1,&nbsp;7],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;7,&nbsp;10],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;10,&nbsp;11],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1,&nbsp;5,&nbsp;9],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[5,&nbsp;11,&nbsp;4],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[11,&nbsp;10,&nbsp;2],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[10,&nbsp;7,&nbsp;6],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[7,&nbsp;1,&nbsp;8],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[3,&nbsp;9,&nbsp;4],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[3,&nbsp;4,&nbsp;2],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[3,&nbsp;2,&nbsp;6],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[3,&nbsp;6,&nbsp;8],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[3,&nbsp;8,&nbsp;9],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[4,&nbsp;9,&nbsp;5],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2,&nbsp;4,&nbsp;11],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[6,&nbsp;2,&nbsp;10],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[8,&nbsp;6,&nbsp;7],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[9,&nbsp;8,&nbsp;1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dtype=int,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices=vertices,&nbsp;triangles=triangles)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;range(subdivisions):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._subdivide()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_subdivide(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;midpoint_cache&nbsp;=&nbsp;{}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_midpoint(v1_idx,&nbsp;v2_idx):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;=&nbsp;tuple(sorted((v1_idx,&nbsp;v2_idx)))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;key&nbsp;in&nbsp;midpoint_cache:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;midpoint_cache[key]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v1&nbsp;=&nbsp;self.vertices[v1_idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v2&nbsp;=&nbsp;self.vertices[v2_idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;midpoint&nbsp;=&nbsp;(v1&nbsp;+&nbsp;v2)&nbsp;/&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;midpoint&nbsp;/=&nbsp;np.linalg.norm(midpoint)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;midpoint&nbsp;*=&nbsp;np.linalg.norm(v1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vertices&nbsp;=&nbsp;np.vstack((self.vertices,&nbsp;midpoint))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mid_idx&nbsp;=&nbsp;self.vertices.shape[0]&nbsp;-&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;midpoint_cache[key]&nbsp;=&nbsp;mid_idx<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;mid_idx<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_triangles&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;tri&nbsp;in&nbsp;self.triangles:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v0,&nbsp;v1,&nbsp;v2&nbsp;=&nbsp;tri<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;get_midpoint(v0,&nbsp;v1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;get_midpoint(v1,&nbsp;v2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;get_midpoint(v2,&nbsp;v0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_triangles.append([v0,&nbsp;a,&nbsp;c])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_triangles.append([v1,&nbsp;b,&nbsp;a])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_triangles.append([v2,&nbsp;c,&nbsp;b])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_triangles.append([a,&nbsp;b,&nbsp;c])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.triangles&nbsp;=&nbsp;np.array(new_triangles,&nbsp;dtype=int)<br>
+<br>
+class&nbsp;PlaneMesh(Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;width:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;depth:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;segments_w:&nbsp;int&nbsp;=&nbsp;1,&nbsp;segments_d:&nbsp;int&nbsp;=&nbsp;1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;d&nbsp;in&nbsp;range(segments_d&nbsp;+&nbsp;1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;=&nbsp;(d&nbsp;/&nbsp;segments_d&nbsp;-&nbsp;0.5)&nbsp;*&nbsp;depth<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;w&nbsp;in&nbsp;range(segments_w&nbsp;+&nbsp;1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;(w&nbsp;/&nbsp;segments_w&nbsp;-&nbsp;0.5)&nbsp;*&nbsp;width<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append([x,&nbsp;0.0,&nbsp;z])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;d&nbsp;in&nbsp;range(segments_d):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;w&nbsp;in&nbsp;range(segments_w):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v0&nbsp;=&nbsp;d&nbsp;*&nbsp;(segments_w&nbsp;+&nbsp;1)&nbsp;+&nbsp;w<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v1&nbsp;=&nbsp;v0&nbsp;+&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v2&nbsp;=&nbsp;v0&nbsp;+&nbsp;(segments_w&nbsp;+&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v3&nbsp;=&nbsp;v2&nbsp;+&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([v0,&nbsp;v2,&nbsp;v1])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([v1,&nbsp;v2,&nbsp;v3])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices=np.array(vertices,&nbsp;dtype=float),&nbsp;triangles=np.array(triangles,&nbsp;dtype=int))<br>
+<br>
+class&nbsp;CylinderMesh(Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;radius:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;height:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;segments:&nbsp;int&nbsp;=&nbsp;16):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;half_height&nbsp;=&nbsp;height&nbsp;*&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;y&nbsp;in&nbsp;[-half_height,&nbsp;half_height]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;s&nbsp;in&nbsp;range(segments):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;theta&nbsp;=&nbsp;s&nbsp;*&nbsp;2&nbsp;*&nbsp;np.pi&nbsp;/&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;radius&nbsp;*&nbsp;np.cos(theta)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;=&nbsp;radius&nbsp;*&nbsp;np.sin(theta)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append([x,&nbsp;y,&nbsp;z])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;s&nbsp;in&nbsp;range(segments):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;next_s&nbsp;=&nbsp;(s&nbsp;+&nbsp;1)&nbsp;%&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bottom0&nbsp;=&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bottom1&nbsp;=&nbsp;next_s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;top0&nbsp;=&nbsp;s&nbsp;+&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;top1&nbsp;=&nbsp;next_s&nbsp;+&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([bottom0,&nbsp;top0,&nbsp;bottom1])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([bottom1,&nbsp;top0,&nbsp;top1])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Add&nbsp;center&nbsp;vertices&nbsp;for&nbsp;bottom&nbsp;and&nbsp;top&nbsp;caps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bottom_center_idx&nbsp;=&nbsp;len(vertices)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append([0.0,&nbsp;-half_height,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;top_center_idx&nbsp;=&nbsp;len(vertices)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append([0.0,&nbsp;half_height,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;s&nbsp;in&nbsp;range(segments):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;next_s&nbsp;=&nbsp;(s&nbsp;+&nbsp;1)&nbsp;%&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bottom0&nbsp;=&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bottom1&nbsp;=&nbsp;next_s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;top0&nbsp;=&nbsp;s&nbsp;+&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;top1&nbsp;=&nbsp;next_s&nbsp;+&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([bottom1,&nbsp;bottom_center_idx,&nbsp;bottom0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([top0,&nbsp;top_center_idx,&nbsp;top1])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices=np.array(vertices,&nbsp;dtype=float),&nbsp;triangles=np.array(triangles,&nbsp;dtype=int))<br>
+<br>
+class&nbsp;ConeMesh(Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;radius:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;height:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;segments:&nbsp;int&nbsp;=&nbsp;16):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;half_height&nbsp;=&nbsp;height&nbsp;*&nbsp;0.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;apex&nbsp;=&nbsp;[0.0,&nbsp;half_height,&nbsp;0.0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base_center&nbsp;=&nbsp;[0.0,&nbsp;-half_height,&nbsp;0.0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append(apex)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;s&nbsp;in&nbsp;range(segments):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;theta&nbsp;=&nbsp;s&nbsp;*&nbsp;2&nbsp;*&nbsp;np.pi&nbsp;/&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;radius&nbsp;*&nbsp;np.cos(theta)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;=&nbsp;radius&nbsp;*&nbsp;np.sin(theta)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append([x,&nbsp;-half_height,&nbsp;z])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;s&nbsp;in&nbsp;range(segments):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;next_s&nbsp;=&nbsp;(s&nbsp;+&nbsp;1)&nbsp;%&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base0&nbsp;=&nbsp;s&nbsp;+&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base1&nbsp;=&nbsp;next_s&nbsp;+&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([0,&nbsp;base0,&nbsp;base1])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([base0,&nbsp;base1,&nbsp;len(vertices)])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append(base_center)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices=np.array(vertices,&nbsp;dtype=float),&nbsp;triangles=np.array(triangles,&nbsp;dtype=int))<br>
+<br>
+class&nbsp;RingMesh(Mesh3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Плоское&nbsp;кольцо&nbsp;(annulus)&nbsp;в&nbsp;XZ-плоскости.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Нормаль&nbsp;смотрит&nbsp;вдоль&nbsp;+Y.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;radius:&nbsp;float&nbsp;=&nbsp;1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thickness:&nbsp;float&nbsp;=&nbsp;0.05,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;segments:&nbsp;int&nbsp;=&nbsp;32,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;segments&nbsp;&lt;&nbsp;3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;RingMesh:&nbsp;segments&nbsp;must&nbsp;be&nbsp;&gt;=&nbsp;3&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;внутренняя/внешняя&nbsp;окружности<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inner_radius&nbsp;=&nbsp;max(radius&nbsp;-&nbsp;thickness&nbsp;*&nbsp;0.5,&nbsp;1e-4)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outer_radius&nbsp;=&nbsp;radius&nbsp;+&nbsp;thickness&nbsp;*&nbsp;0.5<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices:&nbsp;list[list[float]]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles:&nbsp;list[list[int]]&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;вершины:&nbsp;[inner_i,&nbsp;outer_i]&nbsp;для&nbsp;каждого&nbsp;сегмента<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(segments):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle&nbsp;=&nbsp;2.0&nbsp;*&nbsp;np.pi&nbsp;*&nbsp;i&nbsp;/&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;np.cos(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;np.sin(angle)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_inner&nbsp;=&nbsp;inner_radius&nbsp;*&nbsp;c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z_inner&nbsp;=&nbsp;inner_radius&nbsp;*&nbsp;s<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x_outer&nbsp;=&nbsp;outer_radius&nbsp;*&nbsp;c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z_outer&nbsp;=&nbsp;outer_radius&nbsp;*&nbsp;s<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append([x_inner,&nbsp;0.0,&nbsp;z_inner])&nbsp;&nbsp;#&nbsp;inner<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append([x_outer,&nbsp;0.0,&nbsp;z_outer])&nbsp;&nbsp;#&nbsp;outer<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;индексы:&nbsp;два&nbsp;треугольника&nbsp;на&nbsp;&quot;квадратик&quot;&nbsp;между&nbsp;сегментами<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(segments):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i_inner&nbsp;=&nbsp;2&nbsp;*&nbsp;i<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i_outer&nbsp;=&nbsp;2&nbsp;*&nbsp;i&nbsp;+&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;next_i&nbsp;=&nbsp;(i&nbsp;+&nbsp;1)&nbsp;%&nbsp;segments<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_inner&nbsp;=&nbsp;2&nbsp;*&nbsp;next_i<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_outer&nbsp;=&nbsp;2&nbsp;*&nbsp;next_i&nbsp;+&nbsp;1<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;следим&nbsp;за&nbsp;порядком&nbsp;обхода,&nbsp;чтобы&nbsp;нормали&nbsp;смотрели&nbsp;в&nbsp;+Y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([i_inner,&nbsp;n_inner,&nbsp;i_outer])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles.append([i_outer,&nbsp;n_inner,&nbsp;n_outer])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices_np&nbsp;=&nbsp;np.asarray(vertices,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triangles_np&nbsp;=&nbsp;np.asarray(triangles,&nbsp;dtype=int)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices=vertices_np,&nbsp;triangles=triangles_np,&nbsp;uvs=None)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;для&nbsp;более&nbsp;внятного&nbsp;освещения,&nbsp;если&nbsp;оно&nbsp;у&nbsp;тебя&nbsp;есть<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.compute_vertex_normals()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

@@ -6,88 +6,88 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Line rendering demo with multiple viewports.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Line&nbsp;rendering&nbsp;demo&nbsp;with&nbsp;multiple&nbsp;viewports.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;Material,<br>
-&#9;Scene,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from termin.visualization.line import LineEntity<br>
-from termin.visualization.shader import ShaderProgram<br>
+from&nbsp;termin.visualization.line&nbsp;import&nbsp;LineEntity<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
 <br>
 <br>
-VERT = &quot;&quot;&quot;<br>
-#version 330 core<br>
-layout(location = 0) in vec3 a_position;<br>
+VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
 <br>
-uniform mat4 u_model;<br>
-uniform mat4 u_view;<br>
-uniform mat4 u_projection;<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
 <br>
-void main() {<br>
-&#9;gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-FRAG = &quot;&quot;&quot;<br>
-#version 330 core<br>
-uniform vec4 u_color;<br>
-out vec4 FragColor;<br>
+FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+uniform&nbsp;vec4&nbsp;u_color;<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
 <br>
-void main() {<br>
-&#9;FragColor = u_color;<br>
+void&nbsp;main()&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;u_color;<br>
 }<br>
 &quot;&quot;&quot;<br>
 <br>
 <br>
-def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent]:<br>
-&#9;shader_prog = ShaderProgram(VERT, FRAG)<br>
-&#9;material = Material(shader=shader_prog, color=np.array([0.1, 0.8, 0.2, 1.0], dtype=np.float32))<br>
-&#9;points = [<br>
-&#9;&#9;np.array([0.0, 0.0, 0.0]),<br>
-&#9;&#9;np.array([1.0, 0.0, 0.0]),<br>
-&#9;&#9;np.array([1.0, 1.0, 0.0]),<br>
-&#9;&#9;np.array([0.0, 1.0, 0.0]),<br>
-&#9;&#9;np.array([0.0, 0.0, 0.0]),<br>
-&#9;]<br>
-&#9;line1 = LineEntity(points=points, material=material, name=&quot;line1&quot;)<br>
-&#9;line2 = LineEntity(points=[p + np.array([0.0, 0.0, 1.0]) for p in points], material=material, name=&quot;line2&quot;)<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld)&nbsp;-&gt;&nbsp;tuple[Scene,&nbsp;PerspectiveCameraComponent]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader_prog&nbsp;=&nbsp;ShaderProgram(VERT,&nbsp;FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;Material(shader=shader_prog,&nbsp;color=np.array([0.1,&nbsp;0.8,&nbsp;0.2,&nbsp;1.0],&nbsp;dtype=np.float32))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;points&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.array([0.0,&nbsp;0.0,&nbsp;0.0]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.array([1.0,&nbsp;0.0,&nbsp;0.0]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.array([1.0,&nbsp;1.0,&nbsp;0.0]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.array([0.0,&nbsp;1.0,&nbsp;0.0]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.array([0.0,&nbsp;0.0,&nbsp;0.0]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;line1&nbsp;=&nbsp;LineEntity(points=points,&nbsp;material=material,&nbsp;name=&quot;line1&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;line2&nbsp;=&nbsp;LineEntity(points=[p&nbsp;+&nbsp;np.array([0.0,&nbsp;0.0,&nbsp;1.0])&nbsp;for&nbsp;p&nbsp;in&nbsp;points],&nbsp;material=material,&nbsp;name=&quot;line2&quot;)<br>
 <br>
-&#9;scene = Scene()<br>
-&#9;scene.add(line1)<br>
-&#9;scene.add(line2)<br>
-&#9;world.add_scene(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(line1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(line2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
-&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
-&#9;camera = PerspectiveCameraComponent()<br>
-&#9;camera_entity.add_component(camera)<br>
-&#9;camera_entity.add_component(OrbitCameraController(target=np.array([0.5, 0.5, 0.5])))<br>
-&#9;scene.add(camera_entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(OrbitCameraController(target=np.array([0.5,&nbsp;0.5,&nbsp;0.5])))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(camera_entity)<br>
 <br>
-&#9;return scene, camera<br>
-<br>
-<br>
-def main():<br>
-&#9;world = VisualizationWorld()<br>
-&#9;scene, camera = build_scene(world)<br>
-&#9;window = world.create_window(title=&quot;termin line demo&quot;)<br>
-&#9;# illustrate two viewports referencing same scene/camera<br>
-&#9;window.add_viewport(scene, camera, rect=(0.0, 0.0, 0.5, 1.0))<br>
-&#9;window.add_viewport(scene, camera, rect=(0.5, 0.0, 0.5, 1.0))<br>
-&#9;world.run()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;camera<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;camera&nbsp;=&nbsp;build_scene(world)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;world.create_window(title=&quot;termin&nbsp;line&nbsp;demo&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;illustrate&nbsp;two&nbsp;viewports&nbsp;referencing&nbsp;same&nbsp;scene/camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;camera,&nbsp;rect=(0.0,&nbsp;0.0,&nbsp;0.5,&nbsp;1.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;camera,&nbsp;rect=(0.5,&nbsp;0.0,&nbsp;0.5,&nbsp;1.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

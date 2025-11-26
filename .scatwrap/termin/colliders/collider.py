@@ -7,32 +7,32 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-import numpy<br>
+import&nbsp;numpy<br>
 <br>
-class Collider:<br>
-&#9;def closest_to_ray(self, ray: &quot;Ray3&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает (p_col, p_ray, distance) — ближайшие точки между коллайдером и лучом.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;raise NotImplementedError(&quot;closest_to_ray must be implemented by subclasses.&quot;)<br>
-&#9;<br>
-&#9;def transform_by(self, transform: 'Pose3'):<br>
-&#9;&#9;&quot;&quot;&quot;Return a new Collider transformed by the given Pose3.&quot;&quot;&quot;<br>
-&#9;&#9;raise NotImplementedError(&quot;transform_by must be implemented by subclasses.&quot;)<br>
+class&nbsp;Collider:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_ray(self,&nbsp;ray:&nbsp;&quot;Ray3&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;(p_col,&nbsp;p_ray,&nbsp;distance)&nbsp;—&nbsp;ближайшие&nbsp;точки&nbsp;между&nbsp;коллайдером&nbsp;и&nbsp;лучом.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(&quot;closest_to_ray&nbsp;must&nbsp;be&nbsp;implemented&nbsp;by&nbsp;subclasses.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_by(self,&nbsp;transform:&nbsp;'Pose3'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;a&nbsp;new&nbsp;Collider&nbsp;transformed&nbsp;by&nbsp;the&nbsp;given&nbsp;Pose3.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(&quot;transform_by&nbsp;must&nbsp;be&nbsp;implemented&nbsp;by&nbsp;subclasses.&quot;)<br>
 <br>
-&#9;def closest_to_collider(self, other: &quot;Collider&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;Return the closest points and distance between this collider and another collider.&quot;&quot;&quot;<br>
-&#9;&#9;raise NotImplementedError(&quot;closest_to_collider must be implemented by subclasses.&quot;)<br>
-&#9;<br>
-&#9;def avoidance(self, other: &quot;Collider&quot;) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Compute an avoidance vector to maintain a minimum distance from another collider.&quot;&quot;&quot;<br>
-&#9;&#9;p_near, q_near, dist = self.closest_to_collider(other)<br>
-&#9;&#9;diff = p_near - q_near<br>
-&#9;&#9;real_dist = numpy.linalg.norm(diff)<br>
-&#9;&#9;if real_dist == 0.0:<br>
-&#9;&#9;&#9;return numpy.zeros(3), 0.0, p_near<br>
-&#9;&#9;direction = diff / real_dist<br>
-&#9;&#9;return direction, real_dist, p_near<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_collider(self,&nbsp;other:&nbsp;&quot;Collider&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;the&nbsp;closest&nbsp;points&nbsp;and&nbsp;distance&nbsp;between&nbsp;this&nbsp;collider&nbsp;and&nbsp;another&nbsp;collider.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(&quot;closest_to_collider&nbsp;must&nbsp;be&nbsp;implemented&nbsp;by&nbsp;subclasses.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;avoidance(self,&nbsp;other:&nbsp;&quot;Collider&quot;)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Compute&nbsp;an&nbsp;avoidance&nbsp;vector&nbsp;to&nbsp;maintain&nbsp;a&nbsp;minimum&nbsp;distance&nbsp;from&nbsp;another&nbsp;collider.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_near,&nbsp;q_near,&nbsp;dist&nbsp;=&nbsp;self.closest_to_collider(other)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;diff&nbsp;=&nbsp;p_near&nbsp;-&nbsp;q_near<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;real_dist&nbsp;=&nbsp;numpy.linalg.norm(diff)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;real_dist&nbsp;==&nbsp;0.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.zeros(3),&nbsp;0.0,&nbsp;p_near<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;diff&nbsp;/&nbsp;real_dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;direction,&nbsp;real_dist,&nbsp;p_near<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

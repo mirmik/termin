@@ -6,202 +6,202 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# ===== termin/apps/editor_inspector.py =====<br>
-from __future__ import annotations<br>
+#&nbsp;=====&nbsp;termin/apps/editor_inspector.py&nbsp;=====<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import Optional<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional<br>
 <br>
-import numpy as np<br>
-from PyQt5.QtWidgets import (<br>
-&#9;QWidget,<br>
-&#9;QFormLayout,<br>
-&#9;QHBoxLayout,<br>
-&#9;QDoubleSpinBox,<br>
-&#9;QLabel,<br>
-&#9;QVBoxLayout,<br>
-&#9;QListWidget,<br>
-&#9;QListWidgetItem,<br>
-&#9;QCheckBox,<br>
-&#9;QLineEdit,<br>
-&#9;QMenu,<br>
-&#9;QAction,<br>
-&#9;QComboBox,<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QWidget,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QFormLayout,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QHBoxLayout,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QDoubleSpinBox,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QLabel,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QVBoxLayout,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QListWidget,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QListWidgetItem,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QCheckBox,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QLineEdit,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QMenu,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QAction,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QComboBox,<br>
 )<br>
-from PyQt5.QtCore import Qt, pyqtSignal<br>
+from&nbsp;PyQt5.QtCore&nbsp;import&nbsp;Qt,&nbsp;pyqtSignal<br>
 <br>
-from termin.kinematic.transform import Transform3<br>
-from termin.visualization.entity import Entity, Component<br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.visualization.inspect import InspectField<br>
-from termin.visualization.resources import ResourceManager<br>
+from&nbsp;termin.kinematic.transform&nbsp;import&nbsp;Transform3<br>
+from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Entity,&nbsp;Component<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.visualization.inspect&nbsp;import&nbsp;InspectField<br>
+from&nbsp;termin.visualization.resources&nbsp;import&nbsp;ResourceManager<br>
 <br>
 <br>
-class TransformInspector(QWidget):<br>
-&#9;transform_changed = pyqtSignal()<br>
+class&nbsp;TransformInspector(QWidget):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;transform_changed&nbsp;=&nbsp;pyqtSignal()<br>
 <br>
-&#9;def __init__(self, parent: Optional[QWidget] = None):<br>
-&#9;&#9;super().__init__(parent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;parent:&nbsp;Optional[QWidget]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent)<br>
 <br>
-&#9;&#9;self._transform: Optional[Transform3] = None<br>
-&#9;&#9;self._updating_from_model = False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform:&nbsp;Optional[Transform3]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._updating_from_model&nbsp;=&nbsp;False<br>
 <br>
-&#9;&#9;layout = QFormLayout(self)<br>
-&#9;&#9;layout.setLabelAlignment(Qt.AlignLeft)<br>
-&#9;&#9;layout.setFormAlignment(Qt.AlignTop)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;QFormLayout(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.setLabelAlignment(Qt.AlignLeft)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.setFormAlignment(Qt.AlignTop)<br>
 <br>
-&#9;&#9;def make_vec3_row():<br>
-&#9;&#9;&#9;row = QHBoxLayout()<br>
-&#9;&#9;&#9;sx = QDoubleSpinBox()<br>
-&#9;&#9;&#9;sy = QDoubleSpinBox()<br>
-&#9;&#9;&#9;sz = QDoubleSpinBox()<br>
-&#9;&#9;&#9;for sb in (sx, sy, sz):<br>
-&#9;&#9;&#9;&#9;sb.setRange(-1e6, 1e6)<br>
-&#9;&#9;&#9;&#9;sb.setDecimals(3)<br>
-&#9;&#9;&#9;&#9;sb.setSingleStep(0.1)<br>
-&#9;&#9;&#9;&#9;row.addWidget(sb)<br>
-&#9;&#9;&#9;return row, (sx, sy, sz)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;make_vec3_row():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row&nbsp;=&nbsp;QHBoxLayout()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sx&nbsp;=&nbsp;QDoubleSpinBox()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sy&nbsp;=&nbsp;QDoubleSpinBox()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sz&nbsp;=&nbsp;QDoubleSpinBox()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sb&nbsp;in&nbsp;(sx,&nbsp;sy,&nbsp;sz):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setRange(-1e6,&nbsp;1e6)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setDecimals(3)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setSingleStep(0.1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row.addWidget(sb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;row,&nbsp;(sx,&nbsp;sy,&nbsp;sz)<br>
 <br>
-&#9;&#9;pos_row, self._pos = make_vec3_row()<br>
-&#9;&#9;layout.addRow(QLabel(&quot;Position&quot;), pos_row)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pos_row,&nbsp;self._pos&nbsp;=&nbsp;make_vec3_row()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addRow(QLabel(&quot;Position&quot;),&nbsp;pos_row)<br>
 <br>
-&#9;&#9;rot_row, self._rot = make_vec3_row()<br>
-&#9;&#9;layout.addRow(QLabel(&quot;Rotation (deg)&quot;), rot_row)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rot_row,&nbsp;self._rot&nbsp;=&nbsp;make_vec3_row()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addRow(QLabel(&quot;Rotation&nbsp;(deg)&quot;),&nbsp;rot_row)<br>
 <br>
-&#9;&#9;scale_row, self._scale = make_vec3_row()<br>
-&#9;&#9;for sb in self._scale:<br>
-&#9;&#9;&#9;sb.setValue(1.0)<br>
-&#9;&#9;layout.addRow(QLabel(&quot;Scale&quot;), scale_row)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scale_row,&nbsp;self._scale&nbsp;=&nbsp;make_vec3_row()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sb&nbsp;in&nbsp;self._scale:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setValue(1.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addRow(QLabel(&quot;Scale&quot;),&nbsp;scale_row)<br>
 <br>
-&#9;&#9;for sb in (*self._pos, *self._rot, *self._scale):<br>
-&#9;&#9;&#9;sb.valueChanged.connect(self._on_value_changed)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sb&nbsp;in&nbsp;(*self._pos,&nbsp;*self._rot,&nbsp;*self._scale):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.valueChanged.connect(self._on_value_changed)<br>
 <br>
-&#9;&#9;self._set_enabled(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_enabled(False)<br>
 <br>
-&#9;def set_target(self, obj: Optional[object]):<br>
-&#9;&#9;if isinstance(obj, Entity):<br>
-&#9;&#9;&#9;transform = obj.transform<br>
-&#9;&#9;elif isinstance(obj, Transform3):<br>
-&#9;&#9;&#9;transform = obj<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;transform = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_target(self,&nbsp;obj:&nbsp;Optional[object]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(obj,&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;transform&nbsp;=&nbsp;obj.transform<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(obj,&nbsp;Transform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;transform&nbsp;=&nbsp;obj<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;transform&nbsp;=&nbsp;None<br>
 <br>
-&#9;&#9;self._transform = transform<br>
-&#9;&#9;self._update_from_transform()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform&nbsp;=&nbsp;transform<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_from_transform()<br>
 <br>
-&#9;def _set_enabled(self, flag: bool):<br>
-&#9;&#9;for sb in (*self._pos, *self._rot, *self._scale):<br>
-&#9;&#9;&#9;sb.setEnabled(flag)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_set_enabled(self,&nbsp;flag:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sb&nbsp;in&nbsp;(*self._pos,&nbsp;*self._rot,&nbsp;*self._scale):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setEnabled(flag)<br>
 <br>
-&#9;def _update_from_transform(self):<br>
-&#9;&#9;self._updating_from_model = True<br>
-&#9;&#9;try:<br>
-&#9;&#9;&#9;if self._transform is None:<br>
-&#9;&#9;&#9;&#9;self._set_enabled(False)<br>
-&#9;&#9;&#9;&#9;for sb in (*self._pos, *self._rot, *self._scale):<br>
-&#9;&#9;&#9;&#9;&#9;sb.setValue(0.0)<br>
-&#9;&#9;&#9;&#9;for sb in self._scale:<br>
-&#9;&#9;&#9;&#9;&#9;sb.setValue(1.0)<br>
-&#9;&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_update_from_transform(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._updating_from_model&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._transform&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_enabled(False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sb&nbsp;in&nbsp;(*self._pos,&nbsp;*self._rot,&nbsp;*self._scale):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setValue(0.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sb&nbsp;in&nbsp;self._scale:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setValue(1.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;&#9;&#9;self._set_enabled(True)<br>
-&#9;&#9;&#9;pose: Pose3 = self._transform.global_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_enabled(True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose:&nbsp;Pose3&nbsp;=&nbsp;self._transform.global_pose()<br>
 <br>
-&#9;&#9;&#9;px, py, pz = pose.lin<br>
-&#9;&#9;&#9;x, y, z, w = pose.ang<br>
-&#9;&#9;&#9;az, ay, ax = self.quat_to_euler_zyx(np.array([x, y, z, w], dtype=float))<br>
-&#9;&#9;&#9;self._pos[0].setValue(float(px))<br>
-&#9;&#9;&#9;self._pos[1].setValue(float(py))<br>
-&#9;&#9;&#9;self._pos[2].setValue(float(pz))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pz&nbsp;=&nbsp;pose.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y,&nbsp;z,&nbsp;w&nbsp;=&nbsp;pose.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;az,&nbsp;ay,&nbsp;ax&nbsp;=&nbsp;self.quat_to_euler_zyx(np.array([x,&nbsp;y,&nbsp;z,&nbsp;w],&nbsp;dtype=float))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pos[0].setValue(float(px))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pos[1].setValue(float(py))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pos[2].setValue(float(pz))<br>
 <br>
-&#9;&#9;&#9;self._rot[0].setValue(float(ax))<br>
-&#9;&#9;&#9;self._rot[1].setValue(float(ay))<br>
-&#9;&#9;&#9;self._rot[2].setValue(float(az))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot[0].setValue(float(ax))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot[1].setValue(float(ay))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot[2].setValue(float(az))<br>
 <br>
-&#9;&#9;&#9;s = np.array([1.0, 1.0, 1.0], dtype=float)<br>
-&#9;&#9;&#9;self._scale[0].setValue(float(s[0]))<br>
-&#9;&#9;&#9;self._scale[1].setValue(float(s[1]))<br>
-&#9;&#9;&#9;self._scale[2].setValue(float(s[2]))<br>
-&#9;&#9;finally:<br>
-&#9;&#9;&#9;self._updating_from_model = False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;np.array([1.0,&nbsp;1.0,&nbsp;1.0],&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._scale[0].setValue(float(s[0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._scale[1].setValue(float(s[1]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._scale[2].setValue(float(s[2]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._updating_from_model&nbsp;=&nbsp;False<br>
 <br>
-&#9;def euler_zyx_to_quat(self, zyx: np.ndarray) -&gt; np.ndarray:<br>
-&#9;&#9;zquat = np.array(<br>
-&#9;&#9;&#9;[<br>
-&#9;&#9;&#9;&#9;0.0,<br>
-&#9;&#9;&#9;&#9;0.0,<br>
-&#9;&#9;&#9;&#9;np.sin(np.radians(zyx[0]) / 2),<br>
-&#9;&#9;&#9;&#9;np.cos(np.radians(zyx[0]) / 2),<br>
-&#9;&#9;&#9;],<br>
-&#9;&#9;&#9;dtype=float,<br>
-&#9;&#9;)<br>
-&#9;&#9;yquat = np.array(<br>
-&#9;&#9;&#9;[<br>
-&#9;&#9;&#9;&#9;0.0,<br>
-&#9;&#9;&#9;&#9;np.sin(np.radians(zyx[1]) / 2),<br>
-&#9;&#9;&#9;&#9;0.0,<br>
-&#9;&#9;&#9;&#9;np.cos(np.radians(zyx[1]) / 2),<br>
-&#9;&#9;&#9;],<br>
-&#9;&#9;&#9;dtype=float,<br>
-&#9;&#9;)<br>
-&#9;&#9;xquat = np.array(<br>
-&#9;&#9;&#9;[<br>
-&#9;&#9;&#9;&#9;np.sin(np.radians(zyx[2]) / 2),<br>
-&#9;&#9;&#9;&#9;0.0,<br>
-&#9;&#9;&#9;&#9;0.0,<br>
-&#9;&#9;&#9;&#9;np.cos(np.radians(zyx[2]) / 2),<br>
-&#9;&#9;&#9;],<br>
-&#9;&#9;&#9;dtype=float,<br>
-&#9;&#9;)<br>
-&#9;&#9;return self.quat_mult(self.quat_mult(zquat, yquat), xquat)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;euler_zyx_to_quat(self,&nbsp;zyx:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;zquat&nbsp;=&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.sin(np.radians(zyx[0])&nbsp;/&nbsp;2),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.cos(np.radians(zyx[0])&nbsp;/&nbsp;2),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dtype=float,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yquat&nbsp;=&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.sin(np.radians(zyx[1])&nbsp;/&nbsp;2),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.cos(np.radians(zyx[1])&nbsp;/&nbsp;2),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dtype=float,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xquat&nbsp;=&nbsp;np.array(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.sin(np.radians(zyx[2])&nbsp;/&nbsp;2),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;np.cos(np.radians(zyx[2])&nbsp;/&nbsp;2),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dtype=float,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.quat_mult(self.quat_mult(zquat,&nbsp;yquat),&nbsp;xquat)<br>
 <br>
-&#9;def quat_mult(self, q1: np.ndarray, q2: np.ndarray) -&gt; np.ndarray:<br>
-&#9;&#9;w1, x1, y1, z1 = q1[3], q1[0], q1[1], q1[2]<br>
-&#9;&#9;w2, x2, y2, z2 = q2[3], q2[0], q2[1], q2[2]<br>
-&#9;&#9;w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2<br>
-&#9;&#9;x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2<br>
-&#9;&#9;y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2<br>
-&#9;&#9;z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2<br>
-&#9;&#9;return np.array([x, y, z, w], dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;quat_mult(self,&nbsp;q1:&nbsp;np.ndarray,&nbsp;q2:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w1,&nbsp;x1,&nbsp;y1,&nbsp;z1&nbsp;=&nbsp;q1[3],&nbsp;q1[0],&nbsp;q1[1],&nbsp;q1[2]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w2,&nbsp;x2,&nbsp;y2,&nbsp;z2&nbsp;=&nbsp;q2[3],&nbsp;q2[0],&nbsp;q2[1],&nbsp;q2[2]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w&nbsp;=&nbsp;w1&nbsp;*&nbsp;w2&nbsp;-&nbsp;x1&nbsp;*&nbsp;x2&nbsp;-&nbsp;y1&nbsp;*&nbsp;y2&nbsp;-&nbsp;z1&nbsp;*&nbsp;z2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;w1&nbsp;*&nbsp;x2&nbsp;+&nbsp;x1&nbsp;*&nbsp;w2&nbsp;+&nbsp;y1&nbsp;*&nbsp;z2&nbsp;-&nbsp;z1&nbsp;*&nbsp;y2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;w1&nbsp;*&nbsp;y2&nbsp;-&nbsp;x1&nbsp;*&nbsp;z2&nbsp;+&nbsp;y1&nbsp;*&nbsp;w2&nbsp;+&nbsp;z1&nbsp;*&nbsp;x2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;=&nbsp;w1&nbsp;*&nbsp;z2&nbsp;+&nbsp;x1&nbsp;*&nbsp;y2&nbsp;-&nbsp;y1&nbsp;*&nbsp;x2&nbsp;+&nbsp;z1&nbsp;*&nbsp;w2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.array([x,&nbsp;y,&nbsp;z,&nbsp;w],&nbsp;dtype=float)<br>
 <br>
-&#9;def quat_to_euler_zyx(self, quat: np.ndarray) -&gt; np.ndarray:<br>
-&#9;&#9;x, y, z, w = quat[0], quat[1], quat[2], quat[3]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;quat_to_euler_zyx(self,&nbsp;quat:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;y,&nbsp;z,&nbsp;w&nbsp;=&nbsp;quat[0],&nbsp;quat[1],&nbsp;quat[2],&nbsp;quat[3]<br>
 <br>
-&#9;&#9;t0 = +2.0 * (w * z + x * y)<br>
-&#9;&#9;t1 = +1.0 - 2.0 * (y * y + z * z)<br>
-&#9;&#9;Z = np.degrees(np.arctan2(t0, t1))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t0&nbsp;=&nbsp;+2.0&nbsp;*&nbsp;(w&nbsp;*&nbsp;z&nbsp;+&nbsp;x&nbsp;*&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t1&nbsp;=&nbsp;+1.0&nbsp;-&nbsp;2.0&nbsp;*&nbsp;(y&nbsp;*&nbsp;y&nbsp;+&nbsp;z&nbsp;*&nbsp;z)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Z&nbsp;=&nbsp;np.degrees(np.arctan2(t0,&nbsp;t1))<br>
 <br>
-&#9;&#9;t2 = +2.0 * (w * y - z * x)<br>
-&#9;&#9;t2 = +1.0 if t2 &gt; +1.0 else t2<br>
-&#9;&#9;t2 = -1.0 if t2 &lt; -1.0 else t2<br>
-&#9;&#9;Y = np.degrees(np.arcsin(t2))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t2&nbsp;=&nbsp;+2.0&nbsp;*&nbsp;(w&nbsp;*&nbsp;y&nbsp;-&nbsp;z&nbsp;*&nbsp;x)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t2&nbsp;=&nbsp;+1.0&nbsp;if&nbsp;t2&nbsp;&gt;&nbsp;+1.0&nbsp;else&nbsp;t2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t2&nbsp;=&nbsp;-1.0&nbsp;if&nbsp;t2&nbsp;&lt;&nbsp;-1.0&nbsp;else&nbsp;t2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Y&nbsp;=&nbsp;np.degrees(np.arcsin(t2))<br>
 <br>
-&#9;&#9;t3 = +2.0 * (w * x + y * z)<br>
-&#9;&#9;t4 = +1.0 - 2.0 * (x * x + y * y)<br>
-&#9;&#9;X = np.degrees(np.arctan2(t3, t4))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t3&nbsp;=&nbsp;+2.0&nbsp;*&nbsp;(w&nbsp;*&nbsp;x&nbsp;+&nbsp;y&nbsp;*&nbsp;z)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t4&nbsp;=&nbsp;+1.0&nbsp;-&nbsp;2.0&nbsp;*&nbsp;(x&nbsp;*&nbsp;x&nbsp;+&nbsp;y&nbsp;*&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;X&nbsp;=&nbsp;np.degrees(np.arctan2(t3,&nbsp;t4))<br>
 <br>
-&#9;&#9;return np.array([Z, Y, X], dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.array([Z,&nbsp;Y,&nbsp;X],&nbsp;dtype=float)<br>
 <br>
-&#9;def _on_value_changed(self, _value):<br>
-&#9;&#9;if self._updating_from_model:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;if self._transform is None:<br>
-&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_on_value_changed(self,&nbsp;_value):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._updating_from_model:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._transform&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;&#9;pose: Pose3 = self._transform.global_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose:&nbsp;Pose3&nbsp;=&nbsp;self._transform.global_pose()<br>
 <br>
-&#9;&#9;px = self._pos[0].value()<br>
-&#9;&#9;py = self._pos[1].value()<br>
-&#9;&#9;pz = self._pos[2].value()<br>
-&#9;&#9;new_lin = np.array([px, py, pz], dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px&nbsp;=&nbsp;self._pos[0].value()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;py&nbsp;=&nbsp;self._pos[1].value()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pz&nbsp;=&nbsp;self._pos[2].value()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_lin&nbsp;=&nbsp;np.array([px,&nbsp;py,&nbsp;pz],&nbsp;dtype=float)<br>
 <br>
-&#9;&#9;ax = self._rot[0].value()<br>
-&#9;&#9;ay = self._rot[1].value()<br>
-&#9;&#9;az = self._rot[2].value()<br>
-&#9;&#9;new_ang = self.euler_zyx_to_quat(np.array([az, ay, ax], dtype=float))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ax&nbsp;=&nbsp;self._rot[0].value()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ay&nbsp;=&nbsp;self._rot[1].value()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;az&nbsp;=&nbsp;self._rot[2].value()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_ang&nbsp;=&nbsp;self.euler_zyx_to_quat(np.array([az,&nbsp;ay,&nbsp;ax],&nbsp;dtype=float))<br>
 <br>
-&#9;&#9;pose = Pose3(lin=new_lin, ang=new_ang)<br>
-&#9;&#9;self._transform.relocate(pose)<br>
-&#9;&#9;self.transform_changed.emit()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose&nbsp;=&nbsp;Pose3(lin=new_lin,&nbsp;ang=new_ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform.relocate(pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.transform_changed.emit()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

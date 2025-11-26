@@ -6,625 +6,625 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Алгебраическая геометрия: квадратичные формы, эллипсоиды, коники.&quot;&quot;&quot;<br>
-import numpy<br>
-import math<br>
+&quot;&quot;&quot;Алгебраическая&nbsp;геометрия:&nbsp;квадратичные&nbsp;формы,&nbsp;эллипсоиды,&nbsp;коники.&quot;&quot;&quot;<br>
+import&nbsp;numpy<br>
+import&nbsp;math<br>
 <br>
 <br>
-def fit_quadric(points, center=None):<br>
-&#9;&quot;&quot;&quot;Строит квадратичную форму (квадрику) по набору точек методом наименьших квадратов.<br>
-&#9;<br>
-&#9;Универсальная функция для восстановления центральных квадрик:<br>
-&#9;- Эллипсоид (все собственные значения &gt; 0)<br>
-&#9;- Гиперболоид (собственные значения разных знаков)<br>
-&#9;<br>
-&#9;Квадрика задаётся уравнением: (x-c)ᵀ A (x-c) = ±1, где:<br>
-&#9;- A - симметричная матрица (задаёт форму и ориентацию)<br>
-&#9;- c - центр квадрики<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim).<br>
-&#9;&#9;&#9;&#9;Точки должны приблизительно лежать на поверхности квадрики.<br>
-&#9;&#9;&#9;&#9;Минимум n_dim*(n_dim+3)/2 точек для определённости.<br>
-&#9;&#9;center: Центр квадрики размера (n_dim,).<br>
-&#9;&#9;&#9;&#9;Если None, центр определяется автоматически.<br>
-&#9;&#9;&#9;&#9;Если задан, строится квадрика с фиксированным центром.<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;A: Матрица квадратичной формы размера (n_dim, n_dim)<br>
-&#9;&#9;center: Центр квадрики размера (n_dim,)<br>
-&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;Решает задачу наименьших квадратов для общей квадратичной формы:<br>
-&#9;&#9;x² + B₁₁xy + B₁₂xz + B₂₂y² + B₂₃yz + B₃₃z² + C₁x + C₂y + C₃z + D = 0<br>
-&#9;&#9;<br>
-&#9;&#9;Метод не делает предположений о знаках собственных значений A.<br>
-&#9;&#9;Для специфичных проверок используйте fit_ellipsoid().<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;points = numpy.asarray(points, dtype=float)<br>
-&#9;<br>
-&#9;if points.ndim != 2:<br>
-&#9;&#9;raise ValueError(f&quot;points должен быть 2D массивом, получен {points.ndim}D&quot;)<br>
-&#9;<br>
-&#9;n_points, n_dim = points.shape<br>
-&#9;<br>
-&#9;# Минимальное количество точек для определения квадрики<br>
-&#9;min_points = n_dim * (n_dim + 3) // 2<br>
-&#9;if n_points &lt; min_points:<br>
-&#9;&#9;raise ValueError(f&quot;Недостаточно точек: нужно минимум {min_points}, получено {n_points}&quot;)<br>
-&#9;<br>
-&#9;# Решаем задачу подгонки<br>
-&#9;if center is not None:<br>
-&#9;&#9;center = numpy.asarray(center, dtype=float)<br>
-&#9;&#9;if center.shape != (n_dim,):<br>
-&#9;&#9;&#9;raise ValueError(f&quot;center должен иметь размер ({n_dim},), получен {center.shape}&quot;)<br>
-&#9;&#9;A = _fit_quadric_fixed_center(points, center)<br>
-&#9;else:<br>
-&#9;&#9;A, center = _fit_quadric_auto_center(points)<br>
-&#9;<br>
-&#9;return A, center<br>
+def&nbsp;fit_quadric(points,&nbsp;center=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Строит&nbsp;квадратичную&nbsp;форму&nbsp;(квадрику)&nbsp;по&nbsp;набору&nbsp;точек&nbsp;методом&nbsp;наименьших&nbsp;квадратов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Универсальная&nbsp;функция&nbsp;для&nbsp;восстановления&nbsp;центральных&nbsp;квадрик:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Эллипсоид&nbsp;(все&nbsp;собственные&nbsp;значения&nbsp;&gt;&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Гиперболоид&nbsp;(собственные&nbsp;значения&nbsp;разных&nbsp;знаков)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Квадрика&nbsp;задаётся&nbsp;уравнением:&nbsp;(x-c)ᵀ&nbsp;A&nbsp;(x-c)&nbsp;=&nbsp;±1,&nbsp;где:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;A&nbsp;-&nbsp;симметричная&nbsp;матрица&nbsp;(задаёт&nbsp;форму&nbsp;и&nbsp;ориентацию)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;c&nbsp;-&nbsp;центр&nbsp;квадрики<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Точки&nbsp;должны&nbsp;приблизительно&nbsp;лежать&nbsp;на&nbsp;поверхности&nbsp;квадрики.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Минимум&nbsp;n_dim*(n_dim+3)/2&nbsp;точек&nbsp;для&nbsp;определённости.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;квадрики&nbsp;размера&nbsp;(n_dim,).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;None,&nbsp;центр&nbsp;определяется&nbsp;автоматически.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;задан,&nbsp;строится&nbsp;квадрика&nbsp;с&nbsp;фиксированным&nbsp;центром.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;квадратичной&nbsp;формы&nbsp;размера&nbsp;(n_dim,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;квадрики&nbsp;размера&nbsp;(n_dim,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Решает&nbsp;задачу&nbsp;наименьших&nbsp;квадратов&nbsp;для&nbsp;общей&nbsp;квадратичной&nbsp;формы:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x²&nbsp;+&nbsp;B₁₁xy&nbsp;+&nbsp;B₁₂xz&nbsp;+&nbsp;B₂₂y²&nbsp;+&nbsp;B₂₃yz&nbsp;+&nbsp;B₃₃z²&nbsp;+&nbsp;C₁x&nbsp;+&nbsp;C₂y&nbsp;+&nbsp;C₃z&nbsp;+&nbsp;D&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Метод&nbsp;не&nbsp;делает&nbsp;предположений&nbsp;о&nbsp;знаках&nbsp;собственных&nbsp;значений&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;специфичных&nbsp;проверок&nbsp;используйте&nbsp;fit_ellipsoid().<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;points&nbsp;=&nbsp;numpy.asarray(points,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;points.ndim&nbsp;!=&nbsp;2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;points&nbsp;должен&nbsp;быть&nbsp;2D&nbsp;массивом,&nbsp;получен&nbsp;{points.ndim}D&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_points,&nbsp;n_dim&nbsp;=&nbsp;points.shape<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Минимальное&nbsp;количество&nbsp;точек&nbsp;для&nbsp;определения&nbsp;квадрики<br>
+&nbsp;&nbsp;&nbsp;&nbsp;min_points&nbsp;=&nbsp;n_dim&nbsp;*&nbsp;(n_dim&nbsp;+&nbsp;3)&nbsp;//&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n_points&nbsp;&lt;&nbsp;min_points:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Недостаточно&nbsp;точек:&nbsp;нужно&nbsp;минимум&nbsp;{min_points},&nbsp;получено&nbsp;{n_points}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Решаем&nbsp;задачу&nbsp;подгонки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;center&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center&nbsp;=&nbsp;numpy.asarray(center,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;center.shape&nbsp;!=&nbsp;(n_dim,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;center&nbsp;должен&nbsp;иметь&nbsp;размер&nbsp;({n_dim},),&nbsp;получен&nbsp;{center.shape}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_fit_quadric_fixed_center(points,&nbsp;center)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A,&nbsp;center&nbsp;=&nbsp;_fit_quadric_auto_center(points)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A,&nbsp;center<br>
 <br>
 <br>
-def fit_ellipsoid(points, center=None):<br>
-&#9;&quot;&quot;&quot;Строит эллипсоид по набору точек с валидацией и вычислением полуосей.<br>
-&#9;<br>
-&#9;Эллипсоид задаётся уравнением: (x-c)ᵀ A (x-c) = 1, где:<br>
-&#9;- A - положительно определённая матрица (задаёт форму и ориентацию)<br>
-&#9;- c - центр эллипсоида<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim).<br>
-&#9;&#9;center: Центр эллипсоида размера (n_dim,) или None.<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;A: Матрица квадратичной формы размера (n_dim, n_dim)<br>
-&#9;&#9;center: Центр эллипсоида размера (n_dim,)<br>
-&#9;&#9;radii: Полуоси эллипсоида (собственные значения A⁻¹)<br>
-&#9;&#9;axes: Направления осей (собственные векторы A)<br>
-&#9;<br>
-&#9;Raises:<br>
-&#9;&#9;ValueError: Если восстановленная квадрика не является эллипсоидом<br>
-&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; # Точки на сфере радиуса 2<br>
-&#9;&#9;&gt;&gt;&gt; theta = np.linspace(0, 2*np.pi, 50)<br>
-&#9;&#9;&gt;&gt;&gt; phi = np.linspace(0, np.pi, 50)<br>
-&#9;&#9;&gt;&gt;&gt; THETA, PHI = np.meshgrid(theta, phi)<br>
-&#9;&#9;&gt;&gt;&gt; X = 2 * np.sin(PHI) * np.cos(THETA)<br>
-&#9;&#9;&gt;&gt;&gt; Y = 2 * np.sin(PHI) * np.sin(THETA)<br>
-&#9;&#9;&gt;&gt;&gt; Z = 2 * np.cos(PHI)<br>
-&#9;&#9;&gt;&gt;&gt; points = np.column_stack([X.ravel(), Y.ravel(), Z.ravel()])<br>
-&#9;&#9;&gt;&gt;&gt; A, center, radii, axes = fit_ellipsoid(points)<br>
-&#9;&#9;&gt;&gt;&gt; radii  # [2, 2, 2]<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;# Восстанавливаем квадрику универсальным методом<br>
-&#9;A, center = fit_quadric(points, center)<br>
-&#9;<br>
-&#9;# Проверяем, что это именно эллипсоид (все собственные значения &gt; 0)<br>
-&#9;eigvals, eigvecs = numpy.linalg.eigh(A)<br>
-&#9;<br>
-&#9;if numpy.any(eigvals &lt;= 0):<br>
-&#9;&#9;raise ValueError(<br>
-&#9;&#9;&#9;&quot;Получена не положительно определённая матрица. &quot;<br>
-&#9;&#9;&#9;&quot;Точки не лежат на эллипсоиде.&quot;<br>
-&#9;&#9;)<br>
-&#9;<br>
-&#9;# Вычисляем полуоси = sqrt(1/λᵢ), так как (x-c)ᵀA(x-c) = 1 и A = VΛV^T<br>
-&#9;radii = 1.0 / numpy.sqrt(eigvals)<br>
-&#9;<br>
-&#9;# Сортируем по убыванию полуосей (a ≥ b ≥ c)<br>
-&#9;sort_idx = numpy.argsort(radii)[::-1]<br>
-&#9;radii = radii[sort_idx]<br>
-&#9;axes = eigvecs[:, sort_idx]<br>
-&#9;<br>
-&#9;return A, center, radii, axes<br>
+def&nbsp;fit_ellipsoid(points,&nbsp;center=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Строит&nbsp;эллипсоид&nbsp;по&nbsp;набору&nbsp;точек&nbsp;с&nbsp;валидацией&nbsp;и&nbsp;вычислением&nbsp;полуосей.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Эллипсоид&nbsp;задаётся&nbsp;уравнением:&nbsp;(x-c)ᵀ&nbsp;A&nbsp;(x-c)&nbsp;=&nbsp;1,&nbsp;где:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;A&nbsp;-&nbsp;положительно&nbsp;определённая&nbsp;матрица&nbsp;(задаёт&nbsp;форму&nbsp;и&nbsp;ориентацию)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;c&nbsp;-&nbsp;центр&nbsp;эллипсоида<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;эллипсоида&nbsp;размера&nbsp;(n_dim,)&nbsp;или&nbsp;None.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;квадратичной&nbsp;формы&nbsp;размера&nbsp;(n_dim,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;эллипсоида&nbsp;размера&nbsp;(n_dim,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;radii:&nbsp;Полуоси&nbsp;эллипсоида&nbsp;(собственные&nbsp;значения&nbsp;A⁻¹)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;axes:&nbsp;Направления&nbsp;осей&nbsp;(собственные&nbsp;векторы&nbsp;A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Raises:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ValueError:&nbsp;Если&nbsp;восстановленная&nbsp;квадрика&nbsp;не&nbsp;является&nbsp;эллипсоидом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Точки&nbsp;на&nbsp;сфере&nbsp;радиуса&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;theta&nbsp;=&nbsp;np.linspace(0,&nbsp;2*np.pi,&nbsp;50)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;phi&nbsp;=&nbsp;np.linspace(0,&nbsp;np.pi,&nbsp;50)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;THETA,&nbsp;PHI&nbsp;=&nbsp;np.meshgrid(theta,&nbsp;phi)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;X&nbsp;=&nbsp;2&nbsp;*&nbsp;np.sin(PHI)&nbsp;*&nbsp;np.cos(THETA)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Y&nbsp;=&nbsp;2&nbsp;*&nbsp;np.sin(PHI)&nbsp;*&nbsp;np.sin(THETA)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Z&nbsp;=&nbsp;2&nbsp;*&nbsp;np.cos(PHI)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;points&nbsp;=&nbsp;np.column_stack([X.ravel(),&nbsp;Y.ravel(),&nbsp;Z.ravel()])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;A,&nbsp;center,&nbsp;radii,&nbsp;axes&nbsp;=&nbsp;fit_ellipsoid(points)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;radii&nbsp;&nbsp;#&nbsp;[2,&nbsp;2,&nbsp;2]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Восстанавливаем&nbsp;квадрику&nbsp;универсальным&nbsp;методом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A,&nbsp;center&nbsp;=&nbsp;fit_quadric(points,&nbsp;center)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверяем,&nbsp;что&nbsp;это&nbsp;именно&nbsp;эллипсоид&nbsp;(все&nbsp;собственные&nbsp;значения&nbsp;&gt;&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;eigvals,&nbsp;eigvecs&nbsp;=&nbsp;numpy.linalg.eigh(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;numpy.any(eigvals&nbsp;&lt;=&nbsp;0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Получена&nbsp;не&nbsp;положительно&nbsp;определённая&nbsp;матрица.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Точки&nbsp;не&nbsp;лежат&nbsp;на&nbsp;эллипсоиде.&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вычисляем&nbsp;полуоси&nbsp;=&nbsp;sqrt(1/λᵢ),&nbsp;так&nbsp;как&nbsp;(x-c)ᵀA(x-c)&nbsp;=&nbsp;1&nbsp;и&nbsp;A&nbsp;=&nbsp;VΛV^T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;radii&nbsp;=&nbsp;1.0&nbsp;/&nbsp;numpy.sqrt(eigvals)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Сортируем&nbsp;по&nbsp;убыванию&nbsp;полуосей&nbsp;(a&nbsp;≥&nbsp;b&nbsp;≥&nbsp;c)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sort_idx&nbsp;=&nbsp;numpy.argsort(radii)[::-1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;radii&nbsp;=&nbsp;radii[sort_idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;axes&nbsp;=&nbsp;eigvecs[:,&nbsp;sort_idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A,&nbsp;center,&nbsp;radii,&nbsp;axes<br>
 <br>
 <br>
-def fit_hyperboloid(points, center=None):<br>
-&#9;&quot;&quot;&quot;Строит гиперболоид по набору точек с валидацией и анализом типа.<br>
-&#9;<br>
-&#9;Гиперболоид задаётся уравнением: (x-c)ᵀ A (x-c) = ±1, где:<br>
-&#9;- A - матрица со смешанными знаками собственных значений<br>
-&#9;- c - центр гиперболоида<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim).<br>
-&#9;&#9;center: Центр гиперболоида размера (n_dim,) или None.<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;A: Матрица квадратичной формы размера (n_dim, n_dim)<br>
-&#9;&#9;center: Центр гиперболоида размера (n_dim,)<br>
-&#9;&#9;eigvals: Собственные значения (с разными знаками)<br>
-&#9;&#9;eigvecs: Собственные векторы (главные направления)<br>
-&#9;&#9;hyperboloid_type: Тип гиперболоида:<br>
-&#9;&#9;&#9;- &quot;one-sheet&quot;: однополостный (n-1 положительных, 1 отрицательное)<br>
-&#9;&#9;&#9;- &quot;two-sheet&quot;: двуполостный (n-2 положительных, 2 отрицательных)<br>
-&#9;&#9;&#9;- &quot;multi-sheet&quot;: многополостный (для размерностей &gt; 3)<br>
-&#9;<br>
-&#9;Raises:<br>
-&#9;&#9;ValueError: Если восстановленная квадрика не является гиперболоидом<br>
-&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; # Однополостный гиперболоид: x²/4 + y²/4 - z² = 1<br>
-&#9;&#9;&gt;&gt;&gt; u = np.linspace(0, 2*np.pi, 50)<br>
-&#9;&#9;&gt;&gt;&gt; v = np.linspace(-2, 2, 50)<br>
-&#9;&#9;&gt;&gt;&gt; U, V = np.meshgrid(u, v)<br>
-&#9;&#9;&gt;&gt;&gt; X = 2 * np.cosh(V) * np.cos(U)<br>
-&#9;&#9;&gt;&gt;&gt; Y = 2 * np.cosh(V) * np.sin(U)<br>
-&#9;&#9;&gt;&gt;&gt; Z = 2 * np.sinh(V)<br>
-&#9;&#9;&gt;&gt;&gt; points = np.column_stack([X.ravel(), Y.ravel(), Z.ravel()])<br>
-&#9;&#9;&gt;&gt;&gt; A, center, eigvals, eigvecs, htype = fit_hyperboloid(points)<br>
-&#9;&#9;&gt;&gt;&gt; htype  # &quot;one-sheet&quot;<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;# Восстанавливаем квадрику универсальным методом<br>
-&#9;A, center = fit_quadric(points, center)<br>
-&#9;<br>
-&#9;# Анализируем собственные значения<br>
-&#9;eigvals, eigvecs = numpy.linalg.eigh(A)<br>
-&#9;<br>
-&#9;pos_count = numpy.sum(eigvals &gt; 0)<br>
-&#9;neg_count = numpy.sum(eigvals &lt; 0)<br>
-&#9;n_dim = len(eigvals)<br>
-&#9;<br>
-&#9;# Проверяем, что это гиперболоид (смешанные знаки)<br>
-&#9;if pos_count == n_dim or neg_count == n_dim:<br>
-&#9;&#9;raise ValueError(<br>
-&#9;&#9;&#9;f&quot;Получена квадрика с собственными значениями одного знака. &quot;<br>
-&#9;&#9;&#9;f&quot;Это эллипсоид, а не гиперболоид. &quot;<br>
-&#9;&#9;&#9;f&quot;Положительных: {pos_count}, отрицательных: {neg_count}&quot;<br>
-&#9;&#9;)<br>
-&#9;<br>
-&#9;if pos_count == 0 or neg_count == 0:<br>
-&#9;&#9;raise ValueError(<br>
-&#9;&#9;&#9;&quot;Получена вырожденная квадрика. &quot;<br>
-&#9;&#9;&#9;&quot;Точки не лежат на гиперболоиде.&quot;<br>
-&#9;&#9;)<br>
-&#9;<br>
-&#9;# Определяем тип гиперболоида<br>
-&#9;if neg_count == 1:<br>
-&#9;&#9;hyperboloid_type = &quot;one-sheet&quot;<br>
-&#9;elif neg_count == 2:<br>
-&#9;&#9;hyperboloid_type = &quot;two-sheet&quot;<br>
-&#9;else:<br>
-&#9;&#9;hyperboloid_type = &quot;multi-sheet&quot;<br>
-&#9;<br>
-&#9;return A, center, eigvals, eigvecs, hyperboloid_type<br>
+def&nbsp;fit_hyperboloid(points,&nbsp;center=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Строит&nbsp;гиперболоид&nbsp;по&nbsp;набору&nbsp;точек&nbsp;с&nbsp;валидацией&nbsp;и&nbsp;анализом&nbsp;типа.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Гиперболоид&nbsp;задаётся&nbsp;уравнением:&nbsp;(x-c)ᵀ&nbsp;A&nbsp;(x-c)&nbsp;=&nbsp;±1,&nbsp;где:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;A&nbsp;-&nbsp;матрица&nbsp;со&nbsp;смешанными&nbsp;знаками&nbsp;собственных&nbsp;значений<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;c&nbsp;-&nbsp;центр&nbsp;гиперболоида<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;гиперболоида&nbsp;размера&nbsp;(n_dim,)&nbsp;или&nbsp;None.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;квадратичной&nbsp;формы&nbsp;размера&nbsp;(n_dim,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;гиперболоида&nbsp;размера&nbsp;(n_dim,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eigvals:&nbsp;Собственные&nbsp;значения&nbsp;(с&nbsp;разными&nbsp;знаками)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eigvecs:&nbsp;Собственные&nbsp;векторы&nbsp;(главные&nbsp;направления)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hyperboloid_type:&nbsp;Тип&nbsp;гиперболоида:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;&quot;one-sheet&quot;:&nbsp;однополостный&nbsp;(n-1&nbsp;положительных,&nbsp;1&nbsp;отрицательное)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;&quot;two-sheet&quot;:&nbsp;двуполостный&nbsp;(n-2&nbsp;положительных,&nbsp;2&nbsp;отрицательных)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;&quot;multi-sheet&quot;:&nbsp;многополостный&nbsp;(для&nbsp;размерностей&nbsp;&gt;&nbsp;3)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Raises:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ValueError:&nbsp;Если&nbsp;восстановленная&nbsp;квадрика&nbsp;не&nbsp;является&nbsp;гиперболоидом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Однополостный&nbsp;гиперболоид:&nbsp;x²/4&nbsp;+&nbsp;y²/4&nbsp;-&nbsp;z²&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;u&nbsp;=&nbsp;np.linspace(0,&nbsp;2*np.pi,&nbsp;50)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v&nbsp;=&nbsp;np.linspace(-2,&nbsp;2,&nbsp;50)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;U,&nbsp;V&nbsp;=&nbsp;np.meshgrid(u,&nbsp;v)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;X&nbsp;=&nbsp;2&nbsp;*&nbsp;np.cosh(V)&nbsp;*&nbsp;np.cos(U)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Y&nbsp;=&nbsp;2&nbsp;*&nbsp;np.cosh(V)&nbsp;*&nbsp;np.sin(U)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Z&nbsp;=&nbsp;2&nbsp;*&nbsp;np.sinh(V)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;points&nbsp;=&nbsp;np.column_stack([X.ravel(),&nbsp;Y.ravel(),&nbsp;Z.ravel()])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;A,&nbsp;center,&nbsp;eigvals,&nbsp;eigvecs,&nbsp;htype&nbsp;=&nbsp;fit_hyperboloid(points)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;htype&nbsp;&nbsp;#&nbsp;&quot;one-sheet&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Восстанавливаем&nbsp;квадрику&nbsp;универсальным&nbsp;методом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A,&nbsp;center&nbsp;=&nbsp;fit_quadric(points,&nbsp;center)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Анализируем&nbsp;собственные&nbsp;значения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;eigvals,&nbsp;eigvecs&nbsp;=&nbsp;numpy.linalg.eigh(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;pos_count&nbsp;=&nbsp;numpy.sum(eigvals&nbsp;&gt;&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;neg_count&nbsp;=&nbsp;numpy.sum(eigvals&nbsp;&lt;&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_dim&nbsp;=&nbsp;len(eigvals)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверяем,&nbsp;что&nbsp;это&nbsp;гиперболоид&nbsp;(смешанные&nbsp;знаки)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pos_count&nbsp;==&nbsp;n_dim&nbsp;or&nbsp;neg_count&nbsp;==&nbsp;n_dim:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Получена&nbsp;квадрика&nbsp;с&nbsp;собственными&nbsp;значениями&nbsp;одного&nbsp;знака.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Это&nbsp;эллипсоид,&nbsp;а&nbsp;не&nbsp;гиперболоид.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Положительных:&nbsp;{pos_count},&nbsp;отрицательных:&nbsp;{neg_count}&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pos_count&nbsp;==&nbsp;0&nbsp;or&nbsp;neg_count&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Получена&nbsp;вырожденная&nbsp;квадрика.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Точки&nbsp;не&nbsp;лежат&nbsp;на&nbsp;гиперболоиде.&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;тип&nbsp;гиперболоида<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;neg_count&nbsp;==&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hyperboloid_type&nbsp;=&nbsp;&quot;one-sheet&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;neg_count&nbsp;==&nbsp;2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hyperboloid_type&nbsp;=&nbsp;&quot;two-sheet&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hyperboloid_type&nbsp;=&nbsp;&quot;multi-sheet&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A,&nbsp;center,&nbsp;eigvals,&nbsp;eigvecs,&nbsp;hyperboloid_type<br>
 <br>
 <br>
-def fit_paraboloid(points):<br>
-&#9;&quot;&quot;&quot;Строит параболоид по набору точек методом линейной регрессии.<br>
-&#9;<br>
-&#9;Параболоид задаётся уравнением: z = xᵀAx + bᵀx + c, где:<br>
-&#9;- A - симметричная матрица размера (n-1, n-1) для координат (x₁,...,xₙ₋₁)<br>
-&#9;- b - вектор линейных коэффициентов<br>
-&#9;- c - константа<br>
-&#9;- z = xₙ - зависимая переменная<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim).<br>
-&#9;&#9;&#9;&#9;Последняя координата считается зависимой (высота).<br>
-&#9;&#9;&#9;&#9;Минимум n_dim*(n_dim+1)/2 точек.<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;A: Матрица квадратичной формы размера (n_dim-1, n_dim-1)<br>
-&#9;&#9;b: Вектор линейных коэффициентов размера (n_dim-1,)<br>
-&#9;&#9;c: Константа (скаляр)<br>
-&#9;&#9;vertex: Вершина параболоида размера (n_dim-1,)<br>
-&#9;&#9;eigvals: Собственные значения матрицы A<br>
-&#9;&#9;eigvecs: Собственные векторы (главные направления кривизны)<br>
-&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;В отличие от эллипсоида/гиперболоида, параболоид не является<br>
-&#9;&#9;центральной квадрикой. Он решается через линейную регрессию,<br>
-&#9;&#9;где z явно выражается через остальные координаты.<br>
-&#9;&#9;<br>
-&#9;&#9;Для 3D: z = ax² + by² + cxy + dx + ey + f<br>
-&#9;&#9;<br>
-&#9;&#9;Вершина находится из условия ∇z = 0: vertex = -½A⁻¹b<br>
-&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; # Параболоид вращения: z = x² + y²<br>
-&#9;&#9;&gt;&gt;&gt; x = np.linspace(-2, 2, 50)<br>
-&#9;&#9;&gt;&gt;&gt; y = np.linspace(-2, 2, 50)<br>
-&#9;&#9;&gt;&gt;&gt; X, Y = np.meshgrid(x, y)<br>
-&#9;&#9;&gt;&gt;&gt; Z = X**2 + Y**2<br>
-&#9;&#9;&gt;&gt;&gt; points = np.column_stack([X.ravel(), Y.ravel(), Z.ravel()])<br>
-&#9;&#9;&gt;&gt;&gt; A, b, c, vertex, eigvals, eigvecs = fit_paraboloid(points)<br>
-&#9;&#9;&gt;&gt;&gt; vertex  # ≈ [0, 0]<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;points = numpy.asarray(points, dtype=float)<br>
-&#9;<br>
-&#9;if points.ndim != 2:<br>
-&#9;&#9;raise ValueError(f&quot;points должен быть 2D массивом, получен {points.ndim}D&quot;)<br>
-&#9;<br>
-&#9;n_points, n_dim = points.shape<br>
-&#9;<br>
-&#9;if n_dim &lt; 2:<br>
-&#9;&#9;raise ValueError(f&quot;Параболоид требует минимум 2D, получено {n_dim}D&quot;)<br>
-&#9;<br>
-&#9;# Минимальное количество точек для параболоида<br>
-&#9;# Для параметров квадратичной формы без z: (n-1)(n-1+1)/2 + (n-1) + 1<br>
-&#9;min_points = (n_dim - 1) * (n_dim) // 2 + (n_dim - 1) + 1<br>
-&#9;if n_points &lt; min_points:<br>
-&#9;&#9;raise ValueError(<br>
-&#9;&#9;&#9;f&quot;Недостаточно точек для параболоида: &quot;<br>
-&#9;&#9;&#9;f&quot;нужно минимум {min_points}, получено {n_points}&quot;<br>
-&#9;&#9;)<br>
-&#9;<br>
-&#9;# Выделяем независимые координаты (x₁,...,xₙ₋₁) и зависимую (z = xₙ)<br>
-&#9;x_coords = points[:, :-1]  # (n_points, n_dim-1)<br>
-&#9;z_coords = points[:, -1]   # (n_points,)<br>
-&#9;<br>
-&#9;n_indep = n_dim - 1<br>
-&#9;<br>
-&#9;# Строим матрицу дизайна: [x₁², x₁x₂, x₁x₃, x₂², x₂x₃, x₃², x₁, x₂, x₃, 1]<br>
-&#9;columns = []<br>
-&#9;<br>
-&#9;# Квадратичные члены<br>
-&#9;for i in range(n_indep):<br>
-&#9;&#9;for j in range(i, n_indep):<br>
-&#9;&#9;&#9;if i == j:<br>
-&#9;&#9;&#9;&#9;columns.append(x_coords[:, i] ** 2)<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;columns.append(x_coords[:, i] * x_coords[:, j])<br>
-&#9;<br>
-&#9;# Линейные члены<br>
-&#9;for i in range(n_indep):<br>
-&#9;&#9;columns.append(x_coords[:, i])<br>
-&#9;<br>
-&#9;# Константный член<br>
-&#9;columns.append(numpy.ones(n_points))<br>
-&#9;<br>
-&#9;design_matrix = numpy.column_stack(columns)<br>
-&#9;<br>
-&#9;# Решаем линейную регрессию: z = design_matrix @ coeffs<br>
-&#9;coeffs, residuals, rank, s = numpy.linalg.lstsq(<br>
-&#9;&#9;design_matrix, z_coords, rcond=None<br>
-&#9;)<br>
-&#9;<br>
-&#9;# Извлекаем коэффициенты<br>
-&#9;n_quad = n_indep * (n_indep + 1) // 2<br>
-&#9;<br>
-&#9;# Восстанавливаем симметричную матрицу A<br>
-&#9;A = numpy.zeros((n_indep, n_indep))<br>
-&#9;idx = 0<br>
-&#9;for i in range(n_indep):<br>
-&#9;&#9;for j in range(i, n_indep):<br>
-&#9;&#9;&#9;if i == j:<br>
-&#9;&#9;&#9;&#9;A[i, j] = coeffs[idx]<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;A[i, j] = coeffs[idx]<br>
-&#9;&#9;&#9;&#9;A[j, i] = coeffs[idx]<br>
-&#9;&#9;&#9;idx += 1<br>
-&#9;<br>
-&#9;# Линейные коэффициенты<br>
-&#9;b = coeffs[n_quad:n_quad + n_indep]<br>
-&#9;<br>
-&#9;# Константа<br>
-&#9;c = coeffs[n_quad + n_indep]<br>
-&#9;<br>
-&#9;# Вычисляем вершину параболоида: точку экстремума<br>
-&#9;# ∇z = 2Ax + b = 0 =&gt; x = -½A⁻¹b<br>
-&#9;try:<br>
-&#9;&#9;A_inv = numpy.linalg.inv(A)<br>
-&#9;&#9;vertex = -0.5 * A_inv @ b<br>
-&#9;except numpy.linalg.LinAlgError:<br>
-&#9;&#9;# Вырожденный случай (например, цилиндр)<br>
-&#9;&#9;vertex = numpy.zeros(n_indep)<br>
-&#9;&#9;vertex[:] = numpy.nan<br>
-&#9;<br>
-&#9;# Анализируем кривизну через собственные значения<br>
-&#9;eigvals, eigvecs = numpy.linalg.eigh(A)<br>
-&#9;<br>
-&#9;return A, b, c, vertex, eigvals, eigvecs<br>
+def&nbsp;fit_paraboloid(points):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Строит&nbsp;параболоид&nbsp;по&nbsp;набору&nbsp;точек&nbsp;методом&nbsp;линейной&nbsp;регрессии.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Параболоид&nbsp;задаётся&nbsp;уравнением:&nbsp;z&nbsp;=&nbsp;xᵀAx&nbsp;+&nbsp;bᵀx&nbsp;+&nbsp;c,&nbsp;где:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;A&nbsp;-&nbsp;симметричная&nbsp;матрица&nbsp;размера&nbsp;(n-1,&nbsp;n-1)&nbsp;для&nbsp;координат&nbsp;(x₁,...,xₙ₋₁)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;b&nbsp;-&nbsp;вектор&nbsp;линейных&nbsp;коэффициентов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;c&nbsp;-&nbsp;константа<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;z&nbsp;=&nbsp;xₙ&nbsp;-&nbsp;зависимая&nbsp;переменная<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Последняя&nbsp;координата&nbsp;считается&nbsp;зависимой&nbsp;(высота).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Минимум&nbsp;n_dim*(n_dim+1)/2&nbsp;точек.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;квадратичной&nbsp;формы&nbsp;размера&nbsp;(n_dim-1,&nbsp;n_dim-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b:&nbsp;Вектор&nbsp;линейных&nbsp;коэффициентов&nbsp;размера&nbsp;(n_dim-1,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c:&nbsp;Константа&nbsp;(скаляр)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex:&nbsp;Вершина&nbsp;параболоида&nbsp;размера&nbsp;(n_dim-1,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eigvals:&nbsp;Собственные&nbsp;значения&nbsp;матрицы&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eigvecs:&nbsp;Собственные&nbsp;векторы&nbsp;(главные&nbsp;направления&nbsp;кривизны)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;В&nbsp;отличие&nbsp;от&nbsp;эллипсоида/гиперболоида,&nbsp;параболоид&nbsp;не&nbsp;является<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;центральной&nbsp;квадрикой.&nbsp;Он&nbsp;решается&nbsp;через&nbsp;линейную&nbsp;регрессию,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;z&nbsp;явно&nbsp;выражается&nbsp;через&nbsp;остальные&nbsp;координаты.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;3D:&nbsp;z&nbsp;=&nbsp;ax²&nbsp;+&nbsp;by²&nbsp;+&nbsp;cxy&nbsp;+&nbsp;dx&nbsp;+&nbsp;ey&nbsp;+&nbsp;f<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вершина&nbsp;находится&nbsp;из&nbsp;условия&nbsp;∇z&nbsp;=&nbsp;0:&nbsp;vertex&nbsp;=&nbsp;-½A⁻¹b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Параболоид&nbsp;вращения:&nbsp;z&nbsp;=&nbsp;x²&nbsp;+&nbsp;y²<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;x&nbsp;=&nbsp;np.linspace(-2,&nbsp;2,&nbsp;50)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;y&nbsp;=&nbsp;np.linspace(-2,&nbsp;2,&nbsp;50)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;X,&nbsp;Y&nbsp;=&nbsp;np.meshgrid(x,&nbsp;y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Z&nbsp;=&nbsp;X**2&nbsp;+&nbsp;Y**2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;points&nbsp;=&nbsp;np.column_stack([X.ravel(),&nbsp;Y.ravel(),&nbsp;Z.ravel()])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;A,&nbsp;b,&nbsp;c,&nbsp;vertex,&nbsp;eigvals,&nbsp;eigvecs&nbsp;=&nbsp;fit_paraboloid(points)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;vertex&nbsp;&nbsp;#&nbsp;≈&nbsp;[0,&nbsp;0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;points&nbsp;=&nbsp;numpy.asarray(points,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;points.ndim&nbsp;!=&nbsp;2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;points&nbsp;должен&nbsp;быть&nbsp;2D&nbsp;массивом,&nbsp;получен&nbsp;{points.ndim}D&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_points,&nbsp;n_dim&nbsp;=&nbsp;points.shape<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n_dim&nbsp;&lt;&nbsp;2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Параболоид&nbsp;требует&nbsp;минимум&nbsp;2D,&nbsp;получено&nbsp;{n_dim}D&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Минимальное&nbsp;количество&nbsp;точек&nbsp;для&nbsp;параболоида<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Для&nbsp;параметров&nbsp;квадратичной&nbsp;формы&nbsp;без&nbsp;z:&nbsp;(n-1)(n-1+1)/2&nbsp;+&nbsp;(n-1)&nbsp;+&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;min_points&nbsp;=&nbsp;(n_dim&nbsp;-&nbsp;1)&nbsp;*&nbsp;(n_dim)&nbsp;//&nbsp;2&nbsp;+&nbsp;(n_dim&nbsp;-&nbsp;1)&nbsp;+&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n_points&nbsp;&lt;&nbsp;min_points:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;Недостаточно&nbsp;точек&nbsp;для&nbsp;параболоида:&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&quot;нужно&nbsp;минимум&nbsp;{min_points},&nbsp;получено&nbsp;{n_points}&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Выделяем&nbsp;независимые&nbsp;координаты&nbsp;(x₁,...,xₙ₋₁)&nbsp;и&nbsp;зависимую&nbsp;(z&nbsp;=&nbsp;xₙ)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x_coords&nbsp;=&nbsp;points[:,&nbsp;:-1]&nbsp;&nbsp;#&nbsp;(n_points,&nbsp;n_dim-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;z_coords&nbsp;=&nbsp;points[:,&nbsp;-1]&nbsp;&nbsp;&nbsp;#&nbsp;(n_points,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_indep&nbsp;=&nbsp;n_dim&nbsp;-&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Строим&nbsp;матрицу&nbsp;дизайна:&nbsp;[x₁²,&nbsp;x₁x₂,&nbsp;x₁x₃,&nbsp;x₂²,&nbsp;x₂x₃,&nbsp;x₃²,&nbsp;x₁,&nbsp;x₂,&nbsp;x₃,&nbsp;1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;columns&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Квадратичные&nbsp;члены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n_indep):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;range(i,&nbsp;n_indep):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i&nbsp;==&nbsp;j:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;columns.append(x_coords[:,&nbsp;i]&nbsp;**&nbsp;2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;columns.append(x_coords[:,&nbsp;i]&nbsp;*&nbsp;x_coords[:,&nbsp;j])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Линейные&nbsp;члены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n_indep):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;columns.append(x_coords[:,&nbsp;i])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Константный&nbsp;член<br>
+&nbsp;&nbsp;&nbsp;&nbsp;columns.append(numpy.ones(n_points))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;design_matrix&nbsp;=&nbsp;numpy.column_stack(columns)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Решаем&nbsp;линейную&nbsp;регрессию:&nbsp;z&nbsp;=&nbsp;design_matrix&nbsp;@&nbsp;coeffs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;coeffs,&nbsp;residuals,&nbsp;rank,&nbsp;s&nbsp;=&nbsp;numpy.linalg.lstsq(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;design_matrix,&nbsp;z_coords,&nbsp;rcond=None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Извлекаем&nbsp;коэффициенты<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_quad&nbsp;=&nbsp;n_indep&nbsp;*&nbsp;(n_indep&nbsp;+&nbsp;1)&nbsp;//&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Восстанавливаем&nbsp;симметричную&nbsp;матрицу&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;numpy.zeros((n_indep,&nbsp;n_indep))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n_indep):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;range(i,&nbsp;n_indep):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i&nbsp;==&nbsp;j:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[i,&nbsp;j]&nbsp;=&nbsp;coeffs[idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[i,&nbsp;j]&nbsp;=&nbsp;coeffs[idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[j,&nbsp;i]&nbsp;=&nbsp;coeffs[idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;+=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Линейные&nbsp;коэффициенты<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;coeffs[n_quad:n_quad&nbsp;+&nbsp;n_indep]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Константа<br>
+&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;coeffs[n_quad&nbsp;+&nbsp;n_indep]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вычисляем&nbsp;вершину&nbsp;параболоида:&nbsp;точку&nbsp;экстремума<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;∇z&nbsp;=&nbsp;2Ax&nbsp;+&nbsp;b&nbsp;=&nbsp;0&nbsp;=&gt;&nbsp;x&nbsp;=&nbsp;-½A⁻¹b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_inv&nbsp;=&nbsp;numpy.linalg.inv(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex&nbsp;=&nbsp;-0.5&nbsp;*&nbsp;A_inv&nbsp;@&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;numpy.linalg.LinAlgError:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вырожденный&nbsp;случай&nbsp;(например,&nbsp;цилиндр)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex&nbsp;=&nbsp;numpy.zeros(n_indep)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertex[:]&nbsp;=&nbsp;numpy.nan<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Анализируем&nbsp;кривизну&nbsp;через&nbsp;собственные&nbsp;значения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;eigvals,&nbsp;eigvecs&nbsp;=&nbsp;numpy.linalg.eigh(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A,&nbsp;b,&nbsp;c,&nbsp;vertex,&nbsp;eigvals,&nbsp;eigvecs<br>
 <br>
 <br>
-def _fit_quadric_fixed_center(points, center):<br>
-&#9;&quot;&quot;&quot;Подгоняет квадрику с заданным центром.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim)<br>
-&#9;&#9;center: Центр квадрики размера (n_dim,)<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица A размера (n_dim, n_dim)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;n_points, n_dim = points.shape<br>
-&#9;<br>
-&#9;# Сдвигаем точки к центру<br>
-&#9;points_centered = points - center<br>
-&#9;<br>
-&#9;# Строим матрицу дизайна для квадратичной формы xᵀAx = 1<br>
-&#9;design_matrix = _build_quadratic_design_matrix(points_centered)<br>
-&#9;<br>
-&#9;# Решаем систему: design_matrix @ coeffs = 1<br>
-&#9;coeffs, residuals, rank, s = numpy.linalg.lstsq(<br>
-&#9;&#9;design_matrix, numpy.ones(n_points), rcond=None<br>
-&#9;)<br>
-&#9;<br>
-&#9;# Восстанавливаем симметричную матрицу A из коэффициентов<br>
-&#9;A = _coeffs_to_matrix(coeffs, n_dim)<br>
-&#9;<br>
-&#9;return A<br>
+def&nbsp;_fit_quadric_fixed_center(points,&nbsp;center):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Подгоняет&nbsp;квадрику&nbsp;с&nbsp;заданным&nbsp;центром.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;квадрики&nbsp;размера&nbsp;(n_dim,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;A&nbsp;размера&nbsp;(n_dim,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_points,&nbsp;n_dim&nbsp;=&nbsp;points.shape<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Сдвигаем&nbsp;точки&nbsp;к&nbsp;центру<br>
+&nbsp;&nbsp;&nbsp;&nbsp;points_centered&nbsp;=&nbsp;points&nbsp;-&nbsp;center<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Строим&nbsp;матрицу&nbsp;дизайна&nbsp;для&nbsp;квадратичной&nbsp;формы&nbsp;xᵀAx&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;design_matrix&nbsp;=&nbsp;_build_quadratic_design_matrix(points_centered)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Решаем&nbsp;систему:&nbsp;design_matrix&nbsp;@&nbsp;coeffs&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;coeffs,&nbsp;residuals,&nbsp;rank,&nbsp;s&nbsp;=&nbsp;numpy.linalg.lstsq(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;design_matrix,&nbsp;numpy.ones(n_points),&nbsp;rcond=None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Восстанавливаем&nbsp;симметричную&nbsp;матрицу&nbsp;A&nbsp;из&nbsp;коэффициентов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_coeffs_to_matrix(coeffs,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A<br>
 <br>
 <br>
-def _fit_quadric_auto_center(points):<br>
-&#9;&quot;&quot;&quot;Подгоняет квадрику с автоматическим определением центра.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim)<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;A: Матрица размера (n_dim, n_dim)<br>
-&#9;&#9;center: Центр размера (n_dim,)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;n_points, n_dim = points.shape<br>
-&#9;<br>
-&#9;# Строим полную матрицу дизайна: [квадратичные, линейные, константа]<br>
-&#9;design_matrix = _build_full_design_matrix(points)<br>
-&#9;<br>
-&#9;# Решаем однородную систему с ограничением ||coeffs|| = 1<br>
-&#9;# Используем SVD: решение = правый сингулярный вектор для минимального σ<br>
-&#9;u, s, vh = numpy.linalg.svd(design_matrix, full_matrices=True)<br>
-&#9;coeffs = vh[-1, :]<br>
-&#9;<br>
-&#9;# Извлекаем компоненты<br>
-&#9;n_quad = n_dim * (n_dim + 1) // 2<br>
-&#9;A = _coeffs_to_matrix(coeffs[:n_quad], n_dim)<br>
-&#9;b = coeffs[n_quad:n_quad + n_dim]<br>
-&#9;d = coeffs[n_quad + n_dim]<br>
-&#9;<br>
-&#9;# SVD может дать решение с произвольным знаком<br>
-&#9;# Нормализуем так, чтобы след матрицы был положительным<br>
-&#9;if numpy.trace(A) &lt; 0:<br>
-&#9;&#9;A = -A<br>
-&#9;&#9;b = -b<br>
-&#9;&#9;d = -d<br>
-&#9;<br>
-&#9;# Проверяем невырожденность<br>
-&#9;eigvals = numpy.linalg.eigvalsh(A)<br>
-&#9;if numpy.all(numpy.abs(eigvals) &lt; 1e-10):<br>
-&#9;&#9;raise ValueError(<br>
-&#9;&#9;&#9;&quot;Получена вырожденная матрица. &quot;<br>
-&#9;&#9;&#9;&quot;Точки не лежат на центральной квадрике.&quot;<br>
-&#9;&#9;)<br>
-&#9;<br>
-&#9;# Находим центр: c = -½A⁻¹b<br>
-&#9;try:<br>
-&#9;&#9;A_inv = numpy.linalg.inv(A)<br>
-&#9;&#9;center = -0.5 * A_inv @ b<br>
-&#9;except numpy.linalg.LinAlgError:<br>
-&#9;&#9;raise ValueError(<br>
-&#9;&#9;&#9;&quot;Не удалось найти центр квадрики. &quot;<br>
-&#9;&#9;&#9;&quot;Возможно, точки лежат на параболоиде или вырожденной поверхности.&quot;<br>
-&#9;&#9;)<br>
-&#9;<br>
-&#9;# Нормализуем к канонической форме (x-c)ᵀA(x-c) = ±1<br>
-&#9;k = -(center @ A @ center + b @ center + d)<br>
-&#9;<br>
-&#9;if numpy.abs(k) &lt; 1e-10:<br>
-&#9;&#9;raise ValueError(&quot;Некорректная нормализация. Проверьте входные данные.&quot;)<br>
-&#9;<br>
-&#9;A = A / k<br>
-&#9;<br>
-&#9;return A, center<br>
+def&nbsp;_fit_quadric_auto_center(points):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Подгоняет&nbsp;квадрику&nbsp;с&nbsp;автоматическим&nbsp;определением&nbsp;центра.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(n_dim,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;размера&nbsp;(n_dim,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_points,&nbsp;n_dim&nbsp;=&nbsp;points.shape<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Строим&nbsp;полную&nbsp;матрицу&nbsp;дизайна:&nbsp;[квадратичные,&nbsp;линейные,&nbsp;константа]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;design_matrix&nbsp;=&nbsp;_build_full_design_matrix(points)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Решаем&nbsp;однородную&nbsp;систему&nbsp;с&nbsp;ограничением&nbsp;||coeffs||&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Используем&nbsp;SVD:&nbsp;решение&nbsp;=&nbsp;правый&nbsp;сингулярный&nbsp;вектор&nbsp;для&nbsp;минимального&nbsp;σ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(design_matrix,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;coeffs&nbsp;=&nbsp;vh[-1,&nbsp;:]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Извлекаем&nbsp;компоненты<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_quad&nbsp;=&nbsp;n_dim&nbsp;*&nbsp;(n_dim&nbsp;+&nbsp;1)&nbsp;//&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_coeffs_to_matrix(coeffs[:n_quad],&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;coeffs[n_quad:n_quad&nbsp;+&nbsp;n_dim]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;coeffs[n_quad&nbsp;+&nbsp;n_dim]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;SVD&nbsp;может&nbsp;дать&nbsp;решение&nbsp;с&nbsp;произвольным&nbsp;знаком<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нормализуем&nbsp;так,&nbsp;чтобы&nbsp;след&nbsp;матрицы&nbsp;был&nbsp;положительным<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;numpy.trace(A)&nbsp;&lt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;-A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;-b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;-d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверяем&nbsp;невырожденность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;eigvals&nbsp;=&nbsp;numpy.linalg.eigvalsh(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;numpy.all(numpy.abs(eigvals)&nbsp;&lt;&nbsp;1e-10):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Получена&nbsp;вырожденная&nbsp;матрица.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Точки&nbsp;не&nbsp;лежат&nbsp;на&nbsp;центральной&nbsp;квадрике.&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Находим&nbsp;центр:&nbsp;c&nbsp;=&nbsp;-½A⁻¹b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A_inv&nbsp;=&nbsp;numpy.linalg.inv(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center&nbsp;=&nbsp;-0.5&nbsp;*&nbsp;A_inv&nbsp;@&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;numpy.linalg.LinAlgError:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Не&nbsp;удалось&nbsp;найти&nbsp;центр&nbsp;квадрики.&nbsp;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;Возможно,&nbsp;точки&nbsp;лежат&nbsp;на&nbsp;параболоиде&nbsp;или&nbsp;вырожденной&nbsp;поверхности.&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нормализуем&nbsp;к&nbsp;канонической&nbsp;форме&nbsp;(x-c)ᵀA(x-c)&nbsp;=&nbsp;±1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;k&nbsp;=&nbsp;-(center&nbsp;@&nbsp;A&nbsp;@&nbsp;center&nbsp;+&nbsp;b&nbsp;@&nbsp;center&nbsp;+&nbsp;d)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;numpy.abs(k)&nbsp;&lt;&nbsp;1e-10:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Некорректная&nbsp;нормализация.&nbsp;Проверьте&nbsp;входные&nbsp;данные.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;A&nbsp;/&nbsp;k<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A,&nbsp;center<br>
 <br>
 <br>
-def _build_quadratic_design_matrix(points):<br>
-&#9;&quot;&quot;&quot;Строит матрицу дизайна для квадратичных членов.<br>
-&#9;<br>
-&#9;Для каждой точки: [x², xy, xz, y², yz, z², ...] (верхний треугольник).<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim)<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица дизайна размера (n_points, n_dim*(n_dim+1)/2)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;n_points, n_dim = points.shape<br>
-&#9;columns = []<br>
-&#9;<br>
-&#9;for i in range(n_dim):<br>
-&#9;&#9;for j in range(i, n_dim):<br>
-&#9;&#9;&#9;if i == j:<br>
-&#9;&#9;&#9;&#9;# Диагональные элементы: x², y², z²<br>
-&#9;&#9;&#9;&#9;columns.append(points[:, i] ** 2)<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;# Внедиагональные: 2*xy, 2*xz, 2*yz (множитель 2 для симметрии)<br>
-&#9;&#9;&#9;&#9;columns.append(2 * points[:, i] * points[:, j])<br>
-&#9;<br>
-&#9;return numpy.column_stack(columns)<br>
+def&nbsp;_build_quadratic_design_matrix(points):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Строит&nbsp;матрицу&nbsp;дизайна&nbsp;для&nbsp;квадратичных&nbsp;членов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;каждой&nbsp;точки:&nbsp;[x²,&nbsp;xy,&nbsp;xz,&nbsp;y²,&nbsp;yz,&nbsp;z²,&nbsp;...]&nbsp;(верхний&nbsp;треугольник).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;дизайна&nbsp;размера&nbsp;(n_points,&nbsp;n_dim*(n_dim+1)/2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_points,&nbsp;n_dim&nbsp;=&nbsp;points.shape<br>
+&nbsp;&nbsp;&nbsp;&nbsp;columns&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n_dim):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;range(i,&nbsp;n_dim):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i&nbsp;==&nbsp;j:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Диагональные&nbsp;элементы:&nbsp;x²,&nbsp;y²,&nbsp;z²<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;columns.append(points[:,&nbsp;i]&nbsp;**&nbsp;2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Внедиагональные:&nbsp;2*xy,&nbsp;2*xz,&nbsp;2*yz&nbsp;(множитель&nbsp;2&nbsp;для&nbsp;симметрии)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;columns.append(2&nbsp;*&nbsp;points[:,&nbsp;i]&nbsp;*&nbsp;points[:,&nbsp;j])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.column_stack(columns)<br>
 <br>
 <br>
-def _build_full_design_matrix(points):<br>
-&#9;&quot;&quot;&quot;Строит полную матрицу дизайна: квадратичные + линейные + константа.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim)<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица дизайна размера (n_points, n_dim*(n_dim+3)/2 + 1)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;n_points, n_dim = points.shape<br>
-&#9;<br>
-&#9;# Квадратичные члены<br>
-&#9;quad_matrix = _build_quadratic_design_matrix(points)<br>
-&#9;<br>
-&#9;# Линейные члены<br>
-&#9;linear_columns = [points[:, i] for i in range(n_dim)]<br>
-&#9;<br>
-&#9;# Константный член<br>
-&#9;const_column = [numpy.ones(n_points)]<br>
-&#9;<br>
-&#9;return numpy.column_stack([quad_matrix] + linear_columns + const_column)<br>
+def&nbsp;_build_full_design_matrix(points):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Строит&nbsp;полную&nbsp;матрицу&nbsp;дизайна:&nbsp;квадратичные&nbsp;+&nbsp;линейные&nbsp;+&nbsp;константа.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;дизайна&nbsp;размера&nbsp;(n_points,&nbsp;n_dim*(n_dim+3)/2&nbsp;+&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_points,&nbsp;n_dim&nbsp;=&nbsp;points.shape<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Квадратичные&nbsp;члены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;quad_matrix&nbsp;=&nbsp;_build_quadratic_design_matrix(points)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Линейные&nbsp;члены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;linear_columns&nbsp;=&nbsp;[points[:,&nbsp;i]&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n_dim)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Константный&nbsp;член<br>
+&nbsp;&nbsp;&nbsp;&nbsp;const_column&nbsp;=&nbsp;[numpy.ones(n_points)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.column_stack([quad_matrix]&nbsp;+&nbsp;linear_columns&nbsp;+&nbsp;const_column)<br>
 <br>
 <br>
-def _coeffs_to_matrix(coeffs, n_dim):<br>
-&#9;&quot;&quot;&quot;Восстанавливает симметричную матрицу из коэффициентов верхнего треугольника.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;coeffs: Коэффициенты размера (n_dim*(n_dim+1)/2,)<br>
-&#9;&#9;n_dim: Размерность матрицы<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Симметричная матрица размера (n_dim, n_dim)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = numpy.zeros((n_dim, n_dim))<br>
-&#9;idx = 0<br>
-&#9;<br>
-&#9;for i in range(n_dim):<br>
-&#9;&#9;for j in range(i, n_dim):<br>
-&#9;&#9;&#9;if i == j:<br>
-&#9;&#9;&#9;&#9;A[i, j] = coeffs[idx]<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;A[i, j] = coeffs[idx]<br>
-&#9;&#9;&#9;&#9;A[j, i] = coeffs[idx]<br>
-&#9;&#9;&#9;idx += 1<br>
-&#9;<br>
-&#9;return A<br>
+def&nbsp;_coeffs_to_matrix(coeffs,&nbsp;n_dim):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Восстанавливает&nbsp;симметричную&nbsp;матрицу&nbsp;из&nbsp;коэффициентов&nbsp;верхнего&nbsp;треугольника.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coeffs:&nbsp;Коэффициенты&nbsp;размера&nbsp;(n_dim*(n_dim+1)/2,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_dim:&nbsp;Размерность&nbsp;матрицы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Симметричная&nbsp;матрица&nbsp;размера&nbsp;(n_dim,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;numpy.zeros((n_dim,&nbsp;n_dim))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n_dim):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;range(i,&nbsp;n_dim):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i&nbsp;==&nbsp;j:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[i,&nbsp;j]&nbsp;=&nbsp;coeffs[idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[i,&nbsp;j]&nbsp;=&nbsp;coeffs[idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[j,&nbsp;i]&nbsp;=&nbsp;coeffs[idx]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;+=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A<br>
 <br>
 <br>
-def ellipsoid_equation(A, center):<br>
-&#9;&quot;&quot;&quot;Форматирует уравнение эллипсоида в читаемую строку.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица квадратичной формы размера (n_dim, n_dim)<br>
-&#9;&#9;center: Центр эллипсоида размера (n_dim,)<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Строковое представление уравнения<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;n_dim = len(center)<br>
-&#9;coord_names = ['x', 'y', 'z', 'w'] + [f'x_{i}' for i in range(4, n_dim)]<br>
-&#9;<br>
-&#9;terms = []<br>
-&#9;for i in range(n_dim):<br>
-&#9;&#9;ci = center[i]<br>
-&#9;&#9;coord = coord_names[i]<br>
-&#9;&#9;if abs(ci) &gt; 1e-10:<br>
-&#9;&#9;&#9;terms.append(f&quot;({coord} - {ci:.3g})&quot;)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;terms.append(coord)<br>
-&#9;<br>
-&#9;if n_dim &lt;= 3:<br>
-&#9;&#9;return f&quot;(x-c)ᵀ A (x-c) = 1, где c = {center}&quot;<br>
-&#9;else:<br>
-&#9;&#9;return f&quot;Эллипсоид в R^{n_dim} с центром {center}&quot;<br>
+def&nbsp;ellipsoid_equation(A,&nbsp;center):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Форматирует&nbsp;уравнение&nbsp;эллипсоида&nbsp;в&nbsp;читаемую&nbsp;строку.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;квадратичной&nbsp;формы&nbsp;размера&nbsp;(n_dim,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;эллипсоида&nbsp;размера&nbsp;(n_dim,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Строковое&nbsp;представление&nbsp;уравнения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_dim&nbsp;=&nbsp;len(center)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;coord_names&nbsp;=&nbsp;['x',&nbsp;'y',&nbsp;'z',&nbsp;'w']&nbsp;+&nbsp;[f'x_{i}'&nbsp;for&nbsp;i&nbsp;in&nbsp;range(4,&nbsp;n_dim)]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;terms&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(n_dim):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ci&nbsp;=&nbsp;center[i]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coord&nbsp;=&nbsp;coord_names[i]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;abs(ci)&nbsp;&gt;&nbsp;1e-10:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;terms.append(f&quot;({coord}&nbsp;-&nbsp;{ci:.3g})&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;terms.append(coord)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n_dim&nbsp;&lt;=&nbsp;3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;(x-c)ᵀ&nbsp;A&nbsp;(x-c)&nbsp;=&nbsp;1,&nbsp;где&nbsp;c&nbsp;=&nbsp;{center}&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;Эллипсоид&nbsp;в&nbsp;R^{n_dim}&nbsp;с&nbsp;центром&nbsp;{center}&quot;<br>
 <br>
 <br>
-def _gamma_half_integer(n):<br>
-&#9;&quot;&quot;&quot;Вычисляет Γ(n/2 + 1) для натуральных n.<br>
-&#9;<br>
-&#9;Специализированная функция для вычисления гамма-функции в точках<br>
-&#9;вида n/2 + 1, где n — натуральное число. Используется для формулы<br>
-&#9;объёма n-мерной сферы/эллипсоида.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;n: Натуральное число (размерность пространства)<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Значение Γ(n/2 + 1)<br>
-&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;Для чётных n: Γ(n/2 + 1) = (n/2)!<br>
-&#9;&#9;Для нечётных n: Γ(n/2 + 1) = Γ(0.5) * ∏(k + 0.5) для k=0..m,<br>
-&#9;&#9;&#9;&#9;&#9;&#9;где m = (n-1)/2 и Γ(0.5) = √π<br>
-&#9;&#9;<br>
-&#9;&#9;Примеры:<br>
-&#9;&#9;- n=2: Γ(2) = 1! = 1<br>
-&#9;&#9;- n=3: Γ(2.5) = 1.5 × 0.5 × √π ≈ 1.329<br>
-&#9;&#9;- n=4: Γ(3) = 2! = 2<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;if n % 2 == 0:<br>
-&#9;&#9;# n чётное: Γ(k+1) = k! для k = n/2<br>
-&#9;&#9;k = n // 2<br>
-&#9;&#9;return float(math.factorial(k))<br>
-&#9;else:<br>
-&#9;&#9;# n нечётное: n = 2m + 1, n/2 + 1 = m + 1.5<br>
-&#9;&#9;# Γ(m + 1.5) = Γ(0.5) * ∏(k + 0.5) для k = 0..m<br>
-&#9;&#9;# где Γ(0.5) = sqrt(π)<br>
-&#9;&#9;m = (n - 1) // 2<br>
-&#9;&#9;gamma_val = numpy.sqrt(numpy.pi)<br>
-&#9;&#9;for k in range(m + 1):<br>
-&#9;&#9;&#9;gamma_val *= (k + 0.5)<br>
-&#9;&#9;return gamma_val<br>
+def&nbsp;_gamma_half_integer(n):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Вычисляет&nbsp;Γ(n/2&nbsp;+&nbsp;1)&nbsp;для&nbsp;натуральных&nbsp;n.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Специализированная&nbsp;функция&nbsp;для&nbsp;вычисления&nbsp;гамма-функции&nbsp;в&nbsp;точках<br>
+&nbsp;&nbsp;&nbsp;&nbsp;вида&nbsp;n/2&nbsp;+&nbsp;1,&nbsp;где&nbsp;n&nbsp;—&nbsp;натуральное&nbsp;число.&nbsp;Используется&nbsp;для&nbsp;формулы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;объёма&nbsp;n-мерной&nbsp;сферы/эллипсоида.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n:&nbsp;Натуральное&nbsp;число&nbsp;(размерность&nbsp;пространства)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Значение&nbsp;Γ(n/2&nbsp;+&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;чётных&nbsp;n:&nbsp;Γ(n/2&nbsp;+&nbsp;1)&nbsp;=&nbsp;(n/2)!<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;нечётных&nbsp;n:&nbsp;Γ(n/2&nbsp;+&nbsp;1)&nbsp;=&nbsp;Γ(0.5)&nbsp;*&nbsp;∏(k&nbsp;+&nbsp;0.5)&nbsp;для&nbsp;k=0..m,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;m&nbsp;=&nbsp;(n-1)/2&nbsp;и&nbsp;Γ(0.5)&nbsp;=&nbsp;√π<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Примеры:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;n=2:&nbsp;Γ(2)&nbsp;=&nbsp;1!&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;n=3:&nbsp;Γ(2.5)&nbsp;=&nbsp;1.5&nbsp;×&nbsp;0.5&nbsp;×&nbsp;√π&nbsp;≈&nbsp;1.329<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;n=4:&nbsp;Γ(3)&nbsp;=&nbsp;2!&nbsp;=&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;%&nbsp;2&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;n&nbsp;чётное:&nbsp;Γ(k+1)&nbsp;=&nbsp;k!&nbsp;для&nbsp;k&nbsp;=&nbsp;n/2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k&nbsp;=&nbsp;n&nbsp;//&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;float(math.factorial(k))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;n&nbsp;нечётное:&nbsp;n&nbsp;=&nbsp;2m&nbsp;+&nbsp;1,&nbsp;n/2&nbsp;+&nbsp;1&nbsp;=&nbsp;m&nbsp;+&nbsp;1.5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Γ(m&nbsp;+&nbsp;1.5)&nbsp;=&nbsp;Γ(0.5)&nbsp;*&nbsp;∏(k&nbsp;+&nbsp;0.5)&nbsp;для&nbsp;k&nbsp;=&nbsp;0..m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;где&nbsp;Γ(0.5)&nbsp;=&nbsp;sqrt(π)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m&nbsp;=&nbsp;(n&nbsp;-&nbsp;1)&nbsp;//&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gamma_val&nbsp;=&nbsp;numpy.sqrt(numpy.pi)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k&nbsp;in&nbsp;range(m&nbsp;+&nbsp;1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gamma_val&nbsp;*=&nbsp;(k&nbsp;+&nbsp;0.5)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;gamma_val<br>
 <br>
 <br>
-def ellipsoid_volume(radii):<br>
-&#9;&quot;&quot;&quot;Вычисляет объём эллипсоида по полуосям.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;radii: Полуоси эллипсоида размера (n_dim,)<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Объём эллипсоида<br>
-&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;V = (π^(n/2) / Γ(n/2 + 1)) * ∏rᵢ<br>
-&#9;&#9;<br>
-&#9;&#9;Для малых размерностей:<br>
-&#9;&#9;- 1D: 2r (длина отрезка)<br>
-&#9;&#9;- 2D: πab (площадь эллипса)<br>
-&#9;&#9;- 3D: (4/3)πabc (объём эллипсоида)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;radii = numpy.asarray(radii)<br>
-&#9;n_dim = len(radii)<br>
-&#9;<br>
-&#9;# Вычисляем Γ(n/2 + 1) для размерности n<br>
-&#9;gamma_val = _gamma_half_integer(n_dim)<br>
-&#9;<br>
-&#9;# V = (π^(n/2) / Γ(n/2 + 1)) * ∏rᵢ<br>
-&#9;half_n = n_dim / 2.0<br>
-&#9;volume = (numpy.pi ** half_n / gamma_val) * numpy.prod(radii)<br>
-&#9;<br>
-&#9;return volume<br>
+def&nbsp;ellipsoid_volume(radii):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Вычисляет&nbsp;объём&nbsp;эллипсоида&nbsp;по&nbsp;полуосям.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;radii:&nbsp;Полуоси&nbsp;эллипсоида&nbsp;размера&nbsp;(n_dim,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Объём&nbsp;эллипсоида<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;V&nbsp;=&nbsp;(π^(n/2)&nbsp;/&nbsp;Γ(n/2&nbsp;+&nbsp;1))&nbsp;*&nbsp;∏rᵢ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;малых&nbsp;размерностей:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;1D:&nbsp;2r&nbsp;(длина&nbsp;отрезка)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;2D:&nbsp;πab&nbsp;(площадь&nbsp;эллипса)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;3D:&nbsp;(4/3)πabc&nbsp;(объём&nbsp;эллипсоида)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;radii&nbsp;=&nbsp;numpy.asarray(radii)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n_dim&nbsp;=&nbsp;len(radii)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вычисляем&nbsp;Γ(n/2&nbsp;+&nbsp;1)&nbsp;для&nbsp;размерности&nbsp;n<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gamma_val&nbsp;=&nbsp;_gamma_half_integer(n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;V&nbsp;=&nbsp;(π^(n/2)&nbsp;/&nbsp;Γ(n/2&nbsp;+&nbsp;1))&nbsp;*&nbsp;∏rᵢ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;half_n&nbsp;=&nbsp;n_dim&nbsp;/&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;volume&nbsp;=&nbsp;(numpy.pi&nbsp;**&nbsp;half_n&nbsp;/&nbsp;gamma_val)&nbsp;*&nbsp;numpy.prod(radii)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;volume<br>
 <br>
 <br>
-def evaluate_ellipsoid(points, A, center):<br>
-&#9;&quot;&quot;&quot;Вычисляет значения квадратичной формы эллипсоида в точках.<br>
-&#9;<br>
-&#9;Для эллипсоида (x-c)ᵀA(x-c) = 1 вычисляет (x-c)ᵀA(x-c) для каждой точки.<br>
-&#9;Значения:<br>
-&#9;- &lt; 1: точка внутри эллипсоида<br>
-&#9;- = 1: точка на поверхности<br>
-&#9;- &gt; 1: точка снаружи<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim)<br>
-&#9;&#9;A: Матрица квадратичной формы размера (n_dim, n_dim)<br>
-&#9;&#9;center: Центр эллипсоида размера (n_dim,)<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Массив значений размера (n_points,)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;points = numpy.asarray(points, dtype=float)<br>
-&#9;center = numpy.asarray(center, dtype=float)<br>
-&#9;A = numpy.asarray(A, dtype=float)<br>
-&#9;<br>
-&#9;# Центрируем точки<br>
-&#9;points_centered = points - center<br>
-&#9;<br>
-&#9;# Вычисляем квадратичную форму: (x-c)ᵀA(x-c)<br>
-&#9;# Эффективно: sum((A @ p) * p) для каждой точки<br>
-&#9;values = numpy.sum((points_centered @ A) * points_centered, axis=1)<br>
-&#9;<br>
-&#9;return values<br>
+def&nbsp;evaluate_ellipsoid(points,&nbsp;A,&nbsp;center):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Вычисляет&nbsp;значения&nbsp;квадратичной&nbsp;формы&nbsp;эллипсоида&nbsp;в&nbsp;точках.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;эллипсоида&nbsp;(x-c)ᵀA(x-c)&nbsp;=&nbsp;1&nbsp;вычисляет&nbsp;(x-c)ᵀA(x-c)&nbsp;для&nbsp;каждой&nbsp;точки.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Значения:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;&lt;&nbsp;1:&nbsp;точка&nbsp;внутри&nbsp;эллипсоида<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;=&nbsp;1:&nbsp;точка&nbsp;на&nbsp;поверхности<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;&gt;&nbsp;1:&nbsp;точка&nbsp;снаружи<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;квадратичной&nbsp;формы&nbsp;размера&nbsp;(n_dim,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;эллипсоида&nbsp;размера&nbsp;(n_dim,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Массив&nbsp;значений&nbsp;размера&nbsp;(n_points,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;points&nbsp;=&nbsp;numpy.asarray(points,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;center&nbsp;=&nbsp;numpy.asarray(center,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;numpy.asarray(A,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Центрируем&nbsp;точки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;points_centered&nbsp;=&nbsp;points&nbsp;-&nbsp;center<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вычисляем&nbsp;квадратичную&nbsp;форму:&nbsp;(x-c)ᵀA(x-c)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Эффективно:&nbsp;sum((A&nbsp;@&nbsp;p)&nbsp;*&nbsp;p)&nbsp;для&nbsp;каждой&nbsp;точки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;values&nbsp;=&nbsp;numpy.sum((points_centered&nbsp;@&nbsp;A)&nbsp;*&nbsp;points_centered,&nbsp;axis=1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;values<br>
 <br>
 <br>
-def ellipsoid_contains(points, A, center, tol=1e-10):<br>
-&#9;&quot;&quot;&quot;Проверяет, лежат ли точки внутри или на эллипсоиде.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;points: Массив точек размера (n_points, n_dim)<br>
-&#9;&#9;A: Матрица квадратичной формы размера (n_dim, n_dim)<br>
-&#9;&#9;center: Центр эллипсоида размера (n_dim,)<br>
-&#9;&#9;tol: Допуск для точек на границе<br>
-&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Булев массив размера (n_points,): True если точка внутри/на эллипсоиде<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;values = evaluate_ellipsoid(points, A, center)<br>
-&#9;return values &lt;= (1.0 + tol)<br>
+def&nbsp;ellipsoid_contains(points,&nbsp;A,&nbsp;center,&nbsp;tol=1e-10):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Проверяет,&nbsp;лежат&nbsp;ли&nbsp;точки&nbsp;внутри&nbsp;или&nbsp;на&nbsp;эллипсоиде.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points:&nbsp;Массив&nbsp;точек&nbsp;размера&nbsp;(n_points,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;квадратичной&nbsp;формы&nbsp;размера&nbsp;(n_dim,&nbsp;n_dim)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;center:&nbsp;Центр&nbsp;эллипсоида&nbsp;размера&nbsp;(n_dim,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol:&nbsp;Допуск&nbsp;для&nbsp;точек&nbsp;на&nbsp;границе<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Булев&nbsp;массив&nbsp;размера&nbsp;(n_points,):&nbsp;True&nbsp;если&nbsp;точка&nbsp;внутри/на&nbsp;эллипсоиде<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;values&nbsp;=&nbsp;evaluate_ellipsoid(points,&nbsp;A,&nbsp;center)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;values&nbsp;&lt;=&nbsp;(1.0&nbsp;+&nbsp;tol)<br>
 <br>
 <!-- END SCAT CODE -->
 </body>

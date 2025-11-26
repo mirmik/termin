@@ -6,156 +6,156 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-#!/usr/bin/env python3<br>
+#!/usr/bin/env&nbsp;python3<br>
 <br>
-import math<br>
-import numpy<br>
-<br>
-<br>
-class Screw2:<br>
-&#9;def __init__(self, m=0, v=numpy.array([0, 0])):<br>
-&#9;&#9;self._m = m<br>
-&#9;&#9;self._v = numpy.array(v)<br>
-<br>
-&#9;&#9;if not isinstance(self._v, numpy.ndarray) and self._v.shape != (2,):<br>
-&#9;&#9;&#9;raise Exception(&quot;Vector must be numpy.ndarray&quot;)<br>
-<br>
-&#9;&#9;if not isinstance(self._m, (int, float)):<br>
-&#9;&#9;&#9;raise Exception(&quot;Moment must be int or float&quot;)<br>
-<br>
-&#9;def lin(self):<br>
-&#9;&#9;return self._v<br>
-<br>
-&#9;def ang(self):<br>
-&#9;&#9;return self._m<br>
-<br>
-&#9;def vector(self):<br>
-&#9;&#9;return self._v<br>
-<br>
-&#9;def moment(self):<br>
-&#9;&#9;return self._m<br>
-<br>
-&#9;def norm(self):<br>
-&#9;&#9;return math.sqrt(self._m * self._m + self._v.dot(self._v))<br>
-<br>
-&#9;def set_vector(self, v):<br>
-&#9;&#9;self._v = v<br>
-<br>
-&#9;def set_moment(self, m):<br>
-&#9;&#9;self._m = m<br>
-<br>
-&#9;def as_array(self):<br>
-&#9;&#9;return numpy.array([self._m, *self._v])<br>
-<br>
-&#9;def kinematic_carry(self, motor):<br>
-&#9;&#9;a = motor.mul_screw(self)<br>
-&#9;&#9;a = a * motor.reverse()<br>
-&#9;&#9;return a.splash_to_screw()<br>
-<br>
-&#9;def carry(self, motor):<br>
-&#9;&#9;&quot;&quot;&quot; carry(S,P) = PSP* &quot;&quot;&quot;<br>
-&#9;&#9;return self.kinematic_carry(motor)<br>
-<br>
-&#9;def inverse_kinematic_carry (self, motor):<br>
-&#9;&#9;a = motor.reverse().mul_screw(self)<br>
-&#9;&#9;a = a * motor<br>
-&#9;&#9;return a.splash_to_screw()<br>
-&#9;<br>
-&#9;def inverse_carry(self, motor):<br>
-&#9;&#9;&quot;&quot;&quot; inverse_carry(S,P) = P*SP &quot;&quot;&quot;<br>
-&#9;&#9;return self.inverse_kinematic_carry(motor)<br>
-&#9;&#9;<br>
-<br>
-&#9;def fulldot(self, other):<br>
-&#9;&#9;return self._m * other._m + self._v.dot(other._v)<br>
-<br>
-&#9;def force_carry(self, motor):<br>
-&#9;&#9;angle = motor.factorize_rotation_angle()<br>
-&#9;&#9;translation = motor.factorize_translation_vector()<br>
-&#9;&#9;rotated_scr = self.rotate_by_angle(angle)<br>
-&#9;&#9;m = rotated_scr.moment()<br>
-&#9;&#9;v = rotated_scr.vector()<br>
-&#9;&#9;b = translation<br>
-&#9;&#9;a = -m<br>
-<br>
-&#9;&#9;print(&quot;TODO: force carry&quot;)<br>
-&#9;&#9;new_m = m<br>
-&#9;&#9;new_v = v<br>
-&#9;&#9;ret = Screw2(m=new_m, v=new_v)<br>
-&#9;&#9;return ret<br>
-<br>
-&#9;def inverted_kinematic_carry(self, motor):<br>
-&#9;&#9;return self.inverse_kinematic_carry(motor)<br>
-<br>
-&#9;def kinematic_carry_vec(self, translation):<br>
-&#9;&#9;m = self._m<br>
-&#9;&#9;v = self._v<br>
-&#9;&#9;b = translation<br>
-&#9;&#9;a = -m  # (w+v)'=w+v-w*t : из уравнения (v+w)'=(1+t/2)(v+w)(1-t/2)<br>
-&#9;&#9;ret = Screw2(m=m, v=v + numpy.array([<br>
-&#9;&#9;&#9;-a * b[1], a * b[0]<br>
-&#9;&#9;]))<br>
-&#9;&#9;return ret<br>
-<br>
-&#9;def rotate_by_angle(self, angle):<br>
-&#9;&#9;m = self._m<br>
-&#9;&#9;v = self._v<br>
-&#9;&#9;s = math.sin(angle)<br>
-&#9;&#9;c = math.cos(angle)<br>
-&#9;&#9;return Screw2(m=m, v=numpy.array([<br>
-&#9;&#9;&#9;c*v[0] - s*v[1],<br>
-&#9;&#9;&#9;s*v[0] + c*v[1]<br>
-&#9;&#9;]))<br>
-<br>
-&#9;def rotate_by(self, motor):<br>
-&#9;&#9;return self.rotate_by_angle(motor.angle())<br>
-<br>
-&#9;def inverse_rotate_by(self, motor):<br>
-&#9;&#9;return self.rotate_by_angle(-motor.angle())<br>
-<br>
-&#9;def __str__(self):<br>
-&#9;&#9;return &quot;Screw2(%s, %s)&quot; % (self._m, self._v)<br>
-<br>
-&#9;def __mul__(self, s):<br>
-&#9;&#9;return Screw2(v=self._v*s, m=self._m*s)<br>
-<br>
-&#9;def __truediv__(self, s):<br>
-&#9;&#9;return Screw2(v=self._v/s, m=self._m/s)<br>
-<br>
-&#9;def __add__(self, oth):<br>
-&#9;&#9;return Screw2(v=self._v+oth._v, m=self._m+oth._m)<br>
-<br>
-&#9;def __neg__(self):<br>
-&#9;&#9;return Screw2(v=-self._v, m=-self._m)<br>
-<br>
-&#9;def __sub__(self, oth):<br>
-&#9;&#9;return Screw2(v=self._v-oth._v, m=self._m-oth._m)<br>
-<br>
-&#9;def toarray(self):<br>
-&#9;&#9;return numpy.array([self.moment(), *self.vector()])<br>
-<br>
-&#9;@staticmethod<br>
-&#9;def from_array(arr):<br>
-&#9;&#9;return Screw2(m=arr[0], v=arr[1:])<br>
+import&nbsp;math<br>
+import&nbsp;numpy<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;from termin.ga201.motor import Motor2<br>
-&#9;# scr = Screw2(m=0, v=[1, 0])<br>
-&#9;# mot = Motor2.rotation(math.pi/2)<br>
-&#9;# print(scr.kinematic_carry(mot))<br>
-&#9;# print(scr.inverted_kinematic_carry(mot))<br>
+class&nbsp;Screw2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;m=0,&nbsp;v=numpy.array([0,&nbsp;0])):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._m&nbsp;=&nbsp;m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._v&nbsp;=&nbsp;numpy.array(v)<br>
 <br>
-&#9;scr = Screw2(m=1, v=[0, 0])<br>
-&#9;mot = Motor2.translation(1, 0)<br>
-&#9;print(scr.kinematic_carry(mot))<br>
-&#9;print(scr.inverted_kinematic_carry(mot))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(self._v,&nbsp;numpy.ndarray)&nbsp;and&nbsp;self._v.shape&nbsp;!=&nbsp;(2,):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;Vector&nbsp;must&nbsp;be&nbsp;numpy.ndarray&quot;)<br>
 <br>
-&#9;# scr = Screw2(m=0, v=[1, 0])<br>
-&#9;# print(scr.rotate_by_angle(math.pi/2))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(self._m,&nbsp;(int,&nbsp;float)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;Moment&nbsp;must&nbsp;be&nbsp;int&nbsp;or&nbsp;float&quot;)<br>
 <br>
-&#9;# scr = Screw2(m=1, v=[0, 0])<br>
-&#9;# print(scr.rotate_by_angle(math.pi/2))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;lin(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._v<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;ang(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._m<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;vector(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._v<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;moment(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._m<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;norm(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;math.sqrt(self._m&nbsp;*&nbsp;self._m&nbsp;+&nbsp;self._v.dot(self._v))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_vector(self,&nbsp;v):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._v&nbsp;=&nbsp;v<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_moment(self,&nbsp;m):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._m&nbsp;=&nbsp;m<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;as_array(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([self._m,&nbsp;*self._v])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;kinematic_carry(self,&nbsp;motor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;motor.mul_screw(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;a&nbsp;*&nbsp;motor.reverse()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;a.splash_to_screw()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;carry(self,&nbsp;motor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;&nbsp;carry(S,P)&nbsp;=&nbsp;PSP*&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.kinematic_carry(motor)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_kinematic_carry&nbsp;(self,&nbsp;motor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;motor.reverse().mul_screw(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;a&nbsp;*&nbsp;motor<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;a.splash_to_screw()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_carry(self,&nbsp;motor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;&nbsp;inverse_carry(S,P)&nbsp;=&nbsp;P*SP&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.inverse_kinematic_carry(motor)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;fulldot(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._m&nbsp;*&nbsp;other._m&nbsp;+&nbsp;self._v.dot(other._v)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;force_carry(self,&nbsp;motor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle&nbsp;=&nbsp;motor.factorize_rotation_angle()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;translation&nbsp;=&nbsp;motor.factorize_translation_vector()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotated_scr&nbsp;=&nbsp;self.rotate_by_angle(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m&nbsp;=&nbsp;rotated_scr.moment()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;rotated_scr.vector()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;translation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;-m<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;TODO:&nbsp;force&nbsp;carry&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_m&nbsp;=&nbsp;m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_v&nbsp;=&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ret&nbsp;=&nbsp;Screw2(m=new_m,&nbsp;v=new_v)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;ret<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverted_kinematic_carry(self,&nbsp;motor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.inverse_kinematic_carry(motor)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;kinematic_carry_vec(self,&nbsp;translation):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m&nbsp;=&nbsp;self._m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;self._v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;translation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;=&nbsp;-m&nbsp;&nbsp;#&nbsp;(w+v)'=w+v-w*t&nbsp;:&nbsp;из&nbsp;уравнения&nbsp;(v+w)'=(1+t/2)(v+w)(1-t/2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ret&nbsp;=&nbsp;Screw2(m=m,&nbsp;v=v&nbsp;+&nbsp;numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-a&nbsp;*&nbsp;b[1],&nbsp;a&nbsp;*&nbsp;b[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;ret<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotate_by_angle(self,&nbsp;angle):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m&nbsp;=&nbsp;self._m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;self._v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;math.sin(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;math.cos(angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(m=m,&nbsp;v=numpy.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c*v[0]&nbsp;-&nbsp;s*v[1],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s*v[0]&nbsp;+&nbsp;c*v[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotate_by(self,&nbsp;motor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.rotate_by_angle(motor.angle())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_rotate_by(self,&nbsp;motor):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.rotate_by_angle(-motor.angle())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__str__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;&quot;Screw2(%s,&nbsp;%s)&quot;&nbsp;%&nbsp;(self._m,&nbsp;self._v)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__mul__(self,&nbsp;s):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(v=self._v*s,&nbsp;m=self._m*s)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__truediv__(self,&nbsp;s):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(v=self._v/s,&nbsp;m=self._m/s)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__add__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(v=self._v+oth._v,&nbsp;m=self._m+oth._m)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__neg__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(v=-self._v,&nbsp;m=-self._m)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__sub__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(v=self._v-oth._v,&nbsp;m=self._m-oth._m)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;toarray(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([self.moment(),&nbsp;*self.vector()])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_array(arr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(m=arr[0],&nbsp;v=arr[1:])<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.ga201.motor&nbsp;import&nbsp;Motor2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;scr&nbsp;=&nbsp;Screw2(m=0,&nbsp;v=[1,&nbsp;0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;mot&nbsp;=&nbsp;Motor2.rotation(math.pi/2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;print(scr.kinematic_carry(mot))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;print(scr.inverted_kinematic_carry(mot))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scr&nbsp;=&nbsp;Screw2(m=1,&nbsp;v=[0,&nbsp;0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mot&nbsp;=&nbsp;Motor2.translation(1,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;print(scr.kinematic_carry(mot))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;print(scr.inverted_kinematic_carry(mot))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;scr&nbsp;=&nbsp;Screw2(m=0,&nbsp;v=[1,&nbsp;0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;print(scr.rotate_by_angle(math.pi/2))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;scr&nbsp;=&nbsp;Screw2(m=1,&nbsp;v=[0,&nbsp;0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;print(scr.rotate_by_angle(math.pi/2))<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

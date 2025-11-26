@@ -6,178 +6,178 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-#!/usr/bin/env python3<br>
+#!/usr/bin/env&nbsp;python3<br>
 <br>
-import numpy as np<br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.geombase.screw import Screw3<br>
-<br>
-<br>
-def skew3(v):<br>
-&#9;&quot;&quot;&quot;3D skew matrix: v×x = skew3(v) @ x.&quot;&quot;&quot;<br>
-&#9;vx, vy, vz = v<br>
-&#9;return np.array([<br>
-&#9;&#9;[ 0,   -vz,  vy ],<br>
-&#9;&#9;[ vz,   0,  -vx ],<br>
-&#9;&#9;[-vy,  vx,   0  ],<br>
-&#9;], float)<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.geombase.screw&nbsp;import&nbsp;Screw3<br>
 <br>
 <br>
-class SpatialInertia3D:<br>
-&#9;def __init__(self, mass=0.0, inertia=None, com=np.zeros(3)):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;mass    : масса<br>
-&#9;&#9;inertia : 3×3 матрица тензора инерции в центре масс<br>
-&#9;&#9;com     : 3-вектор центра масс (в локальной системе)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.m = float(mass)<br>
-&#9;&#9;if inertia is None:<br>
-&#9;&#9;&#9;self.Ic = np.zeros((3,3), float)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self.Ic = np.asarray(inertia, float).reshape(3,3)<br>
-&#9;&#9;self.c = np.asarray(com, float).reshape(3)<br>
+def&nbsp;skew3(v):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;3D&nbsp;skew&nbsp;matrix:&nbsp;v×x&nbsp;=&nbsp;skew3(v)&nbsp;@&nbsp;x.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vx,&nbsp;vy,&nbsp;vz&nbsp;=&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.array([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;0,&nbsp;&nbsp;&nbsp;-vz,&nbsp;&nbsp;vy&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;vz,&nbsp;&nbsp;&nbsp;0,&nbsp;&nbsp;-vx&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-vy,&nbsp;&nbsp;vx,&nbsp;&nbsp;&nbsp;0&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;],&nbsp;float)<br>
 <br>
-&#9;@property<br>
-&#9;def mass(self):<br>
-&#9;&#9;return self.m<br>
 <br>
-&#9;@property<br>
-&#9;def inertia_matrix(self):<br>
-&#9;&#9;return self.Ic<br>
+class&nbsp;SpatialInertia3D:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;mass=0.0,&nbsp;inertia=None,&nbsp;com=np.zeros(3)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mass&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;масса<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inertia&nbsp;:&nbsp;3×3&nbsp;матрица&nbsp;тензора&nbsp;инерции&nbsp;в&nbsp;центре&nbsp;масс<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;com&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;3-вектор&nbsp;центра&nbsp;масс&nbsp;(в&nbsp;локальной&nbsp;системе)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.m&nbsp;=&nbsp;float(mass)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;inertia&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.Ic&nbsp;=&nbsp;np.zeros((3,3),&nbsp;float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.Ic&nbsp;=&nbsp;np.asarray(inertia,&nbsp;float).reshape(3,3)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.c&nbsp;=&nbsp;np.asarray(com,&nbsp;float).reshape(3)<br>
 <br>
-&#9;@property<br>
-&#9;def center_of_mass(self):<br>
-&#9;&#9;return self.c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mass(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.m<br>
 <br>
-&#9;# ------------------------------------------------------------<br>
-&#9;#     transform / rotated<br>
-&#9;# ------------------------------------------------------------<br>
-&#9;def transform_by(self, pose: Pose3) -&gt; &quot;SpatialInertia3D&quot;:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Преобразование spatial inertia в новую СК.<br>
-&#9;&#9;Как и в 2D: COM просто переносится.<br>
-&#9;&#9;Тензор инерции переносится с помощью правила для тензора.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;R = pose.rotation_matrix()<br>
-&#9;&#9;cW = pose.transform_point(self.c)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inertia_matrix(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.Ic<br>
 <br>
-&#9;&#9;# I_com_new = R * I_com * R^T<br>
-&#9;&#9;Ic_new = R @ self.Ic @ R.T<br>
-&#9;&#9;return SpatialInertia3D(self.m, Ic_new, cW)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;center_of_mass(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.c<br>
 <br>
-&#9;def rotated(self, ang):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Повернуть spatial inertia в локале.<br>
-&#9;&#9;ang — 3-вектор, интерпретируем как ось-угол через экспоненту.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Pose3 умеет делать экспоненту<br>
-&#9;&#9;R = Pose3(lin=np.zeros(3), ang=ang).rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;transform&nbsp;/&nbsp;rotated<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_by(self,&nbsp;pose:&nbsp;Pose3)&nbsp;-&gt;&nbsp;&quot;SpatialInertia3D&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Преобразование&nbsp;spatial&nbsp;inertia&nbsp;в&nbsp;новую&nbsp;СК.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Как&nbsp;и&nbsp;в&nbsp;2D:&nbsp;COM&nbsp;просто&nbsp;переносится.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Тензор&nbsp;инерции&nbsp;переносится&nbsp;с&nbsp;помощью&nbsp;правила&nbsp;для&nbsp;тензора.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;pose.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cW&nbsp;=&nbsp;pose.transform_point(self.c)<br>
 <br>
-&#9;&#9;c_new = R @ self.c<br>
-&#9;&#9;Ic_new = R @ self.Ic @ R.T<br>
-&#9;&#9;return SpatialInertia3D(self.m, Ic_new, c_new)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;I_com_new&nbsp;=&nbsp;R&nbsp;*&nbsp;I_com&nbsp;*&nbsp;R^T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ic_new&nbsp;=&nbsp;R&nbsp;@&nbsp;self.Ic&nbsp;@&nbsp;R.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;SpatialInertia3D(self.m,&nbsp;Ic_new,&nbsp;cW)<br>
 <br>
-&#9;# ------------------------------------------------------------<br>
-&#9;#     Spatial inertia matrix (VW order)<br>
-&#9;# ------------------------------------------------------------<br>
-&#9;def to_matrix_vw_order(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает spatial inertia в порядке:<br>
-&#9;&#9;[ v, ω ]  (первые 3 — линейные, вторые 3 — угловые).<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;m = self.m<br>
-&#9;&#9;c = self.c<br>
-&#9;&#9;S = skew3(c)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rotated(self,&nbsp;ang):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Повернуть&nbsp;spatial&nbsp;inertia&nbsp;в&nbsp;локале.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang&nbsp;—&nbsp;3-вектор,&nbsp;интерпретируем&nbsp;как&nbsp;ось-угол&nbsp;через&nbsp;экспоненту.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Pose3&nbsp;умеет&nbsp;делать&nbsp;экспоненту<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;Pose3(lin=np.zeros(3),&nbsp;ang=ang).rotation_matrix()<br>
 <br>
-&#9;&#9;upper_left  = m * np.eye(3)<br>
-&#9;&#9;upper_right = -m * S<br>
-&#9;&#9;lower_left  = m * S<br>
-&#9;&#9;lower_right = self.Ic + m * (S @ S.T)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c_new&nbsp;=&nbsp;R&nbsp;@&nbsp;self.c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ic_new&nbsp;=&nbsp;R&nbsp;@&nbsp;self.Ic&nbsp;@&nbsp;R.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;SpatialInertia3D(self.m,&nbsp;Ic_new,&nbsp;c_new)<br>
 <br>
-&#9;&#9;return np.block([<br>
-&#9;&#9;&#9;[upper_left,  upper_right],<br>
-&#9;&#9;&#9;[lower_left,  lower_right]<br>
-&#9;&#9;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Spatial&nbsp;inertia&nbsp;matrix&nbsp;(VW&nbsp;order)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_matrix_vw_order(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;spatial&nbsp;inertia&nbsp;в&nbsp;порядке:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;v,&nbsp;ω&nbsp;]&nbsp;&nbsp;(первые&nbsp;3&nbsp;—&nbsp;линейные,&nbsp;вторые&nbsp;3&nbsp;—&nbsp;угловые).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m&nbsp;=&nbsp;self.m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;self.c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S&nbsp;=&nbsp;skew3(c)<br>
 <br>
-&#9;# ------------------------------------------------------------<br>
-&#9;#     Gravity wrench<br>
-&#9;# ------------------------------------------------------------<br>
-&#9;def gravity_wrench(self, g_local: np.ndarray) -&gt; Screw3:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает винт (F, τ) в локальной системе.<br>
-&#9;&#9;g_local — гравитация в ЛОКАЛЕ.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;m = self.m<br>
-&#9;&#9;c = self.c<br>
-&#9;&#9;F = m * g_local<br>
-&#9;&#9;τ = np.cross(c, F)<br>
-&#9;&#9;return Screw3(ang=τ, lin=F)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;upper_left&nbsp;&nbsp;=&nbsp;m&nbsp;*&nbsp;np.eye(3)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;upper_right&nbsp;=&nbsp;-m&nbsp;*&nbsp;S<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lower_left&nbsp;&nbsp;=&nbsp;m&nbsp;*&nbsp;S<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lower_right&nbsp;=&nbsp;self.Ic&nbsp;+&nbsp;m&nbsp;*&nbsp;(S&nbsp;@&nbsp;S.T)<br>
 <br>
-&#9;# ------------------------------------------------------------<br>
-&#9;#     Bias wrench<br>
-&#9;# ------------------------------------------------------------<br>
-&#9;def bias_wrench(self, velocity: Screw3) -&gt; Screw3:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Пространственный bias-винт: v ×* (I v).<br>
-&#9;&#9;Полный 3D аналог твоего 2D-кода.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;m = self.m<br>
-&#9;&#9;c = self.c<br>
-&#9;&#9;Ic = self.Ic<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.block([<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[upper_left,&nbsp;&nbsp;upper_right],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[lower_left,&nbsp;&nbsp;lower_right]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;])<br>
 <br>
-&#9;&#9;v_lin = velocity.lin<br>
-&#9;&#9;v_ang = velocity.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Gravity&nbsp;wrench<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;gravity_wrench(self,&nbsp;g_local:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;Screw3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;винт&nbsp;(F,&nbsp;τ)&nbsp;в&nbsp;локальной&nbsp;системе.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;g_local&nbsp;—&nbsp;гравитация&nbsp;в&nbsp;ЛОКАЛЕ.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m&nbsp;=&nbsp;self.m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;self.c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F&nbsp;=&nbsp;m&nbsp;*&nbsp;g_local<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;τ&nbsp;=&nbsp;np.cross(c,&nbsp;F)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(ang=τ,&nbsp;lin=F)<br>
 <br>
-&#9;&#9;S = skew3(c)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Bias&nbsp;wrench<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bias_wrench(self,&nbsp;velocity:&nbsp;Screw3)&nbsp;-&gt;&nbsp;Screw3:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Пространственный&nbsp;bias-винт:&nbsp;v&nbsp;×*&nbsp;(I&nbsp;v).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Полный&nbsp;3D&nbsp;аналог&nbsp;твоего&nbsp;2D-кода.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m&nbsp;=&nbsp;self.m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;self.c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ic&nbsp;=&nbsp;self.Ic<br>
 <br>
-&#9;&#9;# spatial inertia * v:<br>
-&#9;&#9;h_lin = m * (v_lin + np.cross(v_ang, c))<br>
-&#9;&#9;h_ang = Ic @ v_ang + m * np.cross(c, v_lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v_lin&nbsp;=&nbsp;velocity.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v_ang&nbsp;=&nbsp;velocity.ang<br>
 <br>
-&#9;&#9;# теперь bias = v ×* h<br>
-&#9;&#9;# линейная часть:<br>
-&#9;&#9;b_lin = np.cross(v_ang, h_lin) + np.cross(v_lin, h_ang)*0.0  # линейная от линейной не даёт<br>
-&#9;&#9;# угловая часть:<br>
-&#9;&#9;b_ang = np.cross(v_ang, h_ang)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S&nbsp;=&nbsp;skew3(c)<br>
 <br>
-&#9;&#9;return Screw3(ang=b_ang, lin=b_lin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;spatial&nbsp;inertia&nbsp;*&nbsp;v:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h_lin&nbsp;=&nbsp;m&nbsp;*&nbsp;(v_lin&nbsp;+&nbsp;np.cross(v_ang,&nbsp;c))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h_ang&nbsp;=&nbsp;Ic&nbsp;@&nbsp;v_ang&nbsp;+&nbsp;m&nbsp;*&nbsp;np.cross(c,&nbsp;v_lin)<br>
 <br>
-&#9;# ------------------------------------------------------------<br>
-&#9;#     Сложение spatial inertia<br>
-&#9;# ------------------------------------------------------------<br>
-&#9;def __add__(self, other):<br>
-&#9;&#9;if not isinstance(other, SpatialInertia3D):<br>
-&#9;&#9;&#9;return NotImplemented<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;теперь&nbsp;bias&nbsp;=&nbsp;v&nbsp;×*&nbsp;h<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;линейная&nbsp;часть:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_lin&nbsp;=&nbsp;np.cross(v_ang,&nbsp;h_lin)&nbsp;+&nbsp;np.cross(v_lin,&nbsp;h_ang)*0.0&nbsp;&nbsp;#&nbsp;линейная&nbsp;от&nbsp;линейной&nbsp;не&nbsp;даёт<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;угловая&nbsp;часть:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_ang&nbsp;=&nbsp;np.cross(v_ang,&nbsp;h_ang)<br>
 <br>
-&#9;&#9;m1, m2 = self.m, other.m<br>
-&#9;&#9;c1, c2 = self.c, other.c<br>
-&#9;&#9;I1, I2 = self.Ic, other.Ic<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw3(ang=b_ang,&nbsp;lin=b_lin)<br>
 <br>
-&#9;&#9;m = m1 + m2<br>
-&#9;&#9;if m == 0.0:<br>
-&#9;&#9;&#9;return SpatialInertia3D(0.0, np.zeros((3,3)), np.zeros(3))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Сложение&nbsp;spatial&nbsp;inertia<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__add__(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(other,&nbsp;SpatialInertia3D):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;NotImplemented<br>
 <br>
-&#9;&#9;c = (m1 * c1 + m2 * c2) / m<br>
-&#9;&#9;d1 = c1 - c<br>
-&#9;&#9;d2 = c2 - c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m1,&nbsp;m2&nbsp;=&nbsp;self.m,&nbsp;other.m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c1,&nbsp;c2&nbsp;=&nbsp;self.c,&nbsp;other.c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;I1,&nbsp;I2&nbsp;=&nbsp;self.Ic,&nbsp;other.Ic<br>
 <br>
-&#9;&#9;S1 = skew3(d1)<br>
-&#9;&#9;S2 = skew3(d2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m&nbsp;=&nbsp;m1&nbsp;+&nbsp;m2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;m&nbsp;==&nbsp;0.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;SpatialInertia3D(0.0,&nbsp;np.zeros((3,3)),&nbsp;np.zeros(3))<br>
 <br>
-&#9;&#9;Ic = I1 + m1 * (S1 @ S1.T) + I2 + m2 * (S2 @ S2.T)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;(m1&nbsp;*&nbsp;c1&nbsp;+&nbsp;m2&nbsp;*&nbsp;c2)&nbsp;/&nbsp;m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d1&nbsp;=&nbsp;c1&nbsp;-&nbsp;c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d2&nbsp;=&nbsp;c2&nbsp;-&nbsp;c<br>
 <br>
-&#9;&#9;return SpatialInertia3D(m, Ic, c)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S1&nbsp;=&nbsp;skew3(d1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S2&nbsp;=&nbsp;skew3(d2)<br>
 <br>
-&#9;# ------------------------------------------------------------<br>
-&#9;#     Kinetic energy<br>
-&#9;# ------------------------------------------------------------<br>
-&#9;def get_kinetic_energy(self, velocity: np.ndarray, omega: np.ndarray) -&gt; float:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;velocity — линейная скорость<br>
-&#9;&#9;omega    — угловая скорость<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;v2 = np.dot(velocity, velocity)<br>
-&#9;&#9;return 0.5 * self.m * v2 + 0.5 * (omega @ (self.Ic @ omega))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ic&nbsp;=&nbsp;I1&nbsp;+&nbsp;m1&nbsp;*&nbsp;(S1&nbsp;@&nbsp;S1.T)&nbsp;+&nbsp;I2&nbsp;+&nbsp;m2&nbsp;*&nbsp;(S2&nbsp;@&nbsp;S2.T)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;SpatialInertia3D(m,&nbsp;Ic,&nbsp;c)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Kinetic&nbsp;energy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_kinetic_energy(self,&nbsp;velocity:&nbsp;np.ndarray,&nbsp;omega:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;float:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;velocity&nbsp;—&nbsp;линейная&nbsp;скорость<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;omega&nbsp;&nbsp;&nbsp;&nbsp;—&nbsp;угловая&nbsp;скорость<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v2&nbsp;=&nbsp;np.dot(velocity,&nbsp;velocity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;0.5&nbsp;*&nbsp;self.m&nbsp;*&nbsp;v2&nbsp;+&nbsp;0.5&nbsp;*&nbsp;(omega&nbsp;@&nbsp;(self.Ic&nbsp;@&nbsp;omega))<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

@@ -6,14 +6,14 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-def outkernel_operator(matrix):<br>
-&#9;return matrix @ numpy.linalg.pinv(matrix)<br>
+def&nbsp;outkernel_operator(matrix):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;matrix&nbsp;@&nbsp;numpy.linalg.pinv(matrix)<br>
 <br>
-def kernel_operator(matrix):<br>
-&#9;outkernel = outkernel_operator(matrix)<br>
-&#9;return numpy.eye(matrix.shape[0]) - outkernel<br>
+def&nbsp;kernel_operator(matrix):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;outkernel&nbsp;=&nbsp;outkernel_operator(matrix)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.eye(matrix.shape[0])&nbsp;-&nbsp;outkernel<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

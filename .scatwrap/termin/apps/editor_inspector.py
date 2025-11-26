@@ -6,450 +6,450 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# ===== termin/apps/editor_inspector.py =====<br>
-from __future__ import annotations<br>
+#&nbsp;=====&nbsp;termin/apps/editor_inspector.py&nbsp;=====<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import Optional<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional<br>
 <br>
-import numpy as np<br>
-from PyQt5.QtWidgets import (<br>
-&#9;QWidget,<br>
-&#9;QFormLayout,<br>
-&#9;QHBoxLayout,<br>
-&#9;QDoubleSpinBox,<br>
-&#9;QLabel,<br>
-&#9;QVBoxLayout,<br>
-&#9;QListWidget,<br>
-&#9;QListWidgetItem,<br>
-&#9;QCheckBox,<br>
-&#9;QLineEdit,<br>
-&#9;QMenu,<br>
-&#9;QAction,<br>
-&#9;QComboBox,<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QWidget,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QFormLayout,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QHBoxLayout,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QDoubleSpinBox,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QLabel,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QVBoxLayout,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QListWidget,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QListWidgetItem,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QCheckBox,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QLineEdit,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QMenu,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QAction,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QComboBox,<br>
 )<br>
-from PyQt5.QtCore import Qt, pyqtSignal<br>
-<br>
-from termin.kinematic.transform import Transform3<br>
-from termin.visualization.entity import Entity, Component<br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.visualization.inspect import InspectField<br>
-from termin.visualization.resources import ResourceManager<br>
-<br>
-from termin.apps.transform_inspector import TransformInspector<br>
-<br>
-<br>
-class ComponentsPanel(QWidget):<br>
-&#9;components_changed = pyqtSignal()<br>
-<br>
-&#9;def __init__(self, parent: Optional[QWidget] = None):<br>
-&#9;&#9;super().__init__(parent)<br>
-<br>
-&#9;&#9;layout = QVBoxLayout(self)<br>
-&#9;&#9;layout.setContentsMargins(0, 8, 0, 0)<br>
-&#9;&#9;layout.setSpacing(4)<br>
-<br>
-&#9;&#9;self._title = QLabel(&quot;Components&quot;)<br>
-&#9;&#9;layout.addWidget(self._title)<br>
-<br>
-&#9;&#9;self._list = QListWidget()<br>
-&#9;&#9;layout.addWidget(self._list)<br>
-<br>
-&#9;&#9;self._entity: Optional[Entity] = None<br>
-&#9;&#9;self._component_library: list[tuple[str, type[Component]]] = []<br>
-<br>
-&#9;&#9;self._list.setContextMenuPolicy(Qt.CustomContextMenu)<br>
-&#9;&#9;self._list.customContextMenuRequested.connect(self._on_context_menu)<br>
-<br>
-&#9;def set_entity(self, ent: Optional[Entity]):<br>
-&#9;&#9;self._entity = ent<br>
-&#9;&#9;self._list.clear()<br>
-&#9;&#9;if ent is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;for comp in ent.components:<br>
-&#9;&#9;&#9;name = comp.__class__.__name__<br>
-&#9;&#9;&#9;item = QListWidgetItem(name)<br>
-&#9;&#9;&#9;self._list.addItem(item)<br>
-<br>
-&#9;def set_component_library(self, library: list[tuple[str, type[Component]]]):<br>
-&#9;&#9;self._component_library = list(library)<br>
-<br>
-&#9;def current_component(self) -&gt; Optional[Component]:<br>
-&#9;&#9;if self._entity is None:<br>
-&#9;&#9;&#9;return None<br>
-&#9;&#9;row = self._list.currentRow()<br>
-&#9;&#9;if row &lt; 0 or row &gt;= len(self._entity.components):<br>
-&#9;&#9;&#9;return None<br>
-&#9;&#9;return self._entity.components[row]<br>
-<br>
-&#9;def _on_context_menu(self, pos):<br>
-&#9;&#9;if self._entity is None:<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;global_pos = self._list.mapToGlobal(pos)<br>
-&#9;&#9;menu = QMenu(self)<br>
-<br>
-&#9;&#9;comp = self.current_component()<br>
-&#9;&#9;remove_action = QAction(&quot;Удалить компонент&quot;, self)<br>
-&#9;&#9;remove_action.setEnabled(comp is not None)<br>
-&#9;&#9;remove_action.triggered.connect(self._remove_current_component)<br>
-&#9;&#9;menu.addAction(remove_action)<br>
-<br>
-&#9;&#9;if self._component_library:<br>
-&#9;&#9;&#9;add_menu = menu.addMenu(&quot;Добавить компонент&quot;)<br>
-&#9;&#9;&#9;for label, cls in self._component_library:<br>
-&#9;&#9;&#9;&#9;act = QAction(label, self)<br>
-&#9;&#9;&#9;&#9;act.triggered.connect(<br>
-&#9;&#9;&#9;&#9;&#9;lambda _checked=False, c=cls: self._add_component(c)<br>
-&#9;&#9;&#9;&#9;)<br>
-&#9;&#9;&#9;&#9;add_menu.addAction(act)<br>
-<br>
-&#9;&#9;menu.exec_(global_pos)<br>
-<br>
-&#9;def _remove_current_component(self):<br>
-&#9;&#9;if self._entity is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;comp = self.current_component()<br>
-&#9;&#9;if comp is None:<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;self._entity.remove_component(comp)<br>
-&#9;&#9;self.set_entity(self._entity)<br>
-&#9;&#9;self.components_changed.emit()<br>
-<br>
-&#9;def _add_component(self, comp_cls: type[Component]):<br>
-&#9;&#9;if self._entity is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;try:<br>
-&#9;&#9;&#9;comp = comp_cls()<br>
-&#9;&#9;except TypeError as e:<br>
-&#9;&#9;&#9;print(f&quot;Не удалось создать компонент {comp_cls}: {e}&quot;)<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;self._entity.add_component(comp)<br>
-&#9;&#9;self.set_entity(self._entity)<br>
-<br>
-&#9;&#9;row = len(self._entity.components) - 1<br>
-&#9;&#9;if row &gt;= 0:<br>
-&#9;&#9;&#9;self._list.setCurrentRow(row)<br>
-<br>
-&#9;&#9;self.components_changed.emit()<br>
-<br>
-<br>
-class ComponentInspectorPanel(QWidget):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Рисует форму для одного компонента на основе component.inspect_fields.<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;component_changed = pyqtSignal()<br>
-<br>
-&#9;def __init__(self, resources: ResourceManager, parent: Optional[QWidget] = None):<br>
-&#9;&#9;super().__init__(parent)<br>
-&#9;&#9;self._component: Optional[Component] = None<br>
-&#9;&#9;self._fields: dict[str, InspectField] = {}<br>
-&#9;&#9;self._widgets: dict[str, QWidget] = {}<br>
-&#9;&#9;self._updating_from_model = False<br>
-&#9;&#9;self._resources = resources<br>
-<br>
-&#9;&#9;layout = QFormLayout(self)<br>
-&#9;&#9;layout.setLabelAlignment(Qt.AlignLeft)<br>
-&#9;&#9;layout.setFormAlignment(Qt.AlignTop)<br>
-&#9;&#9;self._layout = layout<br>
-<br>
-&#9;def set_component(self, comp: Optional[Component]):<br>
-&#9;&#9;for i in reversed(range(self._layout.count())):<br>
-&#9;&#9;&#9;item = self._layout.itemAt(i)<br>
-&#9;&#9;&#9;w = item.widget()<br>
-&#9;&#9;&#9;if w is not None:<br>
-&#9;&#9;&#9;&#9;w.setParent(None)<br>
-<br>
-&#9;&#9;self._widgets.clear()<br>
-&#9;&#9;self._component = comp<br>
-<br>
-&#9;&#9;if comp is None:<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;fields = getattr(comp.__class__, &quot;inspect_fields&quot;, None)<br>
-&#9;&#9;if not fields:<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;self._fields = fields<br>
-<br>
-&#9;&#9;self._updating_from_model = True<br>
-&#9;&#9;try:<br>
-&#9;&#9;&#9;for key, field in fields.items():<br>
-&#9;&#9;&#9;&#9;label = field.label or key<br>
-&#9;&#9;&#9;&#9;widget = self._create_widget_for_field(field)<br>
-&#9;&#9;&#9;&#9;self._widgets[key] = widget<br>
-&#9;&#9;&#9;&#9;self._layout.addRow(QLabel(label), widget)<br>
-<br>
-&#9;&#9;&#9;&#9;value = field.get_value(comp)<br>
-&#9;&#9;&#9;&#9;self._set_widget_value(widget, value, field)<br>
-&#9;&#9;&#9;&#9;self._connect_widget(widget, key, field)<br>
-&#9;&#9;finally:<br>
-&#9;&#9;&#9;self._updating_from_model = False<br>
-<br>
-&#9;def _create_widget_for_field(self, field: InspectField) -&gt; QWidget:<br>
-&#9;&#9;kind = field.kind<br>
-<br>
-&#9;&#9;if kind in (&quot;float&quot;, &quot;int&quot;):<br>
-&#9;&#9;&#9;sb = QDoubleSpinBox()<br>
-&#9;&#9;&#9;sb.setDecimals(4)<br>
-&#9;&#9;&#9;sb.setRange(<br>
-&#9;&#9;&#9;&#9;field.min if field.min is not None else -1e9,<br>
-&#9;&#9;&#9;&#9;field.max if field.max is not None else 1e9,<br>
-&#9;&#9;&#9;)<br>
-&#9;&#9;&#9;if field.step is not None:<br>
-&#9;&#9;&#9;&#9;sb.setSingleStep(field.step)<br>
-&#9;&#9;&#9;return sb<br>
-<br>
-&#9;&#9;if kind == &quot;bool&quot;:<br>
-&#9;&#9;&#9;return QCheckBox()<br>
-<br>
-&#9;&#9;if kind == &quot;string&quot;:<br>
-&#9;&#9;&#9;return QLineEdit()<br>
-<br>
-&#9;&#9;if kind == &quot;vec3&quot;:<br>
-&#9;&#9;&#9;row = QWidget()<br>
-&#9;&#9;&#9;hl = QHBoxLayout(row)<br>
-&#9;&#9;&#9;hl.setContentsMargins(0, 0, 0, 0)<br>
-&#9;&#9;&#9;hl.setSpacing(2)<br>
-&#9;&#9;&#9;boxes = []<br>
-&#9;&#9;&#9;for _ in range(3):<br>
-&#9;&#9;&#9;&#9;sb = QDoubleSpinBox()<br>
-&#9;&#9;&#9;&#9;sb.setDecimals(4)<br>
-&#9;&#9;&#9;&#9;sb.setRange(<br>
-&#9;&#9;&#9;&#9;&#9;field.min if field.min is not None else -1e9,<br>
-&#9;&#9;&#9;&#9;&#9;field.max if field.max is not None else 1e9,<br>
-&#9;&#9;&#9;&#9;)<br>
-&#9;&#9;&#9;&#9;if field.step is not None:<br>
-&#9;&#9;&#9;&#9;&#9;sb.setSingleStep(field.step)<br>
-&#9;&#9;&#9;&#9;hl.addWidget(sb)<br>
-&#9;&#9;&#9;&#9;boxes.append(sb)<br>
-&#9;&#9;&#9;row._boxes = boxes  # небольшой хак<br>
-&#9;&#9;&#9;return row<br>
-<br>
-&#9;&#9;if kind == &quot;material&quot;:<br>
-&#9;&#9;&#9;combo = QComboBox()<br>
-&#9;&#9;&#9;names = self._resources.list_material_names()<br>
-&#9;&#9;&#9;for n in names:<br>
-&#9;&#9;&#9;&#9;combo.addItem(n)<br>
-&#9;&#9;&#9;return combo<br>
-<br>
-&#9;&#9;if kind == &quot;mesh&quot;:<br>
-&#9;&#9;&#9;combo = QComboBox()<br>
-&#9;&#9;&#9;names = self._resources.list_mesh_names()<br>
-&#9;&#9;&#9;for n in names:<br>
-&#9;&#9;&#9;&#9;combo.addItem(n)<br>
-&#9;&#9;&#9;return combo<br>
-<br>
-&#9;&#9;le = QLineEdit()<br>
-&#9;&#9;le.setReadOnly(True)<br>
-&#9;&#9;return le<br>
-<br>
-&#9;def _set_widget_value(self, w: QWidget, value, field: InspectField):<br>
-&#9;&#9;if isinstance(w, QDoubleSpinBox):<br>
-&#9;&#9;&#9;w.setValue(float(value))<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;if isinstance(w, QCheckBox):<br>
-&#9;&#9;&#9;w.setChecked(bool(value))<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;if isinstance(w, QLineEdit) and field.kind != &quot;material&quot;:<br>
-&#9;&#9;&#9;w.setText(str(value))<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;if hasattr(w, &quot;_boxes&quot;):<br>
-&#9;&#9;&#9;arr = np.asarray(value).reshape(-1)<br>
-&#9;&#9;&#9;for sb, v in zip(w._boxes, arr):<br>
-&#9;&#9;&#9;&#9;sb.setValue(float(v))<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;if isinstance(w, QComboBox) and field.kind == &quot;material&quot;:<br>
-&#9;&#9;&#9;mat = value<br>
-&#9;&#9;&#9;if mat is None:<br>
-&#9;&#9;&#9;&#9;w.setCurrentIndex(-1)<br>
-&#9;&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;&#9;name = self._resources.find_material_name(mat)<br>
-&#9;&#9;&#9;# обновим список на всякий случай<br>
-&#9;&#9;&#9;existing = [w.itemText(i) for i in range(w.count())]<br>
-&#9;&#9;&#9;all_names = self._resources.list_material_names()<br>
-&#9;&#9;&#9;if existing != all_names:<br>
-&#9;&#9;&#9;&#9;w.clear()<br>
-&#9;&#9;&#9;&#9;for n in all_names:<br>
-&#9;&#9;&#9;&#9;&#9;w.addItem(n)<br>
-<br>
-&#9;&#9;&#9;if name is None:<br>
-&#9;&#9;&#9;&#9;w.setCurrentIndex(-1)<br>
-&#9;&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;&#9;idx = w.findText(name)<br>
-&#9;&#9;&#9;if idx &gt;= 0:<br>
-&#9;&#9;&#9;&#9;w.setCurrentIndex(idx)<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;w.setCurrentIndex(-1)<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;if isinstance(w, QComboBox) and field.kind == &quot;mesh&quot;:<br>
-&#9;&#9;&#9;mesh = value<br>
-&#9;&#9;&#9;if mesh is None:<br>
-&#9;&#9;&#9;&#9;w.setCurrentIndex(-1)<br>
-&#9;&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;&#9;name = self._resources.find_mesh_name(mesh)<br>
-&#9;&#9;&#9;existing = [w.itemText(i) for i in range(w.count())]<br>
-&#9;&#9;&#9;all_names = self._resources.list_mesh_names()<br>
-&#9;&#9;&#9;if existing != all_names:<br>
-&#9;&#9;&#9;&#9;w.clear()<br>
-&#9;&#9;&#9;&#9;for n in all_names:<br>
-&#9;&#9;&#9;&#9;&#9;w.addItem(n)<br>
-<br>
-&#9;&#9;&#9;if name is None:<br>
-&#9;&#9;&#9;&#9;w.setCurrentIndex(-1)<br>
-&#9;&#9;&#9;&#9;return<br>
-<br>
-&#9;&#9;&#9;idx = w.findText(name)<br>
-&#9;&#9;&#9;if idx &gt;= 0:<br>
-&#9;&#9;&#9;&#9;w.setCurrentIndex(idx)<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;w.setCurrentIndex(-1)<br>
-&#9;&#9;&#9;return<br>
-<br>
-&#9;def _connect_widget(self, w: QWidget, key: str, field: InspectField):<br>
-&#9;&#9;def commit():<br>
-&#9;&#9;&#9;if self._updating_from_model or self._component is None:<br>
-&#9;&#9;&#9;&#9;return<br>
-&#9;&#9;&#9;val = self._read_widget_value(w, field)<br>
-&#9;&#9;&#9;field.set_value(self._component, val)<br>
-&#9;&#9;&#9;self.component_changed.emit()<br>
-<br>
-&#9;&#9;if isinstance(w, QDoubleSpinBox):<br>
-&#9;&#9;&#9;w.valueChanged.connect(lambda _v: commit())<br>
-&#9;&#9;elif isinstance(w, QCheckBox):<br>
-&#9;&#9;&#9;w.stateChanged.connect(lambda _s: commit())<br>
-&#9;&#9;elif isinstance(w, QLineEdit) and field.kind != &quot;material&quot;:<br>
-&#9;&#9;&#9;w.editingFinished.connect(commit)<br>
-&#9;&#9;elif hasattr(w, &quot;_boxes&quot;):<br>
-&#9;&#9;&#9;for sb in w._boxes:<br>
-&#9;&#9;&#9;&#9;sb.valueChanged.connect(lambda _v: commit())      <br>
-&#9;&#9;elif isinstance(w, QComboBox) and field.kind in (&quot;material&quot;, &quot;mesh&quot;):<br>
-&#9;&#9;&#9;w.currentIndexChanged.connect(lambda _i: commit())<br>
-<br>
-&#9;def _read_widget_value(self, w: QWidget, field: InspectField):<br>
-&#9;&#9;if isinstance(w, QDoubleSpinBox):<br>
-&#9;&#9;&#9;return float(w.value())<br>
-<br>
-&#9;&#9;if isinstance(w, QCheckBox):<br>
-&#9;&#9;&#9;return bool(w.isChecked())<br>
-<br>
-&#9;&#9;if isinstance(w, QLineEdit) and field.kind != &quot;material&quot;:<br>
-&#9;&#9;&#9;return w.text()<br>
-<br>
-&#9;&#9;if hasattr(w, &quot;_boxes&quot;):<br>
-&#9;&#9;&#9;return np.array([sb.value() for sb in w._boxes], dtype=float)<br>
-<br>
-&#9;&#9;if isinstance(w, QComboBox) and field.kind == &quot;material&quot;:<br>
-&#9;&#9;&#9;name = w.currentText()<br>
-&#9;&#9;&#9;if not name:<br>
-&#9;&#9;&#9;&#9;return None<br>
-&#9;&#9;&#9;return self._resources.get_material(name)<br>
-<br>
-&#9;&#9;if isinstance(w, QComboBox) and field.kind == &quot;mesh&quot;:<br>
-&#9;&#9;&#9;name = w.currentText()<br>
-&#9;&#9;&#9;if not name:<br>
-&#9;&#9;&#9;&#9;return None<br>
-&#9;&#9;&#9;return self._resources.get_mesh(name)<br>
-<br>
-&#9;&#9;return None<br>
-<br>
-<br>
-class EntityInspector(QWidget):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Общий инспектор для Entity/Transform:<br>
-&#9;сверху TransformInspector, ниже список компонентов, ещё ниже – инспектор компонента.<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;transform_changed = pyqtSignal()<br>
-&#9;component_changed = pyqtSignal()<br>
-<br>
-&#9;def __init__(self, resources: ResourceManager, parent: Optional[QWidget] = None):<br>
-&#9;&#9;super().__init__(parent)<br>
-<br>
-&#9;&#9;self._resources = resources<br>
-<br>
-&#9;&#9;layout = QVBoxLayout(self)<br>
-&#9;&#9;layout.setContentsMargins(0, 0, 0, 0)<br>
-&#9;&#9;layout.setSpacing(4)<br>
-<br>
-&#9;&#9;self._transform_inspector = TransformInspector(self)<br>
-&#9;&#9;layout.addWidget(self._transform_inspector)<br>
-<br>
-&#9;&#9;self._components_panel = ComponentsPanel(self)<br>
-&#9;&#9;layout.addWidget(self._components_panel)<br>
-<br>
-&#9;&#9;self._component_inspector = ComponentInspectorPanel(resources, self)<br>
-&#9;&#9;layout.addWidget(self._component_inspector)<br>
-<br>
-&#9;&#9;self._entity: Optional[Entity] = None<br>
-<br>
-&#9;&#9;self._transform_inspector.transform_changed.connect(<br>
-&#9;&#9;&#9;self.transform_changed<br>
-&#9;&#9;)<br>
-&#9;&#9;self._components_panel._list.currentRowChanged.connect(<br>
-&#9;&#9;&#9;self._on_component_selected<br>
-&#9;&#9;)<br>
-&#9;&#9;self._component_inspector.component_changed.connect(<br>
-&#9;&#9;&#9;self._on_component_changed<br>
-&#9;&#9;)<br>
-&#9;&#9;self._components_panel.components_changed.connect(<br>
-&#9;&#9;&#9;self._on_components_changed<br>
-&#9;&#9;)<br>
-<br>
-&#9;def _on_components_changed(self):<br>
-&#9;&#9;ent = self._entity<br>
-&#9;&#9;self._components_panel.set_entity(ent)<br>
-<br>
-&#9;&#9;if ent is not None:<br>
-&#9;&#9;&#9;row = self._components_panel._list.currentRow()<br>
-&#9;&#9;&#9;if 0 &lt;= row &lt; len(ent.components):<br>
-&#9;&#9;&#9;&#9;self._component_inspector.set_component(ent.components[row])<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;self._component_inspector.set_component(None)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;self._component_inspector.set_component(None)<br>
-<br>
-&#9;&#9;self.component_changed.emit()<br>
-<br>
-&#9;def set_component_library(self, library: list[tuple[str, type[Component]]]):<br>
-&#9;&#9;self._components_panel.set_component_library(library)<br>
-<br>
-&#9;def _on_component_changed(self):<br>
-&#9;&#9;self.component_changed.emit()<br>
-<br>
-&#9;def set_target(self, obj: Optional[object]):<br>
-&#9;&#9;if isinstance(obj, Entity):<br>
-&#9;&#9;&#9;ent = obj<br>
-&#9;&#9;&#9;trans = obj.transform<br>
-&#9;&#9;elif isinstance(obj, Transform3):<br>
-&#9;&#9;&#9;trans = obj<br>
-&#9;&#9;&#9;ent = getattr(obj, &quot;entity&quot;, None)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;ent = None<br>
-&#9;&#9;&#9;trans = None<br>
-<br>
-&#9;&#9;self._entity = ent<br>
-<br>
-&#9;&#9;self._transform_inspector.set_target(trans or ent)<br>
-&#9;&#9;self._components_panel.set_entity(ent)<br>
-&#9;&#9;self._component_inspector.set_component(None)<br>
-<br>
-&#9;def _on_component_selected(self, row: int):<br>
-&#9;&#9;if self._entity is None or row &lt; 0:<br>
-&#9;&#9;&#9;self._component_inspector.set_component(None)<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;comp = self._entity.components[row]<br>
-&#9;&#9;self._component_inspector.set_component(comp)<br>
+from&nbsp;PyQt5.QtCore&nbsp;import&nbsp;Qt,&nbsp;pyqtSignal<br>
+<br>
+from&nbsp;termin.kinematic.transform&nbsp;import&nbsp;Transform3<br>
+from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Entity,&nbsp;Component<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.visualization.inspect&nbsp;import&nbsp;InspectField<br>
+from&nbsp;termin.visualization.resources&nbsp;import&nbsp;ResourceManager<br>
+<br>
+from&nbsp;termin.apps.transform_inspector&nbsp;import&nbsp;TransformInspector<br>
+<br>
+<br>
+class&nbsp;ComponentsPanel(QWidget):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;components_changed&nbsp;=&nbsp;pyqtSignal()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;parent:&nbsp;Optional[QWidget]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;QVBoxLayout(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.setContentsMargins(0,&nbsp;8,&nbsp;0,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.setSpacing(4)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._title&nbsp;=&nbsp;QLabel(&quot;Components&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addWidget(self._title)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._list&nbsp;=&nbsp;QListWidget()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addWidget(self._list)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity:&nbsp;Optional[Entity]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_library:&nbsp;list[tuple[str,&nbsp;type[Component]]]&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._list.setContextMenuPolicy(Qt.CustomContextMenu)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._list.customContextMenuRequested.connect(self._on_context_menu)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_entity(self,&nbsp;ent:&nbsp;Optional[Entity]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity&nbsp;=&nbsp;ent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._list.clear()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;comp&nbsp;in&nbsp;ent.components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;comp.__class__.__name__<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;item&nbsp;=&nbsp;QListWidgetItem(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._list.addItem(item)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_component_library(self,&nbsp;library:&nbsp;list[tuple[str,&nbsp;type[Component]]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_library&nbsp;=&nbsp;list(library)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;current_component(self)&nbsp;-&gt;&nbsp;Optional[Component]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._entity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row&nbsp;=&nbsp;self._list.currentRow()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;row&nbsp;&lt;&nbsp;0&nbsp;or&nbsp;row&nbsp;&gt;=&nbsp;len(self._entity.components):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._entity.components[row]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_on_context_menu(self,&nbsp;pos):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._entity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;global_pos&nbsp;=&nbsp;self._list.mapToGlobal(pos)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;menu&nbsp;=&nbsp;QMenu(self)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp&nbsp;=&nbsp;self.current_component()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remove_action&nbsp;=&nbsp;QAction(&quot;Удалить&nbsp;компонент&quot;,&nbsp;self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remove_action.setEnabled(comp&nbsp;is&nbsp;not&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remove_action.triggered.connect(self._remove_current_component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;menu.addAction(remove_action)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._component_library:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add_menu&nbsp;=&nbsp;menu.addMenu(&quot;Добавить&nbsp;компонент&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;label,&nbsp;cls&nbsp;in&nbsp;self._component_library:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;act&nbsp;=&nbsp;QAction(label,&nbsp;self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;act.triggered.connect(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lambda&nbsp;_checked=False,&nbsp;c=cls:&nbsp;self._add_component(c)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add_menu.addAction(act)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;menu.exec_(global_pos)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_remove_current_component(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._entity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp&nbsp;=&nbsp;self.current_component()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;comp&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity.remove_component(comp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_entity(self._entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.components_changed.emit()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_add_component(self,&nbsp;comp_cls:&nbsp;type[Component]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._entity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp&nbsp;=&nbsp;comp_cls()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;TypeError&nbsp;as&nbsp;e:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;Не&nbsp;удалось&nbsp;создать&nbsp;компонент&nbsp;{comp_cls}:&nbsp;{e}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity.add_component(comp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.set_entity(self._entity)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row&nbsp;=&nbsp;len(self._entity.components)&nbsp;-&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;row&nbsp;&gt;=&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._list.setCurrentRow(row)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.components_changed.emit()<br>
+<br>
+<br>
+class&nbsp;ComponentInspectorPanel(QWidget):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Рисует&nbsp;форму&nbsp;для&nbsp;одного&nbsp;компонента&nbsp;на&nbsp;основе&nbsp;component.inspect_fields.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;component_changed&nbsp;=&nbsp;pyqtSignal()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;resources:&nbsp;ResourceManager,&nbsp;parent:&nbsp;Optional[QWidget]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component:&nbsp;Optional[Component]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._fields:&nbsp;dict[str,&nbsp;InspectField]&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._widgets:&nbsp;dict[str,&nbsp;QWidget]&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._updating_from_model&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._resources&nbsp;=&nbsp;resources<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;QFormLayout(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.setLabelAlignment(Qt.AlignLeft)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.setFormAlignment(Qt.AlignTop)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._layout&nbsp;=&nbsp;layout<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_component(self,&nbsp;comp:&nbsp;Optional[Component]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;reversed(range(self._layout.count())):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;item&nbsp;=&nbsp;self._layout.itemAt(i)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w&nbsp;=&nbsp;item.widget()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;w&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setParent(None)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._widgets.clear()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component&nbsp;=&nbsp;comp<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;comp&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fields&nbsp;=&nbsp;getattr(comp.__class__,&nbsp;&quot;inspect_fields&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;fields:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._fields&nbsp;=&nbsp;fields<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._updating_from_model&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;key,&nbsp;field&nbsp;in&nbsp;fields.items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label&nbsp;=&nbsp;field.label&nbsp;or&nbsp;key<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;widget&nbsp;=&nbsp;self._create_widget_for_field(field)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._widgets[key]&nbsp;=&nbsp;widget<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._layout.addRow(QLabel(label),&nbsp;widget)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;value&nbsp;=&nbsp;field.get_value(comp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_widget_value(widget,&nbsp;value,&nbsp;field)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._connect_widget(widget,&nbsp;key,&nbsp;field)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._updating_from_model&nbsp;=&nbsp;False<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_create_widget_for_field(self,&nbsp;field:&nbsp;InspectField)&nbsp;-&gt;&nbsp;QWidget:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind&nbsp;=&nbsp;field.kind<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;kind&nbsp;in&nbsp;(&quot;float&quot;,&nbsp;&quot;int&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb&nbsp;=&nbsp;QDoubleSpinBox()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setDecimals(4)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setRange(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field.min&nbsp;if&nbsp;field.min&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;-1e9,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field.max&nbsp;if&nbsp;field.max&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;1e9,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;field.step&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setSingleStep(field.step)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;sb<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;kind&nbsp;==&nbsp;&quot;bool&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;QCheckBox()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;kind&nbsp;==&nbsp;&quot;string&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;QLineEdit()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;kind&nbsp;==&nbsp;&quot;vec3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row&nbsp;=&nbsp;QWidget()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hl&nbsp;=&nbsp;QHBoxLayout(row)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hl.setContentsMargins(0,&nbsp;0,&nbsp;0,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hl.setSpacing(2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boxes&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;range(3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb&nbsp;=&nbsp;QDoubleSpinBox()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setDecimals(4)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setRange(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field.min&nbsp;if&nbsp;field.min&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;-1e9,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field.max&nbsp;if&nbsp;field.max&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;1e9,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;field.step&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setSingleStep(field.step)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hl.addWidget(sb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;boxes.append(sb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row._boxes&nbsp;=&nbsp;boxes&nbsp;&nbsp;#&nbsp;небольшой&nbsp;хак<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;row<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;kind&nbsp;==&nbsp;&quot;material&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;combo&nbsp;=&nbsp;QComboBox()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;names&nbsp;=&nbsp;self._resources.list_material_names()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;n&nbsp;in&nbsp;names:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;combo.addItem(n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;combo<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;kind&nbsp;==&nbsp;&quot;mesh&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;combo&nbsp;=&nbsp;QComboBox()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;names&nbsp;=&nbsp;self._resources.list_mesh_names()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;n&nbsp;in&nbsp;names:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;combo.addItem(n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;combo<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;le&nbsp;=&nbsp;QLineEdit()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;le.setReadOnly(True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;le<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_set_widget_value(self,&nbsp;w:&nbsp;QWidget,&nbsp;value,&nbsp;field:&nbsp;InspectField):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QDoubleSpinBox):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setValue(float(value))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QCheckBox):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setChecked(bool(value))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QLineEdit)&nbsp;and&nbsp;field.kind&nbsp;!=&nbsp;&quot;material&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setText(str(value))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(w,&nbsp;&quot;_boxes&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr&nbsp;=&nbsp;np.asarray(value).reshape(-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sb,&nbsp;v&nbsp;in&nbsp;zip(w._boxes,&nbsp;arr):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.setValue(float(v))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QComboBox)&nbsp;and&nbsp;field.kind&nbsp;==&nbsp;&quot;material&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mat&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setCurrentIndex(-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;self._resources.find_material_name(mat)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;обновим&nbsp;список&nbsp;на&nbsp;всякий&nbsp;случай<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;existing&nbsp;=&nbsp;[w.itemText(i)&nbsp;for&nbsp;i&nbsp;in&nbsp;range(w.count())]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;all_names&nbsp;=&nbsp;self._resources.list_material_names()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;existing&nbsp;!=&nbsp;all_names:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.clear()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;n&nbsp;in&nbsp;all_names:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.addItem(n)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;name&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setCurrentIndex(-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;w.findText(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;idx&nbsp;&gt;=&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setCurrentIndex(idx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setCurrentIndex(-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QComboBox)&nbsp;and&nbsp;field.kind&nbsp;==&nbsp;&quot;mesh&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh&nbsp;=&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mesh&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setCurrentIndex(-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;self._resources.find_mesh_name(mesh)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;existing&nbsp;=&nbsp;[w.itemText(i)&nbsp;for&nbsp;i&nbsp;in&nbsp;range(w.count())]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;all_names&nbsp;=&nbsp;self._resources.list_mesh_names()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;existing&nbsp;!=&nbsp;all_names:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.clear()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;n&nbsp;in&nbsp;all_names:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.addItem(n)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;name&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setCurrentIndex(-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;w.findText(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;idx&nbsp;&gt;=&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setCurrentIndex(idx)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.setCurrentIndex(-1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_connect_widget(self,&nbsp;w:&nbsp;QWidget,&nbsp;key:&nbsp;str,&nbsp;field:&nbsp;InspectField):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;commit():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._updating_from_model&nbsp;or&nbsp;self._component&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;=&nbsp;self._read_widget_value(w,&nbsp;field)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field.set_value(self._component,&nbsp;val)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.component_changed.emit()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QDoubleSpinBox):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.valueChanged.connect(lambda&nbsp;_v:&nbsp;commit())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(w,&nbsp;QCheckBox):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.stateChanged.connect(lambda&nbsp;_s:&nbsp;commit())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(w,&nbsp;QLineEdit)&nbsp;and&nbsp;field.kind&nbsp;!=&nbsp;&quot;material&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.editingFinished.connect(commit)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;hasattr(w,&nbsp;&quot;_boxes&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sb&nbsp;in&nbsp;w._boxes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.valueChanged.connect(lambda&nbsp;_v:&nbsp;commit())&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(w,&nbsp;QComboBox)&nbsp;and&nbsp;field.kind&nbsp;in&nbsp;(&quot;material&quot;,&nbsp;&quot;mesh&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w.currentIndexChanged.connect(lambda&nbsp;_i:&nbsp;commit())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_read_widget_value(self,&nbsp;w:&nbsp;QWidget,&nbsp;field:&nbsp;InspectField):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QDoubleSpinBox):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;float(w.value())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QCheckBox):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;bool(w.isChecked())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QLineEdit)&nbsp;and&nbsp;field.kind&nbsp;!=&nbsp;&quot;material&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;w.text()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hasattr(w,&nbsp;&quot;_boxes&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;np.array([sb.value()&nbsp;for&nbsp;sb&nbsp;in&nbsp;w._boxes],&nbsp;dtype=float)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QComboBox)&nbsp;and&nbsp;field.kind&nbsp;==&nbsp;&quot;material&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;w.currentText()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;name:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._resources.get_material(name)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(w,&nbsp;QComboBox)&nbsp;and&nbsp;field.kind&nbsp;==&nbsp;&quot;mesh&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;=&nbsp;w.currentText()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;name:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._resources.get_mesh(name)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+<br>
+class&nbsp;EntityInspector(QWidget):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Общий&nbsp;инспектор&nbsp;для&nbsp;Entity/Transform:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;сверху&nbsp;TransformInspector,&nbsp;ниже&nbsp;список&nbsp;компонентов,&nbsp;ещё&nbsp;ниже&nbsp;–&nbsp;инспектор&nbsp;компонента.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;transform_changed&nbsp;=&nbsp;pyqtSignal()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;component_changed&nbsp;=&nbsp;pyqtSignal()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;resources:&nbsp;ResourceManager,&nbsp;parent:&nbsp;Optional[QWidget]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._resources&nbsp;=&nbsp;resources<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;QVBoxLayout(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.setContentsMargins(0,&nbsp;0,&nbsp;0,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.setSpacing(4)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform_inspector&nbsp;=&nbsp;TransformInspector(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addWidget(self._transform_inspector)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components_panel&nbsp;=&nbsp;ComponentsPanel(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addWidget(self._components_panel)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_inspector&nbsp;=&nbsp;ComponentInspectorPanel(resources,&nbsp;self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.addWidget(self._component_inspector)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity:&nbsp;Optional[Entity]&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform_inspector.transform_changed.connect(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.transform_changed<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components_panel._list.currentRowChanged.connect(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._on_component_selected<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_inspector.component_changed.connect(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._on_component_changed<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components_panel.components_changed.connect(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._on_components_changed<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_on_components_changed(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;self._entity<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components_panel.set_entity(ent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row&nbsp;=&nbsp;self._components_panel._list.currentRow()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;0&nbsp;&lt;=&nbsp;row&nbsp;&lt;&nbsp;len(ent.components):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_inspector.set_component(ent.components[row])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_inspector.set_component(None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_inspector.set_component(None)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.component_changed.emit()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_component_library(self,&nbsp;library:&nbsp;list[tuple[str,&nbsp;type[Component]]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components_panel.set_component_library(library)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_on_component_changed(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.component_changed.emit()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_target(self,&nbsp;obj:&nbsp;Optional[object]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(obj,&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;obj<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;trans&nbsp;=&nbsp;obj.transform<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(obj,&nbsp;Transform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;trans&nbsp;=&nbsp;obj<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;getattr(obj,&nbsp;&quot;entity&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;trans&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity&nbsp;=&nbsp;ent<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform_inspector.set_target(trans&nbsp;or&nbsp;ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components_panel.set_entity(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_inspector.set_component(None)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_on_component_selected(self,&nbsp;row:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._entity&nbsp;is&nbsp;None&nbsp;or&nbsp;row&nbsp;&lt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_inspector.set_component(None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp&nbsp;=&nbsp;self._entity.components[row]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._component_inspector.set_component(comp)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

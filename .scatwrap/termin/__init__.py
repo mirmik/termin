@@ -7,24 +7,24 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 &quot;&quot;&quot;<br>
-Termin - библиотека для кинематики, динамики и мультифизического моделирования.<br>
+Termin&nbsp;-&nbsp;библиотека&nbsp;для&nbsp;кинематики,&nbsp;динамики&nbsp;и&nbsp;мультифизического&nbsp;моделирования.<br>
 <br>
-Основные модули:<br>
-- geombase - базовые геометрические классы (Pose3, Screw2, Screw3)<br>
-- kinematics - трансформации и кинематические цепи<br>
-- fem - метод конечных элементов для мультифизики<br>
+Основные&nbsp;модули:<br>
+-&nbsp;geombase&nbsp;-&nbsp;базовые&nbsp;геометрические&nbsp;классы&nbsp;(Pose3,&nbsp;Screw2,&nbsp;Screw3)<br>
+-&nbsp;kinematics&nbsp;-&nbsp;трансформации&nbsp;и&nbsp;кинематические&nbsp;цепи<br>
+-&nbsp;fem&nbsp;-&nbsp;метод&nbsp;конечных&nbsp;элементов&nbsp;для&nbsp;мультифизики<br>
 &quot;&quot;&quot;<br>
 <br>
-# Базовая геометрия<br>
-from .geombase import Pose3, Screw2, Screw3<br>
+#&nbsp;Базовая&nbsp;геометрия<br>
+from&nbsp;.geombase&nbsp;import&nbsp;Pose3,&nbsp;Screw2,&nbsp;Screw3<br>
 <br>
-__version__ = '0.1.0'<br>
+__version__&nbsp;=&nbsp;'0.1.0'<br>
 <br>
-__all__ = [<br>
-&#9;# Geombase<br>
-&#9;'Pose3',<br>
-&#9;'Screw2',<br>
-&#9;'Screw3',<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Geombase<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Pose3',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Screw2',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;'Screw3',<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

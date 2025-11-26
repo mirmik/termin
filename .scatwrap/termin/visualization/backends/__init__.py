@@ -6,75 +6,75 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Backend registry and default implementations.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Backend&nbsp;registry&nbsp;and&nbsp;default&nbsp;implementations.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
-from typing import Optional<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional<br>
 <br>
 <br>
-from .base import (<br>
-&#9;Action,<br>
-&#9;BackendWindow,<br>
-&#9;GraphicsBackend,<br>
-&#9;Key,<br>
-&#9;MeshHandle,<br>
-&#9;MouseButton,<br>
-&#9;PolylineHandle,<br>
-&#9;ShaderHandle,<br>
-&#9;TextureHandle,<br>
-&#9;WindowBackend,<br>
-&#9;FramebufferHandle,<br>
+from&nbsp;.base&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Action,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;BackendWindow,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;GraphicsBackend,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Key,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MouseButton,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PolylineHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ShaderHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;TextureHandle,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;WindowBackend,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FramebufferHandle,<br>
 )<br>
-from .nop_graphics import NOPGraphicsBackend<br>
-from .nop_window import NOPWindowBackend<br>
+from&nbsp;.nop_graphics&nbsp;import&nbsp;NOPGraphicsBackend<br>
+from&nbsp;.nop_window&nbsp;import&nbsp;NOPWindowBackend<br>
 <br>
-from .qt import QtGLWindowHandle<br>
-from .opengl import OpenGLGraphicsBackend<br>
-from .qt import QtWindowBackend<br>
+from&nbsp;.qt&nbsp;import&nbsp;QtGLWindowHandle<br>
+from&nbsp;.opengl&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
+from&nbsp;.qt&nbsp;import&nbsp;QtWindowBackend<br>
 <br>
-_default_graphics_backend: Optional[GraphicsBackend] = None<br>
-_default_window_backend: Optional[WindowBackend] = None<br>
-<br>
-<br>
-def set_default_graphics_backend(backend: GraphicsBackend):<br>
-&#9;global _default_graphics_backend<br>
-&#9;_default_graphics_backend = backend<br>
+_default_graphics_backend:&nbsp;Optional[GraphicsBackend]&nbsp;=&nbsp;None<br>
+_default_window_backend:&nbsp;Optional[WindowBackend]&nbsp;=&nbsp;None<br>
 <br>
 <br>
-def get_default_graphics_backend() -&gt; Optional[GraphicsBackend]:<br>
-&#9;return _default_graphics_backend<br>
+def&nbsp;set_default_graphics_backend(backend:&nbsp;GraphicsBackend):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;global&nbsp;_default_graphics_backend<br>
+&nbsp;&nbsp;&nbsp;&nbsp;_default_graphics_backend&nbsp;=&nbsp;backend<br>
 <br>
 <br>
-def set_default_window_backend(backend: WindowBackend):<br>
-&#9;global _default_window_backend<br>
-&#9;_default_window_backend = backend<br>
+def&nbsp;get_default_graphics_backend()&nbsp;-&gt;&nbsp;Optional[GraphicsBackend]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;_default_graphics_backend<br>
 <br>
 <br>
-def get_default_window_backend() -&gt; Optional[WindowBackend]:<br>
-&#9;return _default_window_backend<br>
+def&nbsp;set_default_window_backend(backend:&nbsp;WindowBackend):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;global&nbsp;_default_window_backend<br>
+&nbsp;&nbsp;&nbsp;&nbsp;_default_window_backend&nbsp;=&nbsp;backend<br>
 <br>
 <br>
-__all__ = [<br>
-&#9;&quot;Action&quot;,<br>
-&#9;&quot;BackendWindow&quot;,<br>
-&#9;&quot;GraphicsBackend&quot;,<br>
-&#9;&quot;Key&quot;,<br>
-&#9;&quot;MeshHandle&quot;,<br>
-&#9;&quot;MouseButton&quot;,<br>
-&#9;&quot;PolylineHandle&quot;,<br>
-&#9;&quot;ShaderHandle&quot;,<br>
-&#9;&quot;TextureHandle&quot;,<br>
-&#9;&quot;WindowBackend&quot;,<br>
-&#9;&quot;FramebufferHandle&quot;,<br>
-&#9;&quot;set_default_graphics_backend&quot;,<br>
-&#9;&quot;get_default_graphics_backend&quot;,<br>
-&#9;&quot;set_default_window_backend&quot;,<br>
-&#9;&quot;get_default_window_backend&quot;,<br>
-&#9;&quot;NOPGraphicsBackend&quot;,   # &lt;-- экспортируем<br>
-&#9;&quot;NOPWindowBackend&quot;,     # &lt;-- экспортируем<br>
-&#9;&quot;QtWindowBackend&quot;,<br>
-&#9;&quot;QtGLWindowHandle&quot;,<br>
-&#9;&quot;OpenGLGraphicsBackend&quot;,<br>
+def&nbsp;get_default_window_backend()&nbsp;-&gt;&nbsp;Optional[WindowBackend]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;_default_window_backend<br>
+<br>
+<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Action&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;BackendWindow&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;GraphicsBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;Key&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;MeshHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;MouseButton&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;PolylineHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;ShaderHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;TextureHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;WindowBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;FramebufferHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;set_default_graphics_backend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;get_default_graphics_backend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;set_default_window_backend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;get_default_window_backend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;NOPGraphicsBackend&quot;,&nbsp;&nbsp;&nbsp;#&nbsp;&lt;--&nbsp;экспортируем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;NOPWindowBackend&quot;,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&lt;--&nbsp;экспортируем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;QtWindowBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;QtGLWindowHandle&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;OpenGLGraphicsBackend&quot;,<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

@@ -6,7 +6,7 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from .gizmo_axes import GizmoEntity, GizmoMoveController<br>
+from&nbsp;.gizmo_axes&nbsp;import&nbsp;GizmoEntity,&nbsp;GizmoMoveController<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

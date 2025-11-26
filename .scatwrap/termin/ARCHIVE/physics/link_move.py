@@ -8,23 +8,23 @@
 <!-- BEGIN SCAT CODE -->
 <br>
 <br>
-import numpy<br>
+import&nbsp;numpy<br>
 <br>
 <br>
-# class MoveLink:<br>
-#     def __init__(self, pose=Motor2(), child=None, parent=None):<br>
-#         self._position = pose<br>
-#         self._child = child<br>
-#         self._parent = parent<br>
+#&nbsp;class&nbsp;MoveLink:<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;pose=Motor2(),&nbsp;child=None,&nbsp;parent=None):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._position&nbsp;=&nbsp;pose<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._child&nbsp;=&nbsp;child<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._parent&nbsp;=&nbsp;parent<br>
 <br>
-#     def position(self):<br>
-#         return self._position<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;position(self):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._position<br>
 <br>
-#     def update_position(self, pose):<br>
-#         self._position = pose<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_position(self,&nbsp;pose):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._position&nbsp;=&nbsp;pose<br>
 <br>
-#     def rmalize(self):<br>
-#         self._position.rmalize()<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rmalize(self):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._position.rmalize()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

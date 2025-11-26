@@ -6,57 +6,57 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import torch<br>
+import&nbsp;torch<br>
 <br>
-geomproduct_left_operator_indexes = [<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
-&#9;[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],<br>
+geomproduct_left_operator_indexes&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0,&nbsp;0],<br>
 ]<br>
 <br>
 <br>
-def multivector(e=0, e1=0, e2=0, e3=0, e4=0, e23=0, e31=0, e12=0, e43=0, e42=0, e41=0, e321=0, e412=0, e431=0, e423=0, e1234=0):<br>
-&#9;return torch.tensor([e, e1, e2, e3, e4, e23, e31, e12, e43, e42, e41, e321, e412, e431, e423, e1234])<br>
+def&nbsp;multivector(e=0,&nbsp;e1=0,&nbsp;e2=0,&nbsp;e3=0,&nbsp;e4=0,&nbsp;e23=0,&nbsp;e31=0,&nbsp;e12=0,&nbsp;e43=0,&nbsp;e42=0,&nbsp;e41=0,&nbsp;e321=0,&nbsp;e412=0,&nbsp;e431=0,&nbsp;e423=0,&nbsp;e1234=0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;torch.tensor([e,&nbsp;e1,&nbsp;e2,&nbsp;e3,&nbsp;e4,&nbsp;e23,&nbsp;e31,&nbsp;e12,&nbsp;e43,&nbsp;e42,&nbsp;e41,&nbsp;e321,&nbsp;e412,&nbsp;e431,&nbsp;e423,&nbsp;e1234])<br>
 <br>
 <br>
-def vector(x, y, z, w=0):<br>
-&#9;return multivector(e1=x, e2=y, e3=z, e4=w)<br>
+def&nbsp;vector(x,&nbsp;y,&nbsp;z,&nbsp;w=0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e1=x,&nbsp;e2=y,&nbsp;e3=z,&nbsp;e4=w)<br>
 <br>
 <br>
-def realbivector(x, y, z):<br>
-&#9;return multivector(e23=x, e31=y, e12=z)<br>
+def&nbsp;realbivector(x,&nbsp;y,&nbsp;z):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e23=x,&nbsp;e31=y,&nbsp;e12=z)<br>
 <br>
 <br>
-def dualbivector(x, y, z):<br>
-&#9;return multivector(e41=x, e42=y, e43=z)<br>
+def&nbsp;dualbivector(x,&nbsp;y,&nbsp;z):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e41=x,&nbsp;e42=y,&nbsp;e43=z)<br>
 <br>
 <br>
-def bivector(rx, ry, rz, dx, dy, dz):<br>
-&#9;return realbivector(rx, ry, rz) + dualbivector(dx, dy, dz)<br>
+def&nbsp;bivector(rx,&nbsp;ry,&nbsp;rz,&nbsp;dx,&nbsp;dy,&nbsp;dz):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;realbivector(rx,&nbsp;ry,&nbsp;rz)&nbsp;+&nbsp;dualbivector(dx,&nbsp;dy,&nbsp;dz)<br>
 <br>
 <br>
-def scalar(s):<br>
-&#9;return multivector(e=s)<br>
+def&nbsp;scalar(s):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e=s)<br>
 <br>
 <br>
-def pseudoscalar(p):<br>
-&#9;return multivector(e1234=p)<br>
+def&nbsp;pseudoscalar(p):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;multivector(e1234=p)<br>
 <br>
 <br>
-def geomproduct_left_operator(m):<br>
+def&nbsp;geomproduct_left_operator(m):<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

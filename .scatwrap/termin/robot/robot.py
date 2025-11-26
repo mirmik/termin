@@ -7,170 +7,170 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import Dict, Iterable, List, Optional<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;Iterable,&nbsp;List,&nbsp;Optional<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase import Pose3, Screw3<br>
-from termin.kinematic.kinematic import KinematicTransform3<br>
-from termin.kinematic.transform import Transform3<br>
+from&nbsp;termin.geombase&nbsp;import&nbsp;Pose3,&nbsp;Screw3<br>
+from&nbsp;termin.kinematic.kinematic&nbsp;import&nbsp;KinematicTransform3<br>
+from&nbsp;termin.kinematic.transform&nbsp;import&nbsp;Transform3<br>
 <br>
 <br>
-class Robot:<br>
-&#9;&quot;&quot;&quot;Дерево кинематических пар с глобальным построением Якобиана.<br>
+class&nbsp;Robot:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Дерево&nbsp;кинематических&nbsp;пар&nbsp;с&nbsp;глобальным&nbsp;построением&nbsp;Якобиана.<br>
 <br>
-&#9;Класс собирает все `KinematicTransform3` в дереве `Transform3`, фиксирует<br>
-&#9;их порядок и предоставляет матрицы чувствительности:<br>
-&#9;&#9;J = [ ω_1 … ω_n;<br>
-&#9;&#9;&#9;v_1 … v_n ],<br>
-&#9;где столбец (ω_i, v_i)^T соответствует очередной обобщённой координате.<br>
-&#9;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Класс&nbsp;собирает&nbsp;все&nbsp;`KinematicTransform3`&nbsp;в&nbsp;дереве&nbsp;`Transform3`,&nbsp;фиксирует<br>
+&nbsp;&nbsp;&nbsp;&nbsp;их&nbsp;порядок&nbsp;и&nbsp;предоставляет&nbsp;матрицы&nbsp;чувствительности:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;J&nbsp;=&nbsp;[&nbsp;ω_1&nbsp;…&nbsp;ω_n;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v_1&nbsp;…&nbsp;v_n&nbsp;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;столбец&nbsp;(ω_i,&nbsp;v_i)^T&nbsp;соответствует&nbsp;очередной&nbsp;обобщённой&nbsp;координате.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, base: Transform3):<br>
-&#9;&#9;self.base = base<br>
-&#9;&#9;self._kinematic_units: List[KinematicTransform3] = []<br>
-&#9;&#9;self._joint_slices: Dict[KinematicTransform3, slice] = {}<br>
-&#9;&#9;self._dofs = 0<br>
-&#9;&#9;self.reindex_kinematics()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;base:&nbsp;Transform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.base&nbsp;=&nbsp;base<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._kinematic_units:&nbsp;List[KinematicTransform3]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._joint_slices:&nbsp;Dict[KinematicTransform3,&nbsp;slice]&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dofs&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.reindex_kinematics()<br>
 <br>
-&#9;@property<br>
-&#9;def dofs(self) -&gt; int:<br>
-&#9;&#9;&quot;&quot;&quot;Количество обобщённых координат в дереве.&quot;&quot;&quot;<br>
-&#9;&#9;return self._dofs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;dofs(self)&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Количество&nbsp;обобщённых&nbsp;координат&nbsp;в&nbsp;дереве.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._dofs<br>
 <br>
-&#9;@property<br>
-&#9;def kinematic_units(self) -&gt; List[KinematicTransform3]:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает зарегистрированные кинематические пары в порядке индексации.&quot;&quot;&quot;<br>
-&#9;&#9;return list(self._kinematic_units)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;kinematic_units(self)&nbsp;-&gt;&nbsp;List[KinematicTransform3]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;зарегистрированные&nbsp;кинематические&nbsp;пары&nbsp;в&nbsp;порядке&nbsp;индексации.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;list(self._kinematic_units)<br>
 <br>
-&#9;def joint_slice(self, joint: KinematicTransform3) -&gt; slice:<br>
-&#9;&#9;&quot;&quot;&quot;Диапазон столбцов Якобиана, отвечающий данной кинематической паре.&quot;&quot;&quot;<br>
-&#9;&#9;return self._joint_slices[joint]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;joint_slice(self,&nbsp;joint:&nbsp;KinematicTransform3)&nbsp;-&gt;&nbsp;slice:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Диапазон&nbsp;столбцов&nbsp;Якобиана,&nbsp;отвечающий&nbsp;данной&nbsp;кинематической&nbsp;паре.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._joint_slices[joint]<br>
 <br>
-&#9;def reindex_kinematics(self):<br>
-&#9;&#9;&quot;&quot;&quot;Перестраивает список кинематических пар и их индексы.&quot;&quot;&quot;<br>
-&#9;&#9;self._kinematic_units.clear()<br>
-&#9;&#9;self._joint_slices.clear()<br>
-&#9;&#9;self._dofs = 0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;reindex_kinematics(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Перестраивает&nbsp;список&nbsp;кинематических&nbsp;пар&nbsp;и&nbsp;их&nbsp;индексы.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._kinematic_units.clear()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._joint_slices.clear()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dofs&nbsp;=&nbsp;0<br>
 <br>
-&#9;&#9;for node in self._walk_transforms(self.base):<br>
-&#9;&#9;&#9;if isinstance(node, KinematicTransform3):<br>
-&#9;&#9;&#9;&#9;node.update_kinematic_parent()<br>
-&#9;&#9;&#9;&#9;dof = len(node.senses())<br>
-&#9;&#9;&#9;&#9;start = self._dofs<br>
-&#9;&#9;&#9;&#9;self._kinematic_units.append(node)<br>
-&#9;&#9;&#9;&#9;self._joint_slices[node] = slice(start, start + dof)<br>
-&#9;&#9;&#9;&#9;self._dofs += dof<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;node&nbsp;in&nbsp;self._walk_transforms(self.base):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(node,&nbsp;KinematicTransform3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node.update_kinematic_parent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dof&nbsp;=&nbsp;len(node.senses())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;start&nbsp;=&nbsp;self._dofs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._kinematic_units.append(node)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._joint_slices[node]&nbsp;=&nbsp;slice(start,&nbsp;start&nbsp;+&nbsp;dof)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dofs&nbsp;+=&nbsp;dof<br>
 <br>
-&#9;def _walk_transforms(self, node: Transform3) -&gt; Iterable[Transform3]:<br>
-&#9;&#9;yield node<br>
-&#9;&#9;for child in node.children:<br>
-&#9;&#9;&#9;yield from self._walk_transforms(child)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_walk_transforms(self,&nbsp;node:&nbsp;Transform3)&nbsp;-&gt;&nbsp;Iterable[Transform3]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;node<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child&nbsp;in&nbsp;node.children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;from&nbsp;self._walk_transforms(child)<br>
 <br>
-&#9;def sensitivity_twists(<br>
-&#9;&#9;self,<br>
-&#9;&#9;body: Transform3,<br>
-&#9;&#9;local_pose: Pose3 = Pose3.identity(),<br>
-&#9;&#9;basis: Optional[Pose3] = None,<br>
-&#9;) -&gt; Dict[KinematicTransform3, List[Screw3]]:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает чувствительности (твисты) к цели `body * local_pose`.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;sensitivity_twists(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:&nbsp;Transform3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local_pose:&nbsp;Pose3&nbsp;=&nbsp;Pose3.identity(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basis:&nbsp;Optional[Pose3]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;Dict[KinematicTransform3,&nbsp;List[Screw3]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;чувствительности&nbsp;(твисты)&nbsp;к&nbsp;цели&nbsp;`body&nbsp;*&nbsp;local_pose`.<br>
 <br>
-&#9;&#9;Результат — словарь `{joint: [Screw3, ...]}`. В нём содержатся только те<br>
-&#9;&#9;пары, которые лежат на пути от `body` к корню дерева. Такой формат не<br>
-&#9;&#9;требует знания полного числа степеней свободы: нули автоматически<br>
-&#9;&#9;отсутствуют, а далее `Robot.jacobian` расставляет столбцы по индексам.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;out_pose = body.global_pose() * local_pose<br>
-&#9;&#9;basis_pose = basis.inverse() * out_pose if basis is not None else out_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Результат&nbsp;—&nbsp;словарь&nbsp;`{joint:&nbsp;[Screw3,&nbsp;...]}`.&nbsp;В&nbsp;нём&nbsp;содержатся&nbsp;только&nbsp;те<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;пары,&nbsp;которые&nbsp;лежат&nbsp;на&nbsp;пути&nbsp;от&nbsp;`body`&nbsp;к&nbsp;корню&nbsp;дерева.&nbsp;Такой&nbsp;формат&nbsp;не<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;требует&nbsp;знания&nbsp;полного&nbsp;числа&nbsp;степеней&nbsp;свободы:&nbsp;нули&nbsp;автоматически<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;отсутствуют,&nbsp;а&nbsp;далее&nbsp;`Robot.jacobian`&nbsp;расставляет&nbsp;столбцы&nbsp;по&nbsp;индексам.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;out_pose&nbsp;=&nbsp;body.global_pose()&nbsp;*&nbsp;local_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basis_pose&nbsp;=&nbsp;basis.inverse()&nbsp;*&nbsp;out_pose&nbsp;if&nbsp;basis&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;out_pose<br>
 <br>
-&#9;&#9;current = KinematicTransform3.found_first_kinematic_unit_in_parent_tree(body, ignore_self=True)<br>
-&#9;&#9;twists: Dict[KinematicTransform3, List[Screw3]] = {}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current&nbsp;=&nbsp;KinematicTransform3.found_first_kinematic_unit_in_parent_tree(body,&nbsp;ignore_self=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twists:&nbsp;Dict[KinematicTransform3,&nbsp;List[Screw3]]&nbsp;=&nbsp;{}<br>
 <br>
-&#9;&#9;while current is not None:<br>
-&#9;&#9;&#9;link_pose = current.output.global_pose()<br>
-&#9;&#9;&#9;rel = link_pose.inverse() * out_pose<br>
-&#9;&#9;&#9;radius = rel.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;current&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;link_pose&nbsp;=&nbsp;current.output.global_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rel&nbsp;=&nbsp;link_pose.inverse()&nbsp;*&nbsp;out_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;radius&nbsp;=&nbsp;rel.lin<br>
 <br>
-&#9;&#9;&#9;joint_twists: List[Screw3] = []<br>
-&#9;&#9;&#9;for sens in current.senses():<br>
-&#9;&#9;&#9;&#9;scr = sens.kinematic_carry(radius)<br>
-&#9;&#9;&#9;&#9;scr = scr.inverse_transform_by(rel)<br>
-&#9;&#9;&#9;&#9;scr = scr.transform_by(basis_pose)<br>
-&#9;&#9;&#9;&#9;joint_twists.append(scr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint_twists:&nbsp;List[Screw3]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sens&nbsp;in&nbsp;current.senses():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scr&nbsp;=&nbsp;sens.kinematic_carry(radius)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scr&nbsp;=&nbsp;scr.inverse_transform_by(rel)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scr&nbsp;=&nbsp;scr.transform_by(basis_pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint_twists.append(scr)<br>
 <br>
-&#9;&#9;&#9;twists[current] = joint_twists<br>
-&#9;&#9;&#9;current = current.kinematic_parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twists[current]&nbsp;=&nbsp;joint_twists<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current&nbsp;=&nbsp;current.kinematic_parent<br>
 <br>
-&#9;&#9;return twists<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;twists<br>
 <br>
-&#9;def jacobian(<br>
-&#9;&#9;self,<br>
-&#9;&#9;body: Transform3,<br>
-&#9;&#9;local_pose: Pose3 = Pose3.identity(),<br>
-&#9;&#9;basis: Optional[Pose3] = None,<br>
-&#9;) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Строит полный 6×N Якобиан, собирая столбцы из `sensitivity_twists`.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;jacobian(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:&nbsp;Transform3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local_pose:&nbsp;Pose3&nbsp;=&nbsp;Pose3.identity(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basis:&nbsp;Optional[Pose3]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Строит&nbsp;полный&nbsp;6×N&nbsp;Якобиан,&nbsp;собирая&nbsp;столбцы&nbsp;из&nbsp;`sensitivity_twists`.<br>
 <br>
-&#9;&#9;Колонка j равна [ω_j^T, v_j^T]^T — угловой и линейной частям твиста<br>
-&#9;&#9;соответствующей обобщённой координаты θ_j.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;jac = np.zeros((6, self._dofs), dtype=float)<br>
-&#9;&#9;twists = self.sensitivity_twists(body, local_pose, basis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Колонка&nbsp;j&nbsp;равна&nbsp;[ω_j^T,&nbsp;v_j^T]^T&nbsp;—&nbsp;угловой&nbsp;и&nbsp;линейной&nbsp;частям&nbsp;твиста<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;соответствующей&nbsp;обобщённой&nbsp;координаты&nbsp;θ_j.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;jac&nbsp;=&nbsp;np.zeros((6,&nbsp;self._dofs),&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twists&nbsp;=&nbsp;self.sensitivity_twists(body,&nbsp;local_pose,&nbsp;basis)<br>
 <br>
-&#9;&#9;for joint, cols in twists.items():<br>
-&#9;&#9;&#9;sl = self._joint_slices.get(joint)<br>
-&#9;&#9;&#9;if sl is None:<br>
-&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;for offset, scr in enumerate(cols):<br>
-&#9;&#9;&#9;&#9;idx = sl.start + offset<br>
-&#9;&#9;&#9;&#9;jac[0:3, idx] = scr.ang<br>
-&#9;&#9;&#9;&#9;jac[3:6, idx] = scr.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;joint,&nbsp;cols&nbsp;in&nbsp;twists.items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sl&nbsp;=&nbsp;self._joint_slices.get(joint)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;sl&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;offset,&nbsp;scr&nbsp;in&nbsp;enumerate(cols):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;sl.start&nbsp;+&nbsp;offset<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;jac[0:3,&nbsp;idx]&nbsp;=&nbsp;scr.ang<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;jac[3:6,&nbsp;idx]&nbsp;=&nbsp;scr.lin<br>
 <br>
-&#9;&#9;return jac<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;jac<br>
 <br>
-&#9;def translation_jacobian(<br>
-&#9;&#9;self,<br>
-&#9;&#9;body: Transform3,<br>
-&#9;&#9;local_pose: Pose3 = Pose3.identity(),<br>
-&#9;&#9;basis: Optional[Pose3] = None,<br>
-&#9;) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Возвращает только трансляционную часть Якобиана (3×N).&quot;&quot;&quot;<br>
-&#9;&#9;twists = self.sensitivity_twists(body, local_pose, basis)<br>
-&#9;&#9;jac = np.zeros((3, self._dofs), dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;translation_jacobian(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:&nbsp;Transform3,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local_pose:&nbsp;Pose3&nbsp;=&nbsp;Pose3.identity(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basis:&nbsp;Optional[Pose3]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;только&nbsp;трансляционную&nbsp;часть&nbsp;Якобиана&nbsp;(3×N).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twists&nbsp;=&nbsp;self.sensitivity_twists(body,&nbsp;local_pose,&nbsp;basis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;jac&nbsp;=&nbsp;np.zeros((3,&nbsp;self._dofs),&nbsp;dtype=float)<br>
 <br>
-&#9;&#9;for joint, cols in twists.items():<br>
-&#9;&#9;&#9;sl = self._joint_slices.get(joint)<br>
-&#9;&#9;&#9;if sl is None:<br>
-&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;for offset, scr in enumerate(cols):<br>
-&#9;&#9;&#9;&#9;idx = sl.start + offset<br>
-&#9;&#9;&#9;&#9;jac[:, idx] = scr.lin<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;joint,&nbsp;cols&nbsp;in&nbsp;twists.items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sl&nbsp;=&nbsp;self._joint_slices.get(joint)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;sl&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;offset,&nbsp;scr&nbsp;in&nbsp;enumerate(cols):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;sl.start&nbsp;+&nbsp;offset<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;jac[:,&nbsp;idx]&nbsp;=&nbsp;scr.lin<br>
 <br>
-&#9;&#9;return jac<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;jac<br>
 <br>
-&#9;def integrate_joint_speeds(self, speeds: np.ndarray, dt: float) -&gt; None:<br>
-&#9;&#9;&quot;&quot;&quot;Применяет численный шаг интегрирования ко всем координатам.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;integrate_joint_speeds(self,&nbsp;speeds:&nbsp;np.ndarray,&nbsp;dt:&nbsp;float)&nbsp;-&gt;&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Применяет&nbsp;численный&nbsp;шаг&nbsp;интегрирования&nbsp;ко&nbsp;всем&nbsp;координатам.<br>
 <br>
-&#9;&#9;Для каждой кинематической пары прибавляет `speed_i * dt` к соответствующей<br>
-&#9;&#9;координате, используя `set_coord`. Предполагается, что `speeds` задан в<br>
-&#9;&#9;тех же единицах и порядке, что и столбцы Якобиана.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;speeds = np.asarray(speeds, dtype=float)<br>
-&#9;&#9;if speeds.shape[0] != self._dofs:<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Speeds vector must have length {self._dofs}, got {speeds.shape[0]}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;каждой&nbsp;кинематической&nbsp;пары&nbsp;прибавляет&nbsp;`speed_i&nbsp;*&nbsp;dt`&nbsp;к&nbsp;соответствующей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;координате,&nbsp;используя&nbsp;`set_coord`.&nbsp;Предполагается,&nbsp;что&nbsp;`speeds`&nbsp;задан&nbsp;в<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;тех&nbsp;же&nbsp;единицах&nbsp;и&nbsp;порядке,&nbsp;что&nbsp;и&nbsp;столбцы&nbsp;Якобиана.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;speeds&nbsp;=&nbsp;np.asarray(speeds,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;speeds.shape[0]&nbsp;!=&nbsp;self._dofs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Speeds&nbsp;vector&nbsp;must&nbsp;have&nbsp;length&nbsp;{self._dofs},&nbsp;got&nbsp;{speeds.shape[0]}&quot;)<br>
 <br>
-&#9;&#9;for joint in self._kinematic_units:<br>
-&#9;&#9;&#9;sl = self._joint_slices[joint]<br>
-&#9;&#9;&#9;span = sl.stop - sl.start<br>
-&#9;&#9;&#9;if span == 0:<br>
-&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;segment = speeds[sl] * dt<br>
-&#9;&#9;&#9;if span == 1:<br>
-&#9;&#9;&#9;&#9;joint.set_coord(joint.get_coord() + segment[0])<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;raise NotImplementedError(&quot;Multi-DOF joints require custom integration.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;joint&nbsp;in&nbsp;self._kinematic_units:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sl&nbsp;=&nbsp;self._joint_slices[joint]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;span&nbsp;=&nbsp;sl.stop&nbsp;-&nbsp;sl.start<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;span&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;segment&nbsp;=&nbsp;speeds[sl]&nbsp;*&nbsp;dt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;span&nbsp;==&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint.set_coord(joint.get_coord()&nbsp;+&nbsp;segment[0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(&quot;Multi-DOF&nbsp;joints&nbsp;require&nbsp;custom&nbsp;integration.&quot;)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

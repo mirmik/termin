@@ -6,157 +6,157 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from termin.geombase import Pose3, AABB<br>
-import numpy<br>
-from termin.colliders.collider import Collider<br>
-from termin.geomalgo.project import closest_of_aabb_and_capsule, closest_of_aabb_and_sphere<br>
+from&nbsp;termin.geombase&nbsp;import&nbsp;Pose3,&nbsp;AABB<br>
+import&nbsp;numpy<br>
+from&nbsp;termin.colliders.collider&nbsp;import&nbsp;Collider<br>
+from&nbsp;termin.geomalgo.project&nbsp;import&nbsp;closest_of_aabb_and_capsule,&nbsp;closest_of_aabb_and_sphere<br>
 <br>
 <br>
 <br>
-class BoxCollider(Collider):<br>
-&#9;def closest_to_ray(self, ray: &quot;Ray3&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Переносим луч в локальное пространство коробки и применяем стандартный<br>
-&#9;&#9;алгоритм пересечения луча с AABB.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;import numpy as np<br>
+class&nbsp;BoxCollider(Collider):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_ray(self,&nbsp;ray:&nbsp;&quot;Ray3&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Переносим&nbsp;луч&nbsp;в&nbsp;локальное&nbsp;пространство&nbsp;коробки&nbsp;и&nbsp;применяем&nbsp;стандартный<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;алгоритм&nbsp;пересечения&nbsp;луча&nbsp;с&nbsp;AABB.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-&#9;&#9;# Перенос луча в локальные координаты<br>
-&#9;&#9;O_local = self.point_in_local_frame(ray.origin)<br>
-&#9;&#9;D_local = self.pose.inverse_transform_vector(ray.direction)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Перенос&nbsp;луча&nbsp;в&nbsp;локальные&nbsp;координаты<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;O_local&nbsp;=&nbsp;self.point_in_local_frame(ray.origin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;D_local&nbsp;=&nbsp;self.pose.inverse_transform_vector(ray.direction)<br>
 <br>
-&#9;&#9;# Нормализуем, чтобы корректно считать t<br>
-&#9;&#9;n = np.linalg.norm(D_local)<br>
-&#9;&#9;if n &lt; 1e-8:<br>
-&#9;&#9;&#9;D_local = np.array([0, 0, 1], dtype=np.float32)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;D_local = D_local / n<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нормализуем,&nbsp;чтобы&nbsp;корректно&nbsp;считать&nbsp;t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;np.linalg.norm(D_local)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;&lt;&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;D_local&nbsp;=&nbsp;np.array([0,&nbsp;0,&nbsp;1],&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;D_local&nbsp;=&nbsp;D_local&nbsp;/&nbsp;n<br>
 <br>
-&#9;&#9;aabb = self.local_aabb()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aabb&nbsp;=&nbsp;self.local_aabb()<br>
 <br>
-&#9;&#9;tmin = -np.inf<br>
-&#9;&#9;tmax =  np.inf<br>
-&#9;&#9;hit_possible = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmin&nbsp;=&nbsp;-np.inf<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmax&nbsp;=&nbsp;&nbsp;np.inf<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hit_possible&nbsp;=&nbsp;True<br>
 <br>
-&#9;&#9;for i in range(3):<br>
-&#9;&#9;&#9;if abs(D_local[i]) &lt; 1e-8:<br>
-&#9;&#9;&#9;&#9;# Луч параллелен плоскости AABB, проверяем попадание<br>
-&#9;&#9;&#9;&#9;if O_local[i] &lt; aabb.min_point[i] or O_local[i] &gt; aabb.max_point[i]:<br>
-&#9;&#9;&#9;&#9;&#9;hit_possible = False<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;t1 = (aabb.min_point[i] - O_local[i]) / D_local[i]<br>
-&#9;&#9;&#9;&#9;t2 = (aabb.max_point[i] - O_local[i]) / D_local[i]<br>
-&#9;&#9;&#9;&#9;t1, t2 = min(t1, t2), max(t1, t2)<br>
-&#9;&#9;&#9;&#9;tmin = max(tmin, t1)<br>
-&#9;&#9;&#9;&#9;tmax = min(tmax, t2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;abs(D_local[i])&nbsp;&lt;&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Луч&nbsp;параллелен&nbsp;плоскости&nbsp;AABB,&nbsp;проверяем&nbsp;попадание<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;O_local[i]&nbsp;&lt;&nbsp;aabb.min_point[i]&nbsp;or&nbsp;O_local[i]&nbsp;&gt;&nbsp;aabb.max_point[i]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hit_possible&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t1&nbsp;=&nbsp;(aabb.min_point[i]&nbsp;-&nbsp;O_local[i])&nbsp;/&nbsp;D_local[i]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t2&nbsp;=&nbsp;(aabb.max_point[i]&nbsp;-&nbsp;O_local[i])&nbsp;/&nbsp;D_local[i]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t1,&nbsp;t2&nbsp;=&nbsp;min(t1,&nbsp;t2),&nbsp;max(t1,&nbsp;t2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmin&nbsp;=&nbsp;max(tmin,&nbsp;t1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tmax&nbsp;=&nbsp;min(tmax,&nbsp;t2)<br>
 <br>
-&#9;&#9;# Нет пересечения → ищем ближайшую точку на луче<br>
-&#9;&#9;if (not hit_possible) or (tmax &lt; max(tmin, 0)):<br>
-&#9;&#9;&#9;candidates = [0.0]<br>
-&#9;&#9;&#9;for i in range(3):<br>
-&#9;&#9;&#9;&#9;if abs(D_local[i]) &lt; 1e-8:<br>
-&#9;&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;&#9;candidates.append((aabb.min_point[i] - O_local[i]) / D_local[i])<br>
-&#9;&#9;&#9;&#9;candidates.append((aabb.max_point[i] - O_local[i]) / D_local[i])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нет&nbsp;пересечения&nbsp;→&nbsp;ищем&nbsp;ближайшую&nbsp;точку&nbsp;на&nbsp;луче<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(not&nbsp;hit_possible)&nbsp;or&nbsp;(tmax&nbsp;&lt;&nbsp;max(tmin,&nbsp;0)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates&nbsp;=&nbsp;[0.0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;abs(D_local[i])&nbsp;&lt;&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates.append((aabb.min_point[i]&nbsp;-&nbsp;O_local[i])&nbsp;/&nbsp;D_local[i])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates.append((aabb.max_point[i]&nbsp;-&nbsp;O_local[i])&nbsp;/&nbsp;D_local[i])<br>
 <br>
-&#9;&#9;&#9;best_t = 0.0<br>
-&#9;&#9;&#9;best_dist = float(&quot;inf&quot;)<br>
-&#9;&#9;&#9;for t in candidates:<br>
-&#9;&#9;&#9;&#9;if t &lt; 0:<br>
-&#9;&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;&#9;p_ray_local = O_local + D_local * t<br>
-&#9;&#9;&#9;&#9;p_box_local = np.minimum(np.maximum(p_ray_local, aabb.min_point), aabb.max_point)<br>
-&#9;&#9;&#9;&#9;dist = np.linalg.norm(p_box_local - p_ray_local)<br>
-&#9;&#9;&#9;&#9;if dist &lt; best_dist:<br>
-&#9;&#9;&#9;&#9;&#9;best_dist = dist<br>
-&#9;&#9;&#9;&#9;&#9;best_t = t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_t&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_dist&nbsp;=&nbsp;float(&quot;inf&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;t&nbsp;in&nbsp;candidates:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t&nbsp;&lt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_ray_local&nbsp;=&nbsp;O_local&nbsp;+&nbsp;D_local&nbsp;*&nbsp;t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_box_local&nbsp;=&nbsp;np.minimum(np.maximum(p_ray_local,&nbsp;aabb.min_point),&nbsp;aabb.max_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dist&nbsp;=&nbsp;np.linalg.norm(p_box_local&nbsp;-&nbsp;p_ray_local)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dist&nbsp;&lt;&nbsp;best_dist:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_dist&nbsp;=&nbsp;dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_t&nbsp;=&nbsp;t<br>
 <br>
-&#9;&#9;&#9;p_ray = ray.point_at(best_t)<br>
-&#9;&#9;&#9;p_box_local = O_local + D_local * best_t<br>
-&#9;&#9;&#9;p_box_local = np.minimum(np.maximum(p_box_local, aabb.min_point), aabb.max_point)<br>
-&#9;&#9;&#9;p_col = self.pose.transform_point(p_box_local)<br>
-&#9;&#9;&#9;return p_col, p_ray, best_dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_ray&nbsp;=&nbsp;ray.point_at(best_t)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_box_local&nbsp;=&nbsp;O_local&nbsp;+&nbsp;D_local&nbsp;*&nbsp;best_t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_box_local&nbsp;=&nbsp;np.minimum(np.maximum(p_box_local,&nbsp;aabb.min_point),&nbsp;aabb.max_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_col&nbsp;=&nbsp;self.pose.transform_point(p_box_local)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p_col,&nbsp;p_ray,&nbsp;best_dist<br>
 <br>
-&#9;&#9;# Есть пересечение, используем t_hit ≥ 0<br>
-&#9;&#9;t_hit = tmin if tmin &gt;= 0 else tmax<br>
-&#9;&#9;if t_hit &lt; 0:<br>
-&#9;&#9;&#9;t_hit = tmax<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Есть&nbsp;пересечение,&nbsp;используем&nbsp;t_hit&nbsp;≥&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_hit&nbsp;=&nbsp;tmin&nbsp;if&nbsp;tmin&nbsp;&gt;=&nbsp;0&nbsp;else&nbsp;tmax<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t_hit&nbsp;&lt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_hit&nbsp;=&nbsp;tmax<br>
 <br>
-&#9;&#9;p_ray_local = O_local + D_local * t_hit<br>
-&#9;&#9;p_ray = ray.point_at(t_hit)<br>
-&#9;&#9;# точка попадания лежит в AABB, трансформируем в мир<br>
-&#9;&#9;p_col = p_ray<br>
-&#9;&#9;return p_col, p_ray, 0.0<br>
-&#9;<br>
-&#9;def __init__(self, center : numpy.ndarray = None, size: numpy.ndarray = None, pose: Pose3 = Pose3.identity()):<br>
-&#9;&#9;self.center = center<br>
-&#9;&#9;self.size = size<br>
-&#9;&#9;self.pose = pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_ray_local&nbsp;=&nbsp;O_local&nbsp;+&nbsp;D_local&nbsp;*&nbsp;t_hit<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_ray&nbsp;=&nbsp;ray.point_at(t_hit)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;точка&nbsp;попадания&nbsp;лежит&nbsp;в&nbsp;AABB,&nbsp;трансформируем&nbsp;в&nbsp;мир<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_col&nbsp;=&nbsp;p_ray<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p_col,&nbsp;p_ray,&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;center&nbsp;:&nbsp;numpy.ndarray&nbsp;=&nbsp;None,&nbsp;size:&nbsp;numpy.ndarray&nbsp;=&nbsp;None,&nbsp;pose:&nbsp;Pose3&nbsp;=&nbsp;Pose3.identity()):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.center&nbsp;=&nbsp;center<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.size&nbsp;=&nbsp;size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pose&nbsp;=&nbsp;pose<br>
 <br>
-&#9;&#9;if self.center is None:<br>
-&#9;&#9;&#9;self.center = numpy.array([0.0, 0.0, 0.0], dtype=numpy.float32)<br>
-&#9;&#9;if self.size is None:<br>
-&#9;&#9;&#9;self.size = numpy.array([1.0, 1.0, 1.0], dtype=numpy.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.center&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.center&nbsp;=&nbsp;numpy.array([0.0,&nbsp;0.0,&nbsp;0.0],&nbsp;dtype=numpy.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.size&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.size&nbsp;=&nbsp;numpy.array([1.0,&nbsp;1.0,&nbsp;1.0],&nbsp;dtype=numpy.float32)<br>
 <br>
-&#9;def local_aabb(self) -&gt; AABB:<br>
-&#9;&#9;half_size = self.size / 2.0<br>
-&#9;&#9;min_point = self.center - half_size<br>
-&#9;&#9;max_point = self.center + half_size<br>
-&#9;&#9;return AABB(min_point, max_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;local_aabb(self)&nbsp;-&gt;&nbsp;AABB:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;half_size&nbsp;=&nbsp;self.size&nbsp;/&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_point&nbsp;=&nbsp;self.center&nbsp;-&nbsp;half_size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max_point&nbsp;=&nbsp;self.center&nbsp;+&nbsp;half_size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;AABB(min_point,&nbsp;max_point)<br>
 <br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return f&quot;BoxCollider(center={self.center}, size={self.size}, pose={self.pose})&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;BoxCollider(center={self.center},&nbsp;size={self.size},&nbsp;pose={self.pose})&quot;<br>
 <br>
-&#9;def transform_by(self, tpose: 'Pose3'):<br>
-&#9;&#9;new_pose = tpose.compose(self.pose)<br>
-&#9;&#9;return BoxCollider(self.center, self.size, new_pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transform_by(self,&nbsp;tpose:&nbsp;'Pose3'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_pose&nbsp;=&nbsp;tpose.compose(self.pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;BoxCollider(self.center,&nbsp;self.size,&nbsp;new_pose)<br>
 <br>
-&#9;def point_in_local_frame(self, point: numpy.ndarray) -&gt; numpy.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Transform point to local frame&quot;&quot;&quot;<br>
-&#9;&#9;return self.pose.inverse_transform_point(point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;point_in_local_frame(self,&nbsp;point:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;point&nbsp;to&nbsp;local&nbsp;frame&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.pose.inverse_transform_point(point)<br>
 <br>
-&#9;def segment_in_local_frame(self, seg_start: numpy.ndarray, seg_end: numpy.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;Transform segment to local frame&quot;&quot;&quot;<br>
-&#9;&#9;local_start = self.point_in_local_frame(seg_start)<br>
-&#9;&#9;local_end = self.point_in_local_frame(seg_end)<br>
-&#9;&#9;return local_start, local_end<br>
-&#9;<br>
-&#9;def closest_point_to_capsule(self, capsule : &quot;CapsuleCollider&quot;):<br>
-&#9;&#9;a_local = self.point_in_local_frame(capsule.a)<br>
-&#9;&#9;b_local = self.point_in_local_frame(capsule.b)<br>
-&#9;&#9;aabb = self.local_aabb()<br>
-&#9;&#9;closest_aabb_point, closest_capsule_point, distance = closest_of_aabb_and_capsule(<br>
-&#9;&#9;&#9;aabb.min_point, aabb.max_point,<br>
-&#9;&#9;&#9;a_local, b_local, capsule.radius<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;segment_in_local_frame(self,&nbsp;seg_start:&nbsp;numpy.ndarray,&nbsp;seg_end:&nbsp;numpy.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Transform&nbsp;segment&nbsp;to&nbsp;local&nbsp;frame&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local_start&nbsp;=&nbsp;self.point_in_local_frame(seg_start)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local_end&nbsp;=&nbsp;self.point_in_local_frame(seg_end)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;local_start,&nbsp;local_end<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_point_to_capsule(self,&nbsp;capsule&nbsp;:&nbsp;&quot;CapsuleCollider&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_local&nbsp;=&nbsp;self.point_in_local_frame(capsule.a)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b_local&nbsp;=&nbsp;self.point_in_local_frame(capsule.b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aabb&nbsp;=&nbsp;self.local_aabb()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_aabb_point,&nbsp;closest_capsule_point,&nbsp;distance&nbsp;=&nbsp;closest_of_aabb_and_capsule(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aabb.min_point,&nbsp;aabb.max_point,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a_local,&nbsp;b_local,&nbsp;capsule.radius<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;&#9;# Transform closest points back to world frame<br>
-&#9;&#9;closest_aabb_point_world = self.pose.transform_point(closest_aabb_point)<br>
-&#9;&#9;closest_capsule_point_world = self.pose.transform_point(closest_capsule_point)<br>
-&#9;&#9;return closest_aabb_point_world, closest_capsule_point_world, distance<br>
-&#9;<br>
-&#9;def closest_to_sphere(self, sphere : &quot;SphereCollider&quot;):<br>
-&#9;&#9;c_local = self.point_in_local_frame(sphere.center)<br>
-&#9;&#9;aabb = self.local_aabb()<br>
-&#9;&#9;closest_aabb_point, closest_sphere_point, distance = closest_of_aabb_and_sphere(<br>
-&#9;&#9;&#9;aabb.min_point, aabb.max_point,<br>
-&#9;&#9;&#9;c_local, sphere.radius<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Transform&nbsp;closest&nbsp;points&nbsp;back&nbsp;to&nbsp;world&nbsp;frame<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_aabb_point_world&nbsp;=&nbsp;self.pose.transform_point(closest_aabb_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_capsule_point_world&nbsp;=&nbsp;self.pose.transform_point(closest_capsule_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;closest_aabb_point_world,&nbsp;closest_capsule_point_world,&nbsp;distance<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_sphere(self,&nbsp;sphere&nbsp;:&nbsp;&quot;SphereCollider&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c_local&nbsp;=&nbsp;self.point_in_local_frame(sphere.center)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aabb&nbsp;=&nbsp;self.local_aabb()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_aabb_point,&nbsp;closest_sphere_point,&nbsp;distance&nbsp;=&nbsp;closest_of_aabb_and_sphere(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aabb.min_point,&nbsp;aabb.max_point,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c_local,&nbsp;sphere.radius<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
-&#9;&#9;# Transform closest points back to world frame<br>
-&#9;&#9;closest_aabb_point_world = self.pose.transform_point(closest_aabb_point)<br>
-&#9;&#9;closest_sphere_point_world = self.pose.transform_point(closest_sphere_point)<br>
-&#9;&#9;return closest_aabb_point_world, closest_sphere_point_world, distance<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Transform&nbsp;closest&nbsp;points&nbsp;back&nbsp;to&nbsp;world&nbsp;frame<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_aabb_point_world&nbsp;=&nbsp;self.pose.transform_point(closest_aabb_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_sphere_point_world&nbsp;=&nbsp;self.pose.transform_point(closest_sphere_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;closest_aabb_point_world,&nbsp;closest_sphere_point_world,&nbsp;distance<br>
 <br>
-&#9;def closest_to_collider(self, other: &quot;Collider&quot;):<br>
-&#9;&#9;from .capsule import CapsuleCollider<br>
-&#9;&#9;from .sphere import SphereCollider<br>
-&#9;&#9;if isinstance(other, CapsuleCollider):<br>
-&#9;&#9;&#9;return self.closest_point_to_capsule(other)<br>
-&#9;&#9;elif isinstance(other, SphereCollider):<br>
-&#9;&#9;&#9;return self.closest_to_sphere(other)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;raise NotImplementedError(f&quot;closest_to_collider not implemented for {type(other)}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_collider(self,&nbsp;other:&nbsp;&quot;Collider&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.capsule&nbsp;import&nbsp;CapsuleCollider<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.sphere&nbsp;import&nbsp;SphereCollider<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(other,&nbsp;CapsuleCollider):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.closest_point_to_capsule(other)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;isinstance(other,&nbsp;SphereCollider):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.closest_to_sphere(other)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(f&quot;closest_to_collider&nbsp;not&nbsp;implemented&nbsp;for&nbsp;{type(other)}&quot;)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

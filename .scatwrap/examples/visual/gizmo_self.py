@@ -6,63 +6,63 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Minimal demo that renders a cube and allows orbiting camera controls.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Minimal&nbsp;demo&nbsp;that&nbsp;renders&nbsp;a&nbsp;cube&nbsp;and&nbsp;allows&nbsp;orbiting&nbsp;camera&nbsp;controls.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.mesh.mesh import UVSphereMesh, Mesh, CubeMesh<br>
-from termin.visualization import (<br>
-&#9;Entity,<br>
-&#9;MeshDrawable,<br>
-&#9;Scene,<br>
-&#9;Material,<br>
-&#9;VisualizationWorld,<br>
-&#9;PerspectiveCameraComponent,<br>
-&#9;OrbitCameraController,<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;UVSphereMesh,&nbsp;Mesh,&nbsp;CubeMesh<br>
+from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Entity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Scene,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Material,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;VisualizationWorld,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from termin.visualization.components import MeshRenderer<br>
-from termin.visualization.shader import ShaderProgram<br>
-from termin.visualization.skybox import SkyBoxEntity<br>
-from termin.visualization.gizmos import GizmoEntity, GizmoMoveController<br>
-from termin.visualization.scene import Scene<br>
+from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.gizmos&nbsp;import&nbsp;GizmoEntity,&nbsp;GizmoMoveController<br>
+from&nbsp;termin.visualization.scene&nbsp;import&nbsp;Scene<br>
 <br>
-def build_scene(world: VisualizationWorld) -&gt; tuple[Scene, PerspectiveCameraComponent]:<br>
-&#9;scene = Scene()<br>
+def&nbsp;build_scene(world:&nbsp;VisualizationWorld)&nbsp;-&gt;&nbsp;tuple[Scene,&nbsp;PerspectiveCameraComponent]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;Scene()<br>
 <br>
-&#9;gizmo = GizmoEntity(size=2.0)<br>
-&#9;gizmo.add_component(GizmoMoveController(gizmo, scene))<br>
-&#9;scene.add(gizmo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gizmo&nbsp;=&nbsp;GizmoEntity(size=2.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gizmo.add_component(GizmoMoveController(gizmo,&nbsp;scene))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(gizmo)<br>
 <br>
-&#9;skybox = SkyBoxEntity()<br>
-&#9;scene.add(skybox)<br>
-&#9;world.add_scene(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;skybox&nbsp;=&nbsp;SkyBoxEntity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(skybox)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
-&#9;camera_entity = Entity(name=&quot;camera&quot;)<br>
-&#9;camera = PerspectiveCameraComponent()<br>
-&#9;camera_entity.add_component(camera)<br>
-&#9;controller = OrbitCameraController()<br>
-&#9;controller.azimuth = 0<br>
-&#9;controller.elevation = 0<br>
-&#9;camera_entity.add_component(controller)<br>
-&#9;<br>
-&#9;scene.add(camera_entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity&nbsp;=&nbsp;Entity(name=&quot;camera&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera&nbsp;=&nbsp;PerspectiveCameraComponent()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;controller&nbsp;=&nbsp;OrbitCameraController()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;controller.azimuth&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;controller.elevation&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_entity.add_component(controller)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(camera_entity)<br>
 <br>
-&#9;return scene, camera<br>
-<br>
-<br>
-def main():<br>
-&#9;world = VisualizationWorld()<br>
-&#9;scene, camera = build_scene(world)<br>
-&#9;window = world.create_window(title=&quot;termin cube demo&quot;)<br>
-&#9;window.add_viewport(scene, camera)<br>
-&#9;world.run()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene,&nbsp;camera<br>
 <br>
 <br>
-if __name__ == &quot;__main__&quot;:<br>
-&#9;main()<br>
+def&nbsp;main():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene,&nbsp;camera&nbsp;=&nbsp;build_scene(world)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;world.create_window(title=&quot;termin&nbsp;cube&nbsp;demo&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.add_viewport(scene,&nbsp;camera)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;world.run()<br>
+<br>
+<br>
+if&nbsp;__name__&nbsp;==&nbsp;&quot;__main__&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;main()<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

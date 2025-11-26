@@ -6,113 +6,113 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from typing import Any, Optional, Tuple<br>
-from .base import BackendWindow, WindowBackend<br>
+from&nbsp;typing&nbsp;import&nbsp;Any,&nbsp;Optional,&nbsp;Tuple<br>
+from&nbsp;.base&nbsp;import&nbsp;BackendWindow,&nbsp;WindowBackend<br>
 <br>
-class NOPWindowHandle(BackendWindow):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Псевдо-окно:<br>
-&#9;- имеет размеры;<br>
-&#9;- хранит курсор;<br>
-&#9;- умеет закрываться;<br>
-&#9;- хранит коллбеки, но сам их не вызывает.<br>
-&#9;&quot;&quot;&quot;<br>
+class&nbsp;NOPWindowHandle(BackendWindow):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Псевдо-окно:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;имеет&nbsp;размеры;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;хранит&nbsp;курсор;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;умеет&nbsp;закрываться;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;хранит&nbsp;коллбеки,&nbsp;но&nbsp;сам&nbsp;их&nbsp;не&nbsp;вызывает.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, width: int, height: int, title: str, share: Optional[BackendWindow] = None):<br>
-&#9;&#9;self._width = width<br>
-&#9;&#9;self._height = height<br>
-&#9;&#9;self._closed = False<br>
-&#9;&#9;self._user_ptr: Any = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;width:&nbsp;int,&nbsp;height:&nbsp;int,&nbsp;title:&nbsp;str,&nbsp;share:&nbsp;Optional[BackendWindow]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._width&nbsp;=&nbsp;width<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._height&nbsp;=&nbsp;height<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._closed&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._user_ptr:&nbsp;Any&nbsp;=&nbsp;None<br>
 <br>
-&#9;&#9;self._cursor_x: float = 0.0<br>
-&#9;&#9;self._cursor_y: float = 0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._cursor_x:&nbsp;float&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._cursor_y:&nbsp;float&nbsp;=&nbsp;0.0<br>
 <br>
-&#9;&#9;# Коллбеки, чтобы Window мог их установить<br>
-&#9;&#9;self._framebuffer_callback = None<br>
-&#9;&#9;self._cursor_callback = None<br>
-&#9;&#9;self._scroll_callback = None<br>
-&#9;&#9;self._mouse_callback = None<br>
-&#9;&#9;self._key_callback = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Коллбеки,&nbsp;чтобы&nbsp;Window&nbsp;мог&nbsp;их&nbsp;установить<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._framebuffer_callback&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._cursor_callback&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._scroll_callback&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mouse_callback&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._key_callback&nbsp;=&nbsp;None<br>
 <br>
-&#9;# --- BackendWindow API ----------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;BackendWindow&nbsp;API&nbsp;----------------------------------------------<br>
 <br>
-&#9;def close(self):<br>
-&#9;&#9;self._closed = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;close(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._closed&nbsp;=&nbsp;True<br>
 <br>
-&#9;def should_close(self) -&gt; bool:<br>
-&#9;&#9;return self._closed is True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;should_close(self)&nbsp;-&gt;&nbsp;bool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._closed&nbsp;is&nbsp;True<br>
 <br>
-&#9;def make_current(self):<br>
-&#9;&#9;# Нет реального контекста, просто заглушка<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;make_current(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нет&nbsp;реального&nbsp;контекста,&nbsp;просто&nbsp;заглушка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def swap_buffers(self):<br>
-&#9;&#9;# Ничего не свапаем<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;swap_buffers(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ничего&nbsp;не&nbsp;свапаем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def framebuffer_size(self) -&gt; Tuple[int, int]:<br>
-&#9;&#9;return self._width, self._height<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;framebuffer_size(self)&nbsp;-&gt;&nbsp;Tuple[int,&nbsp;int]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._width,&nbsp;self._height<br>
 <br>
-&#9;def window_size(self) -&gt; Tuple[int, int]:<br>
-&#9;&#9;return self._width, self._height<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;window_size(self)&nbsp;-&gt;&nbsp;Tuple[int,&nbsp;int]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._width,&nbsp;self._height<br>
 <br>
-&#9;def get_cursor_pos(self) -&gt; Tuple[float, float]:<br>
-&#9;&#9;return self._cursor_x, self._cursor_y<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_cursor_pos(self)&nbsp;-&gt;&nbsp;Tuple[float,&nbsp;float]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._cursor_x,&nbsp;self._cursor_y<br>
 <br>
-&#9;def set_should_close(self, flag: bool):<br>
-&#9;&#9;if flag:<br>
-&#9;&#9;&#9;self._closed = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_should_close(self,&nbsp;flag:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;flag:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._closed&nbsp;=&nbsp;True<br>
 <br>
-&#9;def set_user_pointer(self, ptr: Any):<br>
-&#9;&#9;self._user_ptr = ptr<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_user_pointer(self,&nbsp;ptr:&nbsp;Any):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._user_ptr&nbsp;=&nbsp;ptr<br>
 <br>
-&#9;def set_framebuffer_size_callback(self, callback):<br>
-&#9;&#9;self._framebuffer_callback = callback<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_framebuffer_size_callback(self,&nbsp;callback):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._framebuffer_callback&nbsp;=&nbsp;callback<br>
 <br>
-&#9;def set_cursor_pos_callback(self, callback):<br>
-&#9;&#9;self._cursor_callback = callback<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_cursor_pos_callback(self,&nbsp;callback):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._cursor_callback&nbsp;=&nbsp;callback<br>
 <br>
-&#9;def set_scroll_callback(self, callback):<br>
-&#9;&#9;self._scroll_callback = callback<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_scroll_callback(self,&nbsp;callback):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._scroll_callback&nbsp;=&nbsp;callback<br>
 <br>
-&#9;def set_mouse_button_callback(self, callback):<br>
-&#9;&#9;self._mouse_callback = callback<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_mouse_button_callback(self,&nbsp;callback):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mouse_callback&nbsp;=&nbsp;callback<br>
 <br>
-&#9;def set_key_callback(self, callback):<br>
-&#9;&#9;self._key_callback = callback<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_key_callback(self,&nbsp;callback):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._key_callback&nbsp;=&nbsp;callback<br>
 <br>
-&#9;# drives_render() оставляем по умолчанию (из базового класса),<br>
-&#9;# то есть False: движок сам будет вызывать render().<br>
-&#9;# Если хочешь симулировать push-модель, можно сделать здесь True.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;drives_render()&nbsp;оставляем&nbsp;по&nbsp;умолчанию&nbsp;(из&nbsp;базового&nbsp;класса),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;то&nbsp;есть&nbsp;False:&nbsp;движок&nbsp;сам&nbsp;будет&nbsp;вызывать&nbsp;render().<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;хочешь&nbsp;симулировать&nbsp;push-модель,&nbsp;можно&nbsp;сделать&nbsp;здесь&nbsp;True.<br>
 <br>
-&#9;def bind_window_framebuffer(self):<br>
-&#9;&#9;# Нет реального фреймбуфера, просто заглушка<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind_window_framebuffer(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нет&nbsp;реального&nbsp;фреймбуфера,&nbsp;просто&nbsp;заглушка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def request_update(self):<br>
-&#9;&#9;# Нечего обновлять<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;request_update(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нечего&nbsp;обновлять<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
 <br>
-class NOPWindowBackend(WindowBackend):<br>
-&#9;&quot;&quot;&quot;Оконный бэкенд без настоящих окон (удобно для тестов).&quot;&quot;&quot;<br>
+class&nbsp;NOPWindowBackend(WindowBackend):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Оконный&nbsp;бэкенд&nbsp;без&nbsp;настоящих&nbsp;окон&nbsp;(удобно&nbsp;для&nbsp;тестов).&quot;&quot;&quot;<br>
 <br>
-&#9;def create_window(<br>
-&#9;&#9;self,<br>
-&#9;&#9;width: int,<br>
-&#9;&#9;height: int,<br>
-&#9;&#9;title: str,<br>
-&#9;&#9;share: Optional[Any] = None,<br>
-&#9;) -&gt; NOPWindowHandle:<br>
-&#9;&#9;return NOPWindowHandle(width, height, title, share=share)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_window(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width:&nbsp;int,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;height:&nbsp;int,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;title:&nbsp;str,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;share:&nbsp;Optional[Any]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;NOPWindowHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;NOPWindowHandle(width,&nbsp;height,&nbsp;title,&nbsp;share=share)<br>
 <br>
-&#9;def poll_events(self):<br>
-&#9;&#9;# Событий нет, всё молчит<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;poll_events(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Событий&nbsp;нет,&nbsp;всё&nbsp;молчит<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
-&#9;def terminate(self):<br>
-&#9;&#9;# Нечего завершать<br>
-&#9;&#9;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;terminate(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нечего&nbsp;завершать<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

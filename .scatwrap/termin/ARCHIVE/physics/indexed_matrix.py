@@ -7,120 +7,120 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-import numpy<br>
-import torch<br>
+import&nbsp;numpy<br>
+import&nbsp;torch<br>
 <br>
-#import coo<br>
-import scipy.sparse<br>
-<br>
-<br>
-torch_type = torch.float64<br>
-<br>
-class IndexedMatrix:<br>
-&#9;def __init__(self, matrix, lidxs=None, ridxs=None, lcomm=None, rcomm=None):<br>
-&#9;&#9;self.lcomm = lcomm<br>
-&#9;&#9;self.rcomm = rcomm<br>
-&#9;&#9;self.lidxs = lidxs<br>
-&#9;&#9;self.ridxs = ridxs<br>
-&#9;&#9;#self.matrix = scipy.sparse.lil_matrix(matrix)<br>
-&#9;&#9;self.matrix = matrix<br>
-&#9;&#9;if self.lidxs:<br>
-&#9;&#9;&#9;self.index_of_lidxs = {idx: lidxs.index(idx) for idx in lidxs}<br>
-&#9;&#9;if self.ridxs:<br>
-&#9;&#9;&#9;self.index_of_ridxs = {idx: ridxs.index(idx) for idx in ridxs}<br>
-<br>
-#    def coo(self):<br>
-#        self.matrix = scipy.sparse.coo_matrix(self.matrix)<br>
-<br>
-#    def dense(self):<br>
-#        return self.matrix.todense()<br>
-<br>
-&#9;def matmul(self, oth):<br>
-&#9;&#9;if self.ridxs != oth.lidxs:<br>
-&#9;&#9;&#9;raise Exception(&quot;indexes is not same in convolution&quot;)<br>
-&#9;&#9;matrix = self.matrix @ oth.matrix<br>
-&#9;&#9;return IndexedMatrix(matrix, self.lidxs, oth.ridxs)<br>
-<br>
-&#9;def vecmul(self, oth):<br>
-&#9;&#9;if self.ridxs != oth.idxs:<br>
-&#9;&#9;&#9;raise Exception(&quot;indexes is not same in convolution&quot;)<br>
-&#9;&#9;matrix = self.matrix @ oth.matrix<br>
-&#9;&#9;return IndexedVector(matrix, self.lidxs)<br>
-<br>
-&#9;def __matmul__(self, oth):<br>
-&#9;&#9;if isinstance(oth, IndexedVector):<br>
-&#9;&#9;&#9;return self.vecmul(oth)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;return self.matmul(oth)<br>
-<br>
-&#9;def __neg__(self):<br>
-&#9;&#9;return IndexedMatrix(-self.matrix, self.lidxs, self.ridxs, self.lcomm, self.rcomm)<br>
-<br>
-&#9;def inv(self):<br>
-&#9;&#9;return IndexedMatrix(scipy.sparse.linalg.inv(self.matrix), self.ridxs, self.lidxs, self.rcomm, self.lcomm)<br>
-<br>
-&#9;def solve(self, b):<br>
-&#9;&#9;return numpy.linalg.solve(self.matrix, b.matrix)<br>
-<br>
-&#9;def raise_if_lidxs_is_not_same(self, oth):<br>
-&#9;&#9;if self.lidxs != oth.lidxs:<br>
-&#9;&#9;&#9;raise Exception(&quot;indexes is not same in convolution&quot;)<br>
-<br>
-&#9;def raise_if_ridxs_is_not_same(self, oth):<br>
-&#9;&#9;if self.ridxs != oth.ridxs:<br>
-&#9;&#9;&#9;raise Exception(&quot;indexes is not same in convolution&quot;)<br>
-<br>
-&#9;def raise_if_not_linkaged(self, oth):<br>
-&#9;&#9;if self.ridxs != oth.lidxs:<br>
-&#9;&#9;&#9;raise Exception(&quot;indexes is not same in convolution&quot;)<br>
-<br>
-&#9;def __add__(self, oth):<br>
-&#9;&#9;self.raise_if_lidxs_is_not_same(oth)<br>
-&#9;&#9;self.raise_if_ridxs_is_not_same(oth)<br>
-&#9;&#9;return IndexedMatrix(self.matrix + oth.matrix, self.lidxs, self.ridxs, self.lcomm, self.rcomm)<br>
-<br>
-&#9;def __mul__(self, s):<br>
-&#9;&#9;return IndexedMatrix(self.matrix * s, self.lidxs, self.ridxs, self.lcomm, self.rcomm)<br>
-<br>
-&#9;def unsparse(self):<br>
-&#9;&#9;return self.matrix.toarray()<br>
-<br>
-&#9;def transpose(self):<br>
-&#9;&#9;return IndexedMatrix(self.matrix.T, self.ridxs, self.lidxs, self.rcomm, self.lcomm)<br>
-<br>
-&#9;def accumulate_from(self, other):<br>
-&#9;&#9;lidxs = [self.index_of_lidxs[i] for i in other.lidxs]<br>
-&#9;&#9;ridxs = [self.index_of_ridxs[i] for i in other.ridxs]<br>
-<br>
-&#9;&#9;for i in range(len(lidxs)):<br>
-&#9;&#9;&#9;for j in range(len(ridxs)):<br>
-&#9;&#9;&#9;&#9;self.matrix[lidxs[i], ridxs[j]] += other.matrix[i, j]<br>
-<br>
-&#9;def __str__(self):<br>
-&#9;&#9;return &quot;Matrix:\r\n{}\r\nLeft Indexes: {}\r\nRight Indexes: {}\r\n&quot;.format(self.matrix, self.lidxs, self.ridxs)<br>
+#import&nbsp;coo<br>
+import&nbsp;scipy.sparse<br>
 <br>
 <br>
-class IndexedVector:<br>
-&#9;def __init__(self, matrix, idxs, comm=None):<br>
-&#9;&#9;self.comm = comm<br>
-&#9;&#9;if isinstance(matrix, numpy.ndarray) and len(matrix.shape) != 1:<br>
-&#9;&#9;&#9;matrix = matrix.reshape(matrix.shape[0], 1)<br>
-&#9;&#9;self.matrix = matrix<br>
-&#9;&#9;self.idxs = idxs<br>
-&#9;&#9;if self.idxs:<br>
-&#9;&#9;&#9;self.index_of_idxs = {idx: idxs.index(idx) for idx in idxs}<br>
+torch_type&nbsp;=&nbsp;torch.float64<br>
 <br>
-&#9;def __str__(self):<br>
-&#9;&#9;return &quot;Vector:\r\n{}\r\nIndexes: {}\r\n&quot;.format(self.matrix, self.idxs)<br>
+class&nbsp;IndexedMatrix:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;matrix,&nbsp;lidxs=None,&nbsp;ridxs=None,&nbsp;lcomm=None,&nbsp;rcomm=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lcomm&nbsp;=&nbsp;lcomm<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rcomm&nbsp;=&nbsp;rcomm<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lidxs&nbsp;=&nbsp;lidxs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.ridxs&nbsp;=&nbsp;ridxs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#self.matrix&nbsp;=&nbsp;scipy.sparse.lil_matrix(matrix)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.matrix&nbsp;=&nbsp;matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.lidxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.index_of_lidxs&nbsp;=&nbsp;{idx:&nbsp;lidxs.index(idx)&nbsp;for&nbsp;idx&nbsp;in&nbsp;lidxs}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.ridxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.index_of_ridxs&nbsp;=&nbsp;{idx:&nbsp;ridxs.index(idx)&nbsp;for&nbsp;idx&nbsp;in&nbsp;ridxs}<br>
 <br>
-&#9;def accumulate_from(self, other):<br>
-&#9;&#9;idxs = [self.index_of_idxs[i] for i in other.idxs]<br>
-&#9;&#9;for i in range(len(idxs)):<br>
-&#9;&#9;&#9;self.matrix[idxs[i]] += other.matrix[i]<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;coo(self):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.matrix&nbsp;=&nbsp;scipy.sparse.coo_matrix(self.matrix)<br>
 <br>
-&#9;def upbind_values(self):<br>
-&#9;&#9;for i in range(len(self.idxs)):<br>
-&#9;&#9;&#9;self.idxs[i].set_value(self.matrix[i])<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;dense(self):<br>
+#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.matrix.todense()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;matmul(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.ridxs&nbsp;!=&nbsp;oth.lidxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;indexes&nbsp;is&nbsp;not&nbsp;same&nbsp;in&nbsp;convolution&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix&nbsp;=&nbsp;self.matrix&nbsp;@&nbsp;oth.matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;IndexedMatrix(matrix,&nbsp;self.lidxs,&nbsp;oth.ridxs)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;vecmul(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.ridxs&nbsp;!=&nbsp;oth.idxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;indexes&nbsp;is&nbsp;not&nbsp;same&nbsp;in&nbsp;convolution&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix&nbsp;=&nbsp;self.matrix&nbsp;@&nbsp;oth.matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;IndexedVector(matrix,&nbsp;self.lidxs)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__matmul__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(oth,&nbsp;IndexedVector):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.vecmul(oth)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.matmul(oth)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__neg__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;IndexedMatrix(-self.matrix,&nbsp;self.lidxs,&nbsp;self.ridxs,&nbsp;self.lcomm,&nbsp;self.rcomm)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inv(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;IndexedMatrix(scipy.sparse.linalg.inv(self.matrix),&nbsp;self.ridxs,&nbsp;self.lidxs,&nbsp;self.rcomm,&nbsp;self.lcomm)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;solve(self,&nbsp;b):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.linalg.solve(self.matrix,&nbsp;b.matrix)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;raise_if_lidxs_is_not_same(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.lidxs&nbsp;!=&nbsp;oth.lidxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;indexes&nbsp;is&nbsp;not&nbsp;same&nbsp;in&nbsp;convolution&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;raise_if_ridxs_is_not_same(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.ridxs&nbsp;!=&nbsp;oth.ridxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;indexes&nbsp;is&nbsp;not&nbsp;same&nbsp;in&nbsp;convolution&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;raise_if_not_linkaged(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.ridxs&nbsp;!=&nbsp;oth.lidxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;Exception(&quot;indexes&nbsp;is&nbsp;not&nbsp;same&nbsp;in&nbsp;convolution&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__add__(self,&nbsp;oth):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.raise_if_lidxs_is_not_same(oth)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.raise_if_ridxs_is_not_same(oth)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;IndexedMatrix(self.matrix&nbsp;+&nbsp;oth.matrix,&nbsp;self.lidxs,&nbsp;self.ridxs,&nbsp;self.lcomm,&nbsp;self.rcomm)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__mul__(self,&nbsp;s):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;IndexedMatrix(self.matrix&nbsp;*&nbsp;s,&nbsp;self.lidxs,&nbsp;self.ridxs,&nbsp;self.lcomm,&nbsp;self.rcomm)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;unsparse(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.matrix.toarray()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;transpose(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;IndexedMatrix(self.matrix.T,&nbsp;self.ridxs,&nbsp;self.lidxs,&nbsp;self.rcomm,&nbsp;self.lcomm)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;accumulate_from(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lidxs&nbsp;=&nbsp;[self.index_of_lidxs[i]&nbsp;for&nbsp;i&nbsp;in&nbsp;other.lidxs]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ridxs&nbsp;=&nbsp;[self.index_of_ridxs[i]&nbsp;for&nbsp;i&nbsp;in&nbsp;other.ridxs]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(len(lidxs)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;range(len(ridxs)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.matrix[lidxs[i],&nbsp;ridxs[j]]&nbsp;+=&nbsp;other.matrix[i,&nbsp;j]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__str__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;&quot;Matrix:\r\n{}\r\nLeft&nbsp;Indexes:&nbsp;{}\r\nRight&nbsp;Indexes:&nbsp;{}\r\n&quot;.format(self.matrix,&nbsp;self.lidxs,&nbsp;self.ridxs)<br>
+<br>
+<br>
+class&nbsp;IndexedVector:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;matrix,&nbsp;idxs,&nbsp;comm=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.comm&nbsp;=&nbsp;comm<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(matrix,&nbsp;numpy.ndarray)&nbsp;and&nbsp;len(matrix.shape)&nbsp;!=&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix&nbsp;=&nbsp;matrix.reshape(matrix.shape[0],&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.matrix&nbsp;=&nbsp;matrix<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.idxs&nbsp;=&nbsp;idxs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.idxs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.index_of_idxs&nbsp;=&nbsp;{idx:&nbsp;idxs.index(idx)&nbsp;for&nbsp;idx&nbsp;in&nbsp;idxs}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__str__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;&quot;Vector:\r\n{}\r\nIndexes:&nbsp;{}\r\n&quot;.format(self.matrix,&nbsp;self.idxs)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;accumulate_from(self,&nbsp;other):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idxs&nbsp;=&nbsp;[self.index_of_idxs[i]&nbsp;for&nbsp;i&nbsp;in&nbsp;other.idxs]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(len(idxs)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.matrix[idxs[i]]&nbsp;+=&nbsp;other.matrix[i]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;upbind_values(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(len(self.idxs)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.idxs[i].set_value(self.matrix[i])<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

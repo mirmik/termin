@@ -6,82 +6,82 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import Dict, Optional<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;Optional<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from ..entity import Component<br>
-from termin.geombase.pose3 import Pose3<br>
-from .clip import AnimationClip<br>
+from&nbsp;..entity&nbsp;import&nbsp;Component<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;.clip&nbsp;import&nbsp;AnimationClip<br>
 <br>
 <br>
-class AnimationPlayer(Component):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Компонент-плеер: хранит набор клипов и проигрывает один из них,<br>
-&#9;обновляя локальный Pose3 сущности (и её scale).<br>
-&#9;&quot;&quot;&quot;<br>
+class&nbsp;AnimationPlayer(Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Компонент-плеер:&nbsp;хранит&nbsp;набор&nbsp;клипов&nbsp;и&nbsp;проигрывает&nbsp;один&nbsp;из&nbsp;них,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;обновляя&nbsp;локальный&nbsp;Pose3&nbsp;сущности&nbsp;(и&nbsp;её&nbsp;scale).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;def __init__(self, enabled: bool = True):<br>
-&#9;&#9;super().__init__(enabled=enabled)<br>
-&#9;&#9;self.clips: Dict[str, AnimationClip] = {}<br>
-&#9;&#9;self.current: Optional[AnimationClip] = None<br>
-&#9;&#9;self.time: float = 0.0<br>
-&#9;&#9;self.playing: bool = False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;enabled:&nbsp;bool&nbsp;=&nbsp;True):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(enabled=enabled)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.clips:&nbsp;Dict[str,&nbsp;AnimationClip]&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.current:&nbsp;Optional[AnimationClip]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.time:&nbsp;float&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.playing:&nbsp;bool&nbsp;=&nbsp;False<br>
 <br>
-&#9;def add_clip(self, clip: AnimationClip) -&gt; AnimationClip:<br>
-&#9;&#9;self.clips[clip.name] = clip<br>
-&#9;&#9;return clip<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_clip(self,&nbsp;clip:&nbsp;AnimationClip)&nbsp;-&gt;&nbsp;AnimationClip:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.clips[clip.name]&nbsp;=&nbsp;clip<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;clip<br>
 <br>
-&#9;def play(self, name: str, restart: bool = True):<br>
-&#9;&#9;clip = self.clips.get(name)<br>
-&#9;&#9;if clip is None:<br>
-&#9;&#9;&#9;# можно заменить на логгер, если он есть<br>
-&#9;&#9;&#9;print(f&quot;[AnimationPlayer] clip '{name}' not found&quot;)<br>
-&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;play(self,&nbsp;name:&nbsp;str,&nbsp;restart:&nbsp;bool&nbsp;=&nbsp;True):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clip&nbsp;=&nbsp;self.clips.get(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;clip&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;можно&nbsp;заменить&nbsp;на&nbsp;логгер,&nbsp;если&nbsp;он&nbsp;есть<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;[AnimationPlayer]&nbsp;clip&nbsp;'{name}'&nbsp;not&nbsp;found&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;&#9;if self.current is not clip or restart:<br>
-&#9;&#9;&#9;self.time = 0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.current&nbsp;is&nbsp;not&nbsp;clip&nbsp;or&nbsp;restart:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.time&nbsp;=&nbsp;0.0<br>
 <br>
-&#9;&#9;self.current = clip<br>
-&#9;&#9;self.playing = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.current&nbsp;=&nbsp;clip<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.playing&nbsp;=&nbsp;True<br>
 <br>
-&#9;def stop(self):<br>
-&#9;&#9;self.playing = False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;stop(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.playing&nbsp;=&nbsp;False<br>
 <br>
-&#9;def update(self, dt: float):<br>
-&#9;&#9;if not (self.enabled and self.playing and self.current and self.entity):<br>
-&#9;&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update(self,&nbsp;dt:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;(self.enabled&nbsp;and&nbsp;self.playing&nbsp;and&nbsp;self.current&nbsp;and&nbsp;self.entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&#9;&#9;self.time += dt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.time&nbsp;+=&nbsp;dt<br>
 <br>
-&#9;&#9;sample = self.current.sample(self.time)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sample&nbsp;=&nbsp;self.current.sample(self.time)<br>
 <br>
-&#9;&#9;pose: Pose3 = self.entity.transform.local_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose:&nbsp;Pose3&nbsp;=&nbsp;self.entity.transform.local_pose()<br>
 <br>
-&#9;&#9;<br>
-&#9;&#9;sample = self.current.sample(self.time)<br>
-&#9;&#9;<br>
-&#9;&#9;# TODO: Разобраться с тем, как передать в плеер несколько каналов и к чему они должны применяться.<br>
-&#9;&#9;sample = sample[&quot;clip&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sample&nbsp;=&nbsp;self.current.sample(self.time)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;TODO:&nbsp;Разобраться&nbsp;с&nbsp;тем,&nbsp;как&nbsp;передать&nbsp;в&nbsp;плеер&nbsp;несколько&nbsp;каналов&nbsp;и&nbsp;к&nbsp;чему&nbsp;они&nbsp;должны&nbsp;применяться.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sample&nbsp;=&nbsp;sample[&quot;clip&quot;]<br>
 <br>
-&#9;&#9;tr = sample[0]<br>
-&#9;&#9;rot = sample[1]<br>
-&#9;&#9;sc = sample[2]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tr&nbsp;=&nbsp;sample[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rot&nbsp;=&nbsp;sample[1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sc&nbsp;=&nbsp;sample[2]<br>
 <br>
-&#9;&#9;if tr is not None:<br>
-&#9;&#9;&#9;pose = pose.with_translation(tr)<br>
-&#9;&#9;if rot is not None:<br>
-&#9;&#9;&#9;pose = pose.with_rotation(rot)<br>
-&#9;&#9;sc = sample[2]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;tr&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose&nbsp;=&nbsp;pose.with_translation(tr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rot&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose&nbsp;=&nbsp;pose.with_rotation(rot)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sc&nbsp;=&nbsp;sample[2]<br>
 <br>
-&#9;&#9;# сначала обновляем позу<br>
-&#9;&#9;self.entity.transform.relocate(pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;сначала&nbsp;обновляем&nbsp;позу<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.entity.transform.relocate(pose)<br>
 <br>
-&#9;&#9;# scale — отдельное поле у Entity, используем uniform-скейл<br>
-&#9;&#9;if sc is not None:<br>
-&#9;&#9;&#9;self.entity.scale = float(sc)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;scale&nbsp;—&nbsp;отдельное&nbsp;поле&nbsp;у&nbsp;Entity,&nbsp;используем&nbsp;uniform-скейл<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;sc&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.entity.scale&nbsp;=&nbsp;float(sc)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

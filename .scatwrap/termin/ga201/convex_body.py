@@ -6,130 +6,130 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import termin.ga201.join as join<br>
-import termin.ga201.point as point<br>
-import numpy as np<br>
-from itertools import combinations<br>
-from scipy.spatial import ConvexHull<br>
+import&nbsp;termin.ga201.join&nbsp;as&nbsp;join<br>
+import&nbsp;termin.ga201.point&nbsp;as&nbsp;point<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;itertools&nbsp;import&nbsp;combinations<br>
+from&nbsp;scipy.spatial&nbsp;import&nbsp;ConvexHull<br>
 <br>
-class ConvexBody2:<br>
-&#9;def __init__(self, planes, inverted = False):<br>
-&#9;&#9;self.planes = planes<br>
-&#9;&#9;self.linear_formes_by_grades = [0] * (self.max_grade()) <br>
-&#9;&#9;self.find_linear_formes()<br>
-&#9;&#9;self.inverted = inverted<br>
+class&nbsp;ConvexBody2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;planes,&nbsp;inverted&nbsp;=&nbsp;False):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.planes&nbsp;=&nbsp;planes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.linear_formes_by_grades&nbsp;=&nbsp;[0]&nbsp;*&nbsp;(self.max_grade())&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.find_linear_formes()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inverted&nbsp;=&nbsp;inverted<br>
 <br>
-&#9;@staticmethod<br>
-&#9;def from_points(points):<br>
-&#9;&#9;cpnts = [(p.x, p.y) for p in [p.unitized() for p in points]]<br>
-&#9;&#9;c = ConvexHull(cpnts)    <br>
-&#9;&#9;planes = []<br>
-&#9;&#9;for i in range(len(c.vertices)-1):<br>
-&#9;&#9;&#9;planes.append(join.join_point_point(points[i], points[i+1]))<br>
-&#9;&#9;planes.append(join.join_point_point(points[len(c.vertices)-1], points[0]))<br>
-&#9;&#9;body = ConvexBody2(planes)<br>
-&#9;&#9;return body<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_points(points):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cpnts&nbsp;=&nbsp;[(p.x,&nbsp;p.y)&nbsp;for&nbsp;p&nbsp;in&nbsp;[p.unitized()&nbsp;for&nbsp;p&nbsp;in&nbsp;points]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;ConvexHull(cpnts)&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;planes&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(len(c.vertices)-1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;planes.append(join.join_point_point(points[i],&nbsp;points[i+1]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;planes.append(join.join_point_point(points[len(c.vertices)-1],&nbsp;points[0]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body&nbsp;=&nbsp;ConvexBody2(planes)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;body<br>
 <br>
-&#9;def max_grade(self):<br>
-&#9;&#9;return 2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;max_grade(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;2<br>
 <br>
-&#9;def meet_of_hyperplanes_combination(self, planes):<br>
-&#9;&#9;result = planes[0]<br>
-&#9;&#9;for i in range(1, len(planes)):<br>
-&#9;&#9;&#9;result = join.meet(result, planes[i])<br>
-&#9;&#9;return result<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;meet_of_hyperplanes_combination(self,&nbsp;planes):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result&nbsp;=&nbsp;planes[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(1,&nbsp;len(planes)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result&nbsp;=&nbsp;join.meet(result,&nbsp;planes[i])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;result<br>
 <br>
-&#9;def internal_vertices(self, vertices):<br>
-&#9;&#9;int_vertices = []<br>
-&#9;&#9;for vertex in vertices:<br>
-&#9;&#9;&#9;is_internal = True<br>
-&#9;&#9;&#9;for plane in self.planes:<br>
-&#9;&#9;&#9;&#9;is_internal = self.is_internal_point(vertex)<br>
-&#9;&#9;&#9;&#9;if not is_internal:<br>
-&#9;&#9;&#9;&#9;&#9;break<br>
-&#9;&#9;&#9;if is_internal:<br>
-&#9;&#9;&#9;&#9;int_vertices.append(vertex)        <br>
-&#9;&#9;return int_vertices<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;internal_vertices(self,&nbsp;vertices):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int_vertices&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;vertex&nbsp;in&nbsp;vertices:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;is_internal&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;plane&nbsp;in&nbsp;self.planes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;is_internal&nbsp;=&nbsp;self.is_internal_point(vertex)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;is_internal:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;is_internal:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int_vertices.append(vertex)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;int_vertices<br>
 <br>
-&#9;def drop_infinite_points(self, vertices):<br>
-&#9;&#9;non_infinite_points = []<br>
-&#9;&#9;for vertex in vertices:<br>
-&#9;&#9;&#9;if vertex.is_infinite():<br>
-&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;non_infinite_points.append(vertex)<br>
-&#9;&#9;return non_infinite_points<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;drop_infinite_points(self,&nbsp;vertices):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;non_infinite_points&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;vertex&nbsp;in&nbsp;vertices:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;vertex.is_infinite():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;non_infinite_points.append(vertex)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;non_infinite_points<br>
 <br>
-&#9;def meet_of_hyperplanes(self):<br>
-&#9;&#9;# get list of all vertices of convex body<br>
-&#9;&#9;# by list of planes<br>
-&#9;&#9;# planes - list of planes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;meet_of_hyperplanes(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;get&nbsp;list&nbsp;of&nbsp;all&nbsp;vertices&nbsp;of&nbsp;convex&nbsp;body<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;by&nbsp;list&nbsp;of&nbsp;planes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;planes&nbsp;-&nbsp;list&nbsp;of&nbsp;planes<br>
 <br>
-&#9;&#9;# get list of all combination of planes by max_grade elements<br>
-&#9;&#9;cmbs = [c for c in combinations(self.planes, self.max_grade())]<br>
-&#9;&#9;vertices = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;get&nbsp;list&nbsp;of&nbsp;all&nbsp;combination&nbsp;of&nbsp;planes&nbsp;by&nbsp;max_grade&nbsp;elements<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmbs&nbsp;=&nbsp;[c&nbsp;for&nbsp;c&nbsp;in&nbsp;combinations(self.planes,&nbsp;self.max_grade())]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;[]<br>
 <br>
-&#9;&#9;for cmb in cmbs:<br>
-&#9;&#9;&#9;# get all vertices of cmb<br>
-&#9;&#9;&#9;# and add them to vertices list<br>
-&#9;&#9;&#9;pnt = self.meet_of_hyperplanes_combination(cmb)<br>
-&#9;&#9;&#9;vertices.append(pnt.unitized())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;cmb&nbsp;in&nbsp;cmbs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;get&nbsp;all&nbsp;vertices&nbsp;of&nbsp;cmb<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;and&nbsp;add&nbsp;them&nbsp;to&nbsp;vertices&nbsp;list<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pnt&nbsp;=&nbsp;self.meet_of_hyperplanes_combination(cmb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices.append(pnt.unitized())<br>
 <br>
-&#9;&#9;non_infinite_points = self.drop_infinite_points(vertices)<br>
-&#9;&#9;int_vertices = self.internal_vertices(non_infinite_points)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;non_infinite_points&nbsp;=&nbsp;self.drop_infinite_points(vertices)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int_vertices&nbsp;=&nbsp;self.internal_vertices(non_infinite_points)<br>
 <br>
-&#9;&#9;return int_vertices<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;int_vertices<br>
 <br>
-&#9;def find_linear_formes(self):<br>
-&#9;&#9;# get list of all combination of planes by max_grade elements<br>
-&#9;&#9;self.linear_formes_by_grades[self.max_grade() - 1] = self.planes<br>
-&#9;&#9;vertices = self.meet_of_hyperplanes()<br>
-&#9;&#9;self.linear_formes_by_grades[0] = vertices<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;find_linear_formes(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;get&nbsp;list&nbsp;of&nbsp;all&nbsp;combination&nbsp;of&nbsp;planes&nbsp;by&nbsp;max_grade&nbsp;elements<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.linear_formes_by_grades[self.max_grade()&nbsp;-&nbsp;1]&nbsp;=&nbsp;self.planes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vertices&nbsp;=&nbsp;self.meet_of_hyperplanes()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.linear_formes_by_grades[0]&nbsp;=&nbsp;vertices<br>
 <br>
-&#9;&#9;#TODO: middle grades<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#TODO:&nbsp;middle&nbsp;grades<br>
 <br>
-&#9;def count_of_vertices(self):<br>
-&#9;&#9;return len(self.linear_formes_by_grades[0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;count_of_vertices(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;len(self.linear_formes_by_grades[0])<br>
 <br>
-&#9;def count_of_hyperplanes(self):<br>
-&#9;&#9;return len(self.planes)<br>
-&#9;&#9;<br>
-&#9;def vertices(self):<br>
-&#9;&#9;return self.linear_formes_by_grades[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;count_of_hyperplanes(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;len(self.planes)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;vertices(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.linear_formes_by_grades[0]<br>
 <br>
-&#9;def hyperplanes(self):<br>
-&#9;&#9;return self.linear_formes_by_grades[self.max_grade() - 1]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;hyperplanes(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.linear_formes_by_grades[self.max_grade()&nbsp;-&nbsp;1]<br>
 <br>
-&#9;def is_internal_point(self, point):<br>
-&#9;&#9;for plane in self.planes:<br>
-&#9;&#9;&#9;if join.oriented_distance(point, plane).to_float() &gt; 1e-8:<br>
-&#9;&#9;&#9;&#9;return False<br>
-&#9;&#9;return True<br>
-&#9;<br>
-&#9;def point_projection(self, point):<br>
-&#9;&#9;candidates = []<br>
-&#9;&#9;for grade in range(self.max_grade()-1, -1, -1):<br>
-&#9;&#9;&#9;for linear_form in self.linear_formes_by_grades[grade]:<br>
-&#9;&#9;&#9;&#9;proj = join.point_projection(point, linear_form)<br>
-&#9;&#9;&#9;&#9;if self.is_internal_point(proj):<br>
-&#9;&#9;&#9;&#9;&#9;candidates.append(proj)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;is_internal_point(self,&nbsp;point):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;plane&nbsp;in&nbsp;self.planes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;join.oriented_distance(point,&nbsp;plane).to_float()&nbsp;&gt;&nbsp;1e-8:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;point_projection(self,&nbsp;point):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;grade&nbsp;in&nbsp;range(self.max_grade()-1,&nbsp;-1,&nbsp;-1):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;linear_form&nbsp;in&nbsp;self.linear_formes_by_grades[grade]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;proj&nbsp;=&nbsp;join.point_projection(point,&nbsp;linear_form)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.is_internal_point(proj):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates.append(proj)<br>
 <br>
-&#9;&#9;distances = [join.distance_point_point(point, candidate).to_float() for candidate in candidates]<br>
-&#9;&#9;min_distance_index = np.argmin(distances)<br>
-&#9;&#9;return candidates[min_distance_index]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;distances&nbsp;=&nbsp;[join.distance_point_point(point,&nbsp;candidate).to_float()&nbsp;for&nbsp;candidate&nbsp;in&nbsp;candidates]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_distance_index&nbsp;=&nbsp;np.argmin(distances)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;candidates[min_distance_index]<br>
 <br>
 <br>
-class ConvexWorld2:<br>
-&#9;def __init__(self, bodies):<br>
-&#9;&#9;self.bodies = bodies<br>
+class&nbsp;ConvexWorld2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;bodies):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bodies&nbsp;=&nbsp;bodies<br>
 <br>
-&#9;def point_projection(self, point):<br>
-&#9;&#9;candidates = []<br>
-&#9;&#9;for body in self.bodies:<br>
-&#9;&#9;&#9;candidates.append(body.point_projection(point))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;point_projection(self,&nbsp;point):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;body&nbsp;in&nbsp;self.bodies:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates.append(body.point_projection(point))<br>
 <br>
-&#9;&#9;distances = [join.distance_point_point(point, candidate).to_float() for candidate in candidates]<br>
-&#9;&#9;min_distance_index = np.argmin(distances)<br>
-&#9;&#9;return candidates[min_distance_index]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;distances&nbsp;=&nbsp;[join.distance_point_point(point,&nbsp;candidate).to_float()&nbsp;for&nbsp;candidate&nbsp;in&nbsp;candidates]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_distance_index&nbsp;=&nbsp;np.argmin(distances)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;candidates[min_distance_index]<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

@@ -7,16 +7,16 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-from .channel import AnimationChannel<br>
-from .clip import AnimationClip<br>
-from .player import AnimationPlayer<br>
-from .keyframe import AnimationKeyframe<br>
+from&nbsp;.channel&nbsp;import&nbsp;AnimationChannel<br>
+from&nbsp;.clip&nbsp;import&nbsp;AnimationClip<br>
+from&nbsp;.player&nbsp;import&nbsp;AnimationPlayer<br>
+from&nbsp;.keyframe&nbsp;import&nbsp;AnimationKeyframe<br>
 <br>
-__all__ = [<br>
-&#9;&quot;AnimationChannel&quot;,<br>
-&#9;&quot;AnimationClip&quot;,<br>
-&#9;&quot;AnimationPlayer&quot;,<br>
-&#9;&quot;AnimationKeyframe&quot;,<br>
+__all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;AnimationChannel&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;AnimationClip&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;AnimationPlayer&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;AnimationKeyframe&quot;,<br>
 ]<br>
 <!-- END SCAT CODE -->
 </body>

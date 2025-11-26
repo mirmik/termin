@@ -6,285 +6,285 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Scene entity storing components (Unity-like architecture).&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Scene&nbsp;entity&nbsp;storing&nbsp;components&nbsp;(Unity-like&nbsp;architecture).&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from dataclasses import dataclass, field<br>
-from typing import Iterable, List, Optional, Type, TypeVar, TYPE_CHECKING<br>
+from&nbsp;dataclasses&nbsp;import&nbsp;dataclass,&nbsp;field<br>
+from&nbsp;typing&nbsp;import&nbsp;Iterable,&nbsp;List,&nbsp;Optional,&nbsp;Type,&nbsp;TypeVar,&nbsp;TYPE_CHECKING<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from termin.geombase.pose3 import Pose3<br>
-from termin.kinematic.transform import Transform3<br>
-from .backends.base import GraphicsBackend<br>
+from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+from&nbsp;termin.kinematic.transform&nbsp;import&nbsp;Transform3<br>
+from&nbsp;.backends.base&nbsp;import&nbsp;GraphicsBackend<br>
 <br>
-if TYPE_CHECKING:  # pragma: no cover<br>
-&#9;from .camera import Camera<br>
-&#9;from .renderer import Renderer<br>
-&#9;from .scene import Scene<br>
-&#9;from .shader import ShaderProgram<br>
+if&nbsp;TYPE_CHECKING:&nbsp;&nbsp;#&nbsp;pragma:&nbsp;no&nbsp;cover<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.camera&nbsp;import&nbsp;Camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.renderer&nbsp;import&nbsp;Renderer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.scene&nbsp;import&nbsp;Scene<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.shader&nbsp;import&nbsp;ShaderProgram<br>
 <br>
-from termin.visualization.serialization import COMPONENT_REGISTRY<br>
-from termin.visualization.inspect import InspectField<br>
+from&nbsp;termin.visualization.serialization&nbsp;import&nbsp;COMPONENT_REGISTRY<br>
+from&nbsp;termin.visualization.inspect&nbsp;import&nbsp;InspectField<br>
 <br>
 <br>
 @dataclass<br>
-class RenderContext:<br>
-&#9;&quot;&quot;&quot;Data bundle passed to components during rendering.&quot;&quot;&quot;<br>
+class&nbsp;RenderContext:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Data&nbsp;bundle&nbsp;passed&nbsp;to&nbsp;components&nbsp;during&nbsp;rendering.&quot;&quot;&quot;<br>
 <br>
-&#9;view: np.ndarray<br>
-&#9;projection: np.ndarray<br>
-&#9;camera: &quot;Camera&quot;<br>
-&#9;scene: &quot;Scene&quot;<br>
-&#9;renderer: &quot;Renderer&quot;<br>
-&#9;context_key: int<br>
-&#9;graphics: GraphicsBackend<br>
-&#9;phase: str = &quot;main&quot;<br>
-<br>
-<br>
-class Component:<br>
-&#9;&quot;&quot;&quot;Base class for all entity components.&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self, enabled: bool = True):<br>
-&#9;&#9;self.enabled = enabled<br>
-&#9;&#9;self.entity: Optional[&quot;Entity&quot;] = None<br>
-&#9;&#9;self._started = False<br>
-<br>
-&#9;# Если None → компонент не сериализуется<br>
-&#9;serializable_fields = None<br>
-<br>
-&#9;# Поля, которые инспектор может редактировать.<br>
-&#9;# Заполняется либо руками, либо через дескриптор InspectAttr.<br>
-&#9;inspect_fields: dict[str, InspectField] | None = None<br>
-<br>
-&#9;def required_shaders(self) -&gt; Iterable[&quot;ShaderProgram&quot;]:<br>
-&#9;&#9;&quot;&quot;&quot;Return shaders that must be compiled before rendering.&quot;&quot;&quot;<br>
-&#9;&#9;return ()<br>
-<br>
-&#9;def start(self, scene: &quot;Scene&quot;):<br>
-&#9;&#9;&quot;&quot;&quot;Called once when the component becomes part of an active scene.&quot;&quot;&quot;<br>
-&#9;&#9;self._started = True<br>
-<br>
-&#9;def update(self, dt: float):<br>
-&#9;&#9;&quot;&quot;&quot;Called every frame.&quot;&quot;&quot;<br>
-&#9;&#9;return<br>
-<br>
-&#9;def draw(self, context: RenderContext):<br>
-&#9;&#9;&quot;&quot;&quot;Issue draw calls.&quot;&quot;&quot;<br>
-&#9;&#9;return<br>
-<br>
-&#9;def on_removed(self):<br>
-&#9;&#9;&quot;&quot;&quot;Called when component is removed from its entity.&quot;&quot;&quot;<br>
-&#9;&#9;return<br>
-<br>
-&#9;# Если None → компонент не сериализуется<br>
-&#9;serializable_fields = None<br>
-<br>
-&#9;def serialize_data(self):<br>
-&#9;&#9;if self._serializable_fields is None:<br>
-&#9;&#9;&#9;return None<br>
-<br>
-&#9;&#9;result = {}<br>
-&#9;&#9;fields = self._serializable_fields<br>
-<br>
-&#9;&#9;if isinstance(fields, dict):<br>
-&#9;&#9;&#9;for key, typ in fields.items():<br>
-&#9;&#9;&#9;&#9;value = getattr(self, key)<br>
-&#9;&#9;&#9;&#9;result[key] = typ.serialize(value) if typ else value<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;for key in fields:<br>
-&#9;&#9;&#9;&#9;result[key] = getattr(self, key)<br>
-<br>
-&#9;&#9;return result<br>
-<br>
-&#9;def serialize(self):<br>
-&#9;&#9;data = self.serialize_data()<br>
-&#9;&#9;return {<br>
-&#9;&#9;&#9;&quot;data&quot;: data,<br>
-&#9;&#9;&#9;&quot;type&quot;: self.__class__.__name__,<br>
-&#9;&#9;}<br>
-&#9;&#9;<br>
-&#9;@classmethod<br>
-&#9;def deserialize(cls, data, context):<br>
-&#9;&#9;obj = cls.__new__(cls)<br>
-&#9;&#9;cls.__init__(obj)<br>
-<br>
-&#9;&#9;fields = cls._serializable_fields<br>
-&#9;&#9;if isinstance(fields, dict):<br>
-&#9;&#9;&#9;for key, typ in fields.items():<br>
-&#9;&#9;&#9;&#9;value = data[key]<br>
-&#9;&#9;&#9;&#9;setattr(obj, key, typ.deserialize(value, context) if typ else value)<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;for key in fields:<br>
-&#9;&#9;&#9;&#9;setattr(obj, key, data[key])<br>
-<br>
-&#9;&#9;return obj<br>
+&nbsp;&nbsp;&nbsp;&nbsp;view:&nbsp;np.ndarray<br>
+&nbsp;&nbsp;&nbsp;&nbsp;projection:&nbsp;np.ndarray<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera:&nbsp;&quot;Camera&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene:&nbsp;&quot;Scene&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;renderer:&nbsp;&quot;Renderer&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;context_key:&nbsp;int<br>
+&nbsp;&nbsp;&nbsp;&nbsp;graphics:&nbsp;GraphicsBackend<br>
+&nbsp;&nbsp;&nbsp;&nbsp;phase:&nbsp;str&nbsp;=&nbsp;&quot;main&quot;<br>
 <br>
 <br>
-class InputComponent(Component):<br>
-&#9;&quot;&quot;&quot;Component capable of handling input events.&quot;&quot;&quot;<br>
+class&nbsp;Component:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Base&nbsp;class&nbsp;for&nbsp;all&nbsp;entity&nbsp;components.&quot;&quot;&quot;<br>
 <br>
-&#9;def on_mouse_button(self, viewport, button: int, action: int, mods: int):<br>
-&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;enabled:&nbsp;bool&nbsp;=&nbsp;True):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.enabled&nbsp;=&nbsp;enabled<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.entity:&nbsp;Optional[&quot;Entity&quot;]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._started&nbsp;=&nbsp;False<br>
 <br>
-&#9;def on_mouse_move(self, viewport, x: float, y: float, dx: float, dy: float):<br>
-&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;None&nbsp;→&nbsp;компонент&nbsp;не&nbsp;сериализуется<br>
+&nbsp;&nbsp;&nbsp;&nbsp;serializable_fields&nbsp;=&nbsp;None<br>
 <br>
-&#9;def on_scroll(self, viewport, xoffset: float, yoffset: float):<br>
-&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Поля,&nbsp;которые&nbsp;инспектор&nbsp;может&nbsp;редактировать.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Заполняется&nbsp;либо&nbsp;руками,&nbsp;либо&nbsp;через&nbsp;дескриптор&nbsp;InspectAttr.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;inspect_fields:&nbsp;dict[str,&nbsp;InspectField]&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
-&#9;def on_key(self, viewport, key: int, scancode: int, action: int, mods: int):<br>
-&#9;&#9;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;required_shaders(self)&nbsp;-&gt;&nbsp;Iterable[&quot;ShaderProgram&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;shaders&nbsp;that&nbsp;must&nbsp;be&nbsp;compiled&nbsp;before&nbsp;rendering.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;start(self,&nbsp;scene:&nbsp;&quot;Scene&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Called&nbsp;once&nbsp;when&nbsp;the&nbsp;component&nbsp;becomes&nbsp;part&nbsp;of&nbsp;an&nbsp;active&nbsp;scene.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._started&nbsp;=&nbsp;True<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update(self,&nbsp;dt:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Called&nbsp;every&nbsp;frame.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;context:&nbsp;RenderContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Issue&nbsp;draw&nbsp;calls.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_removed(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Called&nbsp;when&nbsp;component&nbsp;is&nbsp;removed&nbsp;from&nbsp;its&nbsp;entity.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;None&nbsp;→&nbsp;компонент&nbsp;не&nbsp;сериализуется<br>
+&nbsp;&nbsp;&nbsp;&nbsp;serializable_fields&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;serialize_data(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._serializable_fields&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fields&nbsp;=&nbsp;self._serializable_fields<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(fields,&nbsp;dict):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;key,&nbsp;typ&nbsp;in&nbsp;fields.items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;value&nbsp;=&nbsp;getattr(self,&nbsp;key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result[key]&nbsp;=&nbsp;typ.serialize(value)&nbsp;if&nbsp;typ&nbsp;else&nbsp;value<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;key&nbsp;in&nbsp;fields:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result[key]&nbsp;=&nbsp;getattr(self,&nbsp;key)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;result<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;serialize(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;data&nbsp;=&nbsp;self.serialize_data()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;data&quot;:&nbsp;data,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;type&quot;:&nbsp;self.__class__.__name__,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@classmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;deserialize(cls,&nbsp;data,&nbsp;context):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obj&nbsp;=&nbsp;cls.__new__(cls)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cls.__init__(obj)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fields&nbsp;=&nbsp;cls._serializable_fields<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(fields,&nbsp;dict):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;key,&nbsp;typ&nbsp;in&nbsp;fields.items():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;value&nbsp;=&nbsp;data[key]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setattr(obj,&nbsp;key,&nbsp;typ.deserialize(value,&nbsp;context)&nbsp;if&nbsp;typ&nbsp;else&nbsp;value)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;key&nbsp;in&nbsp;fields:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setattr(obj,&nbsp;key,&nbsp;data[key])<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;obj<br>
 <br>
 <br>
-C = TypeVar(&quot;C&quot;, bound=Component)<br>
+class&nbsp;InputComponent(Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Component&nbsp;capable&nbsp;of&nbsp;handling&nbsp;input&nbsp;events.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_button(self,&nbsp;viewport,&nbsp;button:&nbsp;int,&nbsp;action:&nbsp;int,&nbsp;mods:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_move(self,&nbsp;viewport,&nbsp;x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;dx:&nbsp;float,&nbsp;dy:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_scroll(self,&nbsp;viewport,&nbsp;xoffset:&nbsp;float,&nbsp;yoffset:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_key(self,&nbsp;viewport,&nbsp;key:&nbsp;int,&nbsp;scancode:&nbsp;int,&nbsp;action:&nbsp;int,&nbsp;mods:&nbsp;int):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
 <br>
-class Entity:<br>
-&#9;&quot;&quot;&quot;Container of components with transform data.&quot;&quot;&quot;<br>
-<br>
-&#9;def __init__(self, pose: Pose3 = Pose3.identity(), name : str = &quot;entity&quot;, scale: float = 1.0, priority: int = 0, <br>
-&#9;&#9;&#9;pickable: bool = True,<br>
-&#9;&#9;&#9;selectable: bool = True):<br>
-&#9;&#9;self.transform = Transform3(pose)<br>
-&#9;&#9;self.transform.entity = self<br>
-&#9;&#9;self.visible = True<br>
-&#9;&#9;self.active = True<br>
-&#9;&#9;self.name = name<br>
-&#9;&#9;self.scale = scale<br>
-&#9;&#9;self.priority = priority  # rendering priority, lower values drawn first<br>
-&#9;&#9;self._components: List[Component] = []<br>
-&#9;&#9;self.scene: Optional[&quot;Scene&quot;] = None<br>
-&#9;&#9;self.pickable = pickable       # &lt;--- и это<br>
-&#9;&#9;self.selectable = selectable       # &lt;--- и это<br>
-<br>
-&#9;def __post_init__(self):<br>
-&#9;&#9;self.scene: Optional[&quot;Scene&quot;] = None<br>
-&#9;&#9;self._components: List[Component] = []<br>
-<br>
-&#9;def model_matrix(self) -&gt; np.ndarray:<br>
-&#9;&#9;&quot;&quot;&quot;Construct homogeneous model matrix ``M = [R|t]`` with optional uniform scale.&quot;&quot;&quot;<br>
-&#9;&#9;matrix = self.transform.global_pose().as_matrix().copy()<br>
-&#9;&#9;matrix[:3, :3] *= self.scale<br>
-&#9;&#9;return matrix<br>
-<br>
-&#9;def set_visible(self, flag: bool):<br>
-&#9;&#9;self.visible = flag<br>
-&#9;&#9;for child in self.transform.children:<br>
-&#9;&#9;&#9;if child.entity is not None:<br>
-&#9;&#9;&#9;&#9;child.entity.set_visible(flag)<br>
+C&nbsp;=&nbsp;TypeVar(&quot;C&quot;,&nbsp;bound=Component)<br>
 <br>
 <br>
-&#9;def is_pickable(self) -&gt; bool:<br>
-&#9;&#9;return self.pickable and self.visible and self.active<br>
+class&nbsp;Entity:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Container&nbsp;of&nbsp;components&nbsp;with&nbsp;transform&nbsp;data.&quot;&quot;&quot;<br>
 <br>
-&#9;def add_component(self, component: Component) -&gt; Component:<br>
-&#9;&#9;component.entity = self<br>
-&#9;&#9;self._components.append(component)<br>
-&#9;&#9;if self.scene is not None:<br>
-&#9;&#9;&#9;self.scene.register_component(component)<br>
-&#9;&#9;&#9;if not component._started:<br>
-&#9;&#9;&#9;&#9;component.start(self.scene)<br>
-&#9;&#9;return component<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;pose:&nbsp;Pose3&nbsp;=&nbsp;Pose3.identity(),&nbsp;name&nbsp;:&nbsp;str&nbsp;=&nbsp;&quot;entity&quot;,&nbsp;scale:&nbsp;float&nbsp;=&nbsp;1.0,&nbsp;priority:&nbsp;int&nbsp;=&nbsp;0,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pickable:&nbsp;bool&nbsp;=&nbsp;True,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selectable:&nbsp;bool&nbsp;=&nbsp;True):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.transform&nbsp;=&nbsp;Transform3(pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.transform.entity&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.visible&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.active&nbsp;=&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scale&nbsp;=&nbsp;scale<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.priority&nbsp;=&nbsp;priority&nbsp;&nbsp;#&nbsp;rendering&nbsp;priority,&nbsp;lower&nbsp;values&nbsp;drawn&nbsp;first<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components:&nbsp;List[Component]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene:&nbsp;Optional[&quot;Scene&quot;]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pickable&nbsp;=&nbsp;pickable&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&lt;---&nbsp;и&nbsp;это<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.selectable&nbsp;=&nbsp;selectable&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&lt;---&nbsp;и&nbsp;это<br>
 <br>
-&#9;def remove_component(self, component: Component):<br>
-&#9;&#9;if component not in self._components:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;self._components.remove(component)<br>
-&#9;&#9;if self.scene is not None:<br>
-&#9;&#9;&#9;self.scene.unregister_component(component)<br>
-&#9;&#9;component.on_removed()<br>
-&#9;&#9;component.entity = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__post_init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene:&nbsp;Optional[&quot;Scene&quot;]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components:&nbsp;List[Component]&nbsp;=&nbsp;[]<br>
 <br>
-&#9;def get_component(self, component_type: Type[C]) -&gt; Optional[C]:<br>
-&#9;&#9;for comp in self._components:<br>
-&#9;&#9;&#9;if isinstance(comp, component_type):<br>
-&#9;&#9;&#9;&#9;return comp<br>
-&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;model_matrix(self)&nbsp;-&gt;&nbsp;np.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Construct&nbsp;homogeneous&nbsp;model&nbsp;matrix&nbsp;``M&nbsp;=&nbsp;[R|t]``&nbsp;with&nbsp;optional&nbsp;uniform&nbsp;scale.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix&nbsp;=&nbsp;self.transform.global_pose().as_matrix().copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix[:3,&nbsp;:3]&nbsp;*=&nbsp;self.scale<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;matrix<br>
 <br>
-&#9;def find_component(self, component_type: Type[C]) -&gt; C:<br>
-&#9;&#9;comp = self.get_component(component_type)<br>
-&#9;&#9;if comp is None:<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Component of type {component_type} not found in entity {self.name}&quot;)<br>
-&#9;&#9;return comp<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_visible(self,&nbsp;flag:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.visible&nbsp;=&nbsp;flag<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child&nbsp;in&nbsp;self.transform.children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;child.entity&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child.entity.set_visible(flag)<br>
 <br>
-&#9;@property<br>
-&#9;def components(self) -&gt; List[Component]:<br>
-&#9;&#9;return list(self._components)<br>
 <br>
-&#9;def update(self, dt: float):<br>
-&#9;&#9;if not self.active:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;for component in self._components:<br>
-&#9;&#9;&#9;if component.enabled:<br>
-&#9;&#9;&#9;&#9;component.update(dt)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;is_pickable(self)&nbsp;-&gt;&nbsp;bool:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.pickable&nbsp;and&nbsp;self.visible&nbsp;and&nbsp;self.active<br>
 <br>
-&#9;def draw(self, context: RenderContext):<br>
-&#9;&#9;if not (self.active and self.visible):<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;for component in self._components:<br>
-&#9;&#9;&#9;if component.enabled:<br>
-&#9;&#9;&#9;&#9;component.draw(context)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_component(self,&nbsp;component:&nbsp;Component)&nbsp;-&gt;&nbsp;Component:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.entity&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components.append(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.scene&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.register_component(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;component._started:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.start(self.scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;component<br>
 <br>
-&#9;def gather_shaders(self) -&gt; Iterable[&quot;ShaderProgram&quot;]:<br>
-&#9;&#9;for component in self._components:<br>
-&#9;&#9;&#9;yield from component.required_shaders()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;remove_component(self,&nbsp;component:&nbsp;Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;component&nbsp;not&nbsp;in&nbsp;self._components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components.remove(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.scene&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.unregister_component(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.on_removed()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.entity&nbsp;=&nbsp;None<br>
 <br>
-&#9;def on_added(self, scene: &quot;Scene&quot;):<br>
-&#9;&#9;self.scene = scene<br>
-&#9;&#9;for component in self._components:<br>
-&#9;&#9;&#9;scene.register_component(component)<br>
-&#9;&#9;&#9;if not component._started:<br>
-&#9;&#9;&#9;&#9;component.start(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_component(self,&nbsp;component_type:&nbsp;Type[C])&nbsp;-&gt;&nbsp;Optional[C]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;comp&nbsp;in&nbsp;self._components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(comp,&nbsp;component_type):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;comp<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
-&#9;def on_removed(self):<br>
-&#9;&#9;for component in self._components:<br>
-&#9;&#9;&#9;if self.scene is not None:<br>
-&#9;&#9;&#9;&#9;self.scene.unregister_component(component)<br>
-&#9;&#9;&#9;component.on_removed()<br>
-&#9;&#9;&#9;component.entity = None<br>
-&#9;&#9;self.scene = None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;find_component(self,&nbsp;component_type:&nbsp;Type[C])&nbsp;-&gt;&nbsp;C:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp&nbsp;=&nbsp;self.get_component(component_type)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;comp&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Component&nbsp;of&nbsp;type&nbsp;{component_type}&nbsp;not&nbsp;found&nbsp;in&nbsp;entity&nbsp;{self.name}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;comp<br>
 <br>
-&#9;def serialize(self):<br>
-&#9;&#9;pose = self.transform.local_pose()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;components(self)&nbsp;-&gt;&nbsp;List[Component]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;list(self._components)<br>
 <br>
-&#9;&#9;return {<br>
-&#9;&#9;&#9;&quot;name&quot;: self.name,<br>
-&#9;&#9;&#9;&quot;priority&quot;: self.priority,<br>
-&#9;&#9;&#9;&quot;scale&quot;: self.scale,<br>
-&#9;&#9;&#9;&quot;pose&quot;: {<br>
-&#9;&#9;&#9;&#9;&quot;position&quot;: pose.lin.tolist(),<br>
-&#9;&#9;&#9;&#9;&quot;rotation&quot;: pose.ang.tolist(),<br>
-&#9;&#9;&#9;},<br>
-&#9;&#9;&#9;&quot;components&quot;: [<br>
-&#9;&#9;&#9;&#9;comp.serialize()<br>
-&#9;&#9;&#9;&#9;for comp in self.components<br>
-&#9;&#9;&#9;&#9;if comp.serialize() is not None<br>
-&#9;&#9;&#9;]<br>
-&#9;&#9;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update(self,&nbsp;dt:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;self.active:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;component&nbsp;in&nbsp;self._components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;component.enabled:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.update(dt)<br>
 <br>
-&#9;@classmethod<br>
-&#9;def deserialize(cls, data, context):<br>
-&#9;&#9;import numpy as np<br>
-&#9;&#9;from termin.geombase.pose3 import Pose3<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;context:&nbsp;RenderContext):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;(self.active&nbsp;and&nbsp;self.visible):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;component&nbsp;in&nbsp;self._components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;component.enabled:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.draw(context)<br>
 <br>
-&#9;&#9;ent = cls(<br>
-&#9;&#9;&#9;pose=Pose3(<br>
-&#9;&#9;&#9;&#9;lin=np.array(data[&quot;pose&quot;][&quot;position&quot;]),<br>
-&#9;&#9;&#9;&#9;ang=np.array(data[&quot;pose&quot;][&quot;rotation&quot;]),<br>
-&#9;&#9;&#9;),<br>
-&#9;&#9;&#9;name=data[&quot;name&quot;],<br>
-&#9;&#9;&#9;scale=data[&quot;scale&quot;],<br>
-&#9;&#9;&#9;priority=data[&quot;priority&quot;],<br>
-&#9;&#9;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;gather_shaders(self)&nbsp;-&gt;&nbsp;Iterable[&quot;ShaderProgram&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;component&nbsp;in&nbsp;self._components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;from&nbsp;component.required_shaders()<br>
 <br>
-&#9;&#9;for c in data[&quot;components&quot;]:<br>
-&#9;&#9;&#9;comp_cls = COMPONENT_REGISTRY[c[&quot;type&quot;]]<br>
-&#9;&#9;&#9;comp = comp_cls.deserialize(c[&quot;data&quot;], context)<br>
-&#9;&#9;&#9;ent.add_component(comp)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_added(self,&nbsp;scene:&nbsp;&quot;Scene&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene&nbsp;=&nbsp;scene<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;component&nbsp;in&nbsp;self._components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene.register_component(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;component._started:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.start(scene)<br>
 <br>
-&#9;&#9;return ent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_removed(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;component&nbsp;in&nbsp;self._components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.scene&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.unregister_component(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.on_removed()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.entity&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;serialize(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose&nbsp;=&nbsp;self.transform.local_pose()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;name&quot;:&nbsp;self.name,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;priority&quot;:&nbsp;self.priority,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;scale&quot;:&nbsp;self.scale,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;pose&quot;:&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;position&quot;:&nbsp;pose.lin.tolist(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;rotation&quot;:&nbsp;pose.ang.tolist(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;components&quot;:&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp.serialize()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;comp&nbsp;in&nbsp;self.components<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;comp.serialize()&nbsp;is&nbsp;not&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@classmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;deserialize(cls,&nbsp;data,&nbsp;context):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import&nbsp;numpy&nbsp;as&nbsp;np<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;cls(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose=Pose3(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=np.array(data[&quot;pose&quot;][&quot;position&quot;]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=np.array(data[&quot;pose&quot;][&quot;rotation&quot;]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name=data[&quot;name&quot;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scale=data[&quot;scale&quot;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;priority=data[&quot;priority&quot;],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;c&nbsp;in&nbsp;data[&quot;components&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp_cls&nbsp;=&nbsp;COMPONENT_REGISTRY[c[&quot;type&quot;]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp&nbsp;=&nbsp;comp_cls.deserialize(c[&quot;data&quot;],&nbsp;context)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent.add_component(comp)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;ent<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

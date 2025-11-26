@@ -6,1104 +6,1104 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import numpy<br>
-<br>
-<br>
-def _ensure_inexact(A):<br>
-&#9;&quot;&quot;&quot;Конвертирует целочисленные массивы в float, сохраняя float/complex типы.&quot;&quot;&quot;<br>
-&#9;A = numpy.asarray(A)<br>
-&#9;if not numpy.issubdtype(A.dtype, numpy.inexact):<br>
-&#9;&#9;# Конвертируем целые числа в float64<br>
-&#9;&#9;return numpy.asarray(A, dtype=float)<br>
-&#9;# Оставляем float32/float64/complex как есть<br>
-&#9;return A<br>
-<br>
-<br>
-def nullspace_projector(A):<br>
-&#9;&quot;&quot;&quot;Возвращает матрицу ортогонального проектора на нуль-пространство матрицы A.<br>
-&#9;<br>
-&#9;Проектор P обладает свойствами:<br>
-&#9;- A @ P = 0 (проекция попадает в нуль-пространство)<br>
-&#9;- P @ P = P (идемпотентность)<br>
-&#9;- P.T = P (для вещественных матриц - симметричность)<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица проектора размера (n, n)<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;Для проекции вектора v на нуль-пространство: v_proj = P @ v<br>
-&#9;&#9;Использует SVD-разложение для оптимальной производительности.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = _ensure_inexact(A)<br>
-&#9;u, s, vh = numpy.linalg.svd(A, full_matrices=True)<br>
-&#9;<br>
-&#9;# Определяем ранг матрицы<br>
-&#9;tol = max(A.shape) * numpy.finfo(A.dtype).eps * s[0] if s.size &gt; 0 else 0<br>
-&#9;rank = numpy.sum(s &gt; tol)<br>
-&#9;<br>
-&#9;# Базис нуль-пространства = правые сингулярные векторы для нулевых сингулярных чисел<br>
-&#9;null_basis = vh[rank:].T.conj()<br>
-&#9;<br>
-&#9;# Проектор = базис @ базис.T<br>
-&#9;if null_basis.size &gt; 0:<br>
-&#9;&#9;return null_basis @ null_basis.T.conj()<br>
-&#9;else:<br>
-&#9;&#9;# Нуль-пространство пустое - возвращаем нулевой проектор<br>
-&#9;&#9;return numpy.zeros((A.shape[1], A.shape[1]), dtype=A.dtype)<br>
-<br>
-<br>
-def nullspace_basis_svd(A, rtol=None, atol=None):<br>
-&#9;&quot;&quot;&quot;Ортонормированный базис ker(A), полученный через SVD A = U Σ V^H.<br>
-<br>
-&#9;Правые сингулярные векторы, соответствующие нулевым σ, образуют базис<br>
-&#9;нуль-пространства. В реализации отбрасываются σ ниже заданного порога.<br>
-<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;rtol: Относительный порог для сингулярных чисел (≈ eps · max(m, n)).<br>
-&#9;&#9;atol: Абсолютный порог (если задан, имеет приоритет над rtol).<br>
-<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица (n, k) с ортонормированными столбцами basis, где A @ basis = 0.<br>
-&#9;&#9;Если ker(A) тривиально, возвращается массив формы (n, 0).<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = _ensure_inexact(A)<br>
-&#9;u, s, vh = numpy.linalg.svd(A, full_matrices=True)<br>
-<br>
-&#9;if atol is not None:<br>
-&#9;&#9;tol = atol<br>
-&#9;else:<br>
-&#9;&#9;if rtol is None:<br>
-&#9;&#9;&#9;rtol = max(A.shape) * numpy.finfo(A.dtype).eps<br>
-&#9;&#9;tol = rtol * s[0] if s.size &gt; 0 else rtol<br>
-<br>
-&#9;rank = numpy.sum(s &gt; tol)<br>
-&#9;null_basis = vh[rank:].T.conj()<br>
-<br>
-&#9;if null_basis.size == 0:<br>
-&#9;&#9;return numpy.zeros((A.shape[1], 0), dtype=A.dtype)<br>
-<br>
-&#9;return null_basis<br>
-<br>
-<br>
-def nullspace_basis_qr(A, rtol=None, atol=None):<br>
-&#9;&quot;&quot;&quot;Ортонормированный базис ker(A) по формуле A^T = Q R (полный QR).<br>
-<br>
-&#9;Если r = rank(A), то строки A лежат в span(Q[:, :r]) и<br>
-&#9;ker(A) = (rowspace(A))^⊥ = span(Q[:, r:]). Хвостовые столбцы Q уже<br>
-&#9;ортонормированы и задают искомый базис.<br>
-<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;rtol: Относительный порог для диагонали R.<br>
-&#9;&#9;atol: Абсолютный порог (если задан, имеет приоритет).<br>
-<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица (n, k) с ортонормированными столбцами ker(A).<br>
-&#9;&#9;Если дополнение тривиально, возвращается массив формы (n, 0).<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = _ensure_inexact(A)<br>
-&#9;m, n = A.shape<br>
-<br>
-&#9;if n == 0:<br>
-&#9;&#9;return numpy.zeros((0, 0), dtype=A.dtype)<br>
-<br>
-&#9;Q, R = numpy.linalg.qr(A.T, mode=&quot;complete&quot;)<br>
-&#9;diag_len = min(n, m)<br>
-<br>
-&#9;if diag_len == 0:<br>
-&#9;&#9;rank = 0<br>
-&#9;else:<br>
-&#9;&#9;diag = numpy.abs(numpy.diag(R[:diag_len, :diag_len]))<br>
-&#9;&#9;max_diag = diag.max() if diag.size &gt; 0 else 0.0<br>
-<br>
-&#9;&#9;if atol is not None:<br>
-&#9;&#9;&#9;tol = atol<br>
-&#9;&#9;else:<br>
-&#9;&#9;&#9;if rtol is None:<br>
-&#9;&#9;&#9;&#9;rtol = max(m, n) * numpy.finfo(A.dtype).eps<br>
-&#9;&#9;&#9;tol = rtol * max_diag if max_diag &gt; 0 else rtol<br>
-<br>
-&#9;&#9;rank = int(numpy.sum(diag &gt; tol))<br>
-<br>
-&#9;return Q[:, rank:]<br>
-<br>
-<br>
-def nullspace_basis(A, rtol=None, atol=None, method=&quot;svd&quot;):<br>
-&#9;&quot;&quot;&quot;Возвращает ортонормированный базис ker(A) с выбранным алгоритмом.<br>
-<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;rtol: Относительный порог толеранса.<br>
-&#9;&#9;atol: Абсолютный порог толеранса.<br>
-&#9;&#9;method: 'svd' (устойчивее) или 'qr' (быстрее для узких матриц).<br>
-<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица (n, k), столбцы которой образуют базис нуль-пространства.<br>
-<br>
-&#9;Raises:<br>
-&#9;&#9;ValueError: если указан неподдерживаемый method.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;if method is None:<br>
-&#9;&#9;method = &quot;svd&quot;<br>
-<br>
-&#9;if method == &quot;svd&quot;:<br>
-&#9;&#9;return nullspace_basis_svd(A, rtol=rtol, atol=atol)<br>
-&#9;if method == &quot;qr&quot;:<br>
-&#9;&#9;return nullspace_basis_qr(A, rtol=rtol, atol=atol)<br>
-<br>
-&#9;raise ValueError(f&quot;Unsupported nullspace method '{method}'. Use 'svd' or 'qr'.&quot;)<br>
-<br>
-<br>
-def rowspace_projector(A):<br>
-&#9;&quot;&quot;&quot;Возвращает матрицу ортогонального проектора на пространство строк матрицы A.<br>
-&#9;<br>
-&#9;Пространство строк (row space) - это ортогональное дополнение к нуль-пространству.<br>
-&#9;Проектор P обладает свойствами:<br>
-&#9;- P @ v лежит в пространстве строк для любого v<br>
-&#9;- P + nullspace_projector(A) = I (дополнение)<br>
-&#9;- P @ P = P (идемпотентность)<br>
-&#9;- P.T = P (для вещественных матриц - симметричность)<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица проектора размера (n, n)<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;Для проекции вектора v на пространство строк: v_proj = P @ v<br>
-&#9;&#9;rowspace_projector(A) = I - nullspace_projector(A)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = _ensure_inexact(A)<br>
-&#9;u, s, vh = numpy.linalg.svd(A, full_matrices=True)<br>
-&#9;<br>
-&#9;# Определяем ранг матрицы<br>
-&#9;tol = max(A.shape) * numpy.finfo(A.dtype).eps * s[0] if s.size &gt; 0 else 0<br>
-&#9;rank = numpy.sum(s &gt; tol)<br>
-&#9;<br>
-&#9;# Базис пространства строк = правые сингулярные векторы для ненулевых σ<br>
-&#9;row_basis = vh[:rank].T.conj()<br>
-&#9;<br>
-&#9;# Проектор = базис @ базис.T<br>
-&#9;if row_basis.size &gt; 0:<br>
-&#9;&#9;return row_basis @ row_basis.T.conj()<br>
-&#9;else:<br>
-&#9;&#9;# Пространство строк пустое - возвращаем нулевой проектор<br>
-&#9;&#9;return numpy.zeros((A.shape[1], A.shape[1]), dtype=A.dtype)<br>
-<br>
-<br>
-def rowspace_basis(A, rtol=None):<br>
-&#9;&quot;&quot;&quot;Возвращает ортонормированный базис пространства строк матрицы A.<br>
-&#9;<br>
-&#9;Пространство строк (row space) состоит из всех линейных комбинаций строк A.<br>
-&#9;Это ортогональное дополнение к нуль-пространству: rowspace ⊕ nullspace = R^n.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;rtol: Относительный порог для определения нулевых сингулярных чисел.<br>
-&#9;&#9;&#9;По умолчанию: max(m, n) * машинная_точность * max(сингулярное_число)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица размера (n, k) где k = rank(A) - размерность пространства строк.<br>
-&#9;&#9;Столбцы образуют ортонормированный базис пространства строк.<br>
-&#9;&#9;Если rank(A) = 0, возвращает массив формы (n, 0).<br>
-&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Использует SVD-разложение для численной устойчивости<br>
-&#9;&#9;- Размерность пространства строк = rank(A)<br>
-&#9;&#9;- Векторы базиса ортонормированы: basis.T @ basis = I<br>
-&#9;&#9;- Для получения проектора: P = basis @ basis.T<br>
-&#9;&#9;- Дополнение: rowspace_basis ⊕ nullspace_basis = полный базис R^n<br>
-&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; A = np.array([[1, 2, 3], [2, 4, 6]])  # Ранг 1<br>
-&#9;&#9;&gt;&gt;&gt; R = rowspace_basis(A)<br>
-&#9;&#9;&gt;&gt;&gt; R.shape  # (3, 1) - базис из 1 вектора<br>
-&#9;&#9;&gt;&gt;&gt; N = nullspace_basis(A)<br>
-&#9;&#9;&gt;&gt;&gt; N.shape  # (3, 2) - дополнение<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = _ensure_inexact(A)<br>
-&#9;u, s, vh = numpy.linalg.svd(A, full_matrices=True)<br>
-&#9;<br>
-&#9;# Определяем порог для малых сингулярных чисел<br>
-&#9;if rtol is None:<br>
-&#9;&#9;rtol = max(A.shape) * numpy.finfo(A.dtype).eps<br>
-&#9;<br>
-&#9;tol = rtol * s[0] if s.size &gt; 0 else rtol<br>
-&#9;<br>
-&#9;# Ранг матрицы = количество сингулярных чисел больше порога<br>
-&#9;rank = numpy.sum(s &gt; tol)<br>
-&#9;<br>
-&#9;# Пространство строк = правые сингулярные векторы соответствующие ненулевым σ<br>
-&#9;# Берём строки vh с индексами [:rank] и транспонируем<br>
-&#9;row_basis = vh[:rank].T.conj()<br>
-&#9;<br>
-&#9;return row_basis<br>
-<br>
-<br>
-def colspace_projector(A):<br>
-&#9;&quot;&quot;&quot;Возвращает матрицу ортогонального проектора на пространство столбцов матрицы A.<br>
-&#9;<br>
-&#9;Пространство столбцов (column space, range) - это образ отображения A.<br>
-&#9;Проектор P обладает свойствами:<br>
-&#9;- P @ b лежит в colspace для любого b<br>
-&#9;- P + left_nullspace_projector(A) = I (дополнение)<br>
-&#9;- P @ P = P (идемпотентность)<br>
-&#9;- P.T = P (для вещественных матриц - симметричность)<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица проектора размера (m, m)<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;Для проекции вектора b на пространство столбцов: b_proj = P @ b<br>
-&#9;&#9;Если Ax = b несовместна, то Ax = P @ b всегда разрешима.<br>
-&#9;&#9;Работает в пространстве значений R^m.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = _ensure_inexact(A)<br>
-&#9;u, s, vh = numpy.linalg.svd(A, full_matrices=True)<br>
-&#9;<br>
-&#9;# Определяем ранг матрицы<br>
-&#9;tol = max(A.shape) * numpy.finfo(A.dtype).eps * s[0] if s.size &gt; 0 else 0<br>
-&#9;rank = numpy.sum(s &gt; tol)<br>
-&#9;<br>
-&#9;# Базис пространства столбцов = левые сингулярные векторы для ненулевых σ<br>
-&#9;col_basis = u[:, :rank]<br>
-&#9;<br>
-&#9;# Проектор = базис @ базис.T<br>
-&#9;if col_basis.size &gt; 0:<br>
-&#9;&#9;return col_basis @ col_basis.T.conj()<br>
-&#9;else:<br>
-&#9;&#9;# Пространство столбцов пустое - возвращаем нулевой проектор<br>
-&#9;&#9;return numpy.zeros((A.shape[0], A.shape[0]), dtype=A.dtype)<br>
-<br>
-<br>
-def colspace_basis(A, rtol=None):<br>
-&#9;&quot;&quot;&quot;Возвращает ортонормированный базис пространства столбцов матрицы A.<br>
-&#9;<br>
-&#9;Пространство столбцов (column space, range, образ) состоит из всех векторов вида A @ x.<br>
-&#9;Это ортогональное дополнение к левому нуль-пространству: colspace ⊕ left_nullspace = R^m.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;rtol: Относительный порог для определения нулевых сингулярных чисел.<br>
-&#9;&#9;&#9;По умолчанию: max(m, n) * машинная_точность * max(сингулярное_число)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица размера (m, k) где k = rank(A) - размерность пространства столбцов.<br>
-&#9;&#9;Столбцы образуют ортонормированный базис пространства столбцов.<br>
-&#9;&#9;Если rank(A) = 0, возвращает массив формы (m, 0).<br>
-&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Использует SVD-разложение для численной устойчивости<br>
-&#9;&#9;- Размерность пространства столбцов = rank(A)<br>
-&#9;&#9;- Векторы базиса ортонормированы: basis.T @ basis = I<br>
-&#9;&#9;- Для получения проектора: P = basis @ basis.T<br>
-&#9;&#9;- Работает в пространстве значений R^m<br>
-&#9;&#9;- Эквивалент scipy.linalg.orth(A)<br>
-&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; A = np.array([[1, 0], [2, 0], [3, 0]])  # Ранг 1<br>
-&#9;&#9;&gt;&gt;&gt; C = colspace_basis(A)<br>
-&#9;&#9;&gt;&gt;&gt; C.shape  # (3, 1) - базис из 1 вектора<br>
-&#9;&#9;&gt;&gt;&gt; # Любой вектор A @ x лежит в span(C)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = _ensure_inexact(A)<br>
-&#9;u, s, vh = numpy.linalg.svd(A, full_matrices=True)<br>
-&#9;<br>
-&#9;# Определяем порог для малых сингулярных чисел<br>
-&#9;if rtol is None:<br>
-&#9;&#9;rtol = max(A.shape) * numpy.finfo(A.dtype).eps<br>
-&#9;<br>
-&#9;tol = rtol * s[0] if s.size &gt; 0 else rtol<br>
-&#9;<br>
-&#9;# Ранг матрицы = количество сингулярных чисел больше порога<br>
-&#9;rank = numpy.sum(s &gt; tol)<br>
-&#9;<br>
-&#9;# Пространство столбцов = левые сингулярные векторы соответствующие ненулевым σ<br>
-&#9;col_basis = u[:, :rank]<br>
-&#9;<br>
-&#9;return col_basis<br>
-<br>
-<br>
-def left_nullspace_projector(A):<br>
-&#9;&quot;&quot;&quot;Возвращает матрицу ортогонального проектора на левое нуль-пространство матрицы A.<br>
-&#9;<br>
-&#9;Левое нуль-пространство состоит из векторов y таких, что A^T @ y = 0.<br>
-&#9;Это ортогональное дополнение к пространству столбцов.<br>
-&#9;Проектор P обладает свойствами:<br>
-&#9;- A^T @ P = 0 (эквивалентно: P @ A = 0)<br>
-&#9;- P + colspace_projector(A) = I (дополнение)<br>
-&#9;- P @ P = P (идемпотентность)<br>
-&#9;- P.T = P (для вещественных матриц - симметричность)<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица проектора размера (m, m)<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;Для проекции вектора b на левое нуль-пространство: b_proj = P @ b<br>
-&#9;&#9;left_nullspace(A) = nullspace(A^T)<br>
-&#9;&#9;Работает в пространстве значений R^m.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = _ensure_inexact(A)<br>
-&#9;u, s, vh = numpy.linalg.svd(A, full_matrices=True)<br>
-&#9;<br>
-&#9;# Определяем ранг матрицы<br>
-&#9;tol = max(A.shape) * numpy.finfo(A.dtype).eps * s[0] if s.size &gt; 0 else 0<br>
-&#9;rank = numpy.sum(s &gt; tol)<br>
-&#9;<br>
-&#9;# Базис левого нуль-пространства = левые сингулярные векторы для нулевых σ<br>
-&#9;left_null_basis = u[:, rank:]<br>
-&#9;<br>
-&#9;# Проектор = базис @ базис.T<br>
-&#9;if left_null_basis.size &gt; 0:<br>
-&#9;&#9;return left_null_basis @ left_null_basis.T.conj()<br>
-&#9;else:<br>
-&#9;&#9;# Левое нуль-пространство пустое - возвращаем нулевой проектор<br>
-&#9;&#9;return numpy.zeros((A.shape[0], A.shape[0]), dtype=A.dtype)<br>
-<br>
-<br>
-def left_nullspace_basis(A, rtol=None):<br>
-&#9;&quot;&quot;&quot;Возвращает ортонормированный базис левого нуль-пространства матрицы A.<br>
-&#9;<br>
-&#9;Левое нуль-пространство состоит из векторов y таких, что A^T @ y = 0.<br>
-&#9;Это ортогональное дополнение к пространству столбцов: left_nullspace ⊕ colspace = R^m.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;A: Матрица размера (m, n)<br>
-&#9;&#9;rtol: Относительный порог для определения нулевых сингулярных чисел.<br>
-&#9;&#9;&#9;По умолчанию: max(m, n) * машинная_точность * max(сингулярное_число)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица размера (m, k) где k = m - rank(A) - размерность левого нуль-пространства.<br>
-&#9;&#9;Столбцы образуют ортонормированный базис левого нуль-пространства.<br>
-&#9;&#9;Если rank(A) = m, возвращает массив формы (m, 0).<br>
-&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Использует SVD-разложение для численной устойчивости<br>
-&#9;&#9;- Размерность левого нуль-пространства = m - rank(A)<br>
-&#9;&#9;- Векторы базиса ортонормированы: basis.T @ basis = I<br>
-&#9;&#9;- Для получения проектора: P = basis @ basis.T<br>
-&#9;&#9;- Работает в пространстве значений R^m<br>
-&#9;&#9;- Эквивалент nullspace_basis(A.T)<br>
-&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; A = np.array([[1, 2], [2, 4], [3, 6]])  # Ранг 1<br>
-&#9;&#9;&gt;&gt;&gt; L = left_nullspace_basis(A)<br>
-&#9;&#9;&gt;&gt;&gt; L.shape  # (3, 2) - базис из 2 векторов<br>
-&#9;&#9;&gt;&gt;&gt; np.allclose(A.T @ L, 0)  # Проверка: A^T @ y = 0<br>
-&#9;&#9;True<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;A = _ensure_inexact(A)<br>
-&#9;u, s, vh = numpy.linalg.svd(A, full_matrices=True)<br>
-&#9;<br>
-&#9;# Определяем порог для малых сингулярных чисел<br>
-&#9;if rtol is None:<br>
-&#9;&#9;rtol = max(A.shape) * numpy.finfo(A.dtype).eps<br>
-&#9;<br>
-&#9;tol = rtol * s[0] if s.size &gt; 0 else rtol<br>
-&#9;<br>
-&#9;# Ранг матрицы = количество сингулярных чисел больше порога<br>
-&#9;rank = numpy.sum(s &gt; tol)<br>
-&#9;<br>
-&#9;# Левое нуль-пространство = левые сингулярные векторы соответствующие нулевым σ<br>
-&#9;left_null_basis = u[:, rank:]<br>
-&#9;<br>
-&#9;return left_null_basis<br>
-<br>
-<br>
-def vector_projector(u):<br>
-&#9;&quot;&quot;&quot;Возвращает матрицу ортогонального проектора на направление вектора u.<br>
-&#9;<br>
-&#9;Проектор P проецирует любой вектор v на направление u:<br>
-&#9;&#9;P @ v = proj_u(v) = (u · v / u · u) * u<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;u: Вектор-направление размера (n,) или (n, 1)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица проектора размера (n, n)<br>
-&#9;&#9;<br>
-&#9;Raises:<br>
-&#9;&#9;ValueError: Если u - нулевой вектор<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;Проектор имеет вид: P = (u @ u.T) / (u.T @ u)<br>
-&#9;&#9;Свойства:<br>
-&#9;&#9;- P @ P = P (идемпотентность)<br>
-&#9;&#9;- P.T = P (симметричность для вещественных векторов)<br>
-&#9;&#9;- rank(P) = 1<br>
-&#9;&#9;- trace(P) = 1<br>
-&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; u = np.array([1., 0., 0.])  # Вектор вдоль оси X<br>
-&#9;&#9;&gt;&gt;&gt; P = vector_projector(u)<br>
-&#9;&#9;&gt;&gt;&gt; v = np.array([3., 4., 5.])<br>
-&#9;&#9;&gt;&gt;&gt; P @ v  # array([3., 0., 0.]) - проекция на ось X<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;u = numpy.asarray(u)<br>
-&#9;<br>
-&#9;# Приводим к вектору-столбцу<br>
-&#9;if u.ndim == 1:<br>
-&#9;&#9;u = u.reshape(-1, 1)<br>
-&#9;elif u.ndim == 2 and u.shape[1] != 1:<br>
-&#9;&#9;raise ValueError(f&quot;u должен быть вектором, получена матрица формы {u.shape}&quot;)<br>
-&#9;<br>
-&#9;# Проверка на нулевой вектор<br>
-&#9;norm_sq = numpy.vdot(u, u).real  # u^H @ u для комплексных векторов<br>
-&#9;if norm_sq == 0:<br>
-&#9;&#9;raise ValueError(&quot;Нельзя проецировать на нулевой вектор&quot;)<br>
-&#9;<br>
-&#9;# P = u @ u^H / (u^H @ u)<br>
-&#9;return (u @ u.T.conj()) / norm_sq<br>
-<br>
-<br>
-def subspace_projector(*vectors):<br>
-&#9;&quot;&quot;&quot;Возвращает матрицу ортогонального проектора на подпространство, натянутое на векторы.<br>
-&#9;<br>
-&#9;Проектор P проецирует любой вектор v на подпространство span(u1, u2, ..., uk):<br>
-&#9;&#9;P @ v = проекция v на span(vectors)<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;*vectors: Набор векторов, задающих подпространство.<br>
-&#9;&#9;&#9;&#9;Каждый вектор размера (n,) или (n, 1).<br>
-&#9;&#9;&#9;&#9;Векторы могут быть линейно зависимы (автоматически учитывается).<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица проектора размера (n, n)<br>
-&#9;&#9;<br>
-&#9;Raises:<br>
-&#9;&#9;ValueError: Если все векторы нулевые или не переданы<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Автоматически ортогонализует векторы через SVD<br>
-&#9;&#9;- Ранг проектора = rank(span(vectors))<br>
-&#9;&#9;- Работает для любого количества векторов (k-векторы, бивекторы и т.д.)<br>
-&#9;&#9;- Для 1 вектора эквивалентно vector_projector()<br>
-&#9;&#9;- Для 2 векторов - проектор на плоскость (бивектор)<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; # Проектор на плоскость XY<br>
-&#9;&#9;&gt;&gt;&gt; u1 = np.array([1., 0., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; u2 = np.array([0., 1., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; P = subspace_projector(u1, u2)<br>
-&#9;&#9;&gt;&gt;&gt; v = np.array([3., 4., 5.])<br>
-&#9;&#9;&gt;&gt;&gt; P @ v  # array([3., 4., 0.]) - проекция на XY<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;if len(vectors) == 0:<br>
-&#9;&#9;raise ValueError(&quot;Необходимо передать хотя бы один вектор&quot;)<br>
-&#9;<br>
-&#9;# Собираем векторы в матрицу (каждый вектор - строка)<br>
-&#9;vectors_array = [numpy.asarray(v).flatten() for v in vectors]<br>
-&#9;A = numpy.vstack(vectors_array)<br>
-&#9;<br>
-&#9;# Используем rowspace_projector - он уже делает всё нужное:<br>
-&#9;# - SVD разложение<br>
-&#9;# - Учёт линейной зависимости<br>
-&#9;# - Ортогонализацию<br>
-&#9;return rowspace_projector(A)<br>
-<br>
-<br>
-def orthogonal_complement(P):<br>
-&#9;&quot;&quot;&quot;Возвращает проектор на ортогональное дополнение подпространства.<br>
-&#9;<br>
-&#9;Если P - проектор на подпространство V, то (I - P) - проектор на V⊥.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;P: Матрица ортогонального проектора размера (n, n)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица проектора на ортогональное дополнение размера (n, n)<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- P + orthogonal_complement(P) = I<br>
-&#9;&#9;- Работает для любого ортогонального проектора<br>
-&#9;&#9;- dim(V) + dim(V⊥) = n<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; # Проектор на ось X<br>
-&#9;&#9;&gt;&gt;&gt; P_x = subspace_projector([1., 0., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; P_perp = orthogonal_complement(P_x)<br>
-&#9;&#9;&gt;&gt;&gt; # P_perp проецирует на плоскость YZ<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;P = numpy.asarray(P)<br>
-&#9;n = P.shape[0]<br>
-&#9;return numpy.eye(n, dtype=P.dtype) - P<br>
-<br>
-<br>
-def is_in_subspace(v, P, tol=None):<br>
-&#9;&quot;&quot;&quot;Проверяет, принадлежит ли вектор подпространству.<br>
-&#9;<br>
-&#9;Вектор v ∈ V &lt;=&gt; P @ v = v (проекция совпадает с исходным вектором).<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;v: Вектор размера (n,) или (n, 1)<br>
-&#9;&#9;P: Проектор на подпространство V, размер (n, n)<br>
-&#9;&#9;tol: Порог для сравнения ||P @ v - v||. <br>
-&#9;&#9;&#9;По умолчанию: sqrt(n) * машинная_точность * ||v||<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;True если v ∈ V, False иначе<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Численно устойчиво для малых возмущений<br>
-&#9;&#9;- Для нулевого вектора всегда возвращает True<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; P_xy = subspace_projector([1,0,0], [0,1,0])<br>
-&#9;&#9;&gt;&gt;&gt; is_in_subspace([3, 4, 0], P_xy)  # True<br>
-&#9;&#9;&gt;&gt;&gt; is_in_subspace([3, 4, 5], P_xy)  # False<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;v = numpy.asarray(v).flatten()<br>
-&#9;P = numpy.asarray(P)<br>
-&#9;<br>
-&#9;# Проецируем вектор<br>
-&#9;projected = P @ v<br>
-&#9;<br>
-&#9;# Вычисляем разность<br>
-&#9;diff = projected - v<br>
-&#9;diff_norm = numpy.linalg.norm(diff)<br>
-&#9;<br>
-&#9;# Порог по умолчанию<br>
-&#9;if tol is None:<br>
-&#9;&#9;v_norm = numpy.linalg.norm(v)<br>
-&#9;&#9;if v_norm == 0:<br>
-&#9;&#9;&#9;return True  # Нулевой вектор всегда в подпространстве<br>
-&#9;&#9;tol = numpy.sqrt(len(v)) * numpy.finfo(P.dtype).eps * v_norm<br>
-&#9;<br>
-&#9;return diff_norm &lt;= tol<br>
-<br>
-<br>
-def subspace_dimension(P, tol=None):<br>
-&#9;&quot;&quot;&quot;Возвращает размерность подпространства, заданного проектором.<br>
-&#9;<br>
-&#9;Размерность = ранг проектора = след проектора.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;P: Проектор на подпространство, размер (n, n)<br>
-&#9;&#9;tol: Порог для определения ненулевых сингулярных чисел.<br>
-&#9;&#9;&#9;По умолчанию: n * машинная_точность * max(сингулярное_число)<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Целое число - размерность подпространства (0 ≤ dim ≤ n)<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Для ортогонального проектора: dim = rank(P) = trace(P)<br>
-&#9;&#9;- Численно более устойчиво использовать ранг, а не след<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; P_xy = subspace_projector([1,0,0], [0,1,0])<br>
-&#9;&#9;&gt;&gt;&gt; subspace_dimension(P_xy)  # 2<br>
-&#9;&#9;&gt;&gt;&gt; P_x = vector_projector([1,0,0])<br>
-&#9;&#9;&gt;&gt;&gt; subspace_dimension(P_x)  # 1<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;P = numpy.asarray(P)<br>
-&#9;<br>
-&#9;# Вычисляем ранг через SVD<br>
-&#9;s = numpy.linalg.svd(P, compute_uv=False)<br>
-&#9;<br>
-&#9;if tol is None:<br>
-&#9;&#9;tol = max(P.shape) * numpy.finfo(P.dtype).eps * s[0] if s.size &gt; 0 else 0<br>
-&#9;<br>
-&#9;rank = numpy.sum(s &gt; tol)<br>
-&#9;<br>
-&#9;return int(rank)<br>
-<br>
-<br>
-def gram_schmidt(*vectors, tol=None):<br>
-&#9;&quot;&quot;&quot;Ортогонализует набор векторов классическим методом Грама-Шмидта.<br>
-&#9;<br>
-&#9;Итеративно строит ортогональный базис: каждый следующий вектор ортогонализуется<br>
-&#9;относительно всех предыдущих путём вычитания проекций.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;*vectors: Набор векторов для ортогонализации.<br>
-&#9;&#9;&#9;&#9;Каждый вектор размера (n,) или (n, 1).<br>
-&#9;&#9;tol: Порог для определения нулевых векторов (линейная зависимость).<br>
-&#9;&#9;&#9;По умолчанию: машинная_точность * 10<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Массив формы (n, k), где k ≤ len(vectors) - количество линейно независимых векторов.<br>
-&#9;&#9;Столбцы образуют ортонормированный базис span(vectors).<br>
-&#9;&#9;Если все векторы линейно зависимы, возвращает массив формы (n, 0).<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Классический алгоритм Грама-Шмидта (не модифицированный)<br>
-&#9;&#9;- Численно менее стабилен чем SVD, особенно для почти коллинеарных векторов<br>
-&#9;&#9;- Порядок векторов критичен: первые векторы определяют базис<br>
-&#9;&#9;- Для комплексных векторов использует эрмитово скалярное произведение<br>
-&#9;&#9;<br>
-&#9;Algorithm:<br>
-&#9;&#9;u₁ = v₁ / ||v₁||<br>
-&#9;&#9;u₂ = (v₂ - ⟨v₂, u₁⟩u₁) / ||v₂ - ⟨v₂, u₁⟩u₁||<br>
-&#9;&#9;u₃ = (v₃ - ⟨v₃, u₁⟩u₁ - ⟨v₃, u₂⟩u₂) / ||...||<br>
-&#9;&#9;...<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; v1 = np.array([1., 1., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; v2 = np.array([1., 0., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; Q = gram_schmidt(v1, v2)<br>
-&#9;&#9;&gt;&gt;&gt; np.allclose(Q.T @ Q, np.eye(2))  # Ортонормированность<br>
-&#9;&#9;True<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;if len(vectors) == 0:<br>
-&#9;&#9;raise ValueError(&quot;Необходимо передать хотя бы один вектор&quot;)<br>
-&#9;<br>
-&#9;# Порог по умолчанию<br>
-&#9;if tol is None:<br>
-&#9;&#9;tol = 10 * numpy.finfo(float).eps<br>
-&#9;<br>
-&#9;# Преобразуем векторы в массивы-столбцы<br>
-&#9;vectors_list = []<br>
-&#9;n = None<br>
-&#9;for v in vectors:<br>
-&#9;&#9;v_arr = numpy.asarray(v).flatten()<br>
-&#9;&#9;if n is None:<br>
-&#9;&#9;&#9;n = len(v_arr)<br>
-&#9;&#9;elif len(v_arr) != n:<br>
-&#9;&#9;&#9;raise ValueError(f&quot;Все векторы должны иметь одинаковую размерность, получены {n} и {len(v_arr)}&quot;)<br>
-&#9;&#9;vectors_list.append(v_arr)<br>
-&#9;<br>
-&#9;# Ортогонализация<br>
-&#9;orthonormal_basis = []<br>
-&#9;<br>
-&#9;for v in vectors_list:<br>
-&#9;&#9;# Начинаем с исходного вектора<br>
-&#9;&#9;u = v.copy()<br>
-&#9;&#9;<br>
-&#9;&#9;# Вычитаем проекции на все предыдущие ортонормированные векторы<br>
-&#9;&#9;for q in orthonormal_basis:<br>
-&#9;&#9;&#9;# Проекция: proj_q(u) = ⟨u, q⟩ q<br>
-&#9;&#9;&#9;# Для комплексных: используем vdot (сопряжённое скалярное произведение)<br>
-&#9;&#9;&#9;projection_coef = numpy.vdot(q, u)<br>
-&#9;&#9;&#9;u = u - projection_coef * q<br>
-&#9;&#9;<br>
-&#9;&#9;# Нормализуем<br>
-&#9;&#9;norm = numpy.linalg.norm(u)<br>
-&#9;&#9;<br>
-&#9;&#9;# Если вектор стал нулевым (линейно зависим от предыдущих), пропускаем<br>
-&#9;&#9;if norm &gt; tol:<br>
-&#9;&#9;&#9;u_normalized = u / norm<br>
-&#9;&#9;&#9;orthonormal_basis.append(u_normalized)<br>
-&#9;<br>
-&#9;# Если нет независимых векторов<br>
-&#9;if len(orthonormal_basis) == 0:<br>
-&#9;&#9;return numpy.empty((n, 0), dtype=vectors_list[0].dtype)<br>
-&#9;<br>
-&#9;# Собираем в матрицу (векторы = столбцы)<br>
-&#9;Q = numpy.column_stack(orthonormal_basis)<br>
-&#9;<br>
-&#9;return Q<br>
-<br>
-<br>
-def orthogonalize_svd(*vectors, tol=None):<br>
-&#9;&quot;&quot;&quot;Ортогонализует набор векторов через SVD разложение.<br>
-&#9;<br>
-&#9;Строит ортонормированный базис подпространства, натянутого на входные векторы,<br>
-&#9;используя сингулярное разложение (SVD). Численно более стабильный метод,<br>
-&#9;чем классический Грам-Шмидт.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;*vectors: Набор векторов для ортогонализации.<br>
-&#9;&#9;&#9;&#9;Каждый вектор размера (n,) или (n, 1).<br>
-&#9;&#9;tol: Относительный порог для определения линейной зависимости.<br>
-&#9;&#9;&#9;По умолчанию: max(размеры) * машинная_точность<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Массив формы (n, k), где k ≤ len(vectors) - количество линейно независимых векторов.<br>
-&#9;&#9;Столбцы образуют ортонормированный базис span(vectors).<br>
-&#9;&#9;Если все векторы нулевые или линейно зависимые от нуля, возвращает массив формы (n, 0).<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Использует SVD для численной устойчивости<br>
-&#9;&#9;- Порядок векторов НЕ влияет на базис (в отличие от Грама-Шмидта)<br>
-&#9;&#9;- SVD выбирает &quot;наилучший&quot; базис (главные направления)<br>
-&#9;&#9;- Векторы базиса ортонормированы: Q.T @ Q = I<br>
-&#9;&#9;- Для получения проектора: P = Q @ Q.T<br>
-&#9;&#9;- Более медленный, но более точный чем Грам-Шмидт<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; v1 = np.array([3., 4., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; v2 = np.array([1., 0., 1.])<br>
-&#9;&#9;&gt;&gt;&gt; Q = orthogonalize_svd(v1, v2)<br>
-&#9;&#9;&gt;&gt;&gt; Q.shape  # (3, 2)<br>
-&#9;&#9;&gt;&gt;&gt; np.allclose(Q.T @ Q, np.eye(2))  # Ортонормированность<br>
-&#9;&#9;True<br>
-&#9;&#9;<br>
-&#9;&#9;&gt;&gt;&gt; # Линейно зависимые векторы<br>
-&#9;&#9;&gt;&gt;&gt; v1 = np.array([1., 0., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; v2 = np.array([2., 0., 0.])  # v2 = 2*v1<br>
-&#9;&#9;&gt;&gt;&gt; Q = orthogonalize_svd(v1, v2)<br>
-&#9;&#9;&gt;&gt;&gt; Q.shape  # (3, 1) - только один независимый вектор<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;if len(vectors) == 0:<br>
-&#9;&#9;raise ValueError(&quot;Необходимо передать хотя бы один вектор&quot;)<br>
-&#9;<br>
-&#9;# Преобразуем векторы в массив (векторы = строки)<br>
-&#9;vectors_array = [numpy.asarray(v).flatten() for v in vectors]<br>
-&#9;A = numpy.vstack(vectors_array)<br>
-&#9;<br>
-&#9;# SVD разложение<br>
-&#9;u, s, vh = numpy.linalg.svd(A, full_matrices=True)<br>
-&#9;<br>
-&#9;# Определяем порог для линейной независимости<br>
-&#9;if tol is None:<br>
-&#9;&#9;tol = max(A.shape) * numpy.finfo(A.dtype).eps<br>
-&#9;<br>
-&#9;threshold = tol * s[0] if s.size &gt; 0 else tol<br>
-&#9;<br>
-&#9;# Ранг = количество значимых сингулярных чисел<br>
-&#9;rank = numpy.sum(s &gt; threshold)<br>
-&#9;<br>
-&#9;# Ортонормированный базис = правые сингулярные векторы для ненулевых σ<br>
-&#9;# Транспонируем, чтобы векторы были столбцами<br>
-&#9;orthonormal_basis = vh[:rank].T.conj()<br>
-&#9;<br>
-&#9;return orthonormal_basis<br>
-<br>
-<br>
-def orthogonalize(*vectors, method='svd', tol=None):<br>
-&#9;&quot;&quot;&quot;Ортогонализует набор векторов одним из двух методов.<br>
-&#9;<br>
-&#9;Универсальная функция ортогонализации с выбором метода.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;*vectors: Набор векторов для ортогонализации.<br>
-&#9;&#9;&#9;&#9;Каждый вектор размера (n,) или (n, 1).<br>
-&#9;&#9;method: Метод ортогонализации:<br>
-&#9;&#9;&#9;&#9;- 'svd': SVD разложение (по умолчанию, более стабильный)<br>
-&#9;&#9;&#9;&#9;- 'gram_schmidt' или 'gs': классический Грам-Шмидт<br>
-&#9;&#9;tol: Порог для определения линейной зависимости.<br>
-&#9;&#9;&#9;Интерпретация зависит от метода.<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Массив формы (n, k), где k ≤ len(vectors).<br>
-&#9;&#9;Столбцы образуют ортонормированный базис span(vectors).<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- SVD: численно стабильный, базис не зависит от порядка векторов<br>
-&#9;&#9;- Грам-Шмидт: быстрее, но менее стабильный, порядок векторов важен<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; v1 = np.array([1., 1., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; v2 = np.array([1., 0., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; Q_svd = orthogonalize(v1, v2, method='svd')<br>
-&#9;&#9;&gt;&gt;&gt; Q_gs = orthogonalize(v1, v2, method='gram_schmidt')<br>
-&#9;&#9;&gt;&gt;&gt; # Оба ортонормированы, но могут давать разные базисы<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;if method in ('svd', 'SVD'):<br>
-&#9;&#9;return orthogonalize_svd(*vectors, tol=tol)<br>
-&#9;elif method in ('gram_schmidt', 'gs', 'GS', 'Gram-Schmidt'):<br>
-&#9;&#9;return gram_schmidt(*vectors, tol=tol)<br>
-&#9;else:<br>
-&#9;&#9;raise ValueError(f&quot;Неизвестный метод: {method}. Используйте 'svd' или 'gram_schmidt'&quot;)<br>
-<br>
-<br>
-def is_projector(P, tol=None):<br>
-&#9;&quot;&quot;&quot;Проверяет, является ли матрица ортогональным проектором.<br>
-&#9;<br>
-&#9;Ортогональный проектор должен удовлетворять двум условиям:<br>
-&#9;1. Идемпотентность: P @ P = P<br>
-&#9;2. Эрмитовость: P^H = P (для вещественных матриц: P.T = P)<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;P: Матрица для проверки, размер (n, n)<br>
-&#9;&#9;tol: Порог для численного сравнения.<br>
-&#9;&#9;&#9;По умолчанию: sqrt(n) * машинная_точность * ||P||<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;True если P - ортогональный проектор, False иначе<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Проверяет обе необходимые характеристики проектора<br>
-&#9;&#9;- Учитывает численные погрешности через параметр tol<br>
-&#9;&#9;- Для нулевой матрицы возвращает True (проектор на {0})<br>
-&#9;&#9;- Дополнительно проверяется, что сингулярные числа ≈ 0 или 1<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; # Проектор на ось X<br>
-&#9;&#9;&gt;&gt;&gt; P = vector_projector([1., 0., 0.])<br>
-&#9;&#9;&gt;&gt;&gt; is_projector(P)<br>
-&#9;&#9;True<br>
-&#9;&#9;<br>
-&#9;&#9;&gt;&gt;&gt; # Обычная матрица (не проектор)<br>
-&#9;&#9;&gt;&gt;&gt; A = np.array([[1, 2], [3, 4]])<br>
-&#9;&#9;&gt;&gt;&gt; is_projector(A)<br>
-&#9;&#9;False<br>
-&#9;&#9;<br>
-&#9;&#9;&gt;&gt;&gt; # Проектор на плоскость<br>
-&#9;&#9;&gt;&gt;&gt; P = subspace_projector([1,0,0], [0,1,0])<br>
-&#9;&#9;&gt;&gt;&gt; is_projector(P)<br>
-&#9;&#9;True<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;P = numpy.asarray(P)<br>
-&#9;<br>
-&#9;# Проверка квадратности<br>
-&#9;if P.ndim != 2 or P.shape[0] != P.shape[1]:<br>
-&#9;&#9;return False<br>
-&#9;<br>
-&#9;n = P.shape[0]<br>
-&#9;<br>
-&#9;# Конвертируем в float для корректной работы с numpy.finfo<br>
-&#9;P = _ensure_inexact(P)<br>
-&#9;<br>
-&#9;# Определяем порог<br>
-&#9;if tol is None:<br>
-&#9;&#9;P_norm = numpy.linalg.norm(P)<br>
-&#9;&#9;if P_norm == 0:<br>
-&#9;&#9;&#9;return True  # Нулевая матрица - проектор на {0}<br>
-&#9;&#9;tol = numpy.sqrt(n) * numpy.finfo(P.dtype).eps * P_norm<br>
-&#9;<br>
-&#9;# 1. Проверка идемпотентности: P @ P = P<br>
-&#9;P_squared = P @ P<br>
-&#9;idempotent = numpy.allclose(P_squared, P, atol=tol)<br>
-&#9;<br>
-&#9;if not idempotent:<br>
-&#9;&#9;return False<br>
-&#9;<br>
-&#9;# 2. Проверка эрмитовости: P^H = P<br>
-&#9;P_hermitian = P.T.conj()<br>
-&#9;hermitian = numpy.allclose(P_hermitian, P, atol=tol)<br>
-&#9;<br>
-&#9;if not hermitian:<br>
-&#9;&#9;return False<br>
-&#9;<br>
-&#9;# 3. Дополнительная проверка: сингулярные числа должны быть 0 или 1<br>
-&#9;s = numpy.linalg.svd(P, compute_uv=False)<br>
-&#9;<br>
-&#9;# Более мягкий tolerance для сингулярных чисел<br>
-&#9;# (SVD может давать разную точность на разных версиях NumPy/Python)<br>
-&#9;svd_tol = max(tol, 10 * numpy.finfo(P.dtype).eps * P_norm)<br>
-&#9;<br>
-&#9;# Проверяем, что каждое сингулярное число близко либо к 0, либо к 1<br>
-&#9;for sigma in s:<br>
-&#9;&#9;# Расстояние до ближайшего из {0, 1}<br>
-&#9;&#9;distance_to_binary = min(abs(sigma - 0.0), abs(sigma - 1.0))<br>
-&#9;&#9;if distance_to_binary &gt; svd_tol:<br>
-&#9;&#9;&#9;return False<br>
-&#9;<br>
-&#9;return True<br>
-<br>
-<br>
-def projector_basis(P, rtol=None):<br>
-&#9;&quot;&quot;&quot;Извлекает ортонормированный базис подпространства из проектора.<br>
-&#9;<br>
-&#9;Для проектора P на подпространство V возвращает матрицу Q, столбцы которой<br>
-&#9;образуют ортонормированный базис V. Обратная операция: P = Q @ Q.T<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;P: Ортогональный проектор на подпространство, размер (n, n)<br>
-&#9;&#9;rtol: Относительный порог для определения ранга проектора.<br>
-&#9;&#9;&#9;По умолчанию: max(n) * машинная_точность<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица размера (n, k) где k = dim(V) = rank(P).<br>
-&#9;&#9;Столбцы образуют ортонормированный базис подпространства.<br>
-&#9;&#9;Если P = 0 (тривиальное подпространство), возвращает массив формы (n, 0).<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Использует SVD разложение проектора<br>
-&#9;&#9;- Базис извлекается из правых сингулярных векторов<br>
-&#9;&#9;- Векторы ортонормированы: Q.T @ Q = I_k<br>
-&#9;&#9;- Проверка: P ≈ Q @ Q.T (с точностью до численных ошибок)<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; # Создаём проектор на плоскость XY<br>
-&#9;&#9;&gt;&gt;&gt; P = subspace_projector([1,0,0], [0,1,0])<br>
-&#9;&#9;&gt;&gt;&gt; Q = projector_basis(P)<br>
-&#9;&#9;&gt;&gt;&gt; Q.shape  # (3, 2)<br>
-&#9;&#9;&gt;&gt;&gt; np.allclose(P, Q @ Q.T)  # Восстановление проектора<br>
-&#9;&#9;True<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;P = numpy.asarray(P)<br>
-&#9;<br>
-&#9;# SVD разложение проектора<br>
-&#9;u, s, vh = numpy.linalg.svd(P, full_matrices=True)<br>
-&#9;<br>
-&#9;# Определяем порог<br>
-&#9;if rtol is None:<br>
-&#9;&#9;rtol = max(P.shape) * numpy.finfo(P.dtype).eps<br>
-&#9;<br>
-&#9;threshold = rtol * s[0] if s.size &gt; 0 else rtol<br>
-&#9;<br>
-&#9;# Ранг = количество значимых сингулярных чисел<br>
-&#9;rank = numpy.sum(s &gt; threshold)<br>
-&#9;<br>
-&#9;if rank == 0:<br>
-&#9;&#9;# Тривиальное подпространство {0}<br>
-&#9;&#9;return numpy.empty((P.shape[0], 0), dtype=P.dtype)<br>
-&#9;<br>
-&#9;# Базис = правые сингулярные векторы для ненулевых σ<br>
-&#9;# (транспонируем, чтобы векторы были столбцами)<br>
-&#9;basis = vh[:rank].T.conj()<br>
-&#9;<br>
-&#9;return basis<br>
-<br>
-<br>
-def subspace_intersection(P1, P2, tol=None):<br>
-&#9;&quot;&quot;&quot;Возвращает проектор на пересечение двух подпространств.<br>
-&#9;<br>
-&#9;Вычисляет проектор на V1 ∩ V2, где V1 и V2 заданы проекторами P1 и P2.<br>
-&#9;Использует метод через нуль-пространство: V1 ∩ V2 = V1 ∩ ker(I - P2).<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;P1: Проектор на первое подпространство V1, размер (n, n)<br>
-&#9;&#9;P2: Проектор на второе подпространство V2, размер (n, n)<br>
-&#9;&#9;tol: Порог для определения линейной зависимости.<br>
-&#9;&#9;&#9;По умолчанию: max(n) * машинная_точность<br>
-&#9;&#9;<br>
-&#9;Returns:<br>
-&#9;&#9;Матрица проектора на пересечение V1 ∩ V2, размер (n, n)<br>
-&#9;&#9;<br>
-&#9;Notes:<br>
-&#9;&#9;- Если подпространства не пересекаются (только в 0), возвращает нулевой проектор<br>
-&#9;&#9;- Метод: находим базис V1, проецируем на V2, ищем векторы, оставшиеся в V1<br>
-&#9;&#9;- Математически: v ∈ V1 ∩ V2 ⟺ v ∈ V1 и P2 @ v = v<br>
-&#9;&#9;- dim(V1 ∩ V2) ≤ min(dim(V1), dim(V2))<br>
-&#9;&#9;- Для ортогональных подпространств: V1 ∩ V2 = {0}<br>
-&#9;&#9;<br>
-&#9;Examples:<br>
-&#9;&#9;&gt;&gt;&gt; # Плоскость XY и плоскость XZ пересекаются по оси X<br>
-&#9;&#9;&gt;&gt;&gt; P_xy = subspace_projector([1,0,0], [0,1,0])<br>
-&#9;&#9;&gt;&gt;&gt; P_xz = subspace_projector([1,0,0], [0,0,1])<br>
-&#9;&#9;&gt;&gt;&gt; P_x = subspace_intersection(P_xy, P_xz)<br>
-&#9;&#9;&gt;&gt;&gt; # P_x - проектор на ось X (dim = 1)<br>
-&#9;&#9;<br>
-&#9;&#9;&gt;&gt;&gt; # Ортогональные подпространства<br>
-&#9;&#9;&gt;&gt;&gt; P_x = vector_projector([1,0,0])<br>
-&#9;&#9;&gt;&gt;&gt; P_y = vector_projector([0,1,0])<br>
-&#9;&#9;&gt;&gt;&gt; P_int = subspace_intersection(P_x, P_y)<br>
-&#9;&#9;&gt;&gt;&gt; # P_int ≈ 0 (пересечение пустое)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;P1 = numpy.asarray(P1)<br>
-&#9;P2 = numpy.asarray(P2)<br>
-&#9;<br>
-&#9;if P1.shape != P2.shape:<br>
-&#9;&#9;raise ValueError(f&quot;Проекторы должны иметь одинаковый размер, получены {P1.shape} и {P2.shape}&quot;)<br>
-&#9;<br>
-&#9;# Извлекаем базис V1 из проектора P1<br>
-&#9;basis1 = projector_basis(P1, rtol=tol)<br>
-&#9;<br>
-&#9;if basis1.size == 0:<br>
-&#9;&#9;# V1 = {0}, пересечение пустое<br>
-&#9;&#9;return numpy.zeros_like(P1)<br>
-&#9;<br>
-&#9;# Проецируем базисные векторы V1 на V2<br>
-&#9;# Вектор v ∈ V1 лежит в V1 ∩ V2 ⟺ P2 @ v = v<br>
-&#9;projected_basis = P2 @ basis1<br>
-&#9;<br>
-&#9;# Разность: (P2 @ v - v) должна быть нулевой для векторов из пересечения<br>
-&#9;diff = projected_basis - basis1<br>
-&#9;<br>
-&#9;# Находим нуль-пространство diff (линейные комбинации столбцов basis1,<br>
-&#9;# которые не изменяются при проекции на V2)<br>
-&#9;# diff @ c ≈ 0  =&gt;  c задаёт вектор из пересечения<br>
-&#9;<br>
-&#9;# Определяем абсолютный порог для сингулярных чисел<br>
-&#9;# Используем норму базиса как характерный масштаб<br>
-&#9;if tol is None:<br>
-&#9;&#9;tol = max(P1.shape) * numpy.finfo(P1.dtype).eps<br>
-&#9;<br>
-&#9;# Абсолютный порог учитывает масштаб задачи<br>
-&#9;threshold = tol * max(1.0, numpy.linalg.norm(basis1))<br>
-&#9;<br>
-&#9;# Используем существующую функцию с абсолютным порогом<br>
-&#9;null_coefs = nullspace_basis(diff, atol=threshold)<br>
-&#9;<br>
-&#9;if null_coefs.size == 0:<br>
-&#9;&#9;# Пересечение пустое (только нулевой вектор)<br>
-&#9;&#9;return numpy.zeros_like(P1)<br>
-&#9;<br>
-&#9;# Строим базис пересечения: линейные комбинации basis1<br>
-&#9;intersection_basis = basis1 @ null_coefs<br>
-&#9;<br>
-&#9;# Проектор = базис @ базис^H<br>
-&#9;return intersection_basis @ intersection_basis.T.conj()<br>
-<br>
-<br>
-def project_onto_affine(x, C, b):<br>
-&#9;&quot;&quot;&quot;Возвращает ортогональную проекцию вектора x на аффинное множество, заданное C @ y = b.<br>
-&#9;<br>
-&#9;Args:<br>
-&#9;&#9;x: Вектор размера (n,)<br>
-&#9;&#9;C: Линейно-независимая матрица размера (m, n), задающая линейное отображение<br>
-&#9;&#9;b: Вектор размера (m,), задающий сдвиг аффинного множества<br>
-<br>
-&#9;Returns:<br>
-&#9;&#9;Вектор размера (n,) - проекция x на множество {y | C @ y = b}<br>
-&#9;&quot;&quot;&quot;<br>
-<br>
-&#9;x = numpy.asarray(x).flatten()<br>
-&#9;C = numpy.asarray(C)<br>
-&#9;b = numpy.asarray(b).flatten()<br>
-&#9;<br>
-&#9;if C.shape[0] != b.shape[0]:<br>
-&#9;&#9;raise ValueError(f&quot;Размерность b должна соответствовать числу строк C, получены {C.shape[0]} и {b.shape[0]}&quot;)<br>
-&#9;if C.shape[1] != x.shape[0]:<br>
-&#9;&#9;raise ValueError(f&quot;Размерность x должна соответствовать числу столбцов C, получены {C.shape[1]} и {x.shape[0]}&quot;)<br>
-&#9;<br>
-&#9;Ct = C.T.conj()<br>
-&#9;CCt_inv = numpy.linalg.pinv(C @ Ct)<br>
-&#9;projection = x - Ct @ (CCt_inv @ (C @ x - b))<br>
-&#9;return projection<br>
-<br>
-def affine_projector(C, b):<br>
-&#9;&quot;&quot;&quot;Возвращает проектор на аффинное множество A, заданное C @ y = b и вектор смещения B:<br>
-<br>
-&#9;Решение следует подставлять в форму x^ = x - (A.x - B).<br>
-&#9;Здесь<br>
-&#9;A = C.T @ (C @ C.T)^(-1) @ C<br>
-&#9;B = C.T @ (C @ C.T)^(-1) @ b<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;C = numpy.asarray(C)<br>
-&#9;b = numpy.asarray(b).flatten()<br>
-&#9;<br>
-&#9;if C.shape[0] != b.shape[0]:<br>
-&#9;&#9;raise ValueError(f&quot;Размерность b должна соответствовать числу строк C, получены {C.shape[0]} и {b.shape[0]}&quot;)<br>
-&#9;<br>
-&#9;Ct = C.T.conj()<br>
-&#9;CCt_inv = numpy.linalg.pinv(C @ Ct)<br>
-&#9;<br>
-&#9;K = Ct @ CCt_inv<br>
-&#9;A = K @ C<br>
-&#9;B = K @ b<br>
-<br>
-&#9;return A, B<br>
-<br>
-def metric_project_onto_constraints(<br>
-&#9;&#9;q: numpy.ndarray, <br>
-&#9;&#9;H: numpy.ndarray,<br>
-&#9;&#9;M_inv: numpy.ndarray,<br>
-&#9;&#9;error: numpy.ndarray = None,<br>
-&#9;&#9;h: numpy.ndarray = None) -&gt; numpy.ndarray:<br>
-&#9;&quot;&quot;&quot;Проецировать скорости на ограничения<br>
-&#9;<br>
-&#9;q - текущий вектор<br>
-&#9;H - матрица ограничений<br>
-&#9;M_inv - метрическая матрица<br>
-&#9;<br>
-&#9;Одно из двух должно быть задано:<br>
-&#9;&#9;error - текущая ошибка<br>
-&#9;&#9;h - правая часть ограничений<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;if error is None:<br>
-&#9;&#9;error = H @ q - h<br>
-<br>
-&#9;S = H @ M_inv @ H.T<br>
-<br>
-&#9;lmbda = numpy.linalg.solve(S, error)<br>
-&#9;corrected = q - M_inv @ H.T @ lmbda<br>
-<br>
-&#9;return corrected <br>
+import&nbsp;numpy<br>
+<br>
+<br>
+def&nbsp;_ensure_inexact(A):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Конвертирует&nbsp;целочисленные&nbsp;массивы&nbsp;в&nbsp;float,&nbsp;сохраняя&nbsp;float/complex&nbsp;типы.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;numpy.asarray(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;numpy.issubdtype(A.dtype,&nbsp;numpy.inexact):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Конвертируем&nbsp;целые&nbsp;числа&nbsp;в&nbsp;float64<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.asarray(A,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Оставляем&nbsp;float32/float64/complex&nbsp;как&nbsp;есть<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A<br>
+<br>
+<br>
+def&nbsp;nullspace_projector(A):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;матрицу&nbsp;ортогонального&nbsp;проектора&nbsp;на&nbsp;нуль-пространство&nbsp;матрицы&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Проектор&nbsp;P&nbsp;обладает&nbsp;свойствами:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;A&nbsp;@&nbsp;P&nbsp;=&nbsp;0&nbsp;(проекция&nbsp;попадает&nbsp;в&nbsp;нуль-пространство)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;@&nbsp;P&nbsp;=&nbsp;P&nbsp;(идемпотентность)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P.T&nbsp;=&nbsp;P&nbsp;(для&nbsp;вещественных&nbsp;матриц&nbsp;-&nbsp;симметричность)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;проектора&nbsp;размера&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;проекции&nbsp;вектора&nbsp;v&nbsp;на&nbsp;нуль-пространство:&nbsp;v_proj&nbsp;=&nbsp;P&nbsp;@&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Использует&nbsp;SVD-разложение&nbsp;для&nbsp;оптимальной&nbsp;производительности.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_ensure_inexact(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(A,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;ранг&nbsp;матрицы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;max(A.shape)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Базис&nbsp;нуль-пространства&nbsp;=&nbsp;правые&nbsp;сингулярные&nbsp;векторы&nbsp;для&nbsp;нулевых&nbsp;сингулярных&nbsp;чисел<br>
+&nbsp;&nbsp;&nbsp;&nbsp;null_basis&nbsp;=&nbsp;vh[rank:].T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проектор&nbsp;=&nbsp;базис&nbsp;@&nbsp;базис.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;null_basis.size&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;null_basis&nbsp;@&nbsp;null_basis.T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нуль-пространство&nbsp;пустое&nbsp;-&nbsp;возвращаем&nbsp;нулевой&nbsp;проектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.zeros((A.shape[1],&nbsp;A.shape[1]),&nbsp;dtype=A.dtype)<br>
+<br>
+<br>
+def&nbsp;nullspace_basis_svd(A,&nbsp;rtol=None,&nbsp;atol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Ортонормированный&nbsp;базис&nbsp;ker(A),&nbsp;полученный&nbsp;через&nbsp;SVD&nbsp;A&nbsp;=&nbsp;U&nbsp;Σ&nbsp;V^H.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Правые&nbsp;сингулярные&nbsp;векторы,&nbsp;соответствующие&nbsp;нулевым&nbsp;σ,&nbsp;образуют&nbsp;базис<br>
+&nbsp;&nbsp;&nbsp;&nbsp;нуль-пространства.&nbsp;В&nbsp;реализации&nbsp;отбрасываются&nbsp;σ&nbsp;ниже&nbsp;заданного&nbsp;порога.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol:&nbsp;Относительный&nbsp;порог&nbsp;для&nbsp;сингулярных&nbsp;чисел&nbsp;(≈&nbsp;eps&nbsp;·&nbsp;max(m,&nbsp;n)).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;atol:&nbsp;Абсолютный&nbsp;порог&nbsp;(если&nbsp;задан,&nbsp;имеет&nbsp;приоритет&nbsp;над&nbsp;rtol).<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;(n,&nbsp;k)&nbsp;с&nbsp;ортонормированными&nbsp;столбцами&nbsp;basis,&nbsp;где&nbsp;A&nbsp;@&nbsp;basis&nbsp;=&nbsp;0.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;ker(A)&nbsp;тривиально,&nbsp;возвращается&nbsp;массив&nbsp;формы&nbsp;(n,&nbsp;0).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_ensure_inexact(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(A,&nbsp;full_matrices=True)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;atol&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;atol<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rtol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol&nbsp;=&nbsp;max(A.shape)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;rtol&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;rtol<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;null_basis&nbsp;=&nbsp;vh[rank:].T.conj()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;null_basis.size&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.zeros((A.shape[1],&nbsp;0),&nbsp;dtype=A.dtype)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;null_basis<br>
+<br>
+<br>
+def&nbsp;nullspace_basis_qr(A,&nbsp;rtol=None,&nbsp;atol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Ортонормированный&nbsp;базис&nbsp;ker(A)&nbsp;по&nbsp;формуле&nbsp;A^T&nbsp;=&nbsp;Q&nbsp;R&nbsp;(полный&nbsp;QR).<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;r&nbsp;=&nbsp;rank(A),&nbsp;то&nbsp;строки&nbsp;A&nbsp;лежат&nbsp;в&nbsp;span(Q[:,&nbsp;:r])&nbsp;и<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ker(A)&nbsp;=&nbsp;(rowspace(A))^⊥&nbsp;=&nbsp;span(Q[:,&nbsp;r:]).&nbsp;Хвостовые&nbsp;столбцы&nbsp;Q&nbsp;уже<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ортонормированы&nbsp;и&nbsp;задают&nbsp;искомый&nbsp;базис.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol:&nbsp;Относительный&nbsp;порог&nbsp;для&nbsp;диагонали&nbsp;R.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;atol:&nbsp;Абсолютный&nbsp;порог&nbsp;(если&nbsp;задан,&nbsp;имеет&nbsp;приоритет).<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;(n,&nbsp;k)&nbsp;с&nbsp;ортонормированными&nbsp;столбцами&nbsp;ker(A).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;дополнение&nbsp;тривиально,&nbsp;возвращается&nbsp;массив&nbsp;формы&nbsp;(n,&nbsp;0).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_ensure_inexact(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;m,&nbsp;n&nbsp;=&nbsp;A.shape<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.zeros((0,&nbsp;0),&nbsp;dtype=A.dtype)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Q,&nbsp;R&nbsp;=&nbsp;numpy.linalg.qr(A.T,&nbsp;mode=&quot;complete&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;diag_len&nbsp;=&nbsp;min(n,&nbsp;m)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;diag_len&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;diag&nbsp;=&nbsp;numpy.abs(numpy.diag(R[:diag_len,&nbsp;:diag_len]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max_diag&nbsp;=&nbsp;diag.max()&nbsp;if&nbsp;diag.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;0.0<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;atol&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;atol<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rtol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol&nbsp;=&nbsp;max(m,&nbsp;n)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;rtol&nbsp;*&nbsp;max_diag&nbsp;if&nbsp;max_diag&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;rtol<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;int(numpy.sum(diag&nbsp;&gt;&nbsp;tol))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Q[:,&nbsp;rank:]<br>
+<br>
+<br>
+def&nbsp;nullspace_basis(A,&nbsp;rtol=None,&nbsp;atol=None,&nbsp;method=&quot;svd&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;ортонормированный&nbsp;базис&nbsp;ker(A)&nbsp;с&nbsp;выбранным&nbsp;алгоритмом.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol:&nbsp;Относительный&nbsp;порог&nbsp;толеранса.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;atol:&nbsp;Абсолютный&nbsp;порог&nbsp;толеранса.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;method:&nbsp;'svd'&nbsp;(устойчивее)&nbsp;или&nbsp;'qr'&nbsp;(быстрее&nbsp;для&nbsp;узких&nbsp;матриц).<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;(n,&nbsp;k),&nbsp;столбцы&nbsp;которой&nbsp;образуют&nbsp;базис&nbsp;нуль-пространства.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Raises:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ValueError:&nbsp;если&nbsp;указан&nbsp;неподдерживаемый&nbsp;method.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;method&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;method&nbsp;=&nbsp;&quot;svd&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;method&nbsp;==&nbsp;&quot;svd&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;nullspace_basis_svd(A,&nbsp;rtol=rtol,&nbsp;atol=atol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;method&nbsp;==&nbsp;&quot;qr&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;nullspace_basis_qr(A,&nbsp;rtol=rtol,&nbsp;atol=atol)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Unsupported&nbsp;nullspace&nbsp;method&nbsp;'{method}'.&nbsp;Use&nbsp;'svd'&nbsp;or&nbsp;'qr'.&quot;)<br>
+<br>
+<br>
+def&nbsp;rowspace_projector(A):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;матрицу&nbsp;ортогонального&nbsp;проектора&nbsp;на&nbsp;пространство&nbsp;строк&nbsp;матрицы&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Пространство&nbsp;строк&nbsp;(row&nbsp;space)&nbsp;-&nbsp;это&nbsp;ортогональное&nbsp;дополнение&nbsp;к&nbsp;нуль-пространству.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Проектор&nbsp;P&nbsp;обладает&nbsp;свойствами:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;@&nbsp;v&nbsp;лежит&nbsp;в&nbsp;пространстве&nbsp;строк&nbsp;для&nbsp;любого&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;+&nbsp;nullspace_projector(A)&nbsp;=&nbsp;I&nbsp;(дополнение)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;@&nbsp;P&nbsp;=&nbsp;P&nbsp;(идемпотентность)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P.T&nbsp;=&nbsp;P&nbsp;(для&nbsp;вещественных&nbsp;матриц&nbsp;-&nbsp;симметричность)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;проектора&nbsp;размера&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;проекции&nbsp;вектора&nbsp;v&nbsp;на&nbsp;пространство&nbsp;строк:&nbsp;v_proj&nbsp;=&nbsp;P&nbsp;@&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rowspace_projector(A)&nbsp;=&nbsp;I&nbsp;-&nbsp;nullspace_projector(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_ensure_inexact(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(A,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;ранг&nbsp;матрицы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;max(A.shape)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Базис&nbsp;пространства&nbsp;строк&nbsp;=&nbsp;правые&nbsp;сингулярные&nbsp;векторы&nbsp;для&nbsp;ненулевых&nbsp;σ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;row_basis&nbsp;=&nbsp;vh[:rank].T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проектор&nbsp;=&nbsp;базис&nbsp;@&nbsp;базис.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;row_basis.size&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;row_basis&nbsp;@&nbsp;row_basis.T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пространство&nbsp;строк&nbsp;пустое&nbsp;-&nbsp;возвращаем&nbsp;нулевой&nbsp;проектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.zeros((A.shape[1],&nbsp;A.shape[1]),&nbsp;dtype=A.dtype)<br>
+<br>
+<br>
+def&nbsp;rowspace_basis(A,&nbsp;rtol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;ортонормированный&nbsp;базис&nbsp;пространства&nbsp;строк&nbsp;матрицы&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Пространство&nbsp;строк&nbsp;(row&nbsp;space)&nbsp;состоит&nbsp;из&nbsp;всех&nbsp;линейных&nbsp;комбинаций&nbsp;строк&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Это&nbsp;ортогональное&nbsp;дополнение&nbsp;к&nbsp;нуль-пространству:&nbsp;rowspace&nbsp;⊕&nbsp;nullspace&nbsp;=&nbsp;R^n.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol:&nbsp;Относительный&nbsp;порог&nbsp;для&nbsp;определения&nbsp;нулевых&nbsp;сингулярных&nbsp;чисел.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;max(m,&nbsp;n)&nbsp;*&nbsp;машинная_точность&nbsp;*&nbsp;max(сингулярное_число)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;размера&nbsp;(n,&nbsp;k)&nbsp;где&nbsp;k&nbsp;=&nbsp;rank(A)&nbsp;-&nbsp;размерность&nbsp;пространства&nbsp;строк.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Столбцы&nbsp;образуют&nbsp;ортонормированный&nbsp;базис&nbsp;пространства&nbsp;строк.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;rank(A)&nbsp;=&nbsp;0,&nbsp;возвращает&nbsp;массив&nbsp;формы&nbsp;(n,&nbsp;0).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Использует&nbsp;SVD-разложение&nbsp;для&nbsp;численной&nbsp;устойчивости<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Размерность&nbsp;пространства&nbsp;строк&nbsp;=&nbsp;rank(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Векторы&nbsp;базиса&nbsp;ортонормированы:&nbsp;basis.T&nbsp;@&nbsp;basis&nbsp;=&nbsp;I<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;получения&nbsp;проектора:&nbsp;P&nbsp;=&nbsp;basis&nbsp;@&nbsp;basis.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Дополнение:&nbsp;rowspace_basis&nbsp;⊕&nbsp;nullspace_basis&nbsp;=&nbsp;полный&nbsp;базис&nbsp;R^n<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;A&nbsp;=&nbsp;np.array([[1,&nbsp;2,&nbsp;3],&nbsp;[2,&nbsp;4,&nbsp;6]])&nbsp;&nbsp;#&nbsp;Ранг&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;R&nbsp;=&nbsp;rowspace_basis(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;R.shape&nbsp;&nbsp;#&nbsp;(3,&nbsp;1)&nbsp;-&nbsp;базис&nbsp;из&nbsp;1&nbsp;вектора<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;N&nbsp;=&nbsp;nullspace_basis(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;N.shape&nbsp;&nbsp;#&nbsp;(3,&nbsp;2)&nbsp;-&nbsp;дополнение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_ensure_inexact(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(A,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;порог&nbsp;для&nbsp;малых&nbsp;сингулярных&nbsp;чисел<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rtol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol&nbsp;=&nbsp;max(A.shape)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;rtol&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;rtol<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ранг&nbsp;матрицы&nbsp;=&nbsp;количество&nbsp;сингулярных&nbsp;чисел&nbsp;больше&nbsp;порога<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пространство&nbsp;строк&nbsp;=&nbsp;правые&nbsp;сингулярные&nbsp;векторы&nbsp;соответствующие&nbsp;ненулевым&nbsp;σ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Берём&nbsp;строки&nbsp;vh&nbsp;с&nbsp;индексами&nbsp;[:rank]&nbsp;и&nbsp;транспонируем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;row_basis&nbsp;=&nbsp;vh[:rank].T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;row_basis<br>
+<br>
+<br>
+def&nbsp;colspace_projector(A):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;матрицу&nbsp;ортогонального&nbsp;проектора&nbsp;на&nbsp;пространство&nbsp;столбцов&nbsp;матрицы&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Пространство&nbsp;столбцов&nbsp;(column&nbsp;space,&nbsp;range)&nbsp;-&nbsp;это&nbsp;образ&nbsp;отображения&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Проектор&nbsp;P&nbsp;обладает&nbsp;свойствами:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;@&nbsp;b&nbsp;лежит&nbsp;в&nbsp;colspace&nbsp;для&nbsp;любого&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;+&nbsp;left_nullspace_projector(A)&nbsp;=&nbsp;I&nbsp;(дополнение)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;@&nbsp;P&nbsp;=&nbsp;P&nbsp;(идемпотентность)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P.T&nbsp;=&nbsp;P&nbsp;(для&nbsp;вещественных&nbsp;матриц&nbsp;-&nbsp;симметричность)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;проектора&nbsp;размера&nbsp;(m,&nbsp;m)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;проекции&nbsp;вектора&nbsp;b&nbsp;на&nbsp;пространство&nbsp;столбцов:&nbsp;b_proj&nbsp;=&nbsp;P&nbsp;@&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;Ax&nbsp;=&nbsp;b&nbsp;несовместна,&nbsp;то&nbsp;Ax&nbsp;=&nbsp;P&nbsp;@&nbsp;b&nbsp;всегда&nbsp;разрешима.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Работает&nbsp;в&nbsp;пространстве&nbsp;значений&nbsp;R^m.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_ensure_inexact(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(A,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;ранг&nbsp;матрицы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;max(A.shape)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Базис&nbsp;пространства&nbsp;столбцов&nbsp;=&nbsp;левые&nbsp;сингулярные&nbsp;векторы&nbsp;для&nbsp;ненулевых&nbsp;σ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;col_basis&nbsp;=&nbsp;u[:,&nbsp;:rank]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проектор&nbsp;=&nbsp;базис&nbsp;@&nbsp;базис.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;col_basis.size&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;col_basis&nbsp;@&nbsp;col_basis.T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пространство&nbsp;столбцов&nbsp;пустое&nbsp;-&nbsp;возвращаем&nbsp;нулевой&nbsp;проектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.zeros((A.shape[0],&nbsp;A.shape[0]),&nbsp;dtype=A.dtype)<br>
+<br>
+<br>
+def&nbsp;colspace_basis(A,&nbsp;rtol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;ортонормированный&nbsp;базис&nbsp;пространства&nbsp;столбцов&nbsp;матрицы&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Пространство&nbsp;столбцов&nbsp;(column&nbsp;space,&nbsp;range,&nbsp;образ)&nbsp;состоит&nbsp;из&nbsp;всех&nbsp;векторов&nbsp;вида&nbsp;A&nbsp;@&nbsp;x.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Это&nbsp;ортогональное&nbsp;дополнение&nbsp;к&nbsp;левому&nbsp;нуль-пространству:&nbsp;colspace&nbsp;⊕&nbsp;left_nullspace&nbsp;=&nbsp;R^m.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol:&nbsp;Относительный&nbsp;порог&nbsp;для&nbsp;определения&nbsp;нулевых&nbsp;сингулярных&nbsp;чисел.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;max(m,&nbsp;n)&nbsp;*&nbsp;машинная_точность&nbsp;*&nbsp;max(сингулярное_число)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;k)&nbsp;где&nbsp;k&nbsp;=&nbsp;rank(A)&nbsp;-&nbsp;размерность&nbsp;пространства&nbsp;столбцов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Столбцы&nbsp;образуют&nbsp;ортонормированный&nbsp;базис&nbsp;пространства&nbsp;столбцов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;rank(A)&nbsp;=&nbsp;0,&nbsp;возвращает&nbsp;массив&nbsp;формы&nbsp;(m,&nbsp;0).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Использует&nbsp;SVD-разложение&nbsp;для&nbsp;численной&nbsp;устойчивости<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Размерность&nbsp;пространства&nbsp;столбцов&nbsp;=&nbsp;rank(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Векторы&nbsp;базиса&nbsp;ортонормированы:&nbsp;basis.T&nbsp;@&nbsp;basis&nbsp;=&nbsp;I<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;получения&nbsp;проектора:&nbsp;P&nbsp;=&nbsp;basis&nbsp;@&nbsp;basis.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Работает&nbsp;в&nbsp;пространстве&nbsp;значений&nbsp;R^m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Эквивалент&nbsp;scipy.linalg.orth(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;A&nbsp;=&nbsp;np.array([[1,&nbsp;0],&nbsp;[2,&nbsp;0],&nbsp;[3,&nbsp;0]])&nbsp;&nbsp;#&nbsp;Ранг&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;C&nbsp;=&nbsp;colspace_basis(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;C.shape&nbsp;&nbsp;#&nbsp;(3,&nbsp;1)&nbsp;-&nbsp;базис&nbsp;из&nbsp;1&nbsp;вектора<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Любой&nbsp;вектор&nbsp;A&nbsp;@&nbsp;x&nbsp;лежит&nbsp;в&nbsp;span(C)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_ensure_inexact(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(A,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;порог&nbsp;для&nbsp;малых&nbsp;сингулярных&nbsp;чисел<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rtol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol&nbsp;=&nbsp;max(A.shape)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;rtol&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;rtol<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ранг&nbsp;матрицы&nbsp;=&nbsp;количество&nbsp;сингулярных&nbsp;чисел&nbsp;больше&nbsp;порога<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пространство&nbsp;столбцов&nbsp;=&nbsp;левые&nbsp;сингулярные&nbsp;векторы&nbsp;соответствующие&nbsp;ненулевым&nbsp;σ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;col_basis&nbsp;=&nbsp;u[:,&nbsp;:rank]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;col_basis<br>
+<br>
+<br>
+def&nbsp;left_nullspace_projector(A):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;матрицу&nbsp;ортогонального&nbsp;проектора&nbsp;на&nbsp;левое&nbsp;нуль-пространство&nbsp;матрицы&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Левое&nbsp;нуль-пространство&nbsp;состоит&nbsp;из&nbsp;векторов&nbsp;y&nbsp;таких,&nbsp;что&nbsp;A^T&nbsp;@&nbsp;y&nbsp;=&nbsp;0.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Это&nbsp;ортогональное&nbsp;дополнение&nbsp;к&nbsp;пространству&nbsp;столбцов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Проектор&nbsp;P&nbsp;обладает&nbsp;свойствами:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;A^T&nbsp;@&nbsp;P&nbsp;=&nbsp;0&nbsp;(эквивалентно:&nbsp;P&nbsp;@&nbsp;A&nbsp;=&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;+&nbsp;colspace_projector(A)&nbsp;=&nbsp;I&nbsp;(дополнение)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;@&nbsp;P&nbsp;=&nbsp;P&nbsp;(идемпотентность)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P.T&nbsp;=&nbsp;P&nbsp;(для&nbsp;вещественных&nbsp;матриц&nbsp;-&nbsp;симметричность)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;проектора&nbsp;размера&nbsp;(m,&nbsp;m)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;проекции&nbsp;вектора&nbsp;b&nbsp;на&nbsp;левое&nbsp;нуль-пространство:&nbsp;b_proj&nbsp;=&nbsp;P&nbsp;@&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;left_nullspace(A)&nbsp;=&nbsp;nullspace(A^T)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Работает&nbsp;в&nbsp;пространстве&nbsp;значений&nbsp;R^m.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_ensure_inexact(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(A,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;ранг&nbsp;матрицы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;max(A.shape)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Базис&nbsp;левого&nbsp;нуль-пространства&nbsp;=&nbsp;левые&nbsp;сингулярные&nbsp;векторы&nbsp;для&nbsp;нулевых&nbsp;σ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;left_null_basis&nbsp;=&nbsp;u[:,&nbsp;rank:]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проектор&nbsp;=&nbsp;базис&nbsp;@&nbsp;базис.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;left_null_basis.size&nbsp;&gt;&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;left_null_basis&nbsp;@&nbsp;left_null_basis.T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Левое&nbsp;нуль-пространство&nbsp;пустое&nbsp;-&nbsp;возвращаем&nbsp;нулевой&nbsp;проектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.zeros((A.shape[0],&nbsp;A.shape[0]),&nbsp;dtype=A.dtype)<br>
+<br>
+<br>
+def&nbsp;left_nullspace_basis(A,&nbsp;rtol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;ортонормированный&nbsp;базис&nbsp;левого&nbsp;нуль-пространства&nbsp;матрицы&nbsp;A.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Левое&nbsp;нуль-пространство&nbsp;состоит&nbsp;из&nbsp;векторов&nbsp;y&nbsp;таких,&nbsp;что&nbsp;A^T&nbsp;@&nbsp;y&nbsp;=&nbsp;0.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Это&nbsp;ортогональное&nbsp;дополнение&nbsp;к&nbsp;пространству&nbsp;столбцов:&nbsp;left_nullspace&nbsp;⊕&nbsp;colspace&nbsp;=&nbsp;R^m.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol:&nbsp;Относительный&nbsp;порог&nbsp;для&nbsp;определения&nbsp;нулевых&nbsp;сингулярных&nbsp;чисел.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;max(m,&nbsp;n)&nbsp;*&nbsp;машинная_точность&nbsp;*&nbsp;max(сингулярное_число)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;размера&nbsp;(m,&nbsp;k)&nbsp;где&nbsp;k&nbsp;=&nbsp;m&nbsp;-&nbsp;rank(A)&nbsp;-&nbsp;размерность&nbsp;левого&nbsp;нуль-пространства.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Столбцы&nbsp;образуют&nbsp;ортонормированный&nbsp;базис&nbsp;левого&nbsp;нуль-пространства.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;rank(A)&nbsp;=&nbsp;m,&nbsp;возвращает&nbsp;массив&nbsp;формы&nbsp;(m,&nbsp;0).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Использует&nbsp;SVD-разложение&nbsp;для&nbsp;численной&nbsp;устойчивости<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Размерность&nbsp;левого&nbsp;нуль-пространства&nbsp;=&nbsp;m&nbsp;-&nbsp;rank(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Векторы&nbsp;базиса&nbsp;ортонормированы:&nbsp;basis.T&nbsp;@&nbsp;basis&nbsp;=&nbsp;I<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;получения&nbsp;проектора:&nbsp;P&nbsp;=&nbsp;basis&nbsp;@&nbsp;basis.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Работает&nbsp;в&nbsp;пространстве&nbsp;значений&nbsp;R^m<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Эквивалент&nbsp;nullspace_basis(A.T)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;A&nbsp;=&nbsp;np.array([[1,&nbsp;2],&nbsp;[2,&nbsp;4],&nbsp;[3,&nbsp;6]])&nbsp;&nbsp;#&nbsp;Ранг&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;L&nbsp;=&nbsp;left_nullspace_basis(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;L.shape&nbsp;&nbsp;#&nbsp;(3,&nbsp;2)&nbsp;-&nbsp;базис&nbsp;из&nbsp;2&nbsp;векторов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;np.allclose(A.T&nbsp;@&nbsp;L,&nbsp;0)&nbsp;&nbsp;#&nbsp;Проверка:&nbsp;A^T&nbsp;@&nbsp;y&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;_ensure_inexact(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(A,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;порог&nbsp;для&nbsp;малых&nbsp;сингулярных&nbsp;чисел<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rtol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol&nbsp;=&nbsp;max(A.shape)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;rtol&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;rtol<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ранг&nbsp;матрицы&nbsp;=&nbsp;количество&nbsp;сингулярных&nbsp;чисел&nbsp;больше&nbsp;порога<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Левое&nbsp;нуль-пространство&nbsp;=&nbsp;левые&nbsp;сингулярные&nbsp;векторы&nbsp;соответствующие&nbsp;нулевым&nbsp;σ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;left_null_basis&nbsp;=&nbsp;u[:,&nbsp;rank:]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;left_null_basis<br>
+<br>
+<br>
+def&nbsp;vector_projector(u):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;матрицу&nbsp;ортогонального&nbsp;проектора&nbsp;на&nbsp;направление&nbsp;вектора&nbsp;u.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Проектор&nbsp;P&nbsp;проецирует&nbsp;любой&nbsp;вектор&nbsp;v&nbsp;на&nbsp;направление&nbsp;u:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P&nbsp;@&nbsp;v&nbsp;=&nbsp;proj_u(v)&nbsp;=&nbsp;(u&nbsp;·&nbsp;v&nbsp;/&nbsp;u&nbsp;·&nbsp;u)&nbsp;*&nbsp;u<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u:&nbsp;Вектор-направление&nbsp;размера&nbsp;(n,)&nbsp;или&nbsp;(n,&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;проектора&nbsp;размера&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Raises:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ValueError:&nbsp;Если&nbsp;u&nbsp;-&nbsp;нулевой&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Проектор&nbsp;имеет&nbsp;вид:&nbsp;P&nbsp;=&nbsp;(u&nbsp;@&nbsp;u.T)&nbsp;/&nbsp;(u.T&nbsp;@&nbsp;u)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Свойства:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;@&nbsp;P&nbsp;=&nbsp;P&nbsp;(идемпотентность)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P.T&nbsp;=&nbsp;P&nbsp;(симметричность&nbsp;для&nbsp;вещественных&nbsp;векторов)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;rank(P)&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;trace(P)&nbsp;=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;u&nbsp;=&nbsp;np.array([1.,&nbsp;0.,&nbsp;0.])&nbsp;&nbsp;#&nbsp;Вектор&nbsp;вдоль&nbsp;оси&nbsp;X<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P&nbsp;=&nbsp;vector_projector(u)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v&nbsp;=&nbsp;np.array([3.,&nbsp;4.,&nbsp;5.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P&nbsp;@&nbsp;v&nbsp;&nbsp;#&nbsp;array([3.,&nbsp;0.,&nbsp;0.])&nbsp;-&nbsp;проекция&nbsp;на&nbsp;ось&nbsp;X<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u&nbsp;=&nbsp;numpy.asarray(u)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Приводим&nbsp;к&nbsp;вектору-столбцу<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;u.ndim&nbsp;==&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u&nbsp;=&nbsp;u.reshape(-1,&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;u.ndim&nbsp;==&nbsp;2&nbsp;and&nbsp;u.shape[1]&nbsp;!=&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;u&nbsp;должен&nbsp;быть&nbsp;вектором,&nbsp;получена&nbsp;матрица&nbsp;формы&nbsp;{u.shape}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверка&nbsp;на&nbsp;нулевой&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;norm_sq&nbsp;=&nbsp;numpy.vdot(u,&nbsp;u).real&nbsp;&nbsp;#&nbsp;u^H&nbsp;@&nbsp;u&nbsp;для&nbsp;комплексных&nbsp;векторов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;norm_sq&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Нельзя&nbsp;проецировать&nbsp;на&nbsp;нулевой&nbsp;вектор&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;P&nbsp;=&nbsp;u&nbsp;@&nbsp;u^H&nbsp;/&nbsp;(u^H&nbsp;@&nbsp;u)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(u&nbsp;@&nbsp;u.T.conj())&nbsp;/&nbsp;norm_sq<br>
+<br>
+<br>
+def&nbsp;subspace_projector(*vectors):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;матрицу&nbsp;ортогонального&nbsp;проектора&nbsp;на&nbsp;подпространство,&nbsp;натянутое&nbsp;на&nbsp;векторы.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Проектор&nbsp;P&nbsp;проецирует&nbsp;любой&nbsp;вектор&nbsp;v&nbsp;на&nbsp;подпространство&nbsp;span(u1,&nbsp;u2,&nbsp;...,&nbsp;uk):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P&nbsp;@&nbsp;v&nbsp;=&nbsp;проекция&nbsp;v&nbsp;на&nbsp;span(vectors)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*vectors:&nbsp;Набор&nbsp;векторов,&nbsp;задающих&nbsp;подпространство.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Каждый&nbsp;вектор&nbsp;размера&nbsp;(n,)&nbsp;или&nbsp;(n,&nbsp;1).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Векторы&nbsp;могут&nbsp;быть&nbsp;линейно&nbsp;зависимы&nbsp;(автоматически&nbsp;учитывается).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;проектора&nbsp;размера&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Raises:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ValueError:&nbsp;Если&nbsp;все&nbsp;векторы&nbsp;нулевые&nbsp;или&nbsp;не&nbsp;переданы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Автоматически&nbsp;ортогонализует&nbsp;векторы&nbsp;через&nbsp;SVD<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Ранг&nbsp;проектора&nbsp;=&nbsp;rank(span(vectors))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Работает&nbsp;для&nbsp;любого&nbsp;количества&nbsp;векторов&nbsp;(k-векторы,&nbsp;бивекторы&nbsp;и&nbsp;т.д.)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;1&nbsp;вектора&nbsp;эквивалентно&nbsp;vector_projector()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;2&nbsp;векторов&nbsp;-&nbsp;проектор&nbsp;на&nbsp;плоскость&nbsp;(бивектор)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Проектор&nbsp;на&nbsp;плоскость&nbsp;XY<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;u1&nbsp;=&nbsp;np.array([1.,&nbsp;0.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;u2&nbsp;=&nbsp;np.array([0.,&nbsp;1.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P&nbsp;=&nbsp;subspace_projector(u1,&nbsp;u2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v&nbsp;=&nbsp;np.array([3.,&nbsp;4.,&nbsp;5.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P&nbsp;@&nbsp;v&nbsp;&nbsp;#&nbsp;array([3.,&nbsp;4.,&nbsp;0.])&nbsp;-&nbsp;проекция&nbsp;на&nbsp;XY<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(vectors)&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Необходимо&nbsp;передать&nbsp;хотя&nbsp;бы&nbsp;один&nbsp;вектор&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собираем&nbsp;векторы&nbsp;в&nbsp;матрицу&nbsp;(каждый&nbsp;вектор&nbsp;-&nbsp;строка)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vectors_array&nbsp;=&nbsp;[numpy.asarray(v).flatten()&nbsp;for&nbsp;v&nbsp;in&nbsp;vectors]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;numpy.vstack(vectors_array)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Используем&nbsp;rowspace_projector&nbsp;-&nbsp;он&nbsp;уже&nbsp;делает&nbsp;всё&nbsp;нужное:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-&nbsp;SVD&nbsp;разложение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-&nbsp;Учёт&nbsp;линейной&nbsp;зависимости<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-&nbsp;Ортогонализацию<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;rowspace_projector(A)<br>
+<br>
+<br>
+def&nbsp;orthogonal_complement(P):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;проектор&nbsp;на&nbsp;ортогональное&nbsp;дополнение&nbsp;подпространства.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;P&nbsp;-&nbsp;проектор&nbsp;на&nbsp;подпространство&nbsp;V,&nbsp;то&nbsp;(I&nbsp;-&nbsp;P)&nbsp;-&nbsp;проектор&nbsp;на&nbsp;V⊥.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P:&nbsp;Матрица&nbsp;ортогонального&nbsp;проектора&nbsp;размера&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;проектора&nbsp;на&nbsp;ортогональное&nbsp;дополнение&nbsp;размера&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;P&nbsp;+&nbsp;orthogonal_complement(P)&nbsp;=&nbsp;I<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Работает&nbsp;для&nbsp;любого&nbsp;ортогонального&nbsp;проектора<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;dim(V)&nbsp;+&nbsp;dim(V⊥)&nbsp;=&nbsp;n<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Проектор&nbsp;на&nbsp;ось&nbsp;X<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_x&nbsp;=&nbsp;subspace_projector([1.,&nbsp;0.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_perp&nbsp;=&nbsp;orthogonal_complement(P_x)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;P_perp&nbsp;проецирует&nbsp;на&nbsp;плоскость&nbsp;YZ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P&nbsp;=&nbsp;numpy.asarray(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;P.shape[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.eye(n,&nbsp;dtype=P.dtype)&nbsp;-&nbsp;P<br>
+<br>
+<br>
+def&nbsp;is_in_subspace(v,&nbsp;P,&nbsp;tol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Проверяет,&nbsp;принадлежит&nbsp;ли&nbsp;вектор&nbsp;подпространству.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Вектор&nbsp;v&nbsp;∈&nbsp;V&nbsp;&lt;=&gt;&nbsp;P&nbsp;@&nbsp;v&nbsp;=&nbsp;v&nbsp;(проекция&nbsp;совпадает&nbsp;с&nbsp;исходным&nbsp;вектором).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v:&nbsp;Вектор&nbsp;размера&nbsp;(n,)&nbsp;или&nbsp;(n,&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P:&nbsp;Проектор&nbsp;на&nbsp;подпространство&nbsp;V,&nbsp;размер&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol:&nbsp;Порог&nbsp;для&nbsp;сравнения&nbsp;||P&nbsp;@&nbsp;v&nbsp;-&nbsp;v||.&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;sqrt(n)&nbsp;*&nbsp;машинная_точность&nbsp;*&nbsp;||v||<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;True&nbsp;если&nbsp;v&nbsp;∈&nbsp;V,&nbsp;False&nbsp;иначе<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Численно&nbsp;устойчиво&nbsp;для&nbsp;малых&nbsp;возмущений<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;нулевого&nbsp;вектора&nbsp;всегда&nbsp;возвращает&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_xy&nbsp;=&nbsp;subspace_projector([1,0,0],&nbsp;[0,1,0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;is_in_subspace([3,&nbsp;4,&nbsp;0],&nbsp;P_xy)&nbsp;&nbsp;#&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;is_in_subspace([3,&nbsp;4,&nbsp;5],&nbsp;P_xy)&nbsp;&nbsp;#&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;numpy.asarray(v).flatten()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P&nbsp;=&nbsp;numpy.asarray(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проецируем&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;projected&nbsp;=&nbsp;P&nbsp;@&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вычисляем&nbsp;разность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;diff&nbsp;=&nbsp;projected&nbsp;-&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;diff_norm&nbsp;=&nbsp;numpy.linalg.norm(diff)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Порог&nbsp;по&nbsp;умолчанию<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;tol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v_norm&nbsp;=&nbsp;numpy.linalg.norm(v)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;v_norm&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;True&nbsp;&nbsp;#&nbsp;Нулевой&nbsp;вектор&nbsp;всегда&nbsp;в&nbsp;подпространстве<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;numpy.sqrt(len(v))&nbsp;*&nbsp;numpy.finfo(P.dtype).eps&nbsp;*&nbsp;v_norm<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;diff_norm&nbsp;&lt;=&nbsp;tol<br>
+<br>
+<br>
+def&nbsp;subspace_dimension(P,&nbsp;tol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;размерность&nbsp;подпространства,&nbsp;заданного&nbsp;проектором.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Размерность&nbsp;=&nbsp;ранг&nbsp;проектора&nbsp;=&nbsp;след&nbsp;проектора.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P:&nbsp;Проектор&nbsp;на&nbsp;подпространство,&nbsp;размер&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol:&nbsp;Порог&nbsp;для&nbsp;определения&nbsp;ненулевых&nbsp;сингулярных&nbsp;чисел.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;n&nbsp;*&nbsp;машинная_точность&nbsp;*&nbsp;max(сингулярное_число)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Целое&nbsp;число&nbsp;-&nbsp;размерность&nbsp;подпространства&nbsp;(0&nbsp;≤&nbsp;dim&nbsp;≤&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;ортогонального&nbsp;проектора:&nbsp;dim&nbsp;=&nbsp;rank(P)&nbsp;=&nbsp;trace(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Численно&nbsp;более&nbsp;устойчиво&nbsp;использовать&nbsp;ранг,&nbsp;а&nbsp;не&nbsp;след<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_xy&nbsp;=&nbsp;subspace_projector([1,0,0],&nbsp;[0,1,0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;subspace_dimension(P_xy)&nbsp;&nbsp;#&nbsp;2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_x&nbsp;=&nbsp;vector_projector([1,0,0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;subspace_dimension(P_x)&nbsp;&nbsp;#&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P&nbsp;=&nbsp;numpy.asarray(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вычисляем&nbsp;ранг&nbsp;через&nbsp;SVD<br>
+&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;numpy.linalg.svd(P,&nbsp;compute_uv=False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;tol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;max(P.shape)&nbsp;*&nbsp;numpy.finfo(P.dtype).eps&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;int(rank)<br>
+<br>
+<br>
+def&nbsp;gram_schmidt(*vectors,&nbsp;tol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Ортогонализует&nbsp;набор&nbsp;векторов&nbsp;классическим&nbsp;методом&nbsp;Грама-Шмидта.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Итеративно&nbsp;строит&nbsp;ортогональный&nbsp;базис:&nbsp;каждый&nbsp;следующий&nbsp;вектор&nbsp;ортогонализуется<br>
+&nbsp;&nbsp;&nbsp;&nbsp;относительно&nbsp;всех&nbsp;предыдущих&nbsp;путём&nbsp;вычитания&nbsp;проекций.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*vectors:&nbsp;Набор&nbsp;векторов&nbsp;для&nbsp;ортогонализации.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Каждый&nbsp;вектор&nbsp;размера&nbsp;(n,)&nbsp;или&nbsp;(n,&nbsp;1).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol:&nbsp;Порог&nbsp;для&nbsp;определения&nbsp;нулевых&nbsp;векторов&nbsp;(линейная&nbsp;зависимость).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;машинная_точность&nbsp;*&nbsp;10<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Массив&nbsp;формы&nbsp;(n,&nbsp;k),&nbsp;где&nbsp;k&nbsp;≤&nbsp;len(vectors)&nbsp;-&nbsp;количество&nbsp;линейно&nbsp;независимых&nbsp;векторов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Столбцы&nbsp;образуют&nbsp;ортонормированный&nbsp;базис&nbsp;span(vectors).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;все&nbsp;векторы&nbsp;линейно&nbsp;зависимы,&nbsp;возвращает&nbsp;массив&nbsp;формы&nbsp;(n,&nbsp;0).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Классический&nbsp;алгоритм&nbsp;Грама-Шмидта&nbsp;(не&nbsp;модифицированный)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Численно&nbsp;менее&nbsp;стабилен&nbsp;чем&nbsp;SVD,&nbsp;особенно&nbsp;для&nbsp;почти&nbsp;коллинеарных&nbsp;векторов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Порядок&nbsp;векторов&nbsp;критичен:&nbsp;первые&nbsp;векторы&nbsp;определяют&nbsp;базис<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;комплексных&nbsp;векторов&nbsp;использует&nbsp;эрмитово&nbsp;скалярное&nbsp;произведение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Algorithm:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u₁&nbsp;=&nbsp;v₁&nbsp;/&nbsp;||v₁||<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u₂&nbsp;=&nbsp;(v₂&nbsp;-&nbsp;⟨v₂,&nbsp;u₁⟩u₁)&nbsp;/&nbsp;||v₂&nbsp;-&nbsp;⟨v₂,&nbsp;u₁⟩u₁||<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u₃&nbsp;=&nbsp;(v₃&nbsp;-&nbsp;⟨v₃,&nbsp;u₁⟩u₁&nbsp;-&nbsp;⟨v₃,&nbsp;u₂⟩u₂)&nbsp;/&nbsp;||...||<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v1&nbsp;=&nbsp;np.array([1.,&nbsp;1.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v2&nbsp;=&nbsp;np.array([1.,&nbsp;0.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Q&nbsp;=&nbsp;gram_schmidt(v1,&nbsp;v2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;np.allclose(Q.T&nbsp;@&nbsp;Q,&nbsp;np.eye(2))&nbsp;&nbsp;#&nbsp;Ортонормированность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(vectors)&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Необходимо&nbsp;передать&nbsp;хотя&nbsp;бы&nbsp;один&nbsp;вектор&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Порог&nbsp;по&nbsp;умолчанию<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;tol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;10&nbsp;*&nbsp;numpy.finfo(float).eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Преобразуем&nbsp;векторы&nbsp;в&nbsp;массивы-столбцы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vectors_list&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;v&nbsp;in&nbsp;vectors:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v_arr&nbsp;=&nbsp;numpy.asarray(v).flatten()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;len(v_arr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;len(v_arr)&nbsp;!=&nbsp;n:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Все&nbsp;векторы&nbsp;должны&nbsp;иметь&nbsp;одинаковую&nbsp;размерность,&nbsp;получены&nbsp;{n}&nbsp;и&nbsp;{len(v_arr)}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vectors_list.append(v_arr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ортогонализация<br>
+&nbsp;&nbsp;&nbsp;&nbsp;orthonormal_basis&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;v&nbsp;in&nbsp;vectors_list:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Начинаем&nbsp;с&nbsp;исходного&nbsp;вектора<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u&nbsp;=&nbsp;v.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вычитаем&nbsp;проекции&nbsp;на&nbsp;все&nbsp;предыдущие&nbsp;ортонормированные&nbsp;векторы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;q&nbsp;in&nbsp;orthonormal_basis:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проекция:&nbsp;proj_q(u)&nbsp;=&nbsp;⟨u,&nbsp;q⟩&nbsp;q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Для&nbsp;комплексных:&nbsp;используем&nbsp;vdot&nbsp;(сопряжённое&nbsp;скалярное&nbsp;произведение)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;projection_coef&nbsp;=&nbsp;numpy.vdot(q,&nbsp;u)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u&nbsp;=&nbsp;u&nbsp;-&nbsp;projection_coef&nbsp;*&nbsp;q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нормализуем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;norm&nbsp;=&nbsp;numpy.linalg.norm(u)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;вектор&nbsp;стал&nbsp;нулевым&nbsp;(линейно&nbsp;зависим&nbsp;от&nbsp;предыдущих),&nbsp;пропускаем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;norm&nbsp;&gt;&nbsp;tol:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u_normalized&nbsp;=&nbsp;u&nbsp;/&nbsp;norm<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;orthonormal_basis.append(u_normalized)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;нет&nbsp;независимых&nbsp;векторов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(orthonormal_basis)&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.empty((n,&nbsp;0),&nbsp;dtype=vectors_list[0].dtype)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собираем&nbsp;в&nbsp;матрицу&nbsp;(векторы&nbsp;=&nbsp;столбцы)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Q&nbsp;=&nbsp;numpy.column_stack(orthonormal_basis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Q<br>
+<br>
+<br>
+def&nbsp;orthogonalize_svd(*vectors,&nbsp;tol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Ортогонализует&nbsp;набор&nbsp;векторов&nbsp;через&nbsp;SVD&nbsp;разложение.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Строит&nbsp;ортонормированный&nbsp;базис&nbsp;подпространства,&nbsp;натянутого&nbsp;на&nbsp;входные&nbsp;векторы,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;используя&nbsp;сингулярное&nbsp;разложение&nbsp;(SVD).&nbsp;Численно&nbsp;более&nbsp;стабильный&nbsp;метод,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;чем&nbsp;классический&nbsp;Грам-Шмидт.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*vectors:&nbsp;Набор&nbsp;векторов&nbsp;для&nbsp;ортогонализации.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Каждый&nbsp;вектор&nbsp;размера&nbsp;(n,)&nbsp;или&nbsp;(n,&nbsp;1).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol:&nbsp;Относительный&nbsp;порог&nbsp;для&nbsp;определения&nbsp;линейной&nbsp;зависимости.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;max(размеры)&nbsp;*&nbsp;машинная_точность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Массив&nbsp;формы&nbsp;(n,&nbsp;k),&nbsp;где&nbsp;k&nbsp;≤&nbsp;len(vectors)&nbsp;-&nbsp;количество&nbsp;линейно&nbsp;независимых&nbsp;векторов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Столбцы&nbsp;образуют&nbsp;ортонормированный&nbsp;базис&nbsp;span(vectors).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;все&nbsp;векторы&nbsp;нулевые&nbsp;или&nbsp;линейно&nbsp;зависимые&nbsp;от&nbsp;нуля,&nbsp;возвращает&nbsp;массив&nbsp;формы&nbsp;(n,&nbsp;0).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Использует&nbsp;SVD&nbsp;для&nbsp;численной&nbsp;устойчивости<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Порядок&nbsp;векторов&nbsp;НЕ&nbsp;влияет&nbsp;на&nbsp;базис&nbsp;(в&nbsp;отличие&nbsp;от&nbsp;Грама-Шмидта)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;SVD&nbsp;выбирает&nbsp;&quot;наилучший&quot;&nbsp;базис&nbsp;(главные&nbsp;направления)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Векторы&nbsp;базиса&nbsp;ортонормированы:&nbsp;Q.T&nbsp;@&nbsp;Q&nbsp;=&nbsp;I<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;получения&nbsp;проектора:&nbsp;P&nbsp;=&nbsp;Q&nbsp;@&nbsp;Q.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Более&nbsp;медленный,&nbsp;но&nbsp;более&nbsp;точный&nbsp;чем&nbsp;Грам-Шмидт<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v1&nbsp;=&nbsp;np.array([3.,&nbsp;4.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v2&nbsp;=&nbsp;np.array([1.,&nbsp;0.,&nbsp;1.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Q&nbsp;=&nbsp;orthogonalize_svd(v1,&nbsp;v2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Q.shape&nbsp;&nbsp;#&nbsp;(3,&nbsp;2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;np.allclose(Q.T&nbsp;@&nbsp;Q,&nbsp;np.eye(2))&nbsp;&nbsp;#&nbsp;Ортонормированность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Линейно&nbsp;зависимые&nbsp;векторы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v1&nbsp;=&nbsp;np.array([1.,&nbsp;0.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v2&nbsp;=&nbsp;np.array([2.,&nbsp;0.,&nbsp;0.])&nbsp;&nbsp;#&nbsp;v2&nbsp;=&nbsp;2*v1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Q&nbsp;=&nbsp;orthogonalize_svd(v1,&nbsp;v2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Q.shape&nbsp;&nbsp;#&nbsp;(3,&nbsp;1)&nbsp;-&nbsp;только&nbsp;один&nbsp;независимый&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;len(vectors)&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(&quot;Необходимо&nbsp;передать&nbsp;хотя&nbsp;бы&nbsp;один&nbsp;вектор&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Преобразуем&nbsp;векторы&nbsp;в&nbsp;массив&nbsp;(векторы&nbsp;=&nbsp;строки)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vectors_array&nbsp;=&nbsp;[numpy.asarray(v).flatten()&nbsp;for&nbsp;v&nbsp;in&nbsp;vectors]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;numpy.vstack(vectors_array)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;SVD&nbsp;разложение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(A,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;порог&nbsp;для&nbsp;линейной&nbsp;независимости<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;tol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;max(A.shape)&nbsp;*&nbsp;numpy.finfo(A.dtype).eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;threshold&nbsp;=&nbsp;tol&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;tol<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ранг&nbsp;=&nbsp;количество&nbsp;значимых&nbsp;сингулярных&nbsp;чисел<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;threshold)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ортонормированный&nbsp;базис&nbsp;=&nbsp;правые&nbsp;сингулярные&nbsp;векторы&nbsp;для&nbsp;ненулевых&nbsp;σ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Транспонируем,&nbsp;чтобы&nbsp;векторы&nbsp;были&nbsp;столбцами<br>
+&nbsp;&nbsp;&nbsp;&nbsp;orthonormal_basis&nbsp;=&nbsp;vh[:rank].T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;orthonormal_basis<br>
+<br>
+<br>
+def&nbsp;orthogonalize(*vectors,&nbsp;method='svd',&nbsp;tol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Ортогонализует&nbsp;набор&nbsp;векторов&nbsp;одним&nbsp;из&nbsp;двух&nbsp;методов.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Универсальная&nbsp;функция&nbsp;ортогонализации&nbsp;с&nbsp;выбором&nbsp;метода.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*vectors:&nbsp;Набор&nbsp;векторов&nbsp;для&nbsp;ортогонализации.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Каждый&nbsp;вектор&nbsp;размера&nbsp;(n,)&nbsp;или&nbsp;(n,&nbsp;1).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;method:&nbsp;Метод&nbsp;ортогонализации:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;'svd':&nbsp;SVD&nbsp;разложение&nbsp;(по&nbsp;умолчанию,&nbsp;более&nbsp;стабильный)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;'gram_schmidt'&nbsp;или&nbsp;'gs':&nbsp;классический&nbsp;Грам-Шмидт<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol:&nbsp;Порог&nbsp;для&nbsp;определения&nbsp;линейной&nbsp;зависимости.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Интерпретация&nbsp;зависит&nbsp;от&nbsp;метода.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Массив&nbsp;формы&nbsp;(n,&nbsp;k),&nbsp;где&nbsp;k&nbsp;≤&nbsp;len(vectors).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Столбцы&nbsp;образуют&nbsp;ортонормированный&nbsp;базис&nbsp;span(vectors).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;SVD:&nbsp;численно&nbsp;стабильный,&nbsp;базис&nbsp;не&nbsp;зависит&nbsp;от&nbsp;порядка&nbsp;векторов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Грам-Шмидт:&nbsp;быстрее,&nbsp;но&nbsp;менее&nbsp;стабильный,&nbsp;порядок&nbsp;векторов&nbsp;важен<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v1&nbsp;=&nbsp;np.array([1.,&nbsp;1.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;v2&nbsp;=&nbsp;np.array([1.,&nbsp;0.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Q_svd&nbsp;=&nbsp;orthogonalize(v1,&nbsp;v2,&nbsp;method='svd')<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Q_gs&nbsp;=&nbsp;orthogonalize(v1,&nbsp;v2,&nbsp;method='gram_schmidt')<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Оба&nbsp;ортонормированы,&nbsp;но&nbsp;могут&nbsp;давать&nbsp;разные&nbsp;базисы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;method&nbsp;in&nbsp;('svd',&nbsp;'SVD'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;orthogonalize_svd(*vectors,&nbsp;tol=tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;method&nbsp;in&nbsp;('gram_schmidt',&nbsp;'gs',&nbsp;'GS',&nbsp;'Gram-Schmidt'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;gram_schmidt(*vectors,&nbsp;tol=tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Неизвестный&nbsp;метод:&nbsp;{method}.&nbsp;Используйте&nbsp;'svd'&nbsp;или&nbsp;'gram_schmidt'&quot;)<br>
+<br>
+<br>
+def&nbsp;is_projector(P,&nbsp;tol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Проверяет,&nbsp;является&nbsp;ли&nbsp;матрица&nbsp;ортогональным&nbsp;проектором.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Ортогональный&nbsp;проектор&nbsp;должен&nbsp;удовлетворять&nbsp;двум&nbsp;условиям:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;1.&nbsp;Идемпотентность:&nbsp;P&nbsp;@&nbsp;P&nbsp;=&nbsp;P<br>
+&nbsp;&nbsp;&nbsp;&nbsp;2.&nbsp;Эрмитовость:&nbsp;P^H&nbsp;=&nbsp;P&nbsp;(для&nbsp;вещественных&nbsp;матриц:&nbsp;P.T&nbsp;=&nbsp;P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P:&nbsp;Матрица&nbsp;для&nbsp;проверки,&nbsp;размер&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol:&nbsp;Порог&nbsp;для&nbsp;численного&nbsp;сравнения.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;sqrt(n)&nbsp;*&nbsp;машинная_точность&nbsp;*&nbsp;||P||<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;True&nbsp;если&nbsp;P&nbsp;-&nbsp;ортогональный&nbsp;проектор,&nbsp;False&nbsp;иначе<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Проверяет&nbsp;обе&nbsp;необходимые&nbsp;характеристики&nbsp;проектора<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Учитывает&nbsp;численные&nbsp;погрешности&nbsp;через&nbsp;параметр&nbsp;tol<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;нулевой&nbsp;матрицы&nbsp;возвращает&nbsp;True&nbsp;(проектор&nbsp;на&nbsp;{0})<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Дополнительно&nbsp;проверяется,&nbsp;что&nbsp;сингулярные&nbsp;числа&nbsp;≈&nbsp;0&nbsp;или&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Проектор&nbsp;на&nbsp;ось&nbsp;X<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P&nbsp;=&nbsp;vector_projector([1.,&nbsp;0.,&nbsp;0.])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;is_projector(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Обычная&nbsp;матрица&nbsp;(не&nbsp;проектор)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;A&nbsp;=&nbsp;np.array([[1,&nbsp;2],&nbsp;[3,&nbsp;4]])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;is_projector(A)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Проектор&nbsp;на&nbsp;плоскость<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P&nbsp;=&nbsp;subspace_projector([1,0,0],&nbsp;[0,1,0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;is_projector(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P&nbsp;=&nbsp;numpy.asarray(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверка&nbsp;квадратности<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;P.ndim&nbsp;!=&nbsp;2&nbsp;or&nbsp;P.shape[0]&nbsp;!=&nbsp;P.shape[1]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;=&nbsp;P.shape[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Конвертируем&nbsp;в&nbsp;float&nbsp;для&nbsp;корректной&nbsp;работы&nbsp;с&nbsp;numpy.finfo<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P&nbsp;=&nbsp;_ensure_inexact(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;порог<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;tol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P_norm&nbsp;=&nbsp;numpy.linalg.norm(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;P_norm&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;True&nbsp;&nbsp;#&nbsp;Нулевая&nbsp;матрица&nbsp;-&nbsp;проектор&nbsp;на&nbsp;{0}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;numpy.sqrt(n)&nbsp;*&nbsp;numpy.finfo(P.dtype).eps&nbsp;*&nbsp;P_norm<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;1.&nbsp;Проверка&nbsp;идемпотентности:&nbsp;P&nbsp;@&nbsp;P&nbsp;=&nbsp;P<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P_squared&nbsp;=&nbsp;P&nbsp;@&nbsp;P<br>
+&nbsp;&nbsp;&nbsp;&nbsp;idempotent&nbsp;=&nbsp;numpy.allclose(P_squared,&nbsp;P,&nbsp;atol=tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;idempotent:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;2.&nbsp;Проверка&nbsp;эрмитовости:&nbsp;P^H&nbsp;=&nbsp;P<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P_hermitian&nbsp;=&nbsp;P.T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;hermitian&nbsp;=&nbsp;numpy.allclose(P_hermitian,&nbsp;P,&nbsp;atol=tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;hermitian:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;3.&nbsp;Дополнительная&nbsp;проверка:&nbsp;сингулярные&nbsp;числа&nbsp;должны&nbsp;быть&nbsp;0&nbsp;или&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;numpy.linalg.svd(P,&nbsp;compute_uv=False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Более&nbsp;мягкий&nbsp;tolerance&nbsp;для&nbsp;сингулярных&nbsp;чисел<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;(SVD&nbsp;может&nbsp;давать&nbsp;разную&nbsp;точность&nbsp;на&nbsp;разных&nbsp;версиях&nbsp;NumPy/Python)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;svd_tol&nbsp;=&nbsp;max(tol,&nbsp;10&nbsp;*&nbsp;numpy.finfo(P.dtype).eps&nbsp;*&nbsp;P_norm)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверяем,&nbsp;что&nbsp;каждое&nbsp;сингулярное&nbsp;число&nbsp;близко&nbsp;либо&nbsp;к&nbsp;0,&nbsp;либо&nbsp;к&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;sigma&nbsp;in&nbsp;s:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Расстояние&nbsp;до&nbsp;ближайшего&nbsp;из&nbsp;{0,&nbsp;1}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;distance_to_binary&nbsp;=&nbsp;min(abs(sigma&nbsp;-&nbsp;0.0),&nbsp;abs(sigma&nbsp;-&nbsp;1.0))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;distance_to_binary&nbsp;&gt;&nbsp;svd_tol:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;True<br>
+<br>
+<br>
+def&nbsp;projector_basis(P,&nbsp;rtol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Извлекает&nbsp;ортонормированный&nbsp;базис&nbsp;подпространства&nbsp;из&nbsp;проектора.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;проектора&nbsp;P&nbsp;на&nbsp;подпространство&nbsp;V&nbsp;возвращает&nbsp;матрицу&nbsp;Q,&nbsp;столбцы&nbsp;которой<br>
+&nbsp;&nbsp;&nbsp;&nbsp;образуют&nbsp;ортонормированный&nbsp;базис&nbsp;V.&nbsp;Обратная&nbsp;операция:&nbsp;P&nbsp;=&nbsp;Q&nbsp;@&nbsp;Q.T<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P:&nbsp;Ортогональный&nbsp;проектор&nbsp;на&nbsp;подпространство,&nbsp;размер&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol:&nbsp;Относительный&nbsp;порог&nbsp;для&nbsp;определения&nbsp;ранга&nbsp;проектора.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;max(n)&nbsp;*&nbsp;машинная_точность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;размера&nbsp;(n,&nbsp;k)&nbsp;где&nbsp;k&nbsp;=&nbsp;dim(V)&nbsp;=&nbsp;rank(P).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Столбцы&nbsp;образуют&nbsp;ортонормированный&nbsp;базис&nbsp;подпространства.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;P&nbsp;=&nbsp;0&nbsp;(тривиальное&nbsp;подпространство),&nbsp;возвращает&nbsp;массив&nbsp;формы&nbsp;(n,&nbsp;0).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Использует&nbsp;SVD&nbsp;разложение&nbsp;проектора<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Базис&nbsp;извлекается&nbsp;из&nbsp;правых&nbsp;сингулярных&nbsp;векторов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Векторы&nbsp;ортонормированы:&nbsp;Q.T&nbsp;@&nbsp;Q&nbsp;=&nbsp;I_k<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Проверка:&nbsp;P&nbsp;≈&nbsp;Q&nbsp;@&nbsp;Q.T&nbsp;(с&nbsp;точностью&nbsp;до&nbsp;численных&nbsp;ошибок)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Создаём&nbsp;проектор&nbsp;на&nbsp;плоскость&nbsp;XY<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P&nbsp;=&nbsp;subspace_projector([1,0,0],&nbsp;[0,1,0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Q&nbsp;=&nbsp;projector_basis(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;Q.shape&nbsp;&nbsp;#&nbsp;(3,&nbsp;2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;np.allclose(P,&nbsp;Q&nbsp;@&nbsp;Q.T)&nbsp;&nbsp;#&nbsp;Восстановление&nbsp;проектора<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P&nbsp;=&nbsp;numpy.asarray(P)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;SVD&nbsp;разложение&nbsp;проектора<br>
+&nbsp;&nbsp;&nbsp;&nbsp;u,&nbsp;s,&nbsp;vh&nbsp;=&nbsp;numpy.linalg.svd(P,&nbsp;full_matrices=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;порог<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rtol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rtol&nbsp;=&nbsp;max(P.shape)&nbsp;*&nbsp;numpy.finfo(P.dtype).eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;threshold&nbsp;=&nbsp;rtol&nbsp;*&nbsp;s[0]&nbsp;if&nbsp;s.size&nbsp;&gt;&nbsp;0&nbsp;else&nbsp;rtol<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Ранг&nbsp;=&nbsp;количество&nbsp;значимых&nbsp;сингулярных&nbsp;чисел<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;numpy.sum(s&nbsp;&gt;&nbsp;threshold)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rank&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Тривиальное&nbsp;подпространство&nbsp;{0}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.empty((P.shape[0],&nbsp;0),&nbsp;dtype=P.dtype)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Базис&nbsp;=&nbsp;правые&nbsp;сингулярные&nbsp;векторы&nbsp;для&nbsp;ненулевых&nbsp;σ<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;(транспонируем,&nbsp;чтобы&nbsp;векторы&nbsp;были&nbsp;столбцами)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;basis&nbsp;=&nbsp;vh[:rank].T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;basis<br>
+<br>
+<br>
+def&nbsp;subspace_intersection(P1,&nbsp;P2,&nbsp;tol=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;проектор&nbsp;на&nbsp;пересечение&nbsp;двух&nbsp;подпространств.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Вычисляет&nbsp;проектор&nbsp;на&nbsp;V1&nbsp;∩&nbsp;V2,&nbsp;где&nbsp;V1&nbsp;и&nbsp;V2&nbsp;заданы&nbsp;проекторами&nbsp;P1&nbsp;и&nbsp;P2.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Использует&nbsp;метод&nbsp;через&nbsp;нуль-пространство:&nbsp;V1&nbsp;∩&nbsp;V2&nbsp;=&nbsp;V1&nbsp;∩&nbsp;ker(I&nbsp;-&nbsp;P2).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P1:&nbsp;Проектор&nbsp;на&nbsp;первое&nbsp;подпространство&nbsp;V1,&nbsp;размер&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P2:&nbsp;Проектор&nbsp;на&nbsp;второе&nbsp;подпространство&nbsp;V2,&nbsp;размер&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol:&nbsp;Порог&nbsp;для&nbsp;определения&nbsp;линейной&nbsp;зависимости.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию:&nbsp;max(n)&nbsp;*&nbsp;машинная_точность<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Матрица&nbsp;проектора&nbsp;на&nbsp;пересечение&nbsp;V1&nbsp;∩&nbsp;V2,&nbsp;размер&nbsp;(n,&nbsp;n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Notes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Если&nbsp;подпространства&nbsp;не&nbsp;пересекаются&nbsp;(только&nbsp;в&nbsp;0),&nbsp;возвращает&nbsp;нулевой&nbsp;проектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Метод:&nbsp;находим&nbsp;базис&nbsp;V1,&nbsp;проецируем&nbsp;на&nbsp;V2,&nbsp;ищем&nbsp;векторы,&nbsp;оставшиеся&nbsp;в&nbsp;V1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Математически:&nbsp;v&nbsp;∈&nbsp;V1&nbsp;∩&nbsp;V2&nbsp;⟺&nbsp;v&nbsp;∈&nbsp;V1&nbsp;и&nbsp;P2&nbsp;@&nbsp;v&nbsp;=&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;dim(V1&nbsp;∩&nbsp;V2)&nbsp;≤&nbsp;min(dim(V1),&nbsp;dim(V2))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Для&nbsp;ортогональных&nbsp;подпространств:&nbsp;V1&nbsp;∩&nbsp;V2&nbsp;=&nbsp;{0}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Examples:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Плоскость&nbsp;XY&nbsp;и&nbsp;плоскость&nbsp;XZ&nbsp;пересекаются&nbsp;по&nbsp;оси&nbsp;X<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_xy&nbsp;=&nbsp;subspace_projector([1,0,0],&nbsp;[0,1,0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_xz&nbsp;=&nbsp;subspace_projector([1,0,0],&nbsp;[0,0,1])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_x&nbsp;=&nbsp;subspace_intersection(P_xy,&nbsp;P_xz)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;P_x&nbsp;-&nbsp;проектор&nbsp;на&nbsp;ось&nbsp;X&nbsp;(dim&nbsp;=&nbsp;1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;Ортогональные&nbsp;подпространства<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_x&nbsp;=&nbsp;vector_projector([1,0,0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_y&nbsp;=&nbsp;vector_projector([0,1,0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;P_int&nbsp;=&nbsp;subspace_intersection(P_x,&nbsp;P_y)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&gt;&gt;&nbsp;#&nbsp;P_int&nbsp;≈&nbsp;0&nbsp;(пересечение&nbsp;пустое)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P1&nbsp;=&nbsp;numpy.asarray(P1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P2&nbsp;=&nbsp;numpy.asarray(P2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;P1.shape&nbsp;!=&nbsp;P2.shape:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Проекторы&nbsp;должны&nbsp;иметь&nbsp;одинаковый&nbsp;размер,&nbsp;получены&nbsp;{P1.shape}&nbsp;и&nbsp;{P2.shape}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Извлекаем&nbsp;базис&nbsp;V1&nbsp;из&nbsp;проектора&nbsp;P1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;basis1&nbsp;=&nbsp;projector_basis(P1,&nbsp;rtol=tol)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;basis1.size&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;V1&nbsp;=&nbsp;{0},&nbsp;пересечение&nbsp;пустое<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.zeros_like(P1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проецируем&nbsp;базисные&nbsp;векторы&nbsp;V1&nbsp;на&nbsp;V2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вектор&nbsp;v&nbsp;∈&nbsp;V1&nbsp;лежит&nbsp;в&nbsp;V1&nbsp;∩&nbsp;V2&nbsp;⟺&nbsp;P2&nbsp;@&nbsp;v&nbsp;=&nbsp;v<br>
+&nbsp;&nbsp;&nbsp;&nbsp;projected_basis&nbsp;=&nbsp;P2&nbsp;@&nbsp;basis1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Разность:&nbsp;(P2&nbsp;@&nbsp;v&nbsp;-&nbsp;v)&nbsp;должна&nbsp;быть&nbsp;нулевой&nbsp;для&nbsp;векторов&nbsp;из&nbsp;пересечения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;diff&nbsp;=&nbsp;projected_basis&nbsp;-&nbsp;basis1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Находим&nbsp;нуль-пространство&nbsp;diff&nbsp;(линейные&nbsp;комбинации&nbsp;столбцов&nbsp;basis1,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;которые&nbsp;не&nbsp;изменяются&nbsp;при&nbsp;проекции&nbsp;на&nbsp;V2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;diff&nbsp;@&nbsp;c&nbsp;≈&nbsp;0&nbsp;&nbsp;=&gt;&nbsp;&nbsp;c&nbsp;задаёт&nbsp;вектор&nbsp;из&nbsp;пересечения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Определяем&nbsp;абсолютный&nbsp;порог&nbsp;для&nbsp;сингулярных&nbsp;чисел<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Используем&nbsp;норму&nbsp;базиса&nbsp;как&nbsp;характерный&nbsp;масштаб<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;tol&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tol&nbsp;=&nbsp;max(P1.shape)&nbsp;*&nbsp;numpy.finfo(P1.dtype).eps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Абсолютный&nbsp;порог&nbsp;учитывает&nbsp;масштаб&nbsp;задачи<br>
+&nbsp;&nbsp;&nbsp;&nbsp;threshold&nbsp;=&nbsp;tol&nbsp;*&nbsp;max(1.0,&nbsp;numpy.linalg.norm(basis1))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Используем&nbsp;существующую&nbsp;функцию&nbsp;с&nbsp;абсолютным&nbsp;порогом<br>
+&nbsp;&nbsp;&nbsp;&nbsp;null_coefs&nbsp;=&nbsp;nullspace_basis(diff,&nbsp;atol=threshold)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;null_coefs.size&nbsp;==&nbsp;0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пересечение&nbsp;пустое&nbsp;(только&nbsp;нулевой&nbsp;вектор)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.zeros_like(P1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Строим&nbsp;базис&nbsp;пересечения:&nbsp;линейные&nbsp;комбинации&nbsp;basis1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;intersection_basis&nbsp;=&nbsp;basis1&nbsp;@&nbsp;null_coefs<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проектор&nbsp;=&nbsp;базис&nbsp;@&nbsp;базис^H<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;intersection_basis&nbsp;@&nbsp;intersection_basis.T.conj()<br>
+<br>
+<br>
+def&nbsp;project_onto_affine(x,&nbsp;C,&nbsp;b):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;ортогональную&nbsp;проекцию&nbsp;вектора&nbsp;x&nbsp;на&nbsp;аффинное&nbsp;множество,&nbsp;заданное&nbsp;C&nbsp;@&nbsp;y&nbsp;=&nbsp;b.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x:&nbsp;Вектор&nbsp;размера&nbsp;(n,)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C:&nbsp;Линейно-независимая&nbsp;матрица&nbsp;размера&nbsp;(m,&nbsp;n),&nbsp;задающая&nbsp;линейное&nbsp;отображение<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b:&nbsp;Вектор&nbsp;размера&nbsp;(m,),&nbsp;задающий&nbsp;сдвиг&nbsp;аффинного&nbsp;множества<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вектор&nbsp;размера&nbsp;(n,)&nbsp;-&nbsp;проекция&nbsp;x&nbsp;на&nbsp;множество&nbsp;{y&nbsp;|&nbsp;C&nbsp;@&nbsp;y&nbsp;=&nbsp;b}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;numpy.asarray(x).flatten()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;=&nbsp;numpy.asarray(C)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;numpy.asarray(b).flatten()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;C.shape[0]&nbsp;!=&nbsp;b.shape[0]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Размерность&nbsp;b&nbsp;должна&nbsp;соответствовать&nbsp;числу&nbsp;строк&nbsp;C,&nbsp;получены&nbsp;{C.shape[0]}&nbsp;и&nbsp;{b.shape[0]}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;C.shape[1]&nbsp;!=&nbsp;x.shape[0]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Размерность&nbsp;x&nbsp;должна&nbsp;соответствовать&nbsp;числу&nbsp;столбцов&nbsp;C,&nbsp;получены&nbsp;{C.shape[1]}&nbsp;и&nbsp;{x.shape[0]}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Ct&nbsp;=&nbsp;C.T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;CCt_inv&nbsp;=&nbsp;numpy.linalg.pinv(C&nbsp;@&nbsp;Ct)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;projection&nbsp;=&nbsp;x&nbsp;-&nbsp;Ct&nbsp;@&nbsp;(CCt_inv&nbsp;@&nbsp;(C&nbsp;@&nbsp;x&nbsp;-&nbsp;b))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;projection<br>
+<br>
+def&nbsp;affine_projector(C,&nbsp;b):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;проектор&nbsp;на&nbsp;аффинное&nbsp;множество&nbsp;A,&nbsp;заданное&nbsp;C&nbsp;@&nbsp;y&nbsp;=&nbsp;b&nbsp;и&nbsp;вектор&nbsp;смещения&nbsp;B:<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Решение&nbsp;следует&nbsp;подставлять&nbsp;в&nbsp;форму&nbsp;x^&nbsp;=&nbsp;x&nbsp;-&nbsp;(A.x&nbsp;-&nbsp;B).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Здесь<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;C.T&nbsp;@&nbsp;(C&nbsp;@&nbsp;C.T)^(-1)&nbsp;@&nbsp;C<br>
+&nbsp;&nbsp;&nbsp;&nbsp;B&nbsp;=&nbsp;C.T&nbsp;@&nbsp;(C&nbsp;@&nbsp;C.T)^(-1)&nbsp;@&nbsp;b<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;=&nbsp;numpy.asarray(C)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;b&nbsp;=&nbsp;numpy.asarray(b).flatten()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;C.shape[0]&nbsp;!=&nbsp;b.shape[0]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Размерность&nbsp;b&nbsp;должна&nbsp;соответствовать&nbsp;числу&nbsp;строк&nbsp;C,&nbsp;получены&nbsp;{C.shape[0]}&nbsp;и&nbsp;{b.shape[0]}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Ct&nbsp;=&nbsp;C.T.conj()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;CCt_inv&nbsp;=&nbsp;numpy.linalg.pinv(C&nbsp;@&nbsp;Ct)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;K&nbsp;=&nbsp;Ct&nbsp;@&nbsp;CCt_inv<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;K&nbsp;@&nbsp;C<br>
+&nbsp;&nbsp;&nbsp;&nbsp;B&nbsp;=&nbsp;K&nbsp;@&nbsp;b<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;A,&nbsp;B<br>
+<br>
+def&nbsp;metric_project_onto_constraints(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q:&nbsp;numpy.ndarray,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H:&nbsp;numpy.ndarray,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;M_inv:&nbsp;numpy.ndarray,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;error:&nbsp;numpy.ndarray&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h:&nbsp;numpy.ndarray&nbsp;=&nbsp;None)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Проецировать&nbsp;скорости&nbsp;на&nbsp;ограничения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;-&nbsp;текущий&nbsp;вектор<br>
+&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;-&nbsp;матрица&nbsp;ограничений<br>
+&nbsp;&nbsp;&nbsp;&nbsp;M_inv&nbsp;-&nbsp;метрическая&nbsp;матрица<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Одно&nbsp;из&nbsp;двух&nbsp;должно&nbsp;быть&nbsp;задано:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;error&nbsp;-&nbsp;текущая&nbsp;ошибка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;-&nbsp;правая&nbsp;часть&nbsp;ограничений<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;error&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;error&nbsp;=&nbsp;H&nbsp;@&nbsp;q&nbsp;-&nbsp;h<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;S&nbsp;=&nbsp;H&nbsp;@&nbsp;M_inv&nbsp;@&nbsp;H.T<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;lmbda&nbsp;=&nbsp;numpy.linalg.solve(S,&nbsp;error)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;corrected&nbsp;=&nbsp;q&nbsp;-&nbsp;M_inv&nbsp;@&nbsp;H.T&nbsp;@&nbsp;lmbda<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;corrected&nbsp;<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

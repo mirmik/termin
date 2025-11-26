@@ -6,8 +6,8 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from termin.ga201.motor import Motor2<br>
-from termin.ga201.screw import Screw2<br>
+from&nbsp;termin.ga201.motor&nbsp;import&nbsp;Motor2<br>
+from&nbsp;termin.ga201.screw&nbsp;import&nbsp;Screw2<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

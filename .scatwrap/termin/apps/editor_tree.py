@@ -6,159 +6,159 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# ===== termin/apps/editor_tree.py =====<br>
-from PyQt5.QtCore import Qt, QAbstractItemModel, QModelIndex<br>
+#&nbsp;=====&nbsp;termin/apps/editor_tree.py&nbsp;=====<br>
+from&nbsp;PyQt5.QtCore&nbsp;import&nbsp;Qt,&nbsp;QAbstractItemModel,&nbsp;QModelIndex<br>
 <br>
-from termin.visualization.scene import Scene<br>
-from termin.visualization.entity import Entity<br>
-from termin.kinematic.transform import Transform3<br>
-<br>
-<br>
-class NodeWrapper:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Узел дерева. Держит только Entity<br>
-&#9;(root держит obj=None).<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;def __init__(self, obj: Entity | None, parent=None):<br>
-&#9;&#9;self.obj = obj<br>
-&#9;&#9;self.parent = parent<br>
-&#9;&#9;self.children: list[NodeWrapper] = []<br>
-<br>
-&#9;@property<br>
-&#9;def name(self) -&gt; str:<br>
-&#9;&#9;if isinstance(self.obj, Entity):<br>
-&#9;&#9;&#9;return f&quot;Entity: {self.obj.name}&quot;<br>
-&#9;&#9;return &quot;Scene&quot;<br>
+from&nbsp;termin.visualization.scene&nbsp;import&nbsp;Scene<br>
+from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Entity<br>
+from&nbsp;termin.kinematic.transform&nbsp;import&nbsp;Transform3<br>
 <br>
 <br>
-class SceneTreeModel(QAbstractItemModel):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Дерево: иерархия Entity, повторяющая иерархию Transform3.<br>
-&#9;Transform-узлы в дереве НЕ показываем.<br>
-&#9;&quot;&quot;&quot;<br>
+class&nbsp;NodeWrapper:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Узел&nbsp;дерева.&nbsp;Держит&nbsp;только&nbsp;Entity<br>
+&nbsp;&nbsp;&nbsp;&nbsp;(root&nbsp;держит&nbsp;obj=None).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;obj:&nbsp;Entity&nbsp;|&nbsp;None,&nbsp;parent=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.obj&nbsp;=&nbsp;obj<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.parent&nbsp;=&nbsp;parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.children:&nbsp;list[NodeWrapper]&nbsp;=&nbsp;[]<br>
 <br>
-&#9;def __init__(self, scene: Scene):<br>
-&#9;&#9;super().__init__()<br>
-&#9;&#9;self.scene = scene<br>
-&#9;&#9;self.root = NodeWrapper(None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@property<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;name(self)&nbsp;-&gt;&nbsp;str:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(self.obj,&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;Entity:&nbsp;{self.obj.name}&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;&quot;Scene&quot;<br>
 <br>
-&#9;&#9;# карта Entity -&gt; NodeWrapper, для быстрого поиска индекса<br>
-&#9;&#9;self._obj_to_node: dict[Entity, NodeWrapper] = {}<br>
 <br>
-&#9;&#9;self._build_hierarchy()<br>
+class&nbsp;SceneTreeModel(QAbstractItemModel):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Дерево:&nbsp;иерархия&nbsp;Entity,&nbsp;повторяющая&nbsp;иерархию&nbsp;Transform3.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Transform-узлы&nbsp;в&nbsp;дереве&nbsp;НЕ&nbsp;показываем.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&#9;# ------------------------------------------------------<br>
-&#9;# Build Tree from scene<br>
-&#9;# ------------------------------------------------------<br>
-&#9;def _build_hierarchy(self):<br>
-&#9;&#9;# чистим на случай пересборки<br>
-&#9;&#9;self.root.children.clear()<br>
-&#9;&#9;self._obj_to_node.clear()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;scene:&nbsp;Scene):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene&nbsp;=&nbsp;scene<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.root&nbsp;=&nbsp;NodeWrapper(None)<br>
 <br>
-&#9;&#9;# Сначала создаём узлы для всех сущностей<br>
-&#9;&#9;for ent in self.scene.entities:<br>
-&#9;&#9;&#9;self._get_or_create_node(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;карта&nbsp;Entity&nbsp;-&gt;&nbsp;NodeWrapper,&nbsp;для&nbsp;быстрого&nbsp;поиска&nbsp;индекса<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._obj_to_node:&nbsp;dict[Entity,&nbsp;NodeWrapper]&nbsp;=&nbsp;{}<br>
 <br>
-&#9;&#9;# Теперь связываем родителей и детей<br>
-&#9;&#9;for ent in self.scene.entities:<br>
-&#9;&#9;&#9;node = self._obj_to_node[ent]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._build_hierarchy()<br>
 <br>
-&#9;&#9;&#9;parent_tf = getattr(ent.transform, &quot;parent&quot;, None)<br>
-&#9;&#9;&#9;parent_ent = getattr(parent_tf, &quot;entity&quot;, None) if parent_tf is not None else None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Build&nbsp;Tree&nbsp;from&nbsp;scene<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;------------------------------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_build_hierarchy(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;чистим&nbsp;на&nbsp;случай&nbsp;пересборки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.root.children.clear()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._obj_to_node.clear()<br>
 <br>
-&#9;&#9;&#9;# если трансформ родителя не привязан к Entity – считаем, что это корень<br>
-&#9;&#9;&#9;if isinstance(parent_ent, Entity) and parent_ent in self._obj_to_node:<br>
-&#9;&#9;&#9;&#9;parent_node = self._obj_to_node[parent_ent]<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;parent_node = self.root<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Сначала&nbsp;создаём&nbsp;узлы&nbsp;для&nbsp;всех&nbsp;сущностей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ent&nbsp;in&nbsp;self.scene.entities:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._get_or_create_node(ent)<br>
 <br>
-&#9;&#9;&#9;node.parent = parent_node<br>
-&#9;&#9;&#9;parent_node.children.append(node)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Теперь&nbsp;связываем&nbsp;родителей&nbsp;и&nbsp;детей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ent&nbsp;in&nbsp;self.scene.entities:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node&nbsp;=&nbsp;self._obj_to_node[ent]<br>
 <br>
-&#9;def _get_or_create_node(self, ent: Entity) -&gt; NodeWrapper:<br>
-&#9;&#9;node = self._obj_to_node.get(ent)<br>
-&#9;&#9;if node is None:<br>
-&#9;&#9;&#9;node = NodeWrapper(ent, parent=None)<br>
-&#9;&#9;&#9;self._obj_to_node[ent] = node<br>
-&#9;&#9;return node<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_tf&nbsp;=&nbsp;getattr(ent.transform,&nbsp;&quot;parent&quot;,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_ent&nbsp;=&nbsp;getattr(parent_tf,&nbsp;&quot;entity&quot;,&nbsp;None)&nbsp;if&nbsp;parent_tf&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
 <br>
-&#9;# ==============================================================<br>
-&#9;# Qt model interface<br>
-&#9;# ==============================================================<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;трансформ&nbsp;родителя&nbsp;не&nbsp;привязан&nbsp;к&nbsp;Entity&nbsp;–&nbsp;считаем,&nbsp;что&nbsp;это&nbsp;корень<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(parent_ent,&nbsp;Entity)&nbsp;and&nbsp;parent_ent&nbsp;in&nbsp;self._obj_to_node:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_node&nbsp;=&nbsp;self._obj_to_node[parent_ent]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_node&nbsp;=&nbsp;self.root<br>
 <br>
-&#9;def index(self, row, column, parent):<br>
-&#9;&#9;parent_node = self.root if not parent.isValid() else parent.internalPointer()<br>
-&#9;&#9;if row &lt; 0 or row &gt;= len(parent_node.children):<br>
-&#9;&#9;&#9;return QModelIndex()<br>
-&#9;&#9;return self.createIndex(row, column, parent_node.children[row])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node.parent&nbsp;=&nbsp;parent_node<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_node.children.append(node)<br>
 <br>
-&#9;def parent(self, index):<br>
-&#9;&#9;if not index.isValid():<br>
-&#9;&#9;&#9;return QModelIndex()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_get_or_create_node(self,&nbsp;ent:&nbsp;Entity)&nbsp;-&gt;&nbsp;NodeWrapper:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node&nbsp;=&nbsp;self._obj_to_node.get(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;node&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node&nbsp;=&nbsp;NodeWrapper(ent,&nbsp;parent=None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._obj_to_node[ent]&nbsp;=&nbsp;node<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;node<br>
 <br>
-&#9;&#9;node: NodeWrapper = index.internalPointer()<br>
-&#9;&#9;parent = node.parent<br>
-&#9;&#9;if parent is None or parent is self.root:<br>
-&#9;&#9;&#9;return QModelIndex()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;==============================================================<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Qt&nbsp;model&nbsp;interface<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;==============================================================<br>
 <br>
-&#9;&#9;grand = parent.parent or self.root<br>
-&#9;&#9;row = grand.children.index(parent)<br>
-&#9;&#9;return self.createIndex(row, 0, parent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;index(self,&nbsp;row,&nbsp;column,&nbsp;parent):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_node&nbsp;=&nbsp;self.root&nbsp;if&nbsp;not&nbsp;parent.isValid()&nbsp;else&nbsp;parent.internalPointer()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;row&nbsp;&lt;&nbsp;0&nbsp;or&nbsp;row&nbsp;&gt;=&nbsp;len(parent_node.children):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;QModelIndex()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.createIndex(row,&nbsp;column,&nbsp;parent_node.children[row])<br>
 <br>
-&#9;def rowCount(self, parent):<br>
-&#9;&#9;node = self.root if not parent.isValid() else parent.internalPointer()<br>
-&#9;&#9;return len(node.children)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;parent(self,&nbsp;index):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;index.isValid():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;QModelIndex()<br>
 <br>
-&#9;def columnCount(self, parent):<br>
-&#9;&#9;return 1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node:&nbsp;NodeWrapper&nbsp;=&nbsp;index.internalPointer()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent&nbsp;=&nbsp;node.parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;parent&nbsp;is&nbsp;None&nbsp;or&nbsp;parent&nbsp;is&nbsp;self.root:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;QModelIndex()<br>
 <br>
-&#9;def data(self, index, role):<br>
-&#9;&#9;if not index.isValid():<br>
-&#9;&#9;&#9;return None<br>
-&#9;&#9;node: NodeWrapper = index.internalPointer()<br>
-&#9;&#9;if role == Qt.DisplayRole:<br>
-&#9;&#9;&#9;return node.name<br>
-&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grand&nbsp;=&nbsp;parent.parent&nbsp;or&nbsp;self.root<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row&nbsp;=&nbsp;grand.children.index(parent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.createIndex(row,&nbsp;0,&nbsp;parent)<br>
 <br>
-&#9;# ==============================================================<br>
-&#9;#   Поиск индекса по объекту сцены<br>
-&#9;# ==============================================================<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;rowCount(self,&nbsp;parent):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node&nbsp;=&nbsp;self.root&nbsp;if&nbsp;not&nbsp;parent.isValid()&nbsp;else&nbsp;parent.internalPointer()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;len(node.children)<br>
 <br>
-&#9;def index_for_object(self, obj) -&gt; QModelIndex:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает QModelIndex для данного Entity, если он есть в дереве.<br>
-&#9;&#9;Transform3 здесь не учитываем, дерево чисто по сущностям.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if not isinstance(obj, Entity):<br>
-&#9;&#9;&#9;# если вдруг прилетел Transform3 – попробуем найти его владельца<br>
-&#9;&#9;&#9;if isinstance(obj, Transform3) and getattr(obj, &quot;entity&quot;, None) is not None:<br>
-&#9;&#9;&#9;&#9;obj = obj.entity<br>
-&#9;&#9;&#9;else:<br>
-&#9;&#9;&#9;&#9;return QModelIndex()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;columnCount(self,&nbsp;parent):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;1<br>
 <br>
-&#9;&#9;node = self._obj_to_node.get(obj)<br>
-&#9;&#9;if node is None:<br>
-&#9;&#9;&#9;return QModelIndex()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;data(self,&nbsp;index,&nbsp;role):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;index.isValid():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node:&nbsp;NodeWrapper&nbsp;=&nbsp;index.internalPointer()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;role&nbsp;==&nbsp;Qt.DisplayRole:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;node.name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
-&#9;&#9;# строим путь от этого узла до root<br>
-&#9;&#9;path_nodes = []<br>
-&#9;&#9;cur = node<br>
-&#9;&#9;while cur is not None and cur is not self.root:<br>
-&#9;&#9;&#9;path_nodes.append(cur)<br>
-&#9;&#9;&#9;cur = cur.parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;==============================================================<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;Поиск&nbsp;индекса&nbsp;по&nbsp;объекту&nbsp;сцены<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;==============================================================<br>
 <br>
-&#9;&#9;path_nodes.reverse()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;index_for_object(self,&nbsp;obj)&nbsp;-&gt;&nbsp;QModelIndex:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;QModelIndex&nbsp;для&nbsp;данного&nbsp;Entity,&nbsp;если&nbsp;он&nbsp;есть&nbsp;в&nbsp;дереве.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Transform3&nbsp;здесь&nbsp;не&nbsp;учитываем,&nbsp;дерево&nbsp;чисто&nbsp;по&nbsp;сущностям.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(obj,&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;вдруг&nbsp;прилетел&nbsp;Transform3&nbsp;–&nbsp;попробуем&nbsp;найти&nbsp;его&nbsp;владельца<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(obj,&nbsp;Transform3)&nbsp;and&nbsp;getattr(obj,&nbsp;&quot;entity&quot;,&nbsp;None)&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obj&nbsp;=&nbsp;obj.entity<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;QModelIndex()<br>
 <br>
-&#9;&#9;parent_index = QModelIndex()<br>
-&#9;&#9;parent_node = self.root<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node&nbsp;=&nbsp;self._obj_to_node.get(obj)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;node&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;QModelIndex()<br>
 <br>
-&#9;&#9;for n in path_nodes:<br>
-&#9;&#9;&#9;row = parent_node.children.index(n)<br>
-&#9;&#9;&#9;idx = self.index(row, 0, parent_index)<br>
-&#9;&#9;&#9;parent_index = idx<br>
-&#9;&#9;&#9;parent_node = n<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;строим&nbsp;путь&nbsp;от&nbsp;этого&nbsp;узла&nbsp;до&nbsp;root<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path_nodes&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;node<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;cur&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;cur&nbsp;is&nbsp;not&nbsp;self.root:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path_nodes.append(cur)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cur&nbsp;=&nbsp;cur.parent<br>
 <br>
-&#9;&#9;return parent_index<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path_nodes.reverse()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_index&nbsp;=&nbsp;QModelIndex()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_node&nbsp;=&nbsp;self.root<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;n&nbsp;in&nbsp;path_nodes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row&nbsp;=&nbsp;parent_node.children.index(n)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;self.index(row,&nbsp;0,&nbsp;parent_index)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_index&nbsp;=&nbsp;idx<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_node&nbsp;=&nbsp;n<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;parent_index<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

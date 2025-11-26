@@ -6,188 +6,188 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-&quot;&quot;&quot;Simple scene graph storing entities and global parameters.&quot;&quot;&quot;<br>
+&quot;&quot;&quot;Simple&nbsp;scene&nbsp;graph&nbsp;storing&nbsp;entities&nbsp;and&nbsp;global&nbsp;parameters.&quot;&quot;&quot;<br>
 <br>
-from __future__ import annotations<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from typing import List, Sequence, TYPE_CHECKING<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Sequence,&nbsp;TYPE_CHECKING<br>
 <br>
-import numpy as np<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from .entity import Component, Entity, InputComponent<br>
-from .backends.base import GraphicsBackend<br>
+from&nbsp;.entity&nbsp;import&nbsp;Component,&nbsp;Entity,&nbsp;InputComponent<br>
+from&nbsp;.backends.base&nbsp;import&nbsp;GraphicsBackend<br>
 <br>
-from termin.geombase.ray import Ray3<br>
-from termin.colliders.raycast_hit import RaycastHit<br>
-from termin.colliders.collider_component import ColliderComponent<br>
+from&nbsp;termin.geombase.ray&nbsp;import&nbsp;Ray3<br>
+from&nbsp;termin.colliders.raycast_hit&nbsp;import&nbsp;RaycastHit<br>
+from&nbsp;termin.colliders.collider_component&nbsp;import&nbsp;ColliderComponent<br>
 <br>
 <br>
 <br>
-if TYPE_CHECKING:  # pragma: no cover<br>
-&#9;from .shader import ShaderProgram<br>
+if&nbsp;TYPE_CHECKING:&nbsp;&nbsp;#&nbsp;pragma:&nbsp;no&nbsp;cover<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;.shader&nbsp;import&nbsp;ShaderProgram<br>
 <br>
-def is_overrides_method(obj, method_name, base_class):<br>
-&#9;return getattr(obj.__class__, method_name) is not getattr(base_class, method_name)<br>
+def&nbsp;is_overrides_method(obj,&nbsp;method_name,&nbsp;base_class):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;getattr(obj.__class__,&nbsp;method_name)&nbsp;is&nbsp;not&nbsp;getattr(base_class,&nbsp;method_name)<br>
 <br>
-class Scene:<br>
-&#9;def raycast(self, ray: Ray3):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает первое пересечение с любым ColliderComponent,<br>
-&#9;&#9;где distance == 0 (чистое попадание).<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;best_hit = None<br>
-&#9;&#9;best_ray_dist = float(&quot;inf&quot;)<br>
+class&nbsp;Scene:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;raycast(self,&nbsp;ray:&nbsp;Ray3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;первое&nbsp;пересечение&nbsp;с&nbsp;любым&nbsp;ColliderComponent,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;distance&nbsp;==&nbsp;0&nbsp;(чистое&nbsp;попадание).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_hit&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_ray_dist&nbsp;=&nbsp;float(&quot;inf&quot;)<br>
 <br>
-&#9;&#9;for comp in self.colliders:<br>
-&#9;&#9;&#9;attached = comp.attached<br>
-&#9;&#9;&#9;if attached is None:<br>
-&#9;&#9;&#9;&#9;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;comp&nbsp;in&nbsp;self.colliders:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;attached&nbsp;=&nbsp;comp.attached<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;attached&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
 <br>
-&#9;&#9;&#9;p_col, p_ray, dist = attached.closest_to_ray(ray)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_col,&nbsp;p_ray,&nbsp;dist&nbsp;=&nbsp;attached.closest_to_ray(ray)<br>
 <br>
-&#9;&#9;&#9;# Интересуют только пересечения<br>
-&#9;&#9;&#9;if dist != 0.0:<br>
-&#9;&#9;&#9;&#9;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Интересуют&nbsp;только&nbsp;пересечения<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dist&nbsp;!=&nbsp;0.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
 <br>
-&#9;&#9;&#9;# Реальное расстояние вдоль луча<br>
-&#9;&#9;&#9;d_ray = np.linalg.norm(p_ray - ray.origin)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Реальное&nbsp;расстояние&nbsp;вдоль&nbsp;луча<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d_ray&nbsp;=&nbsp;np.linalg.norm(p_ray&nbsp;-&nbsp;ray.origin)<br>
 <br>
-&#9;&#9;&#9;if d_ray &lt; best_ray_dist:<br>
-&#9;&#9;&#9;&#9;best_ray_dist = d_ray<br>
-&#9;&#9;&#9;&#9;best_hit = RaycastHit(comp.entity, comp, p_ray, p_col, 0.0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;d_ray&nbsp;&lt;&nbsp;best_ray_dist:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_ray_dist&nbsp;=&nbsp;d_ray<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_hit&nbsp;=&nbsp;RaycastHit(comp.entity,&nbsp;comp,&nbsp;p_ray,&nbsp;p_col,&nbsp;0.0)<br>
 <br>
-&#9;&#9;return best_hit<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;best_hit<br>
 <br>
-&#9;def closest_to_ray(self, ray: Ray3):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Возвращает ближайший объект к лучу (минимальная distance).<br>
-&#9;&#9;Не требует пересечения.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;best_hit = None<br>
-&#9;&#9;best_dist = float(&quot;inf&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;closest_to_ray(self,&nbsp;ray:&nbsp;Ray3):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;ближайший&nbsp;объект&nbsp;к&nbsp;лучу&nbsp;(минимальная&nbsp;distance).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Не&nbsp;требует&nbsp;пересечения.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_hit&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_dist&nbsp;=&nbsp;float(&quot;inf&quot;)<br>
 <br>
-&#9;&#9;for comp in self.colliders:<br>
-&#9;&#9;&#9;attached = comp.attached<br>
-&#9;&#9;&#9;if attached is None:<br>
-&#9;&#9;&#9;&#9;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;comp&nbsp;in&nbsp;self.colliders:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;attached&nbsp;=&nbsp;comp.attached<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;attached&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
 <br>
-&#9;&#9;&#9;p_col, p_ray, dist = attached.closest_to_ray(ray)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p_col,&nbsp;p_ray,&nbsp;dist&nbsp;=&nbsp;attached.closest_to_ray(ray)<br>
 <br>
-&#9;&#9;&#9;if dist &lt; best_dist:<br>
-&#9;&#9;&#9;&#9;best_dist = dist<br>
-&#9;&#9;&#9;&#9;best_hit = RaycastHit(comp.entity, comp, p_ray, p_col, dist)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dist&nbsp;&lt;&nbsp;best_dist:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_dist&nbsp;=&nbsp;dist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;best_hit&nbsp;=&nbsp;RaycastHit(comp.entity,&nbsp;comp,&nbsp;p_ray,&nbsp;p_col,&nbsp;dist)<br>
 <br>
-&#9;&#9;return best_hit<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;best_hit<br>
 <br>
-&#9;&quot;&quot;&quot;Container for renderable entities and lighting data.&quot;&quot;&quot;<br>
-&#9;def __init__(self, background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0)):<br>
-&#9;&#9;self.entities: List[Entity] = []<br>
-&#9;&#9;self.lights: List[np.ndarray] = []<br>
-&#9;&#9;self.background_color = np.array(background_color, dtype=np.float32)<br>
-&#9;&#9;self._shaders_set = set()<br>
-&#9;&#9;self._inited = False<br>
-&#9;&#9;self._input_components: List[InputComponent] = []<br>
-&#9;&#9;self._graphics: GraphicsBackend | None = None<br>
-&#9;&#9;self.colliders = []<br>
-&#9;&#9;self.update_list: List[Component] = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Container&nbsp;for&nbsp;renderable&nbsp;entities&nbsp;and&nbsp;lighting&nbsp;data.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;background_color:&nbsp;Sequence[float]&nbsp;=&nbsp;(0.05,&nbsp;0.05,&nbsp;0.08,&nbsp;1.0)):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.entities:&nbsp;List[Entity]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.lights:&nbsp;List[np.ndarray]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.background_color&nbsp;=&nbsp;np.array(background_color,&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._shaders_set&nbsp;=&nbsp;set()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._inited&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._input_components:&nbsp;List[InputComponent]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._graphics:&nbsp;GraphicsBackend&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.colliders&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_list:&nbsp;List[Component]&nbsp;=&nbsp;[]<br>
 <br>
-&#9;&#9;# Lights<br>
-&#9;&#9;self.light_direction = np.array([-0.5, -1.0, -0.3], dtype=np.float32)<br>
-&#9;&#9;self.light_color = np.array([1.0, 1.0, 1.0], dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Lights<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.light_direction&nbsp;=&nbsp;np.array([-0.5,&nbsp;-1.0,&nbsp;-0.3],&nbsp;dtype=np.float32)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.light_color&nbsp;=&nbsp;np.array([1.0,&nbsp;1.0,&nbsp;1.0],&nbsp;dtype=np.float32)<br>
 <br>
-&#9;def add_non_recurse(self, entity: Entity) -&gt; Entity:<br>
-&#9;&#9;&quot;&quot;&quot;Add entity to the scene, keeping the entities list sorted by priority.&quot;&quot;&quot;<br>
-&#9;&#9;index = 0<br>
-&#9;&#9;while index &lt; len(self.entities) and self.entities[index].priority &lt;= entity.priority:<br>
-&#9;&#9;&#9;index += 1<br>
-&#9;&#9;self.entities.insert(index, entity)<br>
-&#9;&#9;entity.on_added(self)<br>
-&#9;&#9;for shader in entity.gather_shaders():<br>
-&#9;&#9;&#9;self._register_shader(shader)<br>
-&#9;&#9;return entity<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_non_recurse(self,&nbsp;entity:&nbsp;Entity)&nbsp;-&gt;&nbsp;Entity:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Add&nbsp;entity&nbsp;to&nbsp;the&nbsp;scene,&nbsp;keeping&nbsp;the&nbsp;entities&nbsp;list&nbsp;sorted&nbsp;by&nbsp;priority.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index&nbsp;=&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;index&nbsp;&lt;&nbsp;len(self.entities)&nbsp;and&nbsp;self.entities[index].priority&nbsp;&lt;=&nbsp;entity.priority:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index&nbsp;+=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.entities.insert(index,&nbsp;entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entity.on_added(self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;shader&nbsp;in&nbsp;entity.gather_shaders():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._register_shader(shader)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;entity<br>
 <br>
-&#9;def add(self, entity: Entity) -&gt; Entity:<br>
-&#9;&#9;&quot;&quot;&quot;Add entity to the scene, including all its children.&quot;&quot;&quot;<br>
-&#9;&#9;print(&quot;Scene: adding entity&quot;, entity.name, &quot;children: {}&quot;.format(len(entity.transform.children)))  # --- IGNORE ---<br>
-&#9;&#9;self.add_non_recurse(entity)<br>
-&#9;&#9;for child_trans in entity.transform.children:<br>
-&#9;&#9;&#9;child = child_trans.entity<br>
-&#9;&#9;&#9;print(&quot;Scene: adding child entity&quot;, child)<br>
-&#9;&#9;&#9;if child is None:<br>
-&#9;&#9;&#9;&#9;continue<br>
-&#9;&#9;&#9;for shader in child.gather_shaders():<br>
-&#9;&#9;&#9;&#9;self._register_shader(shader)<br>
-&#9;&#9;&#9;self.add(child)<br>
-&#9;&#9;return entity<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add(self,&nbsp;entity:&nbsp;Entity)&nbsp;-&gt;&nbsp;Entity:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Add&nbsp;entity&nbsp;to&nbsp;the&nbsp;scene,&nbsp;including&nbsp;all&nbsp;its&nbsp;children.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Scene:&nbsp;adding&nbsp;entity&quot;,&nbsp;entity.name,&nbsp;&quot;children:&nbsp;{}&quot;.format(len(entity.transform.children)))&nbsp;&nbsp;#&nbsp;---&nbsp;IGNORE&nbsp;---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.add_non_recurse(entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child_trans&nbsp;in&nbsp;entity.transform.children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child&nbsp;=&nbsp;child_trans.entity<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Scene:&nbsp;adding&nbsp;child&nbsp;entity&quot;,&nbsp;child)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;child&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;shader&nbsp;in&nbsp;child.gather_shaders():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._register_shader(shader)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.add(child)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;entity<br>
 <br>
-&#9;def remove(self, entity: Entity):<br>
-&#9;&#9;self.entities.remove(entity)<br>
-&#9;&#9;entity.on_removed()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;remove(self,&nbsp;entity:&nbsp;Entity):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.entities.remove(entity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entity.on_removed()<br>
 <br>
-&#9;def register_component(self, component: Component):<br>
-&#9;&#9;# регистрируем коллайдеры<br>
-&#9;&#9;from termin.colliders.collider_component import ColliderComponent<br>
-&#9;&#9;if isinstance(component, ColliderComponent):<br>
-&#9;&#9;&#9;self.colliders.append(component)<br>
-&#9;&#9;for shader in component.required_shaders():<br>
-&#9;&#9;&#9;self._register_shader(shader)<br>
-&#9;&#9;if isinstance(component, InputComponent):<br>
-&#9;&#9;&#9;self._input_components.append(component)<br>
-&#9;&#9;if is_overrides_method(component, &quot;update&quot;, Component):<br>
-&#9;&#9;&#9;self.update_list.append(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;register_component(self,&nbsp;component:&nbsp;Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;регистрируем&nbsp;коллайдеры<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.colliders.collider_component&nbsp;import&nbsp;ColliderComponent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(component,&nbsp;ColliderComponent):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.colliders.append(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;shader&nbsp;in&nbsp;component.required_shaders():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._register_shader(shader)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(component,&nbsp;InputComponent):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._input_components.append(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;is_overrides_method(component,&nbsp;&quot;update&quot;,&nbsp;Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_list.append(component)<br>
 <br>
-&#9;def unregister_component(self, component: Component):<br>
-&#9;&#9;from termin.colliders.collider_component import ColliderComponent<br>
-&#9;&#9;if isinstance(component, ColliderComponent) and component in self.colliders:<br>
-&#9;&#9;&#9;self.colliders.remove(component)<br>
-&#9;&#9;if isinstance(component, InputComponent) and component in self._input_components:<br>
-&#9;&#9;&#9;self._input_components.remove(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;unregister_component(self,&nbsp;component:&nbsp;Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.colliders.collider_component&nbsp;import&nbsp;ColliderComponent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(component,&nbsp;ColliderComponent)&nbsp;and&nbsp;component&nbsp;in&nbsp;self.colliders:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.colliders.remove(component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(component,&nbsp;InputComponent)&nbsp;and&nbsp;component&nbsp;in&nbsp;self._input_components:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._input_components.remove(component)<br>
 <br>
-&#9;def update(self, dt: float):<br>
-&#9;&#9;for component in self.update_list:<br>
-&#9;&#9;&#9;component.update(dt)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update(self,&nbsp;dt:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;component&nbsp;in&nbsp;self.update_list:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.update(dt)<br>
 <br>
-&#9;def ensure_ready(self, graphics: GraphicsBackend):<br>
-&#9;&#9;if self._inited:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;self._graphics = graphics<br>
-&#9;&#9;for shader in list(self._shaders_set):<br>
-&#9;&#9;&#9;shader.ensure_ready(graphics)<br>
-&#9;&#9;self._inited = True<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;ensure_ready(self,&nbsp;graphics:&nbsp;GraphicsBackend):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._inited:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._graphics&nbsp;=&nbsp;graphics<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;shader&nbsp;in&nbsp;list(self._shaders_set):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.ensure_ready(graphics)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._inited&nbsp;=&nbsp;True<br>
 <br>
-&#9;def _register_shader(self, shader: &quot;ShaderProgram&quot;):<br>
-&#9;&#9;if shader in self._shaders_set:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;self._shaders_set.add(shader)<br>
-&#9;&#9;if self._inited and self._graphics is not None:<br>
-&#9;&#9;&#9;shader.ensure_ready(self._graphics)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_register_shader(self,&nbsp;shader:&nbsp;&quot;ShaderProgram&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;shader&nbsp;in&nbsp;self._shaders_set:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._shaders_set.add(shader)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._inited&nbsp;and&nbsp;self._graphics&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.ensure_ready(self._graphics)<br>
 <br>
-&#9;def dispatch_input(self, viewport, event: str, **kwargs):<br>
-&#9;&#9;listeners = list(self._input_components)<br>
-&#9;&#9;for component in listeners:<br>
-&#9;&#9;&#9;handler = getattr(component, event, None)<br>
-&#9;&#9;&#9;if handler:<br>
-&#9;&#9;&#9;&#9;handler(viewport, **kwargs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;dispatch_input(self,&nbsp;viewport,&nbsp;event:&nbsp;str,&nbsp;**kwargs):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;listeners&nbsp;=&nbsp;list(self._input_components)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;component&nbsp;in&nbsp;listeners:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handler&nbsp;=&nbsp;getattr(component,&nbsp;event,&nbsp;None)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;handler:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handler(viewport,&nbsp;**kwargs)<br>
 <br>
-&#9;def serialize(self):<br>
-&#9;&#9;return {<br>
-&#9;&#9;&#9;&quot;background_color&quot;: self.background_color.tolist(),<br>
-&#9;&#9;&#9;&quot;light_direction&quot;: self.light_direction.tolist(),<br>
-&#9;&#9;&#9;&quot;light_color&quot;: self.light_color.tolist(),<br>
-&#9;&#9;&#9;&quot;entities&quot;: [e.serialize() for e in self.entities]<br>
-&#9;&#9;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;serialize(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;background_color&quot;:&nbsp;self.background_color.tolist(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;light_direction&quot;:&nbsp;self.light_direction.tolist(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;light_color&quot;:&nbsp;self.light_color.tolist(),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;entities&quot;:&nbsp;[e.serialize()&nbsp;for&nbsp;e&nbsp;in&nbsp;self.entities]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
 <br>
-&#9;@classmethod<br>
-&#9;def deserialize(cls, data, context, EntityClass):<br>
-&#9;&#9;scene = cls(background_color=data[&quot;background_color&quot;])<br>
-&#9;&#9;scene.light_direction = data[&quot;light_direction&quot;]<br>
-&#9;&#9;scene.light_color = data[&quot;light_color&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@classmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;deserialize(cls,&nbsp;data,&nbsp;context,&nbsp;EntityClass):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;cls(background_color=data[&quot;background_color&quot;])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene.light_direction&nbsp;=&nbsp;data[&quot;light_direction&quot;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene.light_color&nbsp;=&nbsp;data[&quot;light_color&quot;]<br>
 <br>
-&#9;&#9;for ed in data[&quot;entities&quot;]:<br>
-&#9;&#9;&#9;ent = EntityClass.deserialize(ed, context)<br>
-&#9;&#9;&#9;scene.add(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ed&nbsp;in&nbsp;data[&quot;entities&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;EntityClass.deserialize(ed,&nbsp;context)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene.add(ent)<br>
 <br>
-&#9;&#9;return scene<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

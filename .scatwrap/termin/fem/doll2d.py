@@ -7,571 +7,571 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 <br>
-#!/usr/bin/env python3<br>
+#!/usr/bin/env&nbsp;python3<br>
 &quot;&quot;&quot;<br>
-Редуцированная многотельная динамика 2D на основе дерева звеньев.<br>
+Редуцированная&nbsp;многотельная&nbsp;динамика&nbsp;2D&nbsp;на&nbsp;основе&nbsp;дерева&nbsp;звеньев.<br>
 <br>
-Doll2D - система из звеньев (links), соединенных шарнирами (joints).<br>
-Каждый шарнир имеет обобщенную координату (угол для RotatorJoint).<br>
+Doll2D&nbsp;-&nbsp;система&nbsp;из&nbsp;звеньев&nbsp;(links),&nbsp;соединенных&nbsp;шарнирами&nbsp;(joints).<br>
+Каждый&nbsp;шарнир&nbsp;имеет&nbsp;обобщенную&nbsp;координату&nbsp;(угол&nbsp;для&nbsp;RotatorJoint).<br>
 <br>
-Динамика формируется через уравнения Лагранжа:<br>
-&#9;M(q)·q̈ + C(q,q̇)·q̇ + g(q) = τ<br>
+Динамика&nbsp;формируется&nbsp;через&nbsp;уравнения&nbsp;Лагранжа:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;M(q)·q̈&nbsp;+&nbsp;C(q,q̇)·q̇&nbsp;+&nbsp;g(q)&nbsp;=&nbsp;τ<br>
 <br>
 где:<br>
-- M(q) - матрица масс (зависит от конфигурации)<br>
-- C(q,q̇) - кориолисовы и центробежные силы<br>
-- g(q) - гравитационные силы<br>
-- τ - приложенные моменты/силы<br>
+-&nbsp;M(q)&nbsp;-&nbsp;матрица&nbsp;масс&nbsp;(зависит&nbsp;от&nbsp;конфигурации)<br>
+-&nbsp;C(q,q̇)&nbsp;-&nbsp;кориолисовы&nbsp;и&nbsp;центробежные&nbsp;силы<br>
+-&nbsp;g(q)&nbsp;-&nbsp;гравитационные&nbsp;силы<br>
+-&nbsp;τ&nbsp;-&nbsp;приложенные&nbsp;моменты/силы<br>
 &quot;&quot;&quot;<br>
 <br>
-import numpy as np<br>
-from typing import List, Dict, Optional<br>
-from termin.fem.assembler import MatrixAssembler, Variable, Contribution, Constraint<br>
-from termin.fem.inertia2d import SpatialInertia2D<br>
-from termin.geombase.pose2 import Pose2<br>
-from termin.geombase.screw import Screw2, cross2d_scalar<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Dict,&nbsp;Optional<br>
+from&nbsp;termin.fem.assembler&nbsp;import&nbsp;MatrixAssembler,&nbsp;Variable,&nbsp;Contribution,&nbsp;Constraint<br>
+from&nbsp;termin.fem.inertia2d&nbsp;import&nbsp;SpatialInertia2D<br>
+from&nbsp;termin.geombase.pose2&nbsp;import&nbsp;Pose2<br>
+from&nbsp;termin.geombase.screw&nbsp;import&nbsp;Screw2,&nbsp;cross2d_scalar<br>
 <br>
 <br>
-class Doll2D(Contribution):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Редуцированная многотельная система 2D.<br>
-&#9;<br>
-&#9;Представляет собой дерево звеньев, соединенных шарнирами.<br>
-&#9;Формирует матрицу масс M(q) и вектор обобщенных сил для решателя.<br>
-&#9;<br>
-&#9;Атрибуты:<br>
-&#9;&#9;base: Базовое звено (корень дерева)<br>
-&#9;&#9;links: Список всех звеньев<br>
-&#9;&#9;joints: Список всех шарниров<br>
-&#9;&#9;variables: Список переменных (скорости шарниров)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, base_link=None, assembler=None):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;base_link: Корневое звено (None = земля)<br>
-&#9;&#9;&#9;assembler: MatrixAssembler для автоматической регистрации<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.base = base_link<br>
-&#9;&#9;self.links: List[DollLink2D] = []<br>
-&#9;&#9;self.joints: List[DollJoint2D] = []<br>
-&#9;&#9;self.gravity = np.array([0.0, -9.81])  # [м/с²]<br>
-&#9;&#9;<br>
-&#9;&#9;# Соберем переменные из шарниров<br>
-&#9;&#9;variables = []<br>
-&#9;&#9;if base_link:<br>
-&#9;&#9;&#9;self._collect_joints(base_link)<br>
-&#9;&#9;&#9;variables = [var for joint in self.joints for var in joint.get_variables()]<br>
+class&nbsp;Doll2D(Contribution):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Редуцированная&nbsp;многотельная&nbsp;система&nbsp;2D.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Представляет&nbsp;собой&nbsp;дерево&nbsp;звеньев,&nbsp;соединенных&nbsp;шарнирами.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Формирует&nbsp;матрицу&nbsp;масс&nbsp;M(q)&nbsp;и&nbsp;вектор&nbsp;обобщенных&nbsp;сил&nbsp;для&nbsp;решателя.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Атрибуты:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base:&nbsp;Базовое&nbsp;звено&nbsp;(корень&nbsp;дерева)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;links:&nbsp;Список&nbsp;всех&nbsp;звеньев<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joints:&nbsp;Список&nbsp;всех&nbsp;шарниров<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables:&nbsp;Список&nbsp;переменных&nbsp;(скорости&nbsp;шарниров)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;base_link=None,&nbsp;assembler=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base_link:&nbsp;Корневое&nbsp;звено&nbsp;(None&nbsp;=&nbsp;земля)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler:&nbsp;MatrixAssembler&nbsp;для&nbsp;автоматической&nbsp;регистрации<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.base&nbsp;=&nbsp;base_link<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.links:&nbsp;List[DollLink2D]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.joints:&nbsp;List[DollJoint2D]&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gravity&nbsp;=&nbsp;np.array([0.0,&nbsp;-9.81])&nbsp;&nbsp;#&nbsp;[м/с²]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Соберем&nbsp;переменные&nbsp;из&nbsp;шарниров<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;base_link:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._collect_joints(base_link)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;variables&nbsp;=&nbsp;[var&nbsp;for&nbsp;joint&nbsp;in&nbsp;self.joints&nbsp;for&nbsp;var&nbsp;in&nbsp;joint.get_variables()]<br>
 <br>
-&#9;&#9;print(&quot;HERE!!!!&quot;)<br>
-&#9;&#9;print(variables)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;HERE!!!!&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(variables)<br>
 <br>
-&#9;&#9;super().__init__(variables, assembler=assembler)<br>
-&#9;<br>
-&#9;def _collect_joints(self, link: 'DollLink2D'):<br>
-&#9;&#9;&quot;&quot;&quot;Рекурсивно собрать все звенья и шарниры из дерева.&quot;&quot;&quot;<br>
-&#9;&#9;if link not in self.links:<br>
-&#9;&#9;&#9;self.links.append(link)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(variables,&nbsp;assembler=assembler)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_collect_joints(self,&nbsp;link:&nbsp;'DollLink2D'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Рекурсивно&nbsp;собрать&nbsp;все&nbsp;звенья&nbsp;и&nbsp;шарниры&nbsp;из&nbsp;дерева.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;link&nbsp;not&nbsp;in&nbsp;self.links:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.links.append(link)<br>
 <br>
-&#9;&#9;if link.joint and link.joint not in self.joints:<br>
-&#9;&#9;&#9;self.joints.append(link.joint)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;link.joint&nbsp;and&nbsp;link.joint&nbsp;not&nbsp;in&nbsp;self.joints:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.joints.append(link.joint)<br>
 <br>
-&#9;&#9;for child in link.children:<br>
-&#9;&#9;&#9;self._collect_joints(child)<br>
-&#9;<br>
-&#9;def add_link(self, link: 'DollLink2D'):<br>
-&#9;&#9;&quot;&quot;&quot;Добавить звено в систему.&quot;&quot;&quot;<br>
-&#9;&#9;if link not in self.links:<br>
-&#9;&#9;&#9;self.links.append(link)<br>
-&#9;<br>
-&#9;def update_kinematics(self):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Обновить прямую кинематику всех звеньев.<br>
-&#9;&#9;Вычисляет положения и скорости на основе текущих значений переменных.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if self.base:<br>
-&#9;&#9;&#9;base_pose = Pose2.identity()<br>
-&#9;&#9;&#9;base_twist = Screw2(ang=np.array([0.0]), lin=np.zeros(2))<br>
-&#9;&#9;&#9;self._update_link_kinematics(self.base, base_pose, base_twist)<br>
-&#9;<br>
-&#9;def _update_link_kinematics(self, link: 'DollLink2D',<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;pose: Pose2,<br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;twist: Screw2):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Рекурсивно обновить кинематику звена и его потомков.<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;link: Текущее звено<br>
-&#9;&#9;&#9;pose: Поза точки привязки<br>
-&#9;&#9;&#9;twist: Твист точки привязки (винт скоростей)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Обновляем текущее звено<br>
-&#9;&#9;link.pose = pose<br>
-&#9;&#9;link.twist = twist<br>
-&#9;&#9;<br>
-&#9;&#9;# Обновляем детей через их шарниры<br>
-&#9;&#9;for child in link.children:<br>
-&#9;&#9;&#9;if child.joint:<br>
-&#9;&#9;&#9;&#9;child_pose = child.joint.pose_after_joint(link.pose)<br>
-&#9;&#9;&#9;&#9;child_twist = child.joint.twist_after_joint(link.twist)<br>
-&#9;&#9;&#9;&#9;self._update_link_kinematics(child, child_pose, child_twist)<br>
-&#9;<br>
-&#9;def contribute_to_mass(self, A: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить матрицу масс M(q) в глобальную матрицу.<br>
-&#9;&#9;<br>
-&#9;&#9;Для редуцированной системы: M(q) связывает ускорения с силами.<br>
-&#9;&#9;M строится через якобианы: M = Σ (J_i^T · M_body_i · J_i)<br>
-&#9;&#9;<br>
-&#9;&#9;где J_i - якобиан i-го тела относительно обобщенных координат.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Собираем вклады от всех звеньев<br>
-&#9;&#9;if self.base:<br>
-&#9;&#9;&#9;self.base.contribute_subtree_inertia(A, index_map)<br>
-&#9;<br>
-&#9;def contribute_to_b(self, b: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить обобщенные силы в правую часть.<br>
-&#9;&#9;<br>
-&#9;&#9;Включает:<br>
-&#9;&#9;- Гравитационные силы: Q_g = -∂V/∂q<br>
-&#9;&#9;- Кориолисовы силы: Q_c = -C(q,q̇)·q̇<br>
-&#9;&#9;- Приложенные моменты<br>
-&#9;&#9;&quot;&quot;&quot;        <br>
-&#9;&#9;# Рекурсивно вычисляем силы, спускаясь по дереву<br>
-&#9;&#9;if self.base:<br>
-&#9;&#9;&#9;self.base.contribute_subtree_forces(self.gravity, b, index_map)<br>
-&#9;<br>
-&#9;def get_kinetic_energy(self) -&gt; float:<br>
-&#9;&#9;&quot;&quot;&quot;Вычислить полную кинетическую энергию системы.&quot;&quot;&quot;<br>
-&#9;&#9;energy = 0.0<br>
-&#9;&#9;for link in self.links:<br>
-&#9;&#9;&#9;if link.inertia:<br>
-&#9;&#9;&#9;&#9;v = link.twist.vector()<br>
-&#9;&#9;&#9;&#9;omega = link.twist.moment()<br>
-&#9;&#9;&#9;&#9;energy += link.inertia.get_kinetic_energy(v, omega)<br>
-&#9;&#9;return energy<br>
-<br>
-<br>
-<br>
-class DollJoint2D:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Базовый класс для шарнира в Doll2D.<br>
-&#9;<br>
-&#9;Шарнир связывает родительское и дочернее звено,<br>
-&#9;определяет обобщенную координату и кинематику.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, name: str = &quot;joint&quot;):<br>
-&#9;&#9;self.name = name<br>
-&#9;&#9;self.parent_link: Optional['DollLink2D'] = None<br>
-&#9;&#9;self.child_link: Optional['DollLink2D'] = None<br>
-&#9;<br>
-&#9;def get_variables(self) -&gt; List[Variable]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вернуть список переменных, связанных с этим шарниром.<br>
-&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Список переменных (может быть пустым для фиксированных шарниров)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return []<br>
-&#9;<br>
-&#9;def project_wrench(self, wrench: Screw2, index_map: Dict[Variable, List[int]], b: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Спроецировать вренч на ось шарнира и добавить в вектор обобщенных сил.<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;wrench: Вренч сил (Screw2) в точке привязки дочернего звена<br>
-&#9;&#9;&#9;index_map: Отображение переменных на индексы<br>
-&#9;&#9;&#9;b: Вектор обобщенных сил<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;pass  # Фиксированный шарнир не имеет степеней свободы<br>
-&#9;<br>
-&#9;def inverse_transform_wrench(self, wrench: Screw2) -&gt; Screw2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Обратная трансформация вренча через шарнир (от child к parent).<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;wrench: Вренч в точке привязки дочернего звена<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Вренч в точке привязки родительского звена<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;raise NotImplementedError(&quot;Метод должен быть реализован в подклассе&quot;)<br>
-&#9;<br>
-&#9;def pose_after_joint(self, parent_pose: Pose2) -&gt; Pose2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вычислить позу дочернего звена на основе позы родителя.<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;parent_pose: Поза точки привязки родителя<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Поза точки привязки ребенка<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;raise NotImplementedError(&quot;Метод должен быть реализован в подклассе&quot;)<br>
-&#9;<br>
-&#9;def twist_after_joint(self, parent_twist: Screw2) -&gt; Screw2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вычислить твист дочернего звена на основе твиста родителя.<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;parent_twist: Твист точки привязки родителя<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Твист точки привязки ребенка<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;raise NotImplementedError(&quot;Метод должен быть реализован в подклассе&quot;)<br>
-&#9;<br>
-<br>
-class DollLink2D:<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Звено в Doll2D - твердое тело в цепи.<br>
-&#9;<br>
-&#9;Атрибуты:<br>
-&#9;&#9;name: Имя звена<br>
-&#9;&#9;parent: Родительское звено<br>
-&#9;&#9;children: Дочерние звенья<br>
-&#9;&#9;joint: Шарнир, связывающий это звено с родителем<br>
-&#9;&#9;inertia: Инерционные характеристики (масса, момент инерции, ЦМ)<br>
-&#9;&#9;<br>
-&#9;&#9;# Состояние (вычисляется кинематикой):<br>
-&#9;&#9;pose: Поза точки привязки (Pose2)<br>
-&#9;&#9;twist: Твист точки привязки (Screw2 - винт скоростей)<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, name: str = &quot;link&quot;, inertia: 'SpatialInertia2D' = SpatialInertia2D()):<br>
-&#9;&#9;self.name = name<br>
-&#9;&#9;self.children: List['DollLink2D'] = []<br>
-&#9;&#9;self.parent: Optional['DollLink2D'] = None<br>
-&#9;&#9;self.joint: Optional[DollJoint2D] = None<br>
-&#9;&#9;self.inertia = inertia<br>
-&#9;&#9;<br>
-&#9;&#9;# Кинематическое состояние<br>
-&#9;&#9;self.pose = Pose2.identity()<br>
-&#9;&#9;self.twist = Screw2(ang=np.array([0.0]), lin=np.zeros(2))<br>
-&#9;<br>
-&#9;def add_child(self, child: 'DollLink2D', joint: DollJoint2D):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Добавить дочернее звено через шарнир.<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;child: Дочернее звено<br>
-&#9;&#9;&#9;joint: Шарнир, соединяющий parent и child<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;child.parent = self<br>
-&#9;&#9;child.joint = joint<br>
-&#9;&#9;joint.parent_link = self<br>
-&#9;&#9;joint.child_link = child<br>
-&#9;&#9;self.children.append(child)<br>
-&#9;<br>
-&#9;def gravity_wrench(self, gravity: np.ndarray) -&gt; Screw2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вычислить вренч гравитационной силы, действующей на звено.<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;gravity: Вектор гравитации [м/с²]<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Вренч гравитации (момент + сила) в точке привязки звена<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if not self.inertia:<br>
-&#9;&#9;&#9;return Screw2(ang=np.array([0.0]), lin=np.zeros(2))<br>
-&#9;&#9;<br>
-&#9;&#9;return self.inertia.gravity_wrench(self.pose, gravity)<br>
-&#9;<br>
-&#9;def local_wrench(self, gravity: np.ndarray) -&gt; Screw2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вычислить суммарный вренч всех сил, действующих на звено.<br>
-&#9;&#9;Включает:<br>
-&#9;&#9;- гравитацию<br>
-&#9;&#9;- кориолисовы и центробежные силы<br>
-&#9;&#9;- (в будущем) внешние силы<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;wrench = self.gravity_wrench(gravity)<br>
-<br>
-&#9;&#9;coriolis_wrench = self.coriolis_wrench()<br>
-&#9;&#9;if coriolis_wrench is not None:<br>
-&#9;&#9;&#9;wrench += coriolis_wrench<br>
-<br>
-&#9;&#9;# TODO: добавить внешние силы<br>
-&#9;&#9;return wrench<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child&nbsp;in&nbsp;link.children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._collect_joints(child)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_link(self,&nbsp;link:&nbsp;'DollLink2D'):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Добавить&nbsp;звено&nbsp;в&nbsp;систему.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;link&nbsp;not&nbsp;in&nbsp;self.links:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.links.append(link)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update_kinematics(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Обновить&nbsp;прямую&nbsp;кинематику&nbsp;всех&nbsp;звеньев.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вычисляет&nbsp;положения&nbsp;и&nbsp;скорости&nbsp;на&nbsp;основе&nbsp;текущих&nbsp;значений&nbsp;переменных.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.base:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base_pose&nbsp;=&nbsp;Pose2.identity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;base_twist&nbsp;=&nbsp;Screw2(ang=np.array([0.0]),&nbsp;lin=np.zeros(2))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_link_kinematics(self.base,&nbsp;base_pose,&nbsp;base_twist)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_update_link_kinematics(self,&nbsp;link:&nbsp;'DollLink2D',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose:&nbsp;Pose2,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twist:&nbsp;Screw2):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Рекурсивно&nbsp;обновить&nbsp;кинематику&nbsp;звена&nbsp;и&nbsp;его&nbsp;потомков.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;link:&nbsp;Текущее&nbsp;звено<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose:&nbsp;Поза&nbsp;точки&nbsp;привязки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twist:&nbsp;Твист&nbsp;точки&nbsp;привязки&nbsp;(винт&nbsp;скоростей)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обновляем&nbsp;текущее&nbsp;звено<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;link.pose&nbsp;=&nbsp;pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;link.twist&nbsp;=&nbsp;twist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обновляем&nbsp;детей&nbsp;через&nbsp;их&nbsp;шарниры<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child&nbsp;in&nbsp;link.children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;child.joint:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_pose&nbsp;=&nbsp;child.joint.pose_after_joint(link.pose)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_twist&nbsp;=&nbsp;child.joint.twist_after_joint(link.twist)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_link_kinematics(child,&nbsp;child_pose,&nbsp;child_twist)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_mass(self,&nbsp;A:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;матрицу&nbsp;масс&nbsp;M(q)&nbsp;в&nbsp;глобальную&nbsp;матрицу.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;редуцированной&nbsp;системы:&nbsp;M(q)&nbsp;связывает&nbsp;ускорения&nbsp;с&nbsp;силами.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;M&nbsp;строится&nbsp;через&nbsp;якобианы:&nbsp;M&nbsp;=&nbsp;Σ&nbsp;(J_i^T&nbsp;·&nbsp;M_body_i&nbsp;·&nbsp;J_i)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;где&nbsp;J_i&nbsp;-&nbsp;якобиан&nbsp;i-го&nbsp;тела&nbsp;относительно&nbsp;обобщенных&nbsp;координат.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собираем&nbsp;вклады&nbsp;от&nbsp;всех&nbsp;звеньев<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.base:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.base.contribute_subtree_inertia(A,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_to_b(self,&nbsp;b:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;обобщенные&nbsp;силы&nbsp;в&nbsp;правую&nbsp;часть.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Включает:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Гравитационные&nbsp;силы:&nbsp;Q_g&nbsp;=&nbsp;-∂V/∂q<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Кориолисовы&nbsp;силы:&nbsp;Q_c&nbsp;=&nbsp;-C(q,q̇)·q̇<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Приложенные&nbsp;моменты<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Рекурсивно&nbsp;вычисляем&nbsp;силы,&nbsp;спускаясь&nbsp;по&nbsp;дереву<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.base:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.base.contribute_subtree_forces(self.gravity,&nbsp;b,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_kinetic_energy(self)&nbsp;-&gt;&nbsp;float:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Вычислить&nbsp;полную&nbsp;кинетическую&nbsp;энергию&nbsp;системы.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;energy&nbsp;=&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;link&nbsp;in&nbsp;self.links:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;link.inertia:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;link.twist.vector()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;omega&nbsp;=&nbsp;link.twist.moment()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;energy&nbsp;+=&nbsp;link.inertia.get_kinetic_energy(v,&nbsp;omega)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;energy<br>
 <br>
 <br>
-&#9;def coriolis_wrench(self) -&gt; Optional[Screw2]:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вычислить вренч кориолисовых и центробежных сил для звена.<br>
 <br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Screw2: (момент, сила) в мировой СК, либо None, если звено неподвижно<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;if not self.inertia or self.twist is None:<br>
-&#9;&#9;&#9;return None<br>
+class&nbsp;DollJoint2D:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Базовый&nbsp;класс&nbsp;для&nbsp;шарнира&nbsp;в&nbsp;Doll2D.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Шарнир&nbsp;связывает&nbsp;родительское&nbsp;и&nbsp;дочернее&nbsp;звено,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;определяет&nbsp;обобщенную&nbsp;координату&nbsp;и&nbsp;кинематику.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;name:&nbsp;str&nbsp;=&nbsp;&quot;joint&quot;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.parent_link:&nbsp;Optional['DollLink2D']&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.child_link:&nbsp;Optional['DollLink2D']&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_variables(self)&nbsp;-&gt;&nbsp;List[Variable]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вернуть&nbsp;список&nbsp;переменных,&nbsp;связанных&nbsp;с&nbsp;этим&nbsp;шарниром.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Список&nbsp;переменных&nbsp;(может&nbsp;быть&nbsp;пустым&nbsp;для&nbsp;фиксированных&nbsp;шарниров)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;project_wrench(self,&nbsp;wrench:&nbsp;Screw2,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]],&nbsp;b:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Спроецировать&nbsp;вренч&nbsp;на&nbsp;ось&nbsp;шарнира&nbsp;и&nbsp;добавить&nbsp;в&nbsp;вектор&nbsp;обобщенных&nbsp;сил.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench:&nbsp;Вренч&nbsp;сил&nbsp;(Screw2)&nbsp;в&nbsp;точке&nbsp;привязки&nbsp;дочернего&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;переменных&nbsp;на&nbsp;индексы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b:&nbsp;Вектор&nbsp;обобщенных&nbsp;сил<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass&nbsp;&nbsp;#&nbsp;Фиксированный&nbsp;шарнир&nbsp;не&nbsp;имеет&nbsp;степеней&nbsp;свободы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_wrench(self,&nbsp;wrench:&nbsp;Screw2)&nbsp;-&gt;&nbsp;Screw2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Обратная&nbsp;трансформация&nbsp;вренча&nbsp;через&nbsp;шарнир&nbsp;(от&nbsp;child&nbsp;к&nbsp;parent).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench:&nbsp;Вренч&nbsp;в&nbsp;точке&nbsp;привязки&nbsp;дочернего&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вренч&nbsp;в&nbsp;точке&nbsp;привязки&nbsp;родительского&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(&quot;Метод&nbsp;должен&nbsp;быть&nbsp;реализован&nbsp;в&nbsp;подклассе&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;pose_after_joint(self,&nbsp;parent_pose:&nbsp;Pose2)&nbsp;-&gt;&nbsp;Pose2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вычислить&nbsp;позу&nbsp;дочернего&nbsp;звена&nbsp;на&nbsp;основе&nbsp;позы&nbsp;родителя.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_pose:&nbsp;Поза&nbsp;точки&nbsp;привязки&nbsp;родителя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Поза&nbsp;точки&nbsp;привязки&nbsp;ребенка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(&quot;Метод&nbsp;должен&nbsp;быть&nbsp;реализован&nbsp;в&nbsp;подклассе&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;twist_after_joint(self,&nbsp;parent_twist:&nbsp;Screw2)&nbsp;-&gt;&nbsp;Screw2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вычислить&nbsp;твист&nbsp;дочернего&nbsp;звена&nbsp;на&nbsp;основе&nbsp;твиста&nbsp;родителя.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_twist:&nbsp;Твист&nbsp;точки&nbsp;привязки&nbsp;родителя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Твист&nbsp;точки&nbsp;привязки&nbsp;ребенка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;NotImplementedError(&quot;Метод&nbsp;должен&nbsp;быть&nbsp;реализован&nbsp;в&nbsp;подклассе&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
 <br>
-&#9;&#9;ω = float(self.twist.ang.flatten()[0])<br>
-&#9;&#9;v = self.twist.lin<br>
+class&nbsp;DollLink2D:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Звено&nbsp;в&nbsp;Doll2D&nbsp;-&nbsp;твердое&nbsp;тело&nbsp;в&nbsp;цепи.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Атрибуты:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;Имя&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent:&nbsp;Родительское&nbsp;звено<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;children:&nbsp;Дочерние&nbsp;звенья<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint:&nbsp;Шарнир,&nbsp;связывающий&nbsp;это&nbsp;звено&nbsp;с&nbsp;родителем<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inertia:&nbsp;Инерционные&nbsp;характеристики&nbsp;(масса,&nbsp;момент&nbsp;инерции,&nbsp;ЦМ)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Состояние&nbsp;(вычисляется&nbsp;кинематикой):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose:&nbsp;Поза&nbsp;точки&nbsp;привязки&nbsp;(Pose2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twist:&nbsp;Твист&nbsp;точки&nbsp;привязки&nbsp;(Screw2&nbsp;-&nbsp;винт&nbsp;скоростей)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;name:&nbsp;str&nbsp;=&nbsp;&quot;link&quot;,&nbsp;inertia:&nbsp;'SpatialInertia2D'&nbsp;=&nbsp;SpatialInertia2D()):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.children:&nbsp;List['DollLink2D']&nbsp;=&nbsp;[]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.parent:&nbsp;Optional['DollLink2D']&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.joint:&nbsp;Optional[DollJoint2D]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inertia&nbsp;=&nbsp;inertia<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Кинематическое&nbsp;состояние<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pose&nbsp;=&nbsp;Pose2.identity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.twist&nbsp;=&nbsp;Screw2(ang=np.array([0.0]),&nbsp;lin=np.zeros(2))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add_child(self,&nbsp;child:&nbsp;'DollLink2D',&nbsp;joint:&nbsp;DollJoint2D):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Добавить&nbsp;дочернее&nbsp;звено&nbsp;через&nbsp;шарнир.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child:&nbsp;Дочернее&nbsp;звено<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint:&nbsp;Шарнир,&nbsp;соединяющий&nbsp;parent&nbsp;и&nbsp;child<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child.parent&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child.joint&nbsp;=&nbsp;joint<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint.parent_link&nbsp;=&nbsp;self<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint.child_link&nbsp;=&nbsp;child<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.children.append(child)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;gravity_wrench(self,&nbsp;gravity:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;Screw2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вычислить&nbsp;вренч&nbsp;гравитационной&nbsp;силы,&nbsp;действующей&nbsp;на&nbsp;звено.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gravity:&nbsp;Вектор&nbsp;гравитации&nbsp;[м/с²]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вренч&nbsp;гравитации&nbsp;(момент&nbsp;+&nbsp;сила)&nbsp;в&nbsp;точке&nbsp;привязки&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;self.inertia:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(ang=np.array([0.0]),&nbsp;lin=np.zeros(2))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.inertia.gravity_wrench(self.pose,&nbsp;gravity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;local_wrench(self,&nbsp;gravity:&nbsp;np.ndarray)&nbsp;-&gt;&nbsp;Screw2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вычислить&nbsp;суммарный&nbsp;вренч&nbsp;всех&nbsp;сил,&nbsp;действующих&nbsp;на&nbsp;звено.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Включает:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;гравитацию<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;кориолисовы&nbsp;и&nbsp;центробежные&nbsp;силы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;(в&nbsp;будущем)&nbsp;внешние&nbsp;силы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench&nbsp;=&nbsp;self.gravity_wrench(gravity)<br>
 <br>
-&#9;&#9;# если скорости нулевые — можно не считать<br>
-&#9;&#9;if abs(ω) &lt; 1e-12 and np.linalg.norm(v) &lt; 1e-12:<br>
-&#9;&#9;&#9;return None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;coriolis_wrench&nbsp;=&nbsp;self.coriolis_wrench()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;coriolis_wrench&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench&nbsp;+=&nbsp;coriolis_wrench<br>
 <br>
-&#9;&#9;# Центр масс в мировой СК<br>
-&#9;&#9;r_c = self.pose.rotation_matrix() @ self.inertia.com  # com — в локальной СК<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;TODO:&nbsp;добавить&nbsp;внешние&nbsp;силы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;wrench<br>
 <br>
-&#9;&#9;# Скорость центра масс<br>
-&#9;&#9;v_c = v + ω * np.array([-r_c[1], r_c[0]])<br>
 <br>
-&#9;&#9;# Кориолисовая сила<br>
-&#9;&#9;F_c = self.inertia.mass * ω * np.array([-v_c[1], v_c[0]])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;coriolis_wrench(self)&nbsp;-&gt;&nbsp;Optional[Screw2]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вычислить&nbsp;вренч&nbsp;кориолисовых&nbsp;и&nbsp;центробежных&nbsp;сил&nbsp;для&nbsp;звена.<br>
 <br>
-&#9;&#9;# Момент относительно точки привязки<br>
-&#9;&#9;M_c = r_c[0] * F_c[1] - r_c[1] * F_c[0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Screw2:&nbsp;(момент,&nbsp;сила)&nbsp;в&nbsp;мировой&nbsp;СК,&nbsp;либо&nbsp;None,&nbsp;если&nbsp;звено&nbsp;неподвижно<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;self.inertia&nbsp;or&nbsp;self.twist&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
-&#9;&#9;return Screw2(ang=np.array([M_c]), lin=F_c)<br>
-&#9;<br>
-&#9;def contribute_subtree_forces(self, gravity: np.ndarray, <br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;b: np.ndarray, <br>
-&#9;&#9;&#9;&#9;&#9;&#9;&#9;&#9;index_map: Dict[Variable, List[int]]) -&gt; Screw2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Рекурсивно вычислить суммарный вренч сил для поддерева.<br>
-&#9;&#9;<br>
-&#9;&#9;Алгоритм:<br>
-&#9;&#9;1. Вычисляем вренч сил на текущем звене (гравитация, внешние силы)<br>
-&#9;&#9;2. Рекурсивно получаем вренчи от детей<br>
-&#9;&#9;3. Трансформируем вренчи детей в точку привязки текущего звена<br>
-&#9;&#9;4. Суммируем все вренчи<br>
-&#9;&#9;5. Проецируем на шарнир текущего звена (если есть)<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;gravity: Вектор гравитации [м/с²]<br>
-&#9;&#9;&#9;b: Вектор обобщенных сил<br>
-&#9;&#9;&#9;index_map: Отображение переменных на индексы<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Суммарный вренч сил, действующих на поддерево (в точке привязки)<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# 1. Вренч сил на текущем звене<br>
-&#9;&#9;wrench_link = self.local_wrench(gravity)<br>
-&#9;&#9;<br>
-&#9;&#9;# 2. Собираем вренчи от детей<br>
-&#9;&#9;total_wrench = wrench_link<br>
-&#9;&#9;for child in self.children:<br>
-&#9;&#9;&#9;# Рекурсивно получаем вренч поддерева ребенка<br>
-&#9;&#9;&#9;child_wrench = child.contribute_subtree_forces(gravity, b, index_map)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;# Трансформируем вренч ребенка в точку привязки текущего звена<br>
-&#9;&#9;&#9;# Используем обратную трансформацию через шарнир ребенка<br>
-&#9;&#9;&#9;child_wrench = child.joint.inverse_transform_wrench(child_wrench)<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;&#9;total_wrench = total_wrench + child_wrench<br>
-&#9;&#9;<br>
-&#9;&#9;# 3. Проецируем на шарнир текущего звена<br>
-&#9;&#9;# Обобщенная сила = проекция вренча на оси шарнира<br>
-&#9;&#9;# Для фиксированного шарнира (без переменных) project_wrench ничего не делает<br>
-&#9;&#9;if self.joint:<br>
-&#9;&#9;&#9;self.joint.project_wrench(total_wrench, index_map, b)<br>
-&#9;&#9;<br>
-&#9;&#9;return total_wrench<br>
-&#9;<br>
-&#9;def contribute_subtree_inertia(self, A: np.ndarray, index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Рекурсивно собрать spatial inertia от поддерева, проецировать на переменные.<br>
-&#9;&#9;Алгоритм:<br>
-&#9;&#9;1. Собрать spatial inertia от детей, трансформировать к текущему звену<br>
-&#9;&#9;2. Суммировать с собственной инерцией<br>
-&#9;&#9;3. Проецировать итоговую spatial inertia на переменные звена (через якобиан)<br>
-&#9;&#9;4. Рекурсивно пройти по дереву<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# 1. Собираем spatial inertia от детей<br>
-&#9;&#9;subtree_inertia = SpatialInertia2D(0.0, 0.0, np.zeros(2))<br>
-&#9;&#9;for child in self.children:<br>
-&#9;&#9;&#9;child_inertia = child.contribute_subtree_inertia(A, index_map)<br>
-&#9;&#9;&#9;child_inertia = child_inertia.transform_by(child.joint.child_pose_in_joint)<br>
-&#9;&#9;&#9;subtree_inertia = subtree_inertia + child_inertia<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ω&nbsp;=&nbsp;float(self.twist.ang.flatten()[0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;self.twist.lin<br>
 <br>
-&#9;&#9;# 2. Суммируем с собственной инерцией<br>
-&#9;&#9;total_inertia = subtree_inertia + self.inertia<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;если&nbsp;скорости&nbsp;нулевые&nbsp;—&nbsp;можно&nbsp;не&nbsp;считать<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;abs(ω)&nbsp;&lt;&nbsp;1e-12&nbsp;and&nbsp;np.linalg.norm(v)&nbsp;&lt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
-&#9;&#9;# 3. Проецируем через шарнир (если есть)<br>
-&#9;&#9;if self.joint:<br>
-&#9;&#9;&#9;self.joint.project_inertia(total_inertia, A, index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Центр&nbsp;масс&nbsp;в&nbsp;мировой&nbsp;СК<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r_c&nbsp;=&nbsp;self.pose.rotation_matrix()&nbsp;@&nbsp;self.inertia.com&nbsp;&nbsp;#&nbsp;com&nbsp;—&nbsp;в&nbsp;локальной&nbsp;СК<br>
 <br>
-&#9;&#9;# 4. Возвращаем spatial inertia поддерева для родителя<br>
-&#9;&#9;return total_inertia<br>
-&#9;<br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return f&quot;DollLink2D({self.name})&quot;<br>
-&#9;&#9;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Скорость&nbsp;центра&nbsp;масс<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v_c&nbsp;=&nbsp;v&nbsp;+&nbsp;ω&nbsp;*&nbsp;np.array([-r_c[1],&nbsp;r_c[0]])<br>
 <br>
-class DollRotatorJoint2D(DollJoint2D):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Вращательный шарнир для Doll2D.<br>
-&#9;<br>
-&#9;Связывает родительское и дочернее звено через угловую координату.<br>
-&#9;<br>
-&#9;Атрибуты:<br>
-&#9;&#9;omega: Переменная угловой скорости [рад/с]<br>
-&#9;&#9;angle: Текущий угол [рад] (интегрируется из omega)<br>
-&#9;&#9;joint_pose_in_parent: Поза шарнира в системе координат родителя<br>
-&#9;&#9;child_pose_in_joint: Поза точки привязки ребенка в системе шарнира<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;<br>
-&#9;def __init__(self, <br>
-&#9;&#9;&#9;&#9;name: str = &quot;rotator_joint&quot;,<br>
-&#9;&#9;&#9;&#9;joint_pose_in_parent: Pose2 = None,<br>
-&#9;&#9;&#9;&#9;child_pose_in_joint: Pose2 = None,<br>
-&#9;&#9;&#9;&#9;assembler=None):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;name: Имя шарнира<br>
-&#9;&#9;&#9;joint_pose_in_parent: Поза шарнира в СК родителя<br>
-&#9;&#9;&#9;child_pose_in_joint: Поза точки привязки ребенка в СК шарнира<br>
-&#9;&#9;&#9;assembler: MatrixAssembler для регистрации переменной<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;super().__init__(name)<br>
-&#9;&#9;self.omega = Variable(name=f&quot;{name}_omega&quot;, size=1)<br>
-&#9;&#9;self.angle = 0.0  # текущий угол (интегрируется)<br>
-&#9;&#9;<br>
-&#9;&#9;self.joint_pose_in_parent = joint_pose_in_parent if joint_pose_in_parent is not None else Pose2.identity()<br>
-&#9;&#9;self.child_pose_in_joint = child_pose_in_joint if child_pose_in_joint is not None else Pose2.identity()<br>
-&#9;&#9;<br>
-&#9;&#9;if assembler:<br>
-&#9;&#9;&#9;assembler.add_variable(self.omega)<br>
-&#9;<br>
-&#9;def get_variables(self) -&gt; List[Variable]:<br>
-&#9;&#9;&quot;&quot;&quot;Вернуть список переменных шарнира.&quot;&quot;&quot;<br>
-&#9;&#9;return [self.omega]<br>
-&#9;<br>
-&#9;def project_wrench(self, wrench: Screw2, index_map: Dict[Variable, List[int]], b: np.ndarray):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Спроецировать вренч на ось вращательного шарнира.<br>
-&#9;&#9;<br>
-&#9;&#9;Для вращательного шарнира обобщенная сила = момент (угловая компонента вренча).<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;wrench: Вренч сил в точке привязки дочернего звена<br>
-&#9;&#9;&#9;index_map: Отображение переменных на индексы<br>
-&#9;&#9;&#9;b: Вектор обобщенных сил<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;idx = index_map[self.omega][0]<br>
-&#9;&#9;# Обобщенная сила для вращательного шарнира = момент<br>
-&#9;&#9;b[idx] += wrench.moment()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Кориолисовая&nbsp;сила<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;F_c&nbsp;=&nbsp;self.inertia.mass&nbsp;*&nbsp;ω&nbsp;*&nbsp;np.array([-v_c[1],&nbsp;v_c[0]])<br>
 <br>
-&#9;def project_inertia(self, inertia: 'SpatialInertia2D',<br>
-&#9;&#9;&#9;&#9;&#9;A: np.ndarray,<br>
-&#9;&#9;&#9;&#9;&#9;index_map: Dict[Variable, List[int]]):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Проецировать spatial inertia на матрицу масс через вращательный DOF.<br>
-&#9;&#9;Эквивалентно вычислению M_ii = Sᵀ I S, где S — ось вращения.<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;vars = self.get_variables()<br>
-&#9;&#9;if not vars:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;<br>
-&#9;&#9;idx = index_map[vars[0]][0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Момент&nbsp;относительно&nbsp;точки&nbsp;привязки<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;M_c&nbsp;=&nbsp;r_c[0]&nbsp;*&nbsp;F_c[1]&nbsp;-&nbsp;r_c[1]&nbsp;*&nbsp;F_c[0]<br>
 <br>
-&#9;&#9;# Вращения в локальной СК шарнира в плоскости xy<br>
-&#9;&#9;S = np.array([1.0, 0.0, 0.0])  # [ω, vx, vy]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(ang=np.array([M_c]),&nbsp;lin=F_c)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_subtree_forces(self,&nbsp;gravity:&nbsp;np.ndarray,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b:&nbsp;np.ndarray,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]])&nbsp;-&gt;&nbsp;Screw2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Рекурсивно&nbsp;вычислить&nbsp;суммарный&nbsp;вренч&nbsp;сил&nbsp;для&nbsp;поддерева.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Алгоритм:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.&nbsp;Вычисляем&nbsp;вренч&nbsp;сил&nbsp;на&nbsp;текущем&nbsp;звене&nbsp;(гравитация,&nbsp;внешние&nbsp;силы)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.&nbsp;Рекурсивно&nbsp;получаем&nbsp;вренчи&nbsp;от&nbsp;детей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.&nbsp;Трансформируем&nbsp;вренчи&nbsp;детей&nbsp;в&nbsp;точку&nbsp;привязки&nbsp;текущего&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.&nbsp;Суммируем&nbsp;все&nbsp;вренчи<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;5.&nbsp;Проецируем&nbsp;на&nbsp;шарнир&nbsp;текущего&nbsp;звена&nbsp;(если&nbsp;есть)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gravity:&nbsp;Вектор&nbsp;гравитации&nbsp;[м/с²]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b:&nbsp;Вектор&nbsp;обобщенных&nbsp;сил<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;переменных&nbsp;на&nbsp;индексы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Суммарный&nbsp;вренч&nbsp;сил,&nbsp;действующих&nbsp;на&nbsp;поддерево&nbsp;(в&nbsp;точке&nbsp;привязки)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;1.&nbsp;Вренч&nbsp;сил&nbsp;на&nbsp;текущем&nbsp;звене<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench_link&nbsp;=&nbsp;self.local_wrench(gravity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;2.&nbsp;Собираем&nbsp;вренчи&nbsp;от&nbsp;детей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total_wrench&nbsp;=&nbsp;wrench_link<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child&nbsp;in&nbsp;self.children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Рекурсивно&nbsp;получаем&nbsp;вренч&nbsp;поддерева&nbsp;ребенка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_wrench&nbsp;=&nbsp;child.contribute_subtree_forces(gravity,&nbsp;b,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Трансформируем&nbsp;вренч&nbsp;ребенка&nbsp;в&nbsp;точку&nbsp;привязки&nbsp;текущего&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Используем&nbsp;обратную&nbsp;трансформацию&nbsp;через&nbsp;шарнир&nbsp;ребенка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_wrench&nbsp;=&nbsp;child.joint.inverse_transform_wrench(child_wrench)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total_wrench&nbsp;=&nbsp;total_wrench&nbsp;+&nbsp;child_wrench<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;3.&nbsp;Проецируем&nbsp;на&nbsp;шарнир&nbsp;текущего&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обобщенная&nbsp;сила&nbsp;=&nbsp;проекция&nbsp;вренча&nbsp;на&nbsp;оси&nbsp;шарнира<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Для&nbsp;фиксированного&nbsp;шарнира&nbsp;(без&nbsp;переменных)&nbsp;project_wrench&nbsp;ничего&nbsp;не&nbsp;делает<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.joint:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.joint.project_wrench(total_wrench,&nbsp;index_map,&nbsp;b)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;total_wrench<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;contribute_subtree_inertia(self,&nbsp;A:&nbsp;np.ndarray,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Рекурсивно&nbsp;собрать&nbsp;spatial&nbsp;inertia&nbsp;от&nbsp;поддерева,&nbsp;проецировать&nbsp;на&nbsp;переменные.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Алгоритм:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.&nbsp;Собрать&nbsp;spatial&nbsp;inertia&nbsp;от&nbsp;детей,&nbsp;трансформировать&nbsp;к&nbsp;текущему&nbsp;звену<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.&nbsp;Суммировать&nbsp;с&nbsp;собственной&nbsp;инерцией<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3.&nbsp;Проецировать&nbsp;итоговую&nbsp;spatial&nbsp;inertia&nbsp;на&nbsp;переменные&nbsp;звена&nbsp;(через&nbsp;якобиан)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.&nbsp;Рекурсивно&nbsp;пройти&nbsp;по&nbsp;дереву<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;1.&nbsp;Собираем&nbsp;spatial&nbsp;inertia&nbsp;от&nbsp;детей<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subtree_inertia&nbsp;=&nbsp;SpatialInertia2D(0.0,&nbsp;0.0,&nbsp;np.zeros(2))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child&nbsp;in&nbsp;self.children:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_inertia&nbsp;=&nbsp;child.contribute_subtree_inertia(A,&nbsp;index_map)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_inertia&nbsp;=&nbsp;child_inertia.transform_by(child.joint.child_pose_in_joint)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subtree_inertia&nbsp;=&nbsp;subtree_inertia&nbsp;+&nbsp;child_inertia<br>
 <br>
-&#9;&#9;# Преобразуем ось в систему родителя<br>
-&#9;&#9;R = self.joint_pose_in_parent.rotation_matrix()<br>
-&#9;&#9;S_world = np.array([S[0], *(R @ S[1:])])  # [ω, vx, vy]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;2.&nbsp;Суммируем&nbsp;с&nbsp;собственной&nbsp;инерцией<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total_inertia&nbsp;=&nbsp;subtree_inertia&nbsp;+&nbsp;self.inertia<br>
 <br>
-&#9;&#9;# Spatial inertia в матричном виде<br>
-&#9;&#9;I = inertia.to_matrix()  # 3x3<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;3.&nbsp;Проецируем&nbsp;через&nbsp;шарнир&nbsp;(если&nbsp;есть)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.joint:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.joint.project_inertia(total_inertia,&nbsp;A,&nbsp;index_map)<br>
 <br>
-&#9;&#9;# M_ii = Sᵀ I S<br>
-&#9;&#9;Mjj = float(S_world @ (I @ S_world))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;4.&nbsp;Возвращаем&nbsp;spatial&nbsp;inertia&nbsp;поддерева&nbsp;для&nbsp;родителя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;total_inertia<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;DollLink2D({self.name})&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 <br>
-&#9;&#9;# Записываем в глобальную матрицу масс<br>
-&#9;&#9;A[idx, idx] += Mjj<br>
-&#9;<br>
-&#9;def inverse_transform_wrench(self, wrench: Screw2) -&gt; Screw2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Обратная трансформация вренча через вращательный шарнир (от child к parent).<br>
-&#9;&#9;<br>
-&#9;&#9;Вренч трансформируется обратно по цепочке:<br>
-&#9;&#9;child -&gt; child_pose_in_joint^-1 -&gt; rotation^-1 -&gt; joint_pose_in_parent^-1 -&gt; parent<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;wrench: Вренч в точке привязки дочернего звена<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Вренч в точке привязки родительского звена<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# Обратная трансформация по цепочке<br>
-&#9;&#9;result = wrench.inverse_transform_as_wrench_by(self.child_pose_in_joint)<br>
-&#9;&#9;joint_rotation = Pose2.rotation(self.angle)<br>
-&#9;&#9;result = result.inverse_transform_as_wrench_by(joint_rotation)<br>
-&#9;&#9;result = result.inverse_transform_as_wrench_by(self.joint_pose_in_parent)<br>
-&#9;&#9;return result<br>
-&#9;<br>
-&#9;def pose_after_joint(self, parent_pose: Pose2) -&gt; Pose2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вычислить позу дочернего звена на основе позы родителя.<br>
-&#9;&#9;<br>
-&#9;&#9;Композиция поз:<br>
-&#9;&#9;child_pose = parent_pose * joint_pose_in_parent * rotation(angle) * child_pose_in_joint<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;parent_pose: Поза точки привязки родителя<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Поза точки привязки ребенка<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;joint_rotation = Pose2.rotation(self.angle)<br>
-&#9;&#9;joint_pose = parent_pose * self.joint_pose_in_parent * joint_rotation<br>
-&#9;&#9;child_pose = joint_pose * self.child_pose_in_joint<br>
-&#9;&#9;return child_pose<br>
-&#9;<br>
-&#9;def joint_twist_in_joint(self) -&gt; Screw2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вычислить твист шарнира в его собственной системе координат.<br>
-&#9;&#9;<br>
-&#9;&#9;Возвращает твист, соответствующий собственной угловой скорости шарнира.<br>
-&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Твист шарнира в его системе координат<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;return Screw2(<br>
-&#9;&#9;&#9;ang=self.omega.value,<br>
-&#9;&#9;&#9;lin=np.zeros(2)<br>
-&#9;&#9;)<br>
+class&nbsp;DollRotatorJoint2D(DollJoint2D):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Вращательный&nbsp;шарнир&nbsp;для&nbsp;Doll2D.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Связывает&nbsp;родительское&nbsp;и&nbsp;дочернее&nbsp;звено&nbsp;через&nbsp;угловую&nbsp;координату.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Атрибуты:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;omega:&nbsp;Переменная&nbsp;угловой&nbsp;скорости&nbsp;[рад/с]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;angle:&nbsp;Текущий&nbsp;угол&nbsp;[рад]&nbsp;(интегрируется&nbsp;из&nbsp;omega)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint_pose_in_parent:&nbsp;Поза&nbsp;шарнира&nbsp;в&nbsp;системе&nbsp;координат&nbsp;родителя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_pose_in_joint:&nbsp;Поза&nbsp;точки&nbsp;привязки&nbsp;ребенка&nbsp;в&nbsp;системе&nbsp;шарнира<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;str&nbsp;=&nbsp;&quot;rotator_joint&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint_pose_in_parent:&nbsp;Pose2&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_pose_in_joint:&nbsp;Pose2&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler=None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name:&nbsp;Имя&nbsp;шарнира<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint_pose_in_parent:&nbsp;Поза&nbsp;шарнира&nbsp;в&nbsp;СК&nbsp;родителя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_pose_in_joint:&nbsp;Поза&nbsp;точки&nbsp;привязки&nbsp;ребенка&nbsp;в&nbsp;СК&nbsp;шарнира<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler:&nbsp;MatrixAssembler&nbsp;для&nbsp;регистрации&nbsp;переменной<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.omega&nbsp;=&nbsp;Variable(name=f&quot;{name}_omega&quot;,&nbsp;size=1)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.angle&nbsp;=&nbsp;0.0&nbsp;&nbsp;#&nbsp;текущий&nbsp;угол&nbsp;(интегрируется)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.joint_pose_in_parent&nbsp;=&nbsp;joint_pose_in_parent&nbsp;if&nbsp;joint_pose_in_parent&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;Pose2.identity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.child_pose_in_joint&nbsp;=&nbsp;child_pose_in_joint&nbsp;if&nbsp;child_pose_in_joint&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;Pose2.identity()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;assembler:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assembler.add_variable(self.omega)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_variables(self)&nbsp;-&gt;&nbsp;List[Variable]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Вернуть&nbsp;список&nbsp;переменных&nbsp;шарнира.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[self.omega]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;project_wrench(self,&nbsp;wrench:&nbsp;Screw2,&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]],&nbsp;b:&nbsp;np.ndarray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Спроецировать&nbsp;вренч&nbsp;на&nbsp;ось&nbsp;вращательного&nbsp;шарнира.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;вращательного&nbsp;шарнира&nbsp;обобщенная&nbsp;сила&nbsp;=&nbsp;момент&nbsp;(угловая&nbsp;компонента&nbsp;вренча).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench:&nbsp;Вренч&nbsp;сил&nbsp;в&nbsp;точке&nbsp;привязки&nbsp;дочернего&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Отображение&nbsp;переменных&nbsp;на&nbsp;индексы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b:&nbsp;Вектор&nbsp;обобщенных&nbsp;сил<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;index_map[self.omega][0]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обобщенная&nbsp;сила&nbsp;для&nbsp;вращательного&nbsp;шарнира&nbsp;=&nbsp;момент<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b[idx]&nbsp;+=&nbsp;wrench.moment()<br>
 <br>
-&#9;def twist_after_joint(self, parent_twist: Screw2) -&gt; Screw2:<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Вычислить твист дочернего звена на основе твиста родителя.<br>
-&#9;&#9;<br>
-&#9;&#9;Трансформация твиста с добавлением собственной скорости шарнира.<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;parent_twist: Твист точки привязки родителя<br>
-&#9;&#9;&#9;<br>
-&#9;&#9;Returns:<br>
-&#9;&#9;&#9;Твист точки привязки ребенка<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;# 1. Трансформируем твист родителя в систему шарнира<br>
-&#9;&#9;parent_twist_in_joint = parent_twist.transform_as_twist_by(self.joint_pose_in_parent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;project_inertia(self,&nbsp;inertia:&nbsp;'SpatialInertia2D',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A:&nbsp;np.ndarray,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index_map:&nbsp;Dict[Variable,&nbsp;List[int]]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Проецировать&nbsp;spatial&nbsp;inertia&nbsp;на&nbsp;матрицу&nbsp;масс&nbsp;через&nbsp;вращательный&nbsp;DOF.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Эквивалентно&nbsp;вычислению&nbsp;M_ii&nbsp;=&nbsp;Sᵀ&nbsp;I&nbsp;S,&nbsp;где&nbsp;S&nbsp;—&nbsp;ось&nbsp;вращения.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vars&nbsp;=&nbsp;self.get_variables()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;vars:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;=&nbsp;index_map[vars[0]][0]<br>
 <br>
-&#9;&#9;# 2. Добавляем собственную угловую скорость шарнира<br>
-&#9;&#9;joint_twist = parent_twist_in_joint + self.joint_twist_in_joint()<br>
-&#9;&#9;<br>
-&#9;&#9;# 3. Трансформируем в точку привязки ребенка<br>
-&#9;&#9;child_twist = joint_twist.transform_as_twist_by(self.child_pose_in_joint)<br>
-&#9;&#9;<br>
-&#9;&#9;return child_twist<br>
-&#9;<br>
-&#9;def integrate(self, dt: float):<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;Интегрировать угол из угловой скорости.<br>
-&#9;&#9;<br>
-&#9;&#9;Args:<br>
-&#9;&#9;&#9;dt: Шаг по времени [с]<br>
-&#9;&#9;&quot;&quot;&quot;<br>
-&#9;&#9;self.angle += self.omega.value * dt<br>
-&#9;<br>
-&#9;def __repr__(self):<br>
-&#9;&#9;return f&quot;DollRotatorJoint2D({self.name}, angle={self.angle:.3f}, omega={self.omega.value:.3f})&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Вращения&nbsp;в&nbsp;локальной&nbsp;СК&nbsp;шарнира&nbsp;в&nbsp;плоскости&nbsp;xy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S&nbsp;=&nbsp;np.array([1.0,&nbsp;0.0,&nbsp;0.0])&nbsp;&nbsp;#&nbsp;[ω,&nbsp;vx,&nbsp;vy]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Преобразуем&nbsp;ось&nbsp;в&nbsp;систему&nbsp;родителя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R&nbsp;=&nbsp;self.joint_pose_in_parent.rotation_matrix()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S_world&nbsp;=&nbsp;np.array([S[0],&nbsp;*(R&nbsp;@&nbsp;S[1:])])&nbsp;&nbsp;#&nbsp;[ω,&nbsp;vx,&nbsp;vy]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Spatial&nbsp;inertia&nbsp;в&nbsp;матричном&nbsp;виде<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;I&nbsp;=&nbsp;inertia.to_matrix()&nbsp;&nbsp;#&nbsp;3x3<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;M_ii&nbsp;=&nbsp;Sᵀ&nbsp;I&nbsp;S<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Mjj&nbsp;=&nbsp;float(S_world&nbsp;@&nbsp;(I&nbsp;@&nbsp;S_world))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Записываем&nbsp;в&nbsp;глобальную&nbsp;матрицу&nbsp;масс<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A[idx,&nbsp;idx]&nbsp;+=&nbsp;Mjj<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;inverse_transform_wrench(self,&nbsp;wrench:&nbsp;Screw2)&nbsp;-&gt;&nbsp;Screw2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Обратная&nbsp;трансформация&nbsp;вренча&nbsp;через&nbsp;вращательный&nbsp;шарнир&nbsp;(от&nbsp;child&nbsp;к&nbsp;parent).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вренч&nbsp;трансформируется&nbsp;обратно&nbsp;по&nbsp;цепочке:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child&nbsp;-&gt;&nbsp;child_pose_in_joint^-1&nbsp;-&gt;&nbsp;rotation^-1&nbsp;-&gt;&nbsp;joint_pose_in_parent^-1&nbsp;-&gt;&nbsp;parent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrench:&nbsp;Вренч&nbsp;в&nbsp;точке&nbsp;привязки&nbsp;дочернего&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вренч&nbsp;в&nbsp;точке&nbsp;привязки&nbsp;родительского&nbsp;звена<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обратная&nbsp;трансформация&nbsp;по&nbsp;цепочке<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result&nbsp;=&nbsp;wrench.inverse_transform_as_wrench_by(self.child_pose_in_joint)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint_rotation&nbsp;=&nbsp;Pose2.rotation(self.angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result&nbsp;=&nbsp;result.inverse_transform_as_wrench_by(joint_rotation)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result&nbsp;=&nbsp;result.inverse_transform_as_wrench_by(self.joint_pose_in_parent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;result<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;pose_after_joint(self,&nbsp;parent_pose:&nbsp;Pose2)&nbsp;-&gt;&nbsp;Pose2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вычислить&nbsp;позу&nbsp;дочернего&nbsp;звена&nbsp;на&nbsp;основе&nbsp;позы&nbsp;родителя.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Композиция&nbsp;поз:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_pose&nbsp;=&nbsp;parent_pose&nbsp;*&nbsp;joint_pose_in_parent&nbsp;*&nbsp;rotation(angle)&nbsp;*&nbsp;child_pose_in_joint<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_pose:&nbsp;Поза&nbsp;точки&nbsp;привязки&nbsp;родителя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Поза&nbsp;точки&nbsp;привязки&nbsp;ребенка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint_rotation&nbsp;=&nbsp;Pose2.rotation(self.angle)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint_pose&nbsp;=&nbsp;parent_pose&nbsp;*&nbsp;self.joint_pose_in_parent&nbsp;*&nbsp;joint_rotation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_pose&nbsp;=&nbsp;joint_pose&nbsp;*&nbsp;self.child_pose_in_joint<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;child_pose<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;joint_twist_in_joint(self)&nbsp;-&gt;&nbsp;Screw2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вычислить&nbsp;твист&nbsp;шарнира&nbsp;в&nbsp;его&nbsp;собственной&nbsp;системе&nbsp;координат.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;твист,&nbsp;соответствующий&nbsp;собственной&nbsp;угловой&nbsp;скорости&nbsp;шарнира.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Твист&nbsp;шарнира&nbsp;в&nbsp;его&nbsp;системе&nbsp;координат<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Screw2(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ang=self.omega.value,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lin=np.zeros(2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;twist_after_joint(self,&nbsp;parent_twist:&nbsp;Screw2)&nbsp;-&gt;&nbsp;Screw2:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вычислить&nbsp;твист&nbsp;дочернего&nbsp;звена&nbsp;на&nbsp;основе&nbsp;твиста&nbsp;родителя.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Трансформация&nbsp;твиста&nbsp;с&nbsp;добавлением&nbsp;собственной&nbsp;скорости&nbsp;шарнира.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_twist:&nbsp;Твист&nbsp;точки&nbsp;привязки&nbsp;родителя<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Твист&nbsp;точки&nbsp;привязки&nbsp;ребенка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;1.&nbsp;Трансформируем&nbsp;твист&nbsp;родителя&nbsp;в&nbsp;систему&nbsp;шарнира<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parent_twist_in_joint&nbsp;=&nbsp;parent_twist.transform_as_twist_by(self.joint_pose_in_parent)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;2.&nbsp;Добавляем&nbsp;собственную&nbsp;угловую&nbsp;скорость&nbsp;шарнира<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;joint_twist&nbsp;=&nbsp;parent_twist_in_joint&nbsp;+&nbsp;self.joint_twist_in_joint()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;3.&nbsp;Трансформируем&nbsp;в&nbsp;точку&nbsp;привязки&nbsp;ребенка<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child_twist&nbsp;=&nbsp;joint_twist.transform_as_twist_by(self.child_pose_in_joint)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;child_twist<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;integrate(self,&nbsp;dt:&nbsp;float):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Интегрировать&nbsp;угол&nbsp;из&nbsp;угловой&nbsp;скорости.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Args:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dt:&nbsp;Шаг&nbsp;по&nbsp;времени&nbsp;[с]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.angle&nbsp;+=&nbsp;self.omega.value&nbsp;*&nbsp;dt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__repr__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;f&quot;DollRotatorJoint2D({self.name},&nbsp;angle={self.angle:.3f},&nbsp;omega={self.omega.value:.3f})&quot;<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

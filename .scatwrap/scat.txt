@@ -24,12 +24,12 @@ termin/fem/**<br>
 <br>
 [MAPFORMAT]<br>
 -----------------<br>
-Проект termin (Всякая математика, крутящаяся вокруг линейной алгебры, тензоров, 3д графики, а заодно 3д редактор)<br>
-Актуальное состояние репы:<br>
+Проект&nbsp;termin&nbsp;(Всякая&nbsp;математика,&nbsp;крутящаяся&nbsp;вокруг&nbsp;линейной&nbsp;алгебры,&nbsp;тензоров,&nbsp;3д&nbsp;графики,&nbsp;а&nbsp;заодно&nbsp;3д&nbsp;редактор)<br>
+Актуальное&nbsp;состояние&nbsp;репы:<br>
 <br>
 {RAWMAP}<br>
-В основном сейчас нас интересует редактор, тоесть termin/apps/*, termin/visualization/**, examples/visual/*<br>
-Доступ к коду по ссылкам работает в тестовом режиме. Обязательно скажи, если код выглядет невалидно, так, как будто его проживал парсер, и что он не выполнится.<br>
+В&nbsp;основном&nbsp;сейчас&nbsp;нас&nbsp;интересует&nbsp;редактор,&nbsp;тоесть&nbsp;termin/apps/*,&nbsp;termin/visualization/**,&nbsp;examples/visual/*<br>
+Доступ&nbsp;к&nbsp;коду&nbsp;по&nbsp;ссылкам&nbsp;работает&nbsp;в&nbsp;тестовом&nbsp;режиме.&nbsp;Обязательно&nbsp;скажи,&nbsp;если&nbsp;код&nbsp;выглядет&nbsp;невалидно,&nbsp;так,&nbsp;как&nbsp;будто&nbsp;его&nbsp;проживал&nbsp;парсер,&nbsp;и&nbsp;что&nbsp;он&nbsp;не&nbsp;выполнится.<br>
 -----------------<br>
 <!-- END SCAT CODE -->
 </body>

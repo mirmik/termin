@@ -6,29 +6,29 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from termin.colliders.attached import AttachedCollider<br>
-from termin.colliders.collider import Collider<br>
-from termin.visualization.entity import Component <br>
+from&nbsp;termin.colliders.attached&nbsp;import&nbsp;AttachedCollider<br>
+from&nbsp;termin.colliders.collider&nbsp;import&nbsp;Collider<br>
+from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Component&nbsp;<br>
 <br>
-class ColliderComponent(Component):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Компонент, навешиваемый на Entity.<br>
-&#9;Оборачивает коллайдер в AttachedCollider, чтобы он следовал за Transform3.<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;def __init__(self, collider: Collider):<br>
-&#9;&#9;super().__init__(enabled=True)<br>
-&#9;&#9;self._source_collider = collider<br>
-&#9;&#9;self.attached = None<br>
+class&nbsp;ColliderComponent(Component):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Компонент,&nbsp;навешиваемый&nbsp;на&nbsp;Entity.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Оборачивает&nbsp;коллайдер&nbsp;в&nbsp;AttachedCollider,&nbsp;чтобы&nbsp;он&nbsp;следовал&nbsp;за&nbsp;Transform3.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;collider:&nbsp;Collider):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(enabled=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._source_collider&nbsp;=&nbsp;collider<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.attached&nbsp;=&nbsp;None<br>
 <br>
-&#9;def start(self, scene):<br>
-&#9;&#9;super().start(scene)<br>
-&#9;&#9;if self.entity is None:<br>
-&#9;&#9;&#9;return<br>
-&#9;&#9;# entity.transform всегда Transform3<br>
-&#9;&#9;self.attached = AttachedCollider(self._source_collider, self.entity.transform)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;start(self,&nbsp;scene):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().start(scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.entity&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;entity.transform&nbsp;всегда&nbsp;Transform3<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.attached&nbsp;=&nbsp;AttachedCollider(self._source_collider,&nbsp;self.entity.transform)<br>
 <br>
-&#9;def get_collider(self):<br>
-&#9;&#9;return self.attached<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_collider(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.attached<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

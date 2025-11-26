@@ -6,46 +6,46 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-# Colliders Module<br>
+#&nbsp;Colliders&nbsp;Module<br>
 <br>
-Модуль для обнаружения столкновений и вычисления расстояний между геометрическими примитивами.<br>
+Модуль&nbsp;для&nbsp;обнаружения&nbsp;столкновений&nbsp;и&nbsp;вычисления&nbsp;расстояний&nbsp;между&nbsp;геометрическими&nbsp;примитивами.<br>
 <br>
-## Назначение<br>
+##&nbsp;Назначение<br>
 <br>
-Модуль предоставляет набор коллайдеров для:<br>
-- Вычисления ближайших точек между объектами<br>
-- Определения расстояния между объектами<br>
-- Вычисления векторов избегания столкновений<br>
-- Трансформации коллайдеров в пространстве<br>
+Модуль&nbsp;предоставляет&nbsp;набор&nbsp;коллайдеров&nbsp;для:<br>
+-&nbsp;Вычисления&nbsp;ближайших&nbsp;точек&nbsp;между&nbsp;объектами<br>
+-&nbsp;Определения&nbsp;расстояния&nbsp;между&nbsp;объектами<br>
+-&nbsp;Вычисления&nbsp;векторов&nbsp;избегания&nbsp;столкновений<br>
+-&nbsp;Трансформации&nbsp;коллайдеров&nbsp;в&nbsp;пространстве<br>
 <br>
-## Классы<br>
+##&nbsp;Классы<br>
 <br>
-### Примитивы<br>
-- `SphereCollider` - сферический коллайдер (центр, радиус)<br>
-- `BoxCollider` - прямоугольный коллайдер (центр, размеры, поза)<br>
-- `CapsuleCollider` - капсула (отрезок оси, радиус)<br>
+###&nbsp;Примитивы<br>
+-&nbsp;`SphereCollider`&nbsp;-&nbsp;сферический&nbsp;коллайдер&nbsp;(центр,&nbsp;радиус)<br>
+-&nbsp;`BoxCollider`&nbsp;-&nbsp;прямоугольный&nbsp;коллайдер&nbsp;(центр,&nbsp;размеры,&nbsp;поза)<br>
+-&nbsp;`CapsuleCollider`&nbsp;-&nbsp;капсула&nbsp;(отрезок&nbsp;оси,&nbsp;радиус)<br>
 <br>
-### Специальные<br>
-- `AttachedCollider` - коллайдер, привязанный к Transform3 (для динамических объектов)<br>
-- `UnionCollider` - объединение нескольких коллайдеров в один<br>
+###&nbsp;Специальные<br>
+-&nbsp;`AttachedCollider`&nbsp;-&nbsp;коллайдер,&nbsp;привязанный&nbsp;к&nbsp;Transform3&nbsp;(для&nbsp;динамических&nbsp;объектов)<br>
+-&nbsp;`UnionCollider`&nbsp;-&nbsp;объединение&nbsp;нескольких&nbsp;коллайдеров&nbsp;в&nbsp;один<br>
 <br>
-## API<br>
+##&nbsp;API<br>
 <br>
-Все коллайдеры поддерживают:<br>
-- `transform_by(pose)` - возвращает трансформированный коллайдер<br>
-- `closest_to_collider(other)` - возвращает `(p_near, q_near, distance)`<br>
-- `avoidance(other)` - возвращает `(direction, distance, point)`<br>
+Все&nbsp;коллайдеры&nbsp;поддерживают:<br>
+-&nbsp;`transform_by(pose)`&nbsp;-&nbsp;возвращает&nbsp;трансформированный&nbsp;коллайдер<br>
+-&nbsp;`closest_to_collider(other)`&nbsp;-&nbsp;возвращает&nbsp;`(p_near,&nbsp;q_near,&nbsp;distance)`<br>
+-&nbsp;`avoidance(other)`&nbsp;-&nbsp;возвращает&nbsp;`(direction,&nbsp;distance,&nbsp;point)`<br>
 <br>
 Расстояние:<br>
-- `dist &gt; 0` - коллайдеры разделены<br>
-- `dist = 0` - коллайдеры касаются<br>
-- `dist &lt; 0` - коллайдеры пересекаются<br>
+-&nbsp;`dist&nbsp;&gt;&nbsp;0`&nbsp;-&nbsp;коллайдеры&nbsp;разделены<br>
+-&nbsp;`dist&nbsp;=&nbsp;0`&nbsp;-&nbsp;коллайдеры&nbsp;касаются<br>
+-&nbsp;`dist&nbsp;&lt;&nbsp;0`&nbsp;-&nbsp;коллайдеры&nbsp;пересекаются<br>
 <br>
-## Связь с другими модулями<br>
+##&nbsp;Связь&nbsp;с&nbsp;другими&nbsp;модулями<br>
 <br>
-- **kinematics** - AttachedCollider следует за Transform3<br>
-- **geombase** - использует Pose3 для трансформаций<br>
-- **physics** - коллайдеры для динамических тел<br>
+-&nbsp;**kinematics**&nbsp;-&nbsp;AttachedCollider&nbsp;следует&nbsp;за&nbsp;Transform3<br>
+-&nbsp;**geombase**&nbsp;-&nbsp;использует&nbsp;Pose3&nbsp;для&nbsp;трансформаций<br>
+-&nbsp;**physics**&nbsp;-&nbsp;коллайдеры&nbsp;для&nbsp;динамических&nbsp;тел<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

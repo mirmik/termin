@@ -6,183 +6,183 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-import math<br>
-from tracemalloc import start<br>
-import numpy as np<br>
+import&nbsp;math<br>
+from&nbsp;tracemalloc&nbsp;import&nbsp;start<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-def project_point_on_plane(point, plane_point, plane_normal):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Projects a point onto a plane defined by a point and a normal vector.<br>
+def&nbsp;project_point_on_plane(point,&nbsp;plane_point,&nbsp;plane_normal):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Projects&nbsp;a&nbsp;point&nbsp;onto&nbsp;a&nbsp;plane&nbsp;defined&nbsp;by&nbsp;a&nbsp;point&nbsp;and&nbsp;a&nbsp;normal&nbsp;vector.<br>
 <br>
-&#9;Parameters:<br>
-&#9;point (np.array): The 3D point to be projected (shape: (3,)).<br>
-&#9;plane_point (np.array): A point on the plane (shape: (3,)).<br>
-&#9;plane_normal (np.array): The normal vector of the plane (shape: (3,)).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Parameters:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;point&nbsp;(np.array):&nbsp;The&nbsp;3D&nbsp;point&nbsp;to&nbsp;be&nbsp;projected&nbsp;(shape:&nbsp;(3,)).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;plane_point&nbsp;(np.array):&nbsp;A&nbsp;point&nbsp;on&nbsp;the&nbsp;plane&nbsp;(shape:&nbsp;(3,)).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;plane_normal&nbsp;(np.array):&nbsp;The&nbsp;normal&nbsp;vector&nbsp;of&nbsp;the&nbsp;plane&nbsp;(shape:&nbsp;(3,)).<br>
 <br>
-&#9;Returns:<br>
-&#9;np.array: The projected point on the plane (shape: (3,)).<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;point = np.asarray(point)<br>
-&#9;plane_point = np.asarray(plane_point)<br>
-&#9;plane_normal = np.asarray(plane_normal)<br>
-&#9;<br>
-&#9;# Normalize the plane normal<br>
-&#9;plane_normal = plane_normal / np.linalg.norm(plane_normal)<br>
-&#9;<br>
-&#9;# Vector from plane point to the point<br>
-&#9;vec = point - plane_point<br>
-&#9;<br>
-&#9;# Distance from the point to the plane along the normal<br>
-&#9;distance = np.dot(vec, plane_normal)<br>
-&#9;<br>
-&#9;# Projected point calculation<br>
-&#9;projected_point = point - distance * plane_normal<br>
-&#9;<br>
-&#9;return projected_point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;np.array:&nbsp;The&nbsp;projected&nbsp;point&nbsp;on&nbsp;the&nbsp;plane&nbsp;(shape:&nbsp;(3,)).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;point&nbsp;=&nbsp;np.asarray(point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;plane_point&nbsp;=&nbsp;np.asarray(plane_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;plane_normal&nbsp;=&nbsp;np.asarray(plane_normal)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Normalize&nbsp;the&nbsp;plane&nbsp;normal<br>
+&nbsp;&nbsp;&nbsp;&nbsp;plane_normal&nbsp;=&nbsp;plane_normal&nbsp;/&nbsp;np.linalg.norm(plane_normal)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Vector&nbsp;from&nbsp;plane&nbsp;point&nbsp;to&nbsp;the&nbsp;point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec&nbsp;=&nbsp;point&nbsp;-&nbsp;plane_point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Distance&nbsp;from&nbsp;the&nbsp;point&nbsp;to&nbsp;the&nbsp;plane&nbsp;along&nbsp;the&nbsp;normal<br>
+&nbsp;&nbsp;&nbsp;&nbsp;distance&nbsp;=&nbsp;np.dot(vec,&nbsp;plane_normal)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Projected&nbsp;point&nbsp;calculation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;projected_point&nbsp;=&nbsp;point&nbsp;-&nbsp;distance&nbsp;*&nbsp;plane_normal<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;projected_point<br>
 <br>
-def project_point_on_line(point, line_point, line_direction):<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;Projects a point onto a line defined by a point and a direction vector.<br>
+def&nbsp;project_point_on_line(point,&nbsp;line_point,&nbsp;line_direction):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Projects&nbsp;a&nbsp;point&nbsp;onto&nbsp;a&nbsp;line&nbsp;defined&nbsp;by&nbsp;a&nbsp;point&nbsp;and&nbsp;a&nbsp;direction&nbsp;vector.<br>
 <br>
-&#9;Parameters:<br>
-&#9;point (np.array): The 3D point to be projected (shape: (3,)).<br>
-&#9;line_point (np.array): A point on the line (shape: (3,)).<br>
-&#9;line_direction (np.array): The direction vector of the line (shape: (3,)).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Parameters:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;point&nbsp;(np.array):&nbsp;The&nbsp;3D&nbsp;point&nbsp;to&nbsp;be&nbsp;projected&nbsp;(shape:&nbsp;(3,)).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;line_point&nbsp;(np.array):&nbsp;A&nbsp;point&nbsp;on&nbsp;the&nbsp;line&nbsp;(shape:&nbsp;(3,)).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;line_direction&nbsp;(np.array):&nbsp;The&nbsp;direction&nbsp;vector&nbsp;of&nbsp;the&nbsp;line&nbsp;(shape:&nbsp;(3,)).<br>
 <br>
-&#9;Returns:<br>
-&#9;np.array: The projected point on the line (shape: (3,)).<br>
-&#9;&quot;&quot;&quot;<br>
-&#9;point = np.asarray(point)<br>
-&#9;line_point = np.asarray(line_point)<br>
-&#9;line_direction = np.asarray(line_direction)<br>
-&#9;<br>
-&#9;# Normalize the line direction<br>
-&#9;line_direction = line_direction / np.linalg.norm(line_direction)<br>
-&#9;<br>
-&#9;# Vector from line point to the point<br>
-&#9;vec = point - line_point<br>
-&#9;<br>
-&#9;# Projection length along the line direction<br>
-&#9;projection_length = np.dot(vec, line_direction)<br>
-&#9;<br>
-&#9;# Projected point calculation<br>
-&#9;projected_point = line_point + projection_length * line_direction<br>
-&#9;<br>
-&#9;return projected_point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Returns:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;np.array:&nbsp;The&nbsp;projected&nbsp;point&nbsp;on&nbsp;the&nbsp;line&nbsp;(shape:&nbsp;(3,)).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;point&nbsp;=&nbsp;np.asarray(point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;line_point&nbsp;=&nbsp;np.asarray(line_point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;line_direction&nbsp;=&nbsp;np.asarray(line_direction)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Normalize&nbsp;the&nbsp;line&nbsp;direction<br>
+&nbsp;&nbsp;&nbsp;&nbsp;line_direction&nbsp;=&nbsp;line_direction&nbsp;/&nbsp;np.linalg.norm(line_direction)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Vector&nbsp;from&nbsp;line&nbsp;point&nbsp;to&nbsp;the&nbsp;point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;vec&nbsp;=&nbsp;point&nbsp;-&nbsp;line_point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Projection&nbsp;length&nbsp;along&nbsp;the&nbsp;line&nbsp;direction<br>
+&nbsp;&nbsp;&nbsp;&nbsp;projection_length&nbsp;=&nbsp;np.dot(vec,&nbsp;line_direction)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Projected&nbsp;point&nbsp;calculation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;projected_point&nbsp;=&nbsp;line_point&nbsp;+&nbsp;projection_length&nbsp;*&nbsp;line_direction<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;projected_point<br>
 <br>
-def project_point_on_aabb(point, aabb_min, aabb_max):<br>
-&#9;point = np.asarray(point)<br>
-&#9;aabb_min = np.asarray(aabb_min)<br>
-&#9;aabb_max = np.asarray(aabb_max)<br>
-&#9;<br>
-&#9;projected_point = np.maximum(aabb_min, np.minimum(point, aabb_max))<br>
-&#9;return projected_point<br>
+def&nbsp;project_point_on_aabb(point,&nbsp;aabb_min,&nbsp;aabb_max):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;point&nbsp;=&nbsp;np.asarray(point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;aabb_min&nbsp;=&nbsp;np.asarray(aabb_min)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;aabb_max&nbsp;=&nbsp;np.asarray(aabb_max)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;projected_point&nbsp;=&nbsp;np.maximum(aabb_min,&nbsp;np.minimum(point,&nbsp;aabb_max))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;projected_point<br>
 <br>
-def found_parameter(t0, t1, value):<br>
-&#9;if abs(t1 - t0) &lt; 1e-12:<br>
-&#9;&#9;return float('inf')<br>
-&#9;return (value - t0) / (t1 - t0)<br>
+def&nbsp;found_parameter(t0,&nbsp;t1,&nbsp;value):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;abs(t1&nbsp;-&nbsp;t0)&nbsp;&lt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;float('inf')<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(value&nbsp;-&nbsp;t0)&nbsp;/&nbsp;(t1&nbsp;-&nbsp;t0)<br>
 <br>
-def parameter_of_noclamped_segment_projection(point, segment_start, segment_end):<br>
-&#9;A = np.asarray(segment_start)<br>
-&#9;B = np.asarray(segment_end)<br>
-&#9;P = np.asarray(point)<br>
-&#9;<br>
-&#9;AB = B - A<br>
+def&nbsp;parameter_of_noclamped_segment_projection(point,&nbsp;segment_start,&nbsp;segment_end):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;np.asarray(segment_start)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;B&nbsp;=&nbsp;np.asarray(segment_end)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;P&nbsp;=&nbsp;np.asarray(point)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;AB&nbsp;=&nbsp;B&nbsp;-&nbsp;A<br>
 <br>
-&#9;AB_sqr = np.dot(AB, AB)<br>
-&#9;if AB_sqr &lt; 1e-12:<br>
-&#9;&#9;return 0.0  # Segment is a point<br>
+&nbsp;&nbsp;&nbsp;&nbsp;AB_sqr&nbsp;=&nbsp;np.dot(AB,&nbsp;AB)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;AB_sqr&nbsp;&lt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;0.0&nbsp;&nbsp;#&nbsp;Segment&nbsp;is&nbsp;a&nbsp;point<br>
 <br>
-&#9;AP = P - A    <br>
-&#9;t = np.dot(AP, AB) / AB_sqr<br>
-&#9;return t<br>
-&#9;<br>
-def project_segment_on_aabb(segment_start, segment_end, aabb_min, aabb_max):<br>
-&#9;A = np.asarray(segment_start)<br>
-&#9;B = np.asarray(segment_end)<br>
-&#9;Min = np.asarray(aabb_min)<br>
-&#9;Max = np.asarray(aabb_max)<br>
-&#9;d = B - A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;AP&nbsp;=&nbsp;P&nbsp;-&nbsp;A&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;=&nbsp;np.dot(AP,&nbsp;AB)&nbsp;/&nbsp;AB_sqr<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;t<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+def&nbsp;project_segment_on_aabb(segment_start,&nbsp;segment_end,&nbsp;aabb_min,&nbsp;aabb_max):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;=&nbsp;np.asarray(segment_start)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;B&nbsp;=&nbsp;np.asarray(segment_end)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Min&nbsp;=&nbsp;np.asarray(aabb_min)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Max&nbsp;=&nbsp;np.asarray(aabb_max)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;d&nbsp;=&nbsp;B&nbsp;-&nbsp;A<br>
 <br>
-&#9;candidates = []<br>
+&nbsp;&nbsp;&nbsp;&nbsp;candidates&nbsp;=&nbsp;[]<br>
 <br>
-&#9;rank = len(aabb_max)<br>
-&#9;for i in range(rank):<br>
-&#9;&#9;t_of_min_intersection = found_parameter(A[i], B[i], Min[i])<br>
-&#9;&#9;t_of_max_intersection = found_parameter(A[i], B[i], Max[i])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rank&nbsp;=&nbsp;len(aabb_max)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(rank):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_of_min_intersection&nbsp;=&nbsp;found_parameter(A[i],&nbsp;B[i],&nbsp;Min[i])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t_of_max_intersection&nbsp;=&nbsp;found_parameter(A[i],&nbsp;B[i],&nbsp;Max[i])<br>
 <br>
-&#9;&#9;if 0 &lt;= t_of_min_intersection &lt;= 1:<br>
-&#9;&#9;&#9;point_of_min_intersection = A + t_of_min_intersection * d<br>
-&#9;&#9;&#9;candidates.append(project_point_on_aabb(point_of_min_intersection, Min, Max))<br>
-&#9;&#9;if 0 &lt;= t_of_max_intersection &lt;= 1:<br>
-&#9;&#9;&#9;point_of_max_intersection = A + t_of_max_intersection * d<br>
-&#9;&#9;&#9;candidates.append(project_point_on_aabb(point_of_max_intersection, Min, Max))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;0&nbsp;&lt;=&nbsp;t_of_min_intersection&nbsp;&lt;=&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;point_of_min_intersection&nbsp;=&nbsp;A&nbsp;+&nbsp;t_of_min_intersection&nbsp;*&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates.append(project_point_on_aabb(point_of_min_intersection,&nbsp;Min,&nbsp;Max))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;0&nbsp;&lt;=&nbsp;t_of_max_intersection&nbsp;&lt;=&nbsp;1:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;point_of_max_intersection&nbsp;=&nbsp;A&nbsp;+&nbsp;t_of_max_intersection&nbsp;*&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;candidates.append(project_point_on_aabb(point_of_max_intersection,&nbsp;Min,&nbsp;Max))<br>
 <br>
-&#9;min_distance_sq = float('inf')<br>
-&#9;closest_point_on_segment = None<br>
-&#9;closest_point_on_aabb = None<br>
-&#9;<br>
-&#9;A_projected = project_point_on_aabb(A, Min, Max)<br>
-&#9;B_projected = project_point_on_aabb(B, Min, Max)<br>
-&#9;distance_sq_A = np.sum((A - A_projected) ** 2)<br>
-&#9;distance_sq_B = np.sum((B - B_projected) ** 2)<br>
-&#9;if distance_sq_A &lt; distance_sq_B:<br>
-&#9;&#9;min_distance_sq = distance_sq_A<br>
-&#9;&#9;closest_point_on_segment = A<br>
-&#9;&#9;closest_point_on_aabb = A_projected<br>
-&#9;else:<br>
-&#9;&#9;min_distance_sq = distance_sq_B<br>
-&#9;&#9;closest_point_on_segment = B<br>
-&#9;&#9;closest_point_on_aabb = B_projected<br>
-&#9;<br>
-&#9;for candidate in candidates:<br>
-&#9;&#9;parameter_of_closest_on_segment = parameter_of_noclamped_segment_projection(candidate, A, B)<br>
-&#9;&#9;if 0.0 &lt;= parameter_of_closest_on_segment &lt;= 1.0:<br>
-&#9;&#9;&#9;closest_point_on_segment_candidate = A + parameter_of_closest_on_segment * d<br>
-&#9;&#9;&#9;distance_sq = np.sum((candidate - closest_point_on_segment_candidate) ** 2)<br>
-&#9;&#9;&#9;if distance_sq &lt; min_distance_sq:<br>
-&#9;&#9;&#9;&#9;min_distance_sq = distance_sq<br>
-&#9;&#9;&#9;&#9;closest_point_on_segment = closest_point_on_segment_candidate<br>
-&#9;&#9;&#9;&#9;closest_point_on_aabb = candidate<br>
+&nbsp;&nbsp;&nbsp;&nbsp;min_distance_sq&nbsp;=&nbsp;float('inf')<br>
+&nbsp;&nbsp;&nbsp;&nbsp;closest_point_on_segment&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;closest_point_on_aabb&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;A_projected&nbsp;=&nbsp;project_point_on_aabb(A,&nbsp;Min,&nbsp;Max)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;B_projected&nbsp;=&nbsp;project_point_on_aabb(B,&nbsp;Min,&nbsp;Max)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;distance_sq_A&nbsp;=&nbsp;np.sum((A&nbsp;-&nbsp;A_projected)&nbsp;**&nbsp;2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;distance_sq_B&nbsp;=&nbsp;np.sum((B&nbsp;-&nbsp;B_projected)&nbsp;**&nbsp;2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;distance_sq_A&nbsp;&lt;&nbsp;distance_sq_B:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_distance_sq&nbsp;=&nbsp;distance_sq_A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_point_on_segment&nbsp;=&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_point_on_aabb&nbsp;=&nbsp;A_projected<br>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_distance_sq&nbsp;=&nbsp;distance_sq_B<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_point_on_segment&nbsp;=&nbsp;B<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_point_on_aabb&nbsp;=&nbsp;B_projected<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;candidate&nbsp;in&nbsp;candidates:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parameter_of_closest_on_segment&nbsp;=&nbsp;parameter_of_noclamped_segment_projection(candidate,&nbsp;A,&nbsp;B)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;0.0&nbsp;&lt;=&nbsp;parameter_of_closest_on_segment&nbsp;&lt;=&nbsp;1.0:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_point_on_segment_candidate&nbsp;=&nbsp;A&nbsp;+&nbsp;parameter_of_closest_on_segment&nbsp;*&nbsp;d<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;distance_sq&nbsp;=&nbsp;np.sum((candidate&nbsp;-&nbsp;closest_point_on_segment_candidate)&nbsp;**&nbsp;2)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;distance_sq&nbsp;&lt;&nbsp;min_distance_sq:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;min_distance_sq&nbsp;=&nbsp;distance_sq<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_point_on_segment&nbsp;=&nbsp;closest_point_on_segment_candidate<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;closest_point_on_aabb&nbsp;=&nbsp;candidate<br>
 <br>
-&#9;return closest_point_on_segment, closest_point_on_aabb, math.sqrt(min_distance_sq)<br>
-&#9;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;closest_point_on_segment,&nbsp;closest_point_on_aabb,&nbsp;math.sqrt(min_distance_sq)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
 <br>
-def closest_of_aabb_and_capsule(aabb_min, aabb_max, capsule_point1, capsule_point2, capsule_radius):<br>
-&#9;capsule_core_point, aabb_point, distance = project_segment_on_aabb(<br>
-&#9;&#9;capsule_point1, capsule_point2, aabb_min, aabb_max<br>
-&#9;)<br>
-&#9;if distance &lt;= capsule_radius:<br>
-&#9;&#9;return capsule_core_point, aabb_point, 0.0<br>
-&#9;direction = np.asarray(aabb_point - capsule_core_point, dtype=float)<br>
-&#9;direction_norm = np.linalg.norm(direction)<br>
-&#9;if direction_norm &lt; 1e-12:<br>
-&#9;&#9;# Capsule core point is inside AABB; choose arbitrary direction<br>
-&#9;&#9;direction = np.array([1.0, 0.0, 0.0])<br>
-&#9;&#9;direction_norm = 1.0<br>
-&#9;direction = direction / direction_norm<br>
-&#9;closest_capsule_point = capsule_core_point + direction * capsule_radius<br>
-&#9;return aabb_point, closest_capsule_point, distance - capsule_radius<br>
+def&nbsp;closest_of_aabb_and_capsule(aabb_min,&nbsp;aabb_max,&nbsp;capsule_point1,&nbsp;capsule_point2,&nbsp;capsule_radius):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;capsule_core_point,&nbsp;aabb_point,&nbsp;distance&nbsp;=&nbsp;project_segment_on_aabb(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;capsule_point1,&nbsp;capsule_point2,&nbsp;aabb_min,&nbsp;aabb_max<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;distance&nbsp;&lt;=&nbsp;capsule_radius:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;capsule_core_point,&nbsp;aabb_point,&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;np.asarray(aabb_point&nbsp;-&nbsp;capsule_core_point,&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;direction_norm&nbsp;=&nbsp;np.linalg.norm(direction)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;direction_norm&nbsp;&lt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Capsule&nbsp;core&nbsp;point&nbsp;is&nbsp;inside&nbsp;AABB;&nbsp;choose&nbsp;arbitrary&nbsp;direction<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;np.array([1.0,&nbsp;0.0,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction_norm&nbsp;=&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;direction&nbsp;/&nbsp;direction_norm<br>
+&nbsp;&nbsp;&nbsp;&nbsp;closest_capsule_point&nbsp;=&nbsp;capsule_core_point&nbsp;+&nbsp;direction&nbsp;*&nbsp;capsule_radius<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;aabb_point,&nbsp;closest_capsule_point,&nbsp;distance&nbsp;-&nbsp;capsule_radius<br>
 <br>
-def closest_of_aabb_and_sphere(aabb_min, aabb_max, sphere_center, sphere_radius):<br>
-&#9;aabb_point = project_point_on_aabb(sphere_center, aabb_min, aabb_max)<br>
-&#9;direction = np.asarray(sphere_center - aabb_point, dtype=float)<br>
+def&nbsp;closest_of_aabb_and_sphere(aabb_min,&nbsp;aabb_max,&nbsp;sphere_center,&nbsp;sphere_radius):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;aabb_point&nbsp;=&nbsp;project_point_on_aabb(sphere_center,&nbsp;aabb_min,&nbsp;aabb_max)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;np.asarray(sphere_center&nbsp;-&nbsp;aabb_point,&nbsp;dtype=float)<br>
 <br>
-&#9;print(aabb_max)<br>
-&#9;print(aabb_min)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;print(aabb_max)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;print(aabb_min)<br>
 <br>
-&#9;distance = np.linalg.norm(direction)<br>
-&#9;if distance &lt;= sphere_radius:<br>
-&#9;&#9;return aabb_point, sphere_center, 0.0<br>
-&#9;if distance &lt; 1e-12:<br>
-&#9;&#9;# Sphere center is inside AABB; choose arbitrary direction<br>
-&#9;&#9;direction = np.array([1.0, 0.0, 0.0])<br>
-&#9;&#9;distance = 1.0<br>
-&#9;direction = direction / distance<br>
-&#9;closest_sphere_point = sphere_center - direction * sphere_radius<br>
+&nbsp;&nbsp;&nbsp;&nbsp;distance&nbsp;=&nbsp;np.linalg.norm(direction)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;distance&nbsp;&lt;=&nbsp;sphere_radius:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;aabb_point,&nbsp;sphere_center,&nbsp;0.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;distance&nbsp;&lt;&nbsp;1e-12:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Sphere&nbsp;center&nbsp;is&nbsp;inside&nbsp;AABB;&nbsp;choose&nbsp;arbitrary&nbsp;direction<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;np.array([1.0,&nbsp;0.0,&nbsp;0.0])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;distance&nbsp;=&nbsp;1.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;direction&nbsp;/&nbsp;distance<br>
+&nbsp;&nbsp;&nbsp;&nbsp;closest_sphere_point&nbsp;=&nbsp;sphere_center&nbsp;-&nbsp;direction&nbsp;*&nbsp;sphere_radius<br>
 <br>
-&#9;return aabb_point, closest_sphere_point, distance - sphere_radius<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;aabb_point,&nbsp;closest_sphere_point,&nbsp;distance&nbsp;-&nbsp;sphere_radius<br>
 <!-- END SCAT CODE -->
 </body>
 </html>
