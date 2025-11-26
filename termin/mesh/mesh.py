@@ -567,3 +567,59 @@ class ConeMesh(Mesh3):
             triangles.append([base0, base1, len(vertices)])
         vertices.append(base_center)
         super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
+
+class RingMesh(Mesh3):
+    """
+    Плоское кольцо (annulus) в XZ-плоскости.
+    Нормаль смотрит вдоль +Y.
+    """
+
+    def __init__(
+        self,
+        radius: float = 1.0,
+        thickness: float = 0.05,
+        segments: int = 32,
+    ):
+        if segments < 3:
+            raise ValueError("RingMesh: segments must be >= 3")
+
+        # внутренняя/внешняя окружности
+        inner_radius = max(radius - thickness * 0.5, 1e-4)
+        outer_radius = radius + thickness * 0.5
+
+        vertices: list[list[float]] = []
+        triangles: list[list[int]] = []
+
+        # вершины: [inner_i, outer_i] для каждого сегмента
+        for i in range(segments):
+            angle = 2.0 * np.pi * i / segments
+            c = np.cos(angle)
+            s = np.sin(angle)
+
+            x_inner = inner_radius * c
+            z_inner = inner_radius * s
+            x_outer = outer_radius * c
+            z_outer = outer_radius * s
+
+            vertices.append([x_inner, 0.0, z_inner])  # inner
+            vertices.append([x_outer, 0.0, z_outer])  # outer
+
+        # индексы: два треугольника на "квадратик" между сегментами
+        for i in range(segments):
+            i_inner = 2 * i
+            i_outer = 2 * i + 1
+            next_i = (i + 1) % segments
+            n_inner = 2 * next_i
+            n_outer = 2 * next_i + 1
+
+            # следим за порядком обхода, чтобы нормали смотрели в +Y
+            triangles.append([i_inner, n_inner, i_outer])
+            triangles.append([i_outer, n_inner, n_outer])
+
+        vertices_np = np.asarray(vertices, dtype=float)
+        triangles_np = np.asarray(triangles, dtype=int)
+
+        super().__init__(vertices=vertices_np, triangles=triangles_np, uvs=None)
+
+        # для более внятного освещения, если оно у тебя есть
+        self.compute_vertex_normals()
