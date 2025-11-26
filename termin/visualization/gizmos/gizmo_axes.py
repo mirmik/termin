@@ -132,6 +132,17 @@ class GizmoArrow(Entity):
             self.transform.relocate(Pose3.rotateX(np.pi / 2.0))
         # для оси Y поворот не нужен
 
+        # коллайдер вдоль оси (приблизительно)
+        self.add_component(
+            ColliderComponent(
+                collider=CapsuleCollider(
+                    a=(0, 0, 0),
+                    b=(0, length, 0),
+                    radius=0.07,
+                )
+            )
+        )
+
 
 class GizmoRing(Entity):
     """
@@ -202,8 +213,8 @@ class GizmoEntity(Entity):
         self.transform.add_child(self.z.transform)
 
         # кольца вращения (слегка больше по радиусу)
-        ring_radius = size * 1.1
-        ring_thickness = size * 0.03
+        ring_radius = size * 1.25
+        ring_thickness = size * 0.05
 
         self.rx = GizmoRing("x", radius=ring_radius, thickness=ring_thickness, color=(1, 0.3, 0.3, 1))
         self.ry = GizmoRing("y", radius=ring_radius, thickness=ring_thickness, color=(0.3, 1, 0.3, 1))
@@ -260,7 +271,6 @@ class GizmoMoveController(InputComponent):
         self.gizmo.set_visible(flag)
 
     def on_mouse_button(self, viewport, button, action, mods):
-        print("GizmoMoveController.on_mouse_button", button, action)
         if button != 0:
             return
 
