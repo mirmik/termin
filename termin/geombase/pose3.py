@@ -6,7 +6,11 @@ from termin.util import qmul, qrot, qslerp, qinv
 class Pose3:
     """A 3D Pose represented by rotation quaternion and translation vector."""
 
-    def __init__(self, ang: numpy.ndarray = numpy.array([0.0, 0.0, 0.0, 1.0]), lin: numpy.ndarray = numpy.array([0.0, 0.0, 0.0])):
+    def __init__(self, ang: numpy.ndarray = None, lin: numpy.ndarray = None):
+        if ang is None:
+            ang = numpy.array([0.0, 0.0, 0.0, 1.0])
+        if lin is None:
+            lin = numpy.array([0.0, 0.0, 0.0])
         self._ang = ang
         self._lin = lin
         self._rot_matrix = None  # Lazy computation

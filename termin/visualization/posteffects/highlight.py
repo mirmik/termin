@@ -85,12 +85,13 @@ void main()
 class HighlightEffect(PostEffect):
     name = "highlight"
 
-    def __init__(self, selected_id_getter):
+    def __init__(self, selected_id_getter, color=(0.0, 0.0, 0.0, 1.0)):
         """
         selected_id_getter: callable -> int | None
         (например, лямбда, которая читает selected_entity_id из редактора)
         """
         self._get_id = selected_id_getter
+        self._color = color
         self._shader: ShaderProgram | None = None
 
     def required_resources(self) -> set[str]:
@@ -137,7 +138,7 @@ class HighlightEffect(PostEffect):
         shader.set_uniform_vec2("u_texel_size", texel_size)
 
         # цвет рамки (желтый, например)
-        outline_color = np.array([1.0, 1.0, 0.1], dtype=np.float32)
+        outline_color = np.array(self._color[0:3], dtype=np.float32)
         shader.set_uniform_vec3("u_outline_color", outline_color)
 
         # остальное состояние depth/blend уже подготовил PostProcessPass

@@ -19,7 +19,8 @@ from termin.visualization.gizmos.gizmo_axes import GizmoEntity, GizmoMoveControl
 class EditorWindow(QMainWindow):
     def __init__(self, world, scene):
         super().__init__()
-        self.selected_entity_id = None
+        self.selected_entity_id = 0
+        self.hover_entity_id = 0   # <--- добавили
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -322,21 +323,47 @@ class EditorWindow(QMainWindow):
             self._pending_pick = (x, y, viewport)
 
     def _after_render(self, window):
-        if self._pending_pick is None:
-            return
+        # --- обработка клика (selection) ---
+        if self._pending_pick is not None:
+            x, y, viewport = self._pending_pick
+            self._pending_pick = None
 
-        print("PENDING PICK HANDLER")  # --- DEBUG ---
-        x, y, viewport = self._pending_pick
-        self._pending_pick = None
+            picked_ent = window.pick_entity_at(x, y, viewport)
+            if picked_ent is not None:
+                self.on_selection_changed(picked_ent)
+                self._select_object_in_tree(picked_ent)
+                self.inspector.set_target(picked_ent)
+            else:
+                self.on_selection_changed(None)
+                self.inspector.set_target(None)
 
-        picked_ent = window.pick_entity_at(x, y, viewport)
-        if picked_ent is not None:
-            self.on_selection_changed(picked_ent)
-            self._select_object_in_tree(picked_ent)
-            self.inspector.set_target(picked_ent)
+        # --- обработка hover ---
+        if self._pending_hover is not None:
+            x, y, viewport = self._pending_hover
+            # можно сбрасывать, чтобы не репикать каждый кадр,
+            # либо оставить и обновлять каждый рендер – на твой вкус
+            self._pending_hover = None
+
+            hovered_ent = window.pick_entity_at(x, y, viewport)
+            self._update_hover_entity(hovered_ent)
+
+    def _update_hover_entity(self, ent: Entity | None):
+        # как и в selection – игнорим невыделяемое (гизмо и т.п.)
+        if ent is not None and ent.selectable is False:
+            ent = None
+
+        if ent is not None:
+            new_id = self.viewport_window._get_pick_id_for_entity(ent)
         else:
-            self.on_selection_changed(None)
-            self.inspector.set_target(None)
+            new_id = 0
+
+        if new_id == self.hover_entity_id:
+            return  # ничего не поменялось
+
+        self.hover_entity_id = new_id
+
+        if self.viewport_window is not None:
+            self.viewport_window._request_update()
 
     def _select_object_in_tree(self, obj):
         model: SceneTreeModel = self.sceneTree.model()
@@ -348,6 +375,7 @@ class EditorWindow(QMainWindow):
 
     def _init_viewport(self):
         self._pending_pick = None
+        self._pending_hover = None   # <- новый буфер для hover-пика
         layout = self.viewportContainer.layout()
 
         self.viewport_window = self.world.create_window(
@@ -362,6 +390,7 @@ class EditorWindow(QMainWindow):
 
         self.viewport_window.on_mouse_button_event = self.mouse_button_clicked
         self.viewport_window.after_render_handler = self._after_render
+        self.viewport_window.on_mouse_move_event   = self.mouse_moved
 
         gl_widget = self.viewport_window.handle.widget
         gl_widget.setFocusPolicy(Qt.StrongFocus)
@@ -370,6 +399,17 @@ class EditorWindow(QMainWindow):
         layout.addWidget(gl_widget)
 
         self.viewport.set_render_pipeline(self.make_pipeline())
+
+
+        def mouse_moved(self, x: float, y: float, viewport):
+            """
+            Вызывается Window'ом при каждом движении курсора.
+            Просто запоминаем, что надо сделать hover-pick после следующего рендера.
+            """
+            if viewport is None:
+                self._pending_hover = None
+                return
+            self._pending_hover = (x, y, viewport)
 
     def on_tree_click(self, index):
         node = index.internalPointer()
@@ -388,6 +428,16 @@ class EditorWindow(QMainWindow):
 
         if self.viewport_window is not None:
             self.viewport_window._request_update()
+
+    def mouse_moved(self, x: float, y: float, viewport):
+        """
+        Вызывается Window'ом при каждом движении курсора.
+        Просто запоминаем, что надо сделать hover-pick после следующего рендера.
+        """
+        if viewport is None:
+            self._pending_hover = None
+            return
+        self._pending_hover = (x, y, viewport)
 
     def on_selection_changed(self, selected_ent):
         if selected_ent is not None and selected_ent.selectable is False:
@@ -424,6 +474,7 @@ class EditorWindow(QMainWindow):
             )
         ]
 
-        postprocess.add_effect(HighlightEffect(lambda: self.selected_entity_id))
+        postprocess.add_effect(HighlightEffect(lambda: self.hover_entity_id, color=(0.3, 0.8, 1.0, 1.0)))
+        postprocess.add_effect(HighlightEffect(lambda: self.selected_entity_id, color=(1.0, 0.9, 0.1, 1.0)))
 
         return passes

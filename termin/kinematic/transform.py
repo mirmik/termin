@@ -150,7 +150,9 @@ def inspect_tree(transform: 'Transform', level: int = 0, name_only: bool = False
 
 class Transform3(Transform):
     """A 3D Transform with directional helpers."""
-    def __init__(self, local_pose: Pose3 = Pose3.identity(), parent: 'Transform3' = None, name: str = ""):
+    def __init__(self, local_pose: Pose3 = None, parent: 'Transform3' = None, name: str = ""):
+        if local_pose is None:
+            local_pose = Pose3()
         super().__init__(local_pose, parent, name)
 
     def forward(self, distance: float = 1.0) -> numpy.ndarray:

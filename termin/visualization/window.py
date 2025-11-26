@@ -53,6 +53,7 @@ class Window:
         self.handle.set_key_callback(self._handle_key)
 
         self.on_mouse_button_event : Optional[callable(MouseButton, x, y, Viewport)] = None
+        self.on_mouse_move_event = None  # callable(x: float, y: float, viewport: Optional[Viewport])
         self.after_render_handler = None  # type: Optional[Callable[["Window"], None]]
 
         self._world_mode = "game"  # or "editor"
@@ -328,6 +329,10 @@ class Window:
 
         if viewport is not None:
             viewport.scene.dispatch_input(viewport, "on_mouse_move", x=x, y=y, dx=dx, dy=dy)
+
+        # пробрасываем инфу наверх (редактору), без знания про idmap и hover
+        if self.on_mouse_move_event is not None:
+            self.on_mouse_move_event(x, y, viewport)
 
         self._request_update()
 

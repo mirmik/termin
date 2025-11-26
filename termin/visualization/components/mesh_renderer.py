@@ -5,18 +5,12 @@ from typing import Iterable, Optional
 import numpy as np
 
 from ..entity import Component, RenderContext
-from ..material import Material
 from ..mesh import MeshDrawable
 from termin.mesh.mesh import Mesh3
-
 from termin.geombase.pose3 import Pose3
 from termin.visualization.renderpass import RenderState, RenderPass
-
 from termin.visualization.inspect import InspectField
-
-
 from termin.visualization.material import Material
-from termin.visualization.renderpass import RenderState, RenderPass
 
 class MeshRenderer(Component):
     """Renderer component that draws MeshDrawable with one or multiple passes."""
