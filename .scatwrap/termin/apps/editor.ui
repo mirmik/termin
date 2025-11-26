@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/apps/editor.ui</title>
+</head>
+<body>
+<pre><code>
+&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;ui version=&quot;4.0&quot;&gt;
+ &lt;class&gt;EditorWindow&lt;/class&gt;
+ &lt;widget class=&quot;QMainWindow&quot; name=&quot;EditorWindow&quot;&gt;
+  &lt;property name=&quot;geometry&quot;&gt;
+   &lt;rect&gt;
+    &lt;x&gt;0&lt;/x&gt;
+    &lt;y&gt;0&lt;/y&gt;
+    &lt;width&gt;1600&lt;/width&gt;
+    &lt;height&gt;900&lt;/height&gt;
+   &lt;/rect&gt;
+  &lt;/property&gt;
+
+  &lt;property name=&quot;windowTitle&quot;&gt;
+   &lt;string&gt;Mini Unity Editor&lt;/string&gt;
+  &lt;/property&gt;
+
+  &lt;!-- Центральный виджет главного окна --&gt;
+  &lt;widget class=&quot;QWidget&quot; name=&quot;centralwidget&quot;&gt;
+   &lt;!-- Лейаут, который растягивает сплиттер на всё окно --&gt;
+   &lt;layout class=&quot;QVBoxLayout&quot; name=&quot;centralLayout&quot;&gt;
+    &lt;property name=&quot;spacing&quot;&gt;
+     &lt;number&gt;0&lt;/number&gt;
+    &lt;/property&gt;
+    &lt;property name=&quot;leftMargin&quot;&gt;
+     &lt;number&gt;0&lt;/number&gt;
+    &lt;/property&gt;
+    &lt;property name=&quot;topMargin&quot;&gt;
+     &lt;number&gt;0&lt;/number&gt;
+    &lt;/property&gt;
+    &lt;property name=&quot;rightMargin&quot;&gt;
+     &lt;number&gt;0&lt;/number&gt;
+    &lt;/property&gt;
+    &lt;property name=&quot;bottomMargin&quot;&gt;
+     &lt;number&gt;0&lt;/number&gt;
+    &lt;/property&gt;
+
+    &lt;item&gt;
+     &lt;!-- Главный вертикальный сплиттер: верх (3 панели) / низ (консоль) --&gt;
+     &lt;widget class=&quot;QSplitter&quot; name=&quot;verticalSplitter&quot;&gt;
+      &lt;property name=&quot;orientation&quot;&gt;
+       &lt;enum&gt;Qt::Vertical&lt;/enum&gt;
+      &lt;/property&gt;
+
+      &lt;!-- Верхняя зона: слева Hierarchy, центр Viewport, справа Inspector --&gt;
+      &lt;widget class=&quot;QSplitter&quot; name=&quot;topSplitter&quot;&gt;
+       &lt;property name=&quot;orientation&quot;&gt;
+        &lt;enum&gt;Qt::Horizontal&lt;/enum&gt;
+       &lt;/property&gt;
+
+       &lt;!-- Left panel (Hierarchy) --&gt;
+       &lt;widget class=&quot;QTreeView&quot; name=&quot;sceneTree&quot;&gt;
+        &lt;property name=&quot;minimumSize&quot;&gt;
+         &lt;size&gt;
+          &lt;width&gt;200&lt;/width&gt;
+          &lt;height&gt;0&lt;/height&gt;
+         &lt;/size&gt;
+        &lt;/property&gt;
+       &lt;/widget&gt;
+
+       &lt;!-- Center viewport container --&gt;
+       &lt;widget class=&quot;QWidget&quot; name=&quot;viewportContainer&quot;&gt;
+        &lt;property name=&quot;minimumSize&quot;&gt;
+         &lt;size&gt;
+          &lt;width&gt;300&lt;/width&gt;
+          &lt;height&gt;200&lt;/height&gt;
+         &lt;/size&gt;
+        &lt;/property&gt;
+        &lt;layout class=&quot;QVBoxLayout&quot; name=&quot;viewportLayout&quot;&gt;
+         &lt;property name=&quot;spacing&quot;&gt;
+          &lt;number&gt;0&lt;/number&gt;
+         &lt;/property&gt;
+         &lt;property name=&quot;leftMargin&quot;&gt;
+          &lt;number&gt;0&lt;/number&gt;
+         &lt;/property&gt;
+         &lt;property name=&quot;topMargin&quot;&gt;
+          &lt;number&gt;0&lt;/number&gt;
+         &lt;/property&gt;
+         &lt;property name=&quot;rightMargin&quot;&gt;
+          &lt;number&gt;0&lt;/number&gt;
+         &lt;/property&gt;
+         &lt;property name=&quot;bottomMargin&quot;&gt;
+          &lt;number&gt;0&lt;/number&gt;
+         &lt;/property&gt;
+        &lt;/layout&gt;
+       &lt;/widget&gt;
+
+       &lt;!-- Right panel (Inspector container) --&gt;
+&lt;widget class=&quot;QWidget&quot; name=&quot;inspectorContainer&quot;&gt;
+  &lt;property name=&quot;minimumSize&quot;&gt;
+   &lt;size&gt;
+    &lt;width&gt;200&lt;/width&gt;
+    &lt;height&gt;0&lt;/height&gt;
+   &lt;/size&gt;
+  &lt;/property&gt;
+  &lt;layout class=&quot;QVBoxLayout&quot; name=&quot;inspectorLayout&quot;&gt;
+    &lt;property name=&quot;spacing&quot;&gt;
+     &lt;number&gt;4&lt;/number&gt;
+    &lt;/property&gt;
+    &lt;property name=&quot;leftMargin&quot;&gt;
+     &lt;number&gt;4&lt;/number&gt;
+    &lt;/property&gt;
+    &lt;property name=&quot;topMargin&quot;&gt;
+     &lt;number&gt;4&lt;/number&gt;
+    &lt;/property&gt;
+    &lt;property name=&quot;rightMargin&quot;&gt;
+     &lt;number&gt;4&lt;/number&gt;
+    &lt;/property&gt;
+    &lt;property name=&quot;bottomMargin&quot;&gt;
+     &lt;number&gt;4&lt;/number&gt;
+    &lt;/property&gt;
+    &lt;item&gt;
+      &lt;widget class=&quot;QLabel&quot; name=&quot;inspectorTitle&quot;&gt;
+        &lt;property name=&quot;text&quot;&gt;
+          &lt;string&gt;Inspector&lt;/string&gt;
+        &lt;/property&gt;
+        &lt;property name=&quot;alignment&quot;&gt;
+          &lt;set&gt;Qt::AlignTop&lt;/set&gt;
+        &lt;/property&gt;
+      &lt;/widget&gt;
+    &lt;/item&gt;
+  &lt;/layout&gt;
+&lt;/widget&gt;
+
+
+      &lt;/widget&gt;
+
+      &lt;!-- Нижняя панель (Console) --&gt;
+      &lt;widget class=&quot;QWidget&quot; name=&quot;bottomPanel&quot;&gt;
+       &lt;property name=&quot;minimumSize&quot;&gt;
+        &lt;size&gt;
+         &lt;width&gt;0&lt;/width&gt;
+         &lt;height&gt;80&lt;/height&gt;
+        &lt;/size&gt;
+       &lt;/property&gt;
+       &lt;layout class=&quot;QVBoxLayout&quot; name=&quot;bottomLayout&quot;&gt;
+        &lt;property name=&quot;spacing&quot;&gt;
+         &lt;number&gt;0&lt;/number&gt;
+        &lt;/property&gt;
+        &lt;property name=&quot;leftMargin&quot;&gt;
+         &lt;number&gt;0&lt;/number&gt;
+        &lt;/property&gt;
+        &lt;property name=&quot;topMargin&quot;&gt;
+         &lt;number&gt;0&lt;/number&gt;
+        &lt;/property&gt;
+        &lt;property name=&quot;rightMargin&quot;&gt;
+         &lt;number&gt;0&lt;/number&gt;
+        &lt;/property&gt;
+        &lt;property name=&quot;bottomMargin&quot;&gt;
+         &lt;number&gt;0&lt;/number&gt;
+        &lt;/property&gt;
+
+        &lt;item&gt;
+         &lt;widget class=&quot;QLabel&quot; name=&quot;consoleLabel&quot;&gt;
+          &lt;property name=&quot;text&quot;&gt;
+           &lt;string&gt;Console&lt;/string&gt;
+          &lt;/property&gt;
+          &lt;property name=&quot;alignment&quot;&gt;
+           &lt;set&gt;Qt::AlignTop&lt;/set&gt;
+          &lt;/property&gt;
+         &lt;/widget&gt;
+        &lt;/item&gt;
+       &lt;/layout&gt;
+      &lt;/widget&gt;
+
+     &lt;/widget&gt;
+    &lt;/item&gt;
+   &lt;/layout&gt;
+  &lt;/widget&gt;
+
+ &lt;/widget&gt;
+ &lt;resources/&gt;
+ &lt;connections/&gt;
+&lt;/ui&gt;
+
+</code></pre>
+</body>
+</html>
