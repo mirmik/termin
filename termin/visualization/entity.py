@@ -136,20 +136,48 @@ C = TypeVar("C", bound=Component)
 class Entity:
     """Container of components with transform data."""
 
-    def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float = 1.0, priority: int = 0, 
+    def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float | numpy.ndarray = 1.0, priority: int = 0, 
             pickable: bool = True,
             selectable: bool = True):
+        print(f"Entity.__init__ called with scale={scale}")
+
+        if scale is None:
+            scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+
         self.transform = Transform3(pose)
         self.transform.entity = self
         self.visible = True
         self.active = True
         self.name = name
-        self.scale = scale
+        self._scale: np.ndarray = np.array([1.0, 1.0, 1.0], dtype=float)
+        self.scale = scale # вызов сеттера
         self.priority = priority  # rendering priority, lower values drawn first
         self._components: List[Component] = []
         self.scene: Optional["Scene"] = None
         self.pickable = pickable       # <--- и это
         self.selectable = selectable       # <--- и это
+
+        @property
+        def scale(self) -> np.ndarray:
+            return self._scale
+
+        @scale.setter
+        def scale(self, value):
+            if isinstance(value, (int, float)):
+                arr = np.full(3, float(value), dtype=float)
+            else:
+            
+                arr = np.array(value, dtype=float)
+    
+                # скаляр → [s, s, s]
+                if arr.shape == ():
+                    arr = np.full(3, float(arr), dtype=float)
+                elif arr.shape != (3,):
+                    raise ValueError(f"Entity.scale must be scalar or length-3, got shape {arr.shape}")
+
+                self._scale = arr
+                print(self._scale)
+
 
     def __post_init__(self):
         self.scene: Optional["Scene"] = None
@@ -158,7 +186,8 @@ class Entity:
     def model_matrix(self) -> np.ndarray:
         """Construct homogeneous model matrix ``M = [R|t]`` with optional uniform scale."""
         matrix = self.transform.global_pose().as_matrix().copy()
-        matrix[:3, :3] *= self.scale
+        print(self._scale)
+        matrix[:3, :3] = matrix[:3, :3] @ np.diag(self._scale)
         return matrix
 
     def set_visible(self, flag: bool):
@@ -240,11 +269,10 @@ class Entity:
 
     def serialize(self):
         pose = self.transform.local_pose()
-
         return {
             "name": self.name,
             "priority": self.priority,
-            "scale": self.scale,
+            "scale": self.scale.tolist(),   # было: self.scale
             "pose": {
                 "position": pose.lin.tolist(),
                 "rotation": pose.ang.tolist(),
@@ -253,8 +281,9 @@ class Entity:
                 comp.serialize()
                 for comp in self.components
                 if comp.serialize() is not None
-            ]
+            ],
         }
+
 
     @classmethod
     def deserialize(cls, data, context):

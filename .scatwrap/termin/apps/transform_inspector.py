@@ -36,6 +36,8 @@ from&nbsp;termin.visualization.inspect&nbsp;import&nbsp;InspectField<br>
 from&nbsp;termin.visualization.resources&nbsp;import&nbsp;ResourceManager<br>
 <br>
 <br>
+#&nbsp;scale&nbsp;is&nbsp;now&nbsp;numpy.ndarray<br>
+<br>
 class&nbsp;TransformInspector(QWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;transform_changed&nbsp;=&nbsp;pyqtSignal()<br>
 <br>
@@ -117,7 +119,8 @@ class&nbsp;TransformInspector(QWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot[1].setValue(float(ay))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot[2].setValue(float(az))<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;np.array([1.0,&nbsp;1.0,&nbsp;1.0],&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;self._transform.entity.scale<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert&nbsp;s.shape&nbsp;==&nbsp;(3,)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._scale[0].setValue(float(s[0]))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._scale[1].setValue(float(s[1]))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._scale[2].setValue(float(s[2]))<br>
@@ -198,6 +201,12 @@ class&nbsp;TransformInspector(QWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ay&nbsp;=&nbsp;self._rot[1].value()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;az&nbsp;=&nbsp;self._rot[2].value()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_ang&nbsp;=&nbsp;self.euler_zyx_to_quat(np.array([az,&nbsp;ay,&nbsp;ax],&nbsp;dtype=float))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s_x&nbsp;=&nbsp;self._scale[0].value()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s_y&nbsp;=&nbsp;self._scale[1].value()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s_z&nbsp;=&nbsp;self._scale[2].value()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new_scale&nbsp;=&nbsp;np.array([s_x,&nbsp;s_y,&nbsp;s_z],&nbsp;dtype=float)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform.entity.scale&nbsp;=&nbsp;new_scale<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pose&nbsp;=&nbsp;Pose3(lin=new_lin,&nbsp;ang=new_ang)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform.relocate(pose)<br>

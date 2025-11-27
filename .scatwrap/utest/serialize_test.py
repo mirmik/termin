@@ -95,7 +95,8 @@ def&nbsp;test_entity_serialize_deserialize():<br>
 &nbsp;&nbsp;&nbsp;&nbsp;e2&nbsp;=&nbsp;Entity.deserialize(data,&nbsp;DummyContext())<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;assert&nbsp;e2.name&nbsp;==&nbsp;&quot;test&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;assert&nbsp;e2.scale&nbsp;==&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;assert&nbsp;isinstance(e2.scale,&nbsp;np.ndarray)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;np.testing.assert_array_almost_equal(e2.scale,&nbsp;np.array([2.0,&nbsp;2.0,&nbsp;2.0]))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;assert&nbsp;e2.priority&nbsp;==&nbsp;3<br>
 &nbsp;&nbsp;&nbsp;&nbsp;assert&nbsp;len(e2.components)&nbsp;==&nbsp;1<br>
 &nbsp;&nbsp;&nbsp;&nbsp;assert&nbsp;e2.components[0].x&nbsp;==&nbsp;123<br>

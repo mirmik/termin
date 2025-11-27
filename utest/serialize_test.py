@@ -87,7 +87,8 @@ def test_entity_serialize_deserialize():
     e2 = Entity.deserialize(data, DummyContext())
 
     assert e2.name == "test"
-    assert e2.scale == 2.0
+    assert isinstance(e2.scale, np.ndarray)
+    np.testing.assert_array_almost_equal(e2.scale, np.array([2.0, 2.0, 2.0]))
     assert e2.priority == 3
     assert len(e2.components) == 1
     assert e2.components[0].x == 123

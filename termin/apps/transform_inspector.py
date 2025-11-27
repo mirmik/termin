@@ -28,6 +28,8 @@ from termin.visualization.inspect import InspectField
 from termin.visualization.resources import ResourceManager
 
 
+# scale is now numpy.ndarray
+
 class TransformInspector(QWidget):
     transform_changed = pyqtSignal()
 
@@ -109,7 +111,8 @@ class TransformInspector(QWidget):
             self._rot[1].setValue(float(ay))
             self._rot[2].setValue(float(az))
 
-            s = np.array([1.0, 1.0, 1.0], dtype=float)
+            s = self._transform.entity.scale
+            assert s.shape == (3,)
             self._scale[0].setValue(float(s[0]))
             self._scale[1].setValue(float(s[1]))
             self._scale[2].setValue(float(s[2]))
@@ -190,6 +193,12 @@ class TransformInspector(QWidget):
         ay = self._rot[1].value()
         az = self._rot[2].value()
         new_ang = self.euler_zyx_to_quat(np.array([az, ay, ax], dtype=float))
+
+        s_x = self._scale[0].value()
+        s_y = self._scale[1].value()
+        s_z = self._scale[2].value()
+        new_scale = np.array([s_x, s_y, s_z], dtype=float)
+        self._transform.entity.scale = new_scale
 
         pose = Pose3(lin=new_lin, ang=new_ang)
         self._transform.relocate(pose)
