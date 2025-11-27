@@ -384,34 +384,29 @@ class EditorWindow(QMainWindow):
         x, y, viewport = pending_press
         self._pending_pick_press = None
 
-        picked_ent = window.pick_entity_at(x, y, viewport)
+        picked_color = window.pick_color_at(x, y, viewport, buffer_name="id")
+        alpha = picked_color[3]
+        
+        if alpha == 0:
+            return
 
         gizmo_ctrl = None
         if self.gizmo is not None:
             gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
 
-        # сначала проверяем, не гизмо ли это
-        if picked_ent is not None and gizmo_ctrl is not None:
-            ent = picked_ent
-            is_gizmo_part = self._is_entity_part_of_gizmo(ent)
+        maxindex = len(self.gizmo.helper_geometry_entities())
+        index = int(round(alpha * float(maxindex))) - 1
+        print("Gizmo part index:", index)
 
-            if is_gizmo_part:
-                print("Clicked on gizmo part")
-                name = picked_ent.name or ""
-                print(f"Clicked on gizmo part: {name}")
+        picked_ent =self.gizmo.helper_geometry_entities()[index] 
 
-                # перемещение по оси
-                if name.endswith("shaft") or name.endswith("head"):
-                    axis = name[0]
-                    gizmo_ctrl.start_translate_from_pick(axis, viewport, x, y)
-                    return
+        axis = picked_ent.name[0]
 
-                # вращение по оси (если уже подключишь кольца)
-                if name.endswith("ring"):
-                    print("Starting rotation from pick")
-                    axis = name[0]
-                    gizmo_ctrl.start_rotate_from_pick(axis, viewport, x, y)
-                    return
+        if picked_ent.name.endswith("head") or picked_ent.name.endswith("shaft"):
+            gizmo_ctrl.start_translate_from_pick(axis, viewport, x, y)
+
+        elif picked_ent.name.endswith("ring"):
+            gizmo_ctrl.start_rotate_from_pick(axis, viewport, x, y)
 
 
     def _extract_gizmo_hit(self, ent: Entity | None):
@@ -554,7 +549,6 @@ class EditorWindow(QMainWindow):
             output_res="color_pp",
             pass_name="PostFX",
         )
-
 
         passes: list["FramePass"] = [
             ColorPass(input_res="empty", output_res="color", pass_name="Color"),

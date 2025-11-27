@@ -513,10 +513,11 @@ void main() {
 GIZMO_MASK_FRAG = """
 #version 330 core
 out vec4 fragColor;
+uniform vec4 u_color;
 
 void main() {
     // RGB нам не важен, только альфа
-    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    fragColor = vec4(0.0, 0.0, 0.0, u_color.a);
 }
 """
 
@@ -538,8 +539,6 @@ class GizmoPass(RenderFramePass):
         self.output_res = output_res
         self._shader: ShaderProgram | None = None
         
-    def set_gizmo_entities(self, entities: list["Entity"]) -> None:
-        self._gizmo_entities = entities
 
     def _ensure_shader(self, gfx) -> ShaderProgram:
         if self._shader is None:
@@ -554,10 +553,6 @@ class GizmoPass(RenderFramePass):
         camera   = viewport.camera
         px, py, pw, ph = ctx.rect
         key      = ctx.context_key
-
-        if not self._gizmo_entities:
-            return
-
         
         fb = ctx.fbos.get(self.output_res)
         if fb is None:
@@ -599,6 +594,11 @@ class GizmoPass(RenderFramePass):
         )
 
         from termin.visualization.components import MeshRenderer
+
+        index = 1
+        maxindex = len(self._gizmo_entities)
+
+        print(f"Rendering {maxindex} gizmo entities in GizmoPass")
         for ent in self._gizmo_entities:
             if not ent.active or not ent.visible:
                 continue
@@ -606,9 +606,14 @@ class GizmoPass(RenderFramePass):
             if mr is None or mr.mesh is None:
                 continue
 
+            alpha = index * 1.0/maxindex
+            print(f"Gizmo entity {index}/{maxindex} alpha: {alpha}")
+            shader.set_uniform_vec4("u_color", (0.0, 0.0, 0.0, alpha))
             model = ent.model_matrix()
             shader.set_uniform_matrix4("u_model", model)
             mr.mesh.draw(ctx_render)
+            index += 1
+            
 
         # возвращаем нормальную маску цвета и запись глубины
         gfx.set_color_mask(True, True, True, True)

@@ -321,8 +321,6 @@ class GizmoEntity(Entity):
             self.ry.pick_ring_ent,
             self.rz.pick_ring_ent,
         ]
-
-
 # ---------- ЕДИНЫЙ КОНТРОЛЛЕР ПЕРЕМЕЩЕНИЯ+ВРАЩЕНИЯ ----------
 
 class GizmoMoveController(InputComponent):

@@ -164,25 +164,25 @@ class Window:
     from typing import Optional
     from termin.visualization.entity import Entity
 
-    def pick_entity_at(self, x: float, y: float, viewport: Viewport = None) -> Optional[Entity]:
+    def pick_color_at(self, x: float, y: float, viewport: Viewport = None, buffer_name="color") -> Optional[Tuple[int, int, int, int]]:
         """
-        Вернёт entity под пикселем (x, y) в координатах виджета (origin сверху-слева),
-        используя id-карту, нарисованную IdPass в FBO с ключом 'id'.
+        Вернёт (r,g,b,a) в [0,1] под пикселем (x, y) в координатах виджета (origin сверху-слева),
+        используя цветовую карту, нарисованную ColorPass в FBO с ключом 'color'.
         """
         if self.handle is None:
-            return None
+            raise RuntimeError("Window handle is not available")
 
         # Определяем вьюпорт, если не передали явно
         if viewport is None:
             viewport = self._viewport_under_cursor(x, y)
             if viewport is None:
-                return None
+                raise RuntimeError("No viewport under cursor for picking")
 
         win_w, win_h = self.handle.window_size()       # логические пиксели
         fb_w, fb_h = self.handle.framebuffer_size()    # физические пиксели (GL)
 
         if win_w <= 0 or win_h <= 0 or fb_w <= 0 or fb_h <= 0:
-            return None
+            raise RuntimeError("Invalid window or framebuffer size")
 
         # --- 1) координаты viewport'а в физических пикселях (как при рендере) ---
         px, py, pw, ph = self.viewport_rect_to_pixels(viewport)
@@ -208,18 +208,32 @@ class Window:
         read_x = int(vx)
         read_y = int(ph - vy - 1)   # инверсия Y, как в старом _do_pick_pass
 
-        # Берём FBO с id-картой
+        # Берём FBO с цветовой картой
         fbo_pool = viewport.fbos
-        
-        fb_id = fbo_pool.get("id")
-        if fb_id is None:
-            print("No FBO with key 'id' found in fbo_pool")
+
+        fb_color = fbo_pool.get(buffer_name)
+        if fb_color is None:
+            print(f"No FBO with key {buffer_name!r} found in fbo_pool")
             return None
 
 
-        r, g, b, a = self.graphics.read_pixel(fb_id, read_x, read_y)
+        r, g, b, a = self.graphics.read_pixel(fb_color, read_x, read_y)
         self.handle.bind_window_framebuffer()
+        return (r, g, b, a)
 
+    def pick_entity_at(self, x: float, y: float, viewport: Viewport = None) -> Optional[Entity]:
+        """
+        Вернёт entity под пикселем (x, y) в координатах виджета (origin сверху-слева),
+        используя id-карту, нарисованную IdPass в FBO с ключом 'id'.
+        """
+        if self.handle is None:
+            return None
+
+        color = self.pick_color_at(x, y, viewport=viewport, buffer_name="id")
+        if color is None:
+            return None
+        r, g, b, a = color
+        
         pid = rgb_to_id(r, g, b)
         print(f"Picked color RGBA: {r}, {g}, {b}, {a} -> ID: {pid}")  # --- DEBUG ---
 

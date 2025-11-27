@@ -329,8 +329,6 @@ class&nbsp;GizmoEntity(Entity):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.ry.pick_ring_ent,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.rz.pick_ring_ent,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
-<br>
-<br>
 #&nbsp;----------&nbsp;ЕДИНЫЙ&nbsp;КОНТРОЛЛЕР&nbsp;ПЕРЕМЕЩЕНИЯ+ВРАЩЕНИЯ&nbsp;----------<br>
 <br>
 class&nbsp;GizmoMoveController(InputComponent):<br>
