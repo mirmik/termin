@@ -209,12 +209,11 @@ class Window:
         read_y = int(ph - vy - 1)   # инверсия Y, как в старом _do_pick_pass
 
         # Берём FBO с id-картой
-        fbo_pool = getattr(viewport, "_fbo_pool", None)
-        if not fbo_pool:
-            return None
-
+        fbo_pool = viewport.fbos
+        
         fb_id = fbo_pool.get("id")
         if fb_id is None:
+            print("No FBO with key 'id' found in fbo_pool")
             return None
 
 
@@ -222,6 +221,7 @@ class Window:
         self.handle.bind_window_framebuffer()
 
         pid = rgb_to_id(r, g, b)
+        print(f"Picked color RGBA: {r}, {g}, {b}, {a} -> ID: {pid}")  # --- DEBUG ---
 
         if pid == 0:
             return None
@@ -372,11 +372,10 @@ class Window:
         return None
 
     def get_viewport_fbo(self, viewport, key, size):
-        d = viewport.__dict__.setdefault("_fbo_pool", {})
-        fb = d.get(key)
+        fb = viewport.fbos.get(key)
         if fb is None:
             fb = self.graphics.create_framebuffer(size)
-            d[key] = fb
+            viewport.fbos[key] = fb
         else:
             fb.resize(size)
         return fb
@@ -406,10 +405,27 @@ class Window:
             # Берём список пассов, который кто-то заранее повесил на viewport
             frame_passes = viewport.frame_passes
             if not frame_passes:
-                # Нечего рендерить — пропускаем
                 continue
 
-            # Контекст для пассов
+            # Строим граф и получаем порядок
+            graph = FrameGraph(frame_passes)
+            schedule = graph.build_schedule()
+
+            # --- 1) Предварительно создаём FBO по группам алиасов ---
+            alias_groups = graph.fbo_alias_groups()
+
+            # общий пул FBO у вьюпорта, чтобы pick и прочее видели те же объекты
+            fbos = viewport.fbos
+
+            # если решение графа поменялось, fbo обновятся
+            for canon, names in alias_groups.items():
+                # один физический FBO на всю группу алиасов
+                fb = self.get_viewport_fbo(viewport, canon, (pw, ph))
+                # публикуем под всеми именами, которые фигурируют в графе
+                for name in names:
+                    fbos[name] = fb       # чтобы пассы пользовались ctx.fbos
+
+            # --- 2) Создаём контекст с уже готовой картой FBO ---
             ctx = FrameContext(
                 window=self,
                 viewport=viewport,
@@ -417,12 +433,10 @@ class Window:
                 size=(pw, ph),
                 context_key=context_key,
                 graphics=self.graphics,
+                fbos=fbos,
             )
 
-            # Строим и исполняем граф
-            graph = FrameGraph(frame_passes)
-            schedule = graph.build_schedule()
-
+            # --- 3) Выполняем пассы ---
             for p in schedule:
                 p.execute(ctx)
 

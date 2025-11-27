@@ -12,6 +12,7 @@ class Viewport:
     rect: Tuple[float, float, float, float] # x, y, width, height in normalized coords (0.0:1.0)
     canvas: Optional["Canvas"] = None
     frame_passes: list["FramePass"] = field(default_factory=list)
+    fbos: dict = field(default_factory=dict)
 
 
     def screen_point_to_ray(self, x, y):

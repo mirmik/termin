@@ -20,6 +20,7 @@ class&nbsp;Viewport:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;rect:&nbsp;Tuple[float,&nbsp;float,&nbsp;float,&nbsp;float]&nbsp;#&nbsp;x,&nbsp;y,&nbsp;width,&nbsp;height&nbsp;in&nbsp;normalized&nbsp;coords&nbsp;(0.0:1.0)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;canvas:&nbsp;Optional[&quot;Canvas&quot;]&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;frame_passes:&nbsp;list[&quot;FramePass&quot;]&nbsp;=&nbsp;field(default_factory=list)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;fbos:&nbsp;dict&nbsp;=&nbsp;field(default_factory=dict)<br>
 <br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;screen_point_to_ray(self,&nbsp;x,&nbsp;y):<br>

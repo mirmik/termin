@@ -344,7 +344,11 @@ class EditorWindow(QMainWindow):
         x, y, viewport = pending_release
         self._pending_pick_release = None
 
+        print("Processing pick release at", x, y)
+
         picked_ent = window.pick_entity_at(x, y, viewport)
+
+        print("Picked entity:", picked_ent)
 
         # обычный selection (как у тебя было)
         if picked_ent is not None:
@@ -564,8 +568,7 @@ class EditorWindow(QMainWindow):
                 pass_name="Canvas",
             ),
             PresentToScreenPass(
-                #input_res="color+ui",
-                input_res="id",
+                input_res="color+ui",
                 pass_name="Present",
             )
         ]

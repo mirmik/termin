@@ -216,6 +216,20 @@ class FrameGraph:
     def canonical_resource(self, name: str) -> str:
         return self._canonical_resources.get(name, name)
 
+    def fbo_alias_groups(self) -> Dict[str, Set[str]]:
+        """
+        Группы синонимов ресурсов по каноническим именам.
+
+        Возвращает dict:
+            канон -> множество всех имён, которые к нему сводятся.
+        """
+        groups: Dict[str, Set[str]] = {}
+        for res, canon in self._canonical_resources.items():
+            groups.setdefault(canon, set()).add(res)
+
+        return groups
+    
+
 @dataclass
 class FrameExecutionContext:
     graphics: GraphicsBackend
@@ -404,31 +418,20 @@ class CanvasPass(RenderFramePass):
         self.dst = dst
 
     def execute(self, ctx: FrameContext):
-        gfx = ctx.graphics
-        window = ctx.window
+        gfx      = ctx.graphics
+        window   = ctx.window
         viewport = ctx.viewport
         px, py, pw, ph = ctx.rect
-        key = ctx.context_key
+        key      = ctx.context_key
 
-        # Пытаемся взять FBO исходного ресурса
-        fb_in = ctx.fbos.get(self.src)
-
-        if fb_in is not None:
-            # inplace по сути: переиспользуем тот же FBO
-            fb_out = fb_in
-        else:
-            # src – внешний ресурс / никем не создан:
-            # делаем новый FBO под dst
+        fb_out = ctx.fbos.get(self.dst)
+        if fb_out is None:
             fb_out = window.get_viewport_fbo(viewport, self.dst, (pw, ph))
-
-        # публикуем его под именем dst
-        ctx.fbos[self.dst] = fb_out
+            ctx.fbos[self.dst] = fb_out
 
         gfx.bind_framebuffer(fb_out)
         gfx.set_viewport(0, 0, pw, ph)
 
-        # Ничего не чистим, не копируем: если там уже есть картинка —
-        # рисуем UI поверх неё.
         if viewport.canvas:
             viewport.canvas.render(gfx, key, (0, 0, pw, ph))
 
@@ -463,8 +466,10 @@ class IdPass(RenderFramePass):
         px, py, pw, ph = ctx.rect
         key      = ctx.context_key
 
-        fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
-        ctx.fbos[self.output_res] = fb
+        fb = ctx.fbos.get(self.output_res)
+        if fb is None:
+            fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
+            ctx.fbos[self.output_res] = fb
 
         gfx.bind_framebuffer(fb)
         gfx.set_viewport(0, 0, pw, ph)
@@ -553,11 +558,14 @@ class GizmoPass(RenderFramePass):
         if not self._gizmo_entities:
             return
 
-        # работаем с тем же FBO, что и IdPass
+        
         fb = ctx.fbos.get(self.output_res)
         if fb is None:
             fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
             ctx.fbos[self.output_res] = fb
+
+        # inplace pass всегда переиспользует тот же FBO
+        ctx.fbos[self.output_res] = ctx.fbos.get(self.input_res)
 
         gfx.bind_framebuffer(fb)
         gfx.set_viewport(0, 0, pw, ph)
@@ -576,7 +584,7 @@ class GizmoPass(RenderFramePass):
         shader.ensure_ready(gfx)
         shader.use()
         shader.set_uniform_matrix4("u_view", view)
-        shader.set_uniform_matrix4("u_proj", proj)
+        shader.set_uniform_matrix4("u_projection", proj)
 
         from termin.visualization.entity import RenderContext
         ctx_render = RenderContext(
@@ -605,8 +613,6 @@ class GizmoPass(RenderFramePass):
         # возвращаем нормальную маску цвета и запись глубины
         gfx.set_color_mask(True, True, True, True)
         gfx.set_depth_mask(True)
-
-        print ("GizmoPass executed")
 
 
 
