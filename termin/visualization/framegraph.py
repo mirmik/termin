@@ -425,10 +425,6 @@ class CanvasPass(RenderFramePass):
         key      = ctx.context_key
 
         fb_out = ctx.fbos.get(self.dst)
-        if fb_out is None:
-            fb_out = window.get_viewport_fbo(viewport, self.dst, (pw, ph))
-            ctx.fbos[self.dst] = fb_out
-
         gfx.bind_framebuffer(fb_out)
         gfx.set_viewport(0, 0, pw, ph)
 
@@ -467,10 +463,6 @@ class IdPass(RenderFramePass):
         key      = ctx.context_key
 
         fb = ctx.fbos.get(self.output_res)
-        if fb is None:
-            fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
-            ctx.fbos[self.output_res] = fb
-
         gfx.bind_framebuffer(fb)
         gfx.set_viewport(0, 0, pw, ph)
         gfx.clear_color_depth((0.0, 0.0, 0.0, 0.0))
@@ -555,13 +547,6 @@ class GizmoPass(RenderFramePass):
         key      = ctx.context_key
         
         fb = ctx.fbos.get(self.output_res)
-        if fb is None:
-            fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
-            ctx.fbos[self.output_res] = fb
-
-        # inplace pass всегда переиспользует тот же FBO
-        ctx.fbos[self.output_res] = ctx.fbos.get(self.input_res)
-
         gfx.bind_framebuffer(fb)
         gfx.set_viewport(0, 0, pw, ph)
 
