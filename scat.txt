@@ -17,5 +17,5 @@ examples/**
 
 На что обратить внимание при знакомстве с проектом:
 В основном сейчас нас интересует редактор, тоесть termin/apps/*, termin/visualization/**, examples/visual/*
-TECHNICAL_NOTES.md
+TECHNICAL_NOTES.md - техническое описание проекта (может устаревать)
 -----------------
