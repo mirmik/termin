@@ -133,6 +133,9 @@ class NOPGraphicsBackend(GraphicsBackend):
         # Никакого чистки буферов — просто заглушка
         pass
 
+    def set_color_mask(self, r: bool, g: bool, b: bool, a: bool):
+        self._state["color_mask"] = (r, g, b, a)
+
     def set_depth_test(self, enabled: bool):
         self._state["depth_test"] = enabled
 

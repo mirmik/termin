@@ -141,6 +141,9 @@ class&nbsp;NOPGraphicsBackend(GraphicsBackend):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Никакого&nbsp;чистки&nbsp;буферов&nbsp;—&nbsp;просто&nbsp;заглушка<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_color_mask(self,&nbsp;r:&nbsp;bool,&nbsp;g:&nbsp;bool,&nbsp;b:&nbsp;bool,&nbsp;a:&nbsp;bool):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;color_mask&quot;]&nbsp;=&nbsp;(r,&nbsp;g,&nbsp;b,&nbsp;a)<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_test(self,&nbsp;enabled:&nbsp;bool):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;depth_test&quot;]&nbsp;=&nbsp;enabled<br>
 <br>
