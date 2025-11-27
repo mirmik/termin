@@ -60,7 +60,9 @@ class&nbsp;Window:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.set_mouse_button_callback(self._handle_mouse_button)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.handle.set_key_callback(self._handle_key)<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_mouse_button_event&nbsp;:&nbsp;Optional[callable(MouseButton,&nbsp;MouseAction,&nbsp;x,&nbsp;y,&nbsp;Viewport)]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_mouse_button_event&nbsp;:&nbsp;Optional[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Callable[[MouseButton,&nbsp;Action,&nbsp;float,&nbsp;float,&nbsp;Optional[Viewport]],&nbsp;None]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_mouse_move_event&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;callable(x:&nbsp;float,&nbsp;y:&nbsp;float,&nbsp;viewport:&nbsp;Optional[Viewport])<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.after_render_handler&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;type:&nbsp;Optional[Callable[[&quot;Window&quot;],&nbsp;None]]<br>
 <br>

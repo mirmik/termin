@@ -540,7 +540,7 @@ class EditorWindow(QMainWindow):
         self.gizmo.find_component(GizmoMoveController).set_target(selected_ent)
 
     def make_pipeline(self) -> list["FramePass"]:
-        from termin.visualization.framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass
+        from termin.visualization.framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass, GizmoPass
         from termin.visualization.postprocess import PostProcessPass
         from termin.visualization.posteffects.highlight import HighlightEffect
 
@@ -551,9 +551,12 @@ class EditorWindow(QMainWindow):
             pass_name="PostFX",
         )
 
+
         passes: list["FramePass"] = [
             ColorPass(input_res="empty", output_res="color", pass_name="Color"),
-            IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
+            IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
+            GizmoPass(input_res="preid", output_res="id", pass_name="Gizmo", 
+                gizmo_entities=self.gizmo.helper_geometry_entities()),
             postprocess,
             CanvasPass(
                 src="color_pp",
@@ -561,7 +564,8 @@ class EditorWindow(QMainWindow):
                 pass_name="Canvas",
             ),
             PresentToScreenPass(
-                input_res="color+ui",
+                #input_res="color+ui",
+                input_res="id",
                 pass_name="Present",
             )
         ]

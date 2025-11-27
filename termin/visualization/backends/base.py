@@ -137,6 +137,10 @@ class GraphicsBackend(ABC):
         ...
 
     @abstractmethod
+    def set_color_mask(self, r: bool, g: bool, b: bool, a: bool) -> None:
+        ...
+        
+    @abstractmethod
     def set_depth_test(self, enabled: bool):
         ...
 

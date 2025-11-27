@@ -29,7 +29,6 @@ termin/fem/**<br>
 <br>
 {RAWMAP}<br>
 В&nbsp;основном&nbsp;сейчас&nbsp;нас&nbsp;интересует&nbsp;редактор,&nbsp;тоесть&nbsp;termin/apps/*,&nbsp;termin/visualization/**,&nbsp;examples/visual/*<br>
-Доступ&nbsp;к&nbsp;коду&nbsp;по&nbsp;ссылкам&nbsp;работает&nbsp;в&nbsp;тестовом&nbsp;режиме.&nbsp;Обязательно&nbsp;скажи,&nbsp;если&nbsp;код&nbsp;выглядет&nbsp;невалидно,&nbsp;так,&nbsp;как&nbsp;будто&nbsp;его&nbsp;проживал&nbsp;парсер,&nbsp;и&nbsp;что&nbsp;он&nbsp;не&nbsp;выполнится.<br>
 -----------------<br>
 <!-- END SCAT CODE -->
 </body>

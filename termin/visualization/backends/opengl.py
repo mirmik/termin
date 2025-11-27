@@ -322,6 +322,14 @@ class OpenGLGraphicsBackend(GraphicsBackend):
         gl.glClearColor(float(color[0]), float(color[1]), float(color[2]), float(color[3]))
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
+    def set_color_mask(self, r: bool, g: bool, b: bool, a: bool) -> None:
+        gl.glColorMask(
+            gl.GL_TRUE if r else gl.GL_FALSE,
+            gl.GL_TRUE if g else gl.GL_FALSE,
+            gl.GL_TRUE if b else gl.GL_FALSE,
+            gl.GL_TRUE if a else gl.GL_FALSE,
+        )
+
     def set_depth_test(self, enabled: bool):
         if enabled:
             gl.glEnable(gl.GL_DEPTH_TEST)

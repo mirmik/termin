@@ -52,7 +52,9 @@ class Window:
         self.handle.set_mouse_button_callback(self._handle_mouse_button)
         self.handle.set_key_callback(self._handle_key)
 
-        self.on_mouse_button_event : Optional[callable(MouseButton, MouseAction, x, y, Viewport)] = None
+        self.on_mouse_button_event : Optional[
+            Callable[[MouseButton, Action, float, float, Optional[Viewport]], None]
+        ] = None
         self.on_mouse_move_event = None  # callable(x: float, y: float, viewport: Optional[Viewport])
         self.after_render_handler = None  # type: Optional[Callable[["Window"], None]]
 

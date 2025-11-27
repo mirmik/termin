@@ -85,41 +85,19 @@ class GizmoArrow(Entity):
         super().__init__(
             Pose3.identity(),
             name=f"gizmo_axis_{axis}",
-            pickable=True,
-            selectable=False
+            pickable=False,
+            selectable=False,
         )
-
         self.axis = axis
-        shaft_len = length * 0.75
-        head_len = length * 0.25
+        self.length = float(length)
 
-        # тут же можно "утолщать" геометрию, чтобы легче было попадать мышкой
-        shaft = CylinderMesh(radius=0.03, height=shaft_len, segments=24)
-        head = ConeMesh(radius=0.06, height=head_len, segments=24)
+        shaft_len = self.length * 0.75
+        head_len = self.length * 0.25
 
-        mat = Material(color=color)
-
-        # цилиндр (ствол)
-        shaft_ent = Entity(
-            Pose3.translation(0, shaft_len * 0.5, 0),
-            name=f"{axis}_shaft",
-            pickable=True,
-            selectable=False
-        )
-        shaft_ent.add_component(MeshRenderer(shaft, mat))
-        self.shaft_ent = shaft_ent
-        self.transform.add_child(shaft_ent.transform)
-
-        # конус (наконечник)
-        head_ent = Entity(
-            Pose3.translation(0, shaft_len + head_len * 0.5, 0),
-            name=f"{axis}_head",
-            pickable=True,
-            selectable=False
-        )
-        head_ent.add_component(MeshRenderer(head, mat))
-        self.head_ent = head_ent
-        self.transform.add_child(head_ent.transform)
+        # основная (видимая) геометрия
+        self._create_main_geometry(axis, shaft_len, head_len, color)
+        # вспомогательная (утолщённая, невидимая, только для пиккинга)
+        self._create_pick_geometry(axis, shaft_len, head_len)
 
         # ориентация оси:
         # базовая модель ориентирована вдоль +Y,
@@ -132,6 +110,78 @@ class GizmoArrow(Entity):
             self.transform.relocate(Pose3.rotateX(np.pi / 2.0))
         # для оси Y поворот не нужен
 
+    def _create_main_geometry(
+        self,
+        axis: str,
+        shaft_len: float,
+        head_len: float,
+        color,
+    ):
+        """Создаёт видимые меши стрелки (тонкий ствол + конус)."""
+        shaft_mesh = CylinderMesh(radius=0.03, height=shaft_len, segments=24)
+        head_mesh = ConeMesh(radius=0.06, height=head_len, segments=24)
+
+        mat = Material(color=color)
+
+        # цилиндр (ствол)
+        shaft_ent = Entity(
+            Pose3.translation(0, shaft_len * 0.5, 0),
+            name=f"{axis}_shaft",
+            pickable=False,
+            selectable=False,
+        )
+        shaft_ent.add_component(MeshRenderer(shaft_mesh, mat))
+        self.shaft_ent = shaft_ent
+        self.transform.add_child(shaft_ent.transform)
+
+        # конус (наконечник)
+        head_ent = Entity(
+            Pose3.translation(0, shaft_len + head_len * 0.5, 0),
+            name=f"{axis}_head",
+            pickable=False,
+            selectable=False,
+        )
+        head_ent.add_component(MeshRenderer(head_mesh, mat))
+        self.head_ent = head_ent
+        self.transform.add_child(head_ent.transform)
+
+    def _create_pick_geometry(
+        self,
+        axis: str,
+        shaft_len: float,
+        head_len: float,
+    ):
+        """
+        Создаёт утолщённую невидимую геометрию для удобного пиккинга:
+        отдельные сущности с материалом = None (не рисуются в color pass).
+        Имена:
+            x_pick_shaft, x_pick_head
+        """
+        # утолщённый ствол
+        pick_shaft_mesh = CylinderMesh(radius=0.08, height=shaft_len, segments=16)
+        pick_shaft_ent = Entity(
+            Pose3.translation(0, shaft_len * 0.5, 0),
+            name=f"{axis}_pick_shaft",
+            pickable=False,
+            selectable=False,
+        )
+        pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, None))
+        self.pick_shaft_ent = pick_shaft_ent
+        self.transform.add_child(pick_shaft_ent.transform)
+
+        # утолщённый наконечник
+        pick_head_mesh = ConeMesh(radius=0.10, height=head_len, segments=16)
+        pick_head_ent = Entity(
+            Pose3.translation(0, shaft_len + head_len * 0.5, 0),
+            name=f"{axis}_pick_head",
+            pickable=False,
+            selectable=False,
+        )
+        pick_head_ent.add_component(MeshRenderer(pick_head_mesh, None))
+        self.pick_head_ent = pick_head_ent
+        self.transform.add_child(pick_head_ent.transform)
+
+
 
 class GizmoRing(Entity):
     """
@@ -140,29 +190,28 @@ class GizmoRing(Entity):
     Ориентацией transform доводим до нужной оси.
     """
 
-    def __init__(self, axis: str, radius=1.2, thickness=0.05, color=(1.0, 1.0, 0.0, 1.0)):
+    def __init__(
+        self,
+        axis: str,
+        radius: float = 1.2,
+        thickness: float = 0.05,
+        color=(1.0, 1.0, 0.0, 1.0),
+    ):
         super().__init__(
             Pose3.identity(),
             name=f"gizmo_rot_{axis}",
-            pickable=True,
-            selectable=False
+            pickable=False,
+            selectable=False,
         )
 
         self.axis = axis
+        self.radius = float(radius)
+        self.thickness = float(thickness)
 
-        # здесь толщина кольца и радиус — естественное место для "утолщённой" геометрии
-        ring_mesh = RingMesh(radius=radius, thickness=thickness, segments=48)
-        mat = Material(color=color)
-
-        ring_ent = Entity(
-            Pose3.identity(),
-            name=f"{axis}_ring",
-            pickable=True,
-            selectable=False
-        )
-        ring_ent.add_component(MeshRenderer(ring_mesh, mat))
-        self.ring_ent = ring_ent
-        self.transform.add_child(ring_ent.transform)
+        # основная видимая геометрия
+        self._create_main_geometry(axis, self.radius, self.thickness, color)
+        # вспомогательная утолщённая геометрия для пиккинга
+        self._create_pick_geometry(axis, self.radius, self.thickness)
 
         # базовый RingMesh имеет нормаль (ось) вдоль +Y,
         # поворачиваем так же, как стрелки:
@@ -173,6 +222,54 @@ class GizmoRing(Entity):
             # нормаль Y → Z
             self.transform.relocate(Pose3.rotateX(np.pi / 2.0))
         # для оси Y поворот не нужен
+
+    def _create_main_geometry(
+        self,
+        axis: str,
+        radius: float,
+        thickness: float,
+        color,
+    ):
+        """Создаёт видимое кольцо гизмо."""
+        ring_mesh = RingMesh(radius=radius, thickness=thickness, segments=48)
+        mat = Material(color=color)
+
+        ring_ent = Entity(
+            Pose3.identity(),
+            name=f"{axis}_ring",
+            pickable=False,
+            selectable=False,
+        )
+        ring_ent.add_component(MeshRenderer(ring_mesh, mat))
+        self.ring_ent = ring_ent
+        self.transform.add_child(ring_ent.transform)
+
+    def _create_pick_geometry(
+        self,
+        axis: str,
+        radius: float,
+        thickness: float,
+    ):
+        """
+        Создаёт утолщённое невидимое кольцо для удобного пиккинга.
+        Имя: x_pick_ring.
+        """
+        # делаем кольцо заметно толще для попадания мышью
+        pick_ring_mesh = RingMesh(
+            radius=radius,
+            thickness=thickness * 2.0,
+            segments=32,
+        )
+        pick_ring_ent = Entity(
+            Pose3.identity(),
+            name=f"{axis}_pick_ring",
+            pickable=False,
+            selectable=False,
+        )
+        pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, None))
+        self.pick_ring_ent = pick_ring_ent
+        self.transform.add_child(pick_ring_ent.transform)
+
 
 
 class GizmoEntity(Entity):
@@ -186,7 +283,7 @@ class GizmoEntity(Entity):
         super().__init__(
             Pose3.identity(),
             name="gizmo",
-            pickable=True,
+            pickable=False,
             selectable=False
         )
 
@@ -210,6 +307,20 @@ class GizmoEntity(Entity):
         self.transform.add_child(self.rx.transform)
         self.transform.add_child(self.ry.transform)
         self.transform.add_child(self.rz.transform)
+
+    def helper_geometry_entities(self) -> list[Entity]:
+        """Возвращает список всех вспомогательных (pick) сущностей гизмо."""
+        return [
+            self.x.pick_shaft_ent,
+            self.x.pick_head_ent,
+            self.y.pick_shaft_ent,
+            self.y.pick_head_ent,
+            self.z.pick_shaft_ent,
+            self.z.pick_head_ent,
+            self.rx.pick_ring_ent,
+            self.ry.pick_ring_ent,
+            self.rz.pick_ring_ent,
+        ]
 
 
 # ---------- ЕДИНЫЙ КОНТРОЛЛЕР ПЕРЕМЕЩЕНИЯ+ВРАЩЕНИЯ ----------

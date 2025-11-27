@@ -145,6 +145,10 @@ class&nbsp;GraphicsBackend(ABC):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;@abstractmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_color_mask(self,&nbsp;r:&nbsp;bool,&nbsp;g:&nbsp;bool,&nbsp;b:&nbsp;bool,&nbsp;a:&nbsp;bool)&nbsp;-&gt;&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@abstractmethod<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_depth_test(self,&nbsp;enabled:&nbsp;bool):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
 <br>

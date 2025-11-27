@@ -67,7 +67,6 @@ def&nbsp;qinv(q:&nbsp;numpy.ndarray)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;numpy.array([-q[0],&nbsp;-q[1],&nbsp;-q[2],&nbsp;q[3]])<br>
 <br>
 <br>
-<br>
 <!-- END SCAT CODE -->
 </body>
 </html>
