@@ -6,21 +6,15 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-<br>
-termin/apps/*<br>
-termin/visualization/**<br>
-termin/geombase/**<br>
-termin/apps/**<br>
 termin/**<br>
 examples/visual/*<br>
+utest/**<br>
 scat.txt<br>
 <br>
 [TREE]<br>
 termin/**<br>
 utest/**<br>
 examples/**<br>
-termin/ga/**<br>
-termin/fem/**<br>
 <br>
 [MAPFORMAT]<br>
 -----------------<br>
@@ -28,7 +22,10 @@ termin/fem/**<br>
 Актуальное&nbsp;состояние&nbsp;репы:<br>
 <br>
 {RAWMAP}<br>
+<br>
+На&nbsp;что&nbsp;обратить&nbsp;внимание&nbsp;при&nbsp;знакомстве&nbsp;с&nbsp;проектом:<br>
 В&nbsp;основном&nbsp;сейчас&nbsp;нас&nbsp;интересует&nbsp;редактор,&nbsp;тоесть&nbsp;termin/apps/*,&nbsp;termin/visualization/**,&nbsp;examples/visual/*<br>
+TECHNICAL_NOTES.md<br>
 -----------------<br>
 <!-- END SCAT CODE -->
 </body>

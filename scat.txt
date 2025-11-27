@@ -1,18 +1,12 @@
-
-termin/apps/*
-termin/visualization/**
-termin/geombase/**
-termin/apps/**
 termin/**
 examples/visual/*
+utest/**
 scat.txt
 
 [TREE]
 termin/**
 utest/**
 examples/**
-termin/ga/**
-termin/fem/**
 
 [MAPFORMAT]
 -----------------
@@ -20,5 +14,8 @@ termin/fem/**
 Актуальное состояние репы:
 
 {RAWMAP}
+
+На что обратить внимание при знакомстве с проектом:
 В основном сейчас нас интересует редактор, тоесть termin/apps/*, termin/visualization/**, examples/visual/*
+TECHNICAL_NOTES.md
 -----------------
