@@ -18,6 +18,10 @@ class Pose2:
         self._rot_matrix = None  # Lazy computation
         self._mat = None  # Lazy computation
 
+    def copy(self) -> 'Pose2':
+        """Create a copy of the Pose2."""
+        return Pose2(ang=self.ang, lin=self.lin.copy())
+
     @staticmethod
     def identity():
         """Create an identity pose (no rotation, no translation)."""

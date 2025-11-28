@@ -26,6 +26,10 @@ class&nbsp;Pose2:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._rot_matrix&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Lazy&nbsp;computation<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Lazy&nbsp;computation<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;copy(self)&nbsp;-&gt;&nbsp;'Pose2':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;copy&nbsp;of&nbsp;the&nbsp;Pose2.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose2(ang=self.ang,&nbsp;lin=self.lin.copy())<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;identity():<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;an&nbsp;identity&nbsp;pose&nbsp;(no&nbsp;rotation,&nbsp;no&nbsp;translation).&quot;&quot;&quot;<br>

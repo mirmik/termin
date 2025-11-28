@@ -25,6 +25,10 @@ class&nbsp;Pose3:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Lazy&nbsp;computation<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mat34&nbsp;=&nbsp;None&nbsp;&nbsp;#&nbsp;Lazy&nbsp;computation<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;copy(self)&nbsp;-&gt;&nbsp;'Pose3':<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Create&nbsp;a&nbsp;copy&nbsp;of&nbsp;the&nbsp;Pose3.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=self.ang.copy(),&nbsp;lin=self.lin.copy())<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;@property<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;ang(self)&nbsp;-&gt;&nbsp;numpy.ndarray:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Get&nbsp;the&nbsp;rotation&nbsp;quaternion.&quot;&quot;&quot;<br>

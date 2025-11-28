@@ -35,18 +35,14 @@ class Screw2(Screw):
 
         if not isinstance(ang, numpy.ndarray):
             ang = numpy.array(ang)
-
-        # # check shapes
-        # if ang.shape != (1,) and ang.shape != ():
-        #     raise Exception("ang must be a scalar or shape (1,) ndarray")
-
-        # if lin.shape != (2,):
-        #     raise Exception(f"lin must be shape (2,) ndarray, got {lin.shape}")
-
         ang = ang.reshape(1)
         lin = lin.reshape(2)
 
         super().__init__(ang=ang, lin=lin)
+
+    def copy(self) -> "Screw2":
+        """Create a copy of the Screw2."""
+        return Screw2(ang=self.ang.copy(), lin=self.lin.copy())
 
     def moment(self) -> float:
         """Return the moment (bivector part) of the screw."""
@@ -160,6 +156,10 @@ class Screw3(Screw):
     """A 3D Screw specialized for spatial motions."""
     def __init__(self, ang: numpy.ndarray = numpy.array([0,0,0]), lin: numpy.ndarray = numpy.array([0,0,0])):
         super().__init__(ang=ang, lin=lin)
+
+    def copy(self) -> "Screw3":
+        """Create a copy of the Screw3."""
+        return Screw3(ang=self.ang.copy(), lin=self.lin.copy())
 
     def moment(self) -> numpy.ndarray:
         """Return the moment (bivector part) of the screw."""

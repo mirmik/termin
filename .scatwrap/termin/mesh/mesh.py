@@ -59,6 +59,9 @@ class&nbsp;Mesh2(Mesh):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(vertices,&nbsp;indices)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._validate_mesh()<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;copy(self)&nbsp;-&gt;&nbsp;&quot;Mesh2&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Mesh2(self.vertices.copy(),&nbsp;self.indices.copy())<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_validate_mesh(self):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Ensure&nbsp;that&nbsp;the&nbsp;vertex/index&nbsp;arrays&nbsp;have&nbsp;correct&nbsp;shapes&nbsp;and&nbsp;bounds.&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.vertices.ndim&nbsp;!=&nbsp;2&nbsp;or&nbsp;self.vertices.shape[1]&nbsp;!=&nbsp;3:<br>
@@ -88,6 +91,15 @@ class&nbsp;Mesh3(Mesh):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._validate_mesh()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.vertex_normals&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.face_normals&nbsp;=&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;copy(self)&nbsp;-&gt;&nbsp;&quot;Mesh3&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uvs_copy&nbsp;=&nbsp;self.uv.copy()&nbsp;if&nbsp;self.uv&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh_copy&nbsp;=&nbsp;Mesh3(self.vertices.copy(),&nbsp;self.triangles.copy(),&nbsp;uvs_copy)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.vertex_normals&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh_copy.vertex_normals&nbsp;=&nbsp;self.vertex_normals.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.face_normals&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh_copy.face_normals&nbsp;=&nbsp;self.face_normals.copy()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;mesh_copy<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;build_interleaved_buffer(self):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;позиции&nbsp;—&nbsp;всегда&nbsp;есть<br>

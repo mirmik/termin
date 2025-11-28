@@ -17,6 +17,10 @@ class Pose3:
         self._mat = None  # Lazy computation
         self._mat34 = None  # Lazy computation
 
+    def copy(self) -> 'Pose3':
+        """Create a copy of the Pose3."""
+        return Pose3(ang=self.ang.copy(), lin=self.lin.copy())
+
     @property
     def ang(self) -> numpy.ndarray:
         """Get the rotation quaternion."""

@@ -51,6 +51,9 @@ class Mesh2(Mesh):
         super().__init__(vertices, indices)
         self._validate_mesh()
 
+    def copy(self) -> "Mesh2":
+        return Mesh2(self.vertices.copy(), self.indices.copy())
+
     def _validate_mesh(self):
         """Ensure that the vertex/index arrays have correct shapes and bounds."""
         if self.vertices.ndim != 2 or self.vertices.shape[1] != 3:
@@ -80,6 +83,15 @@ class Mesh3(Mesh):
         self._validate_mesh()
         self.vertex_normals = None
         self.face_normals = None
+
+    def copy(self) -> "Mesh3":
+        uvs_copy = self.uv.copy() if self.uv is not None else None
+        mesh_copy = Mesh3(self.vertices.copy(), self.triangles.copy(), uvs_copy)
+        if self.vertex_normals is not None:
+            mesh_copy.vertex_normals = self.vertex_normals.copy()
+        if self.face_normals is not None:
+            mesh_copy.face_normals = self.face_normals.copy()
+        return mesh_copy
 
     def build_interleaved_buffer(self):
         # позиции — всегда есть
