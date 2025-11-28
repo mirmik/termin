@@ -1,4 +1,5 @@
-# ===== termin/apps/editor_inspector.py =====
+# ===== termin/apps/transform_inspector.py =====
+
 from __future__ import annotations
 
 from typing import Optional, Callable
@@ -27,6 +28,8 @@ from termin.geombase.pose3 import Pose3
 from termin.visualization.inspect import InspectField
 from termin.visualization.resources import ResourceManager
 from termin.apps.undo_stack import UndoCommand
+from termin.apps.editor_commands import TransformEditCommand
+# scale is now numpy.ndarray
 
 
 # scale is now numpy.ndarray
@@ -72,16 +75,6 @@ class TransformInspector(QWidget):
             sb.valueChanged.connect(self._on_value_changed)
 
         self._set_enabled(False)
-
-        def set_undo_command_handler(
-            self, handler: Optional[Callable[[UndoCommand, bool], None]]
-        ) -> None:
-            """
-            Подключает внешний обработчик undo-команд.
-
-            handler(cmd, merge) обычно будет EditorWindow.push_undo_command.
-            """
-            self._push_undo_command = handler
 
 
     def set_undo_command_handler(
@@ -205,8 +198,16 @@ class TransformInspector(QWidget):
         if self._transform is None:
             return
 
-        pose: Pose3 = self._transform.global_pose()
+        # Снимок старого состояния до применения правки из UI
+        old_pose: Pose3 = self._transform.global_pose()
+        entity = self._transform.entity
+        if entity is not None:
+            old_scale = np.asarray(entity.scale, dtype=float)
+        else:
+            # На всякий случай — одиночный Transform3 без сущности.
+            old_scale = np.ones(3, dtype=float)
 
+        # Новые значения из спинбоксов
         px = self._pos[0].value()
         py = self._pos[1].value()
         pz = self._pos[2].value()
@@ -221,8 +222,24 @@ class TransformInspector(QWidget):
         s_y = self._scale[1].value()
         s_z = self._scale[2].value()
         new_scale = np.array([s_x, s_y, s_z], dtype=float)
-        self._transform.entity.scale = new_scale
 
-        pose = Pose3(lin=new_lin, ang=new_ang)
-        self._transform.relocate(pose)
+        new_pose = Pose3(lin=new_lin, ang=new_ang)
+
+        if self._push_undo_command is not None:
+            cmd = TransformEditCommand(
+                transform=self._transform,
+                old_pose=old_pose,
+                old_scale=old_scale,
+                new_pose=new_pose,
+                new_scale=new_scale,
+            )
+            # В инспекторе удобно склеивать серию мелких правок
+            # (пока пользователь крутит спинбоксы) в одну команду.
+            self._push_undo_command(cmd, True)
+        else:
+            # Режим без undo-стека — старое поведение "напрямую".
+            if entity is not None:
+                entity.scale = new_scale
+            self._transform.relocate(new_pose)
+
         self.transform_changed.emit()
