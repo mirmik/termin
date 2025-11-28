@@ -83,6 +83,17 @@ class TransformInspector(QWidget):
             """
             self._push_undo_command = handler
 
+
+    def set_undo_command_handler(
+        self, handler: Optional[Callable[[UndoCommand, bool], None]]
+    ) -> None:
+        """
+        Подключает внешний обработчик undo-команд.
+
+        handler(cmd, merge) обычно будет EditorWindow.push_undo_command.
+        """
+        self._push_undo_command = handler
+        
     def set_target(self, obj: Optional[object]):
         if isinstance(obj, Entity):
             transform = obj.transform

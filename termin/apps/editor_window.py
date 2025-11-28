@@ -93,6 +93,26 @@ class EditorWindow(QMainWindow):
         # --- viewport ---
         self._init_viewport()
 
+        # ----------- undo / redo -----------
+        def push_undo_command(self, cmd: UndoCommand, merge: bool = False) -> None:
+            """
+            Добавить команду в undo-стек редактора.
+            merge=True — попытаться слить с предыдущей (для крутилок трансформа).
+            """
+            self.undo_stack.push(cmd, merge=merge)
+            if self.viewport_window is not None:
+                self.viewport_window._request_update()
+
+        def undo(self) -> None:
+            self.undo_stack.undo()
+            if self.viewport_window is not None:
+                self.viewport_window._request_update()
+
+        def redo(self) -> None:
+            self.undo_stack.redo()
+            if self.viewport_window is not None:
+                self.viewport_window._request_update()
+
         # ----------- undo/redo -----------
         def push_undo_command(self, cmd: UndoCommand, merge: bool = False) -> None:
             self.undo_stack.push(cmd, merge=merge)
