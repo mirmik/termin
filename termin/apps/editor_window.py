@@ -3,6 +3,7 @@ import os
 from PyQt5 import uic
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu
 from PyQt5.QtCore import Qt, QPoint
+from termin.apps.undo_stack import UndoStack, UndoCommand
 
 from termin.visualization.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.components.mesh_renderer import MeshRenderer
@@ -22,6 +23,7 @@ class EditorWindow(QMainWindow):
         super().__init__()
         self.selected_entity_id = 0
         self.hover_entity_id = 0   # <--- добавили
+        self.undo_stack = UndoStack()
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -89,6 +91,22 @@ class EditorWindow(QMainWindow):
 
         # --- viewport ---
         self._init_viewport()
+
+        # ----------- undo/redo -----------
+        def push_undo_command(self, cmd: UndoCommand, merge: bool = False) -> None:
+            self.undo_stack.push(cmd, merge=merge)
+            if self.viewport_window is not None:
+                self.viewport_window._request_update()
+
+        def undo(self) -> None:
+            self.undo_stack.undo()
+            if self.viewport_window is not None:
+                self.viewport_window._request_update()
+
+        def redo(self) -> None:
+            self.undo_stack.redo()
+            if self.viewport_window is not None:
+                self.viewport_window._request_update()
 
 
     def _ensure_editor_entities_root(self):
