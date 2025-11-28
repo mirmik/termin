@@ -1,0 +1,15 @@
+operations:
+  - op: insert_after_text
+    path: termin/apps/transform_inspector.py
+    marker: "class TransformInspector(QWidget):"
+    payload: |
+      # Обработчик для отправки команд в общий undo-стек редактора.
+      # handler(cmd, merge=False) -> None
+          def set_undo_command_handler(self, handler):
+              """
+              Зарегистрировать обработчик команд undo/redo для этого инспектора.
+
+              handler должен быть вызываемым объектом:
+                  handler(cmd, merge=False) -> None
+              """
+              self._push_undo_command = handler

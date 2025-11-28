@@ -35,6 +35,16 @@ from termin.apps.editor_commands import TransformEditCommand
 # scale is now numpy.ndarray
 
 class TransformInspector(QWidget):
+# Обработчик для отправки команд в общий undo-стек редактора.
+# handler(cmd, merge=False) -> None
+    def set_undo_command_handler(self, handler):
+        """
+        Зарегистрировать обработчик команд undo/redo для этого инспектора.
+
+        handler должен быть вызываемым объектом:
+            handler(cmd, merge=False) -> None
+        """
+        self._push_undo_command = handler
     transform_changed = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None):
