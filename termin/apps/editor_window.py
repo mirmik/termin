@@ -1,7 +1,7 @@
 # ===== termin/apps/editor_window.py =====
 import os
 from PyQt5 import uic
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction
 from PyQt5.QtCore import Qt, QPoint
 from termin.apps.undo_stack import UndoStack, UndoCommand
 
@@ -24,9 +24,13 @@ class EditorWindow(QMainWindow):
         self.selected_entity_id = 0
         self.hover_entity_id = 0   # <--- добавили
         self.undo_stack = UndoStack()
+        self._action_undo = None
+        self._action_redo = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
+
+        self._setup_menu_bar()
 
         self.world = world
         self.scene = scene
@@ -94,6 +98,38 @@ class EditorWindow(QMainWindow):
         self._init_viewport()
 
     # ----------- undo / redo -----------
+    def _setup_menu_bar(self) -> None:
+        """
+        Создаёт верхнее меню редактора и вешает действия Undo/Redo с шорткатами.
+        """
+        menu_bar = self.menuBar()
+
+        file_menu = menu_bar.addMenu("File")
+        edit_menu = menu_bar.addMenu("Edit")
+
+        exit_action = file_menu.addAction("Exit")
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+
+        self._action_undo = edit_menu.addAction("Undo")
+        self._action_undo.setShortcut("Ctrl+Z")
+        self._action_undo.triggered.connect(self.undo)
+
+        self._action_redo = edit_menu.addAction("Redo")
+        self._action_redo.setShortcut("Ctrl+Shift+Z")
+        self._action_redo.triggered.connect(self.redo)
+
+        self._update_undo_redo_actions()
+
+    def _update_undo_redo_actions(self) -> None:
+        """
+        Обновляет enabled-состояние пунктов меню Undo/Redo.
+        """
+        if self._action_undo is not None:
+            self._action_undo.setEnabled(self.undo_stack.can_undo)
+        if self._action_redo is not None:
+            self._action_redo.setEnabled(self.undo_stack.can_redo)
+
     def push_undo_command(self, cmd: UndoCommand, merge: bool = False) -> None:
         """
         Добавить команду в undo-стек редактора.
@@ -102,16 +138,19 @@ class EditorWindow(QMainWindow):
         self.undo_stack.push(cmd, merge=merge)
         if self.viewport_window is not None:
             self.viewport_window._request_update()
+        self._update_undo_redo_actions()
 
     def undo(self) -> None:
         self.undo_stack.undo()
         if self.viewport_window is not None:
             self.viewport_window._request_update()
+        self._update_undo_redo_actions()
 
     def redo(self) -> None:
         self.undo_stack.redo()
         if self.viewport_window is not None:
             self.viewport_window._request_update()
+        self._update_undo_redo_actions()
 
 
     def _ensure_editor_entities_root(self):
