@@ -9,7 +9,7 @@
 #&nbsp;=====&nbsp;termin/apps/editor_inspector.py&nbsp;=====<br>
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from&nbsp;typing&nbsp;import&nbsp;Optional<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional,&nbsp;Callable<br>
 <br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;(<br>
@@ -34,6 +34,7 @@ from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Entity,&nbsp;Component<br
 from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
 from&nbsp;termin.visualization.inspect&nbsp;import&nbsp;InspectField<br>
 from&nbsp;termin.visualization.resources&nbsp;import&nbsp;ResourceManager<br>
+from&nbsp;termin.apps.undo_stack&nbsp;import&nbsp;UndoCommand<br>
 <br>
 from&nbsp;termin.apps.transform_inspector&nbsp;import&nbsp;TransformInspector<br>
 <br>
@@ -405,7 +406,17 @@ class&nbsp;EntityInspector(QWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components_panel.components_changed.connect(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._on_components_changed<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._undo_command_handler:&nbsp;Optional[Callable[[UndoCommand,&nbsp;bool],&nbsp;None]]&nbsp;=&nbsp;None<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_undo_command_handler(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,&nbsp;handler:&nbsp;Optional[Callable[[UndoCommand,&nbsp;bool],&nbsp;None]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Задаёт&nbsp;функцию,&nbsp;через&nbsp;которую&nbsp;инспектор&nbsp;будет&nbsp;отправлять&nbsp;undo-команды.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Сейчас&nbsp;она&nbsp;используется&nbsp;только&nbsp;TransformInspector.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._undo_command_handler&nbsp;=&nbsp;handler<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform_inspector.set_undo_command_handler(handler)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_on_components_changed(self):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;self._entity<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components_panel.set_entity(ent)<br>

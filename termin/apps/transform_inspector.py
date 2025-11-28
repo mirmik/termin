@@ -1,7 +1,7 @@
 # ===== termin/apps/editor_inspector.py =====
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Callable
 
 import numpy as np
 from PyQt5.QtWidgets import (
@@ -26,6 +26,7 @@ from termin.visualization.entity import Entity, Component
 from termin.geombase.pose3 import Pose3
 from termin.visualization.inspect import InspectField
 from termin.visualization.resources import ResourceManager
+from termin.apps.undo_stack import UndoCommand
 
 
 # scale is now numpy.ndarray
@@ -38,6 +39,7 @@ class TransformInspector(QWidget):
 
         self._transform: Optional[Transform3] = None
         self._updating_from_model = False
+        self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
 
         layout = QFormLayout(self)
         layout.setLabelAlignment(Qt.AlignLeft)
@@ -70,6 +72,16 @@ class TransformInspector(QWidget):
             sb.valueChanged.connect(self._on_value_changed)
 
         self._set_enabled(False)
+
+        def set_undo_command_handler(
+            self, handler: Optional[Callable[[UndoCommand, bool], None]]
+        ) -> None:
+            """
+            Подключает внешний обработчик undo-команд.
+
+            handler(cmd, merge) обычно будет EditorWindow.push_undo_command.
+            """
+            self._push_undo_command = handler
 
     def set_target(self, obj: Optional[object]):
         if isinstance(obj, Entity):

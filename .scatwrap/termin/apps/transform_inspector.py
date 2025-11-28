@@ -9,7 +9,7 @@
 #&nbsp;=====&nbsp;termin/apps/editor_inspector.py&nbsp;=====<br>
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from&nbsp;typing&nbsp;import&nbsp;Optional<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional,&nbsp;Callable<br>
 <br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;(<br>
@@ -34,6 +34,7 @@ from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Entity,&nbsp;Component<br
 from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
 from&nbsp;termin.visualization.inspect&nbsp;import&nbsp;InspectField<br>
 from&nbsp;termin.visualization.resources&nbsp;import&nbsp;ResourceManager<br>
+from&nbsp;termin.apps.undo_stack&nbsp;import&nbsp;UndoCommand<br>
 <br>
 <br>
 #&nbsp;scale&nbsp;is&nbsp;now&nbsp;numpy.ndarray<br>
@@ -46,6 +47,7 @@ class&nbsp;TransformInspector(QWidget):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._transform:&nbsp;Optional[Transform3]&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._updating_from_model&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._push_undo_command:&nbsp;Optional[Callable[[UndoCommand,&nbsp;bool],&nbsp;None]]&nbsp;=&nbsp;None<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;=&nbsp;QFormLayout(self)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout.setLabelAlignment(Qt.AlignLeft)<br>
@@ -78,6 +80,16 @@ class&nbsp;TransformInspector(QWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.valueChanged.connect(self._on_value_changed)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_enabled(False)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_undo_command_handler(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,&nbsp;handler:&nbsp;Optional[Callable[[UndoCommand,&nbsp;bool],&nbsp;None]]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Подключает&nbsp;внешний&nbsp;обработчик&nbsp;undo-команд.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handler(cmd,&nbsp;merge)&nbsp;обычно&nbsp;будет&nbsp;EditorWindow.push_undo_command.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._push_undo_command&nbsp;=&nbsp;handler<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_target(self,&nbsp;obj:&nbsp;Optional[object]):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(obj,&nbsp;Entity):<br>

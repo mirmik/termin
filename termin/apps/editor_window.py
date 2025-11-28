@@ -74,6 +74,7 @@ class EditorWindow(QMainWindow):
 
         self.inspector.transform_changed.connect(self._on_inspector_transform_changed)
         self.inspector.component_changed.connect(self._on_inspector_component_changed)
+        self.inspector.set_undo_command_handler(self.push_undo_command)
 
 
         # --- создаём редакторские сущности (root, камера, гизмо) ---

@@ -1,7 +1,7 @@
 # ===== termin/apps/editor_inspector.py =====
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Callable
 
 import numpy as np
 from PyQt5.QtWidgets import (
@@ -26,6 +26,7 @@ from termin.visualization.entity import Entity, Component
 from termin.geombase.pose3 import Pose3
 from termin.visualization.inspect import InspectField
 from termin.visualization.resources import ResourceManager
+from termin.apps.undo_stack import UndoCommand
 
 from termin.apps.transform_inspector import TransformInspector
 
@@ -397,7 +398,17 @@ class EntityInspector(QWidget):
         self._components_panel.components_changed.connect(
             self._on_components_changed
         )
+        self._undo_command_handler: Optional[Callable[[UndoCommand, bool], None]] = None
 
+    def set_undo_command_handler(
+        self, handler: Optional[Callable[[UndoCommand, bool], None]]
+    ) -> None:
+        """
+        Задаёт функцию, через которую инспектор будет отправлять undo-команды.
+        Сейчас она используется только TransformInspector.
+        """
+        self._undo_command_handler = handler
+        self._transform_inspector.set_undo_command_handler(handler)
     def _on_components_changed(self):
         ent = self._entity
         self._components_panel.set_entity(ent)

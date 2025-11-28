@@ -82,6 +82,7 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.transform_changed.connect(self._on_inspector_transform_changed)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.component_changed.connect(self._on_inspector_component_changed)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.inspector.set_undo_command_handler(self.push_undo_command)<br>
 <br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---&nbsp;создаём&nbsp;редакторские&nbsp;сущности&nbsp;(root,&nbsp;камера,&nbsp;гизмо)&nbsp;---<br>
