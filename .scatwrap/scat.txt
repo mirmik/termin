@@ -38,6 +38,8 @@ AGENTS.md&nbsp;-&nbsp;некоторые&nbsp;рекомендации&nbsp;по
 <br>
 Присылать&nbsp;патчи&nbsp;к&nbsp;коду&nbsp;можно&nbsp;в&nbsp;формате&nbsp;CHUNK:&nbsp;https://mirmik.github.io/chunk/CHUNK.html<br>
 (При&nbsp;составлении&nbsp;патча&nbsp;обрати&nbsp;внимания,&nbsp;что&nbsp;.scatwrap/&nbsp;не&nbsp;является&nbsp;частью&nbsp;относительного&nbsp;пути)<br>
+<br>
+При&nbsp;написании&nbsp;кода&nbsp;не&nbsp;используй&nbsp;пайтоновкую&nbsp;магию&nbsp;getattr&nbsp;и&nbsp;setattr.&nbsp;Это&nbsp;дурно&nbsp;пахнет.<br>
 -----------------<br>
 <!-- END SCAT CODE -->
 </body>
