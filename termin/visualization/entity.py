@@ -166,17 +166,16 @@ class Entity:
         if isinstance(value, (int, float)):
             arr = np.full(3, float(value), dtype=float)
         else:
-            
             arr = np.array(value, dtype=float)
-    
+
             # скаляр → [s, s, s]
             if arr.shape == ():
                 arr = np.full(3, float(arr), dtype=float)
             elif arr.shape != (3,):
                 raise ValueError(f"Entity.scale must be scalar or length-3, got shape {arr.shape}")
 
-            self._scale = arr
-            print(self._scale)
+        self._scale = arr
+        print(self._scale)
 
 
     def __post_init__(self):
