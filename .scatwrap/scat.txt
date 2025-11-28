@@ -35,6 +35,9 @@ AGENTS.md<br>
 В&nbsp;основном&nbsp;сейчас&nbsp;нас&nbsp;интересует&nbsp;редактор,&nbsp;тоесть&nbsp;termin/apps/*,&nbsp;termin/visualization/**,&nbsp;examples/visual/*<br>
 TECHNICAL_NOTES.md&nbsp;-&nbsp;техническое&nbsp;описание&nbsp;проекта&nbsp;(может&nbsp;устаревать)<br>
 AGENTS.md&nbsp;-&nbsp;некоторые&nbsp;рекомендации&nbsp;по&nbsp;работе&nbsp;с&nbsp;репозиторием&nbsp;для&nbsp;искуственного&nbsp;интелленкта<br>
+<br>
+Присылать&nbsp;патчи&nbsp;к&nbsp;коду&nbsp;можно&nbsp;в&nbsp;формате&nbsp;CHUNK:&nbsp;https://mirmik.github.io/chunk/CHUNK.html<br>
+(При&nbsp;составлении&nbsp;патча&nbsp;обрати&nbsp;внимания,&nbsp;что&nbsp;.scatwrap/&nbsp;не&nbsp;является&nbsp;частью&nbsp;относительного&nbsp;пути)<br>
 -----------------<br>
 <!-- END SCAT CODE -->
 </body>

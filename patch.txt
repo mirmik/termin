@@ -1,7 +1,0 @@
-=== file: termin/visualization/camera.py ===
---- replace-text
-    return self.entity.pose.inverse().as_matrix()
----
-    # Entity.pose не существует — берём позу из Transform3
-    return self.entity.transform.global_pose().inverse().as_matrix()
-=END=
