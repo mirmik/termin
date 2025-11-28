@@ -45,6 +45,8 @@ from&nbsp;termin.apps.editor_commands&nbsp;import&nbsp;TransformEditCommand<br>
 class&nbsp;TransformInspector(QWidget):<br>
 #&nbsp;Обработчик&nbsp;для&nbsp;отправки&nbsp;команд&nbsp;в&nbsp;общий&nbsp;undo-стек&nbsp;редактора.<br>
 #&nbsp;handler(cmd,&nbsp;merge=False)&nbsp;-&gt;&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;transform_changed&nbsp;=&nbsp;pyqtSignal()<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_undo_command_handler(self,&nbsp;handler):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Зарегистрировать&nbsp;обработчик&nbsp;команд&nbsp;undo/redo&nbsp;для&nbsp;этого&nbsp;инспектора.<br>
@@ -53,7 +55,6 @@ class&nbsp;TransformInspector(QWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handler(cmd,&nbsp;merge=False)&nbsp;-&gt;&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._push_undo_command&nbsp;=&nbsp;handler<br>
-&nbsp;&nbsp;&nbsp;&nbsp;transform_changed&nbsp;=&nbsp;pyqtSignal()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;parent:&nbsp;Optional[QWidget]&nbsp;=&nbsp;None):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent)<br>

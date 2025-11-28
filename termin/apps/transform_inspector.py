@@ -37,6 +37,8 @@ from termin.apps.editor_commands import TransformEditCommand
 class TransformInspector(QWidget):
 # Обработчик для отправки команд в общий undo-стек редактора.
 # handler(cmd, merge=False) -> None
+    transform_changed = pyqtSignal()
+
     def set_undo_command_handler(self, handler):
         """
         Зарегистрировать обработчик команд undo/redo для этого инспектора.
@@ -45,7 +47,6 @@ class TransformInspector(QWidget):
             handler(cmd, merge=False) -> None
         """
         self._push_undo_command = handler
-    transform_changed = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
