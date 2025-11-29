@@ -15,6 +15,16 @@ scat.txt
 TECHNICAL_NOTES.md
 AGENTS.md
 
+[VAR(editor)]
+termin/editor/editor.ui
+termin/editor/editor_inspector.py
+termin/editor/transform_inspector.py
+termin/editor/inspect_field.py
+termin/editor/undo_stack.py
+termin/editor/run_editor.py
+termin/editor/editor_commands.py
+termin/editor/editor_window.py
+
 
 [TREE]
 termin/**

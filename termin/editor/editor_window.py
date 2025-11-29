@@ -144,12 +144,14 @@ class EditorWindow(QMainWindow):
         self.undo_stack.undo()
         if self.viewport_window is not None:
             self.viewport_window._request_update()
+        self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
 
     def redo(self) -> None:
         self.undo_stack.redo()
         if self.viewport_window is not None:
             self.viewport_window._request_update()
+        self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
 
 
@@ -558,6 +560,22 @@ class EditorWindow(QMainWindow):
                 self._pending_hover = None
                 return
             self._pending_hover = (x, y, viewport)
+
+    def _resync_inspector_from_selection(self):
+        """
+        Обновляет инспектор в соответствии с текущим выделением в дереве.
+        """
+        index = self.sceneTree.currentIndex()
+        if not index.isValid():
+            if self.inspector is not None:
+                self.inspector.set_target(None)
+            return
+
+        node = index.internalPointer()
+        obj = node.obj if node is not None else None
+
+        if self.inspector is not None:
+            self.inspector.set_target(obj)
 
     def on_tree_click(self, index):
         node = index.internalPointer()

@@ -29,6 +29,12 @@ from termin.visualization.core.resources import ResourceManager
 from termin.editor.inspect_field import InspectField
 from termin.editor.undo_stack import UndoCommand
 
+from termin.editor.editor_commands import (
+    ComponentFieldEditCommand,
+    AddComponentCommand,
+    RemoveComponentCommand,
+)
+from termin.editor.transform_inspector import TransformInspector
 from termin.editor.transform_inspector import TransformInspector
 
 logger = logging.getLogger(__name__)
@@ -53,8 +59,18 @@ class ComponentsPanel(QWidget):
         self._entity: Optional[Entity] = None
         self._component_library: list[tuple[str, type[Component]]] = []
 
+        self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
+
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._on_context_menu)
+
+    def set_undo_command_handler(
+        self, handler: Optional[Callable[[UndoCommand, bool], None]]
+    ) -> None:
+        """
+        Регистрирует обработчик undo-команд для операций с компонентами.
+        """
+        self._push_undo_command = handler
 
     def set_entity(self, ent: Optional[Entity]):
         self._entity = ent
@@ -108,7 +124,12 @@ class ComponentsPanel(QWidget):
         if comp is None:
             return
 
-        self._entity.remove_component(comp)
+        if self._push_undo_command is not None:
+            cmd = RemoveComponentCommand(self._entity, comp)
+            self._push_undo_command(cmd, False)
+        else:
+            self._entity.remove_component(comp)
+
         self.set_entity(self._entity)
         self.components_changed.emit()
 
@@ -117,11 +138,16 @@ class ComponentsPanel(QWidget):
             return
         try:
             comp = comp_cls()
-        except TypeError as e:
+        except TypeError:
             logger.exception("Не удалось создать компонент %s", comp_cls)
             return
 
-        self._entity.add_component(comp)
+        if self._push_undo_command is not None:
+            cmd = AddComponentCommand(self._entity, comp)
+            self._push_undo_command(cmd, False)
+        else:
+            self._entity.add_component(comp)
+
         self.set_entity(self._entity)
 
         row = len(self._entity.components) - 1
@@ -145,11 +171,20 @@ class ComponentInspectorPanel(QWidget):
         self._widgets: dict[str, QWidget] = {}
         self._updating_from_model = False
         self._resources = resources
+        self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
 
         layout = QFormLayout(self)
         layout.setLabelAlignment(Qt.AlignLeft)
         layout.setFormAlignment(Qt.AlignTop)
         self._layout = layout
+
+    def set_undo_command_handler(
+        self, handler: Optional[Callable[[UndoCommand, bool], None]]
+    ) -> None:
+        """
+        Регистрирует обработчик undo-команд для правок полей компонента.
+        """
+        self._push_undo_command = handler
 
     def set_component(self, comp: Optional[Component]):
         for i in reversed(range(self._layout.count())):
@@ -313,24 +348,37 @@ class ComponentInspectorPanel(QWidget):
             return
 
     def _connect_widget(self, w: QWidget, key: str, field: InspectField):
-        def commit():
+        def commit(merge: bool):
             if self._updating_from_model or self._component is None:
                 return
-            val = self._read_widget_value(w, field)
-            field.set_value(self._component, val)
+
+            old_value = field.get_value(self._component)
+            new_value = self._read_widget_value(w, field)
+
+            if self._push_undo_command is not None:
+                cmd = ComponentFieldEditCommand(
+                    component=self._component,
+                    field=field,
+                    old_value=old_value,
+                    new_value=new_value,
+                )
+                self._push_undo_command(cmd, merge)
+            else:
+                field.set_value(self._component, new_value)
+
             self.component_changed.emit()
 
         if isinstance(w, QDoubleSpinBox):
-            w.valueChanged.connect(lambda _v: commit())
+            w.valueChanged.connect(lambda _v: commit(True))
         elif isinstance(w, QCheckBox):
-            w.stateChanged.connect(lambda _s: commit())
+            w.stateChanged.connect(lambda _s: commit(False))
         elif isinstance(w, QLineEdit) and field.kind != "material":
-            w.editingFinished.connect(commit)
+            w.editingFinished.connect(lambda: commit(False))
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:
-                sb.valueChanged.connect(lambda _v: commit())      
+                sb.valueChanged.connect(lambda _v: commit(True))
         elif isinstance(w, QComboBox) and field.kind in ("material", "mesh"):
-            w.currentIndexChanged.connect(lambda _i: commit())
+            w.currentIndexChanged.connect(lambda _i: commit(False))
 
     def _read_widget_value(self, w: QWidget, field: InspectField):
         if isinstance(w, QDoubleSpinBox):
@@ -408,10 +456,12 @@ class EntityInspector(QWidget):
     ) -> None:
         """
         Задаёт функцию, через которую инспектор будет отправлять undo-команды.
-        Сейчас она используется только TransformInspector.
+        Сейчас она используется TransformInspector и панелями компонентов.
         """
         self._undo_command_handler = handler
         self._transform_inspector.set_undo_command_handler(handler)
+        self._components_panel.set_undo_command_handler(handler)
+        self._component_inspector.set_undo_command_handler(handler)
     def _on_components_changed(self):
         ent = self._entity
         self._components_panel.set_entity(ent)
