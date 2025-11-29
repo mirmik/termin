@@ -176,9 +176,6 @@ class DynamicMatrixAssembler(MatrixAssembler):
         #c = [r0:r1]
         #a = [r1:r2]
         #f = [r2:r3]
-        print(r0, r1, r2, r3)
-        print(matrices["electromechanic_coupling"].shape)
-
         A_ext[0:r0, 0:r0] = matrices["conductance"]
         A_ext[r0:r1, 0:r0] = matrices["electric_holonomic"]
         A_ext[0:r0, r0:r1] = matrices["electric_holonomic"].T

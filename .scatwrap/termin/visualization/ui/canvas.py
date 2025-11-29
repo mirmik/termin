@@ -67,7 +67,6 @@ class&nbsp;Canvas:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mouse_down(self,&nbsp;x,&nbsp;y,&nbsp;viewport_rect):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Canvas&nbsp;mouse&nbsp;down&nbsp;at:&quot;,&nbsp;(x,&nbsp;y))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hit&nbsp;=&nbsp;self.hit_test(x,&nbsp;y,&nbsp;viewport_rect)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hit:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.active_element&nbsp;=&nbsp;hit<br>
@@ -83,7 +82,6 @@ class&nbsp;Canvas:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;False<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;mouse_up(self,&nbsp;x,&nbsp;y,&nbsp;viewport_rect):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Canvas&nbsp;mouse&nbsp;up&nbsp;at:&quot;,&nbsp;(x,&nbsp;y))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.active_element:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.active_element.on_mouse_up(x,&nbsp;y,&nbsp;viewport_rect)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.active_element&nbsp;=&nbsp;None<br>

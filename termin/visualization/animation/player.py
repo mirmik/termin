@@ -29,9 +29,7 @@ class AnimationPlayer(Component):
     def play(self, name: str, restart: bool = True):
         clip = self.clips.get(name)
         if clip is None:
-            # можно заменить на логгер, если он есть
-            print(f"[AnimationPlayer] clip '{name}' not found")
-            return
+            raise KeyError(f"[AnimationPlayer] clip '{name}' not found")
 
         if self.current is not clip or restart:
             self.time = 0.0

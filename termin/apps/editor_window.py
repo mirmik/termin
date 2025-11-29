@@ -406,11 +406,7 @@ class EditorWindow(QMainWindow):
         x, y, viewport = pending_release
         self._pending_pick_release = None
 
-        print("Processing pick release at", x, y)
-
         picked_ent = window.pick_entity_at(x, y, viewport)
-
-        print("Picked entity:", picked_ent)
 
         # обычный selection (как у тебя было)
         if picked_ent is not None:
@@ -458,7 +454,6 @@ class EditorWindow(QMainWindow):
 
         maxindex = len(self.gizmo.helper_geometry_entities())
         index = int(round(alpha * float(maxindex))) - 1
-        print("Gizmo part index:", index)
 
         picked_ent =self.gizmo.helper_geometry_entities()[index] 
 

@@ -169,9 +169,6 @@ def&nbsp;closest_of_aabb_and_sphere(aabb_min,&nbsp;aabb_max,&nbsp;sphere_center,
 &nbsp;&nbsp;&nbsp;&nbsp;aabb_point&nbsp;=&nbsp;project_point_on_aabb(sphere_center,&nbsp;aabb_min,&nbsp;aabb_max)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;np.asarray(sphere_center&nbsp;-&nbsp;aabb_point,&nbsp;dtype=float)<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;print(aabb_max)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;print(aabb_min)<br>
-<br>
 &nbsp;&nbsp;&nbsp;&nbsp;distance&nbsp;=&nbsp;np.linalg.norm(direction)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;distance&nbsp;&lt;=&nbsp;sphere_radius:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;aabb_point,&nbsp;sphere_center,&nbsp;0.0<br>

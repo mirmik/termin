@@ -1,5 +1,14 @@
 termin/**
 examples/visual/*
+examples/apps/*
+scat.txt
+TECHNICAL_NOTES.md
+AGENTS.md
+
+[VAR(map)]
+termin/**
+examples/visual/*
+examples/apps/*
 utest/**
 examples/**
 scat.txt
@@ -27,9 +36,6 @@ AGENTS.md
 В основном сейчас нас интересует редактор, тоесть termin/apps/*, termin/visualization/**, examples/visual/*
 TECHNICAL_NOTES.md - техническое описание проекта (может устаревать)
 AGENTS.md - некоторые рекомендации по работе с репозиторием для искуственного интелленкта
-
-Присылать патчи к коду можно в формате CHUNK: https://mirmik.github.io/chunk/CHUNK.html
-(При составлении патча обрати внимания, что .scatwrap/ не является частью относительного пути (но, они являются частью url, по которому тебе надо перейти, чтобы просмотреть файл))
 
 При написании кода не используй пайтоновкую магию getattr и setattr. Это дурно пахнет.
 -----------------

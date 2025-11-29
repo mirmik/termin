@@ -59,7 +59,6 @@ class Canvas:
         return None
 
     def mouse_down(self, x, y, viewport_rect):
-        print("Canvas mouse down at:", (x, y))
         hit = self.hit_test(x, y, viewport_rect)
         if hit:
             self.active_element = hit
@@ -75,7 +74,6 @@ class Canvas:
         return False
 
     def mouse_up(self, x, y, viewport_rect):
-        print("Canvas mouse up at:", (x, y))
         if self.active_element:
             self.active_element.on_mouse_up(x, y, viewport_rect)
             self.active_element = None

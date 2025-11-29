@@ -213,8 +213,7 @@ class Window:
 
         fb_color = fbo_pool.get(buffer_name)
         if fb_color is None:
-            print(f"No FBO with key {buffer_name!r} found in fbo_pool")
-            return None
+            raise KeyError(f"No FBO with key {buffer_name!r} found in fbo_pool")
 
 
         r, g, b, a = self.graphics.read_pixel(fb_color, read_x, read_y)
@@ -235,7 +234,6 @@ class Window:
         r, g, b, a = color
         
         pid = rgb_to_id(r, g, b)
-        print(f"Picked color RGBA: {r}, {g}, {b}, {a} -> ID: {pid}")  # --- DEBUG ---
 
         if pid == 0:
             return None
@@ -280,7 +278,6 @@ class Window:
                 if cam is not None:
                     ray = cam.screen_point_to_ray(x, y, viewport_rect=self.viewport_rect_to_pixels(viewport))   # функция построения Ray3
                     hit = viewport.scene.raycast(ray)
-                    print("Raycast hit:", hit)  # --- DEBUG ---
                     if hit is not None:
                         # Диспатчим on_click в компоненты
                         entity = hit.entity
@@ -310,7 +307,6 @@ class Window:
                 viewport = self._active_viewport
             self._active_viewport = None
         if viewport is not None:
-            #print("Dispatching mouse button to scene")  # --- DEBUG ---
             viewport.scene.dispatch_input(viewport, "on_mouse_button", button=button, action=action, mods=mods)  
 
         if self.on_mouse_button_event:
@@ -463,69 +459,6 @@ class Window:
     def _request_update(self):
         if self.handle is not None:
             self.handle.request_update()
-
-    # def _do_pick_pass(self, viewport, px, py, pw, ph, mouse_x, mouse_y, context_key):
-    #     print(f"Doing pick pass at mouse ({mouse_x}, {mouse_y}) in viewport rect px={px},py={py},pw={pw},ph={ph}")  # --- DEBUG ---
-
-    #     # 1) FBO для picking
-    #     fb_pick = self.get_viewport_fbo(viewport, "PICK", (pw, ph))
-        
-    #     print("Picking FBO:", fb_pick._fbo)  # --- DEBUG ---
-    #     self.graphics.bind_framebuffer(fb_pick)
-    #     self.graphics.set_viewport(0, 0, pw, ph)
-    #     self.graphics.clear_color_depth((0.0, 0.0, 0.0, 0.0))
-
-    #     # 2) карта entity -> id для этой сцены
-    #     pick_ids = {}
-    #     for ent in viewport.scene.entities:
-    #         if not ent.is_pickable():
-    #             continue
-
-    #         mr = ent.get_component(MeshRenderer)
-    #         if mr is None:
-    #             continue
-
-    #         # можешь фильтровать по наличию MeshRenderer
-    #         pick_ids[ent] = self._get_pick_id_for_entity(ent)
-
-    #     # 3) рендерим специальным пассом
-    #     self.renderer.render_viewport_pick(
-    #         viewport.scene,
-    #         viewport.camera,
-    #         (0, 0, pw, ph),
-    #         context_key,
-    #         pick_ids,
-    #     )
-
-    #     # 4) вычисляем координаты пикселя относительно FBO
-    #     win_w, win_h = self.handle.window_size()
-    #     if win_w == 0 or win_h == 0:
-    #         return
-
-    #     vx = mouse_x - px
-    #     vy = mouse_y - py
-    #     if vx < 0 or vy < 0 or vx >= pw or vy >= ph:
-    #         return
-
-    #     read_x = int(vx)
-    #     read_y = ph - int(vy) - 1  # инверсия по Y
-
-    #     print("Reading pixel at FBO coords:", read_x, read_y)  # --- DEBUG ---
-
-    #     r, g, b, a = self.graphics.read_pixel(fb_pick, read_x, read_y)
-    #     print("Picked color RGBA:", r, g, b, a)  # --- DEBUG ---
-    #     pid = rgb_to_id(r, g, b)
-    #     print(f"Picked ID: {pid}")  # --- DEBUG ---
-    #     if pid == 0:
-    #         return
-
-    #     entity = self._pick_entity_by_id.get(pid)
-    #     if entity is not None and self.selection_handler is not None:
-    #         self.selection_handler(entity)
-
-    #     # вернёмся к обычному framebuffer'у
-    #     self.graphics.bind_framebuffer(None)
-
 
 
 # Backwards compatibility

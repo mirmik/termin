@@ -49,8 +49,6 @@ class Variable:
                 vname = name + "_" + lst[i]
                 self.name_list.append(vname)
 
-        print(self.name_list, self.size)
-
     def __str__(self):
         return f"{self.name_list}"
 

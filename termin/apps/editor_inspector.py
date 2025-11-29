@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Optional, Callable
+import logging
 
 import numpy as np
 from PyQt5.QtWidgets import (
@@ -29,6 +30,8 @@ from termin.visualization.resources import ResourceManager
 from termin.apps.undo_stack import UndoCommand
 
 from termin.apps.transform_inspector import TransformInspector
+
+logger = logging.getLogger(__name__)
 
 
 class ComponentsPanel(QWidget):
@@ -115,7 +118,7 @@ class ComponentsPanel(QWidget):
         try:
             comp = comp_cls()
         except TypeError as e:
-            print(f"Не удалось создать компонент {comp_cls}: {e}")
+            logger.exception("Не удалось создать компонент %s", comp_cls)
             return
 
         self._entity.add_component(comp)

@@ -161,9 +161,6 @@ def closest_of_aabb_and_sphere(aabb_min, aabb_max, sphere_center, sphere_radius)
     aabb_point = project_point_on_aabb(sphere_center, aabb_min, aabb_max)
     direction = np.asarray(sphere_center - aabb_point, dtype=float)
 
-    print(aabb_max)
-    print(aabb_min)
-
     distance = np.linalg.norm(direction)
     if distance <= sphere_radius:
         return aabb_point, sphere_center, 0.0

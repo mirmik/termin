@@ -230,7 +230,6 @@ class&nbsp;UISlider(UIElement):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;===&nbsp;Events&nbsp;===<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_down(self,&nbsp;x,&nbsp;y):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Slider&nbsp;mouse&nbsp;down&nbsp;at:&quot;,&nbsp;(x,&nbsp;y))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dragging&nbsp;=&nbsp;True<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_move(self,&nbsp;x,&nbsp;y,&nbsp;viewport_rect):<br>
@@ -239,7 +238,6 @@ class&nbsp;UISlider(UIElement):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nx&nbsp;=&nbsp;(x&nbsp;-&nbsp;px)&nbsp;/&nbsp;pw<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ny&nbsp;=&nbsp;(y&nbsp;-&nbsp;py)&nbsp;/&nbsp;ph<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Slider&nbsp;mouse&nbsp;move&nbsp;at:&quot;,&nbsp;(nx,&nbsp;ny))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;self._dragging:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x0,&nbsp;y0&nbsp;=&nbsp;self.position<br>
@@ -252,7 +250,6 @@ class&nbsp;UISlider(UIElement):<br>
 <br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_up(self,&nbsp;x,&nbsp;y,&nbsp;viewport_rect):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Slider&nbsp;mouse&nbsp;up&nbsp;at:&quot;,&nbsp;(x,&nbsp;y))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._dragging&nbsp;=&nbsp;False<br>
 <!-- END SCAT CODE -->
 </body>

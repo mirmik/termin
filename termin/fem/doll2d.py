@@ -55,9 +55,6 @@ class Doll2D(Contribution):
             self._collect_joints(base_link)
             variables = [var for joint in self.joints for var in joint.get_variables()]
 
-        print("HERE!!!!")
-        print(variables)
-
         super().__init__(variables, assembler=assembler)
     
     def _collect_joints(self, link: 'DollLink2D'):

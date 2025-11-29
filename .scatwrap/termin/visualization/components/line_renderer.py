@@ -123,8 +123,6 @@ class&nbsp;LineRenderer(Component):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;&nbsp;&nbsp;=&nbsp;context.graphics<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;&nbsp;&nbsp;=&nbsp;context.context_key<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Drawing&nbsp;lines&nbsp;with&nbsp;color:&quot;,&nbsp;self.color,&nbsp;&quot;and&nbsp;width:&quot;,&nbsp;self.width)<br>
-<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.material.apply(model,&nbsp;view,&nbsp;proj,&nbsp;graphics=gfx,&nbsp;context_key=key)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.drawable.draw(context)<br>
 <!-- END SCAT CODE -->

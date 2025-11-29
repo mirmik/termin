@@ -222,7 +222,6 @@ class UISlider(UIElement):
 
     # === Events ===
     def on_mouse_down(self, x, y):
-        print("Slider mouse down at:", (x, y))
         self._dragging = True
 
     def on_mouse_move(self, x, y, viewport_rect):
@@ -231,7 +230,6 @@ class UISlider(UIElement):
         nx = (x - px) / pw
         ny = (y - py) / ph
 
-        print("Slider mouse move at:", (nx, ny))
         if not self._dragging:
             return
         x0, y0 = self.position
@@ -244,5 +242,4 @@ class UISlider(UIElement):
 
 
     def on_mouse_up(self, x, y, viewport_rect):
-        print("Slider mouse up at:", (x, y))
         self._dragging = False

@@ -100,11 +100,9 @@ class Scene:
 
     def add(self, entity: Entity) -> Entity:
         """Add entity to the scene, including all its children."""
-        print("Scene: adding entity", entity.name, "children: {}".format(len(entity.transform.children)))  # --- IGNORE ---
         self.add_non_recurse(entity)
         for child_trans in entity.transform.children:
             child = child_trans.entity
-            print("Scene: adding child entity", child)
             if child is None:
                 continue
             for shader in child.gather_shaders():

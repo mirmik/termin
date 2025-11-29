@@ -270,7 +270,6 @@ class&nbsp;OrbitCameraController(CameraController):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._states[key]<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_mouse_button(self,&nbsp;viewport,&nbsp;button:&nbsp;int,&nbsp;action:&nbsp;int,&nbsp;mods:&nbsp;int):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#print(f&quot;!!!!!!!!!!!!Mouse&nbsp;button&nbsp;event:&nbsp;button={button},&nbsp;action={action},&nbsp;mods={mods}&quot;)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;!=&nbsp;self.camera_component.viewport:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
@@ -298,7 +297,6 @@ class&nbsp;OrbitCameraController(CameraController):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pan(-dx&nbsp;*&nbsp;self._pan_speed,&nbsp;dy&nbsp;*&nbsp;self._pan_speed)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;on_scroll(self,&nbsp;viewport,&nbsp;xoffset:&nbsp;float,&nbsp;yoffset:&nbsp;float):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;!!!!!!!!!!!!Scroll&nbsp;event:&nbsp;xoffset={xoffset},&nbsp;yoffset={yoffset}&quot;)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._prevent_moving:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport&nbsp;!=&nbsp;self.camera_component.viewport:<br>

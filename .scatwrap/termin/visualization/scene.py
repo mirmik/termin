@@ -108,11 +108,9 @@ class&nbsp;Scene:<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;add(self,&nbsp;entity:&nbsp;Entity)&nbsp;-&gt;&nbsp;Entity:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Add&nbsp;entity&nbsp;to&nbsp;the&nbsp;scene,&nbsp;including&nbsp;all&nbsp;its&nbsp;children.&quot;&quot;&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Scene:&nbsp;adding&nbsp;entity&quot;,&nbsp;entity.name,&nbsp;&quot;children:&nbsp;{}&quot;.format(len(entity.transform.children)))&nbsp;&nbsp;#&nbsp;---&nbsp;IGNORE&nbsp;---<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.add_non_recurse(entity)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;child_trans&nbsp;in&nbsp;entity.transform.children:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;child&nbsp;=&nbsp;child_trans.entity<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Scene:&nbsp;adding&nbsp;child&nbsp;entity&quot;,&nbsp;child)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;child&nbsp;is&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;shader&nbsp;in&nbsp;child.gather_shaders():<br>

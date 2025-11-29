@@ -4,8 +4,6 @@ import numpy as np
 import pyassimp
 
 
-# ---------- DATA CLASSES ----------
-
 class FBXMeshData:
     def __init__(self, name, vertices, normals, uvs, indices, material_index):
         self.name = name

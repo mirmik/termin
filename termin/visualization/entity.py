@@ -139,7 +139,6 @@ class Entity:
     def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float | numpy.ndarray = 1.0, priority: int = 0, 
             pickable: bool = True,
             selectable: bool = True):
-        print(f"Entity.__init__ called with scale={scale}")
 
         if scale is None:
             scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
@@ -175,7 +174,6 @@ class Entity:
                 raise ValueError(f"Entity.scale must be scalar or length-3, got shape {arr.shape}")
 
         self._scale = arr
-        print(self._scale)
 
 
     def __post_init__(self):
@@ -185,7 +183,6 @@ class Entity:
     def model_matrix(self) -> np.ndarray:
         """Construct homogeneous model matrix ``M = [R|t]`` with optional uniform scale."""
         matrix = self.transform.global_pose().as_matrix().copy()
-        print(self._scale)
         matrix[:3, :3] = matrix[:3, :3] @ np.diag(self._scale)
         return matrix
 

@@ -147,7 +147,6 @@ class&nbsp;Entity:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;pose:&nbsp;Pose3&nbsp;=&nbsp;Pose3.identity(),&nbsp;name&nbsp;:&nbsp;str&nbsp;=&nbsp;&quot;entity&quot;,&nbsp;scale:&nbsp;float&nbsp;|&nbsp;numpy.ndarray&nbsp;=&nbsp;1.0,&nbsp;priority:&nbsp;int&nbsp;=&nbsp;0,&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pickable:&nbsp;bool&nbsp;=&nbsp;True,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selectable:&nbsp;bool&nbsp;=&nbsp;True):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;Entity.__init__&nbsp;called&nbsp;with&nbsp;scale={scale}&quot;)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;scale&nbsp;is&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scale&nbsp;=&nbsp;np.array([1.0,&nbsp;1.0,&nbsp;1.0],&nbsp;dtype=np.float32)<br>
@@ -183,7 +182,6 @@ class&nbsp;Entity:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;ValueError(f&quot;Entity.scale&nbsp;must&nbsp;be&nbsp;scalar&nbsp;or&nbsp;length-3,&nbsp;got&nbsp;shape&nbsp;{arr.shape}&quot;)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._scale&nbsp;=&nbsp;arr<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(self._scale)<br>
 <br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__post_init__(self):<br>
@@ -193,7 +191,6 @@ class&nbsp;Entity:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;model_matrix(self)&nbsp;-&gt;&nbsp;np.ndarray:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Construct&nbsp;homogeneous&nbsp;model&nbsp;matrix&nbsp;``M&nbsp;=&nbsp;[R|t]``&nbsp;with&nbsp;optional&nbsp;uniform&nbsp;scale.&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix&nbsp;=&nbsp;self.transform.global_pose().as_matrix().copy()<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(self._scale)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix[:3,&nbsp;:3]&nbsp;=&nbsp;matrix[:3,&nbsp;:3]&nbsp;@&nbsp;np.diag(self._scale)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;matrix<br>
 <br>

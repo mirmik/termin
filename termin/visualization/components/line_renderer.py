@@ -115,7 +115,5 @@ class LineRenderer(Component):
         gfx   = context.graphics
         key   = context.context_key
 
-        print("Drawing lines with color:", self.color, "and width:", self.width)
-
         self.material.apply(model, view, proj, graphics=gfx, context_key=key)
         self.drawable.draw(context)

@@ -10,6 +10,7 @@
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
 from&nbsp;typing&nbsp;import&nbsp;Optional,&nbsp;Callable<br>
+import&nbsp;logging<br>
 <br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;(<br>
@@ -37,6 +38,8 @@ from&nbsp;termin.visualization.resources&nbsp;import&nbsp;ResourceManager<br>
 from&nbsp;termin.apps.undo_stack&nbsp;import&nbsp;UndoCommand<br>
 <br>
 from&nbsp;termin.apps.transform_inspector&nbsp;import&nbsp;TransformInspector<br>
+<br>
+logger&nbsp;=&nbsp;logging.getLogger(__name__)<br>
 <br>
 <br>
 class&nbsp;ComponentsPanel(QWidget):<br>
@@ -123,7 +126,7 @@ class&nbsp;ComponentsPanel(QWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;comp&nbsp;=&nbsp;comp_cls()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;except&nbsp;TypeError&nbsp;as&nbsp;e:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;Не&nbsp;удалось&nbsp;создать&nbsp;компонент&nbsp;{comp_cls}:&nbsp;{e}&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;logger.exception(&quot;Не&nbsp;удалось&nbsp;создать&nbsp;компонент&nbsp;%s&quot;,&nbsp;comp_cls)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity.add_component(comp)<br>

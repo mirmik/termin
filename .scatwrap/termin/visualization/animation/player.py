@@ -37,9 +37,7 @@ class&nbsp;AnimationPlayer(Component):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;play(self,&nbsp;name:&nbsp;str,&nbsp;restart:&nbsp;bool&nbsp;=&nbsp;True):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clip&nbsp;=&nbsp;self.clips.get(name)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;clip&nbsp;is&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;можно&nbsp;заменить&nbsp;на&nbsp;логгер,&nbsp;если&nbsp;он&nbsp;есть<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(f&quot;[AnimationPlayer]&nbsp;clip&nbsp;'{name}'&nbsp;not&nbsp;found&quot;)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;KeyError(f&quot;[AnimationPlayer]&nbsp;clip&nbsp;'{name}'&nbsp;not&nbsp;found&quot;)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.current&nbsp;is&nbsp;not&nbsp;clip&nbsp;or&nbsp;restart:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.time&nbsp;=&nbsp;0.0<br>

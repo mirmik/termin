@@ -304,7 +304,6 @@ class&nbsp;OpenGLGraphicsBackend(GraphicsBackend):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;read_pixel(self,&nbsp;framebuffer,&nbsp;x:&nbsp;int,&nbsp;y:&nbsp;int):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;привязываем&nbsp;FBO,&nbsp;из&nbsp;которого&nbsp;читаем<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.bind_framebuffer(framebuffer)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#print(&quot;Reading&nbsp;pixel&nbsp;at:&quot;,&nbsp;x,&nbsp;y,&nbsp;&quot;from&nbsp;framebuffer:&quot;,&nbsp;framebuffer._fbo)&nbsp;&nbsp;#&nbsp;---&nbsp;DEBUG&nbsp;---<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;data&nbsp;=&nbsp;GL.glReadPixels(x,&nbsp;y,&nbsp;1,&nbsp;1,&nbsp;GL.GL_RGBA,&nbsp;GL.GL_UNSIGNED_BYTE)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;data&nbsp;=&nbsp;4&nbsp;байта<br>

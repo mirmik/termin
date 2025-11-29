@@ -137,11 +137,6 @@ class&nbsp;Pose3:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;=&nbsp;math.sin(angle&nbsp;/&nbsp;2)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;=&nbsp;math.cos(angle&nbsp;/&nbsp;2)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q&nbsp;=&nbsp;numpy.array([axis[0]&nbsp;*&nbsp;s,&nbsp;axis[1]&nbsp;*&nbsp;s,&nbsp;axis[2]&nbsp;*&nbsp;s,&nbsp;c])<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;axis:&quot;,&nbsp;axis)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;angle&nbsp;(radians):&quot;,&nbsp;angle)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;sin(angle/2):&quot;,&nbsp;s)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;cos(angle/2):&quot;,&nbsp;c)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Rotation&nbsp;quaternion:&quot;,&nbsp;q)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Pose3(ang=q,&nbsp;lin=numpy.array([0.0,&nbsp;0.0,&nbsp;0.0]))<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>

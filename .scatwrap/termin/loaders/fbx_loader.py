@@ -12,8 +12,6 @@ import&nbsp;numpy&nbsp;as&nbsp;np<br>
 import&nbsp;pyassimp<br>
 <br>
 <br>
-#&nbsp;----------&nbsp;DATA&nbsp;CLASSES&nbsp;----------<br>
-<br>
 class&nbsp;FBXMeshData:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;name,&nbsp;vertices,&nbsp;normals,&nbsp;uvs,&nbsp;indices,&nbsp;material_index):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name&nbsp;=&nbsp;name<br>

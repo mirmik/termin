@@ -129,11 +129,6 @@ class Pose3:
         s = math.sin(angle / 2)
         c = math.cos(angle / 2)
         q = numpy.array([axis[0] * s, axis[1] * s, axis[2] * s, c])
-        print("Rotation axis:", axis)
-        print("Rotation angle (radians):", angle)
-        print("Rotation sin(angle/2):", s)
-        print("Rotation cos(angle/2):", c)
-        print("Rotation quaternion:", q)
         return Pose3(ang=q, lin=numpy.array([0.0, 0.0, 0.0]))
 
     @staticmethod

@@ -98,7 +98,6 @@ class GizmoPass(RenderFramePass):
         index = 1
         maxindex = len(self._gizmo_entities)
 
-        print(f"Rendering {maxindex} gizmo entities in GizmoPass")
         for ent in self._gizmo_entities:
             if not ent.active or not ent.visible:
                 continue
@@ -107,7 +106,6 @@ class GizmoPass(RenderFramePass):
                 continue
 
             alpha = index * 1.0 / maxindex
-            print(f"Gizmo entity {index}/{maxindex} alpha: {alpha}")
             shader.set_uniform_vec4("u_color", (0.0, 0.0, 0.0, alpha))
             model = ent.model_matrix()
             shader.set_uniform_matrix4("u_model", model)

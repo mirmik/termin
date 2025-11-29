@@ -69,8 +69,6 @@ class Screw2:
         v = rotated_scr.vector()
         b = translation
         a = -m
-
-        print("TODO: force carry")
         new_m = m
         new_v = v
         ret = Screw2(m=new_m, v=new_v)
