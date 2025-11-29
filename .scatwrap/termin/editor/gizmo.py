@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>termin/editor/gizmo_axes.py</title>
+  <title>termin/editor/gizmo.py</title>
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->

@@ -1,10 +1,10 @@
 # ===== termin/editor/editor_window.py =====
 import os
 from PyQt5 import uic
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog
 from PyQt5.QtCore import Qt, QPoint, QEvent
 from termin.editor.undo_stack import UndoStack, UndoCommand
-from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand
+from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
@@ -15,7 +15,7 @@ from termin.editor.editor_inspector import EntityInspector
 from termin.visualization.core.picking import id_to_rgb
 from termin.visualization.core.resources import ResourceManager
 from termin.geombase.pose3 import Pose3
-from termin.editor.gizmo_axes import GizmoEntity, GizmoMoveController
+from termin.editor.gizmo import GizmoEntity, GizmoMoveController
 from termin.visualization.platform.backends.base import Action, MouseButton
 
 
@@ -150,6 +150,9 @@ class EditorWindow(QMainWindow):
         elif isinstance(cmd, DeleteEntityCommand):
             select_obj = cmd.entity
             self._rebuild_tree_model(select_obj=select_obj)
+        elif isinstance(cmd, RenameEntityCommand):
+            select_obj = cmd.entity
+            self._rebuild_tree_model(select_obj=select_obj)
 
         if self.viewport_window is not None:
             self.viewport_window._request_update()
@@ -164,6 +167,9 @@ class EditorWindow(QMainWindow):
             self._rebuild_tree_model(select_obj=select_obj)
         elif isinstance(cmd, DeleteEntityCommand):
             select_obj = cmd.parent_entity
+            self._rebuild_tree_model(select_obj=select_obj)
+        elif isinstance(cmd, RenameEntityCommand):
+            select_obj = cmd.entity
             self._rebuild_tree_model(select_obj=select_obj)
 
         if self.viewport_window is not None:
@@ -291,14 +297,18 @@ class EditorWindow(QMainWindow):
         menu = QMenu(self)
         action_add = menu.addAction("Add entity")
 
+        action_rename = None
         action_delete = None
         if isinstance(target_obj, Entity):
+            action_rename = menu.addAction("Rename entity")
             action_delete = menu.addAction("Delete entity")
 
         global_pos = self.sceneTree.viewport().mapToGlobal(pos)
         action = menu.exec_(global_pos)
         if action == action_add:
             self._create_entity_from_context(target_obj)
+        elif action == action_rename:
+            self._rename_entity_from_context(target_obj)
         elif action == action_delete:
             self._delete_entity_from_context(target_obj)
 
@@ -317,6 +327,28 @@ class EditorWindow(QMainWindow):
         parent_ent = cmd.parent_entity
 
         self._rebuild_tree_model(select_obj=parent_ent)
+
+        if self.viewport_window is not None:
+            self.viewport_window._request_update()
+
+
+    def _rename_entity_from_context(self, ent: Entity):
+        if not isinstance(ent, Entity):
+            return
+
+        old_name = ent.name or ""
+        new_name, ok = QInputDialog.getText(self, "Rename entity", "Name:", text=old_name)
+        if not ok:
+            return
+
+        new_name = new_name.strip()
+        if not new_name or new_name == old_name:
+            return
+
+        cmd = RenameEntityCommand(ent, old_name, new_name)
+        self.push_undo_command(cmd, merge=False)
+
+        self._rebuild_tree_model(select_obj=ent)
 
         if self.viewport_window is not None:
             self.viewport_window._request_update()

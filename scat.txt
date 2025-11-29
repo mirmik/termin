@@ -24,6 +24,7 @@ termin/editor/undo_stack.py
 termin/editor/run_editor.py
 termin/editor/editor_commands.py
 termin/editor/editor_window.py
+termin/editor/gizmo.py
 
 
 [TREE]

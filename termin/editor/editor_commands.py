@@ -322,3 +322,48 @@ __all__ = [
     "AddEntityCommand",
     "DeleteEntityCommand",
 ]
+
+
+class RenameEntityCommand(UndoCommand):
+    """
+    Переименование сущности.
+
+    В do() устанавливается новое имя, в undo() — старое.
+    """
+
+    def __init__(
+        self,
+        entity: Entity,
+        old_name: str,
+        new_name: str,
+        text: str | None = None,
+    ) -> None:
+        if text is None:
+            text = f"Rename entity '{old_name}' to '{new_name}'"
+        super().__init__(text)
+        self._entity = entity
+        self._old_name = old_name
+        self._new_name = new_name
+
+    @property
+    def entity(self) -> Entity:
+        return self._entity
+
+    def do(self) -> None:
+        self._entity.name = self._new_name
+
+    def undo(self) -> None:
+        self._entity.name = self._old_name
+
+    def merge_with(self, other: UndoCommand) -> bool:
+        """
+        Склейка последовательных переименований одной и той же сущности.
+        """
+        if not isinstance(other, RenameEntityCommand):
+            return False
+        if other._entity is not self._entity:
+            return False
+
+        self._new_name = other._new_name
+        self.text = other.text
+        return True

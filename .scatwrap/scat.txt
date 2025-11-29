@@ -32,6 +32,7 @@ termin/editor/undo_stack.py<br>
 termin/editor/run_editor.py<br>
 termin/editor/editor_commands.py<br>
 termin/editor/editor_window.py<br>
+termin/editor/gizmo.py<br>
 <br>
 <br>
 [TREE]<br>
