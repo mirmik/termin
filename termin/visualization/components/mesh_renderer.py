@@ -43,8 +43,12 @@ class MeshRenderer(Component):
         if isinstance(mesh, Mesh3):
             mesh = MeshDrawable(mesh)
 
+        if material is None and passes is None:
+            material = Material()
+
         self.mesh = mesh
-        self.material = material
+        if passes is None:
+            self.material = material
 
         self.passes: list[RenderPass] = []
 
@@ -95,8 +99,6 @@ class MeshRenderer(Component):
     # --- рендеринг ---
 
     def required_shaders(self):
-        if self.material is None:
-            return
         for p in self.passes:
             yield p.material.shader
 
@@ -105,9 +107,6 @@ class MeshRenderer(Component):
             return
 
         if self.mesh is None:
-            return
-
-        if self.material is None:
             return
 
         model = self.entity.model_matrix()

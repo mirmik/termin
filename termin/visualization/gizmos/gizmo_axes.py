@@ -6,6 +6,7 @@ from termin.visualization.entity import Entity, InputComponent
 from termin.visualization.components import MeshRenderer
 from termin.geombase.pose3 import Pose3
 from termin.util import qmul   # <-- вот это добавляем
+from termin.visualization.renderpass import RenderPass, RenderState
 
 
 # ---------- ВСПОМОГАТЕЛЬНАЯ МАТЕМАТИКА ----------
@@ -165,7 +166,7 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
         )
-        pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, None))
+        pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, passes=[]))
         self.pick_shaft_ent = pick_shaft_ent
         self.transform.add_child(pick_shaft_ent.transform)
 
@@ -177,7 +178,7 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
         )
-        pick_head_ent.add_component(MeshRenderer(pick_head_mesh, None))
+        pick_head_ent.add_component(MeshRenderer(pick_head_mesh, passes=[]))
         self.pick_head_ent = pick_head_ent
         self.transform.add_child(pick_head_ent.transform)
 
@@ -240,7 +241,12 @@ class GizmoRing(Entity):
             pickable=False,
             selectable=False,
         )
-        ring_ent.add_component(MeshRenderer(ring_mesh, mat))
+        pass_without_culling = RenderPass(material=mat, state=RenderState(cull=False))
+        #ring_ent.add_component(MeshRenderer(ring_mesh, passes=[pass_without_culling]))
+        #mr = MeshRenderer(ring_mesh, material=mat)
+        mr = MeshRenderer(ring_mesh, passes=[pass_without_culling])
+        #print(mr.passes)
+        ring_ent.add_component(mr)
         self.ring_ent = ring_ent
         self.transform.add_child(ring_ent.transform)
 
@@ -266,7 +272,7 @@ class GizmoRing(Entity):
             pickable=False,
             selectable=False,
         )
-        pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, None))
+        pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, passes=[]))
         self.pick_ring_ent = pick_ring_ent
         self.transform.add_child(pick_ring_ent.transform)
 

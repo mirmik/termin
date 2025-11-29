@@ -14,6 +14,7 @@ from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Entity,&nbsp;InputCompone
 from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
 from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
 from&nbsp;termin.util&nbsp;import&nbsp;qmul&nbsp;&nbsp;&nbsp;#&nbsp;&lt;--&nbsp;вот&nbsp;это&nbsp;добавляем<br>
+from&nbsp;termin.visualization.renderpass&nbsp;import&nbsp;RenderPass,&nbsp;RenderState<br>
 <br>
 <br>
 #&nbsp;----------&nbsp;ВСПОМОГАТЕЛЬНАЯ&nbsp;МАТЕМАТИКА&nbsp;----------<br>
@@ -173,7 +174,7 @@ class&nbsp;GizmoArrow(Entity):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pickable=False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selectable=False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh,&nbsp;None))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh,&nbsp;passes=[]))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pick_shaft_ent&nbsp;=&nbsp;pick_shaft_ent<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.transform.add_child(pick_shaft_ent.transform)<br>
 <br>
@@ -185,7 +186,7 @@ class&nbsp;GizmoArrow(Entity):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pickable=False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selectable=False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_head_ent.add_component(MeshRenderer(pick_head_mesh,&nbsp;None))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_head_ent.add_component(MeshRenderer(pick_head_mesh,&nbsp;passes=[]))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pick_head_ent&nbsp;=&nbsp;pick_head_ent<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.transform.add_child(pick_head_ent.transform)<br>
 <br>
@@ -248,7 +249,12 @@ class&nbsp;GizmoRing(Entity):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pickable=False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selectable=False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ring_ent.add_component(MeshRenderer(ring_mesh,&nbsp;mat))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_without_culling&nbsp;=&nbsp;RenderPass(material=mat,&nbsp;state=RenderState(cull=False))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#ring_ent.add_component(MeshRenderer(ring_mesh,&nbsp;passes=[pass_without_culling]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#mr&nbsp;=&nbsp;MeshRenderer(ring_mesh,&nbsp;material=mat)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mr&nbsp;=&nbsp;MeshRenderer(ring_mesh,&nbsp;passes=[pass_without_culling])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#print(mr.passes)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ring_ent.add_component(mr)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.ring_ent&nbsp;=&nbsp;ring_ent<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.transform.add_child(ring_ent.transform)<br>
 <br>
@@ -274,7 +280,7 @@ class&nbsp;GizmoRing(Entity):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pickable=False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selectable=False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh,&nbsp;None))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh,&nbsp;passes=[]))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pick_ring_ent&nbsp;=&nbsp;pick_ring_ent<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.transform.add_child(pick_ring_ent.transform)<br>
 <br>
