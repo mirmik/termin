@@ -4,6 +4,7 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction
 from PyQt5.QtCore import Qt, QPoint
 from termin.editor.undo_stack import UndoStack, UndoCommand
+from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand
 
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
@@ -141,14 +142,30 @@ class EditorWindow(QMainWindow):
         self._update_undo_redo_actions()
 
     def undo(self) -> None:
-        self.undo_stack.undo()
+        cmd = self.undo_stack.undo()
+
+        if isinstance(cmd, AddEntityCommand):
+            select_obj = cmd.parent_entity
+            self._rebuild_tree_model(select_obj=select_obj)
+        elif isinstance(cmd, DeleteEntityCommand):
+            select_obj = cmd.entity
+            self._rebuild_tree_model(select_obj=select_obj)
+
         if self.viewport_window is not None:
             self.viewport_window._request_update()
         self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
 
     def redo(self) -> None:
-        self.undo_stack.redo()
+        cmd = self.undo_stack.redo()
+
+        if isinstance(cmd, AddEntityCommand):
+            select_obj = cmd.entity
+            self._rebuild_tree_model(select_obj=select_obj)
+        elif isinstance(cmd, DeleteEntityCommand):
+            select_obj = cmd.parent_entity
+            self._rebuild_tree_model(select_obj=select_obj)
+
         if self.viewport_window is not None:
             self.viewport_window._request_update()
         self._resync_inspector_from_selection()
@@ -289,24 +306,15 @@ class EditorWindow(QMainWindow):
         if not isinstance(ent, Entity):
             return
 
-        parent_tf = getattr(ent.transform, "parent", None)
-        parent_ent = getattr(parent_tf, "entity", None) if parent_tf is not None else None
-        if not isinstance(parent_ent, Entity):
-            parent_ent = None
-
         if self.inspector is not None:
             self.inspector.set_target(None)
 
         self.on_selection_changed(None)
 
-        if hasattr(self.scene, "remove"):
-            self.scene.remove(ent)
-        else:
-            try:
-                self.scene.entities.remove(ent)
-                ent.on_removed()
-            except ValueError:
-                pass
+        cmd = DeleteEntityCommand(self.scene, ent)
+        self.push_undo_command(cmd, merge=False)
+
+        parent_ent = cmd.parent_entity
 
         self._rebuild_tree_model(select_obj=parent_ent)
 
@@ -349,10 +357,9 @@ class EditorWindow(QMainWindow):
 
         ent = Entity(pose=Pose3.identity(), name=name)
 
-        if parent_transform is not None:
-            ent.transform.set_parent(parent_transform)
+        cmd = AddEntityCommand(self.scene, ent, parent_transform=parent_transform)
+        self.push_undo_command(cmd, merge=False)
 
-        self.scene.add(ent)
         self._rebuild_tree_model(select_obj=ent)
 
         if self.viewport_window is not None:

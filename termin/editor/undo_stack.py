@@ -116,22 +116,25 @@ class UndoStack:
         # Любая новая команда инвалидирует ветку redo
         self._undone.clear()
 
-    def undo(self) -> None:
+    def undo(self) -> UndoCommand | None:
         """
         Откатывает последнюю выполненную команду, если такая есть.
+        Возвращает эту команду или None, если откатывать нечего.
         """
         if not self._done:
-            return
+            return None
         cmd = self._done.pop()
         cmd.undo()
         self._undone.append(cmd)
+        return cmd
 
-    def redo(self) -> None:
+    def redo(self) -> UndoCommand | None:
         """
         Повторно выполняет последнюю отменённую команду, если такая есть.
+        Возвращает эту команду или None, если повторять нечего.
         """
         if not self._undone:
-            return
+            return None
         cmd = self._undone.pop()
         cmd.do()
         self._done.append(cmd)
@@ -140,6 +143,8 @@ class UndoStack:
             # Если при повторном применении переполнили историю,
             # выкидываем самую старую команду.
             self._done.pop(0)
+
+        return cmd
 
     def __len__(self) -> int:
         """

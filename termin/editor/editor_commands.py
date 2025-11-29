@@ -190,9 +190,135 @@ class RemoveComponentCommand(UndoCommand):
             self._entity.add_component(self._component)
 
 
+class AddEntityCommand(UndoCommand):
+    """
+    Добавление сущности в сцену.
+
+    В do() сущность добавляется, в undo() — удаляется.
+    """
+
+    def __init__(
+        self,
+        scene,
+        entity: Entity,
+        parent_transform: Transform3 | None = None,
+        text: str = "Add entity",
+    ) -> None:
+        super().__init__(text)
+        self._scene = scene
+        self._entity = entity
+        self._parent_transform = parent_transform
+
+    @property
+    def entity(self) -> Entity:
+        return self._entity
+
+    @property
+    def parent_entity(self) -> Entity | None:
+        if self._parent_transform is None:
+            return None
+        return getattr(self._parent_transform, "entity", None)
+
+    def do(self) -> None:
+        if self._parent_transform is not None:
+            self._entity.transform.set_parent(self._parent_transform)
+
+        scene_entities = getattr(self._scene, "entities", None)
+        if scene_entities is not None and self._entity in scene_entities:
+            return
+
+        if hasattr(self._scene, "add"):
+            self._scene.add(self._entity)
+        elif scene_entities is not None:
+            scene_entities.append(self._entity)
+
+    def undo(self) -> None:
+        if hasattr(self._scene, "remove"):
+            self._scene.remove(self._entity)
+            return
+
+        scene_entities = getattr(self._scene, "entities", None)
+        if scene_entities is None:
+            return
+
+        try:
+            scene_entities.remove(self._entity)
+            self._entity.on_removed()
+        except ValueError:
+            pass
+
+
+class DeleteEntityCommand(UndoCommand):
+    """
+    Удаление сущности из сцены.
+
+    В do() сущность удаляется, в undo() — добавляется обратно.
+    """
+
+    def __init__(
+        self,
+        scene,
+        entity: Entity,
+        text: str = "Delete entity",
+    ) -> None:
+        super().__init__(text)
+        self._scene = scene
+        self._entity = entity
+        tf = getattr(entity, "transform", None)
+        self._parent_transform = getattr(tf, "parent", None) if tf is not None else None
+
+    @property
+    def entity(self) -> Entity:
+        return self._entity
+
+    @property
+    def parent_entity(self) -> Entity | None:
+        if self._parent_transform is None:
+            return None
+        return getattr(self._parent_transform, "entity", None)
+
+    def do(self) -> None:
+        if hasattr(self._scene, "remove"):
+            self._scene.remove(self._entity)
+            return
+
+        scene_entities = getattr(self._scene, "entities", None)
+        if scene_entities is None:
+            return
+
+        try:
+            scene_entities.remove(self._entity)
+            self._entity.on_removed()
+        except ValueError:
+            pass
+
+    def undo(self) -> None:
+        if self._parent_transform is not None:
+            self._entity.transform.set_parent(self._parent_transform)
+
+        scene_entities = getattr(self._scene, "entities", None)
+        if scene_entities is not None and self._entity in scene_entities:
+            return
+
+        if hasattr(self._scene, "add"):
+            self._scene.add(self._entity)
+        elif scene_entities is not None:
+            scene_entities.append(self._entity)
+
+
+__all__ = [
+  "TransformEditCommand",
+  "ComponentFieldEditCommand",
+  "AddComponentCommand",
+  "RemoveComponentCommand",
+  "AddEntityCommand",
+  "DeleteEntityCommand",
+]
 __all__ = [
     "TransformEditCommand",
     "ComponentFieldEditCommand",
     "AddComponentCommand",
     "RemoveComponentCommand",
+    "AddEntityCommand",
+    "DeleteEntityCommand",
 ]
