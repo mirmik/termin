@@ -4,7 +4,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from ..entity import Component
+from termin.visualization.core.entity import Component
 from termin.geombase.pose3 import Pose3
 from .clip import AnimationClip
 

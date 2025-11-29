@@ -42,7 +42,7 @@ setup(
             "visualization/*",
             "visualization/**/*",
             "mesh/*",
-            "apps/*",
+            "editor/*",
         ]
     },
     include_package_data=True,

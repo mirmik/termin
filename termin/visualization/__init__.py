@@ -5,27 +5,28 @@ The module exposes abstractions for window/context management, scene graphs,
 camera models and GPU resources such as meshes, shaders, materials and textures.
 """
 
-from .window import Window, GLWindow
-from .renderer import Renderer
-from .scene import Scene
-from .entity import Entity, Component, InputComponent, RenderContext
-from .camera import (
+from termin.visualization.platform.window import Window, GLWindow
+from termin.visualization.render.renderer import Renderer
+from termin.visualization.core.scene import Scene
+from termin.visualization.core.entity import Entity, Component, InputComponent, RenderContext
+from termin.visualization.core.camera import (
     CameraComponent,
     PerspectiveCameraComponent,
     OrthographicCameraComponent,
     OrbitCameraController,
 )
-from .mesh import MeshDrawable
-from .material import Material
-from .shader import ShaderProgram
-from .texture import Texture
-from .components import MeshRenderer
-from .ui import Canvas, UIElement, UIRectangle
-from .world import VisualizationWorld
-from .backends.base import GraphicsBackend, WindowBackend, MouseButton, Key, Action
-from .backends.opengl import OpenGLGraphicsBackend
-from .backends.glfw import GLFWWindowBackend
-from .backends.qt import QtWindowBackend, QtGLWindowHandle
+from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.render.components import MeshRenderer
+from termin.visualization.ui import Canvas, UIElement, UIRectangle
+from termin.visualization.core.material import Material
+from termin.visualization.render.shader import ShaderProgram
+from termin.visualization.render.texture import Texture
+from termin.visualization.core.world import VisualizationWorld
+from termin.visualization.platform.backends.base import GraphicsBackend, WindowBackend, MouseButton, Key, Action
+from termin.visualization.render.opengl.backends import OpenGLGraphicsBackend
+from termin.visualization.platform.backends.glfw import GLFWWindowBackend
+from termin.visualization.platform.backends.qt import QtWindowBackend, QtGLWindowHandle
+from termin.visualization.render.skybox import SkyBoxEntity
 
 __all__ = [
     "Window",
@@ -58,4 +59,5 @@ __all__ = [
     "GLFWWindowBackend",
     "QtWindowBackend",
     "QtGLWindowHandle",
+    "SkyBoxEntity",
 ]

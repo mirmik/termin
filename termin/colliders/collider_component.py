@@ -1,6 +1,6 @@
 from termin.colliders.attached import AttachedCollider
 from termin.colliders.collider import Collider
-from termin.visualization.entity import Component 
+from termin.visualization.core.entity import Component 
 
 class ColliderComponent(Component):
     """

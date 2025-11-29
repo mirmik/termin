@@ -8,7 +8,7 @@
 <!-- BEGIN SCAT CODE -->
 from&nbsp;termin.colliders.attached&nbsp;import&nbsp;AttachedCollider<br>
 from&nbsp;termin.colliders.collider&nbsp;import&nbsp;Collider<br>
-from&nbsp;termin.visualization.entity&nbsp;import&nbsp;Component&nbsp;<br>
+from&nbsp;termin.visualization.core.entity&nbsp;import&nbsp;Component&nbsp;<br>
 <br>
 class&nbsp;ColliderComponent(Component):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>

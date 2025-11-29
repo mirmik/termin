@@ -2,7 +2,7 @@
 
 import unittest
 
-from termin.visualization.framegraph import (
+from termin.visualization.render.framegraph import (
     FramePass,
     FrameGraph,
     FrameGraphCycleError,

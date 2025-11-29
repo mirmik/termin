@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from ..backends.base import GraphicsBackend
+from termin.visualization.platform.backends.base import GraphicsBackend
 
 
 class Canvas:

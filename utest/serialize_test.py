@@ -1,19 +1,19 @@
 import numpy as np
-from termin.visualization.material import Material
-from termin.visualization.shader import ShaderProgram
+from termin.visualization.core.material import Material
+from termin.visualization.render.shader import ShaderProgram
 
 
 import numpy as np
-from termin.visualization.serialization import serializable
-from termin.visualization.entity import Component
+from termin.visualization.core.serialization import serializable
+from termin.visualization.core.entity import Component
 
 import numpy as np
-from termin.visualization.entity import Entity, Component
+from termin.visualization.core.entity import Entity, Component
 from termin.geombase.pose3 import Pose3
-from termin.visualization.scene import Scene
-from termin.visualization.entity import Entity
+from termin.visualization.core.scene import Scene
+from termin.visualization.core.entity import Entity
 from termin.geombase.pose3 import Pose3
-from termin.visualization.entity import Component
+from termin.visualization.core.entity import Component
 
 
 @serializable(fields=["x"])

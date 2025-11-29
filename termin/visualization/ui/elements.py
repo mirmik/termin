@@ -1,8 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple
+
 import numpy as np
-from ..material import Material
+from termin.visualization.core.material import Material
 
 IDENTITY = np.identity(4, dtype=np.float32)
 

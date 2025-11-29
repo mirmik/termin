@@ -12,7 +12,7 @@ from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Tuple<br>
 <br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from&nbsp;..backends.base&nbsp;import&nbsp;GraphicsBackend<br>
+from&nbsp;termin.visualization.platform.backends.base&nbsp;import&nbsp;GraphicsBackend<br>
 <br>
 <br>
 class&nbsp;Canvas:<br>

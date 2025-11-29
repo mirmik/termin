@@ -1,6 +1,6 @@
 operations:
   - op: insert_after_text
-    path: termin/apps/transform_inspector.py
+    path: termin/editor/transform_inspector.py
     marker: "class TransformInspector(QWidget):"
     payload: |
       # Обработчик для отправки команд в общий undo-стек редактора.

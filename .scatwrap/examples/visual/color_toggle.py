@@ -22,10 +22,10 @@ from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;InputComponent,<br>
 )<br>
-from&nbsp;termin.visualization.backends.base&nbsp;import&nbsp;Action,&nbsp;Key<br>
-from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
-from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
-from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.platform.backends.base&nbsp;import&nbsp;Action,&nbsp;Key<br>
+from&nbsp;termin.visualization.render.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.render.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.render.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
 <br>
 <br>
 VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>

@@ -20,8 +20,8 @@ from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from&nbsp;termin.visualization.line&nbsp;import&nbsp;LineEntity<br>
-from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.core.line&nbsp;import&nbsp;LineEntity<br>
+from&nbsp;termin.visualization.render.shader&nbsp;import&nbsp;ShaderProgram<br>
 <br>
 <br>
 VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>

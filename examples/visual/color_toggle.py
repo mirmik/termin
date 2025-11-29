@@ -14,10 +14,10 @@ from termin.visualization import (
     OrbitCameraController,
     InputComponent,
 )
-from termin.visualization.backends.base import Action, Key
-from termin.visualization.components import MeshRenderer
-from termin.visualization.shader import ShaderProgram
-from termin.visualization.skybox import SkyBoxEntity
+from termin.visualization.platform.backends.base import Action, Key
+from termin.visualization.render.components import MeshRenderer
+from termin.visualization.render.shader import ShaderProgram
+from termin.visualization.render.skybox import SkyBoxEntity
 
 
 VERT = """

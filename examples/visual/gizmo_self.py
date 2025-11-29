@@ -15,11 +15,11 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.components import MeshRenderer
-from termin.visualization.shader import ShaderProgram
-from termin.visualization.skybox import SkyBoxEntity
-from termin.visualization.gizmos import GizmoEntity, GizmoMoveController
-from termin.visualization.scene import Scene
+from termin.visualization.render.components import MeshRenderer
+from termin.visualization.render.shader import ShaderProgram
+from termin.visualization.render.skybox import SkyBoxEntity
+from termin.editor.gizmo_axes import GizmoEntity, GizmoMoveController
+from termin.visualization.core.scene import Scene
 
 def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComponent]:
     scene = Scene()

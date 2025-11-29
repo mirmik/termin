@@ -18,11 +18,11 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.components import MeshRenderer
-from termin.visualization.shader import ShaderProgram
-from termin.visualization.skybox import SkyBoxEntity
-from termin.visualization.posteffects.gray import GrayscaleEffect
-from termin.visualization.posteffects.blur import GaussianBlurPass
+from termin.visualization.render.components import MeshRenderer
+from termin.visualization.render.shader import ShaderProgram
+from termin.visualization.render.skybox import SkyBoxEntity
+from termin.visualization.render.posteffects.gray import GrayscaleEffect
+from termin.visualization.render.posteffects.blur import GaussianBlurPass
 
 # ================================================================
 #          СЦЕНА

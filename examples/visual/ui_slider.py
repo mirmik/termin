@@ -15,9 +15,9 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.components import MeshRenderer
-from termin.visualization.shader import ShaderProgram
-from termin.visualization.skybox import SkyBoxEntity
+from termin.visualization.render.components import MeshRenderer
+from termin.visualization.render.shader import ShaderProgram
+from termin.visualization.render.skybox import SkyBoxEntity
 
 from termin.visualization.ui import Canvas, UIRectangle
 from termin.visualization.ui.font import FontTextureAtlas

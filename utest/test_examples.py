@@ -1,17 +1,18 @@
 import importlib
+import os
 import pathlib
 import sys
 import pytest
 
-import termin.visualization.world as world_module
+import termin.visualization.core.world as world_module
 
-from termin.visualization.backends import (
+from termin.visualization.platform.backends import (
     set_default_graphics_backend,
     set_default_window_backend,
 )
 
-from termin.visualization.backends.nop_graphics import NOPGraphicsBackend
-from termin.visualization.backends.nop_window import NOPWindowBackend
+from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
+from termin.visualization.platform.backends.nop_window import NOPWindowBackend
 
 
 def collect_example_modules():
@@ -24,6 +25,9 @@ def collect_example_modules():
 
     for file in sorted(examples_dir.glob("*.py")):
         if file.stem == "__init__":
+            continue
+        if file.stem == "qt_embed":
+            # Qt-пример требует полноценной оконной среды, пропускаем в автоматических тестах.
             continue
         modname = "examples.visual." + file.stem
         modules.append(modname)
@@ -46,7 +50,7 @@ def test_example_runs_one_frame(module_name, monkeypatch):
     set_default_window_backend(NOPWindowBackend())
 
     # --- 3. Перехват Texture.from_file, чтобы не грузить реальные картинки ---
-    # import termin.visualization.texture as texture_mod
+    # import termin.visualization.render.texture as texture_mod
     # monkeypatch.setattr(
     #     texture_mod.Texture,
     #     "from_file",

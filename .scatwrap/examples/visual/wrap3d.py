@@ -23,10 +23,10 @@ from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer<br>
-from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
-from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
-from&nbsp;termin.visualization.materials.simple&nbsp;import&nbsp;ColorMaterial<br>
+from&nbsp;termin.visualization.render.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.render.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.render.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.render.materials.simple&nbsp;import&nbsp;ColorMaterial<br>
 <br>
 #&nbsp;import&nbsp;convex&nbsp;hull<br>
 from&nbsp;scipy.spatial&nbsp;import&nbsp;ConvexHull<br>

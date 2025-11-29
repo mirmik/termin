@@ -12,8 +12,8 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.line import LineEntity
-from termin.visualization.shader import ShaderProgram
+from termin.visualization.core.line import LineEntity
+from termin.visualization.render.shader import ShaderProgram
 
 
 VERT = """

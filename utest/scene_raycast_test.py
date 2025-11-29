@@ -1,8 +1,8 @@
 import unittest
 import numpy as np
 
-from termin.visualization.scene import Scene
-from termin.visualization.entity import Entity
+from termin.visualization.core.scene import Scene
+from termin.visualization.core.entity import Entity
 from termin.colliders.sphere import SphereCollider
 from termin.colliders.box import BoxCollider
 from termin.colliders.raycast_hit import RaycastHit

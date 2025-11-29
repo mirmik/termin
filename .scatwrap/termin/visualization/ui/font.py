@@ -11,7 +11,7 @@ from&nbsp;PIL&nbsp;import&nbsp;Image,&nbsp;ImageDraw,&nbsp;ImageFont<br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
 import&nbsp;os<br>
-from&nbsp;..backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;TextureHandle<br>
+from&nbsp;termin.visualization.platform.backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;TextureHandle<br>
 <br>
 class&nbsp;FontTextureAtlas:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;path:&nbsp;str,&nbsp;size:&nbsp;int&nbsp;=&nbsp;32):<br>

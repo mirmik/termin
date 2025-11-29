@@ -16,10 +16,10 @@ from termin.visualization import (
     OrbitCameraController,
     Component,
 )
-from termin.visualization.components import MeshRenderer
-from termin.visualization.shader import ShaderProgram
-from termin.visualization.skybox import SkyBoxEntity
-from termin.visualization.camera import CameraController
+from termin.visualization.render.components import MeshRenderer
+from termin.visualization.render.shader import ShaderProgram
+from termin.visualization.render.skybox import SkyBoxEntity
+from termin.visualization.core.camera import CameraController
 
 VERT = """
 #version 330 core

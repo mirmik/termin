@@ -22,9 +22,9 @@ from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCameraComponent,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;OrbitCameraController,<br>
 )<br>
-from&nbsp;termin.visualization.components&nbsp;import&nbsp;MeshRenderer,&nbsp;LineRenderer&nbsp;&nbsp;<br>
-from&nbsp;termin.visualization.shader&nbsp;import&nbsp;ShaderProgram<br>
-from&nbsp;termin.visualization.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
+from&nbsp;termin.visualization.render.components&nbsp;import&nbsp;MeshRenderer,&nbsp;LineRenderer&nbsp;&nbsp;<br>
+from&nbsp;termin.visualization.render.shader&nbsp;import&nbsp;ShaderProgram<br>
+from&nbsp;termin.visualization.render.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
 <br>
 vert&nbsp;=&nbsp;&quot;&quot;&quot;<br>
 #version&nbsp;330&nbsp;core<br>

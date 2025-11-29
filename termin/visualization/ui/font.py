@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
 import os
-from ..backends.base import GraphicsBackend, TextureHandle
+from termin.visualization.platform.backends.base import GraphicsBackend, TextureHandle
 
 class FontTextureAtlas:
     def __init__(self, path: str, size: int = 32):

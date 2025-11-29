@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/visualization/render/texture.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;Simple&nbsp;2D&nbsp;texture&nbsp;wrapper&nbsp;for&nbsp;the&nbsp;graphics&nbsp;backend.&quot;&quot;&quot;<br>
+<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+<br>
+from&nbsp;pathlib&nbsp;import&nbsp;Path<br>
+from&nbsp;typing&nbsp;import&nbsp;Optional<br>
+<br>
+import&nbsp;numpy&nbsp;as&nbsp;np<br>
+from&nbsp;PIL&nbsp;import&nbsp;Image<br>
+from&nbsp;termin.visualization.platform.backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;TextureHandle<br>
+<br>
+<br>
+class&nbsp;Texture:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Loads&nbsp;an&nbsp;image&nbsp;via&nbsp;Pillow&nbsp;and&nbsp;uploads&nbsp;it&nbsp;as&nbsp;``GL_TEXTURE_2D``.&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;path:&nbsp;Optional[str&nbsp;|&nbsp;Path]&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handles:&nbsp;dict[int&nbsp;|&nbsp;None,&nbsp;TextureHandle]&nbsp;=&nbsp;{}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._image_data:&nbsp;Optional[np.ndarray]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._size:&nbsp;Optional[tuple[int,&nbsp;int]]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;path&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.load(path)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;load(self,&nbsp;path:&nbsp;str&nbsp;|&nbsp;Path):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image&nbsp;=&nbsp;Image.open(path).convert(&quot;RGBA&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image&nbsp;=&nbsp;image.transpose(Image.FLIP_TOP_BOTTOM)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;data&nbsp;=&nbsp;np.array(image,&nbsp;dtype=np.uint8)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width,&nbsp;height&nbsp;=&nbsp;image.size<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._image_data&nbsp;=&nbsp;data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._size&nbsp;=&nbsp;(width,&nbsp;height)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handles.clear()<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_ensure_handle(self,&nbsp;graphics:&nbsp;GraphicsBackend,&nbsp;context_key:&nbsp;int&nbsp;|&nbsp;None)&nbsp;-&gt;&nbsp;TextureHandle:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;self._handles.get(context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;handle&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;handle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._image_data&nbsp;is&nbsp;None&nbsp;or&nbsp;self._size&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;RuntimeError(&quot;Texture&nbsp;has&nbsp;no&nbsp;image&nbsp;data&nbsp;to&nbsp;upload.&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;graphics.create_texture(self._image_data,&nbsp;self._size,&nbsp;channels=4)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._handles[context_key]&nbsp;=&nbsp;handle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;handle<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind(self,&nbsp;graphics:&nbsp;GraphicsBackend,&nbsp;unit:&nbsp;int&nbsp;=&nbsp;0,&nbsp;context_key:&nbsp;int&nbsp;|&nbsp;None&nbsp;=&nbsp;None):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle&nbsp;=&nbsp;self._ensure_handle(graphics,&nbsp;context_key)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handle.bind(unit)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@classmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;from_file(cls,&nbsp;path:&nbsp;str&nbsp;|&nbsp;Path)&nbsp;-&gt;&nbsp;&quot;Texture&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tex&nbsp;=&nbsp;cls()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tex.load(path)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;tex<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

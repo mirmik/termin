@@ -4,12 +4,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
-import termin.visualization.mesh as mesh_module
-import termin.visualization.shader as shader_module
-import termin.visualization.texture as texture_module
-from termin.visualization.mesh import MeshDrawable
-from termin.visualization.shader import ShaderCompilationError, ShaderProgram
-from termin.visualization.texture import Texture
+import termin.visualization.core.mesh as mesh_module
+import termin.visualization.render.shader as shader_module
+import termin.visualization.render.texture as texture_module
+from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.render.shader import ShaderCompilationError, ShaderProgram
+from termin.visualization.render.texture import Texture
 from termin.visualization.ui.elements import UIRectangle
 
 

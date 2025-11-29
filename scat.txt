@@ -33,7 +33,7 @@ AGENTS.md
 {RAWMAP}
 
 На что обратить внимание при знакомстве с проектом:
-В основном сейчас нас интересует редактор, тоесть termin/apps/*, termin/visualization/**, examples/visual/*
+В основном сейчас нас интересует редактор, тоесть termin/editor/*, termin/visualization/**, examples/visual/*
 TECHNICAL_NOTES.md - техническое описание проекта (может устаревать)
 AGENTS.md - некоторые рекомендации по работе с репозиторием для искуственного интелленкта
 

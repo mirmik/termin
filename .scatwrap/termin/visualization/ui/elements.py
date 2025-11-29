@@ -9,8 +9,9 @@
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 from&nbsp;dataclasses&nbsp;import&nbsp;dataclass<br>
 from&nbsp;typing&nbsp;import&nbsp;Tuple<br>
+<br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
-from&nbsp;..material&nbsp;import&nbsp;Material<br>
+from&nbsp;termin.visualization.core.material&nbsp;import&nbsp;Material<br>
 <br>
 IDENTITY&nbsp;=&nbsp;np.identity(4,&nbsp;dtype=np.float32)<br>
 <br>

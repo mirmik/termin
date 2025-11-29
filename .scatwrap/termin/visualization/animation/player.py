@@ -12,7 +12,7 @@ from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;Optional<br>
 <br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
-from&nbsp;..entity&nbsp;import&nbsp;Component<br>
+from&nbsp;termin.visualization.core.entity&nbsp;import&nbsp;Component<br>
 from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
 from&nbsp;.clip&nbsp;import&nbsp;AnimationClip<br>
 <br>
