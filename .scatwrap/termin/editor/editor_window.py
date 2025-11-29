@@ -221,10 +221,14 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ent&nbsp;in&nbsp;self.scene.entities:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(ent,&nbsp;GizmoEntity)&nbsp;or&nbsp;getattr(ent,&nbsp;&quot;name&quot;,&nbsp;&quot;&quot;)&nbsp;==&nbsp;&quot;gizmo&quot;:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gizmo&nbsp;=&nbsp;ent<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_ctrl&nbsp;=&nbsp;ent.find_component(GizmoMoveController)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;gizmo_ctrl&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_ctrl.set_undo_command_handler(self.push_undo_command)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo&nbsp;=&nbsp;GizmoEntity(size=1.5)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_controller&nbsp;=&nbsp;GizmoMoveController(gizmo,&nbsp;self.scene)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_controller.set_undo_command_handler(self.push_undo_command)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo.add_component(gizmo_controller)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.editor_entities&nbsp;is&nbsp;not&nbsp;None:<br>
@@ -232,10 +236,6 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene.add(gizmo)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gizmo&nbsp;=&nbsp;gizmo<br>
-<br>
-<br>
-<br>
-&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-----------&nbsp;ресурсы&nbsp;из&nbsp;сцены&nbsp;-----------<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_init_resources_from_scene(self):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>

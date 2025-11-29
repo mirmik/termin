@@ -1,4 +1,7 @@
 import numpy as np
+from typing import Optional, Callable
+from termin.editor.undo_stack import UndoCommand
+from termin.editor.editor_commands import TransformEditCommand
 
 from termin.mesh.mesh import CylinderMesh, ConeMesh, RingMesh
 from termin.visualization.core.material import Material
@@ -348,6 +351,14 @@ class GizmoMoveController(InputComponent):
         self.enabled = False
         self.target: Entity | None = None
 
+        # обработчик undo-команд редактора
+        self._undo_handler: Optional[Callable[[UndoCommand, bool], None]] = None
+
+        # состояние для фиксации трансформа в undo-стек
+        self._drag_transform = None
+        self._start_pose: Pose3 | None = None
+        self._start_scale: np.ndarray | None = None
+
         # общее состояние драга
         self.dragging: bool = False
         self.drag_mode: str | None = None  # "move" или "rotate"
@@ -373,6 +384,12 @@ class GizmoMoveController(InputComponent):
         self.rotate_sensitivity: float = rotate_sensitivity
 
         self.set_enabled(False)
+
+    def set_undo_command_handler(self, handler: Optional[Callable[[UndoCommand, bool], None]]):
+        """
+        Регистрирует обработчик undo-команд (обычно EditorWindow.push_undo_command).
+        """
+        self._undo_handler = handler
 
     # ---------- утилита: пересечение луча с плоскостью ----------
 
@@ -453,7 +470,7 @@ class GizmoMoveController(InputComponent):
         if action == 0:
             self._end_drag()
 
-    def on_mouse_move(self, viewport, x, y, dx, dy):
+    def on_mouse_move(self, viewport, x: float, y: float, dx: float, dy: float):
         if not self.enabled or not self.dragging or self.target is None:
             return
 
@@ -464,7 +481,61 @@ class GizmoMoveController(InputComponent):
 
     # ---------- внутренняя логика начала / конца драга ----------
 
+    def _commit_drag_to_undo(self):
+        """
+        Если трансформ объекта изменился во время текущего драга,
+        отправляет соответствующую TransformEditCommand в undo-стек.
+        """
+        if self._undo_handler is None:
+            return
+        if self._drag_transform is None or self._start_pose is None:
+            return
+
+        tf = self._drag_transform
+        end_pose = tf.global_pose()
+
+        ent = getattr(tf, "entity", None)
+        end_scale = None
+        if ent is not None:
+            try:
+                end_scale = np.asarray(ent.scale, dtype=float)
+            except Exception:
+                end_scale = None
+
+        start_scale = self._start_scale
+        if start_scale is None and end_scale is not None:
+            start_scale = end_scale.copy()
+
+        # если вообще ничего не поменялось — команду не создаём
+        if (
+            np.allclose(end_pose.lin, self._start_pose.lin)
+            and np.allclose(end_pose.ang, self._start_pose.ang)
+            and (
+                start_scale is None
+                or end_scale is None
+                or np.allclose(end_scale, start_scale)
+            )
+        ):
+            return
+
+        if start_scale is None:
+            start_scale = np.ones(3, dtype=float)
+        if end_scale is None:
+            end_scale = start_scale.copy()
+
+        cmd = TransformEditCommand(
+            transform=tf,
+            old_pose=self._start_pose,
+            old_scale=start_scale,
+            new_pose=end_pose,
+            new_scale=end_scale,
+        )
+        self._undo_handler(cmd, False)
+
     def _end_drag(self):
+        if self.dragging:
+            self._commit_drag_to_undo()
+
         self.dragging = False
         self.drag_mode = None
         self.active_axis = None
@@ -482,6 +553,10 @@ class GizmoMoveController(InputComponent):
         self.start_mouse_x = 0.0
         self.start_mouse_y = 0.0
 
+        self._drag_transform = None
+        self._start_pose = None
+        self._start_scale = None
+
     # ---------- ПЕРЕМЕЩЕНИЕ ----------
 
     def _start_move(self, axis: str, viewport, x: float, y: float):
@@ -491,6 +566,14 @@ class GizmoMoveController(InputComponent):
 
         pose = self.target.transform.global_pose()
         self.start_target_pos = pose.lin.copy()
+
+        self._drag_transform = self.target.transform
+        self._start_pose = pose
+        ent = self.target
+        try:
+            self._start_scale = np.asarray(ent.scale, dtype=float).copy()
+        except Exception:
+            self._start_scale = None
 
         self.axis_vec = self._get_axis_vector(axis)
         self.axis_point = self.start_target_pos.copy()
@@ -570,9 +653,17 @@ class GizmoMoveController(InputComponent):
         self.start_target_pos = pose.lin.copy()
         self.start_target_ang = pose.ang.copy()
 
+        self._drag_transform = self.target.transform
+        self._start_pose = pose
+        ent = self.target
+        try:
+            self._start_scale = np.asarray(ent.scale, dtype=float).copy()
+        except Exception:
+            self._start_scale = None
+
         # мировая ось вращения – та же, что и направление стрелки/кольца
         self.rot_axis = self._get_axis_vector(axis)
-        if self.rot_axis is None is None:
+        if self.rot_axis is None:
             self._end_drag()
             return
 

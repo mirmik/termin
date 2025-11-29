@@ -213,10 +213,14 @@ class EditorWindow(QMainWindow):
         for ent in self.scene.entities:
             if isinstance(ent, GizmoEntity) or getattr(ent, "name", "") == "gizmo":
                 self.gizmo = ent
+                gizmo_ctrl = ent.find_component(GizmoMoveController)
+                if gizmo_ctrl is not None:
+                    gizmo_ctrl.set_undo_command_handler(self.push_undo_command)
                 return
 
         gizmo = GizmoEntity(size=1.5)
         gizmo_controller = GizmoMoveController(gizmo, self.scene)
+        gizmo_controller.set_undo_command_handler(self.push_undo_command)
         gizmo.add_component(gizmo_controller)
 
         if self.editor_entities is not None:
@@ -224,10 +228,6 @@ class EditorWindow(QMainWindow):
 
         self.scene.add(gizmo)
         self.gizmo = gizmo
-
-
-
-    # ----------- ресурсы из сцены -----------
 
     def _init_resources_from_scene(self):
         """
