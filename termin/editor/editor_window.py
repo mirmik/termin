@@ -2,7 +2,7 @@
 import os
 from PyQt5 import uic
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction
-from PyQt5.QtCore import Qt, QPoint
+from PyQt5.QtCore import Qt, QPoint, QEvent
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand
 
@@ -552,21 +552,29 @@ class EditorWindow(QMainWindow):
         gl_widget = self.viewport_window.handle.widget
         gl_widget.setFocusPolicy(Qt.StrongFocus)
         gl_widget.setMinimumSize(50, 50)
+        # хотим ловить нажатие Delete именно в виджете вьюпорта
+        gl_widget.installEventFilter(self)
 
         layout.addWidget(gl_widget)
 
         self.viewport.set_render_pipeline(self.make_pipeline())
 
+    def eventFilter(self, obj, event):
+        """
+        Перехватываем нажатие Delete в виджете вьюпорта и удаляем выделенную сущность.
+        """
+        if (
+            self.viewport_window is not None
+            and obj is self.viewport_window.handle.widget
+            and event.type() == QEvent.KeyPress
+            and event.key() == Qt.Key_Delete
+        ):
+            ent = getattr(self, "_selected_entity", None)
+            if isinstance(ent, Entity):
+                self._delete_entity_from_context(ent)
+            return True
 
-        def mouse_moved(self, x: float, y: float, viewport):
-            """
-            Вызывается Window'ом при каждом движении курсора.
-            Просто запоминаем, что надо сделать hover-pick после следующего рендера.
-            """
-            if viewport is None:
-                self._pending_hover = None
-                return
-            self._pending_hover = (x, y, viewport)
+        return super().eventFilter(obj, event)
 
     def _resync_inspector_from_selection(self):
         """
@@ -616,9 +624,20 @@ class EditorWindow(QMainWindow):
         if selected_ent is not None and selected_ent.selectable is False:
             # Мы пикнули что-то невыделяемое. Скорее всего гизмо.
             return
-        
-        self.selected_entity_id = self.viewport_window._get_pick_id_for_entity(selected_ent) if selected_ent is not None else 0
-        self.gizmo.find_component(GizmoMoveController).set_target(selected_ent)
+
+        # сохраняем ссылку, чтобы можно было удалить по клавише Delete
+        self._selected_entity = selected_ent
+
+        self.selected_entity_id = (
+            self.viewport_window._get_pick_id_for_entity(selected_ent)
+            if selected_ent is not None
+            else 0
+        )
+
+        if self.gizmo is not None:
+            gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
+            if gizmo_ctrl is not None:
+                gizmo_ctrl.set_target(selected_ent)
 
     def make_pipeline(self) -> list["FramePass"]:
         from termin.visualization.render.framegraph import ColorPass, IdPass, CanvasPass, PresentToScreenPass, GizmoPass
