@@ -28,6 +28,7 @@ termin/editor/run_editor.py
 termin/editor/editor_commands.py
 termin/editor/editor_window.py
 termin/editor/gizmo.py
+termin/visualization/entity.py
 !**/__pycache__/**
 
 

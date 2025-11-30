@@ -36,6 +36,7 @@ termin/editor/run_editor.py<br>
 termin/editor/editor_commands.py<br>
 termin/editor/editor_window.py<br>
 termin/editor/gizmo.py<br>
+termin/visualization/entity.py<br>
 !**/__pycache__/**<br>
 <br>
 <br>
