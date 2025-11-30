@@ -22,7 +22,7 @@ class UndoStackViewer(QDialog):
     Запускается как отдельное top-level окно поверх главного редактора.
     """
 
-    def __init__(self, undo_stack: UndoStack, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, undo_stack: UndoStack, parent: Optional[QWidget] = None, stack_changed_signal=None) -> None:
         super().__init__(parent)
         self._undo_stack = undo_stack
 
@@ -68,6 +68,9 @@ class UndoStackViewer(QDialog):
 
         refresh_button.clicked.connect(self.refresh)
         close_button.clicked.connect(self.close)
+
+        if stack_changed_signal is not None:
+            stack_changed_signal.connect(self.refresh)
 
         self.refresh()
 

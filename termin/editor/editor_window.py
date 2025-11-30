@@ -2,7 +2,7 @@
 import os
 from PyQt5 import uic
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog
-from PyQt5.QtCore import Qt, QPoint, QEvent
+from PyQt5.QtCore import Qt, QPoint, QEvent, pyqtSignal
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
@@ -23,6 +23,7 @@ from termin.visualization.platform.backends.base import Action, MouseButton
 
 
 class EditorWindow(QMainWindow):
+    undo_stack_changed = pyqtSignal()
     def __init__(self, world, scene):
         super().__init__()
         self.selected_entity_id = 0
@@ -171,6 +172,7 @@ class EditorWindow(QMainWindow):
         self.undo_stack.push(cmd, merge=merge)
         self._request_viewport_update()
         self._update_undo_redo_actions()
+        self.undo_stack_changed.emit()
 
     def undo(self) -> None:
         cmd = self.undo_stack.undo()
@@ -189,6 +191,8 @@ class EditorWindow(QMainWindow):
         self._request_viewport_update()
         self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
+        if cmd is not None:
+            self.undo_stack_changed.emit()
 
     def redo(self) -> None:
         cmd = self.undo_stack.redo()
@@ -207,6 +211,8 @@ class EditorWindow(QMainWindow):
         self._request_viewport_update()
         self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
+        if cmd is not None:
+            self.undo_stack_changed.emit()
     def _show_undo_stack_viewer(self) -> None:
         """
         Открывает отдельное окно с содержимым undo/redo стека.
@@ -214,7 +220,11 @@ class EditorWindow(QMainWindow):
         """
         if getattr(self, "_undo_stack_viewer", None) is None:
             from termin.editor.undo_stack_viewer import UndoStackViewer
-            self._undo_stack_viewer = UndoStackViewer(self.undo_stack, self)
+            self._undo_stack_viewer = UndoStackViewer(
+                self.undo_stack,
+                self,
+                stack_changed_signal=self.undo_stack_changed,
+            )
 
         self._undo_stack_viewer.refresh()
         self._undo_stack_viewer.show()

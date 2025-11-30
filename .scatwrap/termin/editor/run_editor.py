@@ -102,13 +102,14 @@ def&nbsp;apply_dark_palette(app:&nbsp;QApplication):<br>
 <br>
 <br>
 def&nbsp;run_editor():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;app&nbsp;=&nbsp;QApplication(sys.argv)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;set_default_graphics_backend(OpenGLGraphicsBackend())<br>
 &nbsp;&nbsp;&nbsp;&nbsp;set_default_window_backend(QtWindowBackend())<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;world&nbsp;=&nbsp;VisualizationWorld()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;scene&nbsp;=&nbsp;build_scene(world)<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;app&nbsp;=&nbsp;QApplication(sys.argv)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;apply_dark_palette(app)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;win&nbsp;=&nbsp;EditorWindow(world,&nbsp;scene)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;win.show()<br>

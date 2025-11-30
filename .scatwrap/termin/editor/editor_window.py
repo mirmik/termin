@@ -10,7 +10,7 @@
 import&nbsp;os<br>
 from&nbsp;PyQt5&nbsp;import&nbsp;uic<br>
 from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;QMainWindow,&nbsp;QWidget,&nbsp;QVBoxLayout,&nbsp;QTreeView,&nbsp;QLabel,&nbsp;QMenu,&nbsp;QAction,&nbsp;QInputDialog<br>
-from&nbsp;PyQt5.QtCore&nbsp;import&nbsp;Qt,&nbsp;QPoint,&nbsp;QEvent<br>
+from&nbsp;PyQt5.QtCore&nbsp;import&nbsp;Qt,&nbsp;QPoint,&nbsp;QEvent,&nbsp;pyqtSignal<br>
 from&nbsp;termin.editor.undo_stack&nbsp;import&nbsp;UndoStack,&nbsp;UndoCommand<br>
 from&nbsp;termin.editor.editor_commands&nbsp;import&nbsp;AddEntityCommand,&nbsp;DeleteEntityCommand,&nbsp;RenameEntityCommand<br>
 from&nbsp;termin.editor.scene_tree_controller&nbsp;import&nbsp;SceneTreeController<br>
@@ -31,6 +31,7 @@ from&nbsp;termin.visualization.platform.backends.base&nbsp;import&nbsp;Action,&n
 <br>
 <br>
 class&nbsp;EditorWindow(QMainWindow):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;undo_stack_changed&nbsp;=&nbsp;pyqtSignal()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;world,&nbsp;scene):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.selected_entity_id&nbsp;=&nbsp;0<br>
@@ -179,6 +180,7 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.undo_stack.push(cmd,&nbsp;merge=merge)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._request_viewport_update()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_undo_redo_actions()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.undo_stack_changed.emit()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;undo(self)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmd&nbsp;=&nbsp;self.undo_stack.undo()<br>
@@ -197,6 +199,8 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._request_viewport_update()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._resync_inspector_from_selection()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_undo_redo_actions()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;cmd&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.undo_stack_changed.emit()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;redo(self)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmd&nbsp;=&nbsp;self.undo_stack.redo()<br>
@@ -215,6 +219,8 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._request_viewport_update()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._resync_inspector_from_selection()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_undo_redo_actions()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;cmd&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.undo_stack_changed.emit()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_show_undo_stack_viewer(self)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Открывает&nbsp;отдельное&nbsp;окно&nbsp;с&nbsp;содержимым&nbsp;undo/redo&nbsp;стека.<br>
@@ -222,7 +228,11 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;getattr(self,&nbsp;&quot;_undo_stack_viewer&quot;,&nbsp;None)&nbsp;is&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.editor.undo_stack_viewer&nbsp;import&nbsp;UndoStackViewer<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._undo_stack_viewer&nbsp;=&nbsp;UndoStackViewer(self.undo_stack,&nbsp;self)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._undo_stack_viewer&nbsp;=&nbsp;UndoStackViewer(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.undo_stack,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stack_changed_signal=self.undo_stack_changed,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._undo_stack_viewer.refresh()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._undo_stack_viewer.show()<br>

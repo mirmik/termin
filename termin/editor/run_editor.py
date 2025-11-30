@@ -94,13 +94,14 @@ def apply_dark_palette(app: QApplication):
 
 
 def run_editor():
+    app = QApplication(sys.argv)
+    
     set_default_graphics_backend(OpenGLGraphicsBackend())
     set_default_window_backend(QtWindowBackend())
 
     world = VisualizationWorld()
     scene = build_scene(world)
 
-    app = QApplication(sys.argv)
     apply_dark_palette(app)
     win = EditorWindow(world, scene)
     win.show()

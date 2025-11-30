@@ -1,15 +1,106 @@
+description: "Добавлен сигнал об изменении undo-стека и подключение UndoStackViewer к этому сигналу"
+language: "ru"
 operations:
-  - op: insert_after_text
-    path: termin/editor/transform_inspector.py
-    marker: "class TransformInspector(QWidget):"
+  - op: replace_text
+    comment: "Добавляем импорт pyqtSignal в editor_window.py"
+    path: termin/editor/editor_window.py
+    marker: |
+      from PyQt5.QtCore import Qt, QPoint, QEvent
     payload: |
-      # Обработчик для отправки команд в общий undo-стек редактора.
-      # handler(cmd, merge=False) -> None
-          def set_undo_command_handler(self, handler):
-              """
-              Зарегистрировать обработчик команд undo/redo для этого инспектора.
+      from PyQt5.QtCore import Qt, QPoint, QEvent, pyqtSignal
 
-              handler должен быть вызываемым объектом:
-                  handler(cmd, merge=False) -> None
-              """
-              self._push_undo_command = handler
+  - op: insert_after_text
+    comment: "Объявляем сигнал undo_stack_changed в классе EditorWindow"
+    path: termin/editor/editor_window.py
+    marker: |
+      class EditorWindow(QMainWindow):
+    payload: |
+      class EditorWindow(QMainWindow):
+          undo_stack_changed = pyqtSignal()
+
+  - op: replace_py_method
+    comment: "Эмитим сигнал undo_stack_changed при добавлении новой команды в стек"
+    path: termin/editor/editor_window.py
+    class: EditorWindow
+    method: push_undo_command
+    payload: |
+      def push_undo_command(self, cmd: UndoCommand, merge: bool = False) -> None:
+          """
+          Добавить команду в undo-стек редактора.
+          merge=True — попытаться слить с предыдущей (для крутилок трансформа).
+          """
+          self.undo_stack.push(cmd, merge=merge)
+          self._request_viewport_update()
+          self._update_undo_redo_actions()
+          self.undo_stack_changed.emit()
+
+  - op: replace_py_method
+    comment: "Эмитим сигнал undo_stack_changed после операции undo"
+    path: termin/editor/editor_window.py
+    class: EditorWindow
+    method: undo
+    payload: |
+      def undo(self) -> None:
+          cmd = self.undo_stack.undo()
+          select_obj = None
+
+          if isinstance(cmd, AddEntityCommand):
+              select_obj = cmd.parent_entity
+          elif isinstance(cmd, DeleteEntityCommand):
+              select_obj = cmd.entity
+          elif isinstance(cmd, RenameEntityCommand):
+              select_obj = cmd.entity
+
+          if self.scene_tree_controller is not None:
+              self.scene_tree_controller.rebuild(select_obj=select_obj)
+
+          self._request_viewport_update()
+          self._resync_inspector_from_selection()
+          self._update_undo_redo_actions()
+          self.undo_stack_changed.emit()
+
+  - op: replace_py_method
+    comment: "Эмитим сигнал undo_stack_changed после операции redo"
+    path: termin/editor/editor_window.py
+    class: EditorWindow
+    method: redo
+    payload: |
+      def redo(self) -> None:
+          cmd = self.undo_stack.redo()
+          select_obj = None
+
+          if isinstance(cmd, AddEntityCommand):
+              select_obj = cmd.entity
+          elif isinstance(cmd, DeleteEntityCommand):
+              select_obj = cmd.parent_entity
+          elif isinstance(cmd, RenameEntityCommand):
+              select_obj = cmd.entity
+
+          if self.scene_tree_controller is not None:
+              self.scene_tree_controller.rebuild(select_obj=select_obj)
+
+          self._request_viewport_update()
+          self._resync_inspector_from_selection()
+          self._update_undo_redo_actions()
+          self.undo_stack_changed.emit()
+
+  - op: replace_py_method
+    comment: "Подключаем UndoStackViewer к сигналу undo_stack_changed, чтобы он обновлялся динамически"
+    path: termin/editor/editor_window.py
+    class: EditorWindow
+    method: _show_undo_stack_viewer
+    payload: |
+      def _show_undo_stack_viewer(self) -> None:
+          """
+          Открывает отдельное окно с содержимым undo/redo стека.
+          Окно живёт как независимый top-level, не блокируя основной интерфейс.
+          """
+          if getattr(self, "_undo_stack_viewer", None) is None:
+              from termin.editor.undo_stack_viewer import UndoStackViewer
+              self._undo_stack_viewer = UndoStackViewer(self.undo_stack, self)
+              self.undo_stack_changed.connect(self._undo_stack_viewer.refresh)
+
+          self._undo_stack_viewer.refresh()
+          self._undo_stack_viewer.show()
+          self._undo_stack_viewer.raise_()
+          self._undo_stack_viewer.activateWindow()

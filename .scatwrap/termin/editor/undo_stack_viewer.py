@@ -30,7 +30,7 @@ class&nbsp;UndoStackViewer(QDialog):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;Запускается&nbsp;как&nbsp;отдельное&nbsp;top-level&nbsp;окно&nbsp;поверх&nbsp;главного&nbsp;редактора.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;undo_stack:&nbsp;UndoStack,&nbsp;parent:&nbsp;Optional[QWidget]&nbsp;=&nbsp;None)&nbsp;-&gt;&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;undo_stack:&nbsp;UndoStack,&nbsp;parent:&nbsp;Optional[QWidget]&nbsp;=&nbsp;None,&nbsp;stack_changed_signal=None)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._undo_stack&nbsp;=&nbsp;undo_stack<br>
 <br>
@@ -76,6 +76,9 @@ class&nbsp;UndoStackViewer(QDialog):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;refresh_button.clicked.connect(self.refresh)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;close_button.clicked.connect(self.close)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;stack_changed_signal&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stack_changed_signal.connect(self.refresh)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.refresh()<br>
 <br>

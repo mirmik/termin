@@ -30,13 +30,10 @@ AGENTS.md<br>
 termin/editor/editor.ui<br>
 termin/editor/editor_inspector.py<br>
 termin/editor/transform_inspector.py<br>
-termin/editor/inspect_field.py<br>
 termin/editor/undo_stack.py<br>
-termin/editor/run_editor.py<br>
+termin/editor/undo_stack_viewer.py<br>
 termin/editor/editor_commands.py<br>
 termin/editor/editor_window.py<br>
-termin/editor/gizmo.py<br>
-termin/visualization/entity.py<br>
 !**/__pycache__/**<br>
 <br>
 <br>
