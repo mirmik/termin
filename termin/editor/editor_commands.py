@@ -223,30 +223,11 @@ class AddEntityCommand(UndoCommand):
         if self._parent_transform is not None:
             self._entity.transform.set_parent(self._parent_transform)
 
-        scene_entities = getattr(self._scene, "entities", None)
-        if scene_entities is not None and self._entity in scene_entities:
-            return
-
-        if hasattr(self._scene, "add"):
-            self._scene.add(self._entity)
-        elif scene_entities is not None:
-            scene_entities.append(self._entity)
+        self._scene.add(self._entity)
 
     def undo(self) -> None:
-        if hasattr(self._scene, "remove"):
-            self._scene.remove(self._entity)
-            return
-
-        scene_entities = getattr(self._scene, "entities", None)
-        if scene_entities is None:
-            return
-
-        try:
-            scene_entities.remove(self._entity)
-            self._entity.on_removed()
-        except ValueError:
-            pass
-
+        self._scene.remove(self._entity)
+        
 
 class DeleteEntityCommand(UndoCommand):
     """
@@ -278,42 +259,15 @@ class DeleteEntityCommand(UndoCommand):
         return getattr(self._parent_transform, "entity", None)
 
     def do(self) -> None:
-        if hasattr(self._scene, "remove"):
-            self._scene.remove(self._entity)
-            return
-
-        scene_entities = getattr(self._scene, "entities", None)
-        if scene_entities is None:
-            return
-
-        try:
-            scene_entities.remove(self._entity)
-            self._entity.on_removed()
-        except ValueError:
-            pass
+        self._scene.remove(self._entity)
 
     def undo(self) -> None:
         if self._parent_transform is not None:
             self._entity.transform.set_parent(self._parent_transform)
 
-        scene_entities = getattr(self._scene, "entities", None)
-        if scene_entities is not None and self._entity in scene_entities:
-            return
-
-        if hasattr(self._scene, "add"):
-            self._scene.add(self._entity)
-        elif scene_entities is not None:
-            scene_entities.append(self._entity)
+        self._scene.add(self._entity)
 
 
-__all__ = [
-  "TransformEditCommand",
-  "ComponentFieldEditCommand",
-  "AddComponentCommand",
-  "RemoveComponentCommand",
-  "AddEntityCommand",
-  "DeleteEntityCommand",
-]
 __all__ = [
     "TransformEditCommand",
     "ComponentFieldEditCommand",

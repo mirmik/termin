@@ -68,6 +68,4 @@ def test_example_runs_one_frame(module_name, monkeypatch):
 
     # --- 5. Импортируем модуль и запускаем его main() ---
     module = importlib.import_module(module_name)
-
-    if hasattr(module, "main"):
-        module.main()
+    module.main()

@@ -93,8 +93,6 @@ class&nbsp;UIText(UIElement):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;material:&nbsp;Material&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;draw(self,&nbsp;canvas,&nbsp;graphics,&nbsp;context_key,&nbsp;viewport):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;hasattr(canvas,&nbsp;&quot;font&quot;):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material&nbsp;=&nbsp;self._require_material()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;material.apply(IDENTITY,&nbsp;IDENTITY,&nbsp;IDENTITY,&nbsp;graphics=graphics,&nbsp;context_key=context_key)<br>
 <br>

@@ -123,10 +123,8 @@ class MeshRenderer(Component):
 
             shader = mat.shader
 
-            if hasattr(context.scene, "light_direction"):
-                shader.set_uniform_vec3("u_light_dir", context.scene.light_direction)
-            if hasattr(context.scene, "light_color"):
-                shader.set_uniform_vec3("u_light_color", context.scene.light_color)
+            shader.set_uniform_vec3("u_light_dir", context.scene.light_direction)
+            shader.set_uniform_vec3("u_light_color", context.scene.light_color)
 
             self.mesh.draw(context)
 

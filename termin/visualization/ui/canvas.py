@@ -53,9 +53,8 @@ class Canvas:
 
         # проходим с конца (верхние слои имеют приоритет)
         for elem in reversed(self.elements):
-            if hasattr(elem, "contains"):
-                if elem.contains(nx, ny):
-                    return elem
+            if elem.contains(nx, ny):
+                return elem
         return None
 
     def mouse_down(self, x, y, viewport_rect):

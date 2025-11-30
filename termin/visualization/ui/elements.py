@@ -85,8 +85,6 @@ class UIText(UIElement):
     material: Material | None = None
 
     def draw(self, canvas, graphics, context_key, viewport):
-        if not hasattr(canvas, "font"):
-            return
         material = self._require_material()
         material.apply(IDENTITY, IDENTITY, IDENTITY, graphics=graphics, context_key=context_key)
 
