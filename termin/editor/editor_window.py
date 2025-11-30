@@ -32,6 +32,7 @@ class EditorWindow(QMainWindow):
         self._action_undo = None
         self._action_redo = None
         self._undo_stack_viewer = None
+        self._framegraph_debugger = None
 
         self.world = world
         self.scene = scene
@@ -151,6 +152,8 @@ class EditorWindow(QMainWindow):
         self._action_redo.triggered.connect(self.redo)
 
         debug_action = debug_menu.addAction("Undo/Redo Stack...")
+        tex_debug_action = debug_menu.addAction("Framegraph Texture Viewer...")
+        tex_debug_action.triggered.connect(self._show_framegraph_debugger)
         debug_action.triggered.connect(self._show_undo_stack_viewer)
 
         self._update_undo_redo_actions()
@@ -230,6 +233,33 @@ class EditorWindow(QMainWindow):
         self._undo_stack_viewer.show()
         self._undo_stack_viewer.raise_()
         self._undo_stack_viewer.activateWindow()
+
+    def _show_framegraph_debugger(self) -> None:
+        """
+        Открывает отдельное окно с просмотром текстуры из framegraph
+        (по умолчанию ресурса 'color' основного viewport).
+        """
+        if self.viewport_window is None:
+            return
+        if self.viewport is None:
+            return
+
+        if self._framegraph_debugger is None:
+            from termin.editor.framegraph_debugger import FramegraphDebugDialog
+
+            graphics = self.viewport_window.graphics
+            viewport = self.viewport
+
+            self._framegraph_debugger = FramegraphDebugDialog(
+                graphics=graphics,
+                viewport=viewport,
+                resource_name="color",
+                parent=self,
+            )
+
+        self._framegraph_debugger.show()
+        self._framegraph_debugger.raise_()
+        self._framegraph_debugger.activateWindow()
 
     # ----------- вспомогательные сущности редактора -----------
 
@@ -346,6 +376,9 @@ class EditorWindow(QMainWindow):
     def _request_viewport_update(self) -> None:
         if self.viewport_controller is not None:
             self.viewport_controller.request_update()
+
+        if self._framegraph_debugger is not None:
+            self._framegraph_debugger.request_update()
 
     def _on_tree_object_selected(self, obj: object | None) -> None:
         """

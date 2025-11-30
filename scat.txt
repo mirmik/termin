@@ -26,7 +26,21 @@ termin/editor/undo_stack.py
 termin/editor/undo_stack_viewer.py
 termin/editor/editor_commands.py
 termin/editor/editor_window.py
+termin/visualization/platform/backends/qt.py
 !**/__pycache__/**
+
+[VAR(fgraph)]
+termin/editor/editor.ui
+termin/editor/editor_window.py
+termin/visualization/render/framegraph/context.py
+termin/visualization/render/framegraph/core.py
+termin/visualization/platform/window.py
+termin/visualization/render/shader.py
+
+
+!**/__pycache__/**
+
+
 
 
 [TREE]
