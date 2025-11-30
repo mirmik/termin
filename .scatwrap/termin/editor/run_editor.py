@@ -11,6 +11,7 @@ import&nbsp;sys<br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 from&nbsp;PyQt5.QtGui&nbsp;import&nbsp;QPalette,&nbsp;QColor<br>
 from&nbsp;PyQt5.QtWidgets&nbsp;import&nbsp;QApplication<br>
+from&nbsp;PyQt5&nbsp;import&nbsp;QtCore<br>
 <br>
 from&nbsp;termin.editor.editor_window&nbsp;import&nbsp;EditorWindow<br>
 from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
@@ -102,6 +103,7 @@ def&nbsp;apply_dark_palette(app:&nbsp;QApplication):<br>
 <br>
 <br>
 def&nbsp;run_editor():<br>
+&nbsp;&nbsp;&nbsp;&nbsp;QApplication.setAttribute(QtCore.Qt.AA_ShareOpenGLContexts,&nbsp;True)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;app&nbsp;=&nbsp;QApplication(sys.argv)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;set_default_graphics_backend(OpenGLGraphicsBackend())<br>

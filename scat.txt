@@ -27,6 +27,7 @@ termin/editor/undo_stack_viewer.py
 termin/editor/editor_commands.py
 termin/editor/editor_window.py
 termin/visualization/platform/backends/qt.py
+termin/editor/framegraph_debugger.py
 !**/__pycache__/**
 
 [VAR(fgraph)]

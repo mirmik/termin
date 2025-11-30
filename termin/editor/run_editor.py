@@ -3,6 +3,7 @@ import sys
 import numpy as np
 from PyQt5.QtGui import QPalette, QColor
 from PyQt5.QtWidgets import QApplication
+from PyQt5 import QtCore
 
 from termin.editor.editor_window import EditorWindow
 from termin.geombase.pose3 import Pose3
@@ -94,6 +95,7 @@ def apply_dark_palette(app: QApplication):
 
 
 def run_editor():
+    QApplication.setAttribute(QtCore.Qt.AA_ShareOpenGLContexts, True)
     app = QApplication(sys.argv)
     
     set_default_graphics_backend(OpenGLGraphicsBackend())

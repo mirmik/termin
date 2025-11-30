@@ -103,6 +103,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
         gl.glBindVertexArray(0)
 
+        print("Initialized fullscreen quad VAO/VBO:", vao, vbo)
         self._vao = vao
         self._vbo = vbo
 
@@ -110,7 +111,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         """
         Qt создал контекст, здесь можно инициализировать ресурсы.
         """
-        self._graphics.ensure_ready()
+        
         self._get_shader()
         self._init_fullscreen_quad()
 
@@ -142,6 +143,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         gl.glClearColor(0.1, 0.1, 0.1, 1.0)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
+        print("Painting FBO texture:", self._resource_name, "FBO:", fb)
         if fb is None:
             # Пока нет FBO – просто фон.
             return
@@ -152,7 +154,15 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         shader.use()
         shader.set_uniform_int("u_tex", 0)
 
+        print("Binding texture:", tex)
         tex.bind(0)
+
+        print("glIsTexture:", tex._tex_id, gl.glIsTexture(tex._tex_id))
+
+        w = gl.glGetTexLevelParameteriv(gl.GL_TEXTURE_2D, 0, gl.GL_TEXTURE_WIDTH)
+        h = gl.glGetTexLevelParameteriv(gl.GL_TEXTURE_2D, 0, gl.GL_TEXTURE_HEIGHT)
+        print("debug tex size:", w, h)
+
 
         gl.glDisable(gl.GL_DEPTH_TEST)
         gl.glDepthMask(gl.GL_FALSE)
@@ -161,6 +171,8 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         gl.glBindVertexArray(self._vao)
         gl.glDrawArrays(gl.GL_TRIANGLE_STRIP, 0, 4)
         gl.glBindVertexArray(0)
+
+        print("Finished drawing fullscreen quad")
 
         gl.glDepthMask(gl.GL_TRUE)
         gl.glEnable(gl.GL_DEPTH_TEST)

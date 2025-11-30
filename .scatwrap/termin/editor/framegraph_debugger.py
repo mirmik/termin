@@ -111,6 +111,7 @@ class&nbsp;FramegraphTextureWidget(QtWidgets.QOpenGLWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindBuffer(gl.GL_ARRAY_BUFFER,&nbsp;0)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(0)<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Initialized&nbsp;fullscreen&nbsp;quad&nbsp;VAO/VBO:&quot;,&nbsp;vao,&nbsp;vbo)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vao&nbsp;=&nbsp;vao<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._vbo&nbsp;=&nbsp;vbo<br>
 <br>
@@ -118,7 +119,7 @@ class&nbsp;FramegraphTextureWidget(QtWidgets.QOpenGLWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Qt&nbsp;создал&nbsp;контекст,&nbsp;здесь&nbsp;можно&nbsp;инициализировать&nbsp;ресурсы.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._graphics.ensure_ready()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._get_shader()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._init_fullscreen_quad()<br>
 <br>
@@ -150,6 +151,7 @@ class&nbsp;FramegraphTextureWidget(QtWidgets.QOpenGLWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClearColor(0.1,&nbsp;0.1,&nbsp;0.1,&nbsp;1.0)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClear(gl.GL_COLOR_BUFFER_BIT&nbsp;|&nbsp;gl.GL_DEPTH_BUFFER_BIT)<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Painting&nbsp;FBO&nbsp;texture:&quot;,&nbsp;self._resource_name,&nbsp;&quot;FBO:&quot;,&nbsp;fb)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fb&nbsp;is&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пока&nbsp;нет&nbsp;FBO&nbsp;–&nbsp;просто&nbsp;фон.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
@@ -160,7 +162,15 @@ class&nbsp;FramegraphTextureWidget(QtWidgets.QOpenGLWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.use()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_tex&quot;,&nbsp;0)<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Binding&nbsp;texture:&quot;,&nbsp;tex)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tex.bind(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;glIsTexture:&quot;,&nbsp;tex._tex_id,&nbsp;gl.glIsTexture(tex._tex_id))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w&nbsp;=&nbsp;gl.glGetTexLevelParameteriv(gl.GL_TEXTURE_2D,&nbsp;0,&nbsp;gl.GL_TEXTURE_WIDTH)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;=&nbsp;gl.glGetTexLevelParameteriv(gl.GL_TEXTURE_2D,&nbsp;0,&nbsp;gl.GL_TEXTURE_HEIGHT)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;debug&nbsp;tex&nbsp;size:&quot;,&nbsp;w,&nbsp;h)<br>
+<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDisable(gl.GL_DEPTH_TEST)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDepthMask(gl.GL_FALSE)<br>
@@ -169,6 +179,8 @@ class&nbsp;FramegraphTextureWidget(QtWidgets.QOpenGLWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(self._vao)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDrawArrays(gl.GL_TRIANGLE_STRIP,&nbsp;0,&nbsp;4)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glBindVertexArray(0)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;Finished&nbsp;drawing&nbsp;fullscreen&nbsp;quad&quot;)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glDepthMask(gl.GL_TRUE)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glEnable(gl.GL_DEPTH_TEST)<br>
