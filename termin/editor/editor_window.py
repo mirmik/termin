@@ -30,6 +30,7 @@ class EditorWindow(QMainWindow):
         self.undo_stack = UndoStack()
         self._action_undo = None
         self._action_redo = None
+        self._undo_stack_viewer = None
 
         self.world = world
         self.scene = scene
@@ -128,11 +129,13 @@ class EditorWindow(QMainWindow):
     def _setup_menu_bar(self) -> None:
         """
         Создаёт верхнее меню редактора и вешает действия Undo/Redo с шорткатами.
+        Также добавляет отладочное меню Debug с просмотром undo/redo стека.
         """
         menu_bar = self.menuBar()
 
         file_menu = menu_bar.addMenu("File")
         edit_menu = menu_bar.addMenu("Edit")
+        debug_menu = menu_bar.addMenu("Debug")
 
         exit_action = file_menu.addAction("Exit")
         exit_action.setShortcut("Ctrl+Q")
@@ -145,6 +148,9 @@ class EditorWindow(QMainWindow):
         self._action_redo = edit_menu.addAction("Redo")
         self._action_redo.setShortcut("Ctrl+Shift+Z")
         self._action_redo.triggered.connect(self.redo)
+
+        debug_action = debug_menu.addAction("Undo/Redo Stack...")
+        debug_action.triggered.connect(self._show_undo_stack_viewer)
 
         self._update_undo_redo_actions()
 
@@ -201,6 +207,19 @@ class EditorWindow(QMainWindow):
         self._request_viewport_update()
         self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
+    def _show_undo_stack_viewer(self) -> None:
+        """
+        Открывает отдельное окно с содержимым undo/redo стека.
+        Окно живёт как независимый top-level, не блокируя основной интерфейс.
+        """
+        if getattr(self, "_undo_stack_viewer", None) is None:
+            from termin.editor.undo_stack_viewer import UndoStackViewer
+            self._undo_stack_viewer = UndoStackViewer(self.undo_stack, self)
+
+        self._undo_stack_viewer.refresh()
+        self._undo_stack_viewer.show()
+        self._undo_stack_viewer.raise_()
+        self._undo_stack_viewer.activateWindow()
 
     # ----------- вспомогательные сущности редактора -----------
 
