@@ -12,6 +12,8 @@ examples/apps/*<br>
 scat.txt<br>
 TECHNICAL_NOTES.md<br>
 AGENTS.md<br>
+!**.*pyc<br>
+!**/__pycache__/**<br>
 <br>
 [VAR(map)]<br>
 termin/**<br>
@@ -22,6 +24,7 @@ examples/**<br>
 scat.txt<br>
 TECHNICAL_NOTES.md<br>
 AGENTS.md<br>
+!**/__pycache__/**<br>
 <br>
 [VAR(editor)]<br>
 termin/editor/editor.ui<br>
@@ -33,6 +36,7 @@ termin/editor/run_editor.py<br>
 termin/editor/editor_commands.py<br>
 termin/editor/editor_window.py<br>
 termin/editor/gizmo.py<br>
+!**/__pycache__/**<br>
 <br>
 <br>
 [TREE]<br>
@@ -42,6 +46,8 @@ examples/**<br>
 scat.txt<br>
 TECHNICAL_NOTES.md<br>
 AGENTS.md<br>
+!**.*pyc<br>
+!**/__pycache__/**<br>
 <br>
 <br>
 [MAPFORMAT]<br>

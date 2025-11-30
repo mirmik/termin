@@ -26,7 +26,7 @@ from&nbsp;termin.visualization&nbsp;import&nbsp;(<br>
 from&nbsp;termin.visualization.render.components&nbsp;import&nbsp;MeshRenderer<br>
 from&nbsp;termin.visualization.render.shader&nbsp;import&nbsp;ShaderProgram<br>
 from&nbsp;termin.visualization.render.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
-from&nbsp;termin.editor.gizmo_axes&nbsp;import&nbsp;GizmoEntity,&nbsp;GizmoMoveController<br>
+from&nbsp;termin.editor.gizmo&nbsp;import&nbsp;GizmoEntity,&nbsp;GizmoMoveController<br>
 from&nbsp;termin.visualization.core.scene&nbsp;import&nbsp;Scene<br>
 <br>
 def&nbsp;build_scene(world:&nbsp;VisualizationWorld)&nbsp;-&gt;&nbsp;tuple[Scene,&nbsp;PerspectiveCameraComponent]:<br>

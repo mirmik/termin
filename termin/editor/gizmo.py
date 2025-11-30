@@ -761,3 +761,86 @@ class GizmoMoveController(InputComponent):
         self.gizmo.transform.relocate_global(
             self.target.transform.global_pose()
         )
+class GizmoController:
+    """
+    Обёртка над GizmoEntity и GizmoMoveController:
+    - ищет/создаёт гизмо в сцене;
+    - назначает обработчик undo-команд;
+    - умеет запускать drag по цвету из pick-буфера;
+    - даёт список вспомогательной геометрии для GizmoPass.
+    """
+
+    def __init__(self, scene, editor_entities=None, undo_handler: Optional[Callable[[UndoCommand, bool], None]] = None):
+        self.scene = scene
+        self.editor_entities = editor_entities
+        self._undo_handler = undo_handler
+
+        self.gizmo: GizmoEntity | None = None
+        self._ensure_gizmo()
+
+    def _ensure_gizmo(self):
+        for ent in self.scene.entities:
+            if isinstance(ent, GizmoEntity) or getattr(ent, "name", "") == "gizmo":
+                self.gizmo = ent
+                gizmo_ctrl = ent.find_component(GizmoMoveController)
+                if gizmo_ctrl is not None:
+                    gizmo_ctrl.set_undo_command_handler(self._undo_handler)
+                return
+
+        gizmo = GizmoEntity(size=1.5)
+        gizmo_controller = GizmoMoveController(gizmo, self.scene)
+        gizmo_controller.set_undo_command_handler(self._undo_handler)
+        gizmo.add_component(gizmo_controller)
+
+        if self.editor_entities is not None:
+            self.editor_entities.transform.add_child(gizmo.transform)
+
+        self.scene.add(gizmo)
+        self.gizmo = gizmo
+
+    def set_target(self, target_entity: Entity | None) -> None:
+        if self.gizmo is None:
+            return
+        gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
+        if gizmo_ctrl is not None:
+            gizmo_ctrl.set_target(target_entity)
+
+    def helper_geometry_entities(self) -> list[Entity]:
+        if self.gizmo is None:
+            return []
+        return self.gizmo.helper_geometry_entities()
+
+    def handle_pick_press_with_color(self, x: float, y: float, viewport, picked_color) -> bool:
+        """
+        Возвращает True, если клик по pick-буферу был обработан гизмо
+        (начата операция перемещения или вращения).
+        """
+        if self.gizmo is None:
+            return False
+
+        alpha = picked_color[3]
+        if alpha == 0:
+            return False
+
+        helpers = self.gizmo.helper_geometry_entities()
+        maxindex = len(helpers)
+        index = int(round(alpha * float(maxindex))) - 1
+        if index < 0 or index >= maxindex:
+            return False
+
+        picked_ent = helpers[index]
+        axis = picked_ent.name[0]
+
+        gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
+        if gizmo_ctrl is None:
+            return False
+
+        if picked_ent.name.endswith("head") or picked_ent.name.endswith("shaft"):
+            gizmo_ctrl.start_translate_from_pick(axis, viewport, x, y)
+            return True
+
+        if picked_ent.name.endswith("ring"):
+            gizmo_ctrl.start_rotate_from_pick(axis, viewport, x, y)
+            return True
+
+        return False
