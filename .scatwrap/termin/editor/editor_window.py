@@ -348,7 +348,7 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Колбэк&nbsp;от&nbsp;ViewportController&nbsp;при&nbsp;выборе&nbsp;сущности&nbsp;кликом&nbsp;в&nbsp;вьюпорте.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Синхронизируем&nbsp;выделение&nbsp;в&nbsp;дереве&nbsp;и&nbsp;инспекторе.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;getattr(ent,&nbsp;&quot;selectable&quot;,&nbsp;True)&nbsp;is&nbsp;False:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;not&nbsp;ent.selectable:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;None<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.on_selection_changed(ent)<br>
@@ -408,7 +408,7 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Обновляем&nbsp;идентификатор&nbsp;hover-сущности&nbsp;для&nbsp;подсветки.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;getattr(ent,&nbsp;&quot;selectable&quot;,&nbsp;True)&nbsp;is&nbsp;False:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;not&nbsp;ent.selectable:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ent&nbsp;=&nbsp;None<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.viewport_controller&nbsp;is&nbsp;not&nbsp;None:<br>
@@ -429,7 +429,7 @@ class&nbsp;EditorWindow(QMainWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Обновляем&nbsp;текущее&nbsp;выделение,&nbsp;гизмо&nbsp;и&nbsp;id&nbsp;для&nbsp;подсветки.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;selected_ent&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;getattr(selected_ent,&nbsp;&quot;selectable&quot;,&nbsp;True)&nbsp;is&nbsp;False:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;selected_ent&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;not&nbsp;selected_ent.selectable:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._selected_entity&nbsp;=&nbsp;selected_ent<br>

@@ -340,7 +340,7 @@ class EditorWindow(QMainWindow):
         Колбэк от ViewportController при выборе сущности кликом в вьюпорте.
         Синхронизируем выделение в дереве и инспекторе.
         """
-        if ent is not None and getattr(ent, "selectable", True) is False:
+        if ent is not None and not ent.selectable:
             ent = None
 
         self.on_selection_changed(ent)
@@ -400,7 +400,7 @@ class EditorWindow(QMainWindow):
         """
         Обновляем идентификатор hover-сущности для подсветки.
         """
-        if ent is not None and getattr(ent, "selectable", True) is False:
+        if ent is not None and not ent.selectable:
             ent = None
 
         if self.viewport_controller is not None:
@@ -421,7 +421,7 @@ class EditorWindow(QMainWindow):
         """
         Обновляем текущее выделение, гизмо и id для подсветки.
         """
-        if selected_ent is not None and getattr(selected_ent, "selectable", True) is False:
+        if selected_ent is not None and not selected_ent.selectable:
             return
 
         self._selected_entity = selected_ent

@@ -161,8 +161,8 @@ class&nbsp;Entity:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.priority&nbsp;=&nbsp;priority&nbsp;&nbsp;#&nbsp;rendering&nbsp;priority,&nbsp;lower&nbsp;values&nbsp;drawn&nbsp;first<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._components:&nbsp;List[Component]&nbsp;=&nbsp;[]<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scene:&nbsp;Optional[&quot;Scene&quot;]&nbsp;=&nbsp;None<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pickable&nbsp;=&nbsp;pickable&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&lt;---&nbsp;и&nbsp;это<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.selectable&nbsp;=&nbsp;selectable&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&lt;---&nbsp;и&nbsp;это<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pickable&nbsp;=&nbsp;pickable&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.selectable&nbsp;=&nbsp;selectable&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;@property<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;scale(self)&nbsp;-&gt;&nbsp;np.ndarray:<br>

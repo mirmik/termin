@@ -153,8 +153,8 @@ class Entity:
         self.priority = priority  # rendering priority, lower values drawn first
         self._components: List[Component] = []
         self.scene: Optional["Scene"] = None
-        self.pickable = pickable       # <--- и это
-        self.selectable = selectable       # <--- и это
+        self.pickable = pickable     
+        self.selectable = selectable      
 
     @property
     def scale(self) -> np.ndarray:
