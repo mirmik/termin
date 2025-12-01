@@ -219,6 +219,7 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Устанавливает&nbsp;имя&nbsp;ресурса&nbsp;framegraph,&nbsp;из&nbsp;которого&nbsp;BlitPass&nbsp;будет&nbsp;копировать&nbsp;текстуру.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._debug_source_res&nbsp;=&nbsp;name<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.request_update()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_debug_source_resource(self)&nbsp;-&gt;&nbsp;str:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
@@ -238,6 +239,7 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Включает&nbsp;или&nbsp;выключает&nbsp;паузу&nbsp;BlitPass:&nbsp;при&nbsp;паузе&nbsp;новые&nbsp;кадры&nbsp;не&nbsp;копируются.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._debug_paused&nbsp;=&nbsp;paused<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.request_update()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_debug_paused(self)&nbsp;-&gt;&nbsp;bool:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
@@ -281,7 +283,6 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_pass_internal_symbol(self,&nbsp;pass_name:&nbsp;str,&nbsp;symbol:&nbsp;str&nbsp;|&nbsp;None)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Устанавливает&nbsp;внутреннюю&nbsp;точку&nbsp;дебага&nbsp;для&nbsp;указанного&nbsp;пасса.<br>
-<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Параметры:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name:&nbsp;Имя&nbsp;пасса.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;symbol:&nbsp;Имя&nbsp;символа&nbsp;или&nbsp;None&nbsp;для&nbsp;сброса.<br>
@@ -299,6 +300,7 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Отключаем&nbsp;BlitPass<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._debug_blit_pass&nbsp;is&nbsp;not&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._debug_blit_pass.enabled&nbsp;=&nbsp;False<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.request_update()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;----------&nbsp;pipeline&nbsp;----------<br>

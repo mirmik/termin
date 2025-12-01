@@ -211,6 +211,7 @@ class ViewportController:
         Устанавливает имя ресурса framegraph, из которого BlitPass будет копировать текстуру.
         """
         self._debug_source_res = name
+        self.request_update()
 
     def get_debug_source_resource(self) -> str:
         """
@@ -230,6 +231,7 @@ class ViewportController:
         Включает или выключает паузу BlitPass: при паузе новые кадры не копируются.
         """
         self._debug_paused = paused
+        self.request_update()
 
     def get_debug_paused(self) -> bool:
         """
@@ -273,7 +275,6 @@ class ViewportController:
     def set_pass_internal_symbol(self, pass_name: str, symbol: str | None) -> None:
         """
         Устанавливает внутреннюю точку дебага для указанного пасса.
-
         Параметры:
             pass_name: Имя пасса.
             symbol: Имя символа или None для сброса.
@@ -291,6 +292,7 @@ class ViewportController:
                     # Отключаем BlitPass
                     if self._debug_blit_pass is not None:
                         self._debug_blit_pass.enabled = False
+                self.request_update()
                 return
 
     # ---------- pipeline ----------
