@@ -13,15 +13,60 @@ class FramePass:
     reads  – какие ресурсы этот проход читает (по именам).
     writes – какие ресурсы он пишет.
     inplace – модифицирующий ли это проход (in-place по смыслу).
-    """
 
+    Внутренние точки (internal debug points):
+        Некоторые пассы могут объявлять «внутренние» точки наблюдения,
+        связанные с их внутренними сущностями (например, отдельные меши,
+        стадии рендера и т.п.). По умолчанию проход не имеет таких точек.
+    """
     pass_name: str
     reads: Set[str] = field(default_factory=set)
     writes: Set[str] = field(default_factory=set)
     inplace: bool = False
 
+    # Конфигурация внутренней точки дебага (символ и целевой ресурс).
+    debug_internal_symbol: str | None = None
+    debug_internal_output: str | None = None
+
     def __repr__(self) -> str:
         return f"FramePass({self.pass_name!r})"
+
+    # ---- API внутренних точек ---------------------------------------------
+
+    def get_internal_symbols(self) -> List[str]:
+        """
+        Возвращает список доступных внутренних символов/точек для этого пасса.
+
+        Базовая реализация ничего не знает о внутренних точках и
+        возвращает пустой список. Конкретные реализации пассов могут
+        переопределять метод и формировать список динамически.
+        """
+        return []
+
+    def set_debug_internal_point(
+        self,
+        symbol: str | None,
+        output_res: str | None = None,
+    ) -> None:
+        """
+        Устанавливает (или сбрасывает) активную внутреннюю точку дебага.
+
+        symbol:
+            Имя внутреннего символа, на который следует «подписаться».
+            None — сброс настройки.
+        output_res:
+            Имя ресурса (FBO), в который пасс при необходимости
+            должен выводить состояние для выбранного символа.
+        """
+        self.debug_internal_symbol = symbol
+        self.debug_internal_output = output_res
+
+    def get_debug_internal_point(self) -> tuple[str | None, str | None]:
+        """
+        Текущая конфигурация внутренней точки дебага:
+        (symbol, output_res).
+        """
+        return self.debug_internal_symbol, self.debug_internal_output
 
 
 class FrameGraphError(Exception):

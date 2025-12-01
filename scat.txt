@@ -1,10 +1,11 @@
 termin/**
 examples/visual/*
 examples/apps/*
+utest/**
+examples/**
 scat.txt
 TECHNICAL_NOTES.md
 AGENTS.md
-!**.*pyc
 !**/__pycache__/**
 
 [VAR(map)]

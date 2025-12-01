@@ -9,10 +9,11 @@
 termin/**<br>
 examples/visual/*<br>
 examples/apps/*<br>
+utest/**<br>
+examples/**<br>
 scat.txt<br>
 TECHNICAL_NOTES.md<br>
 AGENTS.md<br>
-!**.*pyc<br>
 !**/__pycache__/**<br>
 <br>
 [VAR(map)]<br>
