@@ -20,6 +20,12 @@ class MeshDrawable:
 
     RESOURCE_KIND = "mesh"
 
+    unical_id_counter = 0
+
+    def unical_id() -> int:
+        MeshDrawable.unical_id_counter += 1
+        return MeshDrawable.unical_id_counter
+
     def __init__(
         self,
         mesh: Mesh3,
@@ -39,7 +45,7 @@ class MeshDrawable:
         # ресурсные метаданные (чтоб Mesh3 о них не знал)
         self._source_id: Optional[str] = source_id
         # name по умолчанию можно взять из source_id, если имя не задано явно
-        self.name: Optional[str] = name or source_id
+        self.name: Optional[str] = name or source_id or f"mesh_{MeshDrawable.unical_id()}"
 
     # --------- интерфейс ресурса ---------
 

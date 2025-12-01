@@ -28,6 +28,12 @@ class&nbsp;MeshDrawable:<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;RESOURCE_KIND&nbsp;=&nbsp;&quot;mesh&quot;<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;unical_id_counter&nbsp;=&nbsp;0<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;unical_id()&nbsp;-&gt;&nbsp;int:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MeshDrawable.unical_id_counter&nbsp;+=&nbsp;1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;MeshDrawable.unical_id_counter<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mesh:&nbsp;Mesh3,<br>
@@ -47,7 +53,7 @@ class&nbsp;MeshDrawable:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;ресурсные&nbsp;метаданные&nbsp;(чтоб&nbsp;Mesh3&nbsp;о&nbsp;них&nbsp;не&nbsp;знал)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._source_id:&nbsp;Optional[str]&nbsp;=&nbsp;source_id<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;name&nbsp;по&nbsp;умолчанию&nbsp;можно&nbsp;взять&nbsp;из&nbsp;source_id,&nbsp;если&nbsp;имя&nbsp;не&nbsp;задано&nbsp;явно<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name:&nbsp;Optional[str]&nbsp;=&nbsp;name&nbsp;or&nbsp;source_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.name:&nbsp;Optional[str]&nbsp;=&nbsp;name&nbsp;or&nbsp;source_id&nbsp;or&nbsp;f&quot;mesh_{MeshDrawable.unical_id()}&quot;<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;---------&nbsp;интерфейс&nbsp;ресурса&nbsp;---------<br>
 <br>
