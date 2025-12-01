@@ -48,7 +48,7 @@ class EditorWindow(QMainWindow):
         self._setup_menu_bar()
 
         # --- ресурс-менеджер редактора ---
-        self.resource_manager = ResourceManager()
+        self.resource_manager = ResourceManager.instance()
         self._init_resources_from_scene()
 
         # --- UI из .ui ---
@@ -68,17 +68,6 @@ class EditorWindow(QMainWindow):
         # --- инспектор ---
         self.inspector = EntityInspector(self.resource_manager, self.inspectorContainer)
         self._init_inspector_widget()
-
-        component_library = [
-            ("PerspectiveCameraComponent", PerspectiveCameraComponent),
-            ("OrbitCameraController",      OrbitCameraController),
-            ("MeshRenderer",               MeshRenderer),
-        ]
-        self.inspector.set_component_library(component_library)
-
-        for label, cls in component_library:
-            self.resource_manager.register_component(label, cls)
-
         self.inspector.transform_changed.connect(self._on_inspector_transform_changed)
         self.inspector.component_changed.connect(self._on_inspector_component_changed)
         self.inspector.set_undo_command_handler(self.push_undo_command)

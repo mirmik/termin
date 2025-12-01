@@ -99,16 +99,20 @@ class ComponentsPanel(QWidget):
 
         global_pos = self._list.mapToGlobal(pos)
         menu = QMenu(self)
-
         comp = self.current_component()
         remove_action = QAction("Удалить компонент", self)
         remove_action.setEnabled(comp is not None)
         remove_action.triggered.connect(self._remove_current_component)
         menu.addAction(remove_action)
 
-        if self._component_library:
+        component_library = self._component_library
+        if not component_library:
+            manager = ResourceManager.instance()
+            component_library = sorted(manager.components.items())
+
+        if component_library:
             add_menu = menu.addMenu("Добавить компонент")
-            for label, cls in self._component_library:
+            for label, cls in component_library:
                 act = QAction(label, self)
                 act.triggered.connect(
                     lambda _checked=False, c=cls: self._add_component(c)

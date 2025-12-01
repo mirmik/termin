@@ -12,16 +12,24 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
 
 
 
-@dataclass
 class ResourceManager:
     """
-    Хранилище ресурсов, привязанное к конкретному редактору/сцене.
-    Никаких глобальных синглтонов.
+    Глобальный менеджер ресурсов редактора.
     """
-    materials: Dict[str, "Material"] = field(default_factory=dict)
-    meshes: Dict[str, "MeshDrawable"] = field(default_factory=dict)
-    textures: Dict[str, "Texture"] = field(default_factory=dict)
-    components: Dict[str, type["Component"]] = field(default_factory=dict)
+
+    _instance: "ResourceManager | None" = None
+
+    def __init__(self):
+        self.materials: Dict[str, "Material"] = {}
+        self.meshes: Dict[str, "MeshDrawable"] = {}
+        self.textures: Dict[str, "Texture"] = {}
+        self.components: Dict[str, type["Component"]] = {}
+
+    @classmethod
+    def instance(cls) -> "ResourceManager":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
     # --------- Материалы ---------
     def register_material(self, name: str, mat: "Material"):

@@ -10,6 +10,7 @@ import numpy as np
 from termin.geombase.pose3 import Pose3
 from termin.kinematic.transform import Transform3
 from termin.visualization.platform.backends.base import GraphicsBackend
+from termin.visualization.core.resources import ResourceManager
 
 if TYPE_CHECKING:  # pragma: no cover
     from termin.visualization.core.camera import Camera
@@ -38,17 +39,25 @@ class RenderContext:
 class Component:
     """Base class for all entity components."""
 
-    def __init__(self, enabled: bool = True):
-        self.enabled = enabled
-        self.entity: Optional["Entity"] = None
-        self._started = False
-
     # Если None → компонент не сериализуется
     serializable_fields = None
 
     # Поля, которые инспектор может редактировать.
     # Заполняется либо руками, либо через дескриптор InspectAttr.
     inspect_fields: dict[str, InspectField] | None = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Базовый класс сам себя не регистрирует
+        if cls is Component:
+            return
+        manager = ResourceManager.instance()
+        manager.register_component(cls.__name__, cls)
+
+    def __init__(self, enabled: bool = True):
+        self.enabled = enabled
+        self.entity: Optional["Entity"] = None
+        self._started = False
 
     def required_shaders(self) -> Iterable["ShaderProgram"]:
         """Return shaders that must be compiled before rendering."""
@@ -70,16 +79,12 @@ class Component:
         """Called when component is removed from its entity."""
         return
 
-    # Если None → компонент не сериализуется
-    serializable_fields = None
-
     def serialize_data(self):
         if self._serializable_fields is None:
             return None
 
         result = {}
         fields = self._serializable_fields
-
         if isinstance(fields, dict):
             for key, typ in fields.items():
                 value = getattr(self, key)
@@ -96,7 +101,7 @@ class Component:
             "data": data,
             "type": self.__class__.__name__,
         }
-        
+
     @classmethod
     def deserialize(cls, data, context):
         obj = cls.__new__(cls)
