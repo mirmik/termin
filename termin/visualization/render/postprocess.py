@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import numpy as np
 
@@ -90,6 +90,29 @@ class PostProcessPass(RenderFramePass):
 
         self._temp_fbos: list["FramebufferHandle"] = []
 
+    def _effect_symbol(self, index: int, effect: "PostEffect") -> str:
+        """
+        Формирует стабильное имя внутреннего символа для эффекта.
+
+        Добавляем индекс в цепочке, чтобы одинаковые эффекты (например,
+        два Highlight) можно было различать.
+        """
+        effect_name = effect.name if hasattr(effect, "name") else effect.__class__.__name__
+        if not effect_name:
+            effect_name = effect.__class__.__name__
+        return f"{index:02d}:{effect_name}"
+
+    def get_internal_symbols(self) -> List[str]:
+        """
+        Возвращает список внутренних символов:
+        - "input" — исходный color перед постобработкой;
+        - по одному символу на каждый эффект в цепочке.
+        """
+        symbols: List[str] = ["input"]
+        for idx, eff in enumerate(self.effects):
+            symbols.append(self._effect_symbol(idx, eff))
+        return symbols
+
     def _get_temp_fbo(self, ctx: "FrameContext", index: int, size: tuple[int, int]):
         gfx = ctx.graphics
         while len(self._temp_fbos) <= index:
@@ -130,6 +153,13 @@ class PostProcessPass(RenderFramePass):
         if fb_in is None:
             return
 
+        # Внутренняя точка дебага (символ и ресурс вывода)
+        debug_symbol, debug_output = self.get_debug_internal_point()
+        debug_fb = None
+        if debug_symbol is not None and debug_output is not None:
+            debug_fb = window.get_viewport_fbo(viewport, debug_output, size)
+            ctx.fbos[debug_output] = debug_fb
+
         color_tex = fb_in.color_texture()
 
         # --- extra textures ---
@@ -151,25 +181,22 @@ class PostProcessPass(RenderFramePass):
 
         # --- нет эффектов -> блит и выходим ---
         if not self.effects:
+            if debug_fb is not None and debug_symbol == "input":
+                self._blit_to_debug(gfx, fb_in, debug_fb, size, key)
             blit_fbo_to_fbo(gfx, fb_in, fb_out_final, size, key)
             return
 
         current_tex = color_tex
 
+        # При запросе дебага исходного состояния пробрасываем его в debug FBO.
+        if debug_fb is not None and debug_symbol == "input":
+            self._blit_to_debug(gfx, fb_in, debug_fb, size, key)
+
         # <<< ВАЖНО: постпроцесс — чисто экранная штука, отключаем глубину >>>
         gfx.set_depth_test(False)
         gfx.set_depth_mask(False)
 
-
         try:
-            if len(self.effects) == 1:
-                effect = self.effects[0]
-                gfx.bind_framebuffer(fb_out_final)
-                gfx.set_viewport(0, 0, pw, ph)
-                effect.draw(gfx, key, current_tex, extra_textures, size)
-                return
-
-            # несколько эффектов — пинг-понг
             for i, effect in enumerate(self.effects):
                 is_last = (i == len(self.effects) - 1)
 
@@ -183,8 +210,31 @@ class PostProcessPass(RenderFramePass):
 
                 effect.draw(gfx, key, current_tex, extra_textures, size)
 
+                # Сохранение промежуточного результата в debug FBO при совпадении символа
+                effect_symbol = self._effect_symbol(i, effect)
+                if debug_fb is not None and debug_symbol == effect_symbol:
+                    self._blit_to_debug(gfx, fb_target, debug_fb, size, key)
+
                 current_tex = fb_target.color_texture()
         finally:
             # восстанавливаем "нормальное" состояние для последующих пассов
             gfx.set_depth_test(True)
             gfx.set_depth_mask(True)
+
+    def _blit_to_debug(
+        self,
+        gfx: "GraphicsBackend",
+        src_fb: "FramebufferHandle",
+        dst_fb: "FramebufferHandle",
+        size: tuple[int, int],
+        context_key: int,
+    ) -> None:
+        """
+        Копирует промежуточный результат постобработки в debug FBO.
+
+        Используется для внутренних точек — после копирования возвращаемся
+        к исходному FBO, чтобы продолжить цепочку без побочных эффектов.
+        """
+        blit_fbo_to_fbo(gfx, src_fb, dst_fb, size, context_key)
+        gfx.bind_framebuffer(src_fb)
+        gfx.set_viewport(0, 0, size[0], size[1])
