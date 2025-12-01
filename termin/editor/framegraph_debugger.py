@@ -180,7 +180,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     """
     Окно-дебагер: внутри одно GL-окно, которое показывает текстуру из framegraph
     (ресурс resource_name из viewport.fbos), плюс панель управления:
-    выбор ресурса и кнопка паузы.
+    выбор ресурса, пауза и (опционально) выбор отладочного внутреннего символа.
     """
 
     def __init__(
@@ -193,9 +193,10 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         set_source_resource: Optional[Callable[[str], None]] = None,
         get_paused: Optional[Callable[[], bool]] = None,
         set_paused: Optional[Callable[[bool], None]] = None,
+        get_internal_symbols: Optional[Callable[[], list[str]]] = None,
+        set_internal_symbol: Optional[Callable[[str], None]] = None,
     ) -> None:
         super().__init__(parent)
-
         self._graphics = graphics
         self._viewport = viewport
         self._resource_name = resource_name
@@ -205,6 +206,10 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._get_paused = get_paused
         self._set_paused = set_paused
 
+        # Колбэки для внутренних отладочных символов (например, имена мешей внутри ColorPass)
+        self._get_internal_symbols = get_internal_symbols
+        self._set_internal_symbol = set_internal_symbol
+
         self.setWindowTitle(f"Framegraph texture: {resource_name}")
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
         self.setModal(False)
@@ -212,18 +217,33 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         layout = QtWidgets.QVBoxLayout(self)
 
+        # --- верхняя панель: выбор ресурса и пауза ---
         controls_layout = QtWidgets.QHBoxLayout()
         self._resource_label = QtWidgets.QLabel("Resource:", self)
         self._resource_combo = QtWidgets.QComboBox(self)
         self._resource_combo.currentTextChanged.connect(self._on_resource_selected)
         self._pause_check = QtWidgets.QCheckBox("Pause", self)
         self._pause_check.toggled.connect(self._on_pause_toggled)
-
         controls_layout.addWidget(self._resource_label)
         controls_layout.addWidget(self._resource_combo, 1)
         controls_layout.addWidget(self._pause_check)
         layout.addLayout(controls_layout)
 
+        # --- вторая панель: выбор внутреннего символа ---
+        # Работает, только если переданы соответствующие колбэки.
+        symbol_layout = QtWidgets.QHBoxLayout()
+        self._symbol_label = QtWidgets.QLabel("Debug symbol:", self)
+        self._symbol_combo = QtWidgets.QComboBox(self)
+        self._symbol_combo.currentTextChanged.connect(self._on_symbol_selected)
+        symbol_layout.addWidget(self._symbol_label)
+        symbol_layout.addWidget(self._symbol_combo, 1)
+        layout.addLayout(symbol_layout)
+
+        # на старте комбобокс может быть пустым/отключённым — это нормально
+        if self._get_internal_symbols is None:
+            self._symbol_combo.setEnabled(False)
+
+        # --- GL-виджет с текстурой ---
         self._gl_widget = FramegraphTextureWidget(
             graphics=self._graphics,
             viewport=self._viewport,
@@ -232,9 +252,10 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         )
         layout.addWidget(self._gl_widget)
 
-        # инициализируем список ресурсов и состояние паузы
+        # инициализируем список ресурсов, состояние паузы и список внутренних символов
         self._update_resource_list()
         self._sync_pause_state()
+        self._update_internal_symbols()
 
     def _update_resource_list(self) -> None:
         """
@@ -242,14 +263,12 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         """
         if not hasattr(self, "_resource_combo"):
             return
-
         if self._get_available_resources is not None:
             names = self._get_available_resources()
         else:
             names = list(self._viewport.fbos.keys())
 
         names = sorted(set(names))
-
         current = self._resource_combo.currentText()
         self._resource_combo.blockSignals(True)
         self._resource_combo.clear()
@@ -272,6 +291,40 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._pause_check.setChecked(value)
         self._pause_check.blockSignals(False)
 
+    def _update_internal_symbols(self) -> None:
+        """
+        Обновляет список внутренних отладочных символов (например, имена мешей)
+        в соответствующем комбобоксе.
+
+        Если колбэк не передан, комбобокс очищается и отключается.
+        """
+        if not hasattr(self, "_symbol_combo"):
+            return
+
+        combo = self._symbol_combo
+        combo.blockSignals(True)
+        combo.clear()
+
+        if self._get_internal_symbols is None:
+            combo.setEnabled(False)
+            combo.blockSignals(False)
+            return
+
+        names = self._get_internal_symbols()
+        names = sorted(set(names))
+        current = combo.currentText()
+
+        for name in names:
+            combo.addItem(name)
+
+        if current and current in names:
+            index = combo.findText(current)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+
+        combo.setEnabled(bool(names))
+        combo.blockSignals(False)
+
     def _on_resource_selected(self, name: str) -> None:
         """
         Обработчик выбора ресурса в комбобоксе: прокидывает имя в BlitPass.
@@ -288,12 +341,27 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         if self._set_paused is not None:
             self._set_paused(bool(checked))
 
+    def _on_symbol_selected(self, name: str) -> None:
+        """
+        Обработчик выбора внутреннего отладочного символа.
+
+        Пока это просто прокидывание выбранного имени наружу
+        через колбэк set_internal_symbol.
+        """
+        if not name:
+            return
+        if self._set_internal_symbol is not None:
+            self._set_internal_symbol(name)
+
     def request_update(self) -> None:
         """
         Редактор может вызвать это, чтобы запросить перерисовку окна
         при обновлении основного viewport.
-        Также здесь обновляем список ресурсов и состояние паузы.
+
+        Также здесь обновляем список ресурсов, состояние паузы и
+        список внутренних отладочных символов.
         """
         self._update_resource_list()
         self._sync_pause_state()
+        self._update_internal_symbols()
         self._gl_widget.update()
