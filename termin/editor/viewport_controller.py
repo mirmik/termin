@@ -121,7 +121,6 @@ class ViewportController:
         return self._gl_widget
 
     def request_update(self) -> None:
-        print("ViewportController: request_update called")
         self._backend.request_update()
 
     def get_pick_id_for_entity(self, ent: Entity | None) -> int:
@@ -145,7 +144,6 @@ class ViewportController:
         self._pending_hover = (x, y, viewport)
 
     def _after_render(self, window) -> None:
-        print("ViewportController: after_render called")
         if self._pending_pick_press is not None:
             self._process_pending_pick_press(self._pending_pick_press, window)
         if self._pending_pick_release is not None:

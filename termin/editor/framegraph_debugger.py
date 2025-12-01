@@ -475,7 +475,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         Вызывается редактором при обновлении основного viewport.
         Обновляет списки и перерисовывает GL-виджет.
         """
-        print("FramegraphDebugDialog: debugger_request_update called")
         self._update_resource_list()
         if self._mode == "inside":
             self._update_passes_list()

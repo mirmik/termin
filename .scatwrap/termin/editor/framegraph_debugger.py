@@ -483,7 +483,6 @@ class&nbsp;FramegraphDebugDialog(QtWidgets.QDialog):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вызывается&nbsp;редактором&nbsp;при&nbsp;обновлении&nbsp;основного&nbsp;viewport.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Обновляет&nbsp;списки&nbsp;и&nbsp;перерисовывает&nbsp;GL-виджет.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;FramegraphDebugDialog:&nbsp;debugger_request_update&nbsp;called&quot;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_resource_list()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._mode&nbsp;==&nbsp;&quot;inside&quot;:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._update_passes_list()<br>

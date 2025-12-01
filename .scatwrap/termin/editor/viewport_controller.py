@@ -129,7 +129,6 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._gl_widget<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;request_update(self)&nbsp;-&gt;&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;ViewportController:&nbsp;request_update&nbsp;called&quot;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._backend.request_update()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_pick_id_for_entity(self,&nbsp;ent:&nbsp;Entity&nbsp;|&nbsp;None)&nbsp;-&gt;&nbsp;int:<br>
@@ -153,7 +152,6 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._pending_hover&nbsp;=&nbsp;(x,&nbsp;y,&nbsp;viewport)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_after_render(self,&nbsp;window)&nbsp;-&gt;&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;ViewportController:&nbsp;after_render&nbsp;called&quot;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._pending_pick_press&nbsp;is&nbsp;not&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._process_pending_pick_press(self._pending_pick_press,&nbsp;window)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._pending_pick_release&nbsp;is&nbsp;not&nbsp;None:<br>
