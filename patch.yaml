@@ -104,3 +104,382 @@ operations:
           self._undo_stack_viewer.show()
           self._undo_stack_viewer.raise_()
           self._undo_stack_viewer.activateWindow()
+description: "Добавляем BlitPass, управление источником текстуры и паузой в дебагере framegraph, а также синхронизацию обновления окна дебагера с рендером основного viewport."
+language: "python"
+operations:
+  - op: insert_after_text
+    comment: "Храним ссылку на окно дебагера и настройки его BlitPass в ViewportController."
+    path: termin/editor/viewport_controller.py
+    marker: |
+      self._on_hover_entity = on_hover_entity
+    payload: |
+      self._framegraph_debugger = None
+      self._debug_source_res: str = "color_pp"
+      self._debug_paused: bool = False
+      self._debug_blit_pass = None
+
+
+
+  - op: replace_py_block
+    comment: "После каждого рендера основного viewport запрашиваем обновление окна дебагера, чтобы оно рисовало уже готовую текстуру."
+    path: termin/editor/viewport_controller.py
+    marker: |
+      def _after_render(self, window) -> None:
+    payload: |
+      def _after_render(self, window) -> None:
+          if self._pending_pick_press is not None:
+              self._process_pending_pick_press(self._pending_pick_press, window)
+          if self._pending_pick_release is not None:
+              self._process_pending_pick_release(self._pending_pick_release, window)
+          if self._pending_hover is not None:
+              self._process_pending_hover(self._pending_hover, window)
+
+          # обновляем окно дебагера уже после того, как все FBO обновлены
+          debugger = getattr(self, "_framegraph_debugger", None)
+          if debugger is not None and debugger.isVisible():
+              debugger.request_update()
+
+  - op: replace_py_block
+    comment: "Расширяем пайплайн: добавляем BlitPass, который копирует выбранный ресурс в отдельный debug-ресурс для дебагера."
+    path: termin/editor/viewport_controller.py
+    marker: |
+      def _make_pipeline(self) -> list:
+    payload: |
+      def _make_pipeline(self) -> list:
+          from termin.visualization.render.framegraph import (
+              ColorPass,
+              IdPass,
+              CanvasPass,
+              PresentToScreenPass,
+              GizmoPass,
+          )
+          from termin.visualization.render.postprocess import PostProcessPass
+          from termin.visualization.render.posteffects.highlight import HighlightEffect
+          from termin.visualization.render.framegraph.passes.present import BlitPass
+
+          gizmo_entities = self._gizmo_controller.helper_geometry_entities()
+
+          postprocess = PostProcessPass(
+              effects=[],
+              input_res="color",
+              output_res="color_pp",
+              pass_name="PostFX",
+          )
+
+          # BlitPass копирует выбранный ресурс в отдельный debug-ресурс.
+          # Источник и режим паузы задаются через колбэк, читающий состояние контроллера.
+          def _get_debug_source():
+              if getattr(self, "_debug_paused", False):
+                  return None
+              return getattr(self, "_debug_source_res", "color_pp")
+
+          blit_pass = BlitPass(
+              get_source_res=_get_debug_source,
+              output_res="debug",
+              pass_name="DebugBlit",
+          )
+          self._debug_blit_pass = blit_pass
+
+          passes: list = [
+              ColorPass(input_res="empty", output_res="color", pass_name="Color"),
+              IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
+              GizmoPass(
+                  input_res="preid",
+                  output_res="id",
+                  pass_name="Gizmo",
+                  gizmo_entities=gizmo_entities,
+              ),
+              postprocess,
+              blit_pass,
+              CanvasPass(
+                  src="color_pp",
+                  dst="color+ui",
+                  pass_name="Canvas",
+              ),
+              PresentToScreenPass(
+                  input_res="color+ui",
+                  pass_name="Present",
+              ),
+          ]
+
+          postprocess.add_effect(
+              HighlightEffect(
+                  lambda: self.hover_entity_id,
+                  color=(0.3, 0.8, 1.0, 1.0),
+              )
+          )
+          postprocess.add_effect(
+              HighlightEffect(
+                  lambda: self.selected_entity_id,
+                  color=(1.0, 0.9, 0.1, 1.0),
+              )
+          )
+
+          return passes
+
+  - op: replace_py_block
+    comment: "Запрос обновления только основного viewport; дебагер обновляется из after_render."
+    path: termin/editor/editor_window.py
+    marker: |
+      def _request_viewport_update(self) -> None:
+    payload: |
+      def _request_viewport_update(self) -> None:
+          if self.viewport_controller is not None:
+              self.viewport_controller.request_update()
+
+  - op: replace_py_block
+    comment: "Создаём окно дебагера, привязываем его к BlitPass и передаём в него колбэки для списка ресурсов и паузы."
+    path: termin/editor/editor_window.py
+    marker: |
+      def _show_framegraph_debugger(self) -> None:
+    payload: |
+      def _show_framegraph_debugger(self) -> None:
+          """
+          Открывает отдельное окно с просмотром текстуры из framegraph
+          (по умолчанию ресурса 'debug', который заполняет BlitPass).
+          """
+          if self.viewport_window is None:
+              return
+          if self.viewport is None:
+              return
+
+          if self._framegraph_debugger is None:
+              from termin.editor.framegraph_debugger import FramegraphDebugDialog
+
+              graphics = self.viewport_window.graphics
+              viewport = self.viewport
+
+              get_resources = None
+              set_source = None
+              get_paused = None
+              set_paused = None
+
+              if self.viewport_controller is not None:
+                  get_resources = self.viewport_controller.get_available_framegraph_resources
+                  set_source = self.viewport_controller.set_debug_source_resource
+                  get_paused = self.viewport_controller.get_debug_paused
+                  set_paused = self.viewport_controller.set_debug_paused
+
+              self._framegraph_debugger = FramegraphDebugDialog(
+                  graphics=graphics,
+                  viewport=viewport,
+                  resource_name="debug",
+                  parent=self,
+                  get_available_resources=get_resources,
+                  set_source_resource=set_source,
+                  get_paused=get_paused,
+                  set_paused=set_paused,
+              )
+
+              if self.viewport_controller is not None:
+                  self.viewport_controller.set_framegraph_debugger(self._framegraph_debugger)
+
+          self._framegraph_debugger.refresh()
+          self._framegraph_debugger.show()
+          self._framegraph_debugger.raise_()
+          self._framegraph_debugger.activateWindow()
+
+  - op: replace_text
+    comment: "Подключаем Callable для новых колбэков в дебагере."
+    path: termin/editor/framegraph_debugger.py
+    marker: |
+      from typing import Optional
+    payload: |
+      from typing import Optional, Callable
+
+  - op: replace_py_block
+    comment: "Расширяем конструктор окна дебагера: добавляем панель с выбором ресурса и кнопкой паузы, принимаем колбэки от контроллера."
+    path: termin/editor/framegraph_debugger.py
+    marker: |
+      def __init__(
+          self,
+          graphics: GraphicsBackend,
+          viewport: Viewport,
+          resource_name: str = "color",
+          parent: Optional[QtWidgets.QWidget] = None,
+      ) -> None:
+    payload: |
+      def __init__(
+          self,
+          graphics: GraphicsBackend,
+          viewport: Viewport,
+          resource_name: str = "debug",
+          parent: Optional[QtWidgets.QWidget] = None,
+          get_available_resources: Optional[Callable[[], list[str]]] = None,
+          set_source_resource: Optional[Callable[[str], None]] = None,
+          get_paused: Optional[Callable[[], bool]] = None,
+          set_paused: Optional[Callable[[bool], None]] = None,
+      ) -> None:
+          super().__init__(parent)
+
+          self._graphics = graphics
+          self._viewport = viewport
+          self._resource_name = resource_name
+
+          self._get_available_resources = get_available_resources
+          self._set_source_resource = set_source_resource
+          self._get_paused = get_paused
+          self._set_paused = set_paused
+
+          self.setWindowTitle(f"Framegraph texture: {resource_name}")
+          self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
+          self.setModal(False)
+          self.setMinimumSize(400, 300)
+
+          layout = QtWidgets.QVBoxLayout(self)
+
+          controls_layout = QtWidgets.QHBoxLayout()
+          self._resource_label = QtWidgets.QLabel("Resource:", self)
+          self._resource_combo = QtWidgets.QComboBox(self)
+          self._resource_combo.currentTextChanged.connect(self._on_resource_selected)
+          self._pause_check = QtWidgets.QCheckBox("Pause", self)
+          self._pause_check.toggled.connect(self._on_pause_toggled)
+
+          controls_layout.addWidget(self._resource_label)
+          controls_layout.addWidget(self._resource_combo, 1)
+          controls_layout.addWidget(self._pause_check)
+          layout.addLayout(controls_layout)
+
+          self._gl_widget = FramegraphTextureWidget(
+              graphics=self._graphics,
+              viewport=self._viewport,
+              resource_name=self._resource_name,
+              parent=self,
+          )
+          layout.addWidget(self._gl_widget)
+
+          # инициализируем список ресурсов и состояние паузы
+          self._update_resource_list()
+          self._sync_pause_state()
+
+  - op: insert_before_text
+    comment: "Добавляем методы управления списком ресурсов и паузой в окне дебагера."
+    path: termin/editor/framegraph_debugger.py
+    marker: |
+      def request_update(self) -> None:
+    payload: |
+      def _update_resource_list(self) -> None:
+          """
+          Обновляет список доступных ресурсов framegraph в комбобоксе.
+          """
+          if not hasattr(self, "_resource_combo"):
+              return
+
+          if self._get_available_resources is not None:
+              names = self._get_available_resources()
+          else:
+              names = list(self._viewport.fbos.keys())
+
+          names = sorted(set(names))
+
+          current = self._resource_combo.currentText()
+          self._resource_combo.blockSignals(True)
+          self._resource_combo.clear()
+          for name in names:
+              self._resource_combo.addItem(name)
+          if current and current in names:
+              index = self._resource_combo.findText(current)
+              if index >= 0:
+                  self._resource_combo.setCurrentIndex(index)
+          self._resource_combo.blockSignals(False)
+
+      def _sync_pause_state(self) -> None:
+          """
+          Синхронизирует состояние чекбокса Pause с внешним состоянием.
+          """
+          if self._get_paused is None or not hasattr(self, "_pause_check"):
+              return
+          value = bool(self._get_paused())
+          self._pause_check.blockSignals(True)
+          self._pause_check.setChecked(value)
+          self._pause_check.blockSignals(False)
+
+      def _on_resource_selected(self, name: str) -> None:
+          """
+          Обработчик выбора ресурса в комбобоксе: прокидывает имя в BlitPass.
+          """
+          if not name:
+              return
+          if self._set_source_resource is not None:
+              self._set_source_resource(name)
+
+      def _on_pause_toggled(self, checked: bool) -> None:
+          """
+          Обработчик переключения паузы: обновляет флаг для BlitPass.
+          """
+          if self._set_paused is not None:
+              self._set_paused(bool(checked))
+
+  - op: replace_py_block
+    comment: "При обновлении окна дебагера обновляем список ресурсов и состояние паузы перед перерисовкой GL-виджета."
+    path: termin/editor/framegraph_debugger.py
+    marker: |
+      def request_update(self) -> None:
+    payload: |
+      def request_update(self) -> None:
+          """
+          Редактор может вызвать это, чтобы запросить перерисовку окна
+          при обновлении основного viewport.
+          Также здесь обновляем список ресурсов и состояние паузы.
+          """
+          self._update_resource_list()
+          self._sync_pause_state()
+          self._gl_widget.update()
+
+  - op: insert_before_text
+    comment: "Добавляем BlitPass, который копирует текстуру из произвольного FBO в отдельный FBO для дебагера."
+    path: termin/visualization/render/framegraph/passes/present.py
+    marker: |
+      FSQ_VERT = """
+    payload: |
+      class BlitPass(RenderFramePass):
+          """
+          Копирует color-текстуру из одного FBO в другой через фуллскрин-квад.
+          Источник задаётся колбэком get_source_res, чтобы его можно было
+          динамически переключать из редактора/дебагера.
+          """
+
+          def __init__(
+              self,
+              get_source_res,
+              output_res: str = "debug",
+              pass_name: str = "Blit",
+          ):
+              super().__init__(
+                  pass_name=pass_name,
+                  reads=set(),  # фактическое имя ресурса задаётся динамически
+                  writes={output_res},
+                  inplace=False,
+              )
+              self._get_source_res = get_source_res
+              self.output_res = output_res
+              self._current_src_name: str | None = None
+
+          def execute(self, ctx: FrameContext):
+              gfx = ctx.graphics
+              window = ctx.window
+              viewport = ctx.viewport
+              px, py, pw, ph = ctx.rect
+              key = ctx.context_key
+
+              if self._get_source_res is None:
+                  return
+
+              src_name = self._get_source_res()
+              if not src_name:
+                  return
+
+              fb_in = ctx.fbos.get(src_name)
+              if fb_in is None:
+                  return
+
+              # при смене источника обновляем набор читаемых ресурсов
+              if src_name != self._current_src_name:
+                  self._current_src_name = src_name
+                  self.reads = {src_name}
+
+              fb_out = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
+              ctx.fbos[self.output_res] = fb_out
+
+              blit_fbo_to_fbo(gfx, fb_in, fb_out, (pw, ph), key)
+

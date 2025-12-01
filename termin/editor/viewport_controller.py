@@ -78,6 +78,10 @@ class ViewportController:
         self._gizmo_controller = gizmo_controller
         self._on_entity_picked = on_entity_picked
         self._on_hover_entity = on_hover_entity
+        self._framegraph_debugger = None
+        self._debug_source_res: str = "color_pp"
+        self._debug_paused: bool = False
+        self._debug_blit_pass = None
 
         self.selected_entity_id: int = 0
         self.hover_entity_id: int = 0
@@ -156,6 +160,11 @@ class ViewportController:
         if self._pending_hover is not None:
             self._process_pending_hover(self._pending_hover, window)
 
+        # обновляем окно дебагера уже после того, как все FBO обновлены
+        debugger = getattr(self, "_framegraph_debugger", None)
+        if debugger is not None and debugger.isVisible():
+            debugger.request_update()
+
     # ---------- обработка hover / выбора / гизмо ----------
 
     def _process_pending_hover(self, pending_hover, window) -> None:
@@ -189,6 +198,46 @@ class ViewportController:
         if handled:
             return
 
+    # ---------- debug helpers ----------
+
+    def set_framegraph_debugger(self, debugger) -> None:
+        """
+        Регистрирует окно дебагера framegraph, которому нужно сообщать
+        об окончании рендера и передавать настройки источника/паузы.
+        """
+        self._framegraph_debugger = debugger
+
+    def set_debug_source_resource(self, name: str) -> None:
+        """
+        Устанавливает имя ресурса framegraph, из которого BlitPass будет копировать текстуру.
+        """
+        self._debug_source_res = name
+
+    def get_debug_source_resource(self) -> str:
+        """
+        Возвращает текущее имя ресурса framegraph, используемое BlitPass как источник.
+        """
+        return self._debug_source_res
+
+    def get_available_framegraph_resources(self) -> list[str]:
+        """
+        Возвращает список имён ресурсов framegraph, доступных у текущего viewport.
+        """
+        viewport = self._backend.viewport
+        return list(viewport.fbos.keys())
+
+    def set_debug_paused(self, paused: bool) -> None:
+        """
+        Включает или выключает паузу BlitPass: при паузе новые кадры не копируются.
+        """
+        self._debug_paused = paused
+
+    def get_debug_paused(self) -> bool:
+        """
+        Текущее состояние паузы для BlitPass.
+        """
+        return self._debug_paused
+
     # ---------- pipeline ----------
 
     def _make_pipeline(self) -> list:
@@ -201,6 +250,7 @@ class ViewportController:
         )
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.highlight import HighlightEffect
+        from termin.visualization.render.framegraph.passes.present import BlitPass
 
         gizmo_entities = self._gizmo_controller.helper_geometry_entities()
 
@@ -210,6 +260,20 @@ class ViewportController:
             output_res="color_pp",
             pass_name="PostFX",
         )
+
+        # BlitPass копирует выбранный ресурс в отдельный debug-ресурс.
+        # Источник и режим паузы задаются через колбэк, читающий состояние контроллера.
+        def _get_debug_source():
+            if getattr(self, "_debug_paused", False):
+                return None
+            return getattr(self, "_debug_source_res", "color_pp")
+
+        blit_pass = BlitPass(
+            get_source_res=_get_debug_source,
+            output_res="debug",
+            pass_name="DebugBlit",
+        )
+        self._debug_blit_pass = blit_pass
 
         passes: list = [
             ColorPass(input_res="empty", output_res="color", pass_name="Color"),
@@ -221,6 +285,7 @@ class ViewportController:
                 gizmo_entities=gizmo_entities,
             ),
             postprocess,
+            blit_pass,
             CanvasPass(
                 src="color_pp",
                 dst="color+ui",

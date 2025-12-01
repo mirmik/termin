@@ -237,7 +237,7 @@ class EditorWindow(QMainWindow):
     def _show_framegraph_debugger(self) -> None:
         """
         Открывает отдельное окно с просмотром текстуры из framegraph
-        (по умолчанию ресурса 'color' основного viewport).
+        (по умолчанию ресурса 'debug', который заполняет BlitPass).
         """
         if self.viewport_window is None:
             return
@@ -250,13 +250,32 @@ class EditorWindow(QMainWindow):
             graphics = self.viewport_window.graphics
             viewport = self.viewport
 
+            get_resources = None
+            set_source = None
+            get_paused = None
+            set_paused = None
+
+            if self.viewport_controller is not None:
+                get_resources = self.viewport_controller.get_available_framegraph_resources
+                set_source = self.viewport_controller.set_debug_source_resource
+                get_paused = self.viewport_controller.get_debug_paused
+                set_paused = self.viewport_controller.set_debug_paused
+
             self._framegraph_debugger = FramegraphDebugDialog(
                 graphics=graphics,
                 viewport=viewport,
-                resource_name="color",
+                resource_name="debug",
                 parent=self,
+                get_available_resources=get_resources,
+                set_source_resource=set_source,
+                get_paused=get_paused,
+                set_paused=set_paused,
             )
 
+            if self.viewport_controller is not None:
+                self.viewport_controller.set_framegraph_debugger(self._framegraph_debugger)
+
+        self._framegraph_debugger.refresh()
         self._framegraph_debugger.show()
         self._framegraph_debugger.raise_()
         self._framegraph_debugger.activateWindow()
@@ -376,9 +395,6 @@ class EditorWindow(QMainWindow):
     def _request_viewport_update(self) -> None:
         if self.viewport_controller is not None:
             self.viewport_controller.request_update()
-
-        if self._framegraph_debugger is not None:
-            self._framegraph_debugger.request_update()
 
     def _on_tree_object_selected(self, obj: object | None) -> None:
         """

@@ -37,6 +37,56 @@ def blit_fbo_to_fbo(
     gfx.set_depth_mask(True)
 
 
+class BlitPass(RenderFramePass):
+    """
+    Копирует color-текстуру из одного FBO в другой через фуллскрин-квад.
+    Источник задаётся колбэком get_source_res, чтобы его можно было
+    динамически переключать из редактора/дебагера.
+    """
+
+    def __init__(
+        self,
+        get_source_res,
+        output_res: str = "debug",
+        pass_name: str = "Blit",
+    ):
+        super().__init__(
+            pass_name=pass_name,
+            reads=set(),  # фактическое имя ресурса задаётся динамически
+            writes={output_res},
+            inplace=False,
+        )
+        self._get_source_res = get_source_res
+        self.output_res = output_res
+        self._current_src_name: str | None = None
+
+    def execute(self, ctx: FrameContext):
+        gfx = ctx.graphics
+        window = ctx.window
+        viewport = ctx.viewport
+        px, py, pw, ph = ctx.rect
+        key = ctx.context_key
+
+        if self._get_source_res is None:
+            return
+
+        src_name = self._get_source_res()
+        if not src_name:
+            return
+
+        fb_in = ctx.fbos.get(src_name)
+        if fb_in is None:
+            return
+
+        # при смене источника обновляем набор читаемых ресурсов
+        if src_name != self._current_src_name:
+            self._current_src_name = src_name
+            self.reads = {src_name}
+
+        fb_out = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
+        ctx.fbos[self.output_res] = fb_out
+
+        blit_fbo_to_fbo(gfx, fb_in, fb_out, (pw, ph), key)
 FSQ_VERT = """
 #version 330 core
 layout(location = 0) in vec2 a_pos;

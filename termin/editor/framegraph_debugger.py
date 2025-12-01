@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Callable
 
 from PyQt5 import QtWidgets, QtCore
 
@@ -21,20 +21,55 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         self,
         graphics: GraphicsBackend,
         viewport: Viewport,
-        resource_name: str = "color",
+        resource_name: str = "debug",
         parent: Optional[QtWidgets.QWidget] = None,
+        get_available_resources: Optional[Callable[[], list[str]]] = None,
+        set_source_resource: Optional[Callable[[str], None]] = None,
+        get_paused: Optional[Callable[[], bool]] = None,
+        set_paused: Optional[Callable[[bool], None]] = None,
     ) -> None:
         super().__init__(parent)
+
         self._graphics = graphics
         self._viewport = viewport
         self._resource_name = resource_name
 
-        self._shader: Optional[ShaderProgram] = None
-        self._vao: Optional[int] = None
-        self._vbo: Optional[int] = None
+        self._get_available_resources = get_available_resources
+        self._set_source_resource = set_source_resource
+        self._get_paused = get_paused
+        self._set_paused = set_paused
 
-        self.setMinimumSize(200, 150)
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.setWindowTitle(f"Framegraph texture: {resource_name}")
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
+        self.setModal(False)
+        self.setMinimumSize(400, 300)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        controls_layout = QtWidgets.QHBoxLayout()
+        self._resource_label = QtWidgets.QLabel("Resource:", self)
+        self._resource_combo = QtWidgets.QComboBox(self)
+        self._resource_combo.currentTextChanged.connect(self._on_resource_selected)
+        self._pause_check = QtWidgets.QCheckBox("Pause", self)
+        self._pause_check.toggled.connect(self._on_pause_toggled)
+
+        controls_layout.addWidget(self._resource_label)
+        controls_layout.addWidget(self._resource_combo, 1)
+        controls_layout.addWidget(self._pause_check)
+        layout.addLayout(controls_layout)
+
+        self._gl_widget = FramegraphTextureWidget(
+            graphics=self._graphics,
+            viewport=self._viewport,
+            resource_name=self._resource_name,
+            parent=self,
+        )
+        layout.addWidget(self._gl_widget)
+
+        # инициализируем список ресурсов и состояние паузы
+        self._update_resource_list()
+        self._sync_pause_state()
+
 
     def sizeHint(self) -> QtCore.QSize:
         return QtCore.QSize(400, 300)
@@ -188,8 +223,12 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self,
         graphics: GraphicsBackend,
         viewport: Viewport,
-        resource_name: str = "color",
+        resource_name: str = "debug",
         parent: Optional[QtWidgets.QWidget] = None,
+        get_available_resources: Optional[Callable[[], list[str]]] = None,
+        set_source_resource: Optional[Callable[[str], None]] = None,
+        get_paused: Optional[Callable[[], bool]] = None,
+        set_paused: Optional[Callable[[bool], None]] = None,
     ) -> None:
         super().__init__(parent)
 
@@ -197,12 +236,30 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._viewport = viewport
         self._resource_name = resource_name
 
+        self._get_available_resources = get_available_resources
+        self._set_source_resource = set_source_resource
+        self._get_paused = get_paused
+        self._set_paused = set_paused
+
         self.setWindowTitle(f"Framegraph texture: {resource_name}")
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
         self.setModal(False)
         self.setMinimumSize(400, 300)
 
         layout = QtWidgets.QVBoxLayout(self)
+
+        controls_layout = QtWidgets.QHBoxLayout()
+        self._resource_label = QtWidgets.QLabel("Resource:", self)
+        self._resource_combo = QtWidgets.QComboBox(self)
+        self._resource_combo.currentTextChanged.connect(self._on_resource_selected)
+        self._pause_check = QtWidgets.QCheckBox("Pause", self)
+        self._pause_check.toggled.connect(self._on_pause_toggled)
+
+        controls_layout.addWidget(self._resource_label)
+        controls_layout.addWidget(self._resource_combo, 1)
+        controls_layout.addWidget(self._pause_check)
+        layout.addLayout(controls_layout)
+
         self._gl_widget = FramegraphTextureWidget(
             graphics=self._graphics,
             viewport=self._viewport,
@@ -211,9 +268,67 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         )
         layout.addWidget(self._gl_widget)
 
+        # инициализируем список ресурсов и состояние паузы
+        self._update_resource_list()
+        self._sync_pause_state()
+
+    def _update_resource_list(self) -> None:
+        """
+        Обновляет список доступных ресурсов framegraph в комбобоксе.
+        """
+        if not hasattr(self, "_resource_combo"):
+            return
+
+        if self._get_available_resources is not None:
+            names = self._get_available_resources()
+        else:
+            names = list(self._viewport.fbos.keys())
+
+        names = sorted(set(names))
+
+        current = self._resource_combo.currentText()
+        self._resource_combo.blockSignals(True)
+        self._resource_combo.clear()
+        for name in names:
+            self._resource_combo.addItem(name)
+        if current and current in names:
+            index = self._resource_combo.findText(current)
+            if index >= 0:
+                self._resource_combo.setCurrentIndex(index)
+        self._resource_combo.blockSignals(False)
+
+    def _sync_pause_state(self) -> None:
+        """
+        Синхронизирует состояние чекбокса Pause с внешним состоянием.
+        """
+        if self._get_paused is None or not hasattr(self, "_pause_check"):
+            return
+        value = bool(self._get_paused())
+        self._pause_check.blockSignals(True)
+        self._pause_check.setChecked(value)
+        self._pause_check.blockSignals(False)
+
+    def _on_resource_selected(self, name: str) -> None:
+        """
+        Обработчик выбора ресурса в комбобоксе: прокидывает имя в BlitPass.
+        """
+        if not name:
+            return
+        if self._set_source_resource is not None:
+            self._set_source_resource(name)
+
+    def _on_pause_toggled(self, checked: bool) -> None:
+        """
+        Обработчик переключения паузы: обновляет флаг для BlitPass.
+        """
+        if self._set_paused is not None:
+            self._set_paused(bool(checked))
     def request_update(self) -> None:
         """
         Редактор может вызвать это, чтобы запросить перерисовку окна
         при обновлении основного viewport.
+        Также здесь обновляем список ресурсов и состояние паузы.
         """
+        self._update_resource_list()
+        self._sync_pause_state()
         self._gl_widget.update()
