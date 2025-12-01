@@ -7,6 +7,7 @@ from typing import List, Sequence, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.core.entity import Component, Entity, InputComponent
+from termin.visualization.render.components.light_component import LightComponent
 from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.geombase.ray import Ray3
 from termin.colliders.raycast_hit import RaycastHit
@@ -79,6 +80,7 @@ class Scene:
         self._input_components: List[InputComponent] = []
         self._graphics: GraphicsBackend | None = None
         self.colliders = []
+        self.light_components: List[LightComponent] = []
         self.update_list: List[Component] = []
 
         # Lights
@@ -115,19 +117,32 @@ class Scene:
     def register_component(self, component: Component):
         # регистрируем коллайдеры
         from termin.colliders.collider_component import ColliderComponent
+
         if isinstance(component, ColliderComponent):
             self.colliders.append(component)
+
+        # регистрируем компоненты освещения
+        if isinstance(component, LightComponent):
+            self.light_components.append(component)
+
         for shader in component.required_shaders():
             self._register_shader(shader)
+
         if isinstance(component, InputComponent):
             self._input_components.append(component)
+
         if is_overrides_method(component, "update", Component):
             self.update_list.append(component)
 
     def unregister_component(self, component: Component):
         from termin.colliders.collider_component import ColliderComponent
+
         if isinstance(component, ColliderComponent) and component in self.colliders:
             self.colliders.remove(component)
+
+        if isinstance(component, LightComponent) and component in self.light_components:
+            self.light_components.remove(component)
+
         if isinstance(component, InputComponent) and component in self._input_components:
             self._input_components.remove(component)
 
