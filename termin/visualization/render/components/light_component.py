@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 
 from termin.visualization.core.entity import Component
-from termin.visualization.core.lighting.light import LightType
+from termin.editor.inspect_field import InspectField
+from termin.visualization.core.lighting.light import LightType, Light
 
 
 class LightComponent(Component):
@@ -11,6 +12,29 @@ class LightComponent(Component):
     Простейший компонент источника света.
     Пока хранит только тип, цвет и интенсивность.
     """
+
+    inspect_fields = {
+        "light_type": InspectField(
+            path="light_type",
+            label="Light Type",
+            kind="enum",
+            choices=[
+                (LightType.DIRECTIONAL, "Directional"),
+                (LightType.POINT, "Point"),
+                (LightType.SPOT, "Spot"),
+            ],
+        ),
+        "color": InspectField(
+            path="color",
+            label="Color",
+            kind="color",
+        ),
+        "intensity": InspectField(
+            path="intensity",
+            label="Intensity",
+            kind="float",
+        ),
+    }
 
     def __init__(
         self,
@@ -23,3 +47,11 @@ class LightComponent(Component):
         self.light_type = light_type
         self.color = np.asarray(color, dtype=np.float32)
         self.intensity = float(intensity)
+
+    def to_light(self) -> Light:
+        """Преобразовать в объект Light для рендеринга."""
+        return Light(
+            light_type=self.light_type,
+            color=self.color,
+            intensity=self.intensity,
+        )
