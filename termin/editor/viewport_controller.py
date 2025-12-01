@@ -82,8 +82,6 @@ class ViewportController:
         self._debug_source_res: str = "color_pp"
         self._debug_paused: bool = False
         self._debug_blit_pass = None
-        self._color_pass = None  # Ссылка на ColorPass для работы с внутренними символами
-        self._debug_internal_symbol: str | None = None  # Текущий внутренний символ дебага
 
         self.selected_entity_id: int = 0
         self.hover_entity_id: int = 0
@@ -163,9 +161,8 @@ class ViewportController:
             self._process_pending_hover(self._pending_hover, window)
 
         # обновляем окно дебагера уже после того, как все FBO обновлены
-        debugger = getattr(self, "_framegraph_debugger", None)
-        if debugger is not None and debugger.isVisible():
-            debugger.request_update()
+        if self._framegraph_debugger is not None and self._framegraph_debugger.isVisible():
+            self._framegraph_debugger.request_update()
 
     # ---------- обработка hover / выбора / гизмо ----------
 
@@ -174,7 +171,7 @@ class ViewportController:
         self._pending_hover = None
 
         ent = self._backend.pick_entity_at(x, y, viewport)
-        if ent is not None and getattr(ent, "selectable", True) is False:
+        if ent is not None and not ent.selectable:
             ent = None
 
         self._on_hover_entity(ent)
@@ -184,7 +181,7 @@ class ViewportController:
         self._pending_pick_release = None
 
         ent = self._backend.pick_entity_at(x, y, viewport)
-        if ent is not None and getattr(ent, "selectable", True) is False:
+        if ent is not None and not ent.selectable:
             ent = None
 
         self._on_entity_picked(ent)
@@ -240,48 +237,7 @@ class ViewportController:
         """
         return self._debug_paused
 
-    # ---------- internal debug symbols (для ColorPass) ----------
-
-    def get_internal_symbols(self) -> list[str]:
-        """
-        Возвращает список внутренних отладочных символов ColorPass.
-
-        Это имена сущностей с MeshRenderer, которые можно использовать
-        как точки дебага — при выборе соответствующего символа
-        будет блититься состояние рендера после отрисовки этого меша.
-        """
-        if self._color_pass is None:
-            return []
-        return self._color_pass.get_internal_symbols()
-
-    def set_internal_symbol(self, symbol: str | None) -> None:
-        """
-        Устанавливает внутреннюю точку дебага для ColorPass.
-
-        Когда symbol установлен, ColorPass будет блитить состояние
-        рендера после отрисовки соответствующей сущности в debug FBO.
-        При этом BlitPass отключается, чтобы не было конфликта ресурсов.
-
-        Параметры:
-            symbol: Имя сущности (меша) или None для сброса.
-        """
-        self._debug_internal_symbol = symbol
-
-        if self._color_pass is None:
-            return
-
-        if symbol is None or symbol == "":
-            # Сброс внутренней точки дебага
-            self._color_pass.set_debug_internal_point(None, None)
-            # Включаем BlitPass обратно
-            if self._debug_blit_pass is not None:
-                self._debug_blit_pass.enabled = True
-        else:
-            # Устанавливаем точку дебага с выходом в ресурс "debug"
-            self._color_pass.set_debug_internal_point(symbol, "debug")
-            # Отключаем BlitPass, чтобы не было конфликта записи в "debug"
-            if self._debug_blit_pass is not None:
-                self._debug_blit_pass.enabled = False
+    # ---------- internal debug symbols ----------
 
     def get_passes_info(self) -> list[tuple[str, bool]]:
         """
@@ -364,9 +320,9 @@ class ViewportController:
         # Источник и режим паузы задаются через колбэк, читающий состояние контроллера.
         # При выборе внутренней точки пасса BlitPass отключается через enabled=False.
         def _get_debug_source():
-            if getattr(self, "_debug_paused", False):
+            if self._debug_paused:
                 return None
-            return getattr(self, "_debug_source_res", "color_pp")
+            return self._debug_source_res
 
         blit_pass = BlitPass(
             get_source_res=_get_debug_source,
@@ -376,7 +332,6 @@ class ViewportController:
         self._debug_blit_pass = blit_pass
 
         color_pass = ColorPass(input_res="empty", output_res="color", pass_name="Color")
-        self._color_pass = color_pass
 
         passes: list = [
             color_pass,

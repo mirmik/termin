@@ -221,7 +221,7 @@ class EditorWindow(QMainWindow):
         Открывает отдельное окно с содержимым undo/redo стека.
         Окно живёт как независимый top-level, не блокируя основной интерфейс.
         """
-        if getattr(self, "_undo_stack_viewer", None) is None:
+        if self._undo_stack_viewer is None:
             from termin.editor.undo_stack_viewer import UndoStackViewer
             self._undo_stack_viewer = UndoStackViewer(
                 self.undo_stack,
@@ -285,8 +285,7 @@ class EditorWindow(QMainWindow):
                 self.viewport_controller.set_framegraph_debugger(self._framegraph_debugger)
 
         # перед показом синхронизируем состояние и просим перерисовку
-        if hasattr(self._framegraph_debugger, "request_update"):
-            self._framegraph_debugger.request_update()
+        self._framegraph_debugger.request_update()
 
         self._framegraph_debugger.show()
         self._framegraph_debugger.raise_()
@@ -300,7 +299,7 @@ class EditorWindow(QMainWindow):
         камера, гизмо и т.п.
         """
         for ent in self.scene.entities:
-            if getattr(ent, "name", "") == "EditorEntities":
+            if ent.name == "EditorEntities":
                 self.editor_entities = ent
                 return
 
@@ -334,13 +333,13 @@ class EditorWindow(QMainWindow):
                 continue
 
             # ------------ МЕШИ ------------
-            mesh = getattr(mr, "mesh", None)
+            mesh = mr.mesh
             if mesh is not None:
                 existing_mesh_name = self.resource_manager.find_mesh_name(mesh)
                 if existing_mesh_name is None:
-                    name = getattr(mesh, "name", None)
+                    name = mesh.name if hasattr(mesh, "name") else None
                     if not name:
-                        base = f"{ent.name}_mesh" if getattr(ent, "name", None) else "Mesh"
+                        base = f"{ent.name}_mesh" if ent.name else "Mesh"
                         name = base
                         i = 1
                         while name in self.resource_manager.meshes:
@@ -358,15 +357,15 @@ class EditorWindow(QMainWindow):
             if existing_name is not None:
                 continue
 
-            name = getattr(mat, "name", None)
+            name = mat.name
             if not name:
-                base = f"{ent.name}_mat" if getattr(ent, "name", None) else "Material"
+                base = f"{ent.name}_mat" if ent.name else "Material"
                 name = base
                 i = 1
                 while name in self.resource_manager.materials:
                     i += 1
                     name = f"{base}_{i}"
-                    mat.name = name
+                mat.name = name
 
             self.resource_manager.register_material(name, mat)
 
@@ -459,7 +458,7 @@ class EditorWindow(QMainWindow):
             and event.type() == QEvent.KeyPress
             and event.key() == Qt.Key_Delete
         ):
-            ent = getattr(self, "_selected_entity", None)
+            ent = self._selected_entity
             if isinstance(ent, Entity):
                 # удаление через команду, дерево и вьюпорт обновятся через undo-стек
                 cmd = DeleteEntityCommand(self.scene, ent)

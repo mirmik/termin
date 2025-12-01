@@ -188,9 +188,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         get_pass_internal_symbols: Optional[Callable[[str], List[str]]] = None,
         # Устанавливает внутренний символ для пасса (pass_name, symbol)
         set_pass_internal_symbol: Optional[Callable[[str, str | None], None]] = None,
-        # Устаревшие колбэки для обратной совместимости
-        get_internal_symbols: Optional[Callable[[], List[str]]] = None,
-        set_internal_symbol: Optional[Callable[[str | None], None]] = None,
     ) -> None:
         super().__init__(parent)
         self._graphics = graphics
@@ -209,10 +206,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._get_passes_info = get_passes_info
         self._get_pass_internal_symbols = get_pass_internal_symbols
         self._set_pass_internal_symbol = set_pass_internal_symbol
-
-        # Устаревшие колбэки (для обратной совместимости)
-        self._get_internal_symbols_legacy = get_internal_symbols
-        self._set_internal_symbol_legacy = set_internal_symbol
 
         # Текущий режим: "between" или "inside"
         self._mode = "between"
@@ -339,9 +332,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         if self._set_pass_internal_symbol is not None and self._selected_pass:
             self._set_pass_internal_symbol(self._selected_pass, name)
-        elif self._set_internal_symbol_legacy is not None:
-            # Обратная совместимость
-            self._set_internal_symbol_legacy(name)
 
     def _on_pause_toggled(self, checked: bool) -> None:
         """Обработчик переключения паузы."""
@@ -352,8 +342,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         """Сбрасывает внутренний символ при переключении режима."""
         if self._set_pass_internal_symbol is not None and self._selected_pass:
             self._set_pass_internal_symbol(self._selected_pass, None)
-        elif self._set_internal_symbol_legacy is not None:
-            self._set_internal_symbol_legacy(None)
 
     def _update_resource_list(self) -> None:
         """Обновляет список ресурсов для режима «Между пассами»."""
@@ -386,11 +374,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         if self._get_passes_info is not None:
             passes_info = self._get_passes_info()
-        elif self._get_internal_symbols_legacy is not None:
-            # Обратная совместимость: один пасс "Color"
-            symbols = self._get_internal_symbols_legacy()
-            if symbols:
-                passes_info = [("Color", True)]
 
         for pass_name, has_symbols in passes_info:
             suffix = " ●" if has_symbols else ""
@@ -412,9 +395,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         if self._get_pass_internal_symbols is not None and self._selected_pass:
             symbols = self._get_pass_internal_symbols(self._selected_pass)
-        elif self._get_internal_symbols_legacy is not None:
-            # Обратная совместимость
-            symbols = self._get_internal_symbols_legacy()
 
         symbols = sorted(set(symbols))
 

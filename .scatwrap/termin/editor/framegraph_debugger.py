@@ -196,9 +196,6 @@ class&nbsp;FramegraphDebugDialog(QtWidgets.QDialog):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;get_pass_internal_symbols:&nbsp;Optional[Callable[[str],&nbsp;List[str]]]&nbsp;=&nbsp;None,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Устанавливает&nbsp;внутренний&nbsp;символ&nbsp;для&nbsp;пасса&nbsp;(pass_name,&nbsp;symbol)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;set_pass_internal_symbol:&nbsp;Optional[Callable[[str,&nbsp;str&nbsp;|&nbsp;None],&nbsp;None]]&nbsp;=&nbsp;None,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Устаревшие&nbsp;колбэки&nbsp;для&nbsp;обратной&nbsp;совместимости<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;get_internal_symbols:&nbsp;Optional[Callable[[],&nbsp;List[str]]]&nbsp;=&nbsp;None,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;set_internal_symbol:&nbsp;Optional[Callable[[str&nbsp;|&nbsp;None],&nbsp;None]]&nbsp;=&nbsp;None,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(parent)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._graphics&nbsp;=&nbsp;graphics<br>
@@ -217,10 +214,6 @@ class&nbsp;FramegraphDebugDialog(QtWidgets.QDialog):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._get_passes_info&nbsp;=&nbsp;get_passes_info<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._get_pass_internal_symbols&nbsp;=&nbsp;get_pass_internal_symbols<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_pass_internal_symbol&nbsp;=&nbsp;set_pass_internal_symbol<br>
-<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Устаревшие&nbsp;колбэки&nbsp;(для&nbsp;обратной&nbsp;совместимости)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._get_internal_symbols_legacy&nbsp;=&nbsp;get_internal_symbols<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_internal_symbol_legacy&nbsp;=&nbsp;set_internal_symbol<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Текущий&nbsp;режим:&nbsp;&quot;between&quot;&nbsp;или&nbsp;&quot;inside&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._mode&nbsp;=&nbsp;&quot;between&quot;<br>
@@ -347,9 +340,6 @@ class&nbsp;FramegraphDebugDialog(QtWidgets.QDialog):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._set_pass_internal_symbol&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;self._selected_pass:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_pass_internal_symbol(self._selected_pass,&nbsp;name)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;self._set_internal_symbol_legacy&nbsp;is&nbsp;not&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обратная&nbsp;совместимость<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_internal_symbol_legacy(name)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_on_pause_toggled(self,&nbsp;checked:&nbsp;bool)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Обработчик&nbsp;переключения&nbsp;паузы.&quot;&quot;&quot;<br>
@@ -360,8 +350,6 @@ class&nbsp;FramegraphDebugDialog(QtWidgets.QDialog):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Сбрасывает&nbsp;внутренний&nbsp;символ&nbsp;при&nbsp;переключении&nbsp;режима.&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._set_pass_internal_symbol&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;self._selected_pass:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_pass_internal_symbol(self._selected_pass,&nbsp;None)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;self._set_internal_symbol_legacy&nbsp;is&nbsp;not&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._set_internal_symbol_legacy(None)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_update_resource_list(self)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Обновляет&nbsp;список&nbsp;ресурсов&nbsp;для&nbsp;режима&nbsp;«Между&nbsp;пассами».&quot;&quot;&quot;<br>
@@ -394,11 +382,6 @@ class&nbsp;FramegraphDebugDialog(QtWidgets.QDialog):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._get_passes_info&nbsp;is&nbsp;not&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;passes_info&nbsp;=&nbsp;self._get_passes_info()<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;self._get_internal_symbols_legacy&nbsp;is&nbsp;not&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обратная&nbsp;совместимость:&nbsp;один&nbsp;пасс&nbsp;&quot;Color&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;symbols&nbsp;=&nbsp;self._get_internal_symbols_legacy()<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;symbols:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;passes_info&nbsp;=&nbsp;[(&quot;Color&quot;,&nbsp;True)]<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;pass_name,&nbsp;has_symbols&nbsp;in&nbsp;passes_info:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;suffix&nbsp;=&nbsp;&quot;&nbsp;●&quot;&nbsp;if&nbsp;has_symbols&nbsp;else&nbsp;&quot;&quot;<br>
@@ -420,9 +403,6 @@ class&nbsp;FramegraphDebugDialog(QtWidgets.QDialog):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._get_pass_internal_symbols&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;self._selected_pass:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;symbols&nbsp;=&nbsp;self._get_pass_internal_symbols(self._selected_pass)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;self._get_internal_symbols_legacy&nbsp;is&nbsp;not&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обратная&nbsp;совместимость<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;symbols&nbsp;=&nbsp;self._get_internal_symbols_legacy()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;symbols&nbsp;=&nbsp;sorted(set(symbols))<br>
 <br>
