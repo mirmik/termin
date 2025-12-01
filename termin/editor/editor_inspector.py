@@ -19,7 +19,10 @@ from PyQt5.QtWidgets import (
     QMenu,
     QAction,
     QComboBox,
+    QPushButton,
+    QColorDialog,
 )
+from PyQt5.QtGui import QColor
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from termin.kinematic.transform import Transform3
@@ -161,6 +164,20 @@ class ComponentsPanel(QWidget):
         self.components_changed.emit()
 
 
+def _to_qcolor(value) -> QColor:
+    if isinstance(value, QColor):
+        return value
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        r, g, b = value[:3]
+        return QColor(int(r), int(g), int(b))
+    try:
+        arr = np.asarray(value).reshape(-1)
+        if arr.size >= 3:
+            r, g, b = arr[:3]
+            return QColor(int(r), int(g), int(b))
+    except Exception:
+        pass
+    return QColor(255, 255, 255)
 class ComponentInspectorPanel(QWidget):
     """
     Рисует форму для одного компонента на основе component.inspect_fields.
@@ -277,6 +294,28 @@ class ComponentInspectorPanel(QWidget):
                 combo.addItem(n)
             return combo
 
+        if kind == "enum":
+            combo = QComboBox()
+            if field.choices:
+                for value, label in field.choices:
+                    combo.addItem(label, userData=value)
+            return combo
+
+        if kind == "color":
+            btn = QPushButton()
+            btn.setAutoFillBackground(True)
+            btn._current_color = None
+
+            def set_btn_color(color: QColor):
+                btn._current_color = color
+                pal = btn.palette()
+                pal.setColor(btn.backgroundRole(), color)
+                btn.setPalette(pal)
+                btn.setText(f"{color.red()}, {color.green()}, {color.blue()}")
+
+            btn._set_color = set_btn_color
+            return btn
+
         le = QLineEdit()
         le.setReadOnly(True)
         return le
@@ -351,6 +390,25 @@ class ComponentInspectorPanel(QWidget):
                 w.setCurrentIndex(-1)
             return
 
+        if isinstance(w, QComboBox) and field.kind == "enum":
+            if field.choices:
+                for i in range(w.count()):
+                    if w.itemData(i) == value:
+                        w.setCurrentIndex(i)
+                        break
+                else:
+                    w.setCurrentIndex(-1)
+            else:
+                idx = w.findText(str(value))
+                w.setCurrentIndex(idx if idx >= 0 else -1)
+            return
+
+        if isinstance(w, QPushButton) and field.kind == "color":
+            qcol = _to_qcolor(value)
+            if hasattr(w, "_set_color"):
+                w._set_color(qcol)
+            return
+
     def _connect_widget(self, w: QWidget, key: str, field: InspectField):
         def commit(merge: bool):
             if self._updating_from_model or self._component is None:
@@ -381,8 +439,21 @@ class ComponentInspectorPanel(QWidget):
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:
                 sb.valueChanged.connect(lambda _v: commit(True))
-        elif isinstance(w, QComboBox) and field.kind in ("material", "mesh"):
+        elif isinstance(w, QComboBox) and field.kind in ("material", "mesh", "enum"):
             w.currentIndexChanged.connect(lambda _i: commit(False))
+        elif isinstance(w, QPushButton) and field.kind == "color":
+            def on_click():
+                if self._component is None:
+                    return
+                start_color = _to_qcolor(field.get_value(self._component))
+                col = QColorDialog.getColor(start_color, self)
+                if not col.isValid():
+                    return
+                if hasattr(w, "_set_color"):
+                    w._set_color(col)
+                commit(False)
+
+            w.clicked.connect(on_click)
 
     def _read_widget_value(self, w: QWidget, field: InspectField):
         if isinstance(w, QDoubleSpinBox):
@@ -408,6 +479,18 @@ class ComponentInspectorPanel(QWidget):
             if not name:
                 return None
             return self._resources.get_mesh(name)
+
+        if isinstance(w, QComboBox) and field.kind == "enum":
+            if field.choices:
+                return w.currentData()
+            text = w.currentText()
+            return text if text else None
+
+        if isinstance(w, QPushButton) and field.kind == "color":
+            qcol = getattr(w, "_current_color", None)
+            if qcol is None:
+                return None
+            return (qcol.red(), qcol.green(), qcol.blue())
 
         return None
 
