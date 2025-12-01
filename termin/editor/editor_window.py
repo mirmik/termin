@@ -275,7 +275,10 @@ class EditorWindow(QMainWindow):
             if self.viewport_controller is not None:
                 self.viewport_controller.set_framegraph_debugger(self._framegraph_debugger)
 
-        self._framegraph_debugger.refresh()
+        # перед показом синхронизируем состояние и просим перерисовку
+        if hasattr(self._framegraph_debugger, "request_update"):
+            self._framegraph_debugger.request_update()
+
         self._framegraph_debugger.show()
         self._framegraph_debugger.raise_()
         self._framegraph_debugger.activateWindow()

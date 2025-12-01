@@ -23,10 +23,6 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         viewport: Viewport,
         resource_name: str = "debug",
         parent: Optional[QtWidgets.QWidget] = None,
-        get_available_resources: Optional[Callable[[], list[str]]] = None,
-        set_source_resource: Optional[Callable[[str], None]] = None,
-        get_paused: Optional[Callable[[], bool]] = None,
-        set_paused: Optional[Callable[[bool], None]] = None,
     ) -> None:
         super().__init__(parent)
 
@@ -34,42 +30,12 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         self._viewport = viewport
         self._resource_name = resource_name
 
-        self._get_available_resources = get_available_resources
-        self._set_source_resource = set_source_resource
-        self._get_paused = get_paused
-        self._set_paused = set_paused
+        self._shader: Optional[ShaderProgram] = None
+        self._vao: Optional[int] = None
+        self._vbo: Optional[int] = None
 
-        self.setWindowTitle(f"Framegraph texture: {resource_name}")
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
-        self.setModal(False)
-        self.setMinimumSize(400, 300)
-
-        layout = QtWidgets.QVBoxLayout(self)
-
-        controls_layout = QtWidgets.QHBoxLayout()
-        self._resource_label = QtWidgets.QLabel("Resource:", self)
-        self._resource_combo = QtWidgets.QComboBox(self)
-        self._resource_combo.currentTextChanged.connect(self._on_resource_selected)
-        self._pause_check = QtWidgets.QCheckBox("Pause", self)
-        self._pause_check.toggled.connect(self._on_pause_toggled)
-
-        controls_layout.addWidget(self._resource_label)
-        controls_layout.addWidget(self._resource_combo, 1)
-        controls_layout.addWidget(self._pause_check)
-        layout.addLayout(controls_layout)
-
-        self._gl_widget = FramegraphTextureWidget(
-            graphics=self._graphics,
-            viewport=self._viewport,
-            resource_name=self._resource_name,
-            parent=self,
-        )
-        layout.addWidget(self._gl_widget)
-
-        # инициализируем список ресурсов и состояние паузы
-        self._update_resource_list()
-        self._sync_pause_state()
-
+        self.setMinimumSize(200, 150)
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
 
     def sizeHint(self) -> QtCore.QSize:
         return QtCore.QSize(400, 300)
@@ -115,9 +81,9 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         # x, y, u, v (triangle strip)
         data = [
             -1.0, -1.0, 0.0, 0.0,
-             1.0, -1.0, 1.0, 0.0,
+            1.0, -1.0, 1.0, 0.0,
             -1.0,  1.0, 0.0, 1.0,
-             1.0,  1.0, 1.0, 1.0,
+            1.0,  1.0, 1.0, 1.0,
         ]
         import array
         arr = array.array("f", data)
@@ -146,7 +112,6 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         """
         Qt создал контекст, здесь можно инициализировать ресурсы.
         """
-        
         self._get_shader()
         self._init_fullscreen_quad()
 
@@ -198,7 +163,6 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         h = gl.glGetTexLevelParameteriv(gl.GL_TEXTURE_2D, 0, gl.GL_TEXTURE_HEIGHT)
         print("debug tex size:", w, h)
 
-
         gl.glDisable(gl.GL_DEPTH_TEST)
         gl.glDepthMask(gl.GL_FALSE)
 
@@ -212,11 +176,11 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         gl.glDepthMask(gl.GL_TRUE)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
-
 class FramegraphDebugDialog(QtWidgets.QDialog):
     """
     Окно-дебагер: внутри одно GL-окно, которое показывает текстуру из framegraph
-    (ресурс resource_name из viewport.fbos).
+    (ресурс resource_name из viewport.fbos), плюс панель управления:
+    выбор ресурса и кнопка паузы.
     """
 
     def __init__(
@@ -323,6 +287,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         """
         if self._set_paused is not None:
             self._set_paused(bool(checked))
+
     def request_update(self) -> None:
         """
         Редактор может вызвать это, чтобы запросить перерисовку окна
