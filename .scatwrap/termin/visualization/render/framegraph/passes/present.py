@@ -50,6 +50,8 @@ class&nbsp;BlitPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;Копирует&nbsp;color-текстуру&nbsp;из&nbsp;одного&nbsp;FBO&nbsp;в&nbsp;другой&nbsp;через&nbsp;фуллскрин-квад.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;Источник&nbsp;задаётся&nbsp;колбэком&nbsp;get_source_res,&nbsp;чтобы&nbsp;его&nbsp;можно&nbsp;было<br>
 &nbsp;&nbsp;&nbsp;&nbsp;динамически&nbsp;переключать&nbsp;из&nbsp;редактора/дебагера.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Для&nbsp;отключения&nbsp;пасса&nbsp;используйте&nbsp;enabled=False.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>

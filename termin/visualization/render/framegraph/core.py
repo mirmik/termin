@@ -13,6 +13,7 @@ class FramePass:
     reads  – какие ресурсы этот проход читает (по именам).
     writes – какие ресурсы он пишет.
     inplace – модифицирующий ли это проход (in-place по смыслу).
+    enabled – включён ли проход; отключённые пассы игнорируются при построении графа.
 
     Внутренние точки (internal debug points):
         Некоторые пассы могут объявлять «внутренние» точки наблюдения,
@@ -23,6 +24,7 @@ class FramePass:
     reads: Set[str] = field(default_factory=set)
     writes: Set[str] = field(default_factory=set)
     inplace: bool = False
+    enabled: bool = True
 
     # Конфигурация внутренней точки дебага (символ и целевой ресурс).
     debug_internal_symbol: str | None = None
@@ -57,9 +59,21 @@ class FramePass:
         output_res:
             Имя ресурса (FBO), в который пасс при необходимости
             должен выводить состояние для выбранного символа.
+
+        При установке output_res он добавляется в writes пасса,
+        при сбросе — удаляется. Это позволяет framegraph корректно
+        учитывать debug-ресурс при построении графа зависимостей.
         """
+        # Удаляем старый debug_internal_output из writes, если он был
+        if self.debug_internal_output is not None:
+            self.writes.discard(self.debug_internal_output)
+
         self.debug_internal_symbol = symbol
         self.debug_internal_output = output_res
+
+        # Добавляем новый debug_internal_output в writes
+        if output_res is not None:
+            self.writes.add(output_res)
 
     def get_debug_internal_point(self) -> tuple[str | None, str | None]:
         """
@@ -85,10 +99,15 @@ class FrameGraph:
     """
     Простейший frame graph: на вход – набор FramePass,
     на выход – топологически отсортированный список пассов.
+
+    Пассы с enabled=False игнорируются при построении графа и
+    не попадают в итоговое расписание.
     """
 
     def __init__(self, passes: Iterable[FramePass]):
-        self._passes: List[FramePass] = list(passes)
+        self._all_passes: List[FramePass] = list(passes)
+        # Фильтруем только включённые пассы для построения графа
+        self._passes: List[FramePass] = [p for p in self._all_passes if p.enabled]
         # карта "ресурс -> каноническое имя" (на будущее — для дебага / инспекции)
         self._canonical_resources: Dict[str, str] = {}
 
@@ -122,11 +141,24 @@ class FrameGraph:
         # 1) собираем writer-ов, reader-ов и валидируем inplace-пассы
         for idx, p in enumerate(self._passes):
             # --- валидация inplace-пассов ---
+            # Inplace-пасс должен иметь ровно 1 read.
+            # В writes может быть 1 основной ресурс + опционально debug_internal_output.
+            # debug_internal_output не нарушает семантику inplace,
+            # так как это отдельный ресурс для дебага.
             if p.inplace:
-                if len(p.reads) != 1 or len(p.writes) != 1:
+                if len(p.reads) != 1:
                     raise FrameGraphError(
-                        f"Inplace pass {p.pass_name!r} must have exactly 1 read and 1 write, "
-                        f"got reads={p.reads}, writes={p.writes}"
+                        f"Inplace pass {p.pass_name!r} must have exactly 1 read, "
+                        f"got reads={p.reads}"
+                    )
+                # Определяем количество «основных» writes (без debug_internal_output)
+                base_writes_count = len(p.writes)
+                if p.debug_internal_output is not None:
+                    base_writes_count -= 1
+                if base_writes_count != 1:
+                    raise FrameGraphError(
+                        f"Inplace pass {p.pass_name!r} must have exactly 1 base write "
+                        f"(excluding debug_internal_output), got {base_writes_count}"
                     )
                 (src,) = p.reads
                 if src in modified_inputs:
@@ -164,7 +196,9 @@ class FrameGraph:
             if not p.inplace:
                 continue
             (src,) = p.reads
-            (dst,) = p.writes
+            # Находим основной write (не debug_internal_output)
+            base_writes = [w for w in p.writes if w != p.debug_internal_output]
+            (dst,) = base_writes
 
             src_canon = canonical.get(src, src)
             # выходу назначаем каноническое имя входа:

@@ -82,6 +82,8 @@ class ViewportController:
         self._debug_source_res: str = "color_pp"
         self._debug_paused: bool = False
         self._debug_blit_pass = None
+        self._color_pass = None  # Ссылка на ColorPass для работы с внутренними символами
+        self._debug_internal_symbol: str | None = None  # Текущий внутренний символ дебага
 
         self.selected_entity_id: int = 0
         self.hover_entity_id: int = 0
@@ -238,6 +240,103 @@ class ViewportController:
         """
         return self._debug_paused
 
+    # ---------- internal debug symbols (для ColorPass) ----------
+
+    def get_internal_symbols(self) -> list[str]:
+        """
+        Возвращает список внутренних отладочных символов ColorPass.
+
+        Это имена сущностей с MeshRenderer, которые можно использовать
+        как точки дебага — при выборе соответствующего символа
+        будет блититься состояние рендера после отрисовки этого меша.
+        """
+        if self._color_pass is None:
+            return []
+        return self._color_pass.get_internal_symbols()
+
+    def set_internal_symbol(self, symbol: str | None) -> None:
+        """
+        Устанавливает внутреннюю точку дебага для ColorPass.
+
+        Когда symbol установлен, ColorPass будет блитить состояние
+        рендера после отрисовки соответствующей сущности в debug FBO.
+        При этом BlitPass отключается, чтобы не было конфликта ресурсов.
+
+        Параметры:
+            symbol: Имя сущности (меша) или None для сброса.
+        """
+        self._debug_internal_symbol = symbol
+
+        if self._color_pass is None:
+            return
+
+        if symbol is None or symbol == "":
+            # Сброс внутренней точки дебага
+            self._color_pass.set_debug_internal_point(None, None)
+            # Включаем BlitPass обратно
+            if self._debug_blit_pass is not None:
+                self._debug_blit_pass.enabled = True
+        else:
+            # Устанавливаем точку дебага с выходом в ресурс "debug"
+            self._color_pass.set_debug_internal_point(symbol, "debug")
+            # Отключаем BlitPass, чтобы не было конфликта записи в "debug"
+            if self._debug_blit_pass is not None:
+                self._debug_blit_pass.enabled = False
+
+    def get_passes_info(self) -> list[tuple[str, bool]]:
+        """
+        Возвращает список пассов с информацией о наличии внутренних символов.
+
+        Возвращает:
+            Список кортежей (pass_name, has_internal_symbols).
+        """
+        viewport = self._backend.viewport
+        result: list[tuple[str, bool]] = []
+        for p in viewport.frame_passes:
+            symbols = p.get_internal_symbols()
+            has_symbols = len(symbols) > 0
+            result.append((p.pass_name, has_symbols))
+        return result
+
+    def get_pass_internal_symbols(self, pass_name: str) -> list[str]:
+        """
+        Возвращает список внутренних символов для указанного пасса.
+
+        Параметры:
+            pass_name: Имя пасса.
+
+        Возвращает:
+            Список символов или пустой список.
+        """
+        viewport = self._backend.viewport
+        for p in viewport.frame_passes:
+            if p.pass_name == pass_name:
+                return p.get_internal_symbols()
+        return []
+
+    def set_pass_internal_symbol(self, pass_name: str, symbol: str | None) -> None:
+        """
+        Устанавливает внутреннюю точку дебага для указанного пасса.
+
+        Параметры:
+            pass_name: Имя пасса.
+            symbol: Имя символа или None для сброса.
+        """
+        viewport = self._backend.viewport
+        for p in viewport.frame_passes:
+            if p.pass_name == pass_name:
+                if symbol is None or symbol == "":
+                    p.set_debug_internal_point(None, None)
+                    # Включаем BlitPass обратно
+                    if self._debug_blit_pass is not None:
+                        self._debug_blit_pass.enabled = True
+                else:
+                    p.set_debug_internal_point(symbol, "debug")
+                    # Отключаем BlitPass
+                    if self._debug_blit_pass is not None:
+                        self._debug_blit_pass.enabled = False
+                return
+
     # ---------- pipeline ----------
 
     def _make_pipeline(self) -> list:
@@ -263,6 +362,7 @@ class ViewportController:
 
         # BlitPass копирует выбранный ресурс в отдельный debug-ресурс.
         # Источник и режим паузы задаются через колбэк, читающий состояние контроллера.
+        # При выборе внутренней точки пасса BlitPass отключается через enabled=False.
         def _get_debug_source():
             if getattr(self, "_debug_paused", False):
                 return None
@@ -275,8 +375,11 @@ class ViewportController:
         )
         self._debug_blit_pass = blit_pass
 
+        color_pass = ColorPass(input_res="empty", output_res="color", pass_name="Color")
+        self._color_pass = color_pass
+
         passes: list = [
-            ColorPass(input_res="empty", output_res="color", pass_name="Color"),
+            color_pass,
             IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
             GizmoPass(
                 input_res="preid",

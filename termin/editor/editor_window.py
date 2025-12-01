@@ -254,12 +254,18 @@ class EditorWindow(QMainWindow):
             set_source = None
             get_paused = None
             set_paused = None
+            get_passes_info = None
+            get_pass_internal_symbols = None
+            set_pass_internal_symbol = None
 
             if self.viewport_controller is not None:
                 get_resources = self.viewport_controller.get_available_framegraph_resources
                 set_source = self.viewport_controller.set_debug_source_resource
                 get_paused = self.viewport_controller.get_debug_paused
                 set_paused = self.viewport_controller.set_debug_paused
+                get_passes_info = self.viewport_controller.get_passes_info
+                get_pass_internal_symbols = self.viewport_controller.get_pass_internal_symbols
+                set_pass_internal_symbol = self.viewport_controller.set_pass_internal_symbol
 
             self._framegraph_debugger = FramegraphDebugDialog(
                 graphics=graphics,
@@ -270,6 +276,9 @@ class EditorWindow(QMainWindow):
                 set_source_resource=set_source,
                 get_paused=get_paused,
                 set_paused=set_paused,
+                get_passes_info=get_passes_info,
+                get_pass_internal_symbols=get_pass_internal_symbols,
+                set_pass_internal_symbol=set_pass_internal_symbol,
             )
 
             if self.viewport_controller is not None:
