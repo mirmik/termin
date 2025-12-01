@@ -211,6 +211,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._mode = "between"
         # Текущий выбранный пасс (для режима «Внутри пасса»)
         self._selected_pass: str | None = None
+        # Текущий выбранный внутренний символ (для режима «Внутри пасса»)
+        self._selected_symbol: str | None = None
 
         self._build_ui()
 
@@ -323,14 +325,20 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         idx = self._pass_combo.currentIndex()
         if idx >= 0:
             self._selected_pass = self._pass_combo.itemData(idx)
+        # При ручном выборе пасса сбрасываем выбранный символ,
+        # чтобы не тянуть его между разными пассами.
+        self._selected_symbol = None
         self._update_symbols_list()
 
     def _on_symbol_selected(self, name: str) -> None:
         """Обработчик выбора символа (режим «Внутри пасса»)."""
         if not name:
             return
-
-        if self._set_pass_internal_symbol is not None and self._selected_pass:
+        if self._selected_pass is None:
+            return
+        # Запоминаем выбранный внутренний символ для последующих обновлений списка.
+        self._selected_symbol = name
+        if self._set_pass_internal_symbol is not None:
             self._set_pass_internal_symbol(self._selected_pass, name)
 
     def _on_pause_toggled(self, checked: bool) -> None:
@@ -367,6 +375,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _update_passes_list(self) -> None:
         """Обновляет список пассов для режима «Внутри пасса»."""
+        previous_pass = self._selected_pass
+
         self._pass_combo.blockSignals(True)
         self._pass_combo.clear()
 
@@ -375,19 +385,45 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         if self._get_passes_info is not None:
             passes_info = self._get_passes_info()
 
-        for pass_name, has_symbols in passes_info:
+        selected_index = -1
+
+        for index, (pass_name, has_symbols) in enumerate(passes_info):
             suffix = " ●" if has_symbols else ""
             self._pass_combo.addItem(pass_name + suffix, pass_name)
+            if previous_pass is not None and pass_name == previous_pass:
+                selected_index = index
 
         self._pass_combo.blockSignals(False)
 
-        # Обновляем символы для первого пасса
-        if self._pass_combo.count() > 0:
-            self._selected_pass = self._pass_combo.itemData(0)
+        # Если ранее выбранного пасса больше нет в списке, логический выбор оставляем,
+        # но в комбобоксе явно не выделяем ничего.
+        if previous_pass is not None and selected_index < 0:
+            self._pass_combo.blockSignals(True)
+            self._pass_combo.setCurrentIndex(-1)
+            self._pass_combo.blockSignals(False)
+            return
+
+        # Инициализация выбора, если раньше его не было
+        if previous_pass is None:
+            if self._pass_combo.count() > 0:
+                self._pass_combo.blockSignals(True)
+                self._pass_combo.setCurrentIndex(0)
+                self._selected_pass = self._pass_combo.itemData(0)
+                self._pass_combo.blockSignals(False)
+                self._update_symbols_list()
+            return
+
+        # Перерисовываем символы для ранее выбранного пасса, если он есть в списке
+        if selected_index >= 0:
+            self._pass_combo.blockSignals(True)
+            self._pass_combo.setCurrentIndex(selected_index)
+            self._pass_combo.blockSignals(False)
             self._update_symbols_list()
 
     def _update_symbols_list(self) -> None:
         """Обновляет список символов для выбранного пасса."""
+        previous_symbol = self._selected_symbol
+
         self._symbol_combo.blockSignals(True)
         self._symbol_combo.clear()
 
@@ -398,8 +434,19 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         symbols = sorted(set(symbols))
 
-        for sym in symbols:
+        selected_index = -1
+
+        for index, sym in enumerate(symbols):
             self._symbol_combo.addItem(sym)
+            if previous_symbol is not None and sym == previous_symbol:
+                selected_index = index
+
+        # Если ранее выбранного символа нет в новом списке, логический выбор не трогаем,
+        # просто не выделяем ничего в комбобоксе.
+        if previous_symbol is not None and selected_index < 0:
+            self._symbol_combo.setCurrentIndex(-1)
+        elif selected_index >= 0:
+            self._symbol_combo.setCurrentIndex(selected_index)
 
         self._symbol_combo.setEnabled(len(symbols) > 0)
         self._symbol_combo.blockSignals(False)
