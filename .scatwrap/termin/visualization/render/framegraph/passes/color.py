@@ -125,15 +125,13 @@ class&nbsp;ColorPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Обход&nbsp;сущностей&nbsp;сцены&nbsp;и&nbsp;отрисовка<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;entity&nbsp;in&nbsp;scene.entities:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Сохраняем&nbsp;имя&nbsp;сущности&nbsp;(для&nbsp;get_internal_symbols)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entity_name&nbsp;=&nbsp;getattr(entity,&nbsp;&quot;name&quot;,&nbsp;None)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;entity_name:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity_names.append(entity_name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity_names.append(entity.name)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Отрисовка&nbsp;сущности<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entity.draw(render_context)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;текущая&nbsp;сущность&nbsp;—&nbsp;точка&nbsp;дебага,&nbsp;блитим&nbsp;в&nbsp;debug&nbsp;FBO<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;debug_fb&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;entity_name&nbsp;==&nbsp;debug_symbol:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;debug_fb&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;entity.name&nbsp;==&nbsp;debug_symbol:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._blit_to_debug(gfx,&nbsp;fb,&nbsp;debug_fb,&nbsp;(pw,&nbsp;ph),&nbsp;key)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_blit_to_debug(<br>

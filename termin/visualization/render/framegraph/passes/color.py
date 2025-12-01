@@ -117,15 +117,13 @@ class ColorPass(RenderFramePass):
         # Обход сущностей сцены и отрисовка
         for entity in scene.entities:
             # Сохраняем имя сущности (для get_internal_symbols)
-            entity_name = getattr(entity, "name", None)
-            if entity_name:
-                self._entity_names.append(entity_name)
+            self._entity_names.append(entity.name)
 
             # Отрисовка сущности
             entity.draw(render_context)
 
             # Если текущая сущность — точка дебага, блитим в debug FBO
-            if debug_fb is not None and entity_name == debug_symbol:
+            if debug_fb is not None and entity.name == debug_symbol:
                 self._blit_to_debug(gfx, fb, debug_fb, (pw, ph), key)
 
     def _blit_to_debug(

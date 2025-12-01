@@ -360,8 +360,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         # Фильтруем debug — его не показываем как источник
         names = [n for n in names if n != "debug"]
-        names = sorted(set(names))
-
+        
         current = self._resource_combo.currentText()
         self._resource_combo.blockSignals(True)
         self._resource_combo.clear()
@@ -431,8 +430,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         if self._get_pass_internal_symbols is not None and self._selected_pass:
             symbols = self._get_pass_internal_symbols(self._selected_pass)
-
-        symbols = sorted(set(symbols))
 
         selected_index = -1
 

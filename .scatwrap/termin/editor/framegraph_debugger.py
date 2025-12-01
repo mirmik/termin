@@ -368,8 +368,7 @@ class&nbsp;FramegraphDebugDialog(QtWidgets.QDialog):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Фильтруем&nbsp;debug&nbsp;—&nbsp;его&nbsp;не&nbsp;показываем&nbsp;как&nbsp;источник<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;names&nbsp;=&nbsp;[n&nbsp;for&nbsp;n&nbsp;in&nbsp;names&nbsp;if&nbsp;n&nbsp;!=&nbsp;&quot;debug&quot;]<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;names&nbsp;=&nbsp;sorted(set(names))<br>
-<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;current&nbsp;=&nbsp;self._resource_combo.currentText()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._resource_combo.blockSignals(True)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._resource_combo.clear()<br>
@@ -439,8 +438,6 @@ class&nbsp;FramegraphDebugDialog(QtWidgets.QDialog):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self._get_pass_internal_symbols&nbsp;is&nbsp;not&nbsp;None&nbsp;and&nbsp;self._selected_pass:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;symbols&nbsp;=&nbsp;self._get_pass_internal_symbols(self._selected_pass)<br>
-<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;symbols&nbsp;=&nbsp;sorted(set(symbols))<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;selected_index&nbsp;=&nbsp;-1<br>
 <br>
