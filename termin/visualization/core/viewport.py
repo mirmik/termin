@@ -1,8 +1,13 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.camera import CameraComponent
+
+if TYPE_CHECKING:
+    from termin.visualization.render.framegraph import RenderPipeline
+    from termin.visualization.render.framegraph.core import FramePass
+
 
 @dataclass
 class Viewport:
@@ -11,7 +16,7 @@ class Viewport:
     window: "Window"
     rect: Tuple[float, float, float, float] # x, y, width, height in normalized coords (0.0:1.0)
     canvas: Optional["Canvas"] = None
-    frame_passes: list["FramePass"] = field(default_factory=list)
+    pipeline: "RenderPipeline | None" = None
     fbos: dict = field(default_factory=dict)
 
 
@@ -22,13 +27,11 @@ class Viewport:
         # вызываем камеру
         return self.camera.screen_point_to_ray(x, y, viewport_rect=rect)
 
-    def set_render_pipeline(self, passes: list["FramePass"]):
+    def set_render_pipeline(self, pipeline: "RenderPipeline"):
         """
         Устанавливает конвейер рендера для этого вьюпорта.
-
-        passes – список FramePass.
         """
-        self.frame_passes = passes
+        self.pipeline = pipeline
 
     def find_render_pass(self, pass_name: str) -> Optional["FramePass"]:
         """
@@ -36,7 +39,9 @@ class Viewport:
 
         Возвращает FramePass или None.
         """
-        for p in self.frame_passes:
+        if self.pipeline is None:
+            return None
+        for p in self.pipeline.passes:
             if p.pass_name == pass_name:
                 return p
         return None
@@ -45,7 +50,7 @@ class Viewport:
     #     ДЕФОЛТНЫЙ ПАЙПЛАЙН ДЛЯ ВЬЮПОРТА
     # -------------------------------------------------------------
     @staticmethod
-    def make_default_pipeline() -> list["FramePass"]:
+    def make_default_pipeline() -> "RenderPipeline":
         """
         Собирает дефолтный конвейер рендера для этого вьюпорта.
         """
@@ -54,6 +59,8 @@ class Viewport:
             ColorPass,
             IdPass,
             PresentToScreenPass,
+            RenderPipeline,
+            ClearSpec,
         )
         from termin.visualization.render.postprocess import PostProcessPass
 
@@ -75,4 +82,9 @@ class Viewport:
                 pass_name="Present",
             )
         ]
-        return passes
+        
+        clear_specs = [
+            ClearSpec(resource="empty", color=(0.2, 0.2, 0.2, 1.0), depth=1.0),
+        ]
+        
+        return RenderPipeline(passes=passes, clear_specs=clear_specs)

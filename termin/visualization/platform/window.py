@@ -20,7 +20,7 @@ from termin.visualization.core.viewport import Viewport
 from termin.visualization.ui.canvas import Canvas
 from termin.visualization.core.picking import rgb_to_id
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.framegraph import FrameGraph, FrameContext, RenderFramePass, IdPass
+from termin.visualization.render.framegraph import FrameGraph, FrameContext, RenderFramePass, IdPass, RenderPipeline
 from termin.visualization.render.postprocess import PostProcessPass
 from termin.visualization.render.posteffects.highlight import HighlightEffect
 from termin.visualization.render.posteffects.gray import GrayscaleEffect
@@ -412,8 +412,12 @@ class Window:
             # Обновляем аспект камеры
             viewport.camera.set_aspect(pw / float(max(1, ph)))
 
-            # Берём список пассов, который кто-то заранее повесил на viewport
-            frame_passes = viewport.frame_passes
+            # Берём pipeline, который кто-то заранее повесил на viewport
+            pipeline = viewport.pipeline
+            if pipeline is None:
+                continue
+
+            frame_passes = pipeline.passes
             if not frame_passes:
                 continue
 
@@ -435,7 +439,21 @@ class Window:
                 for name in names:
                     fbos[name] = fb       # чтобы пассы пользовались ctx.fbos
 
-            # --- 2) Создаём контекст с уже готовой картой FBO ---
+            # --- 2) Очистка ресурсов перед рендерингом ---
+            for clear_spec in pipeline.clear_specs:
+                fb = fbos.get(clear_spec.resource)
+                if fb is None:
+                    continue
+                self.graphics.bind_framebuffer(fb)
+                self.graphics.set_viewport(0, 0, pw, ph)
+                if clear_spec.color is not None and clear_spec.depth is not None:
+                    self.graphics.clear_color_depth(clear_spec.color)
+                elif clear_spec.color is not None:
+                    self.graphics.clear_color(clear_spec.color)
+                elif clear_spec.depth is not None:
+                    self.graphics.clear_depth(clear_spec.depth)
+
+            # --- 3) Создаём контекст с уже готовой картой FBO ---
             ctx = FrameContext(
                 window=self,
                 viewport=viewport,
@@ -446,7 +464,7 @@ class Window:
                 fbos=fbos,
             )
 
-            # --- 3) Выполняем пассы ---
+            # --- 4) Выполняем пассы ---
             for p in schedule:
                 p.execute(ctx)
 

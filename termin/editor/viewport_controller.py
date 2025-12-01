@@ -6,16 +6,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 
 from termin.visualization.core.entity import Entity
-from termin.visualization.render.framegraph import (
-    ColorPass,
-    IdPass,
-    CanvasPass,
-    PresentToScreenPass,
-    GizmoPass,
-)
-from termin.visualization.render.postprocess import PostProcessPass
-from termin.visualization.render.posteffects.highlight import HighlightEffect
 from termin.visualization.platform.backends.base import Action, MouseButton
+from termin.visualization.render.framegraph import RenderPipeline, ClearSpec
 
 from termin.editor.gizmo import GizmoController
 
@@ -81,7 +73,6 @@ class ViewportController:
         self._framegraph_debugger = None
         self._debug_source_res: str = "color_pp"
         self._debug_paused: bool = False
-        self._debug_blit_pass = None
 
         self.selected_entity_id: int = 0
         self.hover_entity_id: int = 0
@@ -130,6 +121,7 @@ class ViewportController:
         return self._gl_widget
 
     def request_update(self) -> None:
+        print("ViewportController: request_update called")
         self._backend.request_update()
 
     def get_pick_id_for_entity(self, ent: Entity | None) -> int:
@@ -153,6 +145,7 @@ class ViewportController:
         self._pending_hover = (x, y, viewport)
 
     def _after_render(self, window) -> None:
+        print("ViewportController: after_render called")
         if self._pending_pick_press is not None:
             self._process_pending_pick_press(self._pending_pick_press, window)
         if self._pending_pick_release is not None:
@@ -162,7 +155,7 @@ class ViewportController:
 
         # обновляем окно дебагера уже после того, как все FBO обновлены
         if self._framegraph_debugger is not None and self._framegraph_debugger.isVisible():
-            self._framegraph_debugger.request_update()
+            self._framegraph_debugger.debugger_request_update()
 
     # ---------- обработка hover / выбора / гизмо ----------
 
@@ -219,6 +212,15 @@ class ViewportController:
         """
         return self._debug_source_res
 
+    def get_debug_blit_pass(self):
+        """
+        Возвращает BlitPass из пайплайна для управления дебаггером.
+        """
+        viewport = self._backend.viewport
+        if viewport.pipeline is not None:
+            return viewport.pipeline.debug_blit_pass
+        return None
+
     def get_available_framegraph_resources(self) -> list[str]:
         """
         Возвращает список имён ресурсов framegraph, доступных у текущего viewport.
@@ -250,7 +252,9 @@ class ViewportController:
         """
         viewport = self._backend.viewport
         result: list[tuple[str, bool]] = []
-        for p in viewport.frame_passes:
+        if viewport.pipeline is None:
+            return result
+        for p in viewport.pipeline.passes:
             symbols = p.get_internal_symbols()
             has_symbols = len(symbols) > 0
             result.append((p.pass_name, has_symbols))
@@ -267,7 +271,9 @@ class ViewportController:
             Список символов или пустой список.
         """
         viewport = self._backend.viewport
-        for p in viewport.frame_passes:
+        if viewport.pipeline is None:
+            return []
+        for p in viewport.pipeline.passes:
             if p.pass_name == pass_name:
                 return p.get_internal_symbols()
         return []
@@ -280,24 +286,27 @@ class ViewportController:
             symbol: Имя символа или None для сброса.
         """
         viewport = self._backend.viewport
-        for p in viewport.frame_passes:
+        if viewport.pipeline is None:
+            return
+        blit_pass = viewport.pipeline.debug_blit_pass
+        for p in viewport.pipeline.passes:
             if p.pass_name == pass_name:
                 if symbol is None or symbol == "":
                     p.set_debug_internal_point(None, None)
                     # Включаем BlitPass обратно
-                    if self._debug_blit_pass is not None:
-                        self._debug_blit_pass.enabled = True
+                    if blit_pass is not None:
+                        blit_pass.enabled = True
                 else:
                     p.set_debug_internal_point(symbol, "debug")
                     # Отключаем BlitPass
-                    if self._debug_blit_pass is not None:
-                        self._debug_blit_pass.enabled = False
+                    if blit_pass is not None:
+                        blit_pass.enabled = False
                 self.request_update()
                 return
 
     # ---------- pipeline ----------
 
-    def _make_pipeline(self) -> list:
+    def _make_pipeline(self) -> RenderPipeline:
         from termin.visualization.render.framegraph import (
             ColorPass,
             IdPass,
@@ -331,7 +340,6 @@ class ViewportController:
             output_res="debug",
             pass_name="DebugBlit",
         )
-        self._debug_blit_pass = blit_pass
 
         color_pass = ColorPass(input_res="empty", output_res="color", pass_name="Color")
 
@@ -370,4 +378,14 @@ class ViewportController:
             )
         )
 
-        return passes
+        # Спецификации очистки ресурсов перед рендерингом
+        clear_specs = [
+            ClearSpec(resource="empty", color=(0.2, 0.2, 0.2, 1.0), depth=1.0),
+            ClearSpec(resource="empty_id", color=(0.0, 0.0, 0.0, 1.0), depth=1.0),
+        ]
+
+        return RenderPipeline(
+            passes=passes, 
+            clear_specs=clear_specs, 
+            debug_blit_pass=blit_pass,
+        )

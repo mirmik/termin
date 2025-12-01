@@ -188,6 +188,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         get_pass_internal_symbols: Optional[Callable[[str], List[str]]] = None,
         # Устанавливает внутренний символ для пасса (pass_name, symbol)
         set_pass_internal_symbol: Optional[Callable[[str, str | None], None]] = None,
+        # Геттер для BlitPass (чтобы управлять им напрямую)
+        get_debug_blit_pass: Optional[Callable[[], object]] = None,
     ) -> None:
         super().__init__(parent)
         self._graphics = graphics
@@ -197,6 +199,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # Колбэки для режима «Между пассами»
         self._get_available_resources = get_available_resources
         self._set_source_resource = set_source_resource
+        self._get_debug_blit_pass = get_debug_blit_pass
 
         # Общие колбэки
         self._get_paused = get_paused
@@ -311,9 +314,19 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._update_passes_list()
 
     def _on_resource_selected(self, name: str) -> None:
-        """Обработчик выбора ресурса (режим «Между пассами»)."""
+        """Обработчик выбора ресурса (режим «Между пассами»).
+        
+        Напрямую обновляет reads у BlitPass, чтобы граф зависимостей
+        корректно выстроил порядок пассов до вызова request_update.
+        """
         if not name:
             return
+        # Обновляем reads у BlitPass напрямую
+        if self._get_debug_blit_pass is not None:
+            blit_pass = self._get_debug_blit_pass()
+            if blit_pass is not None:
+                blit_pass.reads = {name}
+        # Устанавливаем источник и запрашиваем обновление
         if self._set_source_resource is not None:
             self._set_source_resource(name)
 
@@ -457,11 +470,12 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._pause_check.setChecked(value)
         self._pause_check.blockSignals(False)
 
-    def request_update(self) -> None:
+    def debugger_request_update(self) -> None:
         """
         Вызывается редактором при обновлении основного viewport.
         Обновляет списки и перерисовывает GL-виджет.
         """
+        print("FramegraphDebugDialog: debugger_request_update called")
         self._update_resource_list()
         if self._mode == "inside":
             self._update_passes_list()

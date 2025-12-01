@@ -329,6 +329,14 @@ class&nbsp;OpenGLGraphicsBackend(GraphicsBackend):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClearColor(float(color[0]),&nbsp;float(color[1]),&nbsp;float(color[2]),&nbsp;float(color[3]))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClear(gl.GL_COLOR_BUFFER_BIT&nbsp;|&nbsp;gl.GL_DEPTH_BUFFER_BIT)<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;clear_color(self,&nbsp;color):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClearColor(float(color[0]),&nbsp;float(color[1]),&nbsp;float(color[2]),&nbsp;float(color[3]))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClear(gl.GL_COLOR_BUFFER_BIT)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;clear_depth(self,&nbsp;value:&nbsp;float&nbsp;=&nbsp;1.0):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClearDepth(float(value))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glClear(gl.GL_DEPTH_BUFFER_BIT)<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_color_mask(self,&nbsp;r:&nbsp;bool,&nbsp;g:&nbsp;bool,&nbsp;b:&nbsp;bool,&nbsp;a:&nbsp;bool)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.glColorMask(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gl.GL_TRUE&nbsp;if&nbsp;r&nbsp;else&nbsp;gl.GL_FALSE,<br>

@@ -257,6 +257,7 @@ class EditorWindow(QMainWindow):
             get_passes_info = None
             get_pass_internal_symbols = None
             set_pass_internal_symbol = None
+            get_debug_blit_pass = None
 
             if self.viewport_controller is not None:
                 get_resources = self.viewport_controller.get_available_framegraph_resources
@@ -266,6 +267,7 @@ class EditorWindow(QMainWindow):
                 get_passes_info = self.viewport_controller.get_passes_info
                 get_pass_internal_symbols = self.viewport_controller.get_pass_internal_symbols
                 set_pass_internal_symbol = self.viewport_controller.set_pass_internal_symbol
+                get_debug_blit_pass = self.viewport_controller.get_debug_blit_pass
 
             self._framegraph_debugger = FramegraphDebugDialog(
                 graphics=graphics,
@@ -279,13 +281,14 @@ class EditorWindow(QMainWindow):
                 get_passes_info=get_passes_info,
                 get_pass_internal_symbols=get_pass_internal_symbols,
                 set_pass_internal_symbol=set_pass_internal_symbol,
+                get_debug_blit_pass=get_debug_blit_pass,
             )
 
             if self.viewport_controller is not None:
                 self.viewport_controller.set_framegraph_debugger(self._framegraph_debugger)
 
         # перед показом синхронизируем состояние и просим перерисовку
-        self._framegraph_debugger.request_update()
+        self._framegraph_debugger.debugger_request_update()
 
         self._framegraph_debugger.show()
         self._framegraph_debugger.raise_()

@@ -7,10 +7,15 @@
 <body>
 <!-- BEGIN SCAT CODE -->
 from&nbsp;dataclasses&nbsp;import&nbsp;dataclass,&nbsp;field<br>
-from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Optional,&nbsp;Tuple<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Optional,&nbsp;Tuple,&nbsp;TYPE_CHECKING<br>
 <br>
 from&nbsp;termin.visualization.core.scene&nbsp;import&nbsp;Scene<br>
 from&nbsp;termin.visualization.core.camera&nbsp;import&nbsp;CameraComponent<br>
+<br>
+if&nbsp;TYPE_CHECKING:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.framegraph&nbsp;import&nbsp;RenderPipeline<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.framegraph.core&nbsp;import&nbsp;FramePass<br>
+<br>
 <br>
 @dataclass<br>
 class&nbsp;Viewport:<br>
@@ -19,7 +24,7 @@ class&nbsp;Viewport:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;window:&nbsp;&quot;Window&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;rect:&nbsp;Tuple[float,&nbsp;float,&nbsp;float,&nbsp;float]&nbsp;#&nbsp;x,&nbsp;y,&nbsp;width,&nbsp;height&nbsp;in&nbsp;normalized&nbsp;coords&nbsp;(0.0:1.0)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;canvas:&nbsp;Optional[&quot;Canvas&quot;]&nbsp;=&nbsp;None<br>
-&nbsp;&nbsp;&nbsp;&nbsp;frame_passes:&nbsp;list[&quot;FramePass&quot;]&nbsp;=&nbsp;field(default_factory=list)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;pipeline:&nbsp;&quot;RenderPipeline&nbsp;|&nbsp;None&quot;&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;fbos:&nbsp;dict&nbsp;=&nbsp;field(default_factory=dict)<br>
 <br>
 <br>
@@ -30,13 +35,11 @@ class&nbsp;Viewport:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;вызываем&nbsp;камеру<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self.camera.screen_point_to_ray(x,&nbsp;y,&nbsp;viewport_rect=rect)<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_render_pipeline(self,&nbsp;passes:&nbsp;list[&quot;FramePass&quot;]):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_render_pipeline(self,&nbsp;pipeline:&nbsp;&quot;RenderPipeline&quot;):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Устанавливает&nbsp;конвейер&nbsp;рендера&nbsp;для&nbsp;этого&nbsp;вьюпорта.<br>
-<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;passes&nbsp;–&nbsp;список&nbsp;FramePass.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.frame_passes&nbsp;=&nbsp;passes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.pipeline&nbsp;=&nbsp;pipeline<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;find_render_pass(self,&nbsp;pass_name:&nbsp;str)&nbsp;-&gt;&nbsp;Optional[&quot;FramePass&quot;]:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
@@ -44,7 +47,9 @@ class&nbsp;Viewport:<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;FramePass&nbsp;или&nbsp;None.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;p&nbsp;in&nbsp;self.frame_passes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.pipeline&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;p&nbsp;in&nbsp;self.pipeline.passes:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;p.pass_name&nbsp;==&nbsp;pass_name:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;p<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
@@ -53,7 +58,7 @@ class&nbsp;Viewport:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ДЕФОЛТНЫЙ&nbsp;ПАЙПЛАЙН&nbsp;ДЛЯ&nbsp;ВЬЮПОРТА<br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-------------------------------------------------------------<br>
 &nbsp;&nbsp;&nbsp;&nbsp;@staticmethod<br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;make_default_pipeline()&nbsp;-&gt;&nbsp;list[&quot;FramePass&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;make_default_pipeline()&nbsp;-&gt;&nbsp;&quot;RenderPipeline&quot;:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собирает&nbsp;дефолтный&nbsp;конвейер&nbsp;рендера&nbsp;для&nbsp;этого&nbsp;вьюпорта.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
@@ -62,6 +67,8 @@ class&nbsp;Viewport:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorPass,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IdPass,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PresentToScreenPass,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RenderPipeline,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ClearSpec,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.postprocess&nbsp;import&nbsp;PostProcessPass<br>
 <br>
@@ -83,7 +90,12 @@ class&nbsp;Viewport:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=&quot;Present&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;passes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clear_specs&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ClearSpec(resource=&quot;empty&quot;,&nbsp;color=(0.2,&nbsp;0.2,&nbsp;0.2,&nbsp;1.0),&nbsp;depth=1.0),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;RenderPipeline(passes=passes,&nbsp;clear_specs=clear_specs)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

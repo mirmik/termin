@@ -321,6 +321,14 @@ class OpenGLGraphicsBackend(GraphicsBackend):
         gl.glClearColor(float(color[0]), float(color[1]), float(color[2]), float(color[3]))
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
+    def clear_color(self, color):
+        gl.glClearColor(float(color[0]), float(color[1]), float(color[2]), float(color[3]))
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+
+    def clear_depth(self, value: float = 1.0):
+        gl.glClearDepth(float(value))
+        gl.glClear(gl.GL_DEPTH_BUFFER_BIT)
+
     def set_color_mask(self, r: bool, g: bool, b: bool, a: bool) -> None:
         gl.glColorMask(
             gl.GL_TRUE if r else gl.GL_FALSE,
