@@ -7,6 +7,7 @@ from typing import List, Sequence, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.core.entity import Component, Entity, InputComponent
+from termin.visualization.core.lighting.light import Light, LightType
 from termin.visualization.render.components.light_component import LightComponent
 from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.geombase.ray import Ray3
@@ -73,7 +74,7 @@ class Scene:
     """Container for renderable entities and lighting data."""
     def __init__(self, background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0)):
         self.entities: List[Entity] = []
-        self.lights: List[np.ndarray] = []
+        self.lights: List[Light] = []
         self.background_color = np.array(background_color, dtype=np.float32)
         self._shaders_set = set()
         self._inited = False
@@ -86,6 +87,47 @@ class Scene:
         # Lights
         self.light_direction = np.array([-0.5, -1.0, -0.3], dtype=np.float32)
         self.light_color = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+
+    def build_lights(self) -> List[Light]:
+        """
+        Собрать мировые параметры всех источников света.
+
+        Направление локной оси ``-Z`` переносим в мир через поворот ``R`` сущности:
+        ``dir_world = R * (0, 0, -1)``.
+        """
+        lights: list[Light] = []
+
+        forward_local = np.array([0.0, 0.0, -1.0], dtype=np.float32)
+
+        for comp in self.light_components:
+            if not comp.enabled:
+                continue
+            if comp.entity is None:
+                continue
+
+            ent = comp.entity
+            pose = ent.transform.global_pose()
+            rotation = pose.rotation_matrix()
+
+            position = np.asarray(pose.lin, dtype=np.float32)
+            forward_world = np.asarray(rotation @ forward_local, dtype=np.float32)
+
+            light = comp.to_light()
+            light.position = position
+            light.direction = forward_world
+            lights.append(light)
+
+        if not lights:
+            fallback = Light(
+                type=LightType.DIRECTIONAL,
+                color=self.light_color,
+                intensity=1.0,
+                direction=self.light_direction,
+            )
+            lights.append(fallback)
+
+        self.lights = lights
+        return lights
 
     def add_non_recurse(self, entity: Entity) -> Entity:
         """Add entity to the scene, keeping the entities list sorted by priority."""
@@ -183,8 +225,8 @@ class Scene:
     @classmethod
     def deserialize(cls, data, context, EntityClass):
         scene = cls(background_color=data["background_color"])
-        scene.light_direction = data["light_direction"]
-        scene.light_color = data["light_color"]
+        scene.light_direction = np.asarray(data["light_direction"], dtype=np.float32)
+        scene.light_color = np.asarray(data["light_color"], dtype=np.float32)
 
         for ed in data["entities"]:
             ent = EntityClass.deserialize(ed, context)

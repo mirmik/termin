@@ -9,15 +9,12 @@
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
 from&nbsp;typing&nbsp;import&nbsp;Iterable<br>
-<br>
-import&nbsp;numpy&nbsp;as&nbsp;np<br>
-<br>
-from&nbsp;termin.geombase.pose3&nbsp;import&nbsp;Pose3<br>
 from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;Mesh3<br>
 from&nbsp;termin.editor.inspect_field&nbsp;import&nbsp;InspectField<br>
 from&nbsp;termin.visualization.core.entity&nbsp;import&nbsp;Component,&nbsp;RenderContext<br>
 from&nbsp;termin.visualization.core.material&nbsp;import&nbsp;Material<br>
 from&nbsp;termin.visualization.core.mesh&nbsp;import&nbsp;MeshDrawable<br>
+from&nbsp;termin.visualization.render.lighting.upload&nbsp;import&nbsp;upload_lights_to_shader<br>
 from&nbsp;termin.visualization.render.renderpass&nbsp;import&nbsp;RenderState,&nbsp;RenderPass<br>
 <br>
 class&nbsp;MeshRenderer(Component):<br>
@@ -131,8 +128,7 @@ class&nbsp;MeshRenderer(Component):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;mat.shader<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec3(&quot;u_light_dir&quot;,&nbsp;context.scene.light_direction)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec3(&quot;u_light_color&quot;,&nbsp;context.scene.light_color)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;upload_lights_to_shader(shader,&nbsp;context.scene.lights)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.mesh.draw(context)<br>
 <br>

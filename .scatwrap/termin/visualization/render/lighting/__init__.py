@@ -10,10 +10,13 @@
 <br>
 from&nbsp;termin.visualization.render.lighting.setup&nbsp;import&nbsp;LightBudget,&nbsp;LightSetup<br>
 from&nbsp;termin.visualization.render.lighting.shading&nbsp;import&nbsp;blinn_phong_specular,&nbsp;fresnel_schlick,&nbsp;lambert_diffuse<br>
+from&nbsp;termin.visualization.render.lighting.upload&nbsp;import&nbsp;MAX_LIGHTS,&nbsp;upload_lights_to_shader<br>
 <br>
 __all__&nbsp;=&nbsp;[<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;LightBudget&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;LightSetup&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;MAX_LIGHTS&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;upload_lights_to_shader&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;blinn_phong_specular&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;fresnel_schlick&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;lambert_diffuse&quot;,<br>

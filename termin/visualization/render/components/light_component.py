@@ -22,6 +22,7 @@ class LightComponent(Component):
                 (LightType.DIRECTIONAL, "Directional"),
                 (LightType.POINT, "Point"),
                 (LightType.SPOT, "Spot"),
+                (LightType.AMBIENT, "Ambient"),
             ],
         ),
         "color": InspectField(
@@ -51,7 +52,7 @@ class LightComponent(Component):
     def to_light(self) -> Light:
         """Преобразовать в объект Light для рендеринга."""
         return Light(
-            light_type=self.light_type,
+            type=self.light_type,
             color=self.color,
             intensity=self.intensity,
         )

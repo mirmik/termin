@@ -29,6 +29,7 @@ class Renderer:
         self.graphics.set_viewport(x, y, w, h)
         view = camera.get_view_matrix()
         projection = camera.get_projection_matrix()
+        scene.build_lights()
         context = RenderContext(
             view=view,
             projection=projection,

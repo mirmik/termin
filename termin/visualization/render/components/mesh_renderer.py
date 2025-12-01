@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from typing import Iterable
-
-import numpy as np
-
-from termin.geombase.pose3 import Pose3
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.render.lighting.upload import upload_lights_to_shader
 from termin.visualization.render.renderpass import RenderState, RenderPass
 
 class MeshRenderer(Component):
@@ -123,8 +120,7 @@ class MeshRenderer(Component):
 
             shader = mat.shader
 
-            shader.set_uniform_vec3("u_light_dir", context.scene.light_direction)
-            shader.set_uniform_vec3("u_light_color", context.scene.light_color)
+            upload_lights_to_shader(shader, context.scene.lights)
 
             self.mesh.draw(context)
 
