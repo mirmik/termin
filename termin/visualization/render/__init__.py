@@ -1,3 +1,21 @@
 """Rendering package entry point. Import concrete submodules directly."""
 
-__all__ = []
+from termin.visualization.render.engine import RenderEngine
+from termin.visualization.render.headless import HeadlessContext
+from termin.visualization.render.surface import (
+    RenderSurface,
+    OffscreenRenderSurface,
+    WindowRenderSurface,
+)
+from termin.visualization.render.view import RenderView
+from termin.visualization.render.state import ViewportRenderState
+
+__all__ = [
+    "RenderEngine",
+    "HeadlessContext",
+    "RenderSurface",
+    "OffscreenRenderSurface",
+    "WindowRenderSurface",
+    "RenderView",
+    "ViewportRenderState",
+]
