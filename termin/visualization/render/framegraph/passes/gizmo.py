@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from termin.visualization.render.framegraph.context import FrameContext
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.shader import ShaderProgram
 
@@ -53,30 +52,37 @@ class GizmoPass(RenderFramePass):
             self._shader.ensure_ready(gfx)
         return self._shader
 
-    def execute(self, ctx: FrameContext):
-        gfx = ctx.graphics
-        window = ctx.window
-        viewport = ctx.viewport
-        camera = viewport.camera
-        px, py, pw, ph = ctx.rect
-        key = ctx.context_key
+    def execute(
+        self,
+        graphics: "GraphicsBackend",
+        *,
+        fbos: dict[str, "FramebufferHandle" | None],
+        rect: tuple[int, int, int, int],
+        scene,
+        camera,
+        renderer,
+        context_key: int,
+        **_,
+    ):
+        px, py, pw, ph = rect
+        key = context_key
 
-        fb = ctx.fbos.get(self.output_res)
-        gfx.bind_framebuffer(fb)
-        gfx.set_viewport(0, 0, pw, ph)
+        fb = fbos.get(self.output_res)
+        graphics.bind_framebuffer(fb)
+        graphics.set_viewport(0, 0, pw, ph)
 
         # глубину тестируем, но не пишем
-        gfx.set_depth_test(True)
-        gfx.set_depth_mask(False)
+        graphics.set_depth_test(True)
+        graphics.set_depth_mask(False)
 
         # главное отличие: пишем только в альфу
-        gfx.set_color_mask(False, False, False, True)
+        graphics.set_color_mask(False, False, False, True)
 
         view = camera.get_view_matrix()
         proj = camera.get_projection_matrix()
 
-        shader = self._ensure_shader(gfx)
-        shader.ensure_ready(gfx)
+        shader = self._ensure_shader(graphics)
+        shader.ensure_ready(graphics)
         shader.use()
         shader.set_uniform_matrix4("u_view", view)
         shader.set_uniform_matrix4("u_projection", proj)
@@ -86,10 +92,10 @@ class GizmoPass(RenderFramePass):
             view=view,
             projection=proj,
             camera=camera,
-            scene=viewport.scene,
-            renderer=window.renderer,
+            scene=scene,
+            renderer=renderer,
             context_key=key,
-            graphics=gfx,
+            graphics=graphics,
             phase="gizmo_mask",
         )
 
@@ -113,5 +119,5 @@ class GizmoPass(RenderFramePass):
             index += 1
 
         # возвращаем нормальную маску цвета и запись глубины
-        gfx.set_color_mask(True, True, True, True)
-        gfx.set_depth_mask(True)
+        graphics.set_color_mask(True, True, True, True)
+        graphics.set_depth_mask(True)

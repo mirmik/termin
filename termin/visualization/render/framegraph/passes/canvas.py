@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from termin.visualization.render.framegraph.context import FrameContext
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 
 
@@ -20,16 +19,21 @@ class CanvasPass(RenderFramePass):
         self.src = src
         self.dst = dst
 
-    def execute(self, ctx: FrameContext):
-        gfx = ctx.graphics
-        window = ctx.window
-        viewport = ctx.viewport
-        px, py, pw, ph = ctx.rect
-        key = ctx.context_key
+    def execute(
+        self,
+        graphics: "GraphicsBackend",
+        *,
+        fbos: dict[str, "FramebufferHandle" | None],
+        rect: tuple[int, int, int, int],
+        canvas=None,
+        context_key: int,
+        **_,
+    ):
+        px, py, pw, ph = rect
 
-        fb_out = ctx.fbos.get(self.dst)
-        gfx.bind_framebuffer(fb_out)
-        gfx.set_viewport(0, 0, pw, ph)
+        fb_out = fbos.get(self.dst)
+        graphics.bind_framebuffer(fb_out)
+        graphics.set_viewport(0, 0, pw, ph)
 
-        if viewport.canvas:
-            viewport.canvas.render(gfx, key, (0, 0, pw, ph))
+        if canvas:
+            canvas.render(graphics, context_key, (0, 0, pw, ph))

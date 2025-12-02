@@ -11,7 +11,7 @@ from termin.visualization.platform.backends.base import (
     GraphicsBackend,
     TextureHandle,
 )
-from termin.visualization.render.framegraph import FrameContext, RenderFramePass, blit_fbo_to_fbo
+from termin.visualization.render.framegraph import RenderFramePass, blit_fbo_to_fbo
 
 
 class PostEffect:
@@ -113,10 +113,9 @@ class PostProcessPass(RenderFramePass):
             symbols.append(self._effect_symbol(idx, eff))
         return symbols
 
-    def _get_temp_fbo(self, ctx: "FrameContext", index: int, size: tuple[int, int]):
-        gfx = ctx.graphics
+    def _get_temp_fbo(self, graphics: "GraphicsBackend", index: int, size: tuple[int, int]):
         while len(self._temp_fbos) <= index:
-            self._temp_fbos.append(gfx.create_framebuffer(size))
+            self._temp_fbos.append(graphics.create_framebuffer(size))
         fb = self._temp_fbos[index]
         fb.resize(size)
         return fb
@@ -140,16 +139,21 @@ class PostProcessPass(RenderFramePass):
         self.effects.append(effect)
         self.rebuild_reads()
 
-    def execute(self, ctx: "FrameContext"):
-        gfx      = ctx.graphics
-        window   = ctx.window
-        viewport = ctx.viewport
-        px, py, pw, ph = ctx.rect
-        key      = ctx.context_key
+    def execute(
+        self,
+        graphics: "GraphicsBackend",
+        *,
+        fbos: dict[str, "FramebufferHandle" | None],
+        rect: tuple[int, int, int, int],
+        context_key: int,
+        **_,
+    ):
+        px, py, pw, ph = rect
+        key = context_key
 
         size = (pw, ph)
 
-        fb_in = ctx.fbos.get(self.input_res)
+        fb_in = fbos.get(self.input_res)
         if fb_in is None:
             return
 
@@ -157,8 +161,7 @@ class PostProcessPass(RenderFramePass):
         debug_symbol, debug_output = self.get_debug_internal_point()
         debug_fb = None
         if debug_symbol is not None and debug_output is not None:
-            debug_fb = window.get_viewport_fbo(viewport, debug_output, size)
-            ctx.fbos[debug_output] = debug_fb
+            debug_fb = fbos.get(debug_output)
 
         color_tex = fb_in.color_texture()
 
@@ -171,30 +174,31 @@ class PostProcessPass(RenderFramePass):
 
         extra_textures: dict[str, "TextureHandle"] = {}
         for res_name in required_resources:
-            fb = ctx.fbos.get(res_name)
+            fb = fbos.get(res_name)
             if fb is None:
                 continue
             extra_textures[res_name] = fb.color_texture()
 
-        fb_out_final = window.get_viewport_fbo(viewport, self.output_res, size)
-        ctx.fbos[self.output_res] = fb_out_final
+        fb_out_final = fbos.get(self.output_res)
+        if fb_out_final is None:
+            return
 
         # --- нет эффектов -> блит и выходим ---
         if not self.effects:
             if debug_fb is not None and debug_symbol == "input":
-                self._blit_to_debug(gfx, fb_in, debug_fb, size, key)
-            blit_fbo_to_fbo(gfx, fb_in, fb_out_final, size, key)
+                self._blit_to_debug(graphics, fb_in, debug_fb, size, key)
+            blit_fbo_to_fbo(graphics, fb_in, fb_out_final, size, key)
             return
 
         current_tex = color_tex
 
         # При запросе дебага исходного состояния пробрасываем его в debug FBO.
         if debug_fb is not None and debug_symbol == "input":
-            self._blit_to_debug(gfx, fb_in, debug_fb, size, key)
+            self._blit_to_debug(graphics, fb_in, debug_fb, size, key)
 
         # <<< ВАЖНО: постпроцесс — чисто экранная штука, отключаем глубину >>>
-        gfx.set_depth_test(False)
-        gfx.set_depth_mask(False)
+        graphics.set_depth_test(False)
+        graphics.set_depth_mask(False)
 
         try:
             for i, effect in enumerate(self.effects):
@@ -203,23 +207,23 @@ class PostProcessPass(RenderFramePass):
                 if is_last:
                     fb_target = fb_out_final
                 else:
-                    fb_target = self._get_temp_fbo(ctx, i % 2, size)
+                    fb_target = self._get_temp_fbo(graphics, i % 2, size)
 
-                gfx.bind_framebuffer(fb_target)
-                gfx.set_viewport(0, 0, pw, ph)
+                graphics.bind_framebuffer(fb_target)
+                graphics.set_viewport(0, 0, pw, ph)
 
-                effect.draw(gfx, key, current_tex, extra_textures, size)
+                effect.draw(graphics, key, current_tex, extra_textures, size)
 
                 # Сохранение промежуточного результата в debug FBO при совпадении символа
                 effect_symbol = self._effect_symbol(i, effect)
                 if debug_fb is not None and debug_symbol == effect_symbol:
-                    self._blit_to_debug(gfx, fb_target, debug_fb, size, key)
+                    self._blit_to_debug(graphics, fb_target, debug_fb, size, key)
 
                 current_tex = fb_target.color_texture()
         finally:
             # восстанавливаем "нормальное" состояние для последующих пассов
-            gfx.set_depth_test(True)
-            gfx.set_depth_mask(True)
+            graphics.set_depth_test(True)
+            graphics.set_depth_mask(True)
 
     def _blit_to_debug(
         self,

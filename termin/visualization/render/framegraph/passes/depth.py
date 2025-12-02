@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import List
 
-from termin.visualization.render.framegraph.context import FrameContext
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.core.entity import RenderContext
@@ -52,33 +51,38 @@ class DepthPass(RenderFramePass):
         """
         return list(self._entity_names)
 
-    def execute(self, ctx: FrameContext):
-        gfx = ctx.graphics
-        window = ctx.window
-        viewport = ctx.viewport
-        scene = viewport.scene
-        camera = viewport.camera
-        px, py, pw, ph = ctx.rect
-        key = ctx.context_key
+    def execute(
+        self,
+        graphics: "GraphicsBackend",
+        *,
+        fbos: dict[str, "FramebufferHandle" | None],
+        rect: tuple[int, int, int, int],
+        scene,
+        camera,
+        renderer,
+        context_key: int,
+        **_,
+    ):
+        px, py, pw, ph = rect
+        key = context_key
 
-        # FBO для depth-ресурса создаём/берём так же, как ColorPass
-        fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
-        ctx.fbos[self.output_res] = fb
+        fb = fbos.get(self.output_res)
+        if fb is None:
+            return
 
         # Настройка debug-вывода (как в ColorPass/IdPass)
         debug_symbol, debug_output = self.get_debug_internal_point()
         debug_fb = None
         if debug_symbol is not None and debug_output is not None:
-            debug_fb = window.get_viewport_fbo(viewport, debug_output, (pw, ph))
-            ctx.fbos[debug_output] = debug_fb
+            debug_fb = fbos.get(debug_output)
 
         # Обновляем список имён
         self._entity_names = []
 
-        gfx.bind_framebuffer(fb)
-        gfx.set_viewport(0, 0, pw, ph)
+        graphics.bind_framebuffer(fb)
+        graphics.set_viewport(0, 0, pw, ph)
         # Чистим: белый цвет (максимальная глубина), глубина = 1
-        gfx.clear_color_depth((1.0, 1.0, 1.0, 1.0))
+        graphics.clear_color_depth((1.0, 1.0, 1.0, 1.0))
 
         # Матрицы камеры
         view = camera.view_matrix()
@@ -88,11 +92,11 @@ class DepthPass(RenderFramePass):
         render_ctx = RenderContext(
             view=view,
             projection=proj,
-            graphics=gfx,
+            graphics=graphics,
             context_key=key,
             scene=scene,
             camera=camera,
-            renderer=window.renderer,
+            renderer=renderer,
             phase="depth",
         )
 
@@ -112,7 +116,7 @@ class DepthPass(RenderFramePass):
         depth_material.update_camera_planes(near_plane, far_plane)
 
         # Состояние рендера для depth-прохода
-        gfx.apply_render_state(
+        graphics.apply_render_state(
             RenderState(
                 depth_test=True,
                 depth_write=True,
@@ -130,13 +134,13 @@ class DepthPass(RenderFramePass):
             self._entity_names.append(ent.name)
 
             model = ent.model_matrix()
-            depth_material.apply(model, view, proj, graphics=gfx, context_key=key)
+            depth_material.apply(model, view, proj, graphics=graphics, context_key=key)
 
             if mr.mesh is not None:
                 mr.mesh.draw(render_ctx)
 
             if debug_fb is not None and ent.name == debug_symbol:
-                self._blit_to_debug(gfx, fb, debug_fb, (pw, ph), key)
+                self._blit_to_debug(graphics, fb, debug_fb, (pw, ph), key)
 
     def _blit_to_debug(
         self,

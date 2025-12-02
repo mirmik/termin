@@ -20,7 +20,7 @@ from termin.visualization.core.viewport import Viewport
 from termin.visualization.ui.canvas import Canvas
 from termin.visualization.core.picking import rgb_to_id
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.framegraph import FrameGraph, FrameContext, RenderFramePass, IdPass, RenderPipeline
+from termin.visualization.render.framegraph import FrameGraph, RenderFramePass, IdPass, RenderPipeline
 from termin.visualization.render.postprocess import PostProcessPass
 from termin.visualization.render.posteffects.highlight import HighlightEffect
 from termin.visualization.render.posteffects.gray import GrayscaleEffect
@@ -421,6 +421,11 @@ class Window:
             if not frame_passes:
                 continue
 
+            # Динамические пассы (например, BlitPass) могут обновлять reads перед построением графа
+            for p in frame_passes:
+                if isinstance(p, RenderFramePass):
+                    p.required_resources()
+
             # Строим граф и получаем порядок
             graph = FrameGraph(frame_passes)
             schedule = graph.build_schedule()
@@ -433,11 +438,9 @@ class Window:
 
             # если решение графа поменялось, fbo обновятся
             for canon, names in alias_groups.items():
-                # один физический FBO на всю группу алиасов
                 fb = self.get_viewport_fbo(viewport, canon, (pw, ph))
-                # публикуем под всеми именами, которые фигурируют в графе
                 for name in names:
-                    fbos[name] = fb       # чтобы пассы пользовались ctx.fbos
+                    fbos[name] = fb
 
             # --- 2) Очистка ресурсов перед рендерингом ---
             for clear_spec in pipeline.clear_specs:
@@ -453,24 +456,28 @@ class Window:
                 elif clear_spec.depth is not None:
                     self.graphics.clear_depth(clear_spec.depth)
 
-            # --- 3) Создаём контекст с уже готовой картой FBO ---
-            # --- 3) Создаём контекст с уже готовой картой FBO ---
+            # --- 3) Выполняем пассы с явными зависимостями ---
             scene = viewport.scene
             lights = scene.build_lights()
-            ctx = FrameContext(
-                window=self,
-                viewport=viewport,
-                rect=(px, py, pw, ph),
-                size=(pw, ph),
-                context_key=context_key,
-                graphics=self.graphics,
-                fbos=fbos,
-                lights=lights,
-            )
+            bind_default = self.handle.bind_window_framebuffer
 
-            # --- 4) Выполняем пассы ---
             for p in schedule:
-                p.execute(ctx)
+                resource_names = p.required_resources() if isinstance(p, RenderFramePass) else p.reads | p.writes
+                pass_fbos = {name: fbos.get(name) for name in resource_names}
+
+                p.execute(
+                    self.graphics,
+                    fbos=pass_fbos,
+                    rect=(px, py, pw, ph),
+                    scene=scene,
+                    camera=viewport.camera,
+                    renderer=self.renderer,
+                    context_key=context_key,
+                    lights=lights,
+                    bind_default_framebuffer=bind_default,
+                    get_pick_id=self._get_pick_id_for_entity,
+                    canvas=viewport.canvas,
+                )
 
         if self.after_render_handler is not None:
             self.after_render_handler(self)
