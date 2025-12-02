@@ -51,6 +51,7 @@ class LightComponent(Component):
 
     def to_light(self) -> Light:
         """Преобразовать в объект Light для рендеринга."""
+        print("LightComponent: to_light called", self.light_type, self.color, self.intensity)  # DEBUG
         return Light(
             type=self.light_type,
             color=self.color,

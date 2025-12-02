@@ -454,6 +454,9 @@ class Window:
                     self.graphics.clear_depth(clear_spec.depth)
 
             # --- 3) Создаём контекст с уже готовой картой FBO ---
+            # --- 3) Создаём контекст с уже готовой картой FBO ---
+            scene = viewport.scene
+            lights = scene.build_lights()
             ctx = FrameContext(
                 window=self,
                 viewport=viewport,
@@ -462,6 +465,7 @@ class Window:
                 context_key=context_key,
                 graphics=self.graphics,
                 fbos=fbos,
+                lights=lights,
             )
 
             # --- 4) Выполняем пассы ---

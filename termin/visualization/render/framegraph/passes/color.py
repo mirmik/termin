@@ -75,6 +75,9 @@ class ColorPass(RenderFramePass):
         window = ctx.window
         viewport = ctx.viewport
         scene = viewport.scene
+        lights = ctx.lights
+        if lights is not None:
+            scene.lights = lights
         camera = viewport.camera
         px, py, pw, ph = ctx.rect
         key = ctx.context_key

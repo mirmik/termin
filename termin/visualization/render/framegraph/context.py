@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, List
 
 
 @dataclass
@@ -25,3 +25,5 @@ class FrameContext:
     context_key: int
     graphics: "GraphicsBackend"
     fbos: Dict[str, Any] = field(default_factory=dict)
+    # Предвычисленные источники света для текущего кадра/вьюпорта.
+    lights: List["Light"] | None = None

@@ -9,7 +9,7 @@
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
 from&nbsp;dataclasses&nbsp;import&nbsp;dataclass,&nbsp;field<br>
-from&nbsp;typing&nbsp;import&nbsp;Any,&nbsp;Dict,&nbsp;Tuple<br>
+from&nbsp;typing&nbsp;import&nbsp;Any,&nbsp;Dict,&nbsp;Tuple,&nbsp;List<br>
 <br>
 <br>
 @dataclass<br>
@@ -33,6 +33,8 @@ class&nbsp;FrameContext:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;context_key:&nbsp;int<br>
 &nbsp;&nbsp;&nbsp;&nbsp;graphics:&nbsp;&quot;GraphicsBackend&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;fbos:&nbsp;Dict[str,&nbsp;Any]&nbsp;=&nbsp;field(default_factory=dict)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Предвычисленные&nbsp;источники&nbsp;света&nbsp;для&nbsp;текущего&nbsp;кадра/вьюпорта.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;lights:&nbsp;List[&quot;Light&quot;]&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

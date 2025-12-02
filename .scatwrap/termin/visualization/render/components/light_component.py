@@ -59,6 +59,7 @@ class&nbsp;LightComponent(Component):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_light(self)&nbsp;-&gt;&nbsp;Light:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Преобразовать&nbsp;в&nbsp;объект&nbsp;Light&nbsp;для&nbsp;рендеринга.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;LightComponent:&nbsp;to_light&nbsp;called&quot;,&nbsp;self.light_type,&nbsp;self.color,&nbsp;self.intensity)&nbsp;&nbsp;#&nbsp;DEBUG<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Light(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type=self.light_type,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=self.color,<br>
