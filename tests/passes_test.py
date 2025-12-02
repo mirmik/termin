@@ -132,5 +132,85 @@ class TestPasses(unittest.TestCase):
             context.destroy()
 
 
+
+    def test_depth_pass_opengl():
+        # Небольшой offscreen-буфер, чтобы не мучить CI
+        width, height = 128, 128
+
+        # Headless OpenGL-контекст
+        with HeadlessContext(width, height):
+            graphics = OpenGLGraphicsBackend()
+            graphics.ensure_ready()
+
+            # Поверхность для offscreen-рендера и её FBO
+            surface = OffscreenRenderSurface(graphics, width, height)
+            framebuffer = surface.get_framebuffer()
+
+            # --- Сцена: один куб перед камерой ---
+
+            scene = Scene()
+
+            # Куб в центре мира
+            cube_entity = Entity(name="cube")
+            cube_mesh = CubeMesh()
+            cube_drawable = MeshDrawable(cube_mesh)
+            cube_renderer = MeshRenderer(mesh=cube_drawable)
+            cube_entity.add_component(cube_renderer)
+            scene.add(cube_entity)
+
+            # Камера на (0, 0, 3), смотрит в центр (по умолчанию вдоль -Z)
+            camera_entity = Entity(
+                pose=Pose3.translation(0.0, 0.0, 3.0),
+                name="camera",
+            )
+            camera = PerspectiveCameraComponent(
+                fov_y_degrees=60.0,
+                aspect=width / float(height),
+                near=0.1,
+                far=10.0,
+            )
+            camera_entity.add_component(camera)
+            scene.add(camera_entity)
+
+            # Компиляция шейдеров и подготовка сцены под конкретный backend
+            scene.ensure_ready(graphics)
+
+            # --- Сам DepthPass ---
+
+            depth_pass = DepthPass(input_res="empty_depth", output_res="depth")
+
+            # Для этого теста depth пишет прямо в единственный offscreen-FBO
+            reads_fbos = {"empty_depth": framebuffer}
+            writes_fbos = {"depth": framebuffer}
+
+            rect = (0, 0, width, height)
+
+            depth_pass.execute(
+                graphics=graphics,
+                reads_fbos=reads_fbos,
+                writes_fbos=writes_fbos,
+                rect=rect,
+                scene=scene,
+                camera=camera,
+                context_key=surface.context_key(),
+                lights=None,
+                canvas=None,
+            )
+
+            # --- Проверяем результат ---
+
+            # Центр кадра должен попадать на куб, значит глубина < 1.0 (фон)
+            x = width // 2
+            y = height // 2
+            r, g, b, a = graphics.read_pixel(framebuffer, x, y)
+
+            # sanity-check по диапазону
+            for channel in (r, g, b, a):
+                assert 0.0 <= channel <= 1.0
+
+            # Фон в DepthPass очищается в (1, 1, 1, 1),
+            # объект должен дать заметно более тёмное значение.
+            assert r < 0.99 or g < 0.99 or b < 0.99
+
 if __name__ == "__main__":
     unittest.main()
