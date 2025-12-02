@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import List
 
-from termin.visualization.render.framegraph.context import FrameContext
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.components import MeshRenderer
@@ -52,7 +51,19 @@ class ColorPass(RenderFramePass):
         """
         return list(self._entity_names)
 
-    def execute(self, ctx: FrameContext):
+    def execute(
+        self,
+        graphics: "GraphicsBackend",
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
+        rect: tuple[int, int, int, int],
+        scene,
+        camera,
+        renderer,
+        context_key: int,
+        lights=None,
+        canvas=None,
+    ):
         """
         Выполняет цветовой проход.
 
@@ -71,24 +82,19 @@ class ColorPass(RenderFramePass):
             V — матрица вида камеры (view)
             P — матрица проекции (projection)
         """
-        gfx = ctx.graphics
-        window = ctx.window
-        viewport = ctx.viewport
-        scene = viewport.scene
-        lights = ctx.lights
         if lights is not None:
             scene.lights = lights
-        camera = viewport.camera
-        px, py, pw, ph = ctx.rect
-        key = ctx.context_key
 
-        # Подготовка выходного FBO
-        fb = window.get_viewport_fbo(viewport, self.output_res, (pw, ph))
-        ctx.fbos[self.output_res] = fb
+        px, py, pw, ph = rect
+        key = context_key
 
-        gfx.bind_framebuffer(fb)
-        gfx.set_viewport(0, 0, pw, ph)
-        gfx.clear_color_depth(scene.background_color)
+        fb = writes_fbos.get(self.output_res)
+        if fb is None:
+            return
+
+        graphics.bind_framebuffer(fb)
+        graphics.set_viewport(0, 0, pw, ph)
+        graphics.clear_color_depth(scene.background_color)
 
         # Матрицы камеры
         view = camera.get_view_matrix()
@@ -100,9 +106,9 @@ class ColorPass(RenderFramePass):
             projection=projection,
             camera=camera,
             scene=scene,
-            renderer=window.renderer,
+            renderer=renderer,
             context_key=key,
-            graphics=gfx,
+            graphics=graphics,
         )
 
         # Получаем конфигурацию внутренней точки дебага
@@ -111,8 +117,7 @@ class ColorPass(RenderFramePass):
         # Подготавливаем debug FBO если нужно
         debug_fb = None
         if debug_symbol is not None and debug_output is not None:
-            debug_fb = window.get_viewport_fbo(viewport, debug_output, (pw, ph))
-            ctx.fbos[debug_output] = debug_fb
+            debug_fb = writes_fbos.get(debug_output)
 
         # Обновляем кэш имён сущностей
         self._entity_names = []
@@ -122,12 +127,10 @@ class ColorPass(RenderFramePass):
             # Сохраняем имя сущности (для get_internal_symbols)
             self._entity_names.append(entity.name)
 
-            # Отрисовка сущности
             entity.draw(render_context)
 
-            # Если текущая сущность — точка дебага, блитим в debug FBO
             if debug_fb is not None and entity.name == debug_symbol:
-                self._blit_to_debug(gfx, fb, debug_fb, (pw, ph), key)
+                self._blit_to_debug(graphics, fb, debug_fb, (pw, ph), key)
 
     def _blit_to_debug(
         self,
@@ -155,6 +158,5 @@ class ColorPass(RenderFramePass):
         # Блитим src_fb -> dst_fb
         blit_fbo_to_fbo(gfx, src_fb, dst_fb, size, context_key)
 
-        # Восстанавливаем привязку к основному FBO для продолжения рендера
         gfx.bind_framebuffer(src_fb)
         gfx.set_viewport(0, 0, size[0], size[1])

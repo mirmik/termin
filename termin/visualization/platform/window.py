@@ -17,10 +17,11 @@ from termin.visualization.platform.backends.base import (
     BackendWindow,
 )
 from termin.visualization.core.viewport import Viewport
+from termin.visualization.core.entity import Entity
 from termin.visualization.ui.canvas import Canvas
 from termin.visualization.core.picking import rgb_to_id
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.framegraph import FrameGraph, FrameContext, RenderFramePass, IdPass, RenderPipeline
+from termin.visualization.render.framegraph import FrameGraph, RenderFramePass, IdPass, RenderPipeline
 from termin.visualization.render.postprocess import PostProcessPass
 from termin.visualization.render.posteffects.highlight import HighlightEffect
 from termin.visualization.render.posteffects.gray import GrayscaleEffect
@@ -63,25 +64,12 @@ class Window:
         # picking support
         self.selection_handler = None    # редактор подпишется сюда
         self._pick_requests = {}         # viewport -> (mouse_x, mouse_y)
-        self._pick_id_counter = 1
-        self._pick_entity_by_id = {}
-        self._pick_id_by_entity = {}
 
     def set_selection_handler(self, handler):
         self.selection_handler = handler
 
     def set_world_mode(self, mode: str):
         self._world_mode = mode
-
-    def _get_pick_id_for_entity(self, entity):
-        pid = self._pick_id_by_entity.get(entity)
-        if pid is not None:
-            return pid
-        pid = self._pick_id_counter
-        self._pick_id_counter += 1
-        self._pick_id_by_entity[entity] = pid
-        self._pick_entity_by_id[pid] = entity
-        return pid     
 
     def close(self):
         if self.handle:
@@ -217,7 +205,7 @@ class Window:
 
 
         r, g, b, a = self.graphics.read_pixel(fb_color, read_x, read_y)
-        self.handle.bind_window_framebuffer()
+        self.graphics.bind_framebuffer(self.handle.get_window_framebuffer())
         return (r, g, b, a)
 
     def pick_entity_at(self, x: float, y: float, viewport: Viewport = None) -> Optional[Entity]:
@@ -238,7 +226,7 @@ class Window:
         if pid == 0:
             return None
 
-        entity = self._pick_entity_by_id.get(pid)
+        entity = Entity.lookup_by_pick_id(pid)
 
         return entity
 
@@ -375,6 +363,7 @@ class Window:
             return None
         nx = x / win_w
         ny = 1.0 - (y / win_h)
+
         for viewport in self.viewports:
             vx, vy, vw, vh = viewport.rect
             if vx <= nx <= vx + vw and vy <= ny <= vy + vh:
@@ -421,6 +410,11 @@ class Window:
             if not frame_passes:
                 continue
 
+            # Динамические пассы (например, BlitPass) могут обновлять reads перед построением графа
+            for p in frame_passes:
+                if isinstance(p, RenderFramePass):
+                    p.required_resources()
+
             # Строим граф и получаем порядок
             graph = FrameGraph(frame_passes)
             schedule = graph.build_schedule()
@@ -430,14 +424,19 @@ class Window:
 
             # общий пул FBO у вьюпорта, чтобы pick и прочее видели те же объекты
             fbos = viewport.fbos
+            if display_fbo is not None:
+                fbos["DISPLAY"] = display_fbo
 
             # если решение графа поменялось, fbo обновятся
             for canon, names in alias_groups.items():
-                # один физический FBO на всю группу алиасов
+                if canon == "DISPLAY":
+                    for name in names:
+                        fbos[name] = display_fbo
+                    continue
+
                 fb = self.get_viewport_fbo(viewport, canon, (pw, ph))
-                # публикуем под всеми именами, которые фигурируют в графе
                 for name in names:
-                    fbos[name] = fb       # чтобы пассы пользовались ctx.fbos
+                    fbos[name] = fb
 
             # --- 2) Очистка ресурсов перед рендерингом ---
             for clear_spec in pipeline.clear_specs:
@@ -453,24 +452,25 @@ class Window:
                 elif clear_spec.depth is not None:
                     self.graphics.clear_depth(clear_spec.depth)
 
-            # --- 3) Создаём контекст с уже готовой картой FBO ---
-            # --- 3) Создаём контекст с уже готовой картой FBO ---
+            # --- 3) Выполняем пассы с явными зависимостями ---
             scene = viewport.scene
             lights = scene.build_lights()
-            ctx = FrameContext(
-                window=self,
-                viewport=viewport,
-                rect=(px, py, pw, ph),
-                size=(pw, ph),
-                context_key=context_key,
-                graphics=self.graphics,
-                fbos=fbos,
-                lights=lights,
-            )
-
-            # --- 4) Выполняем пассы ---
             for p in schedule:
-                p.execute(ctx)
+                pass_reads = {name: fbos.get(name) for name in p.reads}
+                pass_writes = {name: fbos.get(name) for name in p.writes}
+
+                p.execute(
+                    self.graphics,
+                    reads_fbos=pass_reads,
+                    writes_fbos=pass_writes,
+                    rect=(px, py, pw, ph),
+                    scene=scene,
+                    camera=viewport.camera,
+                    renderer=self.renderer,
+                    context_key=context_key,
+                    lights=lights,
+                    canvas=viewport.canvas,
+                )
 
         if self.after_render_handler is not None:
             self.after_render_handler(self)

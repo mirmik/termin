@@ -480,13 +480,23 @@ class _OpenGLColorTextureHandle(TextureHandle):
         self._tex_id = tex_id
 
 class OpenGLFramebufferHandle(FramebufferHandle):
-    def __init__(self, size: Tuple[int, int]):
+    def __init__(self, size: Tuple[int, int], fbo_id: int | None = None, owns_attachments: bool = True):
         self._size = size
+        self._owns_attachments = owns_attachments
         self._fbo: int | None = None
         self._color_tex: int | None = None
         self._depth_rb: int | None = None
         self._color_handle = _OpenGLColorTextureHandle(0)
-        self._create()
+        if fbo_id is None:
+            self._create()
+        else:
+            self._fbo = fbo_id
+
+    def set_external_target(self, fbo_id: int, size: Tuple[int, int]):
+        """Rebind handle to an externally managed FBO without owning attachments."""
+        self._owns_attachments = False
+        self._fbo = fbo_id
+        self._size = size
 
     def _create(self):
         w, h = self._size
@@ -540,6 +550,9 @@ class OpenGLFramebufferHandle(FramebufferHandle):
     def resize(self, size: Tuple[int, int]):
         if size == self._size and self._fbo is not None:
             return
+        if not self._owns_attachments:
+            self._size = size
+            return
         self.delete()
         self._size = size
         self._create()
@@ -548,6 +561,9 @@ class OpenGLFramebufferHandle(FramebufferHandle):
         return self._color_handle
 
     def delete(self):
+        if not self._owns_attachments:
+            self._fbo = None
+            return
         if self._fbo is not None:
             gl.glDeleteFramebuffers(1, [self._fbo])
             self._fbo = None

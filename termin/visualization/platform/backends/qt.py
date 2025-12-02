@@ -189,9 +189,19 @@ class QtGLWindowHandle(BackendWindow):
         self._widget.update()
 
     
-    def bind_window_framebuffer(self):        
+    def get_window_framebuffer(self):
         fbo_id = int(self._widget.defaultFramebufferObject())
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, fbo_id)
+        width, height = self.framebuffer_size()
+        from termin.visualization.render.opengl.backends import OpenGLFramebufferHandle
+
+        fb = getattr(self, "_window_fb_handle", None)
+        if fb is None:
+            fb = OpenGLFramebufferHandle((width, height), fbo_id=fbo_id, owns_attachments=False)
+            self._window_fb_handle = fb
+        else:
+            fb.set_external_target(fbo_id, (width, height))
+
+        return fb
 
 
 

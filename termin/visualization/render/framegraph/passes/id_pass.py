@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import List
 
-from termin.visualization.render.framegraph.context import FrameContext
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.core.picking import id_to_rgb
@@ -39,16 +38,23 @@ class IdPass(RenderFramePass):
         """
         return list(self._entity_names)
 
-    def execute(self, ctx: FrameContext):
-        gfx = ctx.graphics
-        window = ctx.window
-        viewport = ctx.viewport
-        scene = viewport.scene
-        camera = viewport.camera
-        px, py, pw, ph = ctx.rect
-        key = ctx.context_key
+    def execute(
+        self,
+        graphics: "GraphicsBackend",
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
+        rect: tuple[int, int, int, int],
+        scene,
+        camera,
+        renderer,
+        context_key: int,
+        lights=None,
+        canvas=None,
+    ):
+        px, py, pw, ph = rect
+        key = context_key
 
-        fb = ctx.fbos.get(self.output_res)
+        fb = writes_fbos.get(self.output_res)
         if fb is None:
             return
 
@@ -56,15 +62,14 @@ class IdPass(RenderFramePass):
         debug_symbol, debug_output = self.get_debug_internal_point()
         debug_fb = None
         if debug_symbol is not None and debug_output is not None:
-            debug_fb = window.get_viewport_fbo(viewport, debug_output, (pw, ph))
-            ctx.fbos[debug_output] = debug_fb
+            debug_fb = writes_fbos.get(debug_output)
 
         # Обновляем список имён pickable-сущностей
         self._entity_names = []
 
-        gfx.bind_framebuffer(fb)
-        gfx.set_viewport(0, 0, pw, ph)
-        gfx.clear_color_depth((0.0, 0.0, 0.0, 0.0))
+        graphics.bind_framebuffer(fb)
+        graphics.set_viewport(0, 0, pw, ph)
+        graphics.clear_color_depth((0.0, 0.0, 0.0, 0.0))
 
         # Карта сущность -> числовой id (цвет кодируем через id_to_rgb)
         pick_ids: dict = {}
@@ -74,7 +79,7 @@ class IdPass(RenderFramePass):
             mr = ent.get_component(MeshRenderer)
             if mr is None:
                 continue
-            pid = window._get_pick_id_for_entity(ent)
+            pid = getattr(ent, "pick_id", 0)
             pick_ids[ent] = pid
             self._entity_names.append(ent.name)
 
@@ -85,18 +90,18 @@ class IdPass(RenderFramePass):
         render_ctx = RenderContext(
             view=view,
             projection=proj,
-            graphics=gfx,
+            graphics=graphics,
             context_key=key,
             scene=scene,
             camera=camera,
-            renderer=window.renderer,
+            renderer=renderer,
             phase="pick",
         )
 
-        pick_material = window.renderer.pick_material
+        pick_material = renderer.pick_material
 
         # Жёсткое состояние для ID-прохода
-        gfx.apply_render_state(RenderState(
+        graphics.apply_render_state(RenderState(
             depth_test=True,
             depth_write=True,
             blend=False,
@@ -122,7 +127,7 @@ class IdPass(RenderFramePass):
                 view=view,
                 proj=proj,
                 pick_color=color,
-                graphics=gfx,
+                graphics=graphics,
                 context_key=key,
             )
 
@@ -130,7 +135,7 @@ class IdPass(RenderFramePass):
                 mr.mesh.draw(render_ctx)
 
             if debug_fb is not None and ent.name == debug_symbol:
-                self._blit_to_debug(gfx, fb, debug_fb, (pw, ph), key)
+                self._blit_to_debug(graphics, fb, debug_fb, (pw, ph), key)
 
     def _blit_to_debug(
         self,
