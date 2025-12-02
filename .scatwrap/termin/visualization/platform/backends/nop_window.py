@@ -85,9 +85,9 @@ class&nbsp;NOPWindowHandle(BackendWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;то&nbsp;есть&nbsp;False:&nbsp;движок&nbsp;сам&nbsp;будет&nbsp;вызывать&nbsp;render().<br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;хочешь&nbsp;симулировать&nbsp;push-модель,&nbsp;можно&nbsp;сделать&nbsp;здесь&nbsp;True.<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind_window_framebuffer(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_window_framebuffer(self):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нет&nbsp;реального&nbsp;фреймбуфера,&nbsp;просто&nbsp;заглушка<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;request_update(self):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Нечего&nbsp;обновлять<br>

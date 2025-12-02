@@ -29,7 +29,7 @@ class CanvasPass(RenderFramePass):
         camera=None,
         renderer=None,
         canvas=None,
-        context_key: int,
+        context_key: int = 0,
         lights=None,
     ):
         px, py, pw, ph = rect

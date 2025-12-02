@@ -49,7 +49,7 @@ class&nbsp;ViewportBackend:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_pick_id_for_entity(self,&nbsp;ent:&nbsp;Entity&nbsp;|&nbsp;None)&nbsp;-&gt;&nbsp;int:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;0<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._window._get_pick_id_for_entity(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;ent.pick_id<br>
 <br>
 <br>
 class&nbsp;ViewportController:<br>
@@ -132,7 +132,9 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._backend.request_update()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_pick_id_for_entity(self,&nbsp;ent:&nbsp;Entity&nbsp;|&nbsp;None)&nbsp;-&gt;&nbsp;int:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._backend.get_pick_id_for_entity(ent)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ent&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;ent.pick_id<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;----------&nbsp;внутренние&nbsp;обработчики&nbsp;событий&nbsp;----------<br>
 <br>

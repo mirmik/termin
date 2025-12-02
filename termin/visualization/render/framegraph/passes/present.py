@@ -88,7 +88,7 @@ class BlitPass(RenderFramePass):
         scene=None,
         camera=None,
         renderer=None,
-        context_key: int,
+        context_key: int = 0,
         lights=None,
         canvas=None,
     ):
@@ -169,7 +169,7 @@ class PresentToScreenPass(RenderFramePass):
         scene=None,
         camera=None,
         renderer=None,
-        context_key: int,
+        context_key: int = 0,
         lights=None,
         canvas=None,
     ):

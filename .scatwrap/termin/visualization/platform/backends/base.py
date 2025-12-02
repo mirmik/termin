@@ -246,7 +246,8 @@ class&nbsp;BackendWindow(ABC):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Abstract&nbsp;window&nbsp;wrapper.&quot;&quot;&quot;<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;@abstractmethod<br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;bind_window_framebuffer(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_window_framebuffer(self)&nbsp;-&gt;&nbsp;&quot;FramebufferHandle&nbsp;|&nbsp;None&quot;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Return&nbsp;a&nbsp;handle&nbsp;for&nbsp;the&nbsp;default&nbsp;window&nbsp;framebuffer.&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;@abstractmethod<br>

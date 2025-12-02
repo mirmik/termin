@@ -424,8 +424,10 @@ class Window:
 
             # общий пул FBO у вьюпорта, чтобы pick и прочее видели те же объекты
             fbos = viewport.fbos
-            if display_fbo is not None:
-                fbos["DISPLAY"] = display_fbo
+            #if display_fbo is not None:
+            #    fbos["DISPLAY"] = display_fbo
+            display_fbo = self.handle.get_window_framebuffer()
+            fbos["DISPLAY"] = display_fbo
 
             # если решение графа поменялось, fbo обновятся
             for canon, names in alias_groups.items():

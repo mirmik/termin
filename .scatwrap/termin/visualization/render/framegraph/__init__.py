@@ -6,7 +6,6 @@
 </head>
 <body>
 <!-- BEGIN SCAT CODE -->
-from&nbsp;termin.visualization.render.framegraph.context&nbsp;import&nbsp;FrameContext,&nbsp;FrameExecutionContext<br>
 from&nbsp;termin.visualization.render.framegraph.core&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;FrameGraph,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;FrameGraphCycleError,<br>
@@ -23,8 +22,6 @@ from&nbsp;termin.visualization.render.framegraph.passes.id_pass&nbsp;import&nbsp
 from&nbsp;termin.visualization.render.framegraph.passes.present&nbsp;import&nbsp;BlitPass,&nbsp;PresentToScreenPass,&nbsp;blit_fbo_to_fbo<br>
 <br>
 __all__&nbsp;=&nbsp;[<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&quot;FrameContext&quot;,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&quot;FrameExecutionContext&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;FrameGraph&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;FrameGraphCycleError&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;FrameGraphError&quot;,<br>

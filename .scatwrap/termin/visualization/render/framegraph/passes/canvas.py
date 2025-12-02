@@ -8,7 +8,6 @@
 <!-- BEGIN SCAT CODE -->
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from&nbsp;termin.visualization.render.framegraph.context&nbsp;import&nbsp;FrameContext<br>
 from&nbsp;termin.visualization.render.framegraph.passes.base&nbsp;import&nbsp;RenderFramePass<br>
 <br>
 <br>
@@ -28,19 +27,27 @@ class&nbsp;CanvasPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.src&nbsp;=&nbsp;src<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.dst&nbsp;=&nbsp;dst<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(self,&nbsp;ctx:&nbsp;FrameContext):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx&nbsp;=&nbsp;ctx.graphics<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;ctx.window<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport&nbsp;=&nbsp;ctx.viewport<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;ctx.rect<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key&nbsp;=&nbsp;ctx.context_key<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;graphics:&nbsp;&quot;GraphicsBackend&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads_fbos:&nbsp;dict[str,&nbsp;&quot;FramebufferHandle&quot;&nbsp;|&nbsp;None],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes_fbos:&nbsp;dict[str,&nbsp;&quot;FramebufferHandle&quot;&nbsp;|&nbsp;None],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rect:&nbsp;tuple[int,&nbsp;int,&nbsp;int,&nbsp;int],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene=None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera=None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;renderer=None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas=None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context_key:&nbsp;int&nbsp;=&nbsp;0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lights=None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;px,&nbsp;py,&nbsp;pw,&nbsp;ph&nbsp;=&nbsp;rect<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_out&nbsp;=&nbsp;ctx.fbos.get(self.dst)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.bind_framebuffer(fb_out)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.set_viewport(0,&nbsp;0,&nbsp;pw,&nbsp;ph)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb_out&nbsp;=&nbsp;writes_fbos.get(self.dst)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;graphics.bind_framebuffer(fb_out)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;graphics.set_viewport(0,&nbsp;0,&nbsp;pw,&nbsp;ph)<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;viewport.canvas:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewport.canvas.render(gfx,&nbsp;key,&nbsp;(0,&nbsp;0,&nbsp;pw,&nbsp;ph))<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;canvas:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.render(graphics,&nbsp;context_key,&nbsp;(0,&nbsp;0,&nbsp;pw,&nbsp;ph))<br>
 <!-- END SCAT CODE -->
 </body>
 </html>
