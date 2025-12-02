@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Callable, List, Optional, Tuple
 
 from termin.visualization.core.camera import CameraComponent
@@ -20,10 +19,7 @@ from termin.visualization.core.entity import Entity
 from termin.visualization.ui.canvas import Canvas
 from termin.visualization.core.picking import rgb_to_id
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.framegraph import FrameGraph, RenderFramePass, IdPass, RenderPipeline
-from termin.visualization.render.postprocess import PostProcessPass
-from termin.visualization.render.posteffects.highlight import HighlightEffect
-from termin.visualization.render.posteffects.gray import GrayscaleEffect
+from termin.visualization.render.pipeline_runner import PipelineRunner
 
 class Window:
     """Manages a platform window and a set of viewports."""
@@ -56,6 +52,8 @@ class Window:
         ] = None
         self.on_mouse_move_event = None  # callable(x: float, y: float, viewport: Optional[Viewport])
         self.after_render_handler = None  # type: Optional[Callable[["Window"], None]]
+
+        self.pipeline_runner = PipelineRunner(self.graphics)
 
         self._world_mode = "game"  # or "editor"
  
@@ -127,7 +125,30 @@ class Window:
         return
 
     def render(self, from_backend: bool = False):
-        self._render_core(from_backend=from_backend)
+        if self.handle is None:
+            return
+
+        self.graphics.ensure_ready()
+
+        if not from_backend:
+            self.make_current()
+
+        width, height = self.handle.framebuffer_size()
+        display_fbo = self.handle.get_window_framebuffer()
+        context_key = id(self)
+
+        self.pipeline_runner.render_viewports(
+            self.viewports,
+            framebuffer_size=(width, height),
+            display_fbo=display_fbo,
+            context_key=context_key,
+        )
+
+        if self.after_render_handler is not None:
+            self.after_render_handler(self)
+
+        if not from_backend:
+            self.handle.swap_buffers()
 
     def viewport_rect_to_pixels(self, viewport: Viewport) -> Tuple[int, int, int, int]:
         if self.handle is None:
@@ -368,114 +389,7 @@ class Window:
                 return viewport
         return None
 
-    def get_viewport_fbo(self, viewport, key, size):
-        fb = viewport.fbos.get(key)
-        if fb is None:
-            fb = self.graphics.create_framebuffer(size)
-            viewport.fbos[key] = fb
-        else:
-            fb.resize(size)
-        return fb
 
-    def _render_core(self, from_backend: bool):
-        if self.handle is None:
-            return
-
-        self.graphics.ensure_ready()
-
-        if not from_backend:
-            self.make_current()
-
-        context_key = id(self)
-        width, height = self.handle.framebuffer_size()
-
-        for viewport in self.viewports:
-            vx, vy, vw, vh = viewport.rect
-            px = int(vx * width)
-            py = int(vy * height)
-            pw = max(1, int(vw * width))
-            ph = max(1, int(vh * height))
-
-            # Обновляем аспект камеры
-            viewport.camera.set_aspect(pw / float(max(1, ph)))
-
-            # Берём pipeline, который кто-то заранее повесил на viewport
-            pipeline = viewport.pipeline
-            if pipeline is None:
-                continue
-
-            frame_passes = pipeline.passes
-            if not frame_passes:
-                continue
-
-            # Динамические пассы (например, BlitPass) могут обновлять reads перед построением графа
-            for p in frame_passes:
-                if isinstance(p, RenderFramePass):
-                    p.required_resources()
-
-            # Строим граф и получаем порядок
-            graph = FrameGraph(frame_passes)
-            schedule = graph.build_schedule()
-
-            # --- 1) Предварительно создаём FBO по группам алиасов ---
-            alias_groups = graph.fbo_alias_groups()
-
-            # общий пул FBO у вьюпорта, чтобы pick и прочее видели те же объекты
-            fbos = viewport.fbos
-            #if display_fbo is not None:
-            #    fbos["DISPLAY"] = display_fbo
-            display_fbo = self.handle.get_window_framebuffer()
-            fbos["DISPLAY"] = display_fbo
-
-            # если решение графа поменялось, fbo обновятся
-            for canon, names in alias_groups.items():
-                if canon == "DISPLAY":
-                    for name in names:
-                        fbos[name] = display_fbo
-                    continue
-
-                fb = self.get_viewport_fbo(viewport, canon, (pw, ph))
-                for name in names:
-                    fbos[name] = fb
-
-            # --- 2) Очистка ресурсов перед рендерингом ---
-            for clear_spec in pipeline.clear_specs:
-                fb = fbos.get(clear_spec.resource)
-                if fb is None:
-                    continue
-                self.graphics.bind_framebuffer(fb)
-                self.graphics.set_viewport(0, 0, pw, ph)
-                if clear_spec.color is not None and clear_spec.depth is not None:
-                    self.graphics.clear_color_depth(clear_spec.color)
-                elif clear_spec.color is not None:
-                    self.graphics.clear_color(clear_spec.color)
-                elif clear_spec.depth is not None:
-                    self.graphics.clear_depth(clear_spec.depth)
-
-            # --- 3) Выполняем пассы с явными зависимостями ---
-            scene = viewport.scene
-            lights = scene.build_lights()
-            for p in schedule:
-                pass_reads = {name: fbos.get(name) for name in p.reads}
-                pass_writes = {name: fbos.get(name) for name in p.writes}
-
-                p.execute(
-                    self.graphics,
-                    reads_fbos=pass_reads,
-                    writes_fbos=pass_writes,
-                    rect=(px, py, pw, ph),
-                    scene=scene,
-                    camera=viewport.camera,
-                    context_key=context_key,
-                    lights=lights,
-                    canvas=viewport.canvas,
-                )
-
-        if self.after_render_handler is not None:
-            self.after_render_handler(self)
-
-        if not from_backend:
-            self.handle.swap_buffers()
 
     def _request_update(self):
         if self.handle is not None:
