@@ -90,7 +90,6 @@ class BlitPass(RenderFramePass):
         renderer=None,
         context_key: int,
         lights=None,
-        bind_default_framebuffer=None,
         canvas=None,
     ):
         px, py, pw, ph = rect
@@ -150,7 +149,7 @@ class PresentToScreenPass(RenderFramePass):
         super().__init__(
             pass_name=pass_name,
             reads={input_res},
-            writes=set(),  # экран считаем внешним
+            writes={"DISPLAY"},
             inplace=False,
         )
         self.input_res = input_res
@@ -172,22 +171,19 @@ class PresentToScreenPass(RenderFramePass):
         renderer=None,
         context_key: int,
         lights=None,
-        bind_default_framebuffer=None,
         canvas=None,
     ):
         px, py, pw, ph = rect
         key = context_key
 
         fb_in = reads_fbos.get(self.input_res)
-        if fb_in is None:
+        fb_out = writes_fbos.get("DISPLAY")
+        if fb_in is None or fb_out is None:
             return
 
         tex_in = fb_in.color_texture()
 
-        if bind_default_framebuffer is None:
-            return
-
-        bind_default_framebuffer()
+        graphics.bind_framebuffer(fb_out)
         graphics.set_viewport(px, py, pw, ph)
 
         graphics.set_depth_test(False)

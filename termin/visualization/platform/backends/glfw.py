@@ -121,8 +121,18 @@ class GLFWWindowHandle(BackendWindow):
         # обычно это делается в основном цикле приложения.
         pass
 
-    def bind_window_framebuffer(self):
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+    def get_window_framebuffer(self):
+        width, height = self.framebuffer_size()
+        from termin.visualization.render.opengl.backends import OpenGLFramebufferHandle
+
+        fb = getattr(self, "_window_fb_handle", None)
+        if fb is None:
+            fb = OpenGLFramebufferHandle((width, height), fbo_id=0, owns_attachments=False)
+            self._window_fb_handle = fb
+        else:
+            fb.set_external_target(0, (width, height))
+
+        return fb
 
 
 class GLFWWindowBackend(WindowBackend):

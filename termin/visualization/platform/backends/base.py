@@ -238,7 +238,8 @@ class BackendWindow(ABC):
     """Abstract window wrapper."""
 
     @abstractmethod
-    def bind_window_framebuffer(self):
+    def get_window_framebuffer(self) -> "FramebufferHandle | None":
+        """Return a handle for the default window framebuffer."""
         ...
 
     @abstractmethod

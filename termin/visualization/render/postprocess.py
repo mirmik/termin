@@ -150,7 +150,6 @@ class PostProcessPass(RenderFramePass):
         renderer=None,
         context_key: int,
         lights=None,
-        bind_default_framebuffer=None,
         canvas=None,
     ):
         px, py, pw, ph = rect

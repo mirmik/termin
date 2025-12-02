@@ -15,7 +15,6 @@ class RenderFramePass(FramePass):
         renderer: "Renderer",
         context_key: int,
         lights: list["Light"] | None = None,
-        bind_default_framebuffer=None,
         canvas=None,
     ) -> None:
         """
@@ -29,7 +28,6 @@ class RenderFramePass(FramePass):
         - scene, camera, renderer: объекты текущего вьюпорта;
         - context_key: ключ для кэшей VAO/шейдеров;
         - lights: предвычисленные источники света (может быть None);
-        - bind_default_framebuffer: функция биндинга системного framebuffer (для Present);
         - canvas: 2D-канва вьюпорта (для CanvasPass).
         """
         raise NotImplementedError

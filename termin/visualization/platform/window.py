@@ -205,7 +205,7 @@ class Window:
 
 
         r, g, b, a = self.graphics.read_pixel(fb_color, read_x, read_y)
-        self.handle.bind_window_framebuffer()
+        self.graphics.bind_framebuffer(self.handle.get_window_framebuffer())
         return (r, g, b, a)
 
     def pick_entity_at(self, x: float, y: float, viewport: Viewport = None) -> Optional[Entity]:
@@ -363,6 +363,7 @@ class Window:
             return None
         nx = x / win_w
         ny = 1.0 - (y / win_h)
+
         for viewport in self.viewports:
             vx, vy, vw, vh = viewport.rect
             if vx <= nx <= vx + vw and vy <= ny <= vy + vh:
@@ -423,9 +424,16 @@ class Window:
 
             # общий пул FBO у вьюпорта, чтобы pick и прочее видели те же объекты
             fbos = viewport.fbos
+            if display_fbo is not None:
+                fbos["DISPLAY"] = display_fbo
 
             # если решение графа поменялось, fbo обновятся
             for canon, names in alias_groups.items():
+                if canon == "DISPLAY":
+                    for name in names:
+                        fbos[name] = display_fbo
+                    continue
+
                 fb = self.get_viewport_fbo(viewport, canon, (pw, ph))
                 for name in names:
                     fbos[name] = fb
@@ -447,8 +455,6 @@ class Window:
             # --- 3) Выполняем пассы с явными зависимостями ---
             scene = viewport.scene
             lights = scene.build_lights()
-            bind_default = self.handle.bind_window_framebuffer
-
             for p in schedule:
                 pass_reads = {name: fbos.get(name) for name in p.reads}
                 pass_writes = {name: fbos.get(name) for name in p.writes}
@@ -463,7 +469,6 @@ class Window:
                     renderer=self.renderer,
                     context_key=context_key,
                     lights=lights,
-                    bind_default_framebuffer=bind_default,
                     canvas=viewport.canvas,
                 )
 
