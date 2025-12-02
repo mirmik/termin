@@ -7,8 +7,8 @@ class RenderFramePass(FramePass):
     def execute(
         self,
         graphics: "GraphicsBackend",
-        *,
-        fbos: dict[str, "FramebufferHandle" | None],
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
         rect: tuple[int, int, int, int],
         scene: "Scene",
         camera: "Camera",
@@ -16,7 +16,6 @@ class RenderFramePass(FramePass):
         context_key: int,
         lights: list["Light"] | None = None,
         bind_default_framebuffer=None,
-        get_pick_id=None,
         canvas=None,
     ) -> None:
         """
@@ -24,13 +23,13 @@ class RenderFramePass(FramePass):
 
         Все зависимости прокидываются явно:
         - graphics: графический бэкенд;
-        - fbos: карта именованных FBO для ресурсов, которые пасс читает/пишет;
+        - reads_fbos: карта FBO, из которых пасс читает;
+        - writes_fbos: карта FBO, в которые пасс пишет;
         - rect: (px, py, pw, ph) – целевой прямоугольник вывода в пикселях;
         - scene, camera, renderer: объекты текущего вьюпорта;
         - context_key: ключ для кэшей VAO/шейдеров;
         - lights: предвычисленные источники света (может быть None);
         - bind_default_framebuffer: функция биндинга системного framebuffer (для Present);
-        - get_pick_id: колбэк, возвращающий числовой ID сущности (для IdPass);
         - canvas: 2D-канва вьюпорта (для CanvasPass).
         """
         raise NotImplementedError

@@ -41,7 +41,7 @@ class ViewportBackend:
     def get_pick_id_for_entity(self, ent: Entity | None) -> int:
         if ent is None:
             return 0
-        return self._window._get_pick_id_for_entity(ent)
+        return ent.pick_id
 
 
 class ViewportController:
@@ -124,7 +124,9 @@ class ViewportController:
         self._backend.request_update()
 
     def get_pick_id_for_entity(self, ent: Entity | None) -> int:
-        return self._backend.get_pick_id_for_entity(ent)
+        if ent is None:
+            return 0
+        return ent.pick_id
 
     # ---------- внутренние обработчики событий ----------
 

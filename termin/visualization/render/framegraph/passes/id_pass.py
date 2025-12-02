@@ -41,20 +41,21 @@ class IdPass(RenderFramePass):
     def execute(
         self,
         graphics: "GraphicsBackend",
-        *,
-        fbos: dict[str, "FramebufferHandle" | None],
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
         rect: tuple[int, int, int, int],
         scene,
         camera,
         renderer,
         context_key: int,
-        get_pick_id=None,
-        **_,
+        lights=None,
+        bind_default_framebuffer=None,
+        canvas=None,
     ):
         px, py, pw, ph = rect
         key = context_key
 
-        fb = fbos.get(self.output_res)
+        fb = writes_fbos.get(self.output_res)
         if fb is None:
             return
 
@@ -62,7 +63,7 @@ class IdPass(RenderFramePass):
         debug_symbol, debug_output = self.get_debug_internal_point()
         debug_fb = None
         if debug_symbol is not None and debug_output is not None:
-            debug_fb = fbos.get(debug_output)
+            debug_fb = writes_fbos.get(debug_output)
 
         # Обновляем список имён pickable-сущностей
         self._entity_names = []
@@ -79,9 +80,7 @@ class IdPass(RenderFramePass):
             mr = ent.get_component(MeshRenderer)
             if mr is None:
                 continue
-            if get_pick_id is None:
-                continue
-            pid = get_pick_id(ent)
+            pid = getattr(ent, "pick_id", 0)
             pick_ids[ent] = pid
             self._entity_names.append(ent.name)
 

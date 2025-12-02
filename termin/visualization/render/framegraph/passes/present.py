@@ -82,11 +82,16 @@ class BlitPass(RenderFramePass):
     def execute(
         self,
         graphics: "GraphicsBackend",
-        *,
-        fbos: dict[str, "FramebufferHandle" | None],
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
         rect: tuple[int, int, int, int],
+        scene=None,
+        camera=None,
+        renderer=None,
         context_key: int,
-        **_,
+        lights=None,
+        bind_default_framebuffer=None,
+        canvas=None,
     ):
         px, py, pw, ph = rect
         key = context_key
@@ -98,11 +103,11 @@ class BlitPass(RenderFramePass):
         if not src_name:
             return
 
-        fb_in = fbos.get(src_name)
+        fb_in = reads_fbos.get(src_name)
         if fb_in is None:
             return
 
-        fb_out = fbos.get(self.output_res)
+        fb_out = writes_fbos.get(self.output_res)
         if fb_out is None:
             return
         
@@ -159,17 +164,21 @@ class PresentToScreenPass(RenderFramePass):
     def execute(
         self,
         graphics: "GraphicsBackend",
-        *,
-        fbos: dict[str, "FramebufferHandle" | None],
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
         rect: tuple[int, int, int, int],
+        scene=None,
+        camera=None,
+        renderer=None,
         context_key: int,
+        lights=None,
         bind_default_framebuffer=None,
-        **_,
+        canvas=None,
     ):
         px, py, pw, ph = rect
         key = context_key
 
-        fb_in = fbos.get(self.input_res)
+        fb_in = reads_fbos.get(self.input_res)
         if fb_in is None:
             return
 

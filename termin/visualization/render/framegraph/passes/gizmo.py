@@ -55,19 +55,21 @@ class GizmoPass(RenderFramePass):
     def execute(
         self,
         graphics: "GraphicsBackend",
-        *,
-        fbos: dict[str, "FramebufferHandle" | None],
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
         rect: tuple[int, int, int, int],
         scene,
         camera,
         renderer,
         context_key: int,
-        **_,
+        lights=None,
+        bind_default_framebuffer=None,
+        canvas=None,
     ):
         px, py, pw, ph = rect
         key = context_key
 
-        fb = fbos.get(self.output_res)
+        fb = writes_fbos.get(self.output_res)
         graphics.bind_framebuffer(fb)
         graphics.set_viewport(0, 0, pw, ph)
 

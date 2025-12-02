@@ -54,19 +54,21 @@ class DepthPass(RenderFramePass):
     def execute(
         self,
         graphics: "GraphicsBackend",
-        *,
-        fbos: dict[str, "FramebufferHandle" | None],
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
         rect: tuple[int, int, int, int],
         scene,
         camera,
         renderer,
         context_key: int,
-        **_,
+        lights=None,
+        bind_default_framebuffer=None,
+        canvas=None,
     ):
         px, py, pw, ph = rect
         key = context_key
 
-        fb = fbos.get(self.output_res)
+        fb = writes_fbos.get(self.output_res)
         if fb is None:
             return
 
@@ -74,7 +76,7 @@ class DepthPass(RenderFramePass):
         debug_symbol, debug_output = self.get_debug_internal_point()
         debug_fb = None
         if debug_symbol is not None and debug_output is not None:
-            debug_fb = fbos.get(debug_output)
+            debug_fb = writes_fbos.get(debug_output)
 
         # Обновляем список имён
         self._entity_names = []

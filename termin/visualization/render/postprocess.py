@@ -142,18 +142,23 @@ class PostProcessPass(RenderFramePass):
     def execute(
         self,
         graphics: "GraphicsBackend",
-        *,
-        fbos: dict[str, "FramebufferHandle" | None],
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
         rect: tuple[int, int, int, int],
+        scene=None,
+        camera=None,
+        renderer=None,
         context_key: int,
-        **_,
+        lights=None,
+        bind_default_framebuffer=None,
+        canvas=None,
     ):
         px, py, pw, ph = rect
         key = context_key
 
         size = (pw, ph)
 
-        fb_in = fbos.get(self.input_res)
+        fb_in = reads_fbos.get(self.input_res)
         if fb_in is None:
             return
 
@@ -161,7 +166,7 @@ class PostProcessPass(RenderFramePass):
         debug_symbol, debug_output = self.get_debug_internal_point()
         debug_fb = None
         if debug_symbol is not None and debug_output is not None:
-            debug_fb = fbos.get(debug_output)
+            debug_fb = writes_fbos.get(debug_output)
 
         color_tex = fb_in.color_texture()
 
@@ -174,12 +179,12 @@ class PostProcessPass(RenderFramePass):
 
         extra_textures: dict[str, "TextureHandle"] = {}
         for res_name in required_resources:
-            fb = fbos.get(res_name)
+            fb = reads_fbos.get(res_name)
             if fb is None:
                 continue
             extra_textures[res_name] = fb.color_texture()
 
-        fb_out_final = fbos.get(self.output_res)
+        fb_out_final = writes_fbos.get(self.output_res)
         if fb_out_final is None:
             return
 

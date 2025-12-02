@@ -22,16 +22,20 @@ class CanvasPass(RenderFramePass):
     def execute(
         self,
         graphics: "GraphicsBackend",
-        *,
-        fbos: dict[str, "FramebufferHandle" | None],
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
         rect: tuple[int, int, int, int],
+        scene=None,
+        camera=None,
+        renderer=None,
         canvas=None,
         context_key: int,
-        **_,
+        lights=None,
+        bind_default_framebuffer=None,
     ):
         px, py, pw, ph = rect
 
-        fb_out = fbos.get(self.dst)
+        fb_out = writes_fbos.get(self.dst)
         graphics.bind_framebuffer(fb_out)
         graphics.set_viewport(0, 0, pw, ph)
 

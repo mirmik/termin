@@ -17,6 +17,7 @@ from termin.visualization.platform.backends.base import (
     BackendWindow,
 )
 from termin.visualization.core.viewport import Viewport
+from termin.visualization.core.entity import Entity
 from termin.visualization.ui.canvas import Canvas
 from termin.visualization.core.picking import rgb_to_id
 from termin.visualization.render.components import MeshRenderer
@@ -63,25 +64,12 @@ class Window:
         # picking support
         self.selection_handler = None    # редактор подпишется сюда
         self._pick_requests = {}         # viewport -> (mouse_x, mouse_y)
-        self._pick_id_counter = 1
-        self._pick_entity_by_id = {}
-        self._pick_id_by_entity = {}
 
     def set_selection_handler(self, handler):
         self.selection_handler = handler
 
     def set_world_mode(self, mode: str):
         self._world_mode = mode
-
-    def _get_pick_id_for_entity(self, entity):
-        pid = self._pick_id_by_entity.get(entity)
-        if pid is not None:
-            return pid
-        pid = self._pick_id_counter
-        self._pick_id_counter += 1
-        self._pick_id_by_entity[entity] = pid
-        self._pick_entity_by_id[pid] = entity
-        return pid     
 
     def close(self):
         if self.handle:
@@ -238,7 +226,7 @@ class Window:
         if pid == 0:
             return None
 
-        entity = self._pick_entity_by_id.get(pid)
+        entity = Entity.lookup_by_pick_id(pid)
 
         return entity
 
@@ -462,12 +450,13 @@ class Window:
             bind_default = self.handle.bind_window_framebuffer
 
             for p in schedule:
-                resource_names = p.required_resources() if isinstance(p, RenderFramePass) else p.reads | p.writes
-                pass_fbos = {name: fbos.get(name) for name in resource_names}
+                pass_reads = {name: fbos.get(name) for name in p.reads}
+                pass_writes = {name: fbos.get(name) for name in p.writes}
 
                 p.execute(
                     self.graphics,
-                    fbos=pass_fbos,
+                    reads_fbos=pass_reads,
+                    writes_fbos=pass_writes,
                     rect=(px, py, pw, ph),
                     scene=scene,
                     camera=viewport.camera,
@@ -475,7 +464,6 @@ class Window:
                     context_key=context_key,
                     lights=lights,
                     bind_default_framebuffer=bind_default,
-                    get_pick_id=self._get_pick_id_for_entity,
                     canvas=viewport.canvas,
                 )
 
