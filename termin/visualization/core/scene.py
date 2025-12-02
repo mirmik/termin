@@ -117,15 +117,6 @@ class Scene:
             light.direction = forward_world
             lights.append(light)
 
-        if not lights:
-            fallback = Light(
-                type=LightType.DIRECTIONAL,
-                color=self.light_color,
-                intensity=1.0,
-                direction=self.light_direction,
-            )
-            lights.append(fallback)
-
         self.lights = lights
         return lights
 
