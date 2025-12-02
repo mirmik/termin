@@ -30,7 +30,6 @@ class RenderContext:
     projection: np.ndarray
     camera: "Camera"
     scene: "Scene"
-    renderer: "Renderer"
     context_key: int
     graphics: GraphicsBackend
     phase: str = "main"

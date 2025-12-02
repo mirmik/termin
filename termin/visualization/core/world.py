@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 from typing import List
 
-from termin.visualization.render.renderer import Renderer
 from termin.visualization.core.scene import Scene
 from termin.visualization.platform.window import Window
 from termin.visualization.platform.backends.glfw import GLFWWindowBackend
@@ -29,7 +28,6 @@ class VisualizationWorld:
         self.window_backend = window_backend or get_default_window_backend() or GLFWWindowBackend()
         set_default_graphics_backend(self.graphics)
         set_default_window_backend(self.window_backend)
-        self.renderer = Renderer(self.graphics)
         self.scenes: List[Scene] = []
         self.windows: List[Window] = []
         self._running = False
@@ -46,7 +44,7 @@ class VisualizationWorld:
 
     def create_window(self, width: int = 1280, height: int = 720, title: str = "termin viewer", **backend_kwargs) -> Window:
         share = self.windows[0] if self.windows else None
-        window = Window(width=width, height=height, title=title, renderer=self.renderer, graphics=self.graphics, window_backend=self.window_backend, share=share, **backend_kwargs)
+        window = Window(width=width, height=height, title=title, graphics=self.graphics, window_backend=self.window_backend, share=share, **backend_kwargs)
         self.windows.append(window)
         return window
 

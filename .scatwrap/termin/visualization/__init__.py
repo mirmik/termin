@@ -14,7 +14,6 @@ camera&nbsp;models&nbsp;and&nbsp;GPU&nbsp;resources&nbsp;such&nbsp;as&nbsp;meshe
 &quot;&quot;&quot;<br>
 <br>
 from&nbsp;termin.visualization.platform.window&nbsp;import&nbsp;Window,&nbsp;GLWindow<br>
-from&nbsp;termin.visualization.render.renderer&nbsp;import&nbsp;Renderer<br>
 from&nbsp;termin.visualization.core.scene&nbsp;import&nbsp;Scene<br>
 from&nbsp;termin.visualization.core.entity&nbsp;import&nbsp;Entity,&nbsp;Component,&nbsp;InputComponent,&nbsp;RenderContext<br>
 from&nbsp;termin.visualization.core.camera&nbsp;import&nbsp;(<br>

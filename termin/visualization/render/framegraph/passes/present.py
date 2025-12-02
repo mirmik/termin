@@ -87,7 +87,6 @@ class BlitPass(RenderFramePass):
         rect: tuple[int, int, int, int],
         scene=None,
         camera=None,
-        renderer=None,
         context_key: int = 0,
         lights=None,
         canvas=None,
@@ -145,11 +144,11 @@ class PresentToScreenPass(RenderFramePass):
 
     _shader: ShaderProgram | None = None
 
-    def __init__(self, input_res: str, pass_name: str = "PresentToScreen"):
+    def __init__(self, input_res: str, output_res: str = "DISPLAY", pass_name: str = "PresentToScreen"):
         super().__init__(
             pass_name=pass_name,
             reads={input_res},
-            writes={"DISPLAY"},
+            writes={output_res},
             inplace=False,
         )
         self.input_res = input_res
@@ -168,7 +167,6 @@ class PresentToScreenPass(RenderFramePass):
         rect: tuple[int, int, int, int],
         scene=None,
         camera=None,
-        renderer=None,
         context_key: int = 0,
         lights=None,
         canvas=None,

@@ -92,7 +92,7 @@ class _QtGLWidget(QtWidgets.QOpenGLWidget):
         # Тут есть активный GL-контекст — выполняем рендер движка
         window_obj = self._owner._user_ptr
         if window_obj is not None:
-            window_obj._render_core(from_backend=True)
+            window_obj.render(from_backend=True)
 
     def resizeGL(self, w, h):
         cb = self._owner._framebuffer_callback

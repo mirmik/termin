@@ -38,7 +38,6 @@ class&nbsp;RenderContext:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;projection:&nbsp;np.ndarray<br>
 &nbsp;&nbsp;&nbsp;&nbsp;camera:&nbsp;&quot;Camera&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;scene:&nbsp;&quot;Scene&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;renderer:&nbsp;&quot;Renderer&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;context_key:&nbsp;int<br>
 &nbsp;&nbsp;&nbsp;&nbsp;graphics:&nbsp;GraphicsBackend<br>
 &nbsp;&nbsp;&nbsp;&nbsp;phase:&nbsp;str&nbsp;=&nbsp;&quot;main&quot;<br>

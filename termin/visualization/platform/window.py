@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional, Tuple
 
 from termin.visualization.core.camera import CameraComponent
-from termin.visualization.render.renderer import Renderer
 from termin.visualization.core.scene import Scene
 from termin.visualization.platform.backends.base import (
     Action,
@@ -29,8 +28,7 @@ from termin.visualization.render.posteffects.gray import GrayscaleEffect
 class Window:
     """Manages a platform window and a set of viewports."""
 
-    def __init__(self, width: int, height: int, title: str, renderer: Renderer, graphics: GraphicsBackend, window_backend: WindowBackend, share=None, **backend_kwargs):
-        self.renderer = renderer
+    def __init__(self, width: int, height: int, title: str, graphics: GraphicsBackend, window_backend: WindowBackend, share=None, **backend_kwargs):
         self.graphics = graphics
         self.generate_default_pipeline = True
         share_handle = None
@@ -128,8 +126,8 @@ class Window:
         # Reserved for future per-window updates.
         return
 
-    def render(self):
-        self._render_core(from_backend=False)
+    def render(self, from_backend: bool = False):
+        self._render_core(from_backend=from_backend)
 
     def viewport_rect_to_pixels(self, viewport: Viewport) -> Tuple[int, int, int, int]:
         if self.handle is None:
@@ -468,7 +466,6 @@ class Window:
                     rect=(px, py, pw, ph),
                     scene=scene,
                     camera=viewport.camera,
-                    renderer=self.renderer,
                     context_key=context_key,
                     lights=lights,
                     canvas=viewport.canvas,

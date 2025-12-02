@@ -13,7 +13,6 @@ from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 import&nbsp;time<br>
 from&nbsp;typing&nbsp;import&nbsp;List<br>
 <br>
-from&nbsp;termin.visualization.render.renderer&nbsp;import&nbsp;Renderer<br>
 from&nbsp;termin.visualization.core.scene&nbsp;import&nbsp;Scene<br>
 from&nbsp;termin.visualization.platform.window&nbsp;import&nbsp;Window<br>
 from&nbsp;termin.visualization.platform.backends.glfw&nbsp;import&nbsp;GLFWWindowBackend<br>
@@ -37,7 +36,6 @@ class&nbsp;VisualizationWorld:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.window_backend&nbsp;=&nbsp;window_backend&nbsp;or&nbsp;get_default_window_backend()&nbsp;or&nbsp;GLFWWindowBackend()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;set_default_graphics_backend(self.graphics)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;set_default_window_backend(self.window_backend)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.renderer&nbsp;=&nbsp;Renderer(self.graphics)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scenes:&nbsp;List[Scene]&nbsp;=&nbsp;[]<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.windows:&nbsp;List[Window]&nbsp;=&nbsp;[]<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._running&nbsp;=&nbsp;False<br>
@@ -54,7 +52,7 @@ class&nbsp;VisualizationWorld:<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_window(self,&nbsp;width:&nbsp;int&nbsp;=&nbsp;1280,&nbsp;height:&nbsp;int&nbsp;=&nbsp;720,&nbsp;title:&nbsp;str&nbsp;=&nbsp;&quot;termin&nbsp;viewer&quot;,&nbsp;**backend_kwargs)&nbsp;-&gt;&nbsp;Window:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;share&nbsp;=&nbsp;self.windows[0]&nbsp;if&nbsp;self.windows&nbsp;else&nbsp;None<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;Window(width=width,&nbsp;height=height,&nbsp;title=title,&nbsp;renderer=self.renderer,&nbsp;graphics=self.graphics,&nbsp;window_backend=self.window_backend,&nbsp;share=share,&nbsp;**backend_kwargs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;=&nbsp;Window(width=width,&nbsp;height=height,&nbsp;title=title,&nbsp;graphics=self.graphics,&nbsp;window_backend=self.window_backend,&nbsp;share=share,&nbsp;**backend_kwargs)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.windows.append(window)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;window<br>
 <br>

@@ -59,7 +59,6 @@ class ColorPass(RenderFramePass):
         rect: tuple[int, int, int, int],
         scene,
         camera,
-        renderer,
         context_key: int,
         lights=None,
         canvas=None,
@@ -106,7 +105,6 @@ class ColorPass(RenderFramePass):
             projection=projection,
             camera=camera,
             scene=scene,
-            renderer=renderer,
             context_key=key,
             graphics=graphics,
         )

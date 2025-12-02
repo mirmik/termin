@@ -46,7 +46,6 @@ class IdPass(RenderFramePass):
         rect: tuple[int, int, int, int],
         scene,
         camera,
-        renderer,
         context_key: int,
         lights=None,
         canvas=None,
@@ -94,11 +93,11 @@ class IdPass(RenderFramePass):
             context_key=key,
             scene=scene,
             camera=camera,
-            renderer=renderer,
             phase="pick",
         )
 
-        pick_material = renderer.pick_material
+        from termin.visualization.render.materials.pick_material import PickMaterial
+        pick_material = PickMaterial()
 
         # Жёсткое состояние для ID-прохода
         graphics.apply_render_state(RenderState(

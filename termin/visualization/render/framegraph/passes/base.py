@@ -12,7 +12,6 @@ class RenderFramePass(FramePass):
         rect: tuple[int, int, int, int],
         scene: "Scene",
         camera: "Camera",
-        renderer: "Renderer",
         context_key: int,
         lights: list["Light"] | None = None,
         canvas=None,

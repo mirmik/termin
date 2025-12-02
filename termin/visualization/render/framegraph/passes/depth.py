@@ -59,7 +59,6 @@ class DepthPass(RenderFramePass):
         rect: tuple[int, int, int, int],
         scene,
         camera,
-        renderer,
         context_key: int,
         lights=None,
         canvas=None,
@@ -97,7 +96,6 @@ class DepthPass(RenderFramePass):
             context_key=key,
             scene=scene,
             camera=camera,
-            renderer=renderer,
             phase="depth",
         )
 

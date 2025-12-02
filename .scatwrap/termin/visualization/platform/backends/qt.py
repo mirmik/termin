@@ -100,7 +100,7 @@ class&nbsp;_QtGLWidget(QtWidgets.QOpenGLWidget):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Тут&nbsp;есть&nbsp;активный&nbsp;GL-контекст&nbsp;—&nbsp;выполняем&nbsp;рендер&nbsp;движка<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window_obj&nbsp;=&nbsp;self._owner._user_ptr<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;window_obj&nbsp;is&nbsp;not&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window_obj._render_core(from_backend=True)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window_obj.render(from_backend=True)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;resizeGL(self,&nbsp;w,&nbsp;h):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cb&nbsp;=&nbsp;self._owner._framebuffer_callback<br>

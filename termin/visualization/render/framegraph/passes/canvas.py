@@ -27,7 +27,6 @@ class CanvasPass(RenderFramePass):
         rect: tuple[int, int, int, int],
         scene=None,
         camera=None,
-        renderer=None,
         canvas=None,
         context_key: int = 0,
         lights=None,

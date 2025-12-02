@@ -14,7 +14,6 @@ from&nbsp;dataclasses&nbsp;import&nbsp;dataclass<br>
 from&nbsp;typing&nbsp;import&nbsp;Callable,&nbsp;List,&nbsp;Optional,&nbsp;Tuple<br>
 <br>
 from&nbsp;termin.visualization.core.camera&nbsp;import&nbsp;CameraComponent<br>
-from&nbsp;termin.visualization.render.renderer&nbsp;import&nbsp;Renderer<br>
 from&nbsp;termin.visualization.core.scene&nbsp;import&nbsp;Scene<br>
 from&nbsp;termin.visualization.platform.backends.base&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;Action,<br>
@@ -37,8 +36,7 @@ from&nbsp;termin.visualization.render.posteffects.gray&nbsp;import&nbsp;Grayscal
 class&nbsp;Window:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Manages&nbsp;a&nbsp;platform&nbsp;window&nbsp;and&nbsp;a&nbsp;set&nbsp;of&nbsp;viewports.&quot;&quot;&quot;<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;width:&nbsp;int,&nbsp;height:&nbsp;int,&nbsp;title:&nbsp;str,&nbsp;renderer:&nbsp;Renderer,&nbsp;graphics:&nbsp;GraphicsBackend,&nbsp;window_backend:&nbsp;WindowBackend,&nbsp;share=None,&nbsp;**backend_kwargs):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.renderer&nbsp;=&nbsp;renderer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;width:&nbsp;int,&nbsp;height:&nbsp;int,&nbsp;title:&nbsp;str,&nbsp;graphics:&nbsp;GraphicsBackend,&nbsp;window_backend:&nbsp;WindowBackend,&nbsp;share=None,&nbsp;**backend_kwargs):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics&nbsp;=&nbsp;graphics<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.generate_default_pipeline&nbsp;=&nbsp;True<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;share_handle&nbsp;=&nbsp;None<br>
@@ -136,8 +134,8 @@ class&nbsp;Window:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Reserved&nbsp;for&nbsp;future&nbsp;per-window&nbsp;updates.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;render(self):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._render_core(from_backend=False)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;render(self,&nbsp;from_backend:&nbsp;bool&nbsp;=&nbsp;False):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._render_core(from_backend=from_backend)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;viewport_rect_to_pixels(self,&nbsp;viewport:&nbsp;Viewport)&nbsp;-&gt;&nbsp;Tuple[int,&nbsp;int,&nbsp;int,&nbsp;int]:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.handle&nbsp;is&nbsp;None:<br>
@@ -476,7 +474,6 @@ class&nbsp;Window:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rect=(px,&nbsp;py,&nbsp;pw,&nbsp;ph),<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scene=scene,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera=viewport.camera,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;renderer=self.renderer,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;context_key=context_key,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lights=lights,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas=viewport.canvas,<br>

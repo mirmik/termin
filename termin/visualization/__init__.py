@@ -6,7 +6,6 @@ camera models and GPU resources such as meshes, shaders, materials and textures.
 """
 
 from termin.visualization.platform.window import Window, GLWindow
-from termin.visualization.render.renderer import Renderer
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity, Component, InputComponent, RenderContext
 from termin.visualization.core.camera import (
