@@ -313,8 +313,10 @@ class ViewportController:
             GizmoPass,
         )
         from termin.visualization.render.postprocess import PostProcessPass
+        from termin.visualization.render.posteffects.fog import FogEffect
         from termin.visualization.render.posteffects.highlight import HighlightEffect
         from termin.visualization.render.framegraph.passes.present import BlitPass
+        from termin.visualization.render.framegraph.passes.depth import DepthPass
 
         gizmo_entities = self._gizmo_controller.helper_geometry_entities()
 
@@ -339,10 +341,12 @@ class ViewportController:
             pass_name="DebugBlit",
         )
 
+        depth_pass = DepthPass(input_res="empty_depth", output_res="depth", pass_name="Depth")
         color_pass = ColorPass(input_res="empty", output_res="color", pass_name="Color")
 
         passes: list = [
             color_pass,
+            depth_pass,
             IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
             GizmoPass(
                 input_res="preid",
@@ -373,6 +377,14 @@ class ViewportController:
             HighlightEffect(
                 lambda: self.selected_entity_id,
                 color=(1.0, 0.9, 0.1, 1.0),
+            )
+        )
+
+        postprocess.add_effect(
+            FogEffect(
+                fog_color=(0.5, 0.6, 0.7),
+                fog_start=0.3,
+                fog_end=1.0,
             )
         )
 
