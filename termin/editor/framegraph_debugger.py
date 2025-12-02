@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from typing import Optional, Callable, List, Tuple
 
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 
 from OpenGL import GL as gl
+import numpy as np
+
+from termin.visualization.platform.backends.opengl import OpenGLFramebufferHandle
 
 from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.visualization.render.shader import ShaderProgram
@@ -15,6 +18,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
     QOpenGLWidget, который берёт FBO из внешнего источника и рисует его color-текстуру
     фуллскрин-квадом. Работает напрямую через OpenGL, без участия Window/FrameGraph.
     """
+    depthImageUpdated = QtCore.pyqtSignal(QtGui.QImage)
 
     def __init__(
         self,
@@ -112,6 +116,73 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
             return None
         return fbos[self._resource_name]
 
+    def _update_depth_image(self, fb) -> None:
+        if not isinstance(fb, OpenGLFramebufferHandle):
+            return
+        if fb._fbo is None:
+            return
+        size = fb._size
+        if not size:
+            return
+        width = int(size[0])
+        height = int(size[1])
+        if width <= 0 or height <= 0:
+            return
+        try:
+            current_fbo = gl.glGetIntegerv(gl.GL_FRAMEBUFFER_BINDING)
+        except Exception:
+            current_fbo = 0
+        if isinstance(current_fbo, (list, tuple)):
+            if current_fbo:
+                current_fbo = int(current_fbo[0])
+            else:
+                current_fbo = 0
+        try:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, fb._fbo or 0)
+            data = gl.glReadPixels(
+                0,
+                0,
+                width,
+                height,
+                gl.GL_DEPTH_COMPONENT,
+                gl.GL_FLOAT,
+            )
+        finally:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, int(current_fbo))
+        if data is None:
+            return
+        if isinstance(data, (bytes, bytearray)):
+            depth = np.frombuffer(data, dtype=np.float32)
+        else:
+            depth = np.array(data, dtype=np.float32)
+        expected_size = width * height
+        if depth.size != expected_size:
+            return
+        depth = depth.reshape((height, width))
+        depth = np.nan_to_num(depth, nan=1.0, posinf=1.0, neginf=0.0)
+        d_min = float(depth.min())
+        d_max = float(depth.max())
+        if d_max > d_min:
+            norm = (depth - d_min) / (d_max - d_min)
+        else:
+            norm = depth
+        norm = 1.0 - norm
+        img = (norm * 255.0).clip(0.0, 255.0).astype(np.uint8)
+        img = np.flipud(img)
+        height_i, width_i = img.shape
+        bytes_per_line = width_i
+        buffer = img.tobytes()
+
+        qimage = QtGui.QImage(
+            buffer,
+            width_i,
+            height_i,
+            bytes_per_line,
+            QtGui.QImage.Format_Grayscale8,
+        )
+        qimage = qimage.copy()
+        self.depthImageUpdated.emit(qimage)
+
     def paintGL(self) -> None:
         fb = self._current_fbo()
 
@@ -128,7 +199,6 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
             return
 
         tex = fb.color_texture()
-
         shader = self._get_shader()
         shader.use()
         shader.set_uniform_int("u_tex", 0)
@@ -145,6 +215,8 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
 
         gl.glDepthMask(gl.GL_TRUE)
         gl.glEnable(gl.GL_DEPTH_TEST)
+
+        self._update_depth_image(fb)
 
 
 class FramegraphDebugDialog(QtWidgets.QDialog):
@@ -227,7 +299,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # ============ Группа выбора режима ============
         mode_group = QtWidgets.QGroupBox("Режим подключения")
         mode_layout = QtWidgets.QVBoxLayout(mode_group)
-
         self._radio_between = QtWidgets.QRadioButton("Между пассами (ресурс FBO)")
         self._radio_inside = QtWidgets.QRadioButton("Внутри пасса (символ)")
         self._radio_between.setChecked(True)
@@ -246,7 +317,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._resource_label = QtWidgets.QLabel("Ресурс:")
         self._resource_combo = QtWidgets.QComboBox()
         self._resource_combo.currentTextChanged.connect(self._on_resource_selected)
-
         between_layout.addWidget(self._resource_label)
         between_layout.addWidget(self._resource_combo, 1)
         layout.addWidget(self._between_panel)
@@ -255,7 +325,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._inside_panel = QtWidgets.QWidget()
         inside_layout = QtWidgets.QVBoxLayout(self._inside_panel)
         inside_layout.setContentsMargins(0, 0, 0, 0)
-
         # Выбор пасса
         pass_row = QtWidgets.QHBoxLayout()
         self._pass_label = QtWidgets.QLabel("Пасс:")
@@ -264,7 +333,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         pass_row.addWidget(self._pass_label)
         pass_row.addWidget(self._pass_combo, 1)
         inside_layout.addLayout(pass_row)
-
         # Выбор символа
         symbol_row = QtWidgets.QHBoxLayout()
         self._symbol_label = QtWidgets.QLabel("Символ:")
@@ -273,7 +341,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         symbol_row.addWidget(self._symbol_label)
         symbol_row.addWidget(self._symbol_combo, 1)
         inside_layout.addLayout(symbol_row)
-
         layout.addWidget(self._inside_panel)
         self._inside_panel.hide()  # По умолчанию скрыта
 
@@ -282,19 +349,51 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._pause_check.toggled.connect(self._on_pause_toggled)
         layout.addWidget(self._pause_check)
 
-        # ============ GL-виджет ============
+        # ============ Просмотр ============
         self._gl_widget = FramegraphTextureWidget(
             graphics=self._graphics,
             get_fbos=self._get_fbos,
             resource_name=self._resource_name,
             parent=self,
         )
-        layout.addWidget(self._gl_widget, 1)
+
+        self._depth_label = QtWidgets.QLabel("Depth")
+        self._depth_label.setAlignment(QtCore.Qt.AlignCenter)
+        self._depth_label.setMinimumSize(100, 100)
+        self._depth_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Expanding,
+        )
+
+        viewer_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        viewer_splitter.addWidget(self._gl_widget)
+        viewer_splitter.addWidget(self._depth_label)
+        viewer_splitter.setStretchFactor(0, 3)
+        viewer_splitter.setStretchFactor(1, 2)
+
+        layout.addWidget(viewer_splitter, 1)
+
+        self._gl_widget.depthImageUpdated.connect(self._on_depth_image_updated)
 
         # Инициализация
         self._update_resource_list()
         self._update_passes_list()
         self._sync_pause_state()
+
+    def _on_depth_image_updated(self, image: QtGui.QImage) -> None:
+        if image is None or image.isNull():
+            return
+        if not hasattr(self, "_depth_label"):
+            return
+        pixmap = QtGui.QPixmap.fromImage(image)
+        target_size = self._depth_label.size()
+        if target_size.width() > 0 and target_size.height() > 0:
+            pixmap = pixmap.scaled(
+                target_size,
+                QtCore.Qt.KeepAspectRatio,
+                QtCore.Qt.SmoothTransformation,
+            )
+        self._depth_label.setPixmap(pixmap)
 
     def _on_mode_changed(self, checked: bool) -> None:
         """Обработчик переключения режима."""

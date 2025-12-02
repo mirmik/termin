@@ -13,7 +13,6 @@ layout(location = 2) in vec2 a_texcoord;
 uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
-
 uniform float u_near;
 uniform float u_far;
 
@@ -23,14 +22,11 @@ void main()
 {
     vec4 world_pos = u_model * vec4(a_position, 1.0);
     vec4 view_pos  = u_view * world_pos;
-
-    // z в системе камеры (камера смотрит вдоль -Z)
+    
     float z = -view_pos.z;
-
     float depth = (z - u_near) / (u_far - u_near);
-    depth = clamp(depth, 0.0, 1.0);
-
-    v_linear_depth = depth;
+    
+    v_linear_depth = depth;  // ❗ БЕЗ clamp
     gl_Position = u_projection * view_pos;
 }
 """
@@ -41,10 +37,17 @@ DEPTH_FRAG = """
 in float v_linear_depth;
 out vec4 FragColor;
 
-void main()
-{
-    float d = clamp(v_linear_depth, 0.0, 1.0);
-    FragColor = vec4(d, d, d, 1.0);
+void main() {
+    float d = v_linear_depth;
+    
+    // Отладка
+    if (d < 0.0) {
+        FragColor = vec4(1.0, 0.0, 0.0, 1.0);  // RED = behind camera
+    } else if (d > 1.0) {
+        FragColor = vec4(0.0, 0.0, 1.0, 1.0);  // BLUE = too far
+    } else {
+        FragColor = vec4(d, d, d, 1.0);  // GRAY = ok
+    }
 }
 """
 
