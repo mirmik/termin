@@ -23,7 +23,7 @@ import numpy
 
 class TestPasses(unittest.TestCase):
 
-    def test_color_pipeline_opengl_smoke(self):
+    def test_color_pipeline_opengl(self):
         """
         Smoke-тест offscreen рендеринга с ColorPass.
         
