@@ -125,7 +125,8 @@ def main():
     win = world.create_window(title="Cube + Grayscale + Gaussian Blur")
     vp = win.add_viewport(scene, cam)
 
-    postprocess = vp.find_render_pass("PostFX")
+    # Используем новый API через world.find_render_pass()
+    postprocess = world.find_render_pass(vp, "PostFX")
 
     # цепочка: Grayscale → Blur Horizontal → Blur Vertical
     postprocess.add_effect(GrayscaleEffect())

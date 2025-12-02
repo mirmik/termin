@@ -133,7 +133,8 @@ def&nbsp;main():<br>
 &nbsp;&nbsp;&nbsp;&nbsp;win&nbsp;=&nbsp;world.create_window(title=&quot;Cube&nbsp;+&nbsp;Grayscale&nbsp;+&nbsp;Gaussian&nbsp;Blur&quot;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;vp&nbsp;=&nbsp;win.add_viewport(scene,&nbsp;cam)<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;postprocess&nbsp;=&nbsp;vp.find_render_pass(&quot;PostFX&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Используем&nbsp;новый&nbsp;API&nbsp;через&nbsp;world.find_render_pass()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;postprocess&nbsp;=&nbsp;world.find_render_pass(vp,&nbsp;&quot;PostFX&quot;)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;цепочка:&nbsp;Grayscale&nbsp;→&nbsp;Blur&nbsp;Horizontal&nbsp;→&nbsp;Blur&nbsp;Vertical<br>
 &nbsp;&nbsp;&nbsp;&nbsp;postprocess.add_effect(GrayscaleEffect())<br>
