@@ -20,8 +20,8 @@ from PyQt5.QtWidgets import (
     QAction,
     QComboBox,
     QPushButton,
-    QColorDialog,
 )
+from termin.editor.color_dialog import ColorDialog
 from PyQt5.QtGui import QColor
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -165,16 +165,40 @@ class ComponentsPanel(QWidget):
 
 
 def _to_qcolor(value) -> QColor:
+    """
+    Конвертирует значение цвета в QColor.
+    Поддерживает:
+    - QColor
+    - tuple/list (r, g, b) или (r, g, b, a) в диапазоне 0..1
+    - numpy array
+    """
     if isinstance(value, QColor):
         return value
     if isinstance(value, (list, tuple)) and len(value) >= 3:
-        r, g, b = value[:3]
-        return QColor(int(r), int(g), int(b))
+        r = float(value[0])
+        g = float(value[1])
+        b = float(value[2])
+        a = float(value[3]) if len(value) > 3 else 1.0
+        # Предполагаем диапазон 0..1
+        return QColor.fromRgbF(
+            max(0.0, min(1.0, r)),
+            max(0.0, min(1.0, g)),
+            max(0.0, min(1.0, b)),
+            max(0.0, min(1.0, a)),
+        )
     try:
         arr = np.asarray(value).reshape(-1)
         if arr.size >= 3:
-            r, g, b = arr[:3]
-            return QColor(int(r), int(g), int(b))
+            r = float(arr[0])
+            g = float(arr[1])
+            b = float(arr[2])
+            a = float(arr[3]) if arr.size > 3 else 1.0
+            return QColor.fromRgbF(
+                max(0.0, min(1.0, r)),
+                max(0.0, min(1.0, g)),
+                max(0.0, min(1.0, b)),
+                max(0.0, min(1.0, a)),
+            )
     except Exception:
         pass
     return QColor(255, 255, 255)
@@ -304,14 +328,24 @@ class ComponentInspectorPanel(QWidget):
         if kind == "color":
             btn = QPushButton()
             btn.setAutoFillBackground(True)
-            btn._current_color = None
+            btn._current_color = None  # tuple (r, g, b, a) в диапазоне 0..1
 
             def set_btn_color(color: QColor):
-                btn._current_color = color
+                # Сохраняем цвет в диапазоне 0..1 с альфой
+                btn._current_color = (
+                    color.redF(),
+                    color.greenF(),
+                    color.blueF(),
+                    color.alphaF(),
+                )
                 pal = btn.palette()
                 pal.setColor(btn.backgroundRole(), color)
                 btn.setPalette(pal)
-                btn.setText(f"{color.red()}, {color.green()}, {color.blue()}")
+                # Отображаем значения RGBA в диапазоне 0..1
+                btn.setText(
+                    f"{color.redF():.2f}, {color.greenF():.2f}, "
+                    f"{color.blueF():.2f}, {color.alphaF():.2f}"
+                )
 
             btn._set_color = set_btn_color
             return btn
@@ -445,12 +479,26 @@ class ComponentInspectorPanel(QWidget):
             def on_click():
                 if self._component is None:
                     return
-                start_color = _to_qcolor(field.get_value(self._component))
-                col = QColorDialog.getColor(start_color, self)
-                if not col.isValid():
+                # Получаем текущий цвет в диапазоне 0..1 (RGBA)
+                current_value = field.get_value(self._component)
+                if current_value is None:
+                    initial = (1.0, 1.0, 1.0, 1.0)
+                elif isinstance(current_value, (list, tuple)) and len(current_value) >= 3:
+                    r = float(current_value[0])
+                    g = float(current_value[1])
+                    b = float(current_value[2])
+                    a = float(current_value[3]) if len(current_value) > 3 else 1.0
+                    initial = (r, g, b, a)
+                else:
+                    initial = (1.0, 1.0, 1.0, 1.0)
+
+                result = ColorDialog.get_color(initial, self)
+                if result is None:
                     return
+                # result теперь (r, g, b, a)
+                new_color = QColor.fromRgbF(result[0], result[1], result[2], result[3])
                 if hasattr(w, "_set_color"):
-                    w._set_color(col)
+                    w._set_color(new_color)
                 commit(False)
 
             w.clicked.connect(on_click)
@@ -487,10 +535,11 @@ class ComponentInspectorPanel(QWidget):
             return text if text else None
 
         if isinstance(w, QPushButton) and field.kind == "color":
-            qcol = getattr(w, "_current_color", None)
-            if qcol is None:
+            # _current_color теперь хранит tuple (r, g, b) в диапазоне 0..1
+            color_tuple = getattr(w, "_current_color", None)
+            if color_tuple is None:
                 return None
-            return (qcol.red(), qcol.green(), qcol.blue())
+            return color_tuple
 
         return None
 
