@@ -8,7 +8,8 @@
 <!-- BEGIN SCAT CODE -->
 &quot;&quot;&quot;OpenGL&nbsp;helpers&nbsp;and&nbsp;backend&nbsp;bindings.&quot;&quot;&quot;<br>
 <br>
-from&nbsp;termin.visualization.render.opengl.backends&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
+#&nbsp;OpenGLGraphicsBackend&nbsp;теперь&nbsp;живёт&nbsp;в&nbsp;platform/backends/opengl.py<br>
+from&nbsp;termin.visualization.platform.backends.opengl&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
 from&nbsp;termin.visualization.render.opengl.helpers&nbsp;import&nbsp;init_opengl,&nbsp;opengl_is_inited<br>
 <br>
 __all__&nbsp;=&nbsp;[<br>

@@ -1,6 +1,7 @@
 """OpenGL helpers and backend bindings."""
 
-from termin.visualization.render.opengl.backends import OpenGLGraphicsBackend
+# OpenGLGraphicsBackend теперь живёт в platform/backends/opengl.py
+from termin.visualization.platform.backends.opengl import OpenGLGraphicsBackend
 from termin.visualization.render.opengl.helpers import init_opengl, opengl_is_inited
 
 __all__ = [

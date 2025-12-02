@@ -108,7 +108,7 @@ class EditorWindow(QMainWindow):
         )
 
         self.viewport_window = self.viewport_controller.window
-        self.viewport = self.viewport_controller._backend.viewport  # внутренняя ссылка для совместимости
+        self.viewport = self.viewport_controller.viewport  # viewport из контроллера
 
         gl_widget = self.viewport_controller.gl_widget
         gl_widget.installEventFilter(self)
@@ -237,7 +237,6 @@ class EditorWindow(QMainWindow):
             from termin.editor.framegraph_debugger import FramegraphDebugDialog
 
             graphics = self.viewport_window.graphics
-            viewport = self.viewport
 
             get_resources = None
             set_source = None
@@ -247,6 +246,7 @@ class EditorWindow(QMainWindow):
             get_pass_internal_symbols = None
             set_pass_internal_symbol = None
             get_debug_blit_pass = None
+            get_fbos = lambda: {}
 
             if self.viewport_controller is not None:
                 get_resources = self.viewport_controller.get_available_framegraph_resources
@@ -257,10 +257,11 @@ class EditorWindow(QMainWindow):
                 get_pass_internal_symbols = self.viewport_controller.get_pass_internal_symbols
                 set_pass_internal_symbol = self.viewport_controller.set_pass_internal_symbol
                 get_debug_blit_pass = self.viewport_controller.get_debug_blit_pass
+                get_fbos = lambda: self.viewport_controller.render_state.fbos
 
             self._framegraph_debugger = FramegraphDebugDialog(
                 graphics=graphics,
-                viewport=viewport,
+                get_fbos=get_fbos,
                 resource_name="debug",
                 parent=self,
                 get_available_resources=get_resources,

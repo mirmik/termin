@@ -163,37 +163,3 @@ class OffscreenRenderSurface(RenderSurface):
         if self._framebuffer is not None:
             self._framebuffer.delete()
             self._framebuffer = None
-
-
-class WindowRenderSurface(RenderSurface):
-    """
-    Поверхность рендеринга на основе окна.
-    
-    Обёртка над BackendWindow, предоставляющая интерфейс RenderSurface.
-    Не владеет окном — только ссылается на него.
-    """
-
-    def __init__(self, window: "BackendWindow"):
-        """
-        Инициализирует поверхность окна.
-        
-        Параметры:
-            window: Хэндл окна (BackendWindow).
-        """
-        from termin.visualization.platform.backends.base import BackendWindow
-        self._window: BackendWindow = window
-
-    def get_framebuffer(self) -> "FramebufferHandle":
-        return self._window.get_window_framebuffer()
-
-    def get_size(self) -> Tuple[int, int]:
-        return self._window.framebuffer_size()
-
-    def make_current(self) -> None:
-        self._window.make_current()
-
-    def present(self) -> None:
-        self._window.swap_buffers()
-
-    def context_key(self) -> int:
-        return id(self._window)

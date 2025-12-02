@@ -13,7 +13,6 @@ from&nbsp;termin.visualization.render.headless&nbsp;import&nbsp;HeadlessContext<
 from&nbsp;termin.visualization.render.surface&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;RenderSurface,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;OffscreenRenderSurface,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;WindowRenderSurface,<br>
 )<br>
 from&nbsp;termin.visualization.render.view&nbsp;import&nbsp;RenderView<br>
 from&nbsp;termin.visualization.render.state&nbsp;import&nbsp;ViewportRenderState<br>
@@ -23,7 +22,6 @@ __all__&nbsp;=&nbsp;[<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;HeadlessContext&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;RenderSurface&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;OffscreenRenderSurface&quot;,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&quot;WindowRenderSurface&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;RenderView&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;ViewportRenderState&quot;,<br>
 ]<br>

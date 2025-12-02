@@ -20,7 +20,7 @@ from .nop_graphics import NOPGraphicsBackend
 from .nop_window import NOPWindowBackend
 from .qt import QtGLWindowHandle, QtWindowBackend
 from termin.visualization.platform.backends.glfw import GLFWWindowBackend
-from termin.visualization.render.opengl.backends import OpenGLGraphicsBackend
+from termin.visualization.platform.backends.opengl import OpenGLGraphicsBackend
 
 _default_graphics_backend: Optional[GraphicsBackend] = None
 _default_window_backend: Optional[WindowBackend] = None

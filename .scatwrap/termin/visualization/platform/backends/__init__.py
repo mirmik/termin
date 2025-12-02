@@ -28,7 +28,7 @@ from&nbsp;.nop_graphics&nbsp;import&nbsp;NOPGraphicsBackend<br>
 from&nbsp;.nop_window&nbsp;import&nbsp;NOPWindowBackend<br>
 from&nbsp;.qt&nbsp;import&nbsp;QtGLWindowHandle,&nbsp;QtWindowBackend<br>
 from&nbsp;termin.visualization.platform.backends.glfw&nbsp;import&nbsp;GLFWWindowBackend<br>
-from&nbsp;termin.visualization.render.opengl.backends&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
+from&nbsp;termin.visualization.platform.backends.opengl&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
 <br>
 _default_graphics_backend:&nbsp;Optional[GraphicsBackend]&nbsp;=&nbsp;None<br>
 _default_window_backend:&nbsp;Optional[WindowBackend]&nbsp;=&nbsp;None<br>

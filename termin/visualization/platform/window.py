@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, TYPE_CHECKING
 
 from termin.visualization.core.camera import CameraComponent
 from termin.visualization.core.scene import Scene
@@ -18,15 +18,69 @@ from termin.visualization.core.viewport import Viewport
 from termin.visualization.core.entity import Entity
 from termin.visualization.ui.canvas import Canvas
 from termin.visualization.core.picking import rgb_to_id
-from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.pipeline_runner import PipelineRunner
+from termin.visualization.render.surface import RenderSurface
+
+if TYPE_CHECKING:
+    from termin.visualization.platform.backends.base import FramebufferHandle
+
+
+class WindowRenderSurface(RenderSurface):
+    """
+    RenderSurface для окна.
+    
+    Лёгкий объект, предоставляющий доступ к framebuffer окна
+    через интерфейс RenderSurface. Не владеет окном.
+    """
+
+    def __init__(self, window: "Window"):
+        self._window = window
+
+    def get_framebuffer(self) -> "FramebufferHandle":
+        return self._window.handle.get_window_framebuffer()
+
+    def get_size(self) -> Tuple[int, int]:
+        return self._window.handle.framebuffer_size()
+
+    def make_current(self) -> None:
+        self._window.make_current()
+
+    def present(self) -> None:
+        if self._window.handle is not None:
+            self._window.handle.swap_buffers()
+
+    def context_key(self) -> int:
+        return id(self._window)
+
 
 class Window:
-    """Manages a platform window and a set of viewports."""
+    """
+    Manages a platform window and a set of viewports.
+    
+    Window отвечает за:
+    - Создание и управление окном через backend
+    - Хранение списка viewports
+    - Обработку событий мыши/клавиатуры
+    - Преобразование координат
+    - Предоставление RenderSurface для рендеринга
+    
+    НЕ отвечает за:
+    - Рендеринг (это делает RenderEngine снаружи)
+    - Управление pipeline и FBO (это ViewportRenderState)
+    
+    Для рендеринга используйте window.render_surface с RenderEngine.
+    """
 
-    def __init__(self, width: int, height: int, title: str, graphics: GraphicsBackend, window_backend: WindowBackend, share=None, **backend_kwargs):
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        title: str,
+        graphics: GraphicsBackend,
+        window_backend: WindowBackend,
+        share=None,
+        **backend_kwargs
+    ):
         self.graphics = graphics
-        self.generate_default_pipeline = True
         share_handle = None
         if isinstance(share, Window):
             share_handle = share.handle
@@ -34,7 +88,12 @@ class Window:
             share_handle = share
 
         self.window_backend = window_backend
-        self.handle: BackendWindow = self.window_backend.create_window(width, height, title, share=share_handle, **backend_kwargs)
+        self.handle: BackendWindow = self.window_backend.create_window(
+            width, height, title, share=share_handle, **backend_kwargs
+        )
+
+        # RenderSurface для этого окна
+        self._render_surface = WindowRenderSurface(self)
 
         self.viewports: List[Viewport] = []
         self._active_viewport: Optional[Viewport] = None
@@ -47,22 +106,26 @@ class Window:
         self.handle.set_mouse_button_callback(self._handle_mouse_button)
         self.handle.set_key_callback(self._handle_key)
 
-        self.on_mouse_button_event : Optional[
+        # Обработчики событий для внешнего кода (например, editor)
+        self.on_mouse_button_event: Optional[
             Callable[[MouseButton, Action, float, float, Optional[Viewport]], None]
         ] = None
-        self.on_mouse_move_event = None  # callable(x: float, y: float, viewport: Optional[Viewport])
-        self.after_render_handler = None  # type: Optional[Callable[["Window"], None]]
-
-        self.pipeline_runner = PipelineRunner(self.graphics)
+        self.on_mouse_move_event: Optional[
+            Callable[[float, float, Optional[Viewport]], None]
+        ] = None
+        self.after_render_handler: Optional[Callable[["Window"], None]] = None
 
         self._world_mode = "game"  # or "editor"
- 
-        # picking support
-        self.selection_handler = None    # редактор подпишется сюда
-        self._pick_requests = {}         # viewport -> (mouse_x, mouse_y)
 
-    def set_selection_handler(self, handler):
-        self.selection_handler = handler
+    @property
+    def render_surface(self) -> RenderSurface:
+        """
+        Возвращает RenderSurface для рендеринга в это окно.
+        
+        Используйте с RenderEngine:
+            engine.render_views(window.render_surface, views)
+        """
+        return self._render_surface
 
     def set_world_mode(self, mode: str):
         self._world_mode = mode
@@ -80,175 +143,159 @@ class Window:
         if self.handle is not None:
             self.handle.make_current()
 
-    def add_viewport(self, scene: Scene, camera: CameraComponent, rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0), canvas: Optional[Canvas] = None) -> Viewport:
+    def add_viewport(
+        self,
+        scene: Scene,
+        camera: CameraComponent,
+        rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
+        canvas: Optional[Canvas] = None,
+    ) -> Viewport:
+        """
+        Создаёт и добавляет новый viewport.
+        
+        Параметры:
+            scene: Сцена для рендеринга.
+            camera: Камера для рендеринга.
+            rect: Нормализованный прямоугольник (x, y, w, h).
+            canvas: Опциональная 2D канва.
+        
+        Возвращает:
+            Созданный Viewport.
+        """
         if not self.handle.drives_render():
             self.make_current()
         scene.ensure_ready(self.graphics)
-        viewport = Viewport(scene=scene, camera=camera, rect=rect, canvas=canvas, window=self)
+        
+        viewport = Viewport(
+            scene=scene,
+            camera=camera,
+            rect=rect,
+            canvas=canvas,
+            window=self,
+        )
         camera.viewport = viewport
         self.viewports.append(viewport)
-
-        if self.generate_default_pipeline:
-            # собираем дефолтный пайплайн
-            pipeline = viewport.make_default_pipeline()
-            viewport.set_render_pipeline(pipeline)
-
-        # if viewport.frame_passes == []:
-        #     # Если никто не добавил пассы, добавим дефолтный main-pass + present
-        #     from .framegraph import ColorPass, PresentToScreenPass, CanvasPass
-
-            # viewport.frame_passes.append(ColorPass(input_res="empty",    output_res="color", pass_name="Color"))
-            # viewport.frame_passes.append(IdPass   (input_res="empty_id", output_res="id",    pass_name="Id"))
-            # # viewport.frame_passes.append(PostProcessPass(
-            # #     effects=[HighlightEffect(lambda: editor.selected_entity_id)],
-            # #     input_res="color",
-            # #     output_res="color_pp",
-            # #     pass_name="PostFX",
-            # # ))
-            # viewport.frame_passes.append(PostProcessPass(
-            #     effects=[GrayscaleEffect()],
-            #     input_res="color",
-            #     output_res="color_pp",
-            #     pass_name="PostFX",
-            # ))
-            
-            # viewport.frame_passes.append(CanvasPass(src="color_pp", dst="color+ui", pass_name="Canvas"))
-            # viewport.frame_passes.append(PresentToScreenPass(input_res="color+ui", pass_name="Present"))
-
-            # viewport.frame_passes.append(PresentToScreenPass(input_res="id", pass_name="Present"))
-            # viewport.frame_passes.append(IdPass(input_res="empty_id", output_res="id", pass_name="IdPass"))
-
         return viewport
 
     def update(self, dt: float):
-        # Reserved for future per-window updates.
-        return
-
-    def render(self, from_backend: bool = False):
-        if self.handle is None:
-            return
-
-        self.graphics.ensure_ready()
-
-        if not from_backend:
-            self.make_current()
-
-        width, height = self.handle.framebuffer_size()
-        display_fbo = self.handle.get_window_framebuffer()
-        context_key = id(self)
-
-        self.pipeline_runner.render_viewports(
-            self.viewports,
-            framebuffer_size=(width, height),
-            display_fbo=display_fbo,
-            context_key=context_key,
-        )
-
-        if self.after_render_handler is not None:
-            self.after_render_handler(self)
-
-        if not from_backend:
-            self.handle.swap_buffers()
+        """Reserved for future per-window updates."""
+        pass
 
     def viewport_rect_to_pixels(self, viewport: Viewport) -> Tuple[int, int, int, int]:
+        """
+        Преобразует нормализованный rect viewport'а в пиксели.
+        
+        Возвращает:
+            (px, py, pw, ph) — позиция и размер в пикселях.
+        """
         if self.handle is None:
             return (0, 0, 0, 0)
         width, height = self.handle.framebuffer_size()
         vx, vy, vw, vh = viewport.rect
-        px = vx * width
-        py = vy * height
-        pw = vw * width
-        ph = vh * height
-        return px, py, pw, ph
-        
+        px = int(vx * width)
+        py = int(vy * height)
+        pw = int(vw * width)
+        ph = int(vh * height)
+        return (px, py, pw, ph)
 
-    # Event handlers -----------------------------------------------------
+    # ----------------------------------------------------------------
+    # Picking support (требует FBO пул извне)
+    # ----------------------------------------------------------------
 
-    def _handle_framebuffer_resize(self, window, width, height):
-        return
-
-
-    from typing import Optional
-    from termin.visualization.core.entity import Entity
-
-    def pick_color_at(self, x: float, y: float, viewport: Viewport = None, buffer_name="color") -> Optional[Tuple[int, int, int, int]]:
+    def pick_color_at(
+        self,
+        x: float,
+        y: float,
+        fbo_pool: dict,
+        viewport: Optional[Viewport] = None,
+        buffer_name: str = "color",
+    ) -> Optional[Tuple[float, float, float, float]]:
         """
-        Вернёт (r,g,b,a) в [0,1] под пикселем (x, y) в координатах виджета (origin сверху-слева),
-        используя цветовую карту, нарисованную ColorPass в FBO с ключом 'color'.
+        Читает цвет пикселя из FBO.
+        
+        Параметры:
+            x, y: координаты в пикселях окна (origin сверху-слева).
+            fbo_pool: словарь {resource_name -> FramebufferHandle}.
+            viewport: viewport для которого читаем (или определяется автоматически).
+            buffer_name: имя ресурса в fbo_pool.
+        
+        Возвращает:
+            (r, g, b, a) в [0..1] или None.
         """
         if self.handle is None:
-            raise RuntimeError("Window handle is not available")
+            return None
 
-        # Определяем вьюпорт, если не передали явно
         if viewport is None:
             viewport = self._viewport_under_cursor(x, y)
             if viewport is None:
-                raise RuntimeError("No viewport under cursor for picking")
+                return None
 
-        win_w, win_h = self.handle.window_size()       # логические пиксели
-        fb_w, fb_h = self.handle.framebuffer_size()    # физические пиксели (GL)
+        win_w, win_h = self.handle.window_size()
+        fb_w, fb_h = self.handle.framebuffer_size()
 
         if win_w <= 0 or win_h <= 0 or fb_w <= 0 or fb_h <= 0:
-            raise RuntimeError("Invalid window or framebuffer size")
+            return None
 
-        # --- 1) координаты viewport'а в физических пикселях (как при рендере) ---
         px, py, pw, ph = self.viewport_rect_to_pixels(viewport)
-        # viewport_rect_to_pixels уже использует framebuffer_size()
 
-
-        # --- 2) переводим координаты мыши из логических в физические ---
+        # Переводим координаты мыши из логических в физические
         sx = fb_w / float(win_w)
         sy = fb_h / float(win_h)
-
         x_phys = x * sx
         y_phys = y * sy
 
-        # --- 3) локальные координаты внутри viewport'а ---
+        # Локальные координаты внутри viewport'а
         vx = x_phys - px
         vy = y_phys - py
-
 
         if vx < 0 or vy < 0 or vx >= pw or vy >= ph:
             return None
 
-        # --- 4) перевод в координаты FBO (origin снизу-слева) ---
+        # Перевод в координаты FBO (origin снизу-слева)
         read_x = int(vx)
-        read_y = int(ph - vy - 1)   # инверсия Y, как в старом _do_pick_pass
+        read_y = int(ph - vy - 1)
 
-        # Берём FBO с цветовой картой
-        fbo_pool = viewport.fbos
+        fb = fbo_pool.get(buffer_name)
+        if fb is None:
+            return None
 
-        fb_color = fbo_pool.get(buffer_name)
-        if fb_color is None:
-            raise KeyError(f"No FBO with key {buffer_name!r} found in fbo_pool")
-
-
-        r, g, b, a = self.graphics.read_pixel(fb_color, read_x, read_y)
+        r, g, b, a = self.graphics.read_pixel(fb, read_x, read_y)
         self.graphics.bind_framebuffer(self.handle.get_window_framebuffer())
         return (r, g, b, a)
 
-    def pick_entity_at(self, x: float, y: float, viewport: Viewport = None) -> Optional[Entity]:
+    def pick_entity_at(
+        self,
+        x: float,
+        y: float,
+        fbo_pool: dict,
+        viewport: Optional[Viewport] = None,
+    ) -> Optional[Entity]:
         """
-        Вернёт entity под пикселем (x, y) в координатах виджета (origin сверху-слева),
-        используя id-карту, нарисованную IdPass в FBO с ключом 'id'.
+        Читает entity под пикселем из id-карты.
+        
+        Параметры:
+            x, y: координаты в пикселях окна.
+            fbo_pool: словарь {resource_name -> FramebufferHandle}.
+            viewport: viewport для которого читаем.
+        
+        Возвращает:
+            Entity или None.
         """
-        if self.handle is None:
-            return None
-
-        color = self.pick_color_at(x, y, viewport=viewport, buffer_name="id")
+        color = self.pick_color_at(x, y, fbo_pool, viewport, buffer_name="id")
         if color is None:
             return None
         r, g, b, a = color
-        
         pid = rgb_to_id(r, g, b)
-
         if pid == 0:
             return None
+        return Entity.lookup_by_pick_id(pid)
 
-        entity = Entity.lookup_by_pick_id(pid)
+    # ----------------------------------------------------------------
+    # Event handlers
+    # ----------------------------------------------------------------
 
-        return entity
-
+    def _handle_framebuffer_resize(self, window, width, height):
+        pass
 
     def _handle_mouse_button_game_mode(self, window, button: MouseButton, action: Action, mods):
         if self.handle is None:
@@ -256,7 +303,7 @@ class Window:
         x, y = self.handle.get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y)
 
-        # ---- UI click handling ----
+        # UI click handling
         if viewport and viewport.canvas:
             if action == Action.PRESS:
                 interrupt = viewport.canvas.mouse_down(x, y, self.viewport_rect_to_pixels(viewport))
@@ -267,7 +314,7 @@ class Window:
                 if interrupt:
                     return
 
-        # Обработка 3D сцены (сперва глобальная)
+        # 3D scene handling
         if action == Action.PRESS:
             self._active_viewport = viewport
         if action == Action.RELEASE:
@@ -277,19 +324,18 @@ class Window:
             self._active_viewport = None
         if viewport is not None:
             viewport.scene.dispatch_input(viewport, "on_mouse_button", button=button, action=action, mods=mods)
-            
-        # Теперь обработка кликов по объектам сцены
+
+        # Object click handling
         if viewport is not None:
             if action == Action.PRESS and button == MouseButton.LEFT:
                 cam = viewport.camera
                 if cam is not None:
-                    ray = cam.screen_point_to_ray(x, y, viewport_rect=self.viewport_rect_to_pixels(viewport))   # функция построения Ray3
+                    ray = cam.screen_point_to_ray(x, y, viewport_rect=self.viewport_rect_to_pixels(viewport))
                     hit = viewport.scene.raycast(ray)
                     if hit is not None:
-                        # Диспатчим on_click в компоненты
                         entity = hit.entity
                         for comp in entity.components:
-                            if hasattr(comp, "on_click"):  # или isinstance(comp, Clickable)
+                            if hasattr(comp, "on_click"):
                                 comp.on_click(hit, button)
 
         self._request_update()
@@ -300,12 +346,7 @@ class Window:
         x, y = self.handle.get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y)
 
-        if viewport is not None:
-            if action == Action.PRESS and button == MouseButton.LEFT:
-                # запоминаем, где кликнули, для этого viewport
-                self._pick_requests[id(viewport)] = (x, y)   
-
-        # Обработка 3D сцены
+        # 3D scene handling
         if action == Action.PRESS:
             self._active_viewport = viewport
         if action == Action.RELEASE:
@@ -314,32 +355,29 @@ class Window:
                 viewport = self._active_viewport
             self._active_viewport = None
         if viewport is not None:
-            viewport.scene.dispatch_input(viewport, "on_mouse_button", button=button, action=action, mods=mods)  
+            viewport.scene.dispatch_input(viewport, "on_mouse_button", button=button, action=action, mods=mods)
 
         if self.on_mouse_button_event:
-            self.on_mouse_button_event(button, action, x, y, viewport)   
+            self.on_mouse_button_event(button, action, x, y, viewport)
 
         self._request_update()
 
     def _handle_mouse_button(self, window, button: MouseButton, action: Action, mods):
         if self._world_mode == "game":
             self._handle_mouse_button_game_mode(window, button, action, mods)
-            return
-
         elif self._world_mode == "editor":
             self._handle_mouse_button_editor_mode(window, button, action, mods)
-            return
 
     def _handle_cursor_pos(self, window, x, y):
         if self.handle is None:
             return
-        
+
         if self._last_cursor is None:
             dx = dy = 0.0
         else:
             dx = x - self._last_cursor[0]
             dy = y - self._last_cursor[1]
-        
+
         self._last_cursor = (x, y)
         viewport = self._active_viewport or self._viewport_under_cursor(x, y)
 
@@ -349,7 +387,6 @@ class Window:
         if viewport is not None:
             viewport.scene.dispatch_input(viewport, "on_mouse_move", x=x, y=y, dx=dx, dy=dy)
 
-        # пробрасываем инфу наверх (редактору), без знания про idmap и hover
         if self.on_mouse_move_event is not None:
             self.on_mouse_move_event(x, y, viewport)
 
@@ -388,8 +425,6 @@ class Window:
             if vx <= nx <= vx + vw and vy <= ny <= vy + vh:
                 return viewport
         return None
-
-
 
     def _request_update(self):
         if self.handle is not None:

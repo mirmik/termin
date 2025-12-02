@@ -6,51 +6,30 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 
 from termin.visualization.core.entity import Entity
+from termin.visualization.core.viewport import Viewport
 from termin.visualization.platform.backends.base import Action, MouseButton
 from termin.visualization.render.framegraph import RenderPipeline, ClearSpec
+from termin.visualization.render import (
+    RenderEngine,
+    RenderView,
+    ViewportRenderState,
+)
 
 from termin.editor.gizmo import GizmoController
 
 
-class ViewportBackend:
-    """
-    Тонкая обёртка над окном визуализации, чтобы не дергать приватные методы напрямую.
-    """
-
-    def __init__(self, window, viewport) -> None:
-        self._window = window
-        self._viewport = viewport
-
-    @property
-    def window(self):
-        return self._window
-
-    @property
-    def viewport(self):
-        return self._viewport
-
-    def request_update(self) -> None:
-        self._window._request_update()
-
-    def pick_entity_at(self, x: float, y: float, viewport) -> Entity | None:
-        return self._window.pick_entity_at(x, y, viewport)
-
-    def pick_color_at(self, x: float, y: float, viewport, buffer_name: str = "id"):
-        return self._window.pick_color_at(x, y, viewport, buffer_name)
-
-    def get_pick_id_for_entity(self, ent: Entity | None) -> int:
-        if ent is None:
-            return 0
-        return ent.pick_id
-
-
 class ViewportController:
     """
-    Управляет окном рендера:
-    - создаёт окно и вьюпорт;
-    - настраивает framegraph и подсветку;
-    - обрабатывает события мыши и пика;
-    - прокидывает выбор и hover через колбэки в EditorWindow.
+    Управляет рендерингом в окне редактора.
+    
+    Владеет:
+    - RenderEngine (выполняет рендеринг)
+    - ViewportRenderState (pipeline + FBO пул)
+    - WindowRenderSurface (куда рендерим)
+    
+    Ссылается на:
+    - Window (события мыши/клавиатуры)
+    - Viewport (scene + camera + rect)
     """
 
     def __init__(
@@ -86,19 +65,27 @@ class ViewportController:
             layout = QVBoxLayout(self._container)
             self._container.setLayout(layout)
 
+        # Создаём окно через world
         window = self._world.create_window(
             width=900,
             height=800,
             title="viewport",
             parent=self._container,
         )
+        
+        # Создаём viewport (теперь без pipeline и fbos)
         viewport = window.add_viewport(self._scene, self._camera)
         window.set_world_mode("editor")
 
-        self._backend = ViewportBackend(window, viewport)
+        self._window = window
+        self._viewport = viewport
 
-        viewport.set_render_pipeline(self._make_pipeline())
+        # Создаём новую архитектуру рендеринга
+        self._render_engine = RenderEngine(window.graphics)
+        self._render_surface = window.render_surface  # Берём surface из окна
+        self._render_state = ViewportRenderState(pipeline=self._make_pipeline())
 
+        # Подписываемся на события
         window.on_mouse_button_event = self._on_mouse_button_event
         window.after_render_handler = self._after_render
         window.on_mouse_move_event = self._on_mouse_move
@@ -110,23 +97,90 @@ class ViewportController:
 
         self._gl_widget = gl_widget
 
+        # Подключаем рендер к Qt виджету
+        self._setup_qt_render()
+
+    def _setup_qt_render(self) -> None:
+        """
+        Настраивает рендеринг для Qt виджета.
+        
+        Qt OpenGL виджет вызывает paintGL при необходимости перерисовки.
+        Нам нужно перехватить это и вызвать наш RenderEngine.
+        """
+        # Qt backend сам вызывает render, нужно подменить метод
+        original_paint = self._gl_widget.paintGL
+        
+        def custom_paint():
+            self._do_render()
+        
+        self._gl_widget.paintGL = custom_paint
+
+    def _do_render(self) -> None:
+        """
+        Выполняет рендеринг через RenderEngine.
+        """
+        if self._window.handle is None:
+            return
+
+        self._window.graphics.ensure_ready()
+        self._render_surface.make_current()
+
+        # Создаём RenderView из Viewport
+        view = RenderView(
+            scene=self._viewport.scene,
+            camera=self._viewport.camera,
+            rect=self._viewport.rect,
+            canvas=self._viewport.canvas,
+        )
+
+        # Рендерим
+        self._render_engine.render_single_view(
+            surface=self._render_surface,
+            view=view,
+            state=self._render_state,
+            present=False,  # Qt сам делает swap buffers
+        )
+
+        # Вызываем after_render_handler
+        if self._window.after_render_handler is not None:
+            self._window.after_render_handler(self._window)
+
     # ---------- свойства для EditorWindow ----------
 
     @property
     def window(self):
-        return self._backend.window
+        return self._window
+
+    @property
+    def viewport(self):
+        return self._viewport
 
     @property
     def gl_widget(self):
         return self._gl_widget
 
+    @property
+    def render_state(self) -> ViewportRenderState:
+        """Доступ к состоянию рендера (pipeline, fbos)."""
+        return self._render_state
+
     def request_update(self) -> None:
-        self._backend.request_update()
+        self._window._request_update()
 
     def get_pick_id_for_entity(self, ent: Entity | None) -> int:
         if ent is None:
             return 0
         return ent.pick_id
+
+    # ---------- picking через новый API ----------
+
+    def pick_entity_at(self, x: float, y: float, viewport: Viewport) -> Entity | None:
+        """Читает entity из id-карты через FBO пул."""
+        return self._window.pick_entity_at(x, y, self._render_state.fbos, viewport)
+
+    def pick_color_at(self, x: float, y: float, viewport: Viewport, buffer_name: str = "id"):
+        """Читает цвет пикселя из FBO пула."""
+        return self._window.pick_color_at(x, y, self._render_state.fbos, viewport, buffer_name)
 
     # ---------- внутренние обработчики событий ----------
 
@@ -137,9 +191,6 @@ class ViewportController:
             self._pending_pick_press = (x, y, viewport)
 
     def _on_mouse_move(self, x: float, y: float, viewport) -> None:
-        """
-        При каждом движении мыши запоминаем, что нужно сделать hover-pick после рендера.
-        """
         if viewport is None:
             self._pending_hover = None
             return
@@ -153,7 +204,6 @@ class ViewportController:
         if self._pending_hover is not None:
             self._process_pending_hover(self._pending_hover, window)
 
-        # обновляем окно дебагера уже после того, как все FBO обновлены
         if self._framegraph_debugger is not None and self._framegraph_debugger.isVisible():
             self._framegraph_debugger.debugger_request_update()
 
@@ -163,7 +213,7 @@ class ViewportController:
         x, y, viewport = pending_hover
         self._pending_hover = None
 
-        ent = self._backend.pick_entity_at(x, y, viewport)
+        ent = self.pick_entity_at(x, y, viewport)
         if ent is not None and not ent.selectable:
             ent = None
 
@@ -173,7 +223,7 @@ class ViewportController:
         x, y, viewport = pending_release
         self._pending_pick_release = None
 
-        ent = self._backend.pick_entity_at(x, y, viewport)
+        ent = self.pick_entity_at(x, y, viewport)
         if ent is not None and not ent.selectable:
             ent = None
 
@@ -183,7 +233,7 @@ class ViewportController:
         x, y, viewport = pending_press
         self._pending_pick_press = None
 
-        picked_color = self._backend.pick_color_at(x, y, viewport, buffer_name="id")
+        picked_color = self.pick_color_at(x, y, viewport, buffer_name="id")
         handled = self._gizmo_controller.handle_pick_press_with_color(
             x, y, viewport, picked_color
         )
@@ -193,112 +243,66 @@ class ViewportController:
     # ---------- debug helpers ----------
 
     def set_framegraph_debugger(self, debugger) -> None:
-        """
-        Регистрирует окно дебагера framegraph, которому нужно сообщать
-        об окончании рендера и передавать настройки источника/паузы.
-        """
         self._framegraph_debugger = debugger
 
     def set_debug_source_resource(self, name: str) -> None:
-        """
-        Устанавливает имя ресурса framegraph, из которого BlitPass будет копировать текстуру.
-        """
         self._debug_source_res = name
         self.request_update()
 
     def get_debug_source_resource(self) -> str:
-        """
-        Возвращает текущее имя ресурса framegraph, используемое BlitPass как источник.
-        """
         return self._debug_source_res
 
     def get_debug_blit_pass(self):
-        """
-        Возвращает BlitPass из пайплайна для управления дебаггером.
-        """
-        viewport = self._backend.viewport
-        if viewport.pipeline is not None:
-            return viewport.pipeline.debug_blit_pass
+        pipeline = self._render_state.pipeline
+        if pipeline is not None:
+            return pipeline.debug_blit_pass
         return None
 
     def get_available_framegraph_resources(self) -> list[str]:
-        """
-        Возвращает список имён ресурсов framegraph, доступных у текущего viewport.
-        """
-        viewport = self._backend.viewport
-        return list(viewport.fbos.keys())
+        return list(self._render_state.fbos.keys())
 
     def set_debug_paused(self, paused: bool) -> None:
-        """
-        Включает или выключает паузу BlitPass: при паузе новые кадры не копируются.
-        """
         self._debug_paused = paused
         self.request_update()
 
     def get_debug_paused(self) -> bool:
-        """
-        Текущее состояние паузы для BlitPass.
-        """
         return self._debug_paused
 
     # ---------- internal debug symbols ----------
 
     def get_passes_info(self) -> list[tuple[str, bool]]:
-        """
-        Возвращает список пассов с информацией о наличии внутренних символов.
-
-        Возвращает:
-            Список кортежей (pass_name, has_internal_symbols).
-        """
-        viewport = self._backend.viewport
         result: list[tuple[str, bool]] = []
-        if viewport.pipeline is None:
+        pipeline = self._render_state.pipeline
+        if pipeline is None:
             return result
-        for p in viewport.pipeline.passes:
+        for p in pipeline.passes:
             symbols = p.get_internal_symbols()
             has_symbols = len(symbols) > 0
             result.append((p.pass_name, has_symbols))
         return result
 
     def get_pass_internal_symbols(self, pass_name: str) -> list[str]:
-        """
-        Возвращает список внутренних символов для указанного пасса.
-
-        Параметры:
-            pass_name: Имя пасса.
-
-        Возвращает:
-            Список символов или пустой список.
-        """
-        viewport = self._backend.viewport
-        if viewport.pipeline is None:
+        pipeline = self._render_state.pipeline
+        if pipeline is None:
             return []
-        for p in viewport.pipeline.passes:
+        for p in pipeline.passes:
             if p.pass_name == pass_name:
                 return p.get_internal_symbols()
         return []
 
     def set_pass_internal_symbol(self, pass_name: str, symbol: str | None) -> None:
-        """
-        Устанавливает внутреннюю точку дебага для указанного пасса.
-        Параметры:
-            pass_name: Имя пасса.
-            symbol: Имя символа или None для сброса.
-        """
-        viewport = self._backend.viewport
-        if viewport.pipeline is None:
+        pipeline = self._render_state.pipeline
+        if pipeline is None:
             return
-        blit_pass = viewport.pipeline.debug_blit_pass
-        for p in viewport.pipeline.passes:
+        blit_pass = pipeline.debug_blit_pass
+        for p in pipeline.passes:
             if p.pass_name == pass_name:
                 if symbol is None or symbol == "":
                     p.set_debug_internal_point(None, None)
-                    # Включаем BlitPass обратно
                     if blit_pass is not None:
                         blit_pass.enabled = True
                 else:
                     p.set_debug_internal_point(symbol, "debug")
-                    # Отключаем BlitPass
                     if blit_pass is not None:
                         blit_pass.enabled = False
                 self.request_update()
@@ -329,9 +333,6 @@ class ViewportController:
             pass_name="PostFX",
         )
 
-        # BlitPass копирует выбранный ресурс в отдельный debug-ресурс.
-        # Источник и режим паузы задаются через колбэк, читающий состояние контроллера.
-        # При выборе внутренней точки пасса BlitPass отключается через enabled=False.
         def _get_debug_source():
             if self._debug_paused:
                 return None
@@ -390,14 +391,13 @@ class ViewportController:
             )
         )
 
-        # Спецификации очистки ресурсов перед рендерингом
         clear_specs = [
             ClearSpec(resource="empty", color=(0.2, 0.2, 0.2, 1.0), depth=1.0),
             ClearSpec(resource="empty_id", color=(0.0, 0.0, 0.0, 1.0), depth=1.0),
         ]
 
         return RenderPipeline(
-            passes=passes, 
-            clear_specs=clear_specs, 
+            passes=passes,
+            clear_specs=clear_specs,
             debug_blit_pass=blit_pass,
         )

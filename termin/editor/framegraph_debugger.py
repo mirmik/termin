@@ -7,27 +7,26 @@ from PyQt5 import QtWidgets, QtCore
 from OpenGL import GL as gl
 
 from termin.visualization.platform.backends.base import GraphicsBackend
-from termin.visualization.core.viewport import Viewport
 from termin.visualization.render.shader import ShaderProgram
 
 
 class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
     """
-    QOpenGLWidget, который берёт FBO из viewport.fbos и рисует его color-текстуру
+    QOpenGLWidget, который берёт FBO из внешнего источника и рисует его color-текстуру
     фуллскрин-квадом. Работает напрямую через OpenGL, без участия Window/FrameGraph.
     """
 
     def __init__(
         self,
         graphics: GraphicsBackend,
-        viewport: Viewport,
+        get_fbos: Callable[[], dict],
         resource_name: str = "debug",
         parent: Optional[QtWidgets.QWidget] = None,
     ) -> None:
         super().__init__(parent)
 
         self._graphics = graphics
-        self._viewport = viewport
+        self._get_fbos = get_fbos
         self._resource_name = resource_name
 
         self._shader: Optional[ShaderProgram] = None
@@ -106,9 +105,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         self._init_fullscreen_quad()
 
     def _current_fbo(self):
-        if self._viewport is None:
-            return None
-        fbos = self._viewport.fbos
+        fbos = self._get_fbos()
         if not fbos:
             return None
         if self._resource_name not in fbos:
@@ -172,7 +169,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     def __init__(
         self,
         graphics: GraphicsBackend,
-        viewport: Viewport,
+        get_fbos: Callable[[], dict],
         resource_name: str = "debug",
         parent: Optional[QtWidgets.QWidget] = None,
         # Колбэки для режима «Между пассами»
@@ -193,7 +190,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     ) -> None:
         super().__init__(parent)
         self._graphics = graphics
-        self._viewport = viewport
+        self._get_fbos = get_fbos
         self._resource_name = resource_name
 
         # Колбэки для режима «Между пассами»
@@ -288,7 +285,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # ============ GL-виджет ============
         self._gl_widget = FramegraphTextureWidget(
             graphics=self._graphics,
-            viewport=self._viewport,
+            get_fbos=self._get_fbos,
             resource_name=self._resource_name,
             parent=self,
         )
@@ -369,7 +366,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         if self._get_available_resources is not None:
             names = self._get_available_resources()
         else:
-            names = list(self._viewport.fbos.keys())
+            names = list(self._get_fbos().keys())
 
         # Фильтруем debug — его не показываем как источник
         names = [n for n in names if n != "debug"]

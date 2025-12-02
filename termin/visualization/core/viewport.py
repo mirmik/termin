@@ -5,86 +5,100 @@ from termin.visualization.core.scene import Scene
 from termin.visualization.core.camera import CameraComponent
 
 if TYPE_CHECKING:
-    from termin.visualization.render.framegraph import RenderPipeline
-    from termin.visualization.render.framegraph.core import FramePass
+    from termin.visualization.ui.canvas import Canvas
 
 
 @dataclass
 class Viewport:
+    """
+    Viewport — "что рендерим и куда" в рамках окна.
+    
+    Содержит только данные:
+    - scene: сцена с объектами
+    - camera: камера для рендеринга
+    - window: родительское окно
+    - rect: нормализованный прямоугольник (x, y, w, h) в [0..1]
+    - canvas: опциональная 2D канва для UI
+    
+    НЕ содержит:
+    - pipeline (управляется снаружи)
+    - fbos (управляются снаружи через ViewportRenderState)
+    
+    Для рендеринга используйте RenderEngine с RenderView и ViewportRenderState.
+    """
     scene: Scene
     camera: CameraComponent
     window: "Window"
-    rect: Tuple[float, float, float, float] # x, y, width, height in normalized coords (0.0:1.0)
+    rect: Tuple[float, float, float, float]  # x, y, width, height in normalized coords (0.0:1.0)
     canvas: Optional["Canvas"] = None
-    pipeline: "RenderPipeline | None" = None
-    fbos: dict = field(default_factory=dict)
 
-
-    def screen_point_to_ray(self, x, y):
-        # окно → прямоугольник вьюпорта в пикселях
+    def screen_point_to_ray(self, x: float, y: float):
+        """
+        Преобразует экранные координаты в луч в мировом пространстве.
+        
+        Параметры:
+            x, y: координаты в пикселях окна.
+        
+        Возвращает:
+            Ray3 из камеры через указанную точку.
+        """
         rect = self.window.viewport_rect_to_pixels(self)
-
-        # вызываем камеру
         return self.camera.screen_point_to_ray(x, y, viewport_rect=rect)
 
-    def set_render_pipeline(self, pipeline: "RenderPipeline"):
+    def compute_pixel_rect(self, width: int, height: int) -> Tuple[int, int, int, int]:
         """
-        Устанавливает конвейер рендера для этого вьюпорта.
+        Вычисляет прямоугольник viewport'а в пикселях.
+        
+        Параметры:
+            width, height: размер родительской поверхности.
+        
+        Возвращает:
+            (px, py, pw, ph) — позиция и размер в пикселях.
         """
-        self.pipeline = pipeline
+        vx, vy, vw, vh = self.rect
+        px = int(vx * width)
+        py = int(vy * height)
+        pw = max(1, int(vw * width))
+        ph = max(1, int(vh * height))
+        return (px, py, pw, ph)
 
-    def find_render_pass(self, pass_name: str) -> Optional["FramePass"]:
-        """
-        Ищет в конвейере рендера пасс с заданным именем.
 
-        Возвращает FramePass или None.
-        """
-        if self.pipeline is None:
-            return None
-        for p in self.pipeline.passes:
-            if p.pass_name == pass_name:
-                return p
-        return None
+def make_default_pipeline() -> "RenderPipeline":
+    """
+    Собирает дефолтный конвейер рендера.
+    
+    Вынесено из класса Viewport как свободная функция.
+    """
+    from termin.visualization.render.framegraph import (
+        CanvasPass,
+        ColorPass,
+        PresentToScreenPass,
+        RenderPipeline,
+        ClearSpec,
+    )
+    from termin.visualization.render.postprocess import PostProcessPass
 
-    # -------------------------------------------------------------
-    #     ДЕФОЛТНЫЙ ПАЙПЛАЙН ДЛЯ ВЬЮПОРТА
-    # -------------------------------------------------------------
-    @staticmethod
-    def make_default_pipeline() -> "RenderPipeline":
-        """
-        Собирает дефолтный конвейер рендера для этого вьюпорта.
-        """
-        from termin.visualization.render.framegraph import (
-            CanvasPass,
-            ColorPass,
-            IdPass,
-            PresentToScreenPass,
-            RenderPipeline,
-            ClearSpec,
+    passes: List = [
+        ColorPass(input_res="empty", output_res="color", pass_name="Color"),
+        PostProcessPass(
+            effects=[],
+            input_res="color",
+            output_res="color_pp",
+            pass_name="PostFX",
+        ),
+        CanvasPass(
+            src="color_pp",
+            dst="color+ui",
+            pass_name="Canvas",
+        ),
+        PresentToScreenPass(
+            input_res="color+ui",
+            pass_name="Present",
         )
-        from termin.visualization.render.postprocess import PostProcessPass
-
-        passes: List["FramePass"] = [
-            ColorPass(input_res="empty", output_res="color", pass_name="Color"),
-            PostProcessPass(
-                effects=[],  # можно заранее что-то положить сюда
-                input_res="color",
-                output_res="color_pp",
-                pass_name="PostFX",
-            ),
-            CanvasPass(
-                src="color_pp",
-                dst="color+ui",
-                pass_name="Canvas",
-            ),
-            PresentToScreenPass(
-                input_res="color+ui",
-                pass_name="Present",
-            )
-        ]
-        
-        clear_specs = [
-            ClearSpec(resource="empty", color=(0.2, 0.2, 0.2, 1.0), depth=1.0),
-        ]
-        
-        return RenderPipeline(passes=passes, clear_specs=clear_specs)
+    ]
+    
+    clear_specs = [
+        ClearSpec(resource="empty", color=(0.2, 0.2, 0.2, 1.0), depth=1.0),
+    ]
+    
+    return RenderPipeline(passes=passes, clear_specs=clear_specs)
