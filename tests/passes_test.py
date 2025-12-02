@@ -14,20 +14,21 @@ from termin.mesh.mesh import Mesh, CubeMesh
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.materials.simple import ColorMaterial
 from termin.geombase.pose3 import Pose3
+from termin.visualization.render.pipeline_runner import PipelineRunner
 import numpy
 
 class TestPasses(unittest.TestCase):
 
     def test_color_pipeline_opengl_smoke(self):
         graphics = OpenGLGraphicsBackend()
-        window_backend = GLFWWindowBackend()
-        window = Window(
-            width=320,
-            height=240,
-            title="test",
-            graphics=graphics,
-            window_backend=window_backend,
-        )
+        # window_backend = GLFWWindowBackend()
+        # window = Window(
+        #     width=320,
+        #     height=240,
+        #     title="test",
+        #     graphics=graphics,
+        #     window_backend=window_backend,
+        # )
 
         scene = Scene()
         # Сцена должна хоть что-то рисовать,
@@ -47,25 +48,28 @@ class TestPasses(unittest.TestCase):
         material = ColorMaterial(color=(1.0, 0.0, 0.0, 1.0))
         cube.add_component(MeshRenderer(CubeMesh(), material=material))
 
-        viewport = window.add_viewport(scene, camera)
+        #viewport = window.add_viewport(scene, camera)
 
         color_pass = ColorPass(
             input_res="empty",
             output_res="color",
             pass_name="Color",
         )
-        present_pass = PresentToScreenPass(
-            input_res="color",
-            output_res="DISPLAY",
-            pass_name="Present",
-        )
+        # present_pass = PresentToScreenPass(
+        #     input_res="color",
+        #     output_res="DISPLAY",
+        #     pass_name="Present",
+        # )
 
         pipeline = RenderPipeline(
-            passes=[color_pass, present_pass],
+            passes=[color_pass],
             clear_specs=[],
         )
 
         viewport.set_render_pipeline(pipeline)
 
-        while not window.should_close:
-            window._render_core(from_backend=False)
+        #while not window.should_close:
+        #    window._render_core(from_backend=False)
+
+        pipeline_runner = PipelineRunner(graphics)
+        pipeline_runner.run_pipeline_once(pipeline, viewport, 320, 240)
