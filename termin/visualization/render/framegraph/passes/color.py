@@ -93,7 +93,6 @@ class ColorPass(RenderFramePass):
 
         graphics.bind_framebuffer(fb)
         graphics.set_viewport(0, 0, pw, ph)
-        graphics.clear_color_depth(scene.background_color)
 
         # Матрицы камеры
         view = camera.get_view_matrix()

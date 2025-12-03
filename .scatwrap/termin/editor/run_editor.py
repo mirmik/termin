@@ -58,10 +58,6 @@ def&nbsp;build_scene(world):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;entity2.transform.relocate(Pose3(lin=np.array([3.0,&nbsp;0.0,&nbsp;0.0]),&nbsp;ang=np.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0])))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;scene.add(entity2)<br>
 <br>
-<br>
-&nbsp;&nbsp;&nbsp;&nbsp;skybox&nbsp;=&nbsp;SkyBoxEntity()<br>
-&nbsp;&nbsp;&nbsp;&nbsp;scene.add(skybox)<br>
-<br>
 &nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;scene<br>

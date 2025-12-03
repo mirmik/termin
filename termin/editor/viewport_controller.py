@@ -323,6 +323,7 @@ class ViewportController:
         from termin.visualization.render.posteffects.highlight import HighlightEffect
         from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
         from termin.visualization.render.framegraph.passes.depth import DepthPass
+        from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
 
         gizmo_entities = self._gizmo_controller.helper_geometry_entities()
 
@@ -345,9 +346,12 @@ class ViewportController:
         )
 
         depth_pass = DepthPass(input_res="empty_depth", output_res="depth", pass_name="Depth")
-        color_pass = ColorPass(input_res="empty", output_res="color", pass_name="Color")
+        color_pass = ColorPass(input_res="skybox", output_res="color", pass_name="Color")
+
+        skybox_pass = SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox")
 
         passes: list = [
+            skybox_pass,
             color_pass,
             depth_pass,
             IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
@@ -392,6 +396,7 @@ class ViewportController:
         )
 
         clear_specs = [
+            ClearSpec(resource="empty_depth", color=(1.0, 1.0, 1.0, 1.0), depth=1.0),
             ClearSpec(resource="empty", color=(0.2, 0.2, 0.2, 1.0), depth=1.0),
             ClearSpec(resource="empty_id", color=(0.0, 0.0, 0.0, 1.0), depth=1.0),
         ]

@@ -331,6 +331,7 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.posteffects.highlight&nbsp;import&nbsp;HighlightEffect<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.framegraph.passes.frame_debugger&nbsp;import&nbsp;FrameDebuggerPass<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.framegraph.passes.depth&nbsp;import&nbsp;DepthPass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.framegraph.passes.skybox&nbsp;import&nbsp;SkyBoxPass<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_entities&nbsp;=&nbsp;self._gizmo_controller.helper_geometry_entities()<br>
 <br>
@@ -353,9 +354,12 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;depth_pass&nbsp;=&nbsp;DepthPass(input_res=&quot;empty_depth&quot;,&nbsp;output_res=&quot;depth&quot;,&nbsp;pass_name=&quot;Depth&quot;)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_pass&nbsp;=&nbsp;ColorPass(input_res=&quot;empty&quot;,&nbsp;output_res=&quot;color&quot;,&nbsp;pass_name=&quot;Color&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_pass&nbsp;=&nbsp;ColorPass(input_res=&quot;skybox&quot;,&nbsp;output_res=&quot;color&quot;,&nbsp;pass_name=&quot;Color&quot;)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;skybox_pass&nbsp;=&nbsp;SkyBoxPass(input_res=&quot;empty&quot;,&nbsp;output_res=&quot;skybox&quot;,&nbsp;pass_name=&quot;Skybox&quot;)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;passes:&nbsp;list&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;skybox_pass,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color_pass,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;depth_pass,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IdPass(input_res=&quot;empty_id&quot;,&nbsp;output_res=&quot;preid&quot;,&nbsp;pass_name=&quot;Id&quot;),<br>
@@ -400,6 +404,7 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clear_specs&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ClearSpec(resource=&quot;empty_depth&quot;,&nbsp;color=(1.0,&nbsp;1.0,&nbsp;1.0,&nbsp;1.0),&nbsp;depth=1.0),<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ClearSpec(resource=&quot;empty&quot;,&nbsp;color=(0.2,&nbsp;0.2,&nbsp;0.2,&nbsp;1.0),&nbsp;depth=1.0),<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ClearSpec(resource=&quot;empty_id&quot;,&nbsp;color=(0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0),&nbsp;depth=1.0),<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>

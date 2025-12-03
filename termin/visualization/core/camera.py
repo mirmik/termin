@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, Optional
 
 import numpy as np
+from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.material import Material
+from termin.visualization.render.shader import ShaderProgram
+from termin.visualization.render.skybox import SKYBOX_VERTEX_SHADER, SKYBOX_FRAGMENT_SHADER, _skybox_cube
 
 from termin.geombase.pose3 import Pose3
 
@@ -51,7 +55,9 @@ class CameraComponent(Component):
         super().__init__(enabled=True)
         self.near = near
         self.far = far
-        self.viewport = None 
+        self.viewport = None
+        self._skybox_mesh: MeshDrawable | None = None
+        self._skybox_material: Material | None = None
 
     def start(self, scene):
         if self.entity is None:
@@ -77,6 +83,43 @@ class CameraComponent(Component):
     def set_aspect(self, aspect: float):
         """Optional method for perspective cameras."""
         return
+
+    def _ensure_skybox_mesh(self) -> MeshDrawable:
+        """
+        Ленивая генерация меша куба, окружающего камеру.
+        Возвращает MeshDrawable поверх геометрии skybox-куба.
+        """
+        if self._skybox_mesh is None:
+            vertices, triangles = _skybox_cube()
+            self._skybox_mesh = MeshDrawable.from_vertices_indices(vertices, triangles)
+        return self._skybox_mesh
+
+    def _ensure_skybox_material(self) -> Material:
+        """
+        Ленивая генерация материала skybox с шейдером градиентного неба.
+        """
+        if self._skybox_material is None:
+            shader = ShaderProgram(
+                vertex_source=SKYBOX_VERTEX_SHADER,
+                fragment_source=SKYBOX_FRAGMENT_SHADER,
+            )
+            material = Material(shader=shader)
+            # Skybox не использует u_color базового материала
+            material.color = None
+            self._skybox_material = material
+        return self._skybox_material
+
+    def skybox_mesh(self) -> MeshDrawable:
+        """
+        Возвращает меш куба skybox вокруг камеры.
+        """
+        return self._ensure_skybox_mesh()
+
+    def skybox_material(self) -> Material:
+        """
+        Возвращает материал skybox, привязанный к камере.
+        """
+        return self._ensure_skybox_material()
 
 
 class PerspectiveCameraComponent(CameraComponent):
