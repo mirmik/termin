@@ -81,8 +81,7 @@ def&nbsp;make_default_pipeline()&nbsp;-&gt;&nbsp;&quot;RenderPipeline&quot;:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CanvasPass,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ColorPass,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PresentToScreenPass,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RenderPipeline,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ClearSpec,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RenderPipeline<br>
 &nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.postprocess&nbsp;import&nbsp;PostProcessPass<br>
 <br>
@@ -105,11 +104,7 @@ def&nbsp;make_default_pipeline()&nbsp;-&gt;&nbsp;&quot;RenderPipeline&quot;:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;]<br>
 &nbsp;&nbsp;&nbsp;&nbsp;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;clear_specs&nbsp;=&nbsp;[<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ClearSpec(resource=&quot;empty&quot;,&nbsp;color=(0.2,&nbsp;0.2,&nbsp;0.2,&nbsp;1.0),&nbsp;depth=1.0),<br>
-&nbsp;&nbsp;&nbsp;&nbsp;]<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;RenderPipeline(passes=passes,&nbsp;clear_specs=clear_specs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;RenderPipeline(passes=passes)<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

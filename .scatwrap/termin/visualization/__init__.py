@@ -30,8 +30,6 @@ from&nbsp;termin.visualization.render.shader&nbsp;import&nbsp;ShaderProgram<br>
 from&nbsp;termin.visualization.render.texture&nbsp;import&nbsp;Texture<br>
 from&nbsp;termin.visualization.core.world&nbsp;import&nbsp;VisualizationWorld<br>
 from&nbsp;termin.visualization.platform.backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;WindowBackend,&nbsp;MouseButton,&nbsp;Key,&nbsp;Action<br>
-from&nbsp;termin.visualization.render.opengl.backends&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
-from&nbsp;termin.visualization.platform.backends.glfw&nbsp;import&nbsp;GLFWWindowBackend<br>
 from&nbsp;termin.visualization.platform.backends.qt&nbsp;import&nbsp;QtWindowBackend,&nbsp;QtGLWindowHandle<br>
 from&nbsp;termin.visualization.render.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
 <br>
@@ -62,8 +60,6 @@ __all__&nbsp;=&nbsp;[<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;MouseButton&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;Key&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;Action&quot;,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&quot;OpenGLGraphicsBackend&quot;,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&quot;GLFWWindowBackend&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;QtWindowBackend&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;QtGLWindowHandle&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;SkyBoxEntity&quot;,<br>

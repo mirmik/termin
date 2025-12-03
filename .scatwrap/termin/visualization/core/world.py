@@ -16,8 +16,6 @@ from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;List<br>
 from&nbsp;termin.visualization.core.scene&nbsp;import&nbsp;Scene<br>
 from&nbsp;termin.visualization.core.viewport&nbsp;import&nbsp;Viewport,&nbsp;make_default_pipeline<br>
 from&nbsp;termin.visualization.platform.window&nbsp;import&nbsp;Window<br>
-from&nbsp;termin.visualization.platform.backends.glfw&nbsp;import&nbsp;GLFWWindowBackend<br>
-from&nbsp;termin.visualization.render.opengl.backends&nbsp;import&nbsp;OpenGLGraphicsBackend<br>
 from&nbsp;termin.visualization.platform.backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;WindowBackend<br>
 from&nbsp;termin.visualization.platform.backends&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;get_default_graphics_backend,<br>
@@ -46,8 +44,8 @@ class&nbsp;VisualizationWorld:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self,&nbsp;graphics_backend:&nbsp;GraphicsBackend&nbsp;|&nbsp;None&nbsp;=&nbsp;None,&nbsp;window_backend:&nbsp;WindowBackend&nbsp;|&nbsp;None&nbsp;=&nbsp;None):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics&nbsp;=&nbsp;graphics_backend&nbsp;or&nbsp;get_default_graphics_backend()&nbsp;or&nbsp;OpenGLGraphicsBackend()<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.window_backend&nbsp;=&nbsp;window_backend&nbsp;or&nbsp;get_default_window_backend()&nbsp;or&nbsp;GLFWWindowBackend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.graphics&nbsp;=&nbsp;graphics_backend&nbsp;or&nbsp;get_default_graphics_backend()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.window_backend&nbsp;=&nbsp;window_backend&nbsp;or&nbsp;get_default_window_backend()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;set_default_graphics_backend(self.graphics)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;set_default_window_backend(self.window_backend)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.scenes:&nbsp;List[Scene]&nbsp;=&nbsp;[]<br>

@@ -12,35 +12,13 @@ RenderPipeline — контейнер для конвейера рендерин
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, List
+
+from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.core import FramePass
     from termin.visualization.render.framegraph.passes.present import BlitPass
-
-
-@dataclass
-class ResourceSpec:
-    """
-    Спецификация требований к ресурсу (FBO).
-
-    Объединяет различные требования pass'а к ресурсу:
-    - Размер (например, для shadow map - фиксированный 1024x1024)
-    - Очистка (цвет и/или глубина)
-    - Формат (для будущего: depth texture, RGBA16F, и т.д.)
-
-    Атрибуты:
-        resource: имя ресурса (FBO)
-        size: требуемый размер (width, height) или None для размера viewport'а
-        clear_color: RGBA цвет очистки (None — не очищать цвет)
-        clear_depth: значение глубины (None — не очищать глубину)
-        format: формат текстуры/attachment'ов (None — по умолчанию)
-    """
-    resource: str
-    size: Tuple[int, int] | None = None
-    clear_color: Tuple[float, float, float, float] | None = None
-    clear_depth: float | None = None
-    format: str | None = None
 
 
 @dataclass
@@ -56,3 +34,4 @@ class RenderPipeline:
     """
     passes: List["FramePass"] = field(default_factory=list)
     debug_blit_pass: "BlitPass | None" = None
+    pipeline_specs: List[ResourceSpec] = field(default_factory=list)

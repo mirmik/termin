@@ -5,7 +5,8 @@ from termin.visualization.render.framegraph.core import (
     FrameGraphMultiWriterError,
     FramePass,
 )
-from termin.visualization.render.framegraph.pipeline import ResourceSpec, RenderPipeline
+from termin.visualization.render.framegraph.pipeline import RenderPipeline
+from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.passes.canvas import CanvasPass
 from termin.visualization.render.framegraph.passes.color import ColorPass

@@ -11,7 +11,7 @@ from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 from&nbsp;typing&nbsp;import&nbsp;List<br>
 <br>
 from&nbsp;termin.visualization.render.framegraph.passes.base&nbsp;import&nbsp;RenderFramePass<br>
-from&nbsp;termin.visualization.render.framegraph.pipeline&nbsp;import&nbsp;ResourceSpec<br>
+from&nbsp;termin.visualization.render.framegraph.resource_spec&nbsp;import&nbsp;ResourceSpec<br>
 from&nbsp;termin.visualization.render.components&nbsp;import&nbsp;MeshRenderer<br>
 from&nbsp;termin.visualization.core.picking&nbsp;import&nbsp;id_to_rgb<br>
 from&nbsp;termin.visualization.core.entity&nbsp;import&nbsp;RenderContext<br>

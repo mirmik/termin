@@ -163,8 +163,16 @@ class RenderEngine:
         schedule = graph.build_schedule()
         alias_groups = graph.fbo_alias_groups()
 
-        # Собираем ResourceSpec'ы из всех pass'ов
+        # Есть две механики передачи спеков. Спеи может объявить тот, кто собирал pipeline,
+        # или каждый pass может объявить свои спеки. Собираем все спеки в одну мапу.
         resource_specs_map = {}  # resource_name -> ResourceSpec
+
+        # Добавляем pipeline-level ResourceSpec'ы
+        if pipeline.pipeline_specs:
+            for spec in pipeline.pipeline_specs:
+                resource_specs_map[spec.resource] = spec
+
+        # Собираем ResourceSpec'ы из всех pass'ов
         for render_pass in frame_passes:
             if isinstance(render_pass, RenderFramePass):
                 for spec in render_pass.get_resource_specs():

@@ -13,7 +13,8 @@ from&nbsp;termin.visualization.render.framegraph.core&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;FrameGraphMultiWriterError,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;FramePass,<br>
 )<br>
-from&nbsp;termin.visualization.render.framegraph.pipeline&nbsp;import&nbsp;ResourceSpec,&nbsp;RenderPipeline<br>
+from&nbsp;termin.visualization.render.framegraph.pipeline&nbsp;import&nbsp;RenderPipeline<br>
+from&nbsp;termin.visualization.render.framegraph.resource_spec&nbsp;import&nbsp;ResourceSpec<br>
 from&nbsp;termin.visualization.render.framegraph.passes.base&nbsp;import&nbsp;RenderFramePass<br>
 from&nbsp;termin.visualization.render.framegraph.passes.canvas&nbsp;import&nbsp;CanvasPass<br>
 from&nbsp;termin.visualization.render.framegraph.passes.color&nbsp;import&nbsp;ColorPass<br>

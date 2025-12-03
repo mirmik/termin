@@ -8,8 +8,6 @@ from typing import Dict, List
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.viewport import Viewport, make_default_pipeline
 from termin.visualization.platform.window import Window
-from termin.visualization.platform.backends.glfw import GLFWWindowBackend
-from termin.visualization.render.opengl.backends import OpenGLGraphicsBackend
 from termin.visualization.platform.backends.base import GraphicsBackend, WindowBackend
 from termin.visualization.platform.backends import (
     get_default_graphics_backend,
@@ -38,8 +36,8 @@ class VisualizationWorld:
     """
 
     def __init__(self, graphics_backend: GraphicsBackend | None = None, window_backend: WindowBackend | None = None):
-        self.graphics = graphics_backend or get_default_graphics_backend() or OpenGLGraphicsBackend()
-        self.window_backend = window_backend or get_default_window_backend() or GLFWWindowBackend()
+        self.graphics = graphics_backend or get_default_graphics_backend()
+        self.window_backend = window_backend or get_default_window_backend()
         set_default_graphics_backend(self.graphics)
         set_default_window_backend(self.window_backend)
         self.scenes: List[Scene] = []

@@ -1,9 +1,9 @@
 import unittest
 
-from termin.visualization.render.opengl.backends import OpenGLGraphicsBackend
+from termin.visualization.platform.backends.opengl import OpenGLGraphicsBackend
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.camera import PerspectiveCameraComponent
-from termin.visualization.render.framegraph import RenderPipeline, ClearSpec
+from termin.visualization.render.framegraph import RenderPipeline, ResourceSpec
 from termin.visualization.render.framegraph.passes.color import ColorPass
 from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
 from termin.visualization.core.entity import Entity
@@ -23,6 +23,18 @@ import numpy
 
 class TestPasses(unittest.TestCase):
 
+    def _create_headless_or_skip(self, width: int = 1, height: int = 1) -> HeadlessContext:
+        """
+        Создаёт HeadlessContext или пропускает тест, если GLFW недоступен
+        (например, нет X11/Wayland дисплея в окружении CI).
+        """
+        try:
+            return HeadlessContext(width, height)
+        except RuntimeError as exc:
+            if "GLFW" in str(exc):
+                self.skipTest(f"GLFW unavailable for headless rendering: {exc}")
+            raise
+
     def test_color_pipeline_opengl(self):
         """
         Smoke-тест offscreen рендеринга с ColorPass.
@@ -37,7 +49,7 @@ class TestPasses(unittest.TestCase):
             empty --[ColorPass]--> color --[PresentToScreenPass]--> DISPLAY
         """
         # Создаём headless OpenGL контекст
-        context = HeadlessContext()
+        context = self._create_headless_or_skip()
         
         try:
             graphics = OpenGLGraphicsBackend()
@@ -79,8 +91,12 @@ class TestPasses(unittest.TestCase):
 
             pipeline = RenderPipeline(
                 passes=[color_pass, present_pass],
-                clear_specs=[
-                    ClearSpec(resource="empty", color=(0.2, 0.2, 0.2, 1.0), depth=1.0),
+                pipeline_specs=[
+                    ResourceSpec(
+                        resource="empty",
+                        clear_color=(0.2, 0.2, 0.2, 1.0),
+                        clear_depth=1.0,
+                    ),
                 ],
             )
 
@@ -146,7 +162,7 @@ class TestPasses(unittest.TestCase):
         width, height = 128, 128
 
         # Headless OpenGL-контекст
-        context = HeadlessContext(width, height)
+        context = self._create_headless_or_skip(width, height)
 
         try:
             graphics = OpenGLGraphicsBackend()

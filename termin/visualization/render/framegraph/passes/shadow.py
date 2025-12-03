@@ -12,7 +12,7 @@ from typing import List, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
-from termin.visualization.render.framegraph.pipeline import ResourceSpec
+from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.renderpass import RenderState

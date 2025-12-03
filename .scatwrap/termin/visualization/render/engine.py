@@ -171,8 +171,16 @@ class&nbsp;RenderEngine:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;schedule&nbsp;=&nbsp;graph.build_schedule()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alias_groups&nbsp;=&nbsp;graph.fbo_alias_groups()<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собираем&nbsp;ResourceSpec'ы&nbsp;из&nbsp;всех&nbsp;pass'ов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Есть&nbsp;две&nbsp;механики&nbsp;передачи&nbsp;спеков.&nbsp;Спеи&nbsp;может&nbsp;объявить&nbsp;тот,&nbsp;кто&nbsp;собирал&nbsp;pipeline,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;или&nbsp;каждый&nbsp;pass&nbsp;может&nbsp;объявить&nbsp;свои&nbsp;спеки.&nbsp;Собираем&nbsp;все&nbsp;спеки&nbsp;в&nbsp;одну&nbsp;мапу.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resource_specs_map&nbsp;=&nbsp;{}&nbsp;&nbsp;#&nbsp;resource_name&nbsp;-&gt;&nbsp;ResourceSpec<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Добавляем&nbsp;pipeline-level&nbsp;ResourceSpec'ы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pipeline.pipeline_specs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;spec&nbsp;in&nbsp;pipeline.pipeline_specs:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resource_specs_map[spec.resource]&nbsp;=&nbsp;spec<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Собираем&nbsp;ResourceSpec'ы&nbsp;из&nbsp;всех&nbsp;pass'ов<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;render_pass&nbsp;in&nbsp;frame_passes:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(render_pass,&nbsp;RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;spec&nbsp;in&nbsp;render_pass.get_resource_specs():<br>

@@ -73,8 +73,7 @@ def make_default_pipeline() -> "RenderPipeline":
         CanvasPass,
         ColorPass,
         PresentToScreenPass,
-        RenderPipeline,
-        ClearSpec,
+        RenderPipeline
     )
     from termin.visualization.render.postprocess import PostProcessPass
 
@@ -97,8 +96,4 @@ def make_default_pipeline() -> "RenderPipeline":
         )
     ]
     
-    clear_specs = [
-        ClearSpec(resource="empty", color=(0.2, 0.2, 0.2, 1.0), depth=1.0),
-    ]
-    
-    return RenderPipeline(passes=passes, clear_specs=clear_specs)
+    return RenderPipeline(passes=passes)
