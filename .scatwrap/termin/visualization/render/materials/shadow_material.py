@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/visualization/render/materials/shadow_material.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;<br>
+Материал&nbsp;для&nbsp;генерации&nbsp;shadow&nbsp;map.<br>
+<br>
+Пишет&nbsp;глубину&nbsp;в&nbsp;стандартный&nbsp;depth&nbsp;buffer,&nbsp;без&nbsp;линеаризации&nbsp;—<br>
+используется&nbsp;нативная&nbsp;нелинейная&nbsp;глубина&nbsp;OpenGL&nbsp;для&nbsp;shadow&nbsp;mapping.<br>
+&quot;&quot;&quot;<br>
+<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+<br>
+from&nbsp;termin.visualization.core.material&nbsp;import&nbsp;Material<br>
+from&nbsp;termin.visualization.render.shader&nbsp;import&nbsp;ShaderProgram<br>
+<br>
+<br>
+SHADOW_VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+<br>
+layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec3&nbsp;a_position;<br>
+<br>
+uniform&nbsp;mat4&nbsp;u_model;<br>
+uniform&nbsp;mat4&nbsp;u_view;<br>
+uniform&nbsp;mat4&nbsp;u_projection;<br>
+<br>
+void&nbsp;main()<br>
+{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;gl_Position&nbsp;=&nbsp;u_projection&nbsp;*&nbsp;u_view&nbsp;*&nbsp;u_model&nbsp;*&nbsp;vec4(a_position,&nbsp;1.0);<br>
+}<br>
+&quot;&quot;&quot;<br>
+<br>
+SHADOW_FRAG&nbsp;=&nbsp;&quot;&quot;&quot;<br>
+#version&nbsp;330&nbsp;core<br>
+<br>
+out&nbsp;vec4&nbsp;FragColor;<br>
+<br>
+void&nbsp;main()<br>
+{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Глубина&nbsp;пишется&nbsp;автоматически&nbsp;в&nbsp;depth&nbsp;buffer.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;//&nbsp;Для&nbsp;отладки&nbsp;можно&nbsp;визуализировать&nbsp;gl_FragCoord.z:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;depth&nbsp;=&nbsp;gl_FragCoord.z;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FragColor&nbsp;=&nbsp;vec4(depth,&nbsp;depth,&nbsp;depth,&nbsp;1.0);<br>
+}<br>
+&quot;&quot;&quot;<br>
+<br>
+<br>
+class&nbsp;ShadowMaterial(Material):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Минимальный&nbsp;материал&nbsp;для&nbsp;shadow&nbsp;pass.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Рендерит&nbsp;геометрию&nbsp;без&nbsp;освещения&nbsp;и&nbsp;текстур&nbsp;—&nbsp;только&nbsp;позиции.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Глубина&nbsp;записывается&nbsp;в&nbsp;depth&nbsp;buffer&nbsp;средствами&nbsp;OpenGL.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;ShaderProgram(SHADOW_VERT,&nbsp;SHADOW_FRAG)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(shader=shader,&nbsp;uniforms={})<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

@@ -8,10 +8,13 @@
 <!-- BEGIN SCAT CODE -->
 &quot;&quot;&quot;Built-in&nbsp;material&nbsp;presets.&quot;&quot;&quot;<br>
 <br>
+from&nbsp;termin.visualization.render.materials.default_material&nbsp;import&nbsp;DefaultMaterial,&nbsp;default_shader<br>
 from&nbsp;termin.visualization.render.materials.pick_material&nbsp;import&nbsp;PickMaterial<br>
 from&nbsp;termin.visualization.render.materials.simple&nbsp;import&nbsp;ColorMaterial<br>
 <br>
 __all__&nbsp;=&nbsp;[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;DefaultMaterial&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;default_shader&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;PickMaterial&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;ColorMaterial&quot;,<br>
 ]<br>
