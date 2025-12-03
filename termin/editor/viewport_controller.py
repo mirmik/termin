@@ -422,11 +422,5 @@ class ViewportController:
         return RenderPipeline(
             passes=passes,
             debug_blit_pass=blit_pass,
-            pipeline_specs=[
-                ResourceSpec(
-                        resource="color",
-                        clear_color=(0.2, 0.2, 0.2, 1.0),
-                        clear_depth=1.0,
-                    ),
-            ],
+            pipeline_specs=[],
         )
