@@ -71,8 +71,9 @@ def&nbsp;build_shadow_view_matrix(params:&nbsp;ShadowCameraParams)&nbsp;-&gt;&nb
 &nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;=&nbsp;params.light_direction<br>
 &nbsp;&nbsp;&nbsp;&nbsp;center&nbsp;=&nbsp;params.center<br>
 &nbsp;&nbsp;&nbsp;&nbsp;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Позиция&nbsp;камеры&nbsp;—&nbsp;отступаем&nbsp;от&nbsp;центра&nbsp;против&nbsp;направления&nbsp;света<br>
-&nbsp;&nbsp;&nbsp;&nbsp;eye&nbsp;=&nbsp;center&nbsp;-&nbsp;direction&nbsp;*&nbsp;params.far<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Размещаем&nbsp;камеру&nbsp;так,&nbsp;чтобы&nbsp;центр&nbsp;сцены&nbsp;был&nbsp;примерно&nbsp;посередине&nbsp;между&nbsp;near&nbsp;и&nbsp;far<br>
+&nbsp;&nbsp;&nbsp;&nbsp;camera_distance&nbsp;=&nbsp;(params.near&nbsp;+&nbsp;params.far)&nbsp;/&nbsp;2.0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;eye&nbsp;=&nbsp;center&nbsp;-&nbsp;direction&nbsp;*&nbsp;camera_distance<br>
 &nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Выбираем&nbsp;up-вектор,&nbsp;ортогональный&nbsp;направлению<br>
 &nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Если&nbsp;свет&nbsp;смотрит&nbsp;вдоль&nbsp;Y,&nbsp;берём&nbsp;Z&nbsp;как&nbsp;временный<br>

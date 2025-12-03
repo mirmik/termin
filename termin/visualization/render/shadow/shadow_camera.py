@@ -63,8 +63,9 @@ def build_shadow_view_matrix(params: ShadowCameraParams) -> np.ndarray:
     direction = params.light_direction
     center = params.center
     
-    # Позиция камеры — отступаем от центра против направления света
-    eye = center - direction * params.far
+    # Размещаем камеру так, чтобы центр сцены был примерно посередине между near и far
+    camera_distance = (params.near + params.far) / 2.0
+    eye = center - direction * camera_distance
     
     # Выбираем up-вектор, ортогональный направлению
     # Если свет смотрит вдоль Y, берём Z как временный
