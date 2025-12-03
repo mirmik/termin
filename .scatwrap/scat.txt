@@ -27,6 +27,11 @@ TECHNICAL_NOTES.md<br>
 AGENTS.md<br>
 !**/__pycache__/**<br>
 <br>
+<br>
+[VAR(visual)]<br>
+termin/editor/**<br>
+termin/visualization/**<br>
+<br>
 [VAR(editor)]<br>
 termin/editor/editor.ui<br>
 termin/editor/editor_inspector.py<br>
