@@ -219,8 +219,11 @@ class&nbsp;NOPGraphicsBackend(GraphicsBackend):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Можно&nbsp;сохранить&nbsp;ссылку,&nbsp;если&nbsp;нужно&nbsp;для&nbsp;отладки<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._state[&quot;bound_fbo&quot;]&nbsp;=&nbsp;framebuffer<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;read_pixel(self,&nbsp;x:&nbsp;int,&nbsp;y:&nbsp;int)&nbsp;-&gt;&nbsp;Any:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;read_pixel(self,&nbsp;framebuffer,&nbsp;x:&nbsp;int,&nbsp;y:&nbsp;int)&nbsp;-&gt;&nbsp;Any:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Возвращаем&nbsp;пустые&nbsp;данные<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;read_depth_buffer(self,&nbsp;framebuffer):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<br>
 <!-- END SCAT CODE -->
 </body>

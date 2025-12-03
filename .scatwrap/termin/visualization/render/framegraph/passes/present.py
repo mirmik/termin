@@ -118,6 +118,8 @@ class&nbsp;BlitPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blit_fbo_to_fbo(graphics,&nbsp;fb_in,&nbsp;fb_out,&nbsp;(pw,&nbsp;ph),&nbsp;key)<br>
+<br>
+<br>
 FSQ_VERT&nbsp;=&nbsp;&quot;&quot;&quot;<br>
 #version&nbsp;330&nbsp;core<br>
 layout(location&nbsp;=&nbsp;0)&nbsp;in&nbsp;vec2&nbsp;a_pos;<br>

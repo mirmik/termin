@@ -231,6 +231,14 @@ class&nbsp;GraphicsBackend(ABC):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;@abstractmethod<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;read_depth_buffer(self,&nbsp;framebuffer):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Вернуть&nbsp;depth-буфер&nbsp;из&nbsp;указанного&nbsp;FBO&nbsp;как&nbsp;numpy-массив&nbsp;float32&nbsp;формы&nbsp;(h,&nbsp;w)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;или&nbsp;None,&nbsp;если&nbsp;чтение&nbsp;невозможно.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@abstractmethod<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;create_framebuffer(self,&nbsp;size:&nbsp;Tuple[int,&nbsp;int])&nbsp;-&gt;&nbsp;&quot;FramebufferHandle&quot;:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
 <br>
@@ -333,7 +341,6 @@ class&nbsp;WindowBackend(ABC):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;@abstractmethod<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;terminate(self):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
-<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

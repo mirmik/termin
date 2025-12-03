@@ -321,7 +321,7 @@ class ViewportController:
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.fog import FogEffect
         from termin.visualization.render.posteffects.highlight import HighlightEffect
-        from termin.visualization.render.framegraph.passes.present import BlitPass
+        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
         from termin.visualization.render.framegraph.passes.depth import DepthPass
 
         gizmo_entities = self._gizmo_controller.helper_geometry_entities()
@@ -338,7 +338,7 @@ class ViewportController:
                 return None
             return self._debug_source_res
 
-        blit_pass = BlitPass(
+        blit_pass = FrameDebuggerPass(
             get_source_res=_get_debug_source,
             output_res="debug",
             pass_name="DebugBlit",

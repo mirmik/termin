@@ -307,6 +307,62 @@ class OpenGLGraphicsBackend(GraphicsBackend):
         r, g, b, a = arr
         return r / 255.0, g / 255.0, b / 255.0, a / 255.0
 
+    def read_depth_buffer(self, framebuffer):
+        if framebuffer is None:
+            return None
+        if not isinstance(framebuffer, OpenGLFramebufferHandle):
+            return None
+        if framebuffer._fbo is None:
+            return None
+
+        size = framebuffer._size
+        if not size:
+            return None
+        width = int(size[0])
+        height = int(size[1])
+        if width <= 0 or height <= 0:
+            return None
+
+        try:
+            current_fbo = gl.glGetIntegerv(gl.GL_FRAMEBUFFER_BINDING)
+        except Exception:
+            current_fbo = 0
+
+        if isinstance(current_fbo, (list, tuple)):
+            if current_fbo:
+                current_fbo = int(current_fbo[0])
+            else:
+                current_fbo = 0
+
+        try:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, framebuffer._fbo or 0)
+            data = gl.glReadPixels(
+                0,
+                0,
+                width,
+                height,
+                gl.GL_DEPTH_COMPONENT,
+                gl.GL_FLOAT,
+            )
+        finally:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, int(current_fbo))
+
+        if data is None:
+            return None
+
+        if isinstance(data, (bytes, bytearray)):
+            depth = np.frombuffer(data, dtype=np.float32)
+        else:
+            depth = np.array(data, dtype=np.float32)
+
+        expected_size = width * height
+        if depth.size != expected_size:
+            return None
+
+        depth = depth.reshape((height, width))
+        depth = np.flipud(depth)
+        return depth
+
     def set_viewport(self, x: int, y: int, w: int, h: int):
         gl.glViewport(x, y, w, h)
 

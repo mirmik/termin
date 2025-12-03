@@ -7,10 +7,9 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from OpenGL import GL as gl
 import numpy as np
 
-from termin.visualization.platform.backends.opengl import OpenGLFramebufferHandle
-
 from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.visualization.render.shader import ShaderProgram
+from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
 
 
 class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
@@ -25,6 +24,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         graphics: GraphicsBackend,
         get_fbos: Callable[[], dict],
         resource_name: str = "debug",
+        get_debug_pass: Optional[Callable[[], object]] = None,
         parent: Optional[QtWidgets.QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -32,6 +32,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         self._graphics = graphics
         self._get_fbos = get_fbos
         self._resource_name = resource_name
+        self._get_debug_pass = get_debug_pass
 
         self._shader: Optional[ShaderProgram] = None
         self._vao: Optional[int] = None
@@ -116,49 +117,28 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
             return None
         return fbos[self._resource_name]
 
-    def _update_depth_image(self, fb) -> None:
-        if not isinstance(fb, OpenGLFramebufferHandle):
+    def _get_debugger_pass(self) -> FrameDebuggerPass | None:
+        if self._get_debug_pass is None:
+            return None
+        candidate = self._get_debug_pass()
+        if isinstance(candidate, FrameDebuggerPass):
+            return candidate
+        return None
+
+    def _update_depth_image(self) -> None:
+        debug_pass = self._get_debugger_pass()
+        if debug_pass is None:
             return
-        if fb._fbo is None:
+        storage = debug_pass.depth_buffer_storage
+        if storage is None:
             return
-        size = fb._size
-        if not size:
+        depth = storage.data
+        width = int(storage.width)
+        height = int(storage.height)
+        if depth is None:
             return
-        width = int(size[0])
-        height = int(size[1])
-        if width <= 0 or height <= 0:
+        if depth.shape != (height, width):
             return
-        try:
-            current_fbo = gl.glGetIntegerv(gl.GL_FRAMEBUFFER_BINDING)
-        except Exception:
-            current_fbo = 0
-        if isinstance(current_fbo, (list, tuple)):
-            if current_fbo:
-                current_fbo = int(current_fbo[0])
-            else:
-                current_fbo = 0
-        try:
-            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, fb._fbo or 0)
-            data = gl.glReadPixels(
-                0,
-                0,
-                width,
-                height,
-                gl.GL_DEPTH_COMPONENT,
-                gl.GL_FLOAT,
-            )
-        finally:
-            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, int(current_fbo))
-        if data is None:
-            return
-        if isinstance(data, (bytes, bytearray)):
-            depth = np.frombuffer(data, dtype=np.float32)
-        else:
-            depth = np.array(data, dtype=np.float32)
-        expected_size = width * height
-        if depth.size != expected_size:
-            return
-        depth = depth.reshape((height, width))
         depth = np.nan_to_num(depth, nan=1.0, posinf=1.0, neginf=0.0)
         d_min = float(depth.min())
         d_max = float(depth.max())
@@ -168,7 +148,6 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
             norm = depth
         norm = 1.0 - norm
         img = (norm * 255.0).clip(0.0, 255.0).astype(np.uint8)
-        img = np.flipud(img)
         height_i, width_i = img.shape
         bytes_per_line = width_i
         buffer = img.tobytes()
@@ -216,7 +195,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         gl.glDepthMask(gl.GL_TRUE)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
-        self._update_depth_image(fb)
+        self._update_depth_image()
 
 
 class FramegraphDebugDialog(QtWidgets.QDialog):
@@ -354,6 +333,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             graphics=self._graphics,
             get_fbos=self._get_fbos,
             resource_name=self._resource_name,
+            get_debug_pass=self._get_debug_blit_pass,
             parent=self,
         )
 

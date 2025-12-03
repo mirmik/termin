@@ -211,6 +211,9 @@ class NOPGraphicsBackend(GraphicsBackend):
         # Можно сохранить ссылку, если нужно для отладки
         self._state["bound_fbo"] = framebuffer
 
-    def read_pixel(self, x: int, y: int) -> Any:
+    def read_pixel(self, framebuffer, x: int, y: int) -> Any:
         # Возвращаем пустые данные
+        return None
+
+    def read_depth_buffer(self, framebuffer):
         return None

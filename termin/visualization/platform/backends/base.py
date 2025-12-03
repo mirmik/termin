@@ -223,6 +223,14 @@ class GraphicsBackend(ABC):
         ...
 
     @abstractmethod
+    def read_depth_buffer(self, framebuffer):
+        """
+        Вернуть depth-буфер из указанного FBO как numpy-массив float32 формы (h, w)
+        или None, если чтение невозможно.
+        """
+        ...
+
+    @abstractmethod
     def create_framebuffer(self, size: Tuple[int, int]) -> "FramebufferHandle":
         ...
 
@@ -325,4 +333,3 @@ class WindowBackend(ABC):
     @abstractmethod
     def terminate(self):
         ...
-

@@ -110,6 +110,8 @@ class BlitPass(RenderFramePass):
             return
         
         blit_fbo_to_fbo(graphics, fb_in, fb_out, (pw, ph), key)
+
+
 FSQ_VERT = """
 #version 330 core
 layout(location = 0) in vec2 a_pos;
