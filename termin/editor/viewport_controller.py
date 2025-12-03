@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, Optional, Tuple
 
+import numpy as np
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 
@@ -324,6 +325,8 @@ class ViewportController:
         from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
         from termin.visualization.render.framegraph.passes.depth import DepthPass
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
+        from termin.visualization.render.framegraph.passes.shadow import ShadowPass
+        from termin.visualization.render.shadow import ShadowCameraParams
 
         gizmo_entities = self._gizmo_controller.helper_geometry_entities()
 
@@ -350,7 +353,22 @@ class ViewportController:
 
         skybox_pass = SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox")
 
+        # Shadow pass с направлением света сверху-спереди
+        shadow_params = ShadowCameraParams(
+            light_direction=np.array([0.5, -1.0, 0.5], dtype=np.float32),
+            ortho_size=20.0,
+            near=0.1,
+            far=100.0,
+        )
+        shadow_pass = ShadowPass(
+            output_res="shadow_map",
+            pass_name="Shadow",
+            shadow_params=shadow_params,
+            resolution=1024,
+        )
+
         passes: list = [
+            shadow_pass,
             skybox_pass,
             color_pass,
             depth_pass,

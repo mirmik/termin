@@ -29,6 +29,8 @@ from&nbsp;termin.visualization.platform.backends&nbsp;import&nbsp;(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;set_default_window_backend,<br>
 )<br>
 from&nbsp;termin.visualization.render.components&nbsp;import&nbsp;MeshRenderer<br>
+from&nbsp;termin.visualization.render.components.light_component&nbsp;import&nbsp;LightComponent<br>
+from&nbsp;termin.visualization.core.lighting.light&nbsp;import&nbsp;LightType<br>
 from&nbsp;termin.visualization.render.skybox&nbsp;import&nbsp;SkyBoxEntity<br>
 <br>
 def&nbsp;build_scene(world):<br>
@@ -57,6 +59,18 @@ def&nbsp;build_scene(world):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;entity2.add_component(MeshRenderer(drawable,&nbsp;blue_material))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;entity2.transform.relocate(Pose3(lin=np.array([3.0,&nbsp;0.0,&nbsp;0.0]),&nbsp;ang=np.array([0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;1.0])))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;scene.add(entity2)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Направленный&nbsp;источник&nbsp;света&nbsp;для&nbsp;теней&nbsp;(направление&nbsp;совпадает&nbsp;с&nbsp;ShadowPass)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;light_entity&nbsp;=&nbsp;Entity(pose=Pose3.identity(),&nbsp;name=&quot;directional_light&quot;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;light_component&nbsp;=&nbsp;LightComponent(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;light_type=LightType.DIRECTIONAL,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=(1.0,&nbsp;1.0,&nbsp;1.0),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;intensity=1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;light_entity.add_component(light_component)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Направление&nbsp;света:&nbsp;[0.5,&nbsp;-1.0,&nbsp;0.5]&nbsp;(совпадает&nbsp;с&nbsp;ShadowPass)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Для&nbsp;directional&nbsp;light&nbsp;направление&nbsp;берётся&nbsp;из&nbsp;трансформа&nbsp;сущности<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene.add(light_entity)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;world.add_scene(scene)<br>
 <br>

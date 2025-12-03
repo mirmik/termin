@@ -173,7 +173,16 @@ class RenderEngine:
                     fbos[name] = display_fbo
                 continue
 
-            fb = self._ensure_fbo(state, canon, (pw, ph))
+            # Проверяем, есть ли у какого-то pass специальный размер для этого ресурса
+            resource_size = (pw, ph)
+            for render_pass in frame_passes:
+                if hasattr(render_pass, 'get_resource_size'):
+                    custom_size = render_pass.get_resource_size(canon)
+                    if custom_size is not None:
+                        resource_size = custom_size
+                        break
+
+            fb = self._ensure_fbo(state, canon, resource_size)
             for name in names:
                 fbos[name] = fb
 

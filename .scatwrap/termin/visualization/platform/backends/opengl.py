@@ -562,6 +562,10 @@ class&nbsp;OpenGLFramebufferHandle(FramebufferHandle):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._fbo&nbsp;=&nbsp;fbo_id<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._size&nbsp;=&nbsp;size<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_size(self)&nbsp;-&gt;&nbsp;Tuple[int,&nbsp;int]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Returns&nbsp;the&nbsp;size&nbsp;of&nbsp;the&nbsp;framebuffer.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._size<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_create(self):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w,&nbsp;h&nbsp;=&nbsp;self._size<br>
 <br>

@@ -21,6 +21,8 @@ from termin.visualization.platform.backends import (
     set_default_window_backend,
 )
 from termin.visualization.render.components import MeshRenderer
+from termin.visualization.render.components.light_component import LightComponent
+from termin.visualization.core.lighting.light import LightType
 from termin.visualization.render.skybox import SkyBoxEntity
 
 def build_scene(world):
@@ -49,6 +51,18 @@ def build_scene(world):
     entity2.add_component(MeshRenderer(drawable, blue_material))
     entity2.transform.relocate(Pose3(lin=np.array([3.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
     scene.add(entity2)
+
+    # Направленный источник света для теней (направление совпадает с ShadowPass)
+    light_entity = Entity(pose=Pose3.identity(), name="directional_light")
+    light_component = LightComponent(
+        light_type=LightType.DIRECTIONAL,
+        color=(1.0, 1.0, 1.0),
+        intensity=1.0,
+    )
+    light_entity.add_component(light_component)
+    # Направление света: [0.5, -1.0, 0.5] (совпадает с ShadowPass)
+    # Для directional light направление берётся из трансформа сущности
+    scene.add(light_entity)
 
     world.add_scene(scene)
 

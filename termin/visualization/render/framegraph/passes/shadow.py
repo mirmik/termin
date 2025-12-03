@@ -116,6 +116,16 @@ class ShadowPass(RenderFramePass):
         """Возвращает имена отрендеренных сущностей для debug."""
         return list(self._entity_names)
 
+    def get_resource_size(self, resource_name: str) -> tuple[int, int] | None:
+        """
+        Возвращает требуемый размер FBO для shadow map.
+
+        ShadowPass требует фиксированный размер, независимо от viewport'а.
+        """
+        if resource_name == self.output_res:
+            return (self.resolution, self.resolution)
+        return None
+
     def execute(
         self,
         graphics: "GraphicsBackend",
@@ -139,16 +149,21 @@ class ShadowPass(RenderFramePass):
         5. Сохраняет light_space_matrix для использования в ColorPass
         """
         px, py, pw, ph = rect
-        
+
         fb = writes_fbos.get(self.output_res)
         if fb is None:
+            print(f"[ShadowPass] ERROR: FBO '{self.output_res}' not found!")
             return
-        
+
+        # DEBUG: Проверяем размер FBO
+        fb_size = fb.get_size() if hasattr(fb, 'get_size') else (pw, ph)
+        print(f"[ShadowPass] FBO size: {fb_size}, target resolution: {self.resolution}, viewport: ({pw}, {ph})")
+
         # Вычисляем матрицы теневой камеры
         self._view_matrix = build_shadow_view_matrix(self.shadow_params)
         self._projection_matrix = build_shadow_projection_matrix(self.shadow_params)
         self._light_space_matrix = compute_light_space_matrix(self.shadow_params)
-        
+
         # Используем разрешение shadow map, а не viewport основной камеры
         shadow_size = self.resolution
         
@@ -156,7 +171,8 @@ class ShadowPass(RenderFramePass):
         graphics.set_viewport(0, 0, shadow_size, shadow_size)
         
         # Очистка — белый цвет (для debug) и максимальная глубина
-        graphics.clear_color_depth((1.0, 1.0, 1.0, 1.0))
+        graphics.clear_color((1.0, 1.0, 1.0, 1.0))
+        graphics.clear_depth(1.0)
         
         # Состояние рендера: depth test/write включены, без blending
         graphics.apply_render_state(
@@ -208,6 +224,9 @@ class ShadowPass(RenderFramePass):
             )
             
             mr.mesh.draw(render_ctx)
-        
+
+        # DEBUG: Сколько объектов отрендерили
+        print(f"[ShadowPass] Rendered {len(self._entity_names)} entities: {self._entity_names}")
+
         # Сбрасываем состояние
         graphics.apply_render_state(RenderState())

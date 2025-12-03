@@ -554,6 +554,10 @@ class OpenGLFramebufferHandle(FramebufferHandle):
         self._fbo = fbo_id
         self._size = size
 
+    def get_size(self) -> Tuple[int, int]:
+        """Returns the size of the framebuffer."""
+        return self._size
+
     def _create(self):
         w, h = self._size
 
