@@ -29,7 +29,6 @@ class FrameDebuggerPass(RenderFramePass):
             pass_name=pass_name,
             reads=set(),
             writes={output_res},
-            inplace=False,
         )
         self._get_source_res = get_source_res
         self.output_res = output_res

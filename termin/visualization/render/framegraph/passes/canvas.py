@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import List, Tuple
+
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 
 
@@ -14,10 +16,13 @@ class CanvasPass(RenderFramePass):
             pass_name=pass_name,
             reads={src},
             writes={dst},
-            inplace=True,  # <- ключевое: модифицирующий пасс
         )
         self.src = src
         self.dst = dst
+
+    def get_inplace_aliases(self) -> List[Tuple[str, str]]:
+        """CanvasPass читает src и пишет dst inplace."""
+        return [(self.src, self.dst)]
 
     def execute(
         self,

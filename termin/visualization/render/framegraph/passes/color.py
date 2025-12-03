@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -10,7 +10,7 @@ from termin.visualization.render.components import MeshRenderer
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
-    from termin.visualization.render.shadow.shadow_map_array import ShadowMapArray
+    from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 
 
 # Максимальное количество shadow maps в шейдере
@@ -49,7 +49,6 @@ class ColorPass(RenderFramePass):
             pass_name=pass_name,
             reads=reads,
             writes={output_res},
-            inplace=False,  # Читаем несколько ресурсов, пишем в другой
         )
         self.input_res = input_res
         self.output_res = output_res
@@ -57,6 +56,10 @@ class ColorPass(RenderFramePass):
 
         # Кэш имён сущностей с MeshRenderer
         self._entity_names: List[str] = []
+
+    def get_inplace_aliases(self) -> List[Tuple[str, str]]:
+        """ColorPass читает input_res и пишет output_res inplace."""
+        return [(self.input_res, self.output_res)]
 
     def get_internal_symbols(self) -> List[str]:
         """
@@ -71,7 +74,7 @@ class ColorPass(RenderFramePass):
     def _bind_shadow_maps(
         self,
         graphics: "GraphicsBackend",
-        shadow_array: "ShadowMapArray | None",
+        shadow_array: "ShadowMapArrayResource | None",
     ) -> None:
         """
         Биндит shadow map текстуры на texture units.
@@ -132,13 +135,13 @@ class ColorPass(RenderFramePass):
         if fb is None:
             return
 
-        # Получаем ShadowMapArray
+        # Получаем ShadowMapArrayResource
         shadow_array = None
         if self.shadow_res is not None:
             shadow_array = reads_fbos.get(self.shadow_res)
-            # Проверяем тип — должен быть ShadowMapArray, а не FBO
-            from termin.visualization.render.shadow.shadow_map_array import ShadowMapArray
-            if not isinstance(shadow_array, ShadowMapArray):
+            # Проверяем тип — должен быть ShadowMapArrayResource
+            from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
+            if not isinstance(shadow_array, ShadowMapArrayResource):
                 shadow_array = None
 
         # Биндим shadow maps на texture units

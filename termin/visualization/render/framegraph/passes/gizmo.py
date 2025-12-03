@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.shader import ShaderProgram
@@ -37,7 +37,6 @@ class GizmoPass(RenderFramePass):
             pass_name=pass_name,
             reads={input_res},
             writes={output_res},
-            inplace=True,
         )
         if gizmo_entities is None:
             gizmo_entities = []
@@ -45,6 +44,10 @@ class GizmoPass(RenderFramePass):
         self.input_res = input_res
         self.output_res = output_res
         self._shader: ShaderProgram | None = None
+
+    def get_inplace_aliases(self) -> List[Tuple[str, str]]:
+        """GizmoPass читает input_res и пишет output_res inplace."""
+        return [(self.input_res, self.output_res)]
 
     def _ensure_shader(self, gfx) -> ShaderProgram:
         if self._shader is None:

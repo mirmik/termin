@@ -8,7 +8,7 @@
 <!-- BEGIN SCAT CODE -->
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from&nbsp;typing&nbsp;import&nbsp;Dict<br>
+from&nbsp;typing&nbsp;import&nbsp;Dict,&nbsp;List,&nbsp;Tuple<br>
 <br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
@@ -39,10 +39,13 @@ class&nbsp;SkyBoxPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads={input_res},<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes={output_res},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=True,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.input_res&nbsp;=&nbsp;input_res<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output_res&nbsp;=&nbsp;output_res<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_inplace_aliases(self)&nbsp;-&gt;&nbsp;List[Tuple[str,&nbsp;str]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;SkyBoxPass&nbsp;читает&nbsp;input_res&nbsp;и&nbsp;пишет&nbsp;output_res&nbsp;inplace.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[(self.input_res,&nbsp;self.output_res)]<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_resource_specs(self)&nbsp;-&gt;&nbsp;list[ResourceSpec]:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>

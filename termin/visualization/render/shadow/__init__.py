@@ -6,9 +6,10 @@ from termin.visualization.render.shadow.shadow_camera import (
     build_shadow_projection_matrix,
     compute_light_space_matrix,
 )
-from termin.visualization.render.shadow.shadow_map_array import (
-    ShadowMapEntry,
-    ShadowMapArray,
+# ShadowMapArrayResource и ShadowMapArrayEntry перенесены в framegraph.resource
+from termin.visualization.render.framegraph.resource import (
+    ShadowMapArrayEntry,
+    ShadowMapArrayResource,
 )
 
 __all__ = [
@@ -16,6 +17,6 @@ __all__ = [
     "build_shadow_view_matrix",
     "build_shadow_projection_matrix",
     "compute_light_space_matrix",
-    "ShadowMapEntry",
-    "ShadowMapArray",
+    "ShadowMapArrayEntry",
+    "ShadowMapArrayResource",
 ]

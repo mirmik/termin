@@ -55,7 +55,6 @@ class BlitPass(RenderFramePass):
             pass_name=pass_name,
             reads=set(),  # фактическое имя ресурса задаётся динамически
             writes={output_res},
-            inplace=False,
         )
         self._get_source_res = get_source_res
         self.output_res = output_res
@@ -151,7 +150,6 @@ class PresentToScreenPass(RenderFramePass):
             pass_name=pass_name,
             reads={input_res},
             writes={output_res},
-            inplace=False,
         )
         self.input_res = input_res
 

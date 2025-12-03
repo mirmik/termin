@@ -15,6 +15,12 @@ from&nbsp;termin.visualization.render.framegraph.core&nbsp;import&nbsp;(<br>
 )<br>
 from&nbsp;termin.visualization.render.framegraph.pipeline&nbsp;import&nbsp;RenderPipeline<br>
 from&nbsp;termin.visualization.render.framegraph.resource_spec&nbsp;import&nbsp;ResourceSpec<br>
+from&nbsp;termin.visualization.render.framegraph.resource&nbsp;import&nbsp;(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;FrameGraphResource,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;SingleFBO,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ShadowMapArrayResource,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ShadowMapArrayEntry,<br>
+)<br>
 from&nbsp;termin.visualization.render.framegraph.passes.base&nbsp;import&nbsp;RenderFramePass<br>
 from&nbsp;termin.visualization.render.framegraph.passes.canvas&nbsp;import&nbsp;CanvasPass<br>
 from&nbsp;termin.visualization.render.framegraph.passes.color&nbsp;import&nbsp;ColorPass<br>
@@ -31,6 +37,10 @@ __all__&nbsp;=&nbsp;[<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;ResourceSpec&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;RenderPipeline&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;RenderFramePass&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;FrameGraphResource&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;SingleFBO&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;ShadowMapArrayResource&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;ShadowMapArrayEntry&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;BlitPass&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;CanvasPass&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;ColorPass&quot;,<br>

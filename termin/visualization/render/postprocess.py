@@ -85,7 +85,6 @@ class PostProcessPass(RenderFramePass):
             pass_name=pass_name,
             reads=reads,
             writes={output_res},
-            inplace=False,
         )
 
         self._temp_fbos: list["FramebufferHandle"] = []

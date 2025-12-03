@@ -98,11 +98,7 @@ class TestPasses(unittest.TestCase):
                         clear_color=(0.2, 0.2, 0.2, 1.0),
                         clear_depth=1.0,
                     ),
-                    ResourceSpec(
-                        resource="color",
-                        clear_color=(0.2, 0.2, 0.2, 1.0),
-                        clear_depth=1.0,
-                    ),
+                    # "color" теперь алиас "empty" (inplace), отдельный спек не нужен
                 ],
             )
 

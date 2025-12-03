@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -31,10 +31,13 @@ class SkyBoxPass(RenderFramePass):
             pass_name=pass_name,
             reads={input_res},
             writes={output_res},
-            inplace=True,
         )
         self.input_res = input_res
         self.output_res = output_res
+
+    def get_inplace_aliases(self) -> List[Tuple[str, str]]:
+        """SkyBoxPass читает input_res и пишет output_res inplace."""
+        return [(self.input_res, self.output_res)]
 
     def get_resource_specs(self) -> list[ResourceSpec]:
         """

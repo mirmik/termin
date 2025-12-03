@@ -1,6 +1,7 @@
 # utest/framegraph_test.py
 
 import unittest
+from typing import List, Tuple
 
 from termin.visualization.render.framegraph import (
     FramePass,
@@ -19,8 +20,21 @@ class DummyPass(FramePass):
             pass_name=pass_name,
             reads=set(reads or []),
             writes=set(writes or []),
-            inplace=inplace,
         )
+        # Для inplace храним явную пару алиасов
+        self._inplace = inplace
+        if inplace and reads and writes:
+            # Для простоты берём первый read и первый write
+            self._inplace_src = list(reads)[0] if reads else None
+            self._inplace_dst = list(writes)[0] if writes else None
+        else:
+            self._inplace_src = None
+            self._inplace_dst = None
+
+    def get_inplace_aliases(self) -> List[Tuple[str, str]]:
+        if self._inplace and self._inplace_src and self._inplace_dst:
+            return [(self._inplace_src, self._inplace_dst)]
+        return []
 
     def execute(self, *args, **kwargs):
         # В тестах ничего не делаем

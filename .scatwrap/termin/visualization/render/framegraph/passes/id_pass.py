@@ -8,7 +8,7 @@
 <!-- BEGIN SCAT CODE -->
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from&nbsp;typing&nbsp;import&nbsp;List<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Tuple<br>
 <br>
 from&nbsp;termin.visualization.render.framegraph.passes.base&nbsp;import&nbsp;RenderFramePass<br>
 from&nbsp;termin.visualization.render.framegraph.resource_spec&nbsp;import&nbsp;ResourceSpec<br>
@@ -30,13 +30,16 @@ class&nbsp;IdPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads={input_res},<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes={output_res},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=True,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.input_res&nbsp;=&nbsp;input_res<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output_res&nbsp;=&nbsp;output_res<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Кэш&nbsp;имён&nbsp;отрисовываемых&nbsp;pickable-энтити.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity_names:&nbsp;List[str]&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_inplace_aliases(self)&nbsp;-&gt;&nbsp;List[Tuple[str,&nbsp;str]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;IdPass&nbsp;читает&nbsp;input_res&nbsp;и&nbsp;пишет&nbsp;output_res&nbsp;inplace.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[(self.input_res,&nbsp;self.output_res)]<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_internal_symbols(self)&nbsp;-&gt;&nbsp;List[str]:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from termin.visualization.render.shader import ShaderProgram
-    from termin.visualization.render.shadow.shadow_map_array import ShadowMapArray
+    from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 
 
 # Максимальное число shadow maps, поддерживаемых шейдером
@@ -18,7 +18,7 @@ SHADOW_MAP_TEXTURE_UNIT_START = 8
 
 def upload_shadow_maps_to_shader(
     shader: "ShaderProgram",
-    shadow_array: "ShadowMapArray",
+    shadow_array: "ShadowMapArrayResource",
 ) -> None:
     """
     Загружает данные shadow maps в uniform'ы шейдера.

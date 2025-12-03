@@ -8,6 +8,8 @@
 <!-- BEGIN SCAT CODE -->
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Tuple<br>
+<br>
 from&nbsp;termin.visualization.render.framegraph.passes.base&nbsp;import&nbsp;RenderFramePass<br>
 <br>
 <br>
@@ -22,10 +24,13 @@ class&nbsp;CanvasPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads={src},<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes={dst},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=True,&nbsp;&nbsp;#&nbsp;&lt;-&nbsp;ключевое:&nbsp;модифицирующий&nbsp;пасс<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.src&nbsp;=&nbsp;src<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.dst&nbsp;=&nbsp;dst<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_inplace_aliases(self)&nbsp;-&gt;&nbsp;List[Tuple[str,&nbsp;str]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;CanvasPass&nbsp;читает&nbsp;src&nbsp;и&nbsp;пишет&nbsp;dst&nbsp;inplace.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[(self.src,&nbsp;self.dst)]<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>

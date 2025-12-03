@@ -14,7 +14,7 @@ from&nbsp;typing&nbsp;import&nbsp;TYPE_CHECKING<br>
 <br>
 if&nbsp;TYPE_CHECKING:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.shader&nbsp;import&nbsp;ShaderProgram<br>
-&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.shadow.shadow_map_array&nbsp;import&nbsp;ShadowMapArray<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.framegraph.resource&nbsp;import&nbsp;ShadowMapArrayResource<br>
 <br>
 <br>
 #&nbsp;Максимальное&nbsp;число&nbsp;shadow&nbsp;maps,&nbsp;поддерживаемых&nbsp;шейдером<br>
@@ -26,7 +26,7 @@ SHADOW_MAP_TEXTURE_UNIT_START&nbsp;=&nbsp;8<br>
 <br>
 def&nbsp;upload_shadow_maps_to_shader(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;shader:&nbsp;&quot;ShaderProgram&quot;,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;shadow_array:&nbsp;&quot;ShadowMapArray&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shadow_array:&nbsp;&quot;ShadowMapArrayResource&quot;,<br>
 )&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;Загружает&nbsp;данные&nbsp;shadow&nbsp;maps&nbsp;в&nbsp;uniform'ы&nbsp;шейдера.<br>

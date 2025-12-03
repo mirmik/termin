@@ -8,7 +8,7 @@
 <!-- BEGIN SCAT CODE -->
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;TYPE_CHECKING<br>
+from&nbsp;typing&nbsp;import&nbsp;List,&nbsp;Tuple,&nbsp;TYPE_CHECKING<br>
 <br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
@@ -18,7 +18,7 @@ from&nbsp;termin.visualization.render.components&nbsp;import&nbsp;MeshRenderer<b
 <br>
 if&nbsp;TYPE_CHECKING:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.platform.backends.base&nbsp;import&nbsp;GraphicsBackend,&nbsp;FramebufferHandle<br>
-&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.shadow.shadow_map_array&nbsp;import&nbsp;ShadowMapArray<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.framegraph.resource&nbsp;import&nbsp;ShadowMapArrayResource<br>
 <br>
 <br>
 #&nbsp;Максимальное&nbsp;количество&nbsp;shadow&nbsp;maps&nbsp;в&nbsp;шейдере<br>
@@ -57,7 +57,6 @@ class&nbsp;ColorPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads=reads,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes={output_res},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=False,&nbsp;&nbsp;#&nbsp;Читаем&nbsp;несколько&nbsp;ресурсов,&nbsp;пишем&nbsp;в&nbsp;другой<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.input_res&nbsp;=&nbsp;input_res<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output_res&nbsp;=&nbsp;output_res<br>
@@ -65,6 +64,10 @@ class&nbsp;ColorPass(RenderFramePass):<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Кэш&nbsp;имён&nbsp;сущностей&nbsp;с&nbsp;MeshRenderer<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity_names:&nbsp;List[str]&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_inplace_aliases(self)&nbsp;-&gt;&nbsp;List[Tuple[str,&nbsp;str]]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;ColorPass&nbsp;читает&nbsp;input_res&nbsp;и&nbsp;пишет&nbsp;output_res&nbsp;inplace.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[(self.input_res,&nbsp;self.output_res)]<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_internal_symbols(self)&nbsp;-&gt;&nbsp;List[str]:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
@@ -79,7 +82,7 @@ class&nbsp;ColorPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;_bind_shadow_maps(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;graphics:&nbsp;&quot;GraphicsBackend&quot;,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadow_array:&nbsp;&quot;ShadowMapArray&nbsp;|&nbsp;None&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadow_array:&nbsp;&quot;ShadowMapArrayResource&nbsp;|&nbsp;None&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Биндит&nbsp;shadow&nbsp;map&nbsp;текстуры&nbsp;на&nbsp;texture&nbsp;units.<br>
@@ -140,13 +143,13 @@ class&nbsp;ColorPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fb&nbsp;is&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Получаем&nbsp;ShadowMapArray<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Получаем&nbsp;ShadowMapArrayResource<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadow_array&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.shadow_res&nbsp;is&nbsp;not&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadow_array&nbsp;=&nbsp;reads_fbos.get(self.shadow_res)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверяем&nbsp;тип&nbsp;—&nbsp;должен&nbsp;быть&nbsp;ShadowMapArray,&nbsp;а&nbsp;не&nbsp;FBO<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.shadow.shadow_map_array&nbsp;import&nbsp;ShadowMapArray<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(shadow_array,&nbsp;ShadowMapArray):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Проверяем&nbsp;тип&nbsp;—&nbsp;должен&nbsp;быть&nbsp;ShadowMapArrayResource<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.framegraph.resource&nbsp;import&nbsp;ShadowMapArrayResource<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;isinstance(shadow_array,&nbsp;ShadowMapArrayResource):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadow_array&nbsp;=&nbsp;None<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Биндим&nbsp;shadow&nbsp;maps&nbsp;на&nbsp;texture&nbsp;units<br>

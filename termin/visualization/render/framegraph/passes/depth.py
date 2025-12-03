@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Tuple
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
@@ -30,7 +30,6 @@ class DepthPass(RenderFramePass):
             pass_name=pass_name,
             reads={input_res},
             writes={output_res},
-            inplace=True,
         )
         self.input_res = input_res
         self.output_res = output_res
@@ -39,6 +38,10 @@ class DepthPass(RenderFramePass):
         self._entity_names: List[str] = []
 
         self._material: DepthMaterial | None = None
+
+    def get_inplace_aliases(self) -> List[Tuple[str, str]]:
+        """DepthPass читает input_res и пишет output_res inplace."""
+        return [(self.input_res, self.output_res)]
 
     def _get_material(self) -> DepthMaterial:
         if self._material is None:

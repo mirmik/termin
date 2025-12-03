@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, List, Set, Tuple, Tuple
 from collections import deque
 
 
@@ -12,8 +12,12 @@ class FramePass:
 
     reads  – какие ресурсы этот проход читает (по именам).
     writes – какие ресурсы он пишет.
-    inplace – модифицирующий ли это проход (in-place по смыслу).
     enabled – включён ли проход; отключённые пассы игнорируются при построении графа.
+
+    Inplace-семантика определяется через get_inplace_aliases():
+        Если метод возвращает непустой список пар [(read, write), ...],
+        то пасс считается inplace — он читает и пишет один и тот же
+        физический ресурс под разными именами.
 
     Внутренние точки (internal debug points):
         Некоторые пассы могут объявлять «внутренние» точки наблюдения,
@@ -23,7 +27,6 @@ class FramePass:
     pass_name: str
     reads: Set[str] = field(default_factory=set)
     writes: Set[str] = field(default_factory=set)
-    inplace: bool = False
     enabled: bool = True
 
     # Конфигурация внутренней точки дебага (символ и целевой ресурс).
@@ -32,6 +35,33 @@ class FramePass:
 
     def __repr__(self) -> str:
         return f"FramePass({self.pass_name!r})"
+
+    # ---- API inplace-алиасов ---------------------------------------------
+
+    def get_inplace_aliases(self) -> List[Tuple[str, str]]:
+        """
+        Возвращает список пар алиасов для inplace-операций.
+        
+        Каждая пара (read_name, write_name) означает, что пасс
+        читает ресурс read_name и пишет в write_name, но физически
+        это один и тот же ресурс (буфер).
+        
+        Пример:
+            ColorPass читает "empty" и пишет "color" inplace:
+            return [("empty", "color")]
+        
+        Пустой список означает, что пасс не является inplace.
+        """
+        return []
+
+    @property
+    def inplace(self) -> bool:
+        """
+        Является ли пасс inplace.
+        
+        Вычисляется динамически на основе get_inplace_aliases().
+        """
+        return len(self.get_inplace_aliases()) > 0
 
     # ---- API внутренних точек ---------------------------------------------
 
@@ -140,33 +170,25 @@ class FrameGraph:
 
         # 1) собираем writer-ов, reader-ов и валидируем inplace-пассы
         for idx, p in enumerate(self._passes):
-            # --- валидация inplace-пассов ---
-            # Inplace-пасс должен иметь ровно 1 read.
-            # В writes может быть 1 основной ресурс + опционально debug_internal_output.
-            # debug_internal_output не нарушает семантику inplace,
-            # так как это отдельный ресурс для дебага.
-            if p.inplace:
-                if len(p.reads) != 1:
-                    raise FrameGraphError(
-                        f"Inplace pass {p.pass_name!r} must have exactly 1 read, "
-                        f"got reads={p.reads}"
-                    )
-                # Определяем количество «основных» writes (без debug_internal_output)
-                base_writes_count = len(p.writes)
-                if p.debug_internal_output is not None:
-                    base_writes_count -= 1
-                if base_writes_count != 1:
-                    raise FrameGraphError(
-                        f"Inplace pass {p.pass_name!r} must have exactly 1 base write "
-                        f"(excluding debug_internal_output), got {base_writes_count}"
-                    )
-                (src,) = p.reads
-                if src in modified_inputs:
-                    # этот ресурс уже модифицировался другим inplace-пассом
-                    raise FrameGraphError(
-                        f"Resource {src!r} is already modified by another inplace pass"
-                    )
-                modified_inputs.add(src)
+            # --- валидация inplace-пассов через get_inplace_aliases ---
+            inplace_aliases = p.get_inplace_aliases()
+            
+            if inplace_aliases:
+                # Валидируем каждый алиас
+                for src, dst in inplace_aliases:
+                    if src not in p.reads:
+                        raise FrameGraphError(
+                            f"Inplace alias source {src!r} not in reads of pass {p.pass_name!r}"
+                        )
+                    if dst not in p.writes:
+                        raise FrameGraphError(
+                            f"Inplace alias target {dst!r} not in writes of pass {p.pass_name!r}"
+                        )
+                    if src in modified_inputs:
+                        raise FrameGraphError(
+                            f"Resource {src!r} is already modified by another inplace pass"
+                        )
+                    modified_inputs.add(src)
 
             # --- writer-ы ---
             for res in p.writes:
@@ -190,23 +212,15 @@ class FrameGraph:
                 # если ресурс нигде не писали, но читают — считаем внешним входом
                 canonical.setdefault(res, res)
 
-        # 2) обработка алиасов для inplace-пассов
-        # (это чисто справочная штука, на граф зависимостей не влияет)
+        # 2) обработка алиасов для inplace-пассов из get_inplace_aliases
         for p in self._passes:
-            if not p.inplace:
-                continue
-            (src,) = p.reads
-            # Находим основной write (не debug_internal_output)
-            base_writes = [w for w in p.writes if w != p.debug_internal_output]
-            (dst,) = base_writes
+            inplace_aliases = p.get_inplace_aliases()
+            for src, dst in inplace_aliases:
+                src_canon = canonical.get(src, src)
+                # выходу назначаем каноническое имя входа
+                canonical[dst] = src_canon
 
-            src_canon = canonical.get(src, src)
-            # выходу назначаем каноническое имя входа:
-            # даже если у dst уже было "своё", переопределяем —
-            # мы сознательно объявляем их синонимами.
-            canonical[dst] = src_canon
-
-        # сохраним карту канонических имён (вдруг пригодится снаружи)
+        # сохраним карту канонических имён
         self._canonical_resources = canonical
 
         # 3) adjacency и in_degree по индексам

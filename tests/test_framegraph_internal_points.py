@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import List, Tuple
+
 from termin.visualization.render.framegraph.core import FrameGraph, FramePass
 
 
@@ -13,9 +15,21 @@ class DummyPass(FramePass):
             pass_name=name,
             reads=set(reads),
             writes=set(writes),
-            inplace=inplace,
         )
         self._internal_symbols = ["a", "b", "c"]
+        # Для inplace храним явную пару алиасов
+        self._inplace = inplace
+        if inplace and reads and writes:
+            self._inplace_src = list(reads)[0] if reads else None
+            self._inplace_dst = list(writes)[0] if writes else None
+        else:
+            self._inplace_src = None
+            self._inplace_dst = None
+
+    def get_inplace_aliases(self) -> List[Tuple[str, str]]:
+        if self._inplace and self._inplace_src and self._inplace_dst:
+            return [(self._inplace_src, self._inplace_dst)]
+        return []
 
     def get_internal_symbols(self) -> list[str]:
         return list(self._internal_symbols)
@@ -105,8 +119,8 @@ def test_inplace_pass_with_debug_internal_output():
     * создавать отдельную группу FBO для debug-ресурса
     """
     # Inplace пасс: 1 read, 1 write + debug output
-    p_inplace = FramePass(
-        pass_name="InplaceWithDebug",
+    p_inplace = DummyPass(
+        name="InplaceWithDebug",
         reads={"input"},
         writes={"output"},
         inplace=True,

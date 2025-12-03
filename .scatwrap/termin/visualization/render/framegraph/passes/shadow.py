@@ -10,7 +10,7 @@
 ShadowPass&nbsp;—&nbsp;проход&nbsp;генерации&nbsp;shadow&nbsp;maps&nbsp;для&nbsp;источников&nbsp;света.<br>
 <br>
 Рендерит&nbsp;сцену&nbsp;с&nbsp;точки&nbsp;зрения&nbsp;каждого&nbsp;источника&nbsp;света&nbsp;с&nbsp;тенями<br>
-в&nbsp;отдельную&nbsp;depth-текстуру.&nbsp;Результат&nbsp;—&nbsp;ShadowMapArray,&nbsp;содержащий<br>
+в&nbsp;отдельную&nbsp;depth-текстуру.&nbsp;Результат&nbsp;—&nbsp;ShadowMapArrayResource,&nbsp;содержащий<br>
 текстуры&nbsp;и&nbsp;матрицы&nbsp;light-space&nbsp;для&nbsp;всех&nbsp;источников.<br>
 <br>
 Поддерживаемые&nbsp;типы&nbsp;источников:<br>
@@ -25,6 +25,7 @@ import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
 from&nbsp;termin.visualization.render.framegraph.passes.base&nbsp;import&nbsp;RenderFramePass<br>
 from&nbsp;termin.visualization.render.framegraph.resource_spec&nbsp;import&nbsp;ResourceSpec<br>
+from&nbsp;termin.visualization.render.framegraph.resource&nbsp;import&nbsp;ShadowMapArrayResource<br>
 from&nbsp;termin.visualization.render.components.mesh_renderer&nbsp;import&nbsp;MeshRenderer<br>
 from&nbsp;termin.visualization.core.entity&nbsp;import&nbsp;RenderContext<br>
 from&nbsp;termin.visualization.render.renderpass&nbsp;import&nbsp;RenderState<br>
@@ -35,7 +36,6 @@ from&nbsp;termin.visualization.render.shadow.shadow_camera&nbsp;import&nbsp;(<br
 &nbsp;&nbsp;&nbsp;&nbsp;build_shadow_view_matrix,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;build_shadow_projection_matrix,<br>
 )<br>
-from&nbsp;termin.visualization.render.shadow.shadow_map_array&nbsp;import&nbsp;ShadowMapArray<br>
 from&nbsp;termin.visualization.core.lighting.light&nbsp;import&nbsp;Light,&nbsp;LightType<br>
 <br>
 if&nbsp;TYPE_CHECKING:<br>
@@ -70,7 +70,6 @@ class&nbsp;ShadowPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass_name=pass_name,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reads=set(),<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writes={output_res},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inplace=False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.output_res&nbsp;=&nbsp;output_res<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.default_resolution&nbsp;=&nbsp;default_resolution<br>
@@ -84,8 +83,8 @@ class&nbsp;ShadowPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Пул&nbsp;FBO&nbsp;для&nbsp;shadow&nbsp;maps&nbsp;(переиспользуются&nbsp;между&nbsp;кадрами)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._fbo_pool:&nbsp;Dict[int,&nbsp;&quot;FramebufferHandle&quot;]&nbsp;=&nbsp;{}<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Текущий&nbsp;ShadowMapArray&nbsp;(обновляется&nbsp;в&nbsp;execute)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._shadow_map_array:&nbsp;ShadowMapArray&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Текущий&nbsp;ShadowMapArrayResource&nbsp;(обновляется&nbsp;в&nbsp;execute)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._shadow_map_array:&nbsp;ShadowMapArrayResource&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Список&nbsp;имён&nbsp;сущностей&nbsp;для&nbsp;debug<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._entity_names:&nbsp;List[str]&nbsp;=&nbsp;[]<br>
@@ -153,8 +152,8 @@ class&nbsp;ShadowPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_shadow_map_array(self)&nbsp;-&gt;&nbsp;ShadowMapArray&nbsp;|&nbsp;None:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;текущий&nbsp;ShadowMapArray&nbsp;(после&nbsp;execute).&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_shadow_map_array(self)&nbsp;-&gt;&nbsp;ShadowMapArrayResource&nbsp;|&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Возвращает&nbsp;текущий&nbsp;ShadowMapArrayResource&nbsp;(после&nbsp;execute).&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._shadow_map_array<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;execute(<br>
@@ -190,8 +189,8 @@ class&nbsp;ShadowPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;light.type&nbsp;==&nbsp;LightType.DIRECTIONAL&nbsp;and&nbsp;light.shadows.enabled:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadow_lights.append((i,&nbsp;light))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создаём&nbsp;ShadowMapArray<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadow_array&nbsp;=&nbsp;ShadowMapArray(resolution=self.default_resolution)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Создаём&nbsp;ShadowMapArrayResource<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadow_array&nbsp;=&nbsp;ShadowMapArrayResource(resolution=self.default_resolution)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._shadow_map_array&nbsp;=&nbsp;shadow_array<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;shadow_lights:<br>

@@ -7,6 +7,12 @@ from termin.visualization.render.framegraph.core import (
 )
 from termin.visualization.render.framegraph.pipeline import RenderPipeline
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
+from termin.visualization.render.framegraph.resource import (
+    FrameGraphResource,
+    SingleFBO,
+    ShadowMapArrayResource,
+    ShadowMapArrayEntry,
+)
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.passes.canvas import CanvasPass
 from termin.visualization.render.framegraph.passes.color import ColorPass
@@ -23,6 +29,10 @@ __all__ = [
     "ResourceSpec",
     "RenderPipeline",
     "RenderFramePass",
+    "FrameGraphResource",
+    "SingleFBO",
+    "ShadowMapArrayResource",
+    "ShadowMapArrayEntry",
     "BlitPass",
     "CanvasPass",
     "ColorPass",

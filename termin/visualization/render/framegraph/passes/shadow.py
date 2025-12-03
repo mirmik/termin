@@ -2,7 +2,7 @@
 ShadowPass — проход генерации shadow maps для источников света.
 
 Рендерит сцену с точки зрения каждого источника света с тенями
-в отдельную depth-текстуру. Результат — ShadowMapArray, содержащий
+в отдельную depth-текстуру. Результат — ShadowMapArrayResource, содержащий
 текстуры и матрицы light-space для всех источников.
 
 Поддерживаемые типы источников:
@@ -17,6 +17,7 @@ import numpy as np
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
+from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.renderpass import RenderState
@@ -27,7 +28,6 @@ from termin.visualization.render.shadow.shadow_camera import (
     build_shadow_view_matrix,
     build_shadow_projection_matrix,
 )
-from termin.visualization.render.shadow.shadow_map_array import ShadowMapArray
 from termin.visualization.core.lighting.light import Light, LightType
 
 if TYPE_CHECKING:
@@ -62,7 +62,6 @@ class ShadowPass(RenderFramePass):
             pass_name=pass_name,
             reads=set(),
             writes={output_res},
-            inplace=False,
         )
         self.output_res = output_res
         self.default_resolution = default_resolution
@@ -76,8 +75,8 @@ class ShadowPass(RenderFramePass):
         # Пул FBO для shadow maps (переиспользуются между кадрами)
         self._fbo_pool: Dict[int, "FramebufferHandle"] = {}
         
-        # Текущий ShadowMapArray (обновляется в execute)
-        self._shadow_map_array: ShadowMapArray | None = None
+        # Текущий ShadowMapArrayResource (обновляется в execute)
+        self._shadow_map_array: ShadowMapArrayResource | None = None
         
         # Список имён сущностей для debug
         self._entity_names: List[str] = []
@@ -145,8 +144,8 @@ class ShadowPass(RenderFramePass):
             )
         ]
 
-    def get_shadow_map_array(self) -> ShadowMapArray | None:
-        """Возвращает текущий ShadowMapArray (после execute)."""
+    def get_shadow_map_array(self) -> ShadowMapArrayResource | None:
+        """Возвращает текущий ShadowMapArrayResource (после execute)."""
         return self._shadow_map_array
 
     def execute(
@@ -182,8 +181,8 @@ class ShadowPass(RenderFramePass):
             if light.type == LightType.DIRECTIONAL and light.shadows.enabled:
                 shadow_lights.append((i, light))
         
-        # Создаём ShadowMapArray
-        shadow_array = ShadowMapArray(resolution=self.default_resolution)
+        # Создаём ShadowMapArrayResource
+        shadow_array = ShadowMapArrayResource(resolution=self.default_resolution)
         self._shadow_map_array = shadow_array
         
         if not shadow_lights:
