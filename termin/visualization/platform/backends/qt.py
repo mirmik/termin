@@ -192,7 +192,7 @@ class QtGLWindowHandle(BackendWindow):
     def get_window_framebuffer(self):
         fbo_id = int(self._widget.defaultFramebufferObject())
         width, height = self.framebuffer_size()
-        from termin.visualization.render.opengl.backends import OpenGLFramebufferHandle
+        from termin.visualization.platform.backends.opengl import OpenGLFramebufferHandle
 
         fb = getattr(self, "_window_fb_handle", None)
         if fb is None:

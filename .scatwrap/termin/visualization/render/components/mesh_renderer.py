@@ -15,6 +15,7 @@ from&nbsp;termin.visualization.core.entity&nbsp;import&nbsp;Component,&nbsp;Rend
 from&nbsp;termin.visualization.core.material&nbsp;import&nbsp;Material<br>
 from&nbsp;termin.visualization.core.mesh&nbsp;import&nbsp;MeshDrawable<br>
 from&nbsp;termin.visualization.render.lighting.upload&nbsp;import&nbsp;upload_lights_to_shader<br>
+from&nbsp;termin.visualization.render.lighting.shadow_upload&nbsp;import&nbsp;upload_shadow_maps_to_shader<br>
 from&nbsp;termin.visualization.render.renderpass&nbsp;import&nbsp;RenderState,&nbsp;RenderPass<br>
 <br>
 class&nbsp;MeshRenderer(Component):<br>
@@ -129,6 +130,10 @@ class&nbsp;MeshRenderer(Component):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader&nbsp;=&nbsp;mat.shader<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;upload_lights_to_shader(shader,&nbsp;context.scene.lights)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Загружаем&nbsp;shadow&nbsp;map&nbsp;uniform'ы&nbsp;(если&nbsp;есть&nbsp;shadow_data&nbsp;в&nbsp;контексте)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;context.shadow_data&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;upload_shadow_maps_to_shader(shader,&nbsp;context.shadow_data)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.mesh.draw(context)<br>
 <br>

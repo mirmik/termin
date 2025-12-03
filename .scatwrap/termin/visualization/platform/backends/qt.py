@@ -200,7 +200,7 @@ class&nbsp;QtGLWindowHandle(BackendWindow):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_window_framebuffer(self):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fbo_id&nbsp;=&nbsp;int(self._widget.defaultFramebufferObject())<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width,&nbsp;height&nbsp;=&nbsp;self.framebuffer_size()<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.opengl.backends&nbsp;import&nbsp;OpenGLFramebufferHandle<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.platform.backends.opengl&nbsp;import&nbsp;OpenGLFramebufferHandle<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fb&nbsp;=&nbsp;getattr(self,&nbsp;&quot;_window_fb_handle&quot;,&nbsp;None)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;fb&nbsp;is&nbsp;None:<br>

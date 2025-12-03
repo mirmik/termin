@@ -33,6 +33,9 @@ class RenderContext:
     context_key: int
     graphics: GraphicsBackend
     phase: str = "main"
+    
+    # Shadow mapping данные (опционально, заполняется ColorPass)
+    shadow_data: "ShadowMapArray | None" = None
 
 
 class Component:

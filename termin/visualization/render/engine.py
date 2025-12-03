@@ -3,7 +3,7 @@ RenderEngine — центральный класс для выполнения �
 
 Отвечает за:
 - Выполнение RenderPipeline для RenderView на RenderSurface
-- Управление FBO пулом (через ViewportRenderState)
+- Управление пулом ресурсов (FBO, ShadowMapArray и др.) через ViewportRenderState
 - Оффскрин рендеринг без окон
 
 Использование:
@@ -24,11 +24,18 @@ RenderEngine — центральный класс для выполнения �
         views=[(view, state)],
     )
     pixels = offscreen.read_pixels()
+
+Ресурсы конвейера:
+- По умолчанию ресурс — это FBO размера viewport'а
+- Пассы могут объявлять спецификации ресурсов через get_resource_specs()
+- Тип ресурса определяется полем resource_type в ResourceSpec:
+  - "fbo" (по умолчанию) — стандартный framebuffer
+  - "shadow_map_array" — массив shadow maps, создаётся пассом динамически
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterable, List, Tuple
+from typing import TYPE_CHECKING, Any, Iterable, List, Tuple
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import (
@@ -178,32 +185,50 @@ class RenderEngine:
                 for spec in render_pass.get_resource_specs():
                     resource_specs_map[spec.resource] = spec
 
-        # Управляем FBO пулом через state
-        fbos = state.fbos
-        fbos["DISPLAY"] = display_fbo
+        # Управляем пулом ресурсов через state
+        # fbos — это словарь ресурсов (FBO, ShadowMapArray и др.)
+        resources = state.fbos
+        resources["DISPLAY"] = display_fbo
 
         for canon, names in alias_groups.items():
             if canon == "DISPLAY":
                 for name in names:
-                    fbos[name] = display_fbo
+                    resources[name] = display_fbo
+                continue
+
+            # Проверяем тип ресурса из спека
+            spec = resource_specs_map.get(canon)
+            resource_type = "fbo"
+            if spec is not None:
+                resource_type = spec.resource_type
+
+            # Для не-FBO ресурсов пропускаем автоматическое создание
+            # Пасс сам создаст и положит ресурс в словарь
+            if resource_type != "fbo":
+                for name in names:
+                    if name not in resources:
+                        resources[name] = None
                 continue
 
             # Определяем размер из ResourceSpec или используем размер viewport'а
             resource_size = (pw, ph)
-            spec = resource_specs_map.get(canon)
             if spec is not None and spec.size is not None:
                 resource_size = spec.size
 
             fb = self._ensure_fbo(state, canon, resource_size)
             for name in names:
-                fbos[name] = fb
+                resources[name] = fb
 
-        # Выполняем очистку ресурсов согласно ResourceSpec
+        # Выполняем очистку ресурсов согласно ResourceSpec (только для FBO)
         for resource_name, spec in resource_specs_map.items():
+            # Пропускаем не-FBO ресурсы
+            if spec.resource_type != "fbo":
+                continue
+
             if spec.clear_color is None and spec.clear_depth is None:
                 continue  # Нечего очищать
 
-            fb = fbos.get(resource_name)
+            fb = resources.get(resource_name)
             if fb is None:
                 continue
 
@@ -225,8 +250,8 @@ class RenderEngine:
         lights = scene.build_lights()
 
         for render_pass in schedule:
-            pass_reads = {name: fbos.get(name) for name in render_pass.reads}
-            pass_writes = {name: fbos.get(name) for name in render_pass.writes}
+            pass_reads = {name: resources.get(name) for name in render_pass.reads}
+            pass_writes = {name: resources.get(name) for name in render_pass.writes}
 
             render_pass.execute(
                 self.graphics,
@@ -239,6 +264,12 @@ class RenderEngine:
                 lights=lights,
                 canvas=view.canvas,
             )
+
+            # После выполнения пасса обновляем ресурсы в пуле
+            # (пасс мог создать новые ресурсы, например ShadowMapArray)
+            for name in render_pass.writes:
+                if name in pass_writes and pass_writes[name] is not None:
+                    resources[name] = pass_writes[name]
 
     def _ensure_fbo(
         self,

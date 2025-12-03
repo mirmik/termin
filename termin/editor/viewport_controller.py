@@ -15,6 +15,7 @@ from termin.visualization.render import (
     RenderView,
     ViewportRenderState,
 )
+from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 
 from termin.editor.gizmo import GizmoController
 
@@ -326,7 +327,6 @@ class ViewportController:
         from termin.visualization.render.framegraph.passes.depth import DepthPass
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
-        from termin.visualization.render.shadow import ShadowCameraParams
 
         gizmo_entities = self._gizmo_controller.helper_geometry_entities()
 
@@ -349,22 +349,25 @@ class ViewportController:
         )
 
         depth_pass = DepthPass(input_res="empty_depth", output_res="depth", pass_name="Depth")
-        color_pass = ColorPass(input_res="skybox", output_res="color", pass_name="Color")
+        
+        # ColorPass читает shadow_maps для shadow mapping
+        color_pass = ColorPass(
+            input_res="skybox",
+            output_res="color",
+            shadow_res="shadow_maps",
+            pass_name="Color",
+        )
 
         skybox_pass = SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox")
 
-        # Shadow pass с направлением света сверху-спереди
-        shadow_params = ShadowCameraParams(
-            light_direction=np.array([0.5, -1.0, 0.5], dtype=np.float32),
+        # Shadow pass — генерирует shadow maps для всех directional lights с тенями
+        shadow_pass = ShadowPass(
+            output_res="shadow_maps",
+            pass_name="Shadow",
+            default_resolution=1024,
             ortho_size=20.0,
             near=0.1,
             far=100.0,
-        )
-        shadow_pass = ShadowPass(
-            output_res="shadow_map",
-            pass_name="Shadow",
-            shadow_params=shadow_params,
-            resolution=1024,
         )
 
         passes: list = [
@@ -419,4 +422,11 @@ class ViewportController:
         return RenderPipeline(
             passes=passes,
             debug_blit_pass=blit_pass,
+            pipeline_specs=[
+                ResourceSpec(
+                        resource="color",
+                        clear_color=(0.2, 0.2, 0.2, 1.0),
+                        clear_depth=1.0,
+                    ),
+            ],
         )

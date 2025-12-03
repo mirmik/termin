@@ -8,17 +8,19 @@
 <!-- BEGIN SCAT CODE -->
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
+from&nbsp;typing&nbsp;import&nbsp;Optional<br>
+<br>
 import&nbsp;numpy&nbsp;as&nbsp;np<br>
 <br>
 from&nbsp;termin.visualization.core.entity&nbsp;import&nbsp;Component<br>
 from&nbsp;termin.editor.inspect_field&nbsp;import&nbsp;InspectField<br>
-from&nbsp;termin.visualization.core.lighting.light&nbsp;import&nbsp;LightType,&nbsp;Light<br>
+from&nbsp;termin.visualization.core.lighting.light&nbsp;import&nbsp;LightType,&nbsp;Light,&nbsp;LightShadowParams<br>
 <br>
 <br>
 class&nbsp;LightComponent(Component):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;Простейший&nbsp;компонент&nbsp;источника&nbsp;света.<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Пока&nbsp;хранит&nbsp;только&nbsp;тип,&nbsp;цвет&nbsp;и&nbsp;интенсивность.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Хранит&nbsp;тип,&nbsp;цвет,&nbsp;интенсивность&nbsp;и&nbsp;параметры&nbsp;теней.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;inspect_fields&nbsp;=&nbsp;{<br>
@@ -43,6 +45,11 @@ class&nbsp;LightComponent(Component):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label=&quot;Intensity&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind=&quot;float&quot;,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;shadows_enabled&quot;:&nbsp;InspectField(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path=&quot;shadows.enabled&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label=&quot;Cast&nbsp;Shadows&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind=&quot;bool&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;),<br>
 &nbsp;&nbsp;&nbsp;&nbsp;}<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;__init__(<br>
@@ -50,20 +57,22 @@ class&nbsp;LightComponent(Component):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;light_type:&nbsp;LightType&nbsp;=&nbsp;LightType.DIRECTIONAL,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=(1.0,&nbsp;1.0,&nbsp;1.0),<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;intensity:&nbsp;float&nbsp;=&nbsp;1.0,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadows:&nbsp;Optional[LightShadowParams]&nbsp;=&nbsp;None,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enabled:&nbsp;bool&nbsp;=&nbsp;True,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;super().__init__(enabled=enabled)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.light_type&nbsp;=&nbsp;light_type<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.color&nbsp;=&nbsp;np.asarray(color,&nbsp;dtype=np.float32)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.intensity&nbsp;=&nbsp;float(intensity)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.shadows&nbsp;=&nbsp;shadows&nbsp;if&nbsp;shadows&nbsp;is&nbsp;not&nbsp;None&nbsp;else&nbsp;LightShadowParams()<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;to_light(self)&nbsp;-&gt;&nbsp;Light:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Преобразовать&nbsp;в&nbsp;объект&nbsp;Light&nbsp;для&nbsp;рендеринга.&quot;&quot;&quot;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;LightComponent:&nbsp;to_light&nbsp;called&quot;,&nbsp;self.light_type,&nbsp;self.color,&nbsp;self.intensity)&nbsp;&nbsp;#&nbsp;DEBUG<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Light(<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type=self.light_type,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;color=self.color,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;intensity=self.intensity,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadows=self.shadows,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 <!-- END SCAT CODE -->
 </body>

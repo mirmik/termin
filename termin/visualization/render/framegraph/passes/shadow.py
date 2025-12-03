@@ -1,13 +1,17 @@
 """
-ShadowPass — проход генерации shadow map для directional light.
+ShadowPass — проход генерации shadow maps для источников света.
 
-Рендерит сцену с точки зрения источника света в depth-текстуру.
-Матрицы view/projection строятся из параметров света, а не из CameraComponent.
+Рендерит сцену с точки зрения каждого источника света с тенями
+в отдельную depth-текстуру. Результат — ShadowMapArray, содержащий
+текстуры и матрицы light-space для всех источников.
+
+Поддерживаемые типы источников:
+- DIRECTIONAL — ортографическая проекция вдоль направления света
 """
 
 from __future__ import annotations
 
-from typing import List, TYPE_CHECKING
+from typing import Dict, List, TYPE_CHECKING
 
 import numpy as np
 
@@ -19,37 +23,41 @@ from termin.visualization.render.renderpass import RenderState
 from termin.visualization.render.materials.shadow_material import ShadowMaterial
 from termin.visualization.render.shadow.shadow_camera import (
     ShadowCameraParams,
+    compute_light_space_matrix,
     build_shadow_view_matrix,
     build_shadow_projection_matrix,
-    compute_light_space_matrix,
 )
+from termin.visualization.render.shadow.shadow_map_array import ShadowMapArray
+from termin.visualization.core.lighting.light import Light, LightType
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
 
 
 class ShadowPass(RenderFramePass):
     """
-    Проход рендеринга shadow map для directional light.
+    Проход рендеринга shadow maps для всех источников света с тенями.
     
     Атрибуты:
-        output_res: имя выходного ресурса (FBO с depth attachment)
-        shadow_params: параметры теневой камеры (направление света, размеры и т.д.)
-        resolution: разрешение shadow map (по умолчанию 1024)
+        output_res: имя выходного ресурса (ShadowMapArray)
+        default_resolution: разрешение shadow map по умолчанию
+        ortho_size: размер ортографического бокса для directional lights
+        near: ближняя плоскость
+        far: дальняя плоскость
     
     Выходные данные:
-        - Depth-текстура с картой теней
-        - light_space_matrix — матрица для трансформации в shader
+        ShadowMapArray с текстурами и матрицами для всех источников.
     """
 
     def __init__(
         self,
-        output_res: str = "shadow_map",
-        pass_name: str = "ShadowPass",
-        shadow_params: ShadowCameraParams = None,
-        resolution: int = 1024,
+        output_res: str = "shadow_maps",
+        pass_name: str = "Shadow",
+        default_resolution: int = 1024,
+        ortho_size: float = 20.0,
+        near: float = 0.1,
+        far: float = 100.0,
     ):
-        # ShadowPass не читает никаких ресурсов, только пишет shadow_map
         super().__init__(
             pass_name=pass_name,
             reads=set(),
@@ -57,27 +65,21 @@ class ShadowPass(RenderFramePass):
             inplace=False,
         )
         self.output_res = output_res
-        self.resolution = resolution
+        self.default_resolution = default_resolution
+        self.ortho_size = ortho_size
+        self.near = near
+        self.far = far
         
-        # Параметры по умолчанию: свет сверху-спереди
-        if shadow_params is None:
-            shadow_params = ShadowCameraParams(
-                light_direction=np.array([0.5, -1.0, 0.5], dtype=np.float32),
-                ortho_size=20.0,
-                near=0.1,
-                far=100.0,
-            )
-        self.shadow_params = shadow_params
+        # Материал для shadow pass (общий для всех источников)
+        self._material: ShadowMaterial | None = None
         
-        # Кэшированные матрицы (обновляются в execute)
-        self._view_matrix: np.ndarray = np.eye(4, dtype=np.float32)
-        self._projection_matrix: np.ndarray = np.eye(4, dtype=np.float32)
-        self._light_space_matrix: np.ndarray = np.eye(4, dtype=np.float32)
+        # Пул FBO для shadow maps (переиспользуются между кадрами)
+        self._fbo_pool: Dict[int, "FramebufferHandle"] = {}
         
-        # Материал для shadow pass
-        self._material: ShadowMaterial = None
+        # Текущий ShadowMapArray (обновляется в execute)
+        self._shadow_map_array: ShadowMapArray | None = None
         
-        # Список отрендеренных сущностей (для debug)
+        # Список имён сущностей для debug
         self._entity_names: List[str] = []
 
     def _get_material(self) -> ShadowMaterial:
@@ -86,32 +88,45 @@ class ShadowPass(RenderFramePass):
             self._material = ShadowMaterial()
         return self._material
 
-    def get_light_space_matrix(self) -> np.ndarray:
+    def _get_or_create_fbo(
+        self,
+        graphics: "GraphicsBackend",
+        resolution: int,
+        index: int,
+    ) -> "FramebufferHandle":
         """
-        Возвращает матрицу light-space для использования в основном шейдере.
+        Получает или создаёт FBO для shadow map.
         
-        Вызывать после execute(), иначе вернётся единичная матрица.
+        FBO кэшируются по индексу для переиспользования между кадрами.
+        При изменении разрешения FBO пересоздаётся.
         """
-        return self._light_space_matrix.copy()
-
-    def update_shadow_params(self, params: ShadowCameraParams) -> None:
-        """Обновляет параметры теневой камеры."""
-        self.shadow_params = params
-
-    def update_from_light_direction(self, direction: np.ndarray) -> None:
-        """
-        Обновляет направление света, сохраняя остальные параметры.
+        fbo = self._fbo_pool.get(index)
         
-        Параметр direction — вектор направления света (из источника в сцену).
-        """
-        self.shadow_params.light_direction = np.asarray(direction, dtype=np.float32)
-        norm = np.linalg.norm(self.shadow_params.light_direction)
-        if norm > 1e-6:
-            self.shadow_params.light_direction /= norm
+        if fbo is None:
+            fbo = graphics.create_framebuffer((resolution, resolution))
+            self._fbo_pool[index] = fbo
+        else:
+            current_size = fbo.get_size()
+            if current_size != (resolution, resolution):
+                fbo.resize((resolution, resolution))
+        
+        return fbo
 
-    def update_center(self, center: np.ndarray) -> None:
-        """Обновляет центр теневого бокса (обычно — позиция игрока или камеры)."""
-        self.shadow_params.center = np.asarray(center, dtype=np.float32)
+    def _build_shadow_params_for_light(self, light: Light) -> ShadowCameraParams:
+        """
+        Строит параметры теневой камеры для источника света.
+        
+        Для directional light:
+            - Направление камеры = направление света
+            - Ортографическая проекция с заданным размером
+        """
+        return ShadowCameraParams(
+            light_direction=light.direction.copy(),
+            ortho_size=self.ortho_size,
+            near=self.near,
+            far=self.far,
+            center=np.zeros(3, dtype=np.float32),
+        )
 
     def get_internal_symbols(self) -> List[str]:
         """Возвращает имена отрендеренных сущностей для debug."""
@@ -119,20 +134,20 @@ class ShadowPass(RenderFramePass):
 
     def get_resource_specs(self) -> list[ResourceSpec]:
         """
-        Объявляет требования к shadow map ресурсу.
-
-        Shadow map требует:
-        - Фиксированный размер (независимо от viewport'а)
-        - Очистку: белый цвет для отладки, depth=1.0
+        Объявляет требования к ресурсу shadow_maps.
+        
+        Тип ресурса — shadow_map_array, создаётся динамически в execute().
         """
         return [
             ResourceSpec(
                 resource=self.output_res,
-                size=(self.resolution, self.resolution),
-                clear_color=(1.0, 1.0, 1.0, 1.0),
-                clear_depth=1.0,
+                resource_type="shadow_map_array",
             )
         ]
+
+    def get_shadow_map_array(self) -> ShadowMapArray | None:
+        """Возвращает текущий ShadowMapArray (после execute)."""
+        return self._shadow_map_array
 
     def execute(
         self,
@@ -143,84 +158,116 @@ class ShadowPass(RenderFramePass):
         scene,
         camera,
         context_key: int,
-        lights=None,
+        lights: List[Light] | None = None,
         canvas=None,
     ) -> None:
         """
-        Выполняет shadow pass.
+        Выполняет shadow pass для всех источников света с тенями.
         
         Алгоритм:
-        1. Вычисляет view/projection матрицы из shadow_params
-        2. Биндит FBO для shadow map
-        3. Очищает depth buffer
-        4. Обходит сущности с MeshRenderer и рендерит их с ShadowMaterial
-        5. Сохраняет light_space_matrix для использования в ColorPass
+        1. Находит все источники света с включёнными тенями
+        2. Для каждого источника:
+           a. Создаёт/получает FBO
+           b. Вычисляет light-space матрицу
+           c. Рендерит сцену в shadow map
+        3. Собирает результат в ShadowMapArray
+        4. Кладёт ShadowMapArray в writes_fbos
         """
-        px, py, pw, ph = rect
-
-        fb = writes_fbos.get(self.output_res)
-        if fb is None:
-            return
-
-        # Вычисляем матрицы теневой камеры
-        self._view_matrix = build_shadow_view_matrix(self.shadow_params)
-        self._projection_matrix = build_shadow_projection_matrix(self.shadow_params)
-        self._light_space_matrix = compute_light_space_matrix(self.shadow_params)
-
-        # Биндим FBO и устанавливаем viewport (очистка уже выполнена в RenderEngine)
-        graphics.bind_framebuffer(fb)
-        graphics.set_viewport(0, 0, self.resolution, self.resolution)
+        if lights is None:
+            lights = []
         
-        # Состояние рендера: depth test/write включены, без blending
-        graphics.apply_render_state(
-            RenderState(
-                depth_test=True,
-                depth_write=True,
-                blend=False,
-                cull=True,
-            )
-        )
+        # Находим источники с тенями (пока только directional)
+        shadow_lights: List[tuple[int, Light]] = []
+        for i, light in enumerate(lights):
+            if light.type == LightType.DIRECTIONAL and light.shadows.enabled:
+                shadow_lights.append((i, light))
+        
+        # Создаём ShadowMapArray
+        shadow_array = ShadowMapArray(resolution=self.default_resolution)
+        self._shadow_map_array = shadow_array
+        
+        if not shadow_lights:
+            # Нет источников с тенями — возвращаем пустой массив
+            writes_fbos[self.output_res] = shadow_array
+            return
         
         shadow_material = self._get_material()
-        
-        # Контекст рендеринга с матрицами теневой камеры
-        render_ctx = RenderContext(
-            view=self._view_matrix,
-            projection=self._projection_matrix,
-            graphics=graphics,
-            context_key=context_key,
-            scene=scene,
-            camera=None,  # теневой pass не использует camera component
-            phase="shadow",
-        )
-        
         self._entity_names = []
         
-        # Обход сущностей и рендеринг
-        for entity in scene.entities:
-            mr = entity.get_component(MeshRenderer)
-            if mr is None:
-                continue
+        # Рендерим shadow map для каждого источника
+        for array_index, (light_index, light) in enumerate(shadow_lights):
+            resolution = light.shadows.map_resolution
             
-            if mr.mesh is None:
-                continue
+            # Получаем FBO
+            fbo = self._get_or_create_fbo(graphics, resolution, array_index)
             
-            # Пропускаем невидимые объекты
-            if not entity.visible:
-                continue
+            # Вычисляем параметры теневой камеры
+            shadow_params = self._build_shadow_params_for_light(light)
+            light_space_matrix = compute_light_space_matrix(shadow_params)
             
-            self._entity_names.append(entity.name)
+            # Матрицы view и projection для материала
+            view_matrix = build_shadow_view_matrix(shadow_params)
+            proj_matrix = build_shadow_projection_matrix(shadow_params)
             
-            model = entity.model_matrix()
-            shadow_material.apply(
-                model,
-                self._view_matrix,
-                self._projection_matrix,
-                graphics=graphics,
-                context_key=context_key,
+            # Очищаем и настраиваем FBO
+            graphics.bind_framebuffer(fbo)
+            graphics.set_viewport(0, 0, resolution, resolution)
+            graphics.clear_color_depth((1.0, 1.0, 1.0, 1.0))
+            
+            # Состояние рендера: depth test/write, без blending
+            graphics.apply_render_state(
+                RenderState(
+                    depth_test=True,
+                    depth_write=True,
+                    blend=False,
+                    cull=True,
+                )
             )
             
-            mr.mesh.draw(render_ctx)
-
+            # Контекст рендеринга с матрицами теневой камеры
+            render_ctx = RenderContext(
+                view=view_matrix,
+                projection=proj_matrix,
+                graphics=graphics,
+                context_key=context_key,
+                scene=scene,
+                camera=None,
+                phase="shadow",
+            )
+            
+            # Рендерим все видимые объекты с мешами
+            for entity in scene.entities:
+                mr = entity.get_component(MeshRenderer)
+                if mr is None or mr.mesh is None:
+                    continue
+                
+                if not entity.visible:
+                    continue
+                
+                # Добавляем в debug-список только для первого источника
+                if array_index == 0:
+                    self._entity_names.append(entity.name)
+                
+                model = entity.model_matrix()
+                shadow_material.apply(
+                    model,
+                    view_matrix,
+                    proj_matrix,
+                    graphics=graphics,
+                    context_key=context_key,
+                )
+                
+                mr.mesh.draw(render_ctx)
+            
+            # Добавляем в массив
+            shadow_array.add_entry(
+                fbo=fbo,
+                light_space_matrix=light_space_matrix,
+                light_index=light_index,
+            )
+        
         # Сбрасываем состояние
         graphics.apply_render_state(RenderState())
+        
+        # Кладём результат в writes
+        writes_fbos[self.output_res] = shadow_array

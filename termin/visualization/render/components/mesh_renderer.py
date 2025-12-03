@@ -7,6 +7,7 @@ from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.render.lighting.upload import upload_lights_to_shader
+from termin.visualization.render.lighting.shadow_upload import upload_shadow_maps_to_shader
 from termin.visualization.render.renderpass import RenderState, RenderPass
 
 class MeshRenderer(Component):
@@ -121,6 +122,10 @@ class MeshRenderer(Component):
             shader = mat.shader
 
             upload_lights_to_shader(shader, context.scene.lights)
+            
+            # Загружаем shadow map uniform'ы (если есть shadow_data в контексте)
+            if context.shadow_data is not None:
+                upload_shadow_maps_to_shader(shader, context.shadow_data)
 
             self.mesh.draw(context)
 

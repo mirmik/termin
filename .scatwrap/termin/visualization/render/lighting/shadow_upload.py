@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>termin/visualization/render/lighting/shadow_upload.py</title>
+</head>
+<body>
+<!-- BEGIN SCAT CODE -->
+&quot;&quot;&quot;Загрузка&nbsp;shadow&nbsp;map&nbsp;данных&nbsp;в&nbsp;GLSL-шейдер.&quot;&quot;&quot;<br>
+<br>
+from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
+<br>
+from&nbsp;typing&nbsp;import&nbsp;TYPE_CHECKING<br>
+<br>
+if&nbsp;TYPE_CHECKING:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.shader&nbsp;import&nbsp;ShaderProgram<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.render.shadow.shadow_map_array&nbsp;import&nbsp;ShadowMapArray<br>
+<br>
+<br>
+#&nbsp;Максимальное&nbsp;число&nbsp;shadow&nbsp;maps,&nbsp;поддерживаемых&nbsp;шейдером<br>
+MAX_SHADOW_MAPS&nbsp;=&nbsp;4<br>
+<br>
+#&nbsp;Начальный&nbsp;texture&nbsp;unit&nbsp;для&nbsp;shadow&nbsp;maps<br>
+SHADOW_MAP_TEXTURE_UNIT_START&nbsp;=&nbsp;8<br>
+<br>
+<br>
+def&nbsp;upload_shadow_maps_to_shader(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader:&nbsp;&quot;ShaderProgram&quot;,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shadow_array:&nbsp;&quot;ShadowMapArray&quot;,<br>
+)&nbsp;-&gt;&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Загружает&nbsp;данные&nbsp;shadow&nbsp;maps&nbsp;в&nbsp;uniform'ы&nbsp;шейдера.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Uniform'ы,&nbsp;ожидаемые&nbsp;шейдером:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u_shadow_map_count&nbsp;—&nbsp;int,&nbsp;количество&nbsp;активных&nbsp;shadow&nbsp;maps<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u_shadow_map[i]&nbsp;—&nbsp;sampler2D,&nbsp;текстура&nbsp;i-го&nbsp;shadow&nbsp;map<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u_light_space_matrix[i]&nbsp;—&nbsp;mat4,&nbsp;матрица&nbsp;преобразования&nbsp;в&nbsp;light-space<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;u_shadow_light_index[i]&nbsp;—&nbsp;int,&nbsp;индекс&nbsp;источника&nbsp;света&nbsp;в&nbsp;массиве&nbsp;lights<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Shadow&nbsp;maps&nbsp;биндятся&nbsp;на&nbsp;texture&nbsp;units&nbsp;начиная&nbsp;с&nbsp;SHADOW_MAP_TEXTURE_UNIT_START.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ColorPass&nbsp;биндит&nbsp;текстуры,&nbsp;этот&nbsp;метод&nbsp;только&nbsp;устанавливает&nbsp;uniform'ы.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Параметры:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader:&nbsp;Активный&nbsp;шейдер&nbsp;(после&nbsp;use())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shadow_array:&nbsp;Массив&nbsp;shadow&nbsp;maps&nbsp;из&nbsp;ShadowPass<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;shadow_array&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_shadow_map_count&quot;,&nbsp;0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;count&nbsp;=&nbsp;min(len(shadow_array),&nbsp;MAX_SHADOW_MAPS)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(&quot;u_shadow_map_count&quot;,&nbsp;count)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;range(count):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entry&nbsp;=&nbsp;shadow_array[i]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;unit&nbsp;=&nbsp;SHADOW_MAP_TEXTURE_UNIT_START&nbsp;+&nbsp;i<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Texture&nbsp;unit&nbsp;для&nbsp;sampler2D<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(f&quot;u_shadow_map[{i}]&quot;,&nbsp;unit)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Матрица&nbsp;light-space:&nbsp;P_light&nbsp;*&nbsp;V_light<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Преобразует&nbsp;мировые&nbsp;координаты&nbsp;в&nbsp;clip-пространство&nbsp;источника<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_matrix4(f&quot;u_light_space_matrix[{i}]&quot;,&nbsp;entry.light_space_matrix)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Индекс&nbsp;источника&nbsp;света&nbsp;(для&nbsp;соответствия&nbsp;с&nbsp;u_light_*&nbsp;массивами)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_int(f&quot;u_shadow_light_index[{i}]&quot;,&nbsp;entry.light_index)<br>
+<!-- END SCAT CODE -->
+</body>
+</html>

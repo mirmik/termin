@@ -41,6 +41,9 @@ class&nbsp;RenderContext:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;context_key:&nbsp;int<br>
 &nbsp;&nbsp;&nbsp;&nbsp;graphics:&nbsp;GraphicsBackend<br>
 &nbsp;&nbsp;&nbsp;&nbsp;phase:&nbsp;str&nbsp;=&nbsp;&quot;main&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Shadow&nbsp;mapping&nbsp;данные&nbsp;(опционально,&nbsp;заполняется&nbsp;ColorPass)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;shadow_data:&nbsp;&quot;ShadowMapArray&nbsp;|&nbsp;None&quot;&nbsp;=&nbsp;None<br>
 <br>
 <br>
 class&nbsp;Component:<br>

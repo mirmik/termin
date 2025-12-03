@@ -81,6 +81,7 @@ class TestPasses(unittest.TestCase):
             color_pass = ColorPass(
                 input_res="empty",
                 output_res="color",
+                shadow_res=None,  # Без shadow mapping в тесте
                 pass_name="Color",
             )
             present_pass = PresentToScreenPass(
@@ -94,6 +95,11 @@ class TestPasses(unittest.TestCase):
                 pipeline_specs=[
                     ResourceSpec(
                         resource="empty",
+                        clear_color=(0.2, 0.2, 0.2, 1.0),
+                        clear_depth=1.0,
+                    ),
+                    ResourceSpec(
+                        resource="color",
                         clear_color=(0.2, 0.2, 0.2, 1.0),
                         clear_depth=1.0,
                     ),
