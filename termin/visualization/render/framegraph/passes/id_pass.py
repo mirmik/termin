@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import List
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.visualization.render.framegraph.pipeline import ResourceSpec
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.core.picking import id_to_rgb
 from termin.visualization.core.entity import RenderContext
@@ -37,6 +38,20 @@ class IdPass(RenderFramePass):
         после прорисовки конкретной сущности в ID-карту.
         """
         return list(self._entity_names)
+
+    def get_resource_specs(self) -> list[ResourceSpec]:
+        """
+        Объявляет требования к входному ресурсу empty_id.
+
+        Очистка: чёрный цвет (0.0, 0.0, 0.0) + depth=1.0
+        """
+        return [
+            ResourceSpec(
+                resource=self.input_res,
+                clear_color=(0.0, 0.0, 0.0, 1.0),
+                clear_depth=1.0,
+            )
+        ]
 
     def execute(
         self,

@@ -20,28 +20,39 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class ClearSpec:
+class ResourceSpec:
     """
-    Спецификация очистки ресурса перед рендерингом.
-    
-    resource: имя ресурса (FBO)
-    color: RGBA цвет очистки (None — не очищать цвет)
-    depth: значение глубины (None — не очищать глубину)
+    Спецификация требований к ресурсу (FBO).
+
+    Объединяет различные требования pass'а к ресурсу:
+    - Размер (например, для shadow map - фиксированный 1024x1024)
+    - Очистка (цвет и/или глубина)
+    - Формат (для будущего: depth texture, RGBA16F, и т.д.)
+
+    Атрибуты:
+        resource: имя ресурса (FBO)
+        size: требуемый размер (width, height) или None для размера viewport'а
+        clear_color: RGBA цвет очистки (None — не очищать цвет)
+        clear_depth: значение глубины (None — не очищать глубину)
+        format: формат текстуры/attachment'ов (None — по умолчанию)
     """
     resource: str
-    color: Tuple[float, float, float, float] | None = (0.0, 0.0, 0.0, 1.0)
-    depth: float | None = 1.0
+    size: Tuple[int, int] | None = None
+    clear_color: Tuple[float, float, float, float] | None = None
+    clear_depth: float | None = None
+    format: str | None = None
 
 
 @dataclass
 class RenderPipeline:
     """
     Контейнер конвейера рендеринга.
-    
+
     passes: список FramePass
-    clear_specs: список ClearSpec для очистки ресурсов перед рендерингом
     debug_blit_pass: ссылка на BlitPass для управления из дебаггера (опционально)
+
+    Спецификации ресурсов (размер, очистка, формат) теперь объявляются
+    самими pass'ами через метод get_resource_specs().
     """
     passes: List["FramePass"] = field(default_factory=list)
-    clear_specs: List[ClearSpec] = field(default_factory=list)
     debug_blit_pass: "BlitPass | None" = None

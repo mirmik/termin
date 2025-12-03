@@ -163,6 +163,13 @@ class RenderEngine:
         schedule = graph.build_schedule()
         alias_groups = graph.fbo_alias_groups()
 
+        # Собираем ResourceSpec'ы из всех pass'ов
+        resource_specs_map = {}  # resource_name -> ResourceSpec
+        for render_pass in frame_passes:
+            if isinstance(render_pass, RenderFramePass):
+                for spec in render_pass.get_resource_specs():
+                    resource_specs_map[spec.resource] = spec
+
         # Управляем FBO пулом через state
         fbos = state.fbos
         fbos["DISPLAY"] = display_fbo
@@ -173,32 +180,37 @@ class RenderEngine:
                     fbos[name] = display_fbo
                 continue
 
-            # Проверяем, есть ли у какого-то pass специальный размер для этого ресурса
+            # Определяем размер из ResourceSpec или используем размер viewport'а
             resource_size = (pw, ph)
-            for render_pass in frame_passes:
-                if hasattr(render_pass, 'get_resource_size'):
-                    custom_size = render_pass.get_resource_size(canon)
-                    if custom_size is not None:
-                        resource_size = custom_size
-                        break
+            spec = resource_specs_map.get(canon)
+            if spec is not None and spec.size is not None:
+                resource_size = spec.size
 
             fb = self._ensure_fbo(state, canon, resource_size)
             for name in names:
                 fbos[name] = fb
 
-        # Выполняем clear спецификации
-        for clear_spec in pipeline.clear_specs:
-            fb = fbos.get(clear_spec.resource)
+        # Выполняем очистку ресурсов согласно ResourceSpec
+        for resource_name, spec in resource_specs_map.items():
+            if spec.clear_color is None and spec.clear_depth is None:
+                continue  # Нечего очищать
+
+            fb = fbos.get(resource_name)
             if fb is None:
                 continue
+
             self.graphics.bind_framebuffer(fb)
-            self.graphics.set_viewport(0, 0, pw, ph)
-            if clear_spec.color is not None and clear_spec.depth is not None:
-                self.graphics.clear_color_depth(clear_spec.color)
-            elif clear_spec.color is not None:
-                self.graphics.clear_color(clear_spec.color)
-            elif clear_spec.depth is not None:
-                self.graphics.clear_depth(clear_spec.depth)
+
+            # Определяем размер viewport для очистки
+            fb_size = spec.size if spec.size is not None else (pw, ph)
+            self.graphics.set_viewport(0, 0, fb_size[0], fb_size[1])
+
+            if spec.clear_color is not None and spec.clear_depth is not None:
+                self.graphics.clear_color_depth(spec.clear_color)
+            elif spec.clear_color is not None:
+                self.graphics.clear_color(spec.clear_color)
+            elif spec.clear_depth is not None:
+                self.graphics.clear_depth(spec.clear_depth)
 
         # Выполняем пассы
         scene = view.scene

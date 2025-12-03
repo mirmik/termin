@@ -12,6 +12,7 @@ from typing import List, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.visualization.render.framegraph.pipeline import ResourceSpec
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.renderpass import RenderState
@@ -116,15 +117,22 @@ class ShadowPass(RenderFramePass):
         """Возвращает имена отрендеренных сущностей для debug."""
         return list(self._entity_names)
 
-    def get_resource_size(self, resource_name: str) -> tuple[int, int] | None:
+    def get_resource_specs(self) -> list[ResourceSpec]:
         """
-        Возвращает требуемый размер FBO для shadow map.
+        Объявляет требования к shadow map ресурсу.
 
-        ShadowPass требует фиксированный размер, независимо от viewport'а.
+        Shadow map требует:
+        - Фиксированный размер (независимо от viewport'а)
+        - Очистку: белый цвет для отладки, depth=1.0
         """
-        if resource_name == self.output_res:
-            return (self.resolution, self.resolution)
-        return None
+        return [
+            ResourceSpec(
+                resource=self.output_res,
+                size=(self.resolution, self.resolution),
+                clear_color=(1.0, 1.0, 1.0, 1.0),
+                clear_depth=1.0,
+            )
+        ]
 
     def execute(
         self,
@@ -152,27 +160,16 @@ class ShadowPass(RenderFramePass):
 
         fb = writes_fbos.get(self.output_res)
         if fb is None:
-            print(f"[ShadowPass] ERROR: FBO '{self.output_res}' not found!")
             return
-
-        # DEBUG: Проверяем размер FBO
-        fb_size = fb.get_size() if hasattr(fb, 'get_size') else (pw, ph)
-        print(f"[ShadowPass] FBO size: {fb_size}, target resolution: {self.resolution}, viewport: ({pw}, {ph})")
 
         # Вычисляем матрицы теневой камеры
         self._view_matrix = build_shadow_view_matrix(self.shadow_params)
         self._projection_matrix = build_shadow_projection_matrix(self.shadow_params)
         self._light_space_matrix = compute_light_space_matrix(self.shadow_params)
 
-        # Используем разрешение shadow map, а не viewport основной камеры
-        shadow_size = self.resolution
-        
+        # Биндим FBO и устанавливаем viewport (очистка уже выполнена в RenderEngine)
         graphics.bind_framebuffer(fb)
-        graphics.set_viewport(0, 0, shadow_size, shadow_size)
-        
-        # Очистка — белый цвет (для debug) и максимальная глубина
-        graphics.clear_color((1.0, 1.0, 1.0, 1.0))
-        graphics.clear_depth(1.0)
+        graphics.set_viewport(0, 0, self.resolution, self.resolution)
         
         # Состояние рендера: depth test/write включены, без blending
         graphics.apply_render_state(
@@ -224,9 +221,6 @@ class ShadowPass(RenderFramePass):
             )
             
             mr.mesh.draw(render_ctx)
-
-        # DEBUG: Сколько объектов отрендерили
-        print(f"[ShadowPass] Rendered {len(self._entity_names)} entities: {self._entity_names}")
 
         # Сбрасываем состояние
         graphics.apply_render_state(RenderState())

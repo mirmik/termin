@@ -5,6 +5,7 @@ from typing import Dict
 import numpy as np
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.visualization.render.framegraph.pipeline import ResourceSpec
 from termin.visualization.core.entity import RenderContext
 
 
@@ -34,6 +35,20 @@ class SkyBoxPass(RenderFramePass):
         )
         self.input_res = input_res
         self.output_res = output_res
+
+    def get_resource_specs(self) -> list[ResourceSpec]:
+        """
+        Объявляет требования к входному ресурсу empty.
+
+        Очистка: тёмно-серый цвет (0.2, 0.2, 0.2) + depth=1.0
+        """
+        return [
+            ResourceSpec(
+                resource=self.input_res,
+                clear_color=(0.2, 0.2, 0.2, 1.0),
+                clear_depth=1.0,
+            )
+        ]
 
     def execute(
         self,

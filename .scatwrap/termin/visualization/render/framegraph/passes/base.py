@@ -48,6 +48,19 @@ class&nbsp;RenderFramePass(FramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;динамически&nbsp;(например,&nbsp;BlitPass&nbsp;с&nbsp;переключаемым&nbsp;источником).<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;set(self.reads)&nbsp;|&nbsp;set(self.writes)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_resource_specs(self)&nbsp;-&gt;&nbsp;list[&quot;ResourceSpec&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;список&nbsp;спецификаций&nbsp;требований&nbsp;к&nbsp;ресурсам.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Пассы&nbsp;могут&nbsp;переопределить&nbsp;этот&nbsp;метод&nbsp;для&nbsp;объявления:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Фиксированного&nbsp;размера&nbsp;ресурса&nbsp;(например,&nbsp;shadow&nbsp;map&nbsp;1024x1024)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Параметров&nbsp;очистки&nbsp;(цвет,&nbsp;глубина)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;Формата&nbsp;attachment'ов&nbsp;(в&nbsp;будущем)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;По&nbsp;умолчанию&nbsp;возвращает&nbsp;пустой&nbsp;список&nbsp;(нет&nbsp;специальных&nbsp;требований).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[]<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

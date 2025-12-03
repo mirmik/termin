@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import List
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.visualization.render.framegraph.pipeline import ResourceSpec
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.renderpass import RenderState
@@ -50,6 +51,20 @@ class DepthPass(RenderFramePass):
         промежуточное состояние depth-карты через дебаггер.
         """
         return list(self._entity_names)
+
+    def get_resource_specs(self) -> list[ResourceSpec]:
+        """
+        Объявляет требования к входному ресурсу empty_depth.
+
+        Очистка: белый цвет (максимальная глубина) + depth=1.0
+        """
+        return [
+            ResourceSpec(
+                resource=self.input_res,
+                clear_color=(1.0, 1.0, 1.0, 1.0),
+                clear_depth=1.0,
+            )
+        ]
 
     def execute(
         self,

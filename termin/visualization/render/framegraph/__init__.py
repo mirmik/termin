@@ -5,7 +5,7 @@ from termin.visualization.render.framegraph.core import (
     FrameGraphMultiWriterError,
     FramePass,
 )
-from termin.visualization.render.framegraph.pipeline import ClearSpec, RenderPipeline
+from termin.visualization.render.framegraph.pipeline import ResourceSpec, RenderPipeline
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.passes.canvas import CanvasPass
 from termin.visualization.render.framegraph.passes.color import ColorPass
@@ -19,7 +19,7 @@ __all__ = [
     "FrameGraphError",
     "FrameGraphMultiWriterError",
     "FramePass",
-    "ClearSpec",
+    "ResourceSpec",
     "RenderPipeline",
     "RenderFramePass",
     "BlitPass",

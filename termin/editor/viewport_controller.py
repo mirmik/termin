@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.viewport import Viewport
 from termin.visualization.platform.backends.base import Action, MouseButton
-from termin.visualization.render.framegraph import RenderPipeline, ClearSpec
+from termin.visualization.render.framegraph import RenderPipeline
 from termin.visualization.render import (
     RenderEngine,
     RenderView,
@@ -405,22 +405,18 @@ class ViewportController:
             )
         )
 
-        postprocess.add_effect(
-            FogEffect(
-                fog_color=(0.5, 0.6, 0.7),
-                fog_start=0.3,
-                fog_end=1.0,
-            )
-        )
+        # postprocess.add_effect(
+        #     FogEffect(
+        #         fog_color=(0.5, 0.6, 0.7),
+        #         fog_start=0.3,
+        #         fog_end=1.0,
+        #     )
+        # )
 
-        clear_specs = [
-            ClearSpec(resource="empty_depth", color=(1.0, 1.0, 1.0, 1.0), depth=1.0),
-            ClearSpec(resource="empty", color=(0.2, 0.2, 0.2, 1.0), depth=1.0),
-            ClearSpec(resource="empty_id", color=(0.0, 0.0, 0.0, 1.0), depth=1.0),
-        ]
+        # ResourceSpec'ы для очистки ресурсов теперь объявляются в самих pass'ах
+        # через метод get_resource_specs()
 
         return RenderPipeline(
             passes=passes,
-            clear_specs=clear_specs,
             debug_blit_pass=blit_pass,
         )
