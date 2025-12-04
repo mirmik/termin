@@ -26,6 +26,7 @@ class&nbsp;InspectField:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;step&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;–&nbsp;шаг&nbsp;(для&nbsp;спинбоксов)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;choices&nbsp;&nbsp;&nbsp;–&nbsp;для&nbsp;enum:&nbsp;список&nbsp;(value,&nbsp;label)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;getter,&nbsp;setter&nbsp;–&nbsp;если&nbsp;нужно&nbsp;обращаться&nbsp;к&nbsp;полю&nbsp;вручную.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;non_serializable&nbsp;–&nbsp;при&nbsp;True&nbsp;поле&nbsp;не&nbsp;попадает&nbsp;в&nbsp;сохранённые&nbsp;данные<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;path:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;label:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
@@ -36,6 +37,7 @@ class&nbsp;InspectField:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;choices:&nbsp;list[tuple[Any,&nbsp;str]]&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;getter:&nbsp;Optional[Callable[[Any],&nbsp;Any]]&nbsp;=&nbsp;None<br>
 &nbsp;&nbsp;&nbsp;&nbsp;setter:&nbsp;Optional[Callable[[Any,&nbsp;Any],&nbsp;None]]&nbsp;=&nbsp;None<br>
+&nbsp;&nbsp;&nbsp;&nbsp;non_serializable:&nbsp;bool&nbsp;=&nbsp;False<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_value(self,&nbsp;obj):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.getter:<br>
@@ -102,6 +104,7 @@ class&nbsp;InspectAttr:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;choices:&nbsp;list[tuple[Any,&nbsp;str]]&nbsp;|&nbsp;None&nbsp;=&nbsp;None,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;getter:&nbsp;Optional[Callable[[Any],&nbsp;Any]]&nbsp;=&nbsp;None,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setter:&nbsp;Optional[Callable[[Any,&nbsp;Any],&nbsp;None]]&nbsp;=&nbsp;None,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;non_serializable:&nbsp;bool&nbsp;=&nbsp;False,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.default&nbsp;=&nbsp;default<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._field&nbsp;=&nbsp;InspectField(<br>
@@ -114,6 +117,7 @@ class&nbsp;InspectAttr:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;choices=choices,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;getter=getter,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setter=setter,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;non_serializable=non_serializable,<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._name:&nbsp;str&nbsp;|&nbsp;None&nbsp;=&nbsp;None<br>
 <br>
@@ -147,7 +151,7 @@ def&nbsp;inspect(default:&nbsp;Any&nbsp;=&nbsp;None,&nbsp;**meta)&nbsp;-&gt;&nbs
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;Сахар:&nbsp;aaa&nbsp;=&nbsp;inspect(42,&nbsp;label=&quot;AAA&quot;,&nbsp;kind=&quot;int&quot;).<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;meta&nbsp;→&nbsp;параметры&nbsp;для&nbsp;InspectField&nbsp;(label,&nbsp;kind,&nbsp;min,&nbsp;max,&nbsp;step,&nbsp;...)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;meta&nbsp;→&nbsp;параметры&nbsp;для&nbsp;InspectField&nbsp;(label,&nbsp;kind,&nbsp;min,&nbsp;max,&nbsp;step,&nbsp;non_serializable,&nbsp;...)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;InspectAttr(default,&nbsp;**meta)<br>
 <!-- END SCAT CODE -->

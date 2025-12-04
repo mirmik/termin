@@ -82,18 +82,29 @@ class Component:
         return
 
     def serialize_data(self):
-        if self._serializable_fields is None:
+        fields = self.serializable_fields
+        inspect_fields = self.inspect_fields
+
+        if fields is None and not inspect_fields:
             return None
 
         result = {}
-        fields = self._serializable_fields
         if isinstance(fields, dict):
             for key, typ in fields.items():
                 value = getattr(self, key)
                 result[key] = typ.serialize(value) if typ else value
-        else:
+        elif fields is not None:
             for key in fields:
                 result[key] = getattr(self, key)
+
+        if inspect_fields:
+            for name, field in inspect_fields.items():
+                if field.non_serializable:
+                    continue
+                key = field.path if field.path is not None else name
+                if key in result:
+                    continue
+                result[key] = field.get_value(self)
 
         return result
 
@@ -109,7 +120,7 @@ class Component:
         obj = cls.__new__(cls)
         cls.__init__(obj)
 
-        fields = cls._serializable_fields
+        fields = cls.serializable_fields
         if isinstance(fields, dict):
             for key, typ in fields.items():
                 value = data[key]

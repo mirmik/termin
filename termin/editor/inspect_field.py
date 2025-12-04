@@ -18,6 +18,7 @@ class InspectField:
     step      – шаг (для спинбоксов)
     choices   – для enum: список (value, label)
     getter, setter – если нужно обращаться к полю вручную.
+    non_serializable – при True поле не попадает в сохранённые данные
     """
     path: str | None = None
     label: str | None = None
@@ -28,6 +29,7 @@ class InspectField:
     choices: list[tuple[Any, str]] | None = None
     getter: Optional[Callable[[Any], Any]] = None
     setter: Optional[Callable[[Any, Any], None]] = None
+    non_serializable: bool = False
 
     def get_value(self, obj):
         if self.getter:
@@ -94,6 +96,7 @@ class InspectAttr:
         choices: list[tuple[Any, str]] | None = None,
         getter: Optional[Callable[[Any], Any]] = None,
         setter: Optional[Callable[[Any, Any], None]] = None,
+        non_serializable: bool = False,
     ):
         self.default = default
         self._field = InspectField(
@@ -106,6 +109,7 @@ class InspectAttr:
             choices=choices,
             getter=getter,
             setter=setter,
+            non_serializable=non_serializable,
         )
         self._name: str | None = None
 
@@ -139,6 +143,6 @@ def inspect(default: Any = None, **meta) -> InspectAttr:
     """
     Сахар: aaa = inspect(42, label="AAA", kind="int").
 
-    meta → параметры для InspectField (label, kind, min, max, step, ...)
+    meta → параметры для InspectField (label, kind, min, max, step, non_serializable, ...)
     """
     return InspectAttr(default, **meta)
