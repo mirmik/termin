@@ -1,6 +1,11 @@
 import pytest
 
-from termin.visualization.render.shader_parser import parse_shader_text
+from termin.visualization.render.shader_parser import (
+    ShasderStage,
+    ShaderMultyPhaseProgramm,
+    ShaderPhase,
+    parse_shader_text,
+)
 
 
 def test_parse_render_state_directives():
@@ -100,3 +105,31 @@ def test_parse_multiple_phases_and_stages():
     assert overlay["glBlend"] is True
     assert overlay["glCull"] is None
     assert overlay["stages"]["vertex"] == "// overlay vertex\n"
+
+
+def test_tree_builders_have_uniform_signature():
+    shader_text = "\n".join(
+        [
+            "@program mesh",
+            "@phase depth",
+            "@glDepthTest true",
+            "@stage vertex",
+            "void main() {}",
+            "@endstage",
+            "@endphase",
+        ]
+    )
+    tree = parse_shader_text(shader_text)
+    program = ShaderMultyPhaseProgramm.from_tree(tree)
+
+    assert program.program == "mesh"
+    assert len(program.phases) == 1
+
+    depth_phase = program.phases[0]
+    assert isinstance(depth_phase, ShaderPhase)
+    assert depth_phase.phase_mark == "depth"
+    assert depth_phase.gl_depth_test is True
+    assert depth_phase.gl_blend is None
+    assert depth_phase.gl_depth_mask is None
+    assert depth_phase.stages["vertex"].source == "void main() {}\n"
+    assert isinstance(depth_phase.stages["vertex"], ShasderStage)

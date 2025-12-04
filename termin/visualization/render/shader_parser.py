@@ -38,11 +38,11 @@ def parse_shader_text(text: str) -> Dict[str, Any]:
                     "glDepthMask": bool | None,
                     "glDepthTest": bool | None,
                     "glBlend": bool | None,
-                    "glCull": bool | None,
-                    "stages": {
-                        "<stage_name>": "<glsl_source>",
-                        ...
-                    },
+            "glCull": bool | None,
+            "stages": {
+                "<stage_name>": "<glsl_source>",
+                ...
+            },
                 },
                 ...
             ],
@@ -213,3 +213,103 @@ def parse_shader_text(text: str) -> Dict[str, Any]:
         "phases": phases,
     }
     return result
+
+
+class ShasderStage:
+    """
+    Описание отдельной стадии шейдера.
+
+    Здесь нет скрытой динамики: имя и исходник задаются явно.
+    """
+
+    def __init__(self, name: str, source: str):
+        if not name:
+            raise ValueError("Имя стадии не может быть пустым")
+        self.name = name
+        self.source = source
+
+    @staticmethod
+    def from_tree(data: Dict[str, Any]) -> "ShasderStage":
+        """
+        Создание стадии из словаря {"name": ..., "source": ...}.
+        """
+        name = data.get("name")
+        source = data.get("source", "")
+        return ShasderStage(str(name), str(source))
+
+
+class ShaderPhase:
+    """
+    Фаза шейдера: набор стадий и флаги состояния рендера.
+    """
+
+    def __init__(
+        self,
+        phase_mark: str,
+        priority: int,
+        gl_depth_mask: Optional[bool],
+        gl_depth_test: Optional[bool],
+        gl_blend: Optional[bool],
+        gl_cull: Optional[bool],
+        stages: Dict[str, ShasderStage],
+    ):
+        if not phase_mark:
+            raise ValueError("Маркер фазы не может быть пустым")
+        self.phase_mark = phase_mark
+        self.priority = int(priority)
+        self.gl_depth_mask = gl_depth_mask
+        self.gl_depth_test = gl_depth_test
+        self.gl_blend = gl_blend
+        self.gl_cull = gl_cull
+        self.stages = stages
+
+    @staticmethod
+    def from_tree(data: Dict[str, Any]) -> "ShaderPhase":
+        """
+        Создание фазы из словаря, который возвращает parse_shader_text.
+        """
+        phase_mark = data.get("phase_mark")
+        priority = data.get("priority", 0)
+        gl_depth_mask = data.get("glDepthMask")
+        gl_depth_test = data.get("glDepthTest")
+        gl_blend = data.get("glBlend")
+        gl_cull = data.get("glCull")
+        stages_raw = data.get("stages", {})
+
+        stages: Dict[str, ShasderStage] = {}
+        for stage_name, stage_source in stages_raw.items():
+            stage_data = {"name": stage_name, "source": stage_source}
+            stage_obj = ShasderStage.from_tree(stage_data)
+            stages[stage_name] = stage_obj
+
+        return ShaderPhase(
+            phase_mark=phase_mark,
+            priority=priority,
+            gl_depth_mask=gl_depth_mask,
+            gl_depth_test=gl_depth_test,
+            gl_blend=gl_blend,
+            gl_cull=gl_cull,
+            stages=stages,
+        )
+
+
+class ShaderMultyPhaseProgramm:
+    """
+    Полное описание мультифазной программы.
+    """
+
+    def __init__(self, program: Optional[str], phases: List[ShaderPhase]):
+        self.program = program
+        self.phases = phases
+
+    @staticmethod
+    def from_tree(tree: Dict[str, Any]) -> "ShaderMultyPhaseProgramm":
+        """
+        Собрать объект из результата parse_shader_text.
+        """
+        program_name = tree.get("program")
+        phases_list_raw = tree.get("phases", [])
+        phases: List[ShaderPhase] = []
+        for phase_dict in phases_list_raw:
+            phases.append(ShaderPhase.from_tree(phase_dict))
+        return ShaderMultyPhaseProgramm(program=program_name, phases=phases)
