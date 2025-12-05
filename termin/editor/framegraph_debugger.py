@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional, Callable, List, Tuple
+from typing import Optional, Callable, List, Tuple, TYPE_CHECKING
+from abc import ABC, abstractmethod
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 
@@ -10,6 +11,180 @@ import numpy as np
 from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
+
+if TYPE_CHECKING:
+    from termin.visualization.platform.backends.base import TextureHandle
+
+
+# ============================================================
+# Обработчики ресурсов (ResourceHandlers)
+# ============================================================
+
+
+class ResourceHandler(ABC):
+    """
+    Базовый класс для обработки различных типов ресурсов framegraph.
+
+    Каждый тип ресурса имеет свой обработчик, который знает:
+    - Как извлечь текстуру для отображения
+    - Нужны ли UI элементы управления
+    - Как обновить UI при изменении ресурса
+    """
+
+    @abstractmethod
+    def get_texture(self, resource, context: dict) -> "TextureHandle | None":
+        """
+        Извлекает текстуру из ресурса для отображения.
+
+        Args:
+            resource: объект ресурса (SingleFBO, ShadowMapArrayResource и т.д.)
+            context: контекст с дополнительной информацией (например, индекс shadow map)
+
+        Returns:
+            TextureHandle или None
+        """
+        pass
+
+    @abstractmethod
+    def create_ui_panel(self, parent: QtWidgets.QWidget) -> QtWidgets.QWidget | None:
+        """
+        Создаёт панель UI для управления ресурсом (если нужна).
+
+        Args:
+            parent: родительский виджет
+
+        Returns:
+            QWidget с элементами управления или None, если управление не требуется
+        """
+        pass
+
+    @abstractmethod
+    def update_ui(self, resource, ui_panel: QtWidgets.QWidget | None) -> None:
+        """
+        Обновляет UI элементы на основе текущего состояния ресурса.
+
+        Args:
+            resource: объект ресурса
+            ui_panel: панель UI, созданная в create_ui_panel
+        """
+        pass
+
+
+class SingleFBOHandler(ResourceHandler):
+    """
+    Обработчик для SingleFBO ресурсов.
+
+    SingleFBO — это простой framebuffer с одной color текстурой.
+    Не требует дополнительных UI элементов управления.
+    """
+
+    def get_texture(self, resource, context: dict) -> "TextureHandle | None":
+        """Возвращает color_texture из SingleFBO."""
+        if resource is None:
+            return None
+        if hasattr(resource, 'color_texture'):
+            return resource.color_texture()
+        return None
+
+    def create_ui_panel(self, parent: QtWidgets.QWidget) -> QtWidgets.QWidget | None:
+        """SingleFBO не требует дополнительных элементов управления."""
+        return None
+
+    def update_ui(self, resource, ui_panel: QtWidgets.QWidget | None) -> None:
+        """Нет UI для обновления."""
+        pass
+
+
+class ShadowMapArrayHandler(ResourceHandler):
+    """
+    Обработчик для ShadowMapArrayResource.
+
+    ShadowMapArray содержит массив shadow maps от разных источников света.
+    Требует ComboBox для выбора конкретной shadow map.
+    """
+
+    def __init__(self):
+        self._combo: QtWidgets.QComboBox | None = None
+        self._on_index_changed: Callable[[int], None] | None = None
+
+    def set_index_changed_callback(self, callback: Callable[[int], None]) -> None:
+        """Устанавливает callback для уведомления об изменении индекса."""
+        self._on_index_changed = callback
+
+    def get_texture(self, resource, context: dict) -> "TextureHandle | None":
+        """
+        Возвращает текстуру из выбранного entry в ShadowMapArray.
+
+        context должен содержать 'shadow_map_index' — индекс выбранного shadow map.
+        """
+        if resource is None:
+            return None
+
+        shadow_map_index = context.get('shadow_map_index', 0)
+
+        # Проверяем, что это ShadowMapArrayResource
+        if not hasattr(resource, '__len__') or not hasattr(resource, '__getitem__'):
+            return None
+
+        if len(resource) == 0:
+            return None
+
+        # Ограничиваем индекс размером массива
+        index = min(shadow_map_index, len(resource) - 1)
+        entry = resource[index]
+
+        if hasattr(entry, 'texture'):
+            return entry.texture()
+
+        return None
+
+    def create_ui_panel(self, parent: QtWidgets.QWidget) -> QtWidgets.QWidget | None:
+        """Создаёт панель с ComboBox для выбора shadow map."""
+        panel = QtWidgets.QWidget(parent)
+        layout = QtWidgets.QHBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        label = QtWidgets.QLabel("Shadow Map:")
+        self._combo = QtWidgets.QComboBox()
+        self._combo.currentIndexChanged.connect(self._on_combo_changed)
+
+        layout.addWidget(label)
+        layout.addWidget(self._combo, 1)
+
+        return panel
+
+    def update_ui(self, resource, ui_panel: QtWidgets.QWidget | None) -> None:
+        """Обновляет список shadow maps в ComboBox."""
+        if self._combo is None or resource is None:
+            return
+
+        # Получаем количество shadow maps
+        count = len(resource) if hasattr(resource, '__len__') else 0
+
+        # Блокируем сигналы при обновлении
+        self._combo.blockSignals(True)
+        self._combo.clear()
+
+        if count > 0:
+            for i in range(count):
+                # Пытаемся получить информацию об источнике света
+                try:
+                    entry = resource[i]
+                    light_index = entry.light_index if hasattr(entry, 'light_index') else i
+                    self._combo.addItem(f"Light {light_index}", i)
+                except:
+                    self._combo.addItem(f"Shadow Map {i}", i)
+
+        # Устанавливаем первый элемент по умолчанию
+        if count > 0:
+            self._combo.setCurrentIndex(0)
+
+        self._combo.blockSignals(False)
+
+    def _on_combo_changed(self, index: int) -> None:
+        """Внутренний обработчик изменения ComboBox."""
+        if self._on_index_changed is not None and index >= 0:
+            self._on_index_changed(index)
 
 
 class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
@@ -37,6 +212,17 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         self._shader: Optional[ShaderProgram] = None
         self._vao: Optional[int] = None
         self._vbo: Optional[int] = None
+
+        # Реестр обработчиков ресурсов
+        self._handlers: dict[str, ResourceHandler] = {
+            "fbo": SingleFBOHandler(),
+            "shadow_map_array": ShadowMapArrayHandler(),
+        }
+
+        # Контекст для обработчиков (хранит состояние, например индекс shadow map)
+        self._handler_context: dict = {
+            'shadow_map_index': 0,
+        }
 
         self.setMinimumSize(200, 150)
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -109,13 +295,66 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         self._get_shader()
         self._init_fullscreen_quad()
 
-    def _current_fbo(self):
+    def _current_resource(self):
+        """Возвращает текущий ресурс из словаря fbos."""
         fbos = self._get_fbos()
         if not fbos:
             return None
         if self._resource_name not in fbos:
             return None
         return fbos[self._resource_name]
+
+    def _get_texture(self):
+        """
+        Извлекает текстуру из текущего ресурса используя соответствующий обработчик.
+
+        Returns:
+            TextureHandle или None
+        """
+        resource = self._current_resource()
+        if resource is None:
+            return None
+
+        # Определяем тип ресурса
+        resource_type = self.get_resource_type()
+        if resource_type is None:
+            # Для обратной совместимости: если нет resource_type, пробуем SingleFBOHandler
+            handler = self._handlers.get("fbo")
+            if handler:
+                return handler.get_texture(resource, self._handler_context)
+            return None
+
+        # Получаем соответствующий обработчик
+        handler = self._handlers.get(resource_type)
+        if handler is None:
+            return None
+
+        # Используем обработчик для получения текстуры
+        return handler.get_texture(resource, self._handler_context)
+
+    def set_shadow_map_index(self, index: int) -> None:
+        """
+        Устанавливает индекс shadow map для отображения.
+
+        Args:
+            index: индекс в массиве ShadowMapArrayResource
+        """
+        self._handler_context['shadow_map_index'] = max(0, index)
+        self.update()
+
+    def get_resource_type(self) -> str | None:
+        """
+        Возвращает тип текущего ресурса.
+
+        Returns:
+            "fbo", "shadow_map_array" или None
+        """
+        resource = self._current_resource()
+        if resource is None:
+            return None
+        if hasattr(resource, 'resource_type'):
+            return resource.resource_type
+        return None
 
     def _get_debugger_pass(self) -> FrameDebuggerPass | None:
         if self._get_debug_pass is None:
@@ -163,8 +402,6 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         self.depthImageUpdated.emit(qimage)
 
     def paintGL(self) -> None:
-        fb = self._current_fbo()
-
         dpr = self.devicePixelRatioF()
         w = int(self.width() * dpr)
         h = int(self.height() * dpr)
@@ -174,10 +411,11 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         gl.glClearColor(0.1, 0.1, 0.1, 1.0)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
-        if fb is None:
+        # Получаем текстуру из ресурса (независимо от типа)
+        tex = self._get_texture()
+        if tex is None:
             return
 
-        tex = fb.color_texture()
         shader = self._get_shader()
         shader.use()
         shader.set_uniform_int("u_tex", 0)
@@ -323,6 +561,17 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         layout.addWidget(self._inside_panel)
         self._inside_panel.hide()  # По умолчанию скрыта
 
+        # ============ Контейнер для динамических UI панелей обработчиков ресурсов ============
+        self._resource_ui_container = QtWidgets.QWidget()
+        self._resource_ui_layout = QtWidgets.QVBoxLayout(self._resource_ui_container)
+        self._resource_ui_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._resource_ui_container)
+        self._resource_ui_container.hide()  # По умолчанию скрыт
+
+        # Текущая UI панель обработчика
+        self._current_handler_ui: QtWidgets.QWidget | None = None
+        self._current_handler: ResourceHandler | None = None
+
         # ============ Пауза ============
         self._pause_check = QtWidgets.QCheckBox("Пауза")
         self._pause_check.toggled.connect(self._on_pause_toggled)
@@ -383,15 +632,19 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._inside_panel.hide()
             # Сбрасываем внутренний символ
             self._clear_internal_symbol()
+            # Обновляем UI для типа ресурса (может показать UI обработчика)
+            self._update_ui_for_resource_type()
         else:
             self._mode = "inside"
             self._between_panel.hide()
             self._inside_panel.show()
+            # В режиме "Внутри пасса" скрываем UI обработчиков ресурсов
+            self._resource_ui_container.hide()
             self._update_passes_list()
 
     def _on_resource_selected(self, name: str) -> None:
         """Обработчик выбора ресурса (режим «Между пассами»).
-        
+
         Напрямую обновляет reads у BlitPass, чтобы граф зависимостей
         корректно выстроил порядок пассов до вызова request_update.
         """
@@ -405,6 +658,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # Устанавливаем источник и запрашиваем обновление
         if self._set_source_resource is not None:
             self._set_source_resource(name)
+        # Обновляем UI для типа ресурса
+        self._update_ui_for_resource_type()
 
     def _on_pass_selected(self, name: str) -> None:
         """Обработчик выбора пасса (режим «Внутри пасса»)."""
@@ -537,6 +792,50 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._symbol_combo.setEnabled(len(symbols) > 0)
         self._symbol_combo.blockSignals(False)
 
+    def _update_ui_for_resource_type(self) -> None:
+        """
+        Обновляет UI в зависимости от типа текущего ресурса.
+
+        Использует обработчики ресурсов для создания и обновления специфичных UI элементов.
+        """
+        # Определяем тип текущего ресурса
+        resource_type = self._gl_widget.get_resource_type()
+
+        # Получаем обработчик для этого типа
+        handler = self._gl_widget._handlers.get(resource_type) if resource_type else None
+
+        # Если тип ресурса изменился, пересоздаём UI
+        if handler != self._current_handler:
+            # Удаляем старую UI панель
+            if self._current_handler_ui is not None:
+                self._resource_ui_layout.removeWidget(self._current_handler_ui)
+                self._current_handler_ui.deleteLater()
+                self._current_handler_ui = None
+
+            self._current_handler = handler
+
+            # Создаём новую UI панель, если обработчик требует
+            if handler is not None:
+                ui_panel = handler.create_ui_panel(self._resource_ui_container)
+                if ui_panel is not None:
+                    self._current_handler_ui = ui_panel
+                    self._resource_ui_layout.addWidget(ui_panel)
+                    self._resource_ui_container.show()
+
+                    # Для ShadowMapArrayHandler устанавливаем callback
+                    if isinstance(handler, ShadowMapArrayHandler):
+                        handler.set_index_changed_callback(self._gl_widget.set_shadow_map_index)
+                else:
+                    self._resource_ui_container.hide()
+            else:
+                self._resource_ui_container.hide()
+
+        # Обновляем UI панель с текущим ресурсом
+        if handler is not None and self._current_handler_ui is not None:
+            fbos = self._gl_widget._get_fbos()
+            resource = fbos.get(self._gl_widget._resource_name) if fbos else None
+            handler.update_ui(resource, self._current_handler_ui)
+
     def _sync_pause_state(self) -> None:
         """Синхронизирует состояние чекбокса Pause с внешним состоянием."""
         if self._get_paused is None:
@@ -555,4 +854,5 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         if self._mode == "inside":
             self._update_passes_list()
         self._sync_pause_state()
+        self._update_ui_for_resource_type()
         self._gl_widget.update()

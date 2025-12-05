@@ -4,6 +4,47 @@ from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.shader import ShaderProgram
 
 
+def _get_texture_from_resource(resource, shadow_map_index: int = 0):
+    """
+    Извлекает текстуру из ресурса framegraph для отображения.
+
+    Поддерживает:
+    - SingleFBO: возвращает color_texture()
+    - ShadowMapArrayResource: возвращает текстуру из первого entry (или по индексу)
+
+    Args:
+        resource: объект ресурса (SingleFBO, ShadowMapArrayResource и т.д.)
+        shadow_map_index: индекс shadow map для ShadowMapArrayResource
+
+    Returns:
+        TextureHandle или None
+    """
+    if resource is None:
+        return None
+
+    # Проверяем тип ресурса через атрибут resource_type
+    if hasattr(resource, 'resource_type'):
+        resource_type = resource.resource_type
+
+        if resource_type == "shadow_map_array":
+            # ShadowMapArrayResource - берем первую текстуру по умолчанию
+            if len(resource) == 0:
+                return None
+            index = min(shadow_map_index, len(resource) - 1)
+            entry = resource[index]
+            return entry.texture()
+
+        elif resource_type == "fbo":
+            # SingleFBO
+            return resource.color_texture()
+
+    # Для обратной совместимости: если нет resource_type, пробуем color_texture
+    if hasattr(resource, 'color_texture'):
+        return resource.color_texture()
+
+    return None
+
+
 def blit_fbo_to_fbo(
     gfx: "GraphicsBackend",
     src_fb,
@@ -27,7 +68,14 @@ def blit_fbo_to_fbo(
     shader.use()
     shader.set_uniform_int("u_tex", 0)
 
-    tex = src_fb.color_texture()
+    # Извлекаем текстуру с учетом типа ресурса
+    tex = _get_texture_from_resource(src_fb)
+    if tex is None:
+        # Если не удалось получить текстуру, ничего не делаем
+        gfx.set_depth_test(True)
+        gfx.set_depth_mask(True)
+        return
+
     tex.bind(0)
 
     gfx.draw_ui_textured_quad(context_key)
@@ -179,7 +227,10 @@ class PresentToScreenPass(RenderFramePass):
         if fb_in is None or fb_out is None:
             return
 
-        tex_in = fb_in.color_texture()
+        # Извлекаем текстуру с учетом типа ресурса
+        tex_in = _get_texture_from_resource(fb_in)
+        if tex_in is None:
+            return
 
         graphics.bind_framebuffer(fb_out)
         graphics.set_viewport(px, py, pw, ph)
