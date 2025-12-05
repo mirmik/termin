@@ -205,22 +205,61 @@ class Scene:
             if handler:
                 handler(viewport, **kwargs)
 
-    def serialize(self):
+    def serialize(self) -> dict:
+        """
+        Сериализует сцену.
+
+        Сохраняет только корневые Entity (без родителя).
+        Дочерние Entity сериализуются рекурсивно внутри своих родителей.
+        """
+        root_entities = [
+            e for e in self.entities
+            if e.transform.parent is None
+        ]
         return {
-            "background_color": self.background_color.tolist(),
-            "light_direction": self.light_direction.tolist(),
-            "light_color": self.light_color.tolist(),
-            "entities": [e.serialize() for e in self.entities]
+            "background_color": list(self.background_color),
+            "light_direction": list(self.light_direction),
+            "light_color": list(self.light_color),
+            "entities": [e.serialize() for e in root_entities],
         }
 
     @classmethod
-    def deserialize(cls, data, context, EntityClass):
-        scene = cls(background_color=data["background_color"])
-        scene.light_direction = np.asarray(data["light_direction"], dtype=np.float32)
-        scene.light_color = np.asarray(data["light_color"], dtype=np.float32)
-
-        for ed in data["entities"]:
-            ent = EntityClass.deserialize(ed, context)
-            scene.add(ent)
-
+    def deserialize(cls, data: dict, context=None) -> "Scene":
+        """Десериализует сцену."""
+        scene = cls(background_color=data.get("background_color", (0.05, 0.05, 0.08, 1.0)))
+        scene.load_from_data(data, context, update_settings=True)
         return scene
+
+    def load_from_data(self, data: dict, context=None, update_settings: bool = True) -> int:
+        """
+        Загружает данные в существующую сцену.
+
+        Параметры:
+            data: Сериализованные данные сцены
+            context: Контекст десериализации
+            update_settings: Обновлять ли настройки сцены (background, light)
+
+        Возвращает:
+            Количество загруженных entities
+        """
+        if update_settings:
+            self.background_color = np.asarray(
+                data.get("background_color", [0.05, 0.05, 0.08, 1.0]),
+                dtype=np.float32
+            )
+            self.light_direction = np.asarray(
+                data.get("light_direction", [-0.5, -1.0, -0.3]),
+                dtype=np.float32
+            )
+            self.light_color = np.asarray(
+                data.get("light_color", [1.0, 1.0, 1.0]),
+                dtype=np.float32
+            )
+
+        loaded_count = 0
+        for ent_data in data.get("entities", []):
+            ent = Entity.deserialize(ent_data, context)
+            self.add(ent)
+            loaded_count += 1
+
+        return loaded_count

@@ -1,8 +1,8 @@
 # ===== termin/editor/editor_window.py =====
 import os
 from PyQt5 import uic
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog
-from PyQt5.QtCore import Qt, QPoint, QEvent, pyqtSignal
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog, QFileDialog, QMessageBox
+from PyQt5.QtCore import Qt, QPoint, QEvent, pyqtSignal, QTimer
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
@@ -127,6 +127,21 @@ class EditorWindow(QMainWindow):
         file_menu = menu_bar.addMenu("File")
         edit_menu = menu_bar.addMenu("Edit")
         debug_menu = menu_bar.addMenu("Debug")
+
+        load_material_action = file_menu.addAction("Load Material...")
+        load_material_action.triggered.connect(self._load_material_from_file)
+
+        file_menu.addSeparator()
+
+        save_world_action = file_menu.addAction("Save World...")
+        save_world_action.setShortcut("Ctrl+S")
+        save_world_action.triggered.connect(self._save_world)
+
+        load_world_action = file_menu.addAction("Load World...")
+        load_world_action.setShortcut("Ctrl+O")
+        load_world_action.triggered.connect(self._load_world)
+
+        file_menu.addSeparator()
 
         exit_action = file_menu.addAction("Exit")
         exit_action.setShortcut("Ctrl+Q")
@@ -521,3 +536,232 @@ class EditorWindow(QMainWindow):
             self.gizmo_controller.set_target(selected_ent)
 
         self._request_viewport_update()
+
+    # ----------- загрузка материалов -----------
+
+    def _load_material_from_file(self) -> None:
+        """
+        Открывает диалог выбора .shader файла, парсит его и добавляет в ResourceManager.
+        Откладываем вызов диалога чтобы избежать проблем с памятью.
+        """
+        QTimer.singleShot(0, self._load_material_dialog)
+
+    def _load_material_dialog(self) -> None:
+        """Реальный вызов диалога загрузки материала."""
+        dialog = QFileDialog(None, "Load Material")
+        dialog.setAcceptMode(QFileDialog.AcceptOpen)
+        dialog.setNameFilter("Shader Files (*.shader);;All Files (*)")
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        dialog.setOption(QFileDialog.DontUseCustomDirectoryIcons, True)
+        dialog.setDirectory(os.path.expanduser("~"))
+
+        if not dialog.exec_():
+            return
+
+        files = dialog.selectedFiles()
+        if not files:
+            return
+        file_path = files[0]
+
+        if not file_path:
+            return
+
+        try:
+            from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
+            from termin.visualization.core.material import Material
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                shader_text = f.read()
+
+            tree = parse_shader_text(shader_text)
+            program = ShaderMultyPhaseProgramm.from_tree(tree)
+            material = Material.from_parsed(program, source_path=file_path)
+
+            # Определяем имя материала
+            material_name = program.program
+            if not material_name:
+                # Используем имя файла без расширения
+                material_name = os.path.splitext(os.path.basename(file_path))[0]
+
+            # Проверяем уникальность имени
+            base_name = material_name
+            counter = 1
+            while material_name in self.resource_manager.materials:
+                counter += 1
+                material_name = f"{base_name}_{counter}"
+
+            material.name = material_name
+            self.resource_manager.register_material(material_name, material)
+
+            QMessageBox.information(
+                self,
+                "Material Loaded",
+                f"Material '{material_name}' loaded successfully.\n"
+                f"Phases: {len(material.phases)}\n"
+                f"Phase marks: {', '.join(p.phase_mark for p in material.phases)}",
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error Loading Material",
+                f"Failed to load material from:\n{file_path}\n\nError: {e}",
+            )
+
+    # ----------- сохранение/загрузка мира -----------
+
+    def _save_world(self) -> None:
+        """
+        Сохраняет текущий мир в JSON файл.
+        Откладываем вызов диалога чтобы избежать проблем с памятью.
+        """
+        QTimer.singleShot(0, self._save_world_dialog)
+
+    def _save_world_dialog(self) -> None:
+        """Реальный вызов диалога сохранения."""
+        dialog = QFileDialog(None, "Save World")
+        dialog.setAcceptMode(QFileDialog.AcceptSave)
+        dialog.setNameFilter("World Files (*.world.json);;JSON Files (*.json);;All Files (*)")
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        dialog.setOption(QFileDialog.DontUseCustomDirectoryIcons, True)
+        dialog.setDirectory(os.path.expanduser("~"))
+
+        if not dialog.exec_():
+            return
+
+        files = dialog.selectedFiles()
+        if not files:
+            return
+        file_path = files[0]
+
+        if not file_path:
+            return
+
+        # Добавляем расширение если не указано
+        if not file_path.endswith(".json"):
+            file_path += ".world.json"
+
+        try:
+            import json
+
+            data = {
+                "version": "1.0",
+                "resources": self.resource_manager.serialize(),
+                "scenes": [self.scene.serialize()],
+            }
+
+            # Сначала сериализуем в строку, потом пишем
+            json_str = json.dumps(data, indent=2, ensure_ascii=False)
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(json_str)
+
+            root_count = sum(1 for e in self.scene.entities if e.transform.parent is None)
+            QMessageBox.information(
+                self,
+                "World Saved",
+                f"World saved successfully to:\n{file_path}\n\n"
+                f"Entities: {root_count}\n"
+                f"Materials: {len(self.resource_manager.materials)}\n"
+                f"Meshes: {len(self.resource_manager.meshes)}",
+            )
+
+        except Exception as e:
+            import traceback
+            QMessageBox.critical(
+                self,
+                "Error Saving World",
+                f"Failed to save world to:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
+            )
+
+    def _load_world(self) -> None:
+        """
+        Загружает мир из JSON файла.
+        Откладываем вызов диалога чтобы избежать проблем с памятью.
+        """
+        QTimer.singleShot(0, self._load_world_dialog)
+
+    def _load_world_dialog(self) -> None:
+        """Реальный вызов диалога загрузки."""
+        dialog = QFileDialog(None, "Load World")
+        dialog.setAcceptMode(QFileDialog.AcceptOpen)
+        dialog.setNameFilter("World Files (*.world.json);;JSON Files (*.json);;All Files (*)")
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        dialog.setOption(QFileDialog.DontUseCustomDirectoryIcons, True)
+        dialog.setDirectory(os.path.expanduser("~"))
+
+        if not dialog.exec_():
+            return
+
+        files = dialog.selectedFiles()
+        if not files:
+            return
+        file_path = files[0]
+
+        if not file_path:
+            return
+
+        try:
+            import json
+            from termin.visualization.core.resources import ResourceManager
+
+            # Сначала читаем файл, потом парсим
+            with open(file_path, "r", encoding="utf-8") as f:
+                json_str = f.read()
+            data = json.loads(json_str)
+
+            # Спрашиваем пользователя - очистить текущую сцену или добавить?
+            reply = QMessageBox.question(
+                self,
+                "Load World",
+                "Clear current scene before loading?\n\n"
+                "Yes - Clear scene and load new world\n"
+                "No - Add loaded entities to current scene",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                QMessageBox.Yes,
+            )
+
+            if reply == QMessageBox.Cancel:
+                return
+
+            # Восстанавливаем ресурсы
+            resources_data = data.get("resources", {})
+            if resources_data:
+                restored_rm = ResourceManager.deserialize(resources_data)
+                self.resource_manager.materials.update(restored_rm.materials)
+                self.resource_manager.meshes.update(restored_rm.meshes)
+                self.resource_manager.textures.update(restored_rm.textures)
+
+            clear_scene = (reply == QMessageBox.Yes)
+            if clear_scene:
+                for entity in list(self.scene.entities):
+                    self.scene.remove(entity)
+
+            # Загружаем первую сцену
+            loaded_count = 0
+            scenes = data.get("scenes", [])
+            if scenes:
+                loaded_count = self.scene.load_from_data(
+                    scenes[0],
+                    context=None,
+                    update_settings=clear_scene
+                )
+
+            self._hierarchy_widget.refresh()
+            self._request_viewport_update()
+
+            QMessageBox.information(
+                self,
+                "World Loaded",
+                f"World loaded successfully from:\n{file_path}\n\n"
+                f"Entities loaded: {loaded_count}\n"
+                f"Materials: {len(self.resource_manager.materials)}\n"
+                f"Meshes: {len(self.resource_manager.meshes)}",
+            )
+
+        except Exception as e:
+            import traceback
+            QMessageBox.critical(
+                self,
+                "Error Loading World",
+                f"Failed to load world from:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
+            )

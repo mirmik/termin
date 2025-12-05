@@ -85,15 +85,76 @@ class MaterialPhase:
         for name, value in self.uniforms.items():
             self.shader_programm.set_uniform_auto(name, value)
 
-    def serialize(self):
+    def serialize(self) -> dict:
+        """Сериализует фазу материала."""
+        def serialize_uniform_value(val):
+            if isinstance(val, np.ndarray):
+                return val.tolist()
+            return val
+
         return {
-            "shader": self.shader_programm.source_path,
-            "color": None if self.color is None else self.color.tolist(),
-            "textures": {k: tex.source_path for k, tex in self.textures.items()},
-            "uniforms": self.uniforms,
             "phase_mark": self.phase_mark,
             "priority": self.priority,
+            "color": self.color.tolist() if self.color is not None else None,
+            "uniforms": {k: serialize_uniform_value(v) for k, v in self.uniforms.items()},
+            "textures": {k: tex.source_path for k, tex in self.textures.items()},
+            "render_state": {
+                "depth_test": self.render_state.depth_test,
+                "depth_write": self.render_state.depth_write,
+                "blend": self.render_state.blend,
+                "cull": self.render_state.cull,
+            },
+            "shader": {
+                "vertex": self.shader_programm.vertex_source,
+                "fragment": self.shader_programm.fragment_source,
+                "geometry": self.shader_programm.geometry_source,
+            },
         }
+
+    @classmethod
+    def deserialize(cls, data: dict, context=None) -> "MaterialPhase":
+        """Десериализует фазу материала."""
+        from termin.visualization.render.renderpass import RenderState
+
+        shader = ShaderProgram(
+            vertex_source=data["shader"]["vertex"],
+            fragment_source=data["shader"]["fragment"],
+            geometry_source=data["shader"].get("geometry"),
+        )
+
+        rs_data = data.get("render_state", {})
+        render_state = RenderState(
+            depth_test=rs_data.get("depth_test", True),
+            depth_write=rs_data.get("depth_write", True),
+            blend=rs_data.get("blend", False),
+            cull=rs_data.get("cull", True),
+        )
+
+        color = None
+        if data.get("color") is not None:
+            color = np.array(data["color"], dtype=np.float32)
+
+        uniforms = {}
+        for k, v in data.get("uniforms", {}).items():
+            if isinstance(v, list):
+                uniforms[k] = np.array(v, dtype=np.float32)
+            else:
+                uniforms[k] = v
+
+        textures = {}
+        if context is not None:
+            for k, path in data.get("textures", {}).items():
+                textures[k] = context.load_texture(path)
+
+        return cls(
+            shader_programm=shader,
+            render_state=render_state,
+            phase_mark=data.get("phase_mark", "main"),
+            priority=data.get("priority", 0),
+            color=color,
+            textures=textures,
+            uniforms=uniforms,
+        )
 
     @classmethod
     def from_shader_phase(
@@ -196,6 +257,7 @@ class Material:
         render_state: Optional["RenderState"] = None,
         phase_mark: str = "main",
         priority: int = 0,
+        source_path: str | None = None,
     ):
         shader = shader or getattr(self, "_pre_shader", None) or getattr(self, "shader", None)
         if shader is None:
@@ -210,6 +272,7 @@ class Material:
         base_textures = textures if textures is not None else getattr(self, "textures", None)
         base_uniforms = uniforms if uniforms is not None else getattr(self, "uniforms", None)
         self.name = name
+        self.source_path = source_path
 
         phase = MaterialPhase(
             shader_programm=shader,
@@ -292,22 +355,78 @@ class Material:
         """Bind shader, upload MVP matrices and all statically defined uniforms."""
         self._default_phase.apply(model, view, projection, graphics, context_key=context_key)
 
-    def serialize(self):
+    def serialize(self) -> dict:
+        """
+        Сериализует материал.
+
+        Если материал загружен из файла (source_path задан), возвращает только путь.
+        Иначе сериализует inline со всеми фазами.
+        """
+        if self.source_path is not None:
+            return {
+                "type": "file",
+                "source_path": self.source_path,
+                "name": self.name,
+            }
+
         return {
-            "shader": self.shader.source_path,
-            "color": None if self.color is None else self.color.tolist(),
-            "textures": {k: tex.source_path for k, tex in self.textures.items()},
-            "uniforms": self.uniforms,
+            "type": "inline",
+            "name": self.name,
+            "phases": [phase.serialize() for phase in self.phases],
         }
 
     @classmethod
-    def deserialize(cls, data, context):
-        shader = context.load_shader(data["shader"])
-        mat = cls(shader, data["color"])
-        for k, p in data["textures"].items():
-            mat.textures[k] = context.load_texture(p)
-        mat.uniforms.update(data["uniforms"])
-        return mat
+    def deserialize(cls, data: dict, context=None) -> "Material":
+        """
+        Десериализует материал.
+
+        Поддерживает два типа:
+        - "file": загрузка из файла шейдера
+        - "inline": полная inline-сериализация
+
+        Параметры:
+            data: Сериализованные данные
+            context: Контекст десериализации (должен предоставлять load_texture, load_shader_file)
+
+        Возвращает:
+            Material
+        """
+        material_type = data.get("type", "legacy")
+
+        if material_type == "file":
+            # Материал из файла - парсим и создаём
+            source_path = data["source_path"]
+            from termin.visualization.render.shader_parser import (
+                parse_shader_text,
+                ShaderMultyPhaseProgramm,
+            )
+
+            with open(source_path, "r", encoding="utf-8") as f:
+                shader_text = f.read()
+
+            tree = parse_shader_text(shader_text)
+            program = ShaderMultyPhaseProgramm.from_tree(tree)
+            return cls.from_parsed(program, name=data.get("name"), source_path=source_path)
+
+        elif material_type == "inline":
+            mat = cls.__new__(cls)
+            mat.name = data.get("name")
+            mat.source_path = None
+            mat.phases = [
+                MaterialPhase.deserialize(phase_data, context)
+                for phase_data in data.get("phases", [])
+            ]
+            return mat
+
+        else:
+            # Legacy формат (обратная совместимость)
+            shader = context.load_shader(data["shader"]) if context else ShaderProgram.default_shader()
+            mat = cls(shader, data.get("color"))
+            if context:
+                for k, p in data.get("textures", {}).items():
+                    mat.textures[k] = context.load_texture(p)
+            mat.uniforms.update(data.get("uniforms", {}))
+            return mat
 
     @classmethod
     def from_parsed(
@@ -317,6 +436,7 @@ class Material:
         textures: Dict[str, Texture] | None = None,
         uniforms: Dict[str, Any] | None = None,
         name: str | None = None,
+        source_path: str | None = None,
     ) -> "Material":
         """
         Создаёт Material из распаршенной мультифазной программы.
@@ -345,6 +465,7 @@ class Material:
         # Создаём материал через __new__ чтобы обойти __init__
         mat = cls.__new__(cls)
         mat.name = name or program.program
+        mat.source_path = source_path
         mat.phases = []
 
         for shader_phase in program.phases:

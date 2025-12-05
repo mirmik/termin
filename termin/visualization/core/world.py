@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.viewport import Viewport, make_default_pipeline
+from termin.visualization.core.resources import ResourceManager
+from termin.visualization.core.entity import Entity
 from termin.visualization.platform.window import Window
 from termin.visualization.platform.backends.base import GraphicsBackend, WindowBackend
 from termin.visualization.platform.backends import (
@@ -181,8 +184,87 @@ class VisualizationWorld:
 
             if CLOSE_AFTER_FIRST_FRAME:
                 break
-            
+
         for window in self.windows:
             window.close()
         self.window_backend.terminate()
         self._running = False
+
+    # --- Сериализация ---
+
+    def serialize(self, resource_manager: Optional[ResourceManager] = None) -> dict:
+        """
+        Сериализует мир в словарь.
+
+        Включает:
+        - resources: Все ресурсы из ResourceManager
+        - scenes: Все сцены
+        """
+        rm = resource_manager or ResourceManager.instance()
+        return {
+            "version": "1.0",
+            "resources": rm.serialize(),
+            "scenes": [scene.serialize() for scene in self.scenes],
+        }
+
+    def save_to_file(self, path: str, resource_manager: Optional[ResourceManager] = None):
+        """
+        Сохраняет мир в JSON файл.
+
+        Параметры:
+            path: Путь к файлу для сохранения
+            resource_manager: ResourceManager для сериализации ресурсов
+        """
+        data = self.serialize(resource_manager)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def deserialize(
+        cls,
+        data: dict,
+        graphics_backend: GraphicsBackend | None = None,
+        window_backend: WindowBackend | None = None,
+    ) -> "VisualizationWorld":
+        """
+        Восстанавливает мир из сериализованных данных.
+        """
+        world = cls(graphics_backend=graphics_backend, window_backend=window_backend)
+
+        # Восстанавливаем ресурсы в глобальный ResourceManager
+        rm = ResourceManager.instance()
+        resources_data = data.get("resources", {})
+        if resources_data:
+            restored_rm = ResourceManager.deserialize(resources_data)
+            rm.materials.update(restored_rm.materials)
+            rm.meshes.update(restored_rm.meshes)
+            rm.textures.update(restored_rm.textures)
+
+        # Восстанавливаем сцены
+        for scene_data in data.get("scenes", []):
+            scene = Scene.deserialize(scene_data)
+            world.add_scene(scene)
+
+        return world
+
+    @classmethod
+    def load_from_file(
+        cls,
+        path: str,
+        graphics_backend: GraphicsBackend | None = None,
+        window_backend: WindowBackend | None = None,
+    ) -> "VisualizationWorld":
+        """
+        Загружает мир из JSON файла.
+
+        Параметры:
+            path: Путь к файлу
+            graphics_backend: Backend для графики (опционально)
+            window_backend: Backend для окон (опционально)
+
+        Возвращает:
+            Новый VisualizationWorld с восстановленным состоянием
+        """
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return cls.deserialize(data, graphics_backend, window_backend)

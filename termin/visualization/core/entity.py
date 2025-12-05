@@ -302,24 +302,36 @@ class Entity:
 
     def serialize(self):
         pose = self.transform.local_pose()
-        return {
+        data = {
             "name": self.name,
             "priority": self.priority,
-            "scale": self.scale.tolist(),   # было: self.scale
+            "scale": list(self.scale),
+            "visible": self.visible,
+            "active": self.active,
+            "pickable": self.pickable,
+            "selectable": self.selectable,
             "pose": {
-                "position": pose.lin.tolist(),
-                "rotation": pose.ang.tolist(),
+                "position": list(pose.lin),
+                "rotation": list(pose.ang),
             },
             "components": [
                 comp.serialize()
                 for comp in self.components
                 if comp.serialize() is not None
             ],
+            "children": [],
         }
+
+        # Сериализуем дочерние Entity через Transform.children
+        for child_transform in self.transform.children:
+            if child_transform.entity is not None:
+                data["children"].append(child_transform.entity.serialize())
+
+        return data
 
 
     @classmethod
-    def deserialize(cls, data, context):
+    def deserialize(cls, data, context=None):
         import numpy as np
         from termin.geombase.pose3 import Pose3
 
@@ -329,13 +341,35 @@ class Entity:
                 ang=np.array(data["pose"]["rotation"]),
             ),
             name=data["name"],
-            scale=data["scale"],
-            priority=data["priority"],
+            scale=data.get("scale", 1.0),
+            priority=data.get("priority", 0),
+            pickable=data.get("pickable", True),
+            selectable=data.get("selectable", True),
         )
 
-        for c in data["components"]:
-            comp_cls = COMPONENT_REGISTRY[c["type"]]
-            comp = comp_cls.deserialize(c["data"], context)
+        # Восстанавливаем дополнительные поля
+        ent.visible = data.get("visible", True)
+        ent.active = data.get("active", True)
+
+        # Компоненты
+        rm = ResourceManager.instance()
+        for c in data.get("components", []):
+            comp_type = c.get("type")
+            if comp_type is None:
+                continue
+            # Пробуем сначала COMPONENT_REGISTRY, потом ResourceManager
+            comp_cls = COMPONENT_REGISTRY.get(comp_type)
+            if comp_cls is None:
+                comp_cls = rm.get_component(comp_type)
+            if comp_cls is None:
+                # Неизвестный компонент - пропускаем
+                continue
+            comp = comp_cls.deserialize(c.get("data", {}), context)
             ent.add_component(comp)
+
+        # Дочерние Entity
+        for child_data in data.get("children", []):
+            child_ent = cls.deserialize(child_data, context)
+            ent.transform.add_child(child_ent.transform)
 
         return ent

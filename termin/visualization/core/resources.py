@@ -72,3 +72,52 @@ class ResourceManager:
 
     def list_component_names(self) -> list[str]:
         return sorted(self.components.keys())
+
+    # --------- Сериализация ---------
+
+    def serialize(self) -> dict:
+        """
+        Сериализует все ресурсы ResourceManager.
+        """
+        return {
+            "materials": {name: mat.serialize() for name, mat in self.materials.items()},
+            "meshes": {name: mesh.serialize() for name, mesh in self.meshes.items()},
+            "textures": {name: self._serialize_texture(tex) for name, tex in self.textures.items()},
+        }
+
+    def _serialize_texture(self, tex: "Texture") -> dict:
+        """Сериализует текстуру."""
+        source_path = tex.source_path if tex.source_path else None
+        if source_path:
+            return {"type": "file", "source_path": source_path}
+        return {"type": "unknown"}
+
+    @classmethod
+    def deserialize(cls, data: dict, context=None) -> "ResourceManager":
+        """
+        Восстанавливает ResourceManager из сериализованных данных.
+        """
+        from termin.visualization.core.material import Material
+        from termin.visualization.core.mesh import MeshDrawable
+
+        rm = cls()
+
+        # Материалы
+        for name, mat_data in data.get("materials", {}).items():
+            mat = Material.deserialize(mat_data)
+            mat.name = name
+            rm.register_material(name, mat)
+
+        # Меши
+        for name, mesh_data in data.get("meshes", {}).items():
+            drawable = MeshDrawable.deserialize(mesh_data, context)
+            if drawable is not None:
+                rm.register_mesh(name, drawable)
+
+        # Текстуры - TODO: добавить Texture.deserialize()
+        # for name, tex_data in data.get("textures", {}).items():
+        #     tex = Texture.deserialize(tex_data, context)
+        #     if tex is not None:
+        #         rm.register_texture(name, tex)
+
+        return rm

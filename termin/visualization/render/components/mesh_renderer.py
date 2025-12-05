@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Iterable, List, TYPE_CHECKING
+from typing import Iterable, List, Optional, TYPE_CHECKING
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.resources import ResourceManager
 from termin.visualization.render.lighting.upload import upload_lights_to_shader
 from termin.visualization.render.lighting.shadow_upload import upload_shadow_maps_to_shader
 from termin.visualization.render.renderpass import RenderState, RenderPass
@@ -165,3 +166,82 @@ class MeshRenderer(Component):
         # Сортируем по priority
         result.sort(key=lambda p: p.priority)
         return result
+
+    # --- сериализация ---
+
+    def serialize_data(self) -> dict:
+        """
+        Сериализует MeshRenderer, используя ссылки на ресурсы по имени.
+
+        Mesh и материалы сохраняются как имена в ResourceManager.
+        """
+        rm = ResourceManager.instance()
+
+        data = {
+            "enabled": self.enabled,
+        }
+
+        # Mesh - сохраняем имя из ResourceManager
+        if self.mesh is not None:
+            mesh_name = rm.find_mesh_name(self.mesh)
+            if mesh_name:
+                data["mesh"] = mesh_name
+            else:
+                # Меш не зарегистрирован - используем name если есть
+                data["mesh"] = self.mesh.name
+
+        # Passes/Materials - сохраняем имена материалов
+        passes_data = []
+        for render_pass in self.passes:
+            pass_data = {}
+            if render_pass.material is not None:
+                mat_name = rm.find_material_name(render_pass.material)
+                if mat_name:
+                    pass_data["material"] = mat_name
+                elif render_pass.material.name:
+                    pass_data["material"] = render_pass.material.name
+            passes_data.append(pass_data)
+        data["passes"] = passes_data
+
+        return data
+
+    @classmethod
+    def deserialize(cls, data: dict, context=None) -> "MeshRenderer":
+        """
+        Восстанавливает MeshRenderer из сериализованных данных.
+
+        Параметры:
+            data: Сериализованные данные (секция 'data' из Component.serialize)
+            context: Опциональный контекст (не используется, ресурсы берутся из ResourceManager)
+
+        Возвращает:
+            MeshRenderer с восстановленными ссылками на ресурсы
+        """
+        rm = ResourceManager.instance()
+
+        # Получаем mesh
+        mesh = None
+        mesh_name = data.get("mesh")
+        if mesh_name:
+            mesh = rm.get_mesh(mesh_name)
+
+        # Получаем passes/materials
+        passes = []
+        for pass_data in data.get("passes", []):
+            mat_name = pass_data.get("material")
+            material = None
+            if mat_name:
+                material = rm.get_material(mat_name)
+            if material is not None:
+                passes.append(RenderPass(material=material, state=RenderState()))
+
+        # Создаём MeshRenderer
+        if passes:
+            renderer = cls(mesh=mesh, passes=passes)
+        elif mesh is not None:
+            renderer = cls(mesh=mesh)
+        else:
+            renderer = cls()
+
+        renderer.enabled = data.get("enabled", True)
+        return renderer

@@ -1,0 +1,118 @@
+{
+  "version": "1.0",
+  "resources": {
+    "materials": {
+      "cylinder_mat": {
+        "type": "inline",
+        "name": "cylinder_mat",
+        "phases": [
+          {
+            "phase_mark": "main",
+            "priority": 0,
+            "color": [
+              0.30000001192092896,
+              0.800000011920929,
+              0.30000001192092896,
+              1.0
+            ],
+            "uniforms": {
+              "u_color": [
+                0.30000001192092896,
+                0.800000011920929,
+                0.30000001192092896,
+                1.0
+              ]
+            },
+            "textures": {},
+            "render_state": {
+              "depth_test": true,
+              "depth_write": true,
+              "blend": false,
+              "cull": true
+            },
+            "shader": {
+              "vertex": "#version 330 core\n\nlayout(location = 0) in vec3 a_position;\nlayout(location = 1) in vec3 a_normal;\n\nuniform mat4 u_model;\nuniform mat4 u_view;\nuniform mat4 u_projection;\n\nout vec3 v_world_pos;\nout vec3 v_normal;\n\nvoid main() {\n    vec4 world = u_model * vec4(a_position, 1.0);\n    v_world_pos = world.xyz;\n    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n    gl_Position = u_projection * u_view * world;\n}\n",
+              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\n\nuniform vec4 u_color; // RGBA базового материала\n\n// ============== Источники света ==============\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT       = 1;\nconst int LIGHT_TYPE_SPOT        = 2;\nconst int LIGHT_TYPE_AMBIENT     = 3;\n\nconst int MAX_LIGHTS = 8;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS]; // (constant, linear, quadratic)\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// ============== Shadow Mapping ==============\nconst int MAX_SHADOW_MAPS = 4;\n\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\n\n// Bias для устранения shadow acne\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) {\n        return 1.0;\n    }\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) {\n        w = 0.0;\n    }\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t); // smoothstep\n}\n\n/**\n * Вычисляет коэффициент тени для источника света.\n *\n * Алгоритм:\n * 1. Преобразуем мировую позицию в light-space: p_light = L * p_world\n * 2. Переводим в NDC: ndc = p_light.xyz / p_light.w\n * 3. Переводим в текстурные координаты: uv = ndc.xy * 0.5 + 0.5\n * 4. Сравниваем глубину фрагмента с глубиной в shadow map\n *\n * Возвращает:\n *   1.0 — фрагмент освещён\n *   0.0 — фрагмент в тени\n */\nfloat compute_shadow(int light_index) {\n    // Ищем shadow map для этого источника\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) {\n            continue;\n        }\n        \n        // Преобразуем в light-space\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        \n        // Perspective divide (для ортографической проекции w=1, но делаем для общности)\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        \n        // Переводим из [-1, 1] в [0, 1] для текстурных координат\n        proj_coords = proj_coords * 0.5 + 0.5;\n        \n        // Проверяем, что координаты внутри shadow map\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0; // Вне frustum'а — считаем освещённым\n        }\n        \n        // Читаем глубину из shadow map (записана в R канал как серый цвет)\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        \n        // Текущая глубина фрагмента\n        float current_depth = proj_coords.z;\n        \n        // Сравниваем с bias для устранения shadow acne\n        float shadow = current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n        \n        return shadow;\n    }\n    \n    // Нет shadow map для этого источника — полностью освещён\n    return 1.0;\n}\n\nvoid main() {\n    vec3 N = normalize(v_normal);\n    vec3 base_color = u_color.rgb;\n    vec3 result = vec3(0.0);\n\n    for (int i = 0; i < u_light_count; ++i) {\n        int type = u_light_type[i];\n        vec3 radiance = u_light_color[i] * u_light_intensity[i];\n\n        if (type == LIGHT_TYPE_AMBIENT) {\n            result += base_color * radiance;\n            continue;\n        }\n\n        vec3 L;\n        float dist;\n        float weight = 1.0;\n\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            L = normalize(-u_light_direction[i]); // направление на свет\n            dist = 1e9;\n        } else {\n            vec3 to_light = u_light_position[i] - v_world_pos;\n            dist = length(to_light);\n            if (dist > 0.0001)\n                L = to_light / dist;\n            else\n                L = vec3(0.0, 1.0, 0.0);\n\n            weight *= compute_distance_attenuation(i, dist);\n\n            if (type == LIGHT_TYPE_SPOT) {\n                weight *= compute_spot_weight(i, L);\n            }\n        }\n\n        // Вычисляем тень для directional lights\n        float shadow = 1.0;\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            shadow = compute_shadow(i);\n        }\n\n        float ndotl = max(dot(N, L), 0.0);\n        vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)\n\n        vec3 V = normalize(-v_world_pos); // камера в (0,0,0) для простоты\n        vec3 H = normalize(L + V);\n        float ndoth = max(dot(N, H), 0.0);\n        float shininess = 16.0;\n        float spec = pow(ndoth, shininess);\n\n        vec3 specular_color = vec3(1.0);\n        vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n\n\n        // Применяем тень к диффузу и спекуляру\n        result += (diffuse + specular) * radiance * weight * shadow;\n    }\n\n    FragColor = vec4(result, u_color.a);\n}\n",
+              "geometry": null
+            }
+          }
+        ]
+      },
+      "cube1_mat": {
+        "type": "inline",
+        "name": "cube1_mat",
+        "phases": [
+          {
+            "phase_mark": "main",
+            "priority": 0,
+            "color": [
+              0.800000011920929,
+              0.30000001192092896,
+              0.30000001192092896,
+              1.0
+            ],
+            "uniforms": {
+              "u_color": [
+                0.800000011920929,
+                0.30000001192092896,
+                0.30000001192092896,
+                1.0
+              ]
+            },
+            "textures": {},
+            "render_state": {
+              "depth_test": true,
+              "depth_write": true,
+              "blend": false,
+              "cull": true
+            },
+            "shader": {
+              "vertex": "#version 330 core\n\nlayout(location = 0) in vec3 a_position;\nlayout(location = 1) in vec3 a_normal;\n\nuniform mat4 u_model;\nuniform mat4 u_view;\nuniform mat4 u_projection;\n\nout vec3 v_world_pos;\nout vec3 v_normal;\n\nvoid main() {\n    vec4 world = u_model * vec4(a_position, 1.0);\n    v_world_pos = world.xyz;\n    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n    gl_Position = u_projection * u_view * world;\n}\n",
+              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\n\nuniform vec4 u_color; // RGBA базового материала\n\n// ============== Источники света ==============\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT       = 1;\nconst int LIGHT_TYPE_SPOT        = 2;\nconst int LIGHT_TYPE_AMBIENT     = 3;\n\nconst int MAX_LIGHTS = 8;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS]; // (constant, linear, quadratic)\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// ============== Shadow Mapping ==============\nconst int MAX_SHADOW_MAPS = 4;\n\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\n\n// Bias для устранения shadow acne\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) {\n        return 1.0;\n    }\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) {\n        w = 0.0;\n    }\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t); // smoothstep\n}\n\n/**\n * Вычисляет коэффициент тени для источника света.\n *\n * Алгоритм:\n * 1. Преобразуем мировую позицию в light-space: p_light = L * p_world\n * 2. Переводим в NDC: ndc = p_light.xyz / p_light.w\n * 3. Переводим в текстурные координаты: uv = ndc.xy * 0.5 + 0.5\n * 4. Сравниваем глубину фрагмента с глубиной в shadow map\n *\n * Возвращает:\n *   1.0 — фрагмент освещён\n *   0.0 — фрагмент в тени\n */\nfloat compute_shadow(int light_index) {\n    // Ищем shadow map для этого источника\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) {\n            continue;\n        }\n        \n        // Преобразуем в light-space\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        \n        // Perspective divide (для ортографической проекции w=1, но делаем для общности)\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        \n        // Переводим из [-1, 1] в [0, 1] для текстурных координат\n        proj_coords = proj_coords * 0.5 + 0.5;\n        \n        // Проверяем, что координаты внутри shadow map\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0; // Вне frustum'а — считаем освещённым\n        }\n        \n        // Читаем глубину из shadow map (записана в R канал как серый цвет)\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        \n        // Текущая глубина фрагмента\n        float current_depth = proj_coords.z;\n        \n        // Сравниваем с bias для устранения shadow acne\n        float shadow = current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n        \n        return shadow;\n    }\n    \n    // Нет shadow map для этого источника — полностью освещён\n    return 1.0;\n}\n\nvoid main() {\n    vec3 N = normalize(v_normal);\n    vec3 base_color = u_color.rgb;\n    vec3 result = vec3(0.0);\n\n    for (int i = 0; i < u_light_count; ++i) {\n        int type = u_light_type[i];\n        vec3 radiance = u_light_color[i] * u_light_intensity[i];\n\n        if (type == LIGHT_TYPE_AMBIENT) {\n            result += base_color * radiance;\n            continue;\n        }\n\n        vec3 L;\n        float dist;\n        float weight = 1.0;\n\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            L = normalize(-u_light_direction[i]); // направление на свет\n            dist = 1e9;\n        } else {\n            vec3 to_light = u_light_position[i] - v_world_pos;\n            dist = length(to_light);\n            if (dist > 0.0001)\n                L = to_light / dist;\n            else\n                L = vec3(0.0, 1.0, 0.0);\n\n            weight *= compute_distance_attenuation(i, dist);\n\n            if (type == LIGHT_TYPE_SPOT) {\n                weight *= compute_spot_weight(i, L);\n            }\n        }\n\n        // Вычисляем тень для directional lights\n        float shadow = 1.0;\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            shadow = compute_shadow(i);\n        }\n\n        float ndotl = max(dot(N, L), 0.0);\n        vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)\n\n        vec3 V = normalize(-v_world_pos); // камера в (0,0,0) для простоты\n        vec3 H = normalize(L + V);\n        float ndoth = max(dot(N, H), 0.0);\n        float shininess = 16.0;\n        float spec = pow(ndoth, shininess);\n\n        vec3 specular_color = vec3(1.0);\n        vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n\n\n        // Применяем тень к диффузу и спекуляру\n        result += (diffuse + specular) * radiance * weight * shadow;\n    }\n\n    FragColor = vec4(result, u_color.a);\n}\n",
+              "geometry": null
+            }
+          }
+        ]
+      },
+      "cube2_mat": {
+        "type": "inline",
+        "name": "cube2_mat",
+        "phases": [
+          {
+            "phase_mark": "main",
+            "priority": 0,
+            "color": [
+              0.30000001192092896,
+              0.30000001192092896,
+              0.800000011920929,
+              1.0
+            ],
+            "uniforms": {
+              "u_color": [
+                0.30000001192092896,
+                0.30000001192092896,
+                0.800000011920929,
+                1.0
+              ]
+            },
+            "textures": {},
+            "render_state": {
+              "depth_test": true,
+              "depth_write": true,
+              "blend": false,
+              "cull": true
+            },
+            "shader": {
+              "vertex": "#version 330 core\n\nlayout(location = 0) in vec3 a_position;\nlayout(location = 1) in vec3 a_normal;\n\nuniform mat4 u_model;\nuniform mat4 u_view;\nuniform mat4 u_projection;\n\nout vec3 v_world_pos;\nout vec3 v_normal;\n\nvoid main() {\n    vec4 world = u_model * vec4(a_position, 1.0);\n    v_world_pos = world.xyz;\n    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n    gl_Position = u_projection * u_view * world;\n}\n",
+              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\n\nuniform vec4 u_color; // RGBA базового материала\n\n// ============== Источники света ==============\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT       = 1;\nconst int LIGHT_TYPE_SPOT        = 2;\nconst int LIGHT_TYPE_AMBIENT     = 3;\n\nconst int MAX_LIGHTS = 8;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS]; // (constant, linear, quadratic)\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// ============== Shadow Mapping ==============\nconst int MAX_SHADOW_MAPS = 4;\n\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\n\n// Bias для устранения shadow acne\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) {\n        return 1.0;\n    }\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) {\n        w = 0.0;\n    }\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t); // smoothstep\n}\n\n/**\n * Вычисляет коэффициент тени для источника света.\n *\n * Алгоритм:\n * 1. Преобразуем мировую позицию в light-space: p_light = L * p_world\n * 2. Переводим в NDC: ndc = p_light.xyz / p_light.w\n * 3. Переводим в текстурные координаты: uv = ndc.xy * 0.5 + 0.5\n * 4. Сравниваем глубину фрагмента с глубиной в shadow map\n *\n * Возвращает:\n *   1.0 — фрагмент освещён\n *   0.0 — фрагмент в тени\n */\nfloat compute_shadow(int light_index) {\n    // Ищем shadow map для этого источника\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) {\n            continue;\n        }\n        \n        // Преобразуем в light-space\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        \n        // Perspective divide (для ортографической проекции w=1, но делаем для общности)\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        \n        // Переводим из [-1, 1] в [0, 1] для текстурных координат\n        proj_coords = proj_coords * 0.5 + 0.5;\n        \n        // Проверяем, что координаты внутри shadow map\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0; // Вне frustum'а — считаем освещённым\n        }\n        \n        // Читаем глубину из shadow map (записана в R канал как серый цвет)\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        \n        // Текущая глубина фрагмента\n        float current_depth = proj_coords.z;\n        \n        // Сравниваем с bias для устранения shadow acne\n        float shadow = current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n        \n        return shadow;\n    }\n    \n    // Нет shadow map для этого источника — полностью освещён\n    return 1.0;\n}\n\nvoid main() {\n    vec3 N = normalize(v_normal);\n    vec3 base_color = u_color.rgb;\n    vec3 result = vec3(0.0);\n\n    for (int i = 0; i < u_light_count; ++i) {\n        int type = u_light_type[i];\n        vec3 radiance = u_light_color[i] * u_light_intensity[i];\n\n        if (type == LIGHT_TYPE_AMBIENT) {\n            result += base_color * radiance;\n            continue;\n        }\n\n        vec3 L;\n        float dist;\n        float weight = 1.0;\n\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            L = normalize(-u_light_direction[i]); // направление на свет\n            dist = 1e9;\n        } else {\n            vec3 to_light = u_light_position[i] - v_world_pos;\n            dist = length(to_light);\n            if (dist > 0.0001)\n                L = to_light / dist;\n            else\n                L = vec3(0.0, 1.0, 0.0);\n\n            weight *= compute_distance_attenuation(i, dist);\n\n            if (type == LIGHT_TYPE_SPOT) {\n                weight *= compute_spot_weight(i, L);\n            }\n        }\n\n        // Вычисляем тень для directional lights\n        float shadow = 1.0;\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            shadow = compute_shadow(i);\n        }\n\n        float ndotl = max(dot(N, L), 0.0);\n        vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)\n\n        vec3 V = normalize(-v_world_pos); // камера в (0,0,0) для простоты\n        vec3 H = normalize(L + V);\n        float ndoth = max(dot(N, H), 0.0);\n        float shininess = 16.0;\n        float spec = pow(ndoth, shininess);\n\n        vec3 specular_color = vec3(1.0);\n        vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n\n\n        // Применяем тень к диффузу и спекуляру\n        result += (diffuse + specular) * radiance * weight * shadow;\n    }\n\n    FragColor = vec4(result, u_color.a);\n}\n",
+              "geometry": null
+            }
+          }
+        ]
+      }
+    },
+    "meshes": {
+      "mesh_2": {
+        "type": "inline",
+        "vertices": [
+          

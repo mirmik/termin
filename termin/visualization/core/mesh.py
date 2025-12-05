@@ -107,36 +107,58 @@ class MeshDrawable:
 
     def serialize(self) -> dict:
         """
-        Возвращает словарь с идентификатором ресурса.
+        Сериализует меш.
 
-        По-хорошему, source_id должен выставлять загрузчик ресурсов
-        (например, путь к файлу или GUID). Mesh3 при этом ни о чём
-        таком знать не обязан.
+        Если source_id задан - сохраняет только ссылку на файл.
+        Иначе сериализует геометрию inline.
         """
         if self._source_id is not None:
-            return {"mesh": self._source_id}
+            return {
+                "type": "file",
+                "source_id": self._source_id,
+            }
 
-        # Для совместимости со старым кодом: если Mesh3 всё-таки
-        # имеет поле source_path — используем его, но это считается
-        # legacy и лучше постепенно от него избавляться.
-        if hasattr(self._mesh, "source_path"):
-            return {"mesh": getattr(self._mesh, "source_path")}
-
-        raise ValueError(
-            "MeshDrawable.serialize: не задан source_id и у mesh нет source_path. "
-            "Нечего сохранять в качестве идентификатора ресурса."
-        )
+        # Inline сериализация геометрии
+        return {
+            "type": "inline",
+            "vertices": list(self._mesh.vertices.flatten()) if self._mesh.vertices is not None else [],
+            "triangles": list(self._mesh.triangles.flatten()) if self._mesh.triangles is not None else [],
+            "normals": list(self._mesh.vertex_normals.flatten()) if self._mesh.vertex_normals is not None else None,
+        }
 
     @classmethod
-    def deserialize(cls, data: dict, context) -> "MeshDrawable":
+    def deserialize(cls, data: dict, context=None) -> "MeshDrawable":
         """
-        Восстановление drawable по идентификатору меша.
+        Восстанавливает MeshDrawable из сериализованных данных.
+        """
+        import numpy as np
 
-        Предполагается, что `context.load_mesh(mesh_id)` вернёт Mesh3.
-        """
-        mesh_id = data["mesh"]
-        mesh = context.load_mesh(mesh_id)  # должен вернуть Mesh3
-        return cls(mesh, source_id=mesh_id, name=mesh_id)
+        mesh_type = data.get("type", "file")
+
+        if mesh_type == "file":
+            source_id = data.get("source_id") or data.get("mesh")
+            if context is not None:
+                mesh = context.load_mesh(source_id)
+                return cls(mesh, source_id=source_id, name=source_id)
+            # Без контекста не можем загрузить файл
+            return None
+
+        # Inline
+        vertices_flat = data.get("vertices", [])
+        triangles_flat = data.get("triangles", [])
+        normals_flat = data.get("normals")
+
+        vertices = np.array(vertices_flat, dtype=np.float32).reshape(-1, 3)
+        triangles = np.array(triangles_flat, dtype=np.int32).reshape(-1, 3)
+        normals = None
+        if normals_flat is not None:
+            normals = np.array(normals_flat, dtype=np.float32).reshape(-1, 3)
+
+        mesh = Mesh3(vertices=vertices, triangles=triangles)
+        if normals is not None:
+            mesh.vertex_normals = normals
+
+        return cls(mesh, name=data.get("name"))
 
     # --------- утилиты для инспектора / дебага ---------
 
