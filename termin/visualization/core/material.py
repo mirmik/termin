@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING, Union
 
 import numpy as np
 
@@ -12,6 +12,11 @@ from termin.visualization.platform.backends.base import GraphicsBackend
 
 if TYPE_CHECKING:
     from termin.visualization.render.renderpass import RenderState
+    from termin.visualization.render.shader_parser import (
+        ShaderPhase as ParsedShaderPhase,
+        ShaderMultyPhaseProgramm,
+        UniformProperty,
+    )
 
 
 def _rgba(vec: Iterable[float]) -> np.ndarray:
@@ -89,6 +94,93 @@ class MaterialPhase:
             "phase_mark": self.phase_mark,
             "priority": self.priority,
         }
+
+    @classmethod
+    def from_shader_phase(
+        cls,
+        shader_phase: "ParsedShaderPhase",
+        color: np.ndarray | None = None,
+        textures: Dict[str, Texture] | None = None,
+        extra_uniforms: Dict[str, Any] | None = None,
+    ) -> "MaterialPhase":
+        """
+        Создаёт MaterialPhase из распаршенной ShaderPhase.
+
+        Параметры:
+            shader_phase: Распаршенная фаза из shader_parser
+            color: Цвет материала (опционально, переопределяет u_color из uniforms)
+            textures: Дополнительные текстуры
+            extra_uniforms: Дополнительные uniforms (переопределяют defaults)
+
+        Возвращает:
+            MaterialPhase с настроенными шейдером, RenderState и uniforms
+        """
+        from termin.visualization.render.renderpass import RenderState
+
+        # 1. Собираем ShaderProgram из stages
+        stages = shader_phase.stages
+        vertex_source = stages.get("vertex")
+        fragment_source = stages.get("fragment")
+        geometry_source = stages.get("geometry")
+
+        if vertex_source is None:
+            raise ValueError(f"Фаза {shader_phase.phase_mark!r} не имеет vertex стадии")
+        if fragment_source is None:
+            raise ValueError(f"Фаза {shader_phase.phase_mark!r} не имеет fragment стадии")
+
+        # Извлекаем source из ShasderStage
+        vs = vertex_source.source if hasattr(vertex_source, 'source') else str(vertex_source)
+        fs = fragment_source.source if hasattr(fragment_source, 'source') else str(fragment_source)
+        gs = None
+        if geometry_source is not None:
+            gs = geometry_source.source if hasattr(geometry_source, 'source') else str(geometry_source)
+
+        shader = ShaderProgram(
+            vertex_source=vs,
+            fragment_source=fs,
+            geometry_source=gs,
+        )
+
+        # 2. Собираем RenderState из gl-флагов
+        render_state = RenderState(
+            depth_write=shader_phase.gl_depth_mask if shader_phase.gl_depth_mask is not None else True,
+            depth_test=shader_phase.gl_depth_test if shader_phase.gl_depth_test is not None else True,
+            blend=shader_phase.gl_blend if shader_phase.gl_blend is not None else False,
+            cull=shader_phase.gl_cull if shader_phase.gl_cull is not None else True,
+        )
+
+        # 3. Собираем uniforms из UniformProperty defaults
+        uniforms: Dict[str, Any] = {}
+        for prop in shader_phase.uniforms:
+            if prop.default is not None:
+                # Конвертируем tuple в numpy array для векторных типов
+                if prop.uniform_type in ("vec2", "vec3", "vec4", "color"):
+                    uniforms[prop.name] = np.array(prop.default, dtype=np.float32)
+                else:
+                    uniforms[prop.name] = prop.default
+
+        # 4. Применяем extra_uniforms
+        if extra_uniforms:
+            uniforms.update(extra_uniforms)
+
+        # 5. Определяем color
+        final_color = color
+        if final_color is None and "u_color" in uniforms:
+            val = uniforms["u_color"]
+            if isinstance(val, np.ndarray):
+                final_color = val
+            elif isinstance(val, (tuple, list)) and len(val) == 4:
+                final_color = np.array(val, dtype=np.float32)
+
+        return cls(
+            shader_programm=shader,
+            render_state=render_state,
+            phase_mark=shader_phase.phase_mark,
+            priority=shader_phase.priority,
+            color=final_color,
+            textures=textures,
+            uniforms=uniforms,
+        )
 
 
 class Material:
@@ -216,3 +308,65 @@ class Material:
             mat.textures[k] = context.load_texture(p)
         mat.uniforms.update(data["uniforms"])
         return mat
+
+    @classmethod
+    def from_parsed(
+        cls,
+        program: "ShaderMultyPhaseProgramm",
+        color: np.ndarray | None = None,
+        textures: Dict[str, Texture] | None = None,
+        uniforms: Dict[str, Any] | None = None,
+        name: str | None = None,
+    ) -> "Material":
+        """
+        Создаёт Material из распаршенной мультифазной программы.
+
+        Параметры:
+            program: ShaderMultyPhaseProgramm из shader_parser
+            color: Базовый цвет (применяется ко всем фазам, где есть u_color)
+            textures: Текстуры (применяются ко всем фазам)
+            uniforms: Дополнительные uniforms (переопределяют defaults во всех фазах)
+            name: Имя материала
+
+        Возвращает:
+            Material со всеми фазами из программы
+
+        Пример использования:
+            from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
+
+            text = open("my_shader.shader").read()
+            tree = parse_shader_text(text)
+            program = ShaderMultyPhaseProgramm.from_tree(tree)
+            material = Material.from_parsed(program, color=(1, 0, 0, 1))
+        """
+        if not program.phases:
+            raise ValueError("Программа не содержит фаз")
+
+        # Создаём материал через __new__ чтобы обойти __init__
+        mat = cls.__new__(cls)
+        mat.name = name or program.program
+        mat.phases = []
+
+        for shader_phase in program.phases:
+            phase = MaterialPhase.from_shader_phase(
+                shader_phase=shader_phase,
+                color=color,
+                textures=textures,
+                extra_uniforms=uniforms,
+            )
+            mat.phases.append(phase)
+
+        return mat
+
+    def get_phases_for_mark(self, phase_mark: str) -> List["MaterialPhase"]:
+        """
+        Возвращает все фазы материала с указанной меткой, отсортированные по priority.
+
+        Параметры:
+            phase_mark: Метка фазы ("opaque", "transparent", "shadow" и т.д.)
+
+        Возвращает:
+            Список MaterialPhase отсортированный по priority (меньше = раньше)
+        """
+        matching = [p for p in self.phases if p.phase_mark == phase_mark]
+        return sorted(matching, key=lambda p: p.priority)

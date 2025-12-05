@@ -1,6 +1,120 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import re
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+
+@dataclass
+class UniformProperty:
+    """
+    Описание uniform-свойства материала.
+
+    Атрибуты:
+        name: Имя uniform'а (например, "u_glossiness")
+        uniform_type: Тип ("float", "int", "bool", "vec2", "vec3", "vec4", "color", "texture2d")
+        default: Значение по умолчанию (None для текстур без дефолта)
+        range_min: Минимум для range (опционально)
+        range_max: Максимум для range (опционально)
+        label: Человекочитаемое имя для инспектора (опционально)
+    """
+    name: str
+    uniform_type: str
+    default: Any = None
+    range_min: Optional[float] = None
+    range_max: Optional[float] = None
+    label: Optional[str] = None
+
+
+def parse_uniform_directive(line: str) -> UniformProperty:
+    """
+    Парсит директиву @uniform.
+
+    Форматы:
+        @uniform float u_name 0.5
+        @uniform float u_name 0.5 range(0.0, 1.0)
+        @uniform color u_name 1.0 1.0 1.0 1.0
+        @uniform vec3 u_name 0.0 1.0 0.0
+        @uniform texture2d u_name
+        @uniform texture2d u_name "default_texture"
+    """
+    # Убираем @uniform и лишние пробелы
+    content = line[len("@uniform"):].strip()
+
+    # Извлекаем range(...) если есть
+    range_min: Optional[float] = None
+    range_max: Optional[float] = None
+    range_match = re.search(r'range\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)', content)
+    if range_match:
+        try:
+            range_min = float(range_match.group(1).strip())
+            range_max = float(range_match.group(2).strip())
+        except ValueError:
+            pass
+        # Убираем range(...) из content
+        content = content[:range_match.start()].strip()
+
+    parts = content.split()
+    if len(parts) < 2:
+        raise ValueError(f"@uniform требует минимум тип и имя: {line!r}")
+
+    uniform_type = parts[0].lower()
+    name = parts[1]
+
+    # Валидация типа
+    valid_types = {"float", "int", "bool", "vec2", "vec3", "vec4", "color", "texture2d"}
+    if uniform_type not in valid_types:
+        raise ValueError(f"Неизвестный тип uniform: {uniform_type!r}")
+
+    # Парсим default value
+    default: Any = None
+    remaining = parts[2:]
+
+    if uniform_type == "float":
+        if remaining:
+            default = float(remaining[0])
+        else:
+            default = 0.0
+    elif uniform_type == "int":
+        if remaining:
+            default = int(remaining[0])
+        else:
+            default = 0
+    elif uniform_type == "bool":
+        if remaining:
+            default = parse_bool(remaining[0])
+        else:
+            default = False
+    elif uniform_type in ("vec2",):
+        if len(remaining) >= 2:
+            default = (float(remaining[0]), float(remaining[1]))
+        else:
+            default = (0.0, 0.0)
+    elif uniform_type in ("vec3",):
+        if len(remaining) >= 3:
+            default = (float(remaining[0]), float(remaining[1]), float(remaining[2]))
+        else:
+            default = (0.0, 0.0, 0.0)
+    elif uniform_type in ("vec4", "color"):
+        if len(remaining) >= 4:
+            default = (float(remaining[0]), float(remaining[1]),
+                      float(remaining[2]), float(remaining[3]))
+        else:
+            default = (1.0, 1.0, 1.0, 1.0) if uniform_type == "color" else (0.0, 0.0, 0.0, 0.0)
+    elif uniform_type == "texture2d":
+        if remaining:
+            # Может быть имя текстуры в кавычках или без
+            default = remaining[0].strip('"\'')
+        else:
+            default = None
+
+    return UniformProperty(
+        name=name,
+        uniform_type=uniform_type,
+        default=default,
+        range_min=range_min,
+        range_max=range_max,
+    )
 
 
 def parse_bool(value: str) -> bool:
@@ -24,9 +138,19 @@ def parse_shader_text(text: str) -> Dict[str, Any]:
         @glDepthTest <bool>
         @glBlend <bool>
         @glCull <bool>
+        @uniform <type> <name> [default] [range(min, max)]
         @stage <stage_name>
         @endstage
         @endphase
+
+    Типы для @uniform:
+        float, int, bool, vec2, vec3, vec4, color, texture2d
+
+    Примеры @uniform:
+        @uniform float u_glossiness 0.5
+        @uniform float u_metallic 0.0 range(0.0, 1.0)
+        @uniform color u_color 1.0 1.0 1.0 1.0
+        @uniform texture2d u_mainTex
 
     Структура результата:
         {
@@ -38,11 +162,12 @@ def parse_shader_text(text: str) -> Dict[str, Any]:
                     "glDepthMask": bool | None,
                     "glDepthTest": bool | None,
                     "glBlend": bool | None,
-            "glCull": bool | None,
-            "stages": {
-                "<stage_name>": "<glsl_source>",
-                ...
-            },
+                    "glCull": bool | None,
+                    "uniforms": [UniformProperty, ...],
+                    "stages": {
+                        "<stage_name>": "<glsl_source>",
+                        ...
+                    },
                 },
                 ...
             ],
@@ -66,6 +191,7 @@ def parse_shader_text(text: str) -> Dict[str, Any]:
             "glBlend": None,
             "glCull": None,
             "stages": {},  # type: ignore[dict-anno]
+            "uniforms": [],  # List[UniformProperty]
         }
         return phase
 
@@ -196,6 +322,14 @@ def parse_shader_text(text: str) -> Dict[str, Any]:
             close_current_stage()
             continue
 
+        if directive == "@uniform":
+            if current_phase is None:
+                raise ValueError("@uniform вне @phase")
+            uniform_prop = parse_uniform_directive(line)
+            uniforms_list: List[UniformProperty] = current_phase["uniforms"]
+            uniforms_list.append(uniform_prop)
+            continue
+
         # Неизвестная директива — на этом этапе просто бросаем ошибку.
         # Можно сделать логирование/варнинг вместо ошибки.
         raise ValueError(f"Неизвестная директива: {directive!r}")
@@ -240,7 +374,7 @@ class ShasderStage:
 
 class ShaderPhase:
     """
-    Фаза шейдера: набор стадий и флаги состояния рендера.
+    Фаза шейдера: набор стадий, флаги состояния рендера и uniform-свойства.
     """
 
     def __init__(
@@ -252,6 +386,7 @@ class ShaderPhase:
         gl_blend: Optional[bool],
         gl_cull: Optional[bool],
         stages: Dict[str, ShasderStage],
+        uniforms: Optional[List[UniformProperty]] = None,
     ):
         if not phase_mark:
             raise ValueError("Маркер фазы не может быть пустым")
@@ -262,6 +397,7 @@ class ShaderPhase:
         self.gl_blend = gl_blend
         self.gl_cull = gl_cull
         self.stages = stages
+        self.uniforms = uniforms if uniforms is not None else []
 
     @staticmethod
     def from_tree(data: Dict[str, Any]) -> "ShaderPhase":
@@ -275,12 +411,16 @@ class ShaderPhase:
         gl_blend = data.get("glBlend")
         gl_cull = data.get("glCull")
         stages_raw = data.get("stages", {})
+        uniforms_raw = data.get("uniforms", [])
 
         stages: Dict[str, ShasderStage] = {}
         for stage_name, stage_source in stages_raw.items():
             stage_data = {"name": stage_name, "source": stage_source}
             stage_obj = ShasderStage.from_tree(stage_data)
             stages[stage_name] = stage_obj
+
+        # uniforms уже распаршены как UniformProperty в parse_shader_text
+        uniforms: List[UniformProperty] = list(uniforms_raw)
 
         return ShaderPhase(
             phase_mark=phase_mark,
@@ -290,6 +430,7 @@ class ShaderPhase:
             gl_blend=gl_blend,
             gl_cull=gl_cull,
             stages=stages,
+            uniforms=uniforms,
         )
 
 

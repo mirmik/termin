@@ -8,7 +8,7 @@
 <!-- BEGIN SCAT CODE -->
 from&nbsp;__future__&nbsp;import&nbsp;annotations<br>
 <br>
-from&nbsp;typing&nbsp;import&nbsp;Iterable<br>
+from&nbsp;typing&nbsp;import&nbsp;Iterable,&nbsp;List,&nbsp;TYPE_CHECKING<br>
 from&nbsp;termin.mesh.mesh&nbsp;import&nbsp;Mesh3<br>
 from&nbsp;termin.editor.inspect_field&nbsp;import&nbsp;InspectField<br>
 from&nbsp;termin.visualization.core.entity&nbsp;import&nbsp;Component,&nbsp;RenderContext<br>
@@ -17,6 +17,9 @@ from&nbsp;termin.visualization.core.mesh&nbsp;import&nbsp;MeshDrawable<br>
 from&nbsp;termin.visualization.render.lighting.upload&nbsp;import&nbsp;upload_lights_to_shader<br>
 from&nbsp;termin.visualization.render.lighting.shadow_upload&nbsp;import&nbsp;upload_shadow_maps_to_shader<br>
 from&nbsp;termin.visualization.render.renderpass&nbsp;import&nbsp;RenderState,&nbsp;RenderPass<br>
+<br>
+if&nbsp;TYPE_CHECKING:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;from&nbsp;termin.visualization.core.material&nbsp;import&nbsp;MaterialPhase<br>
 <br>
 class&nbsp;MeshRenderer(Component):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Renderer&nbsp;component&nbsp;that&nbsp;draws&nbsp;MeshDrawable&nbsp;with&nbsp;one&nbsp;or&nbsp;multiple&nbsp;passes.&quot;&quot;&quot;<br>
@@ -138,6 +141,38 @@ class&nbsp;MeshRenderer(Component):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.mesh.draw(context)<br>
 <br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gfx.apply_render_state(RenderState())<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;get_phases_for_mark(self,&nbsp;phase_mark:&nbsp;str&nbsp;|&nbsp;None)&nbsp;-&gt;&nbsp;List[&quot;MaterialPhase&quot;]:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает&nbsp;все&nbsp;фазы&nbsp;материалов&nbsp;с&nbsp;указанной&nbsp;меткой,&nbsp;отсортированные&nbsp;по&nbsp;priority.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Собирает&nbsp;фазы&nbsp;из&nbsp;всех&nbsp;RenderPass&nbsp;в&nbsp;self.passes.&nbsp;Для&nbsp;каждого&nbsp;pass.material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;получает&nbsp;фазы&nbsp;с&nbsp;помощью&nbsp;material.get_phases_for_mark().<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Параметры:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;phase_mark:&nbsp;Метка&nbsp;фазы&nbsp;(&quot;opaque&quot;,&nbsp;&quot;transparent&quot;,&nbsp;&quot;shadow&quot;&nbsp;и&nbsp;т.д.).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Если&nbsp;None,&nbsp;возвращает&nbsp;все&nbsp;фазы&nbsp;из&nbsp;всех&nbsp;материалов.<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Возвращает:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Список&nbsp;MaterialPhase&nbsp;отсортированный&nbsp;по&nbsp;priority&nbsp;(меньше&nbsp;=&nbsp;раньше).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result:&nbsp;List[&quot;MaterialPhase&quot;]&nbsp;=&nbsp;[]<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;render_pass&nbsp;in&nbsp;self.passes:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mat&nbsp;=&nbsp;render_pass.material<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mat&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;phase_mark&nbsp;is&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Возвращаем&nbsp;все&nbsp;фазы<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result.extend(mat.phases)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Фильтруем&nbsp;по&nbsp;phase_mark<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result.extend(mat.get_phases_for_mark(phase_mark))<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Сортируем&nbsp;по&nbsp;priority<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result.sort(key=lambda&nbsp;p:&nbsp;p.priority)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;result<br>
 <!-- END SCAT CODE -->
 </body>
 </html>

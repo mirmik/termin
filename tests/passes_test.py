@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from termin.visualization.platform.backends.opengl import OpenGLGraphicsBackend
 from termin.visualization.core.scene import Scene
@@ -245,6 +247,369 @@ class TestPasses(unittest.TestCase):
 
         finally:
             context.destroy()
+
+    def test_multiphase_material_colorpass(self):
+        """
+        Тест многофазного материала с ColorPass.
+
+        Проверяет, что:
+        1. Материал с двумя фазами (opaque=красный, transparent=синий) корректно парсится
+        2. ColorPass(phase_mark="opaque") рендерит красный куб
+        3. ColorPass(phase_mark="transparent") рендерит синий куб
+
+        Pipeline:
+            empty --[ColorPass(phase_mark)]--> color --[PresentToScreenPass]--> DISPLAY
+        """
+        from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
+        from termin.visualization.core.material import Material
+
+        # Сбрасываем кэш шейдеров (они могут быть невалидны после предыдущих тестов)
+        PresentToScreenPass._shader = None
+
+        # Создаём headless OpenGL контекст
+        context = self._create_headless_or_skip()
+
+        try:
+            graphics = OpenGLGraphicsBackend()
+            graphics.ensure_ready()
+
+            # Шейдер с двумя фазами: opaque (красный) и transparent (синий)
+            shader_text = """
+@program TwoPhaseTest
+
+@phase opaque
+@priority 0
+@glDepthTest true
+@glDepthMask true
+@uniform color u_color 1.0 0.0 0.0 1.0
+
+@stage vertex
+#version 330 core
+layout(location = 0) in vec3 a_position;
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+@endstage
+
+@stage fragment
+#version 330 core
+uniform vec4 u_color;
+out vec4 FragColor;
+void main() {
+    FragColor = u_color;
+}
+@endstage
+@endphase
+
+@phase transparent
+@priority 100
+@glDepthTest true
+@glDepthMask false
+@glBlend true
+@uniform color u_color 0.0 0.0 1.0 1.0
+
+@stage vertex
+#version 330 core
+layout(location = 0) in vec3 a_position;
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+@endstage
+
+@stage fragment
+#version 330 core
+uniform vec4 u_color;
+out vec4 FragColor;
+void main() {
+    FragColor = u_color;
+}
+@endstage
+@endphase
+"""
+            # Парсим шейдер и создаём материал
+            tree = parse_shader_text(shader_text)
+            program = ShaderMultyPhaseProgramm.from_tree(tree)
+            material = Material.from_parsed(program)
+
+            # Проверяем, что материал имеет две фазы
+            self.assertEqual(len(material.phases), 2)
+            self.assertEqual(material.phases[0].phase_mark, "opaque")
+            self.assertEqual(material.phases[1].phase_mark, "transparent")
+
+            # Создаём сцену с кубом
+            scene = Scene()
+
+            # Камера
+            camera_entity = Entity(name="camera")
+            scene.add(camera_entity)
+            camera = camera_entity.add_component(PerspectiveCameraComponent())
+            camera_entity.transform.relocate(Pose3.looking_at(
+                eye=numpy.array([3.0, 3.0, 3.0]),
+                target=numpy.array([0.0, 0.0, 0.0]),
+                up=numpy.array([0.0, 0.0, 1.0]),
+            ))
+
+            # Куб с многофазным материалом
+            cube = Entity(name="cube")
+            scene.add(cube)
+            cube.add_component(MeshRenderer(CubeMesh(), material=material))
+
+            # Подготавливаем сцену
+            scene.ensure_ready(graphics)
+
+            # --- Тест 1: ColorPass с phase_mark="opaque" должен дать красный куб ---
+
+            color_pass_opaque = ColorPass(
+                input_res="empty",
+                output_res="color",
+                shadow_res=None,
+                pass_name="ColorOpaque",
+                phase_mark="opaque",
+            )
+            present_pass = PresentToScreenPass(
+                input_res="color",
+                output_res="DISPLAY",
+                pass_name="Present",
+            )
+
+            pipeline_opaque = RenderPipeline(
+                passes=[color_pass_opaque, present_pass],
+                pipeline_specs=[
+                    ResourceSpec(
+                        resource="empty",
+                        clear_color=(0.0, 0.0, 0.0, 1.0),  # Чёрный фон
+                        clear_depth=1.0,
+                    ),
+                ],
+            )
+
+            view = RenderView(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
+            state_opaque = ViewportRenderState(pipeline=pipeline_opaque)
+
+            offscreen = OffscreenRenderSurface(graphics, width=128, height=128)
+            engine = RenderEngine(graphics)
+
+            engine.render_single_view(
+                surface=offscreen,
+                view=view,
+                state=state_opaque,
+                present=False,
+            )
+
+            pixels_opaque = offscreen.read_pixels()
+
+            # Проверяем центральный пиксель — должен быть красным
+            center_y, center_x = 64, 64
+            center_pixel = pixels_opaque[center_y, center_x]
+            self.assertGreater(center_pixel[0], 200, f"Opaque phase: Red should be high, got {center_pixel}")
+            self.assertLess(center_pixel[1], 50, f"Opaque phase: Green should be low, got {center_pixel}")
+            self.assertLess(center_pixel[2], 50, f"Opaque phase: Blue should be low, got {center_pixel}")
+
+            # --- Тест 2: ColorPass с phase_mark="transparent" должен дать синий куб ---
+
+            color_pass_transparent = ColorPass(
+                input_res="empty",
+                output_res="color",
+                shadow_res=None,
+                pass_name="ColorTransparent",
+                phase_mark="transparent",
+            )
+
+            pipeline_transparent = RenderPipeline(
+                passes=[color_pass_transparent, present_pass],
+                pipeline_specs=[
+                    ResourceSpec(
+                        resource="empty",
+                        clear_color=(0.0, 0.0, 0.0, 1.0),  # Чёрный фон
+                        clear_depth=1.0,
+                    ),
+                ],
+            )
+
+            state_transparent = ViewportRenderState(pipeline=pipeline_transparent)
+
+            engine.render_single_view(
+                surface=offscreen,
+                view=view,
+                state=state_transparent,
+                present=False,
+            )
+
+            pixels_transparent = offscreen.read_pixels()
+
+            # Проверяем центральный пиксель — должен быть синим
+            center_pixel = pixels_transparent[center_y, center_x]
+            self.assertLess(center_pixel[0], 50, f"Transparent phase: Red should be low, got {center_pixel}")
+            self.assertLess(center_pixel[1], 50, f"Transparent phase: Green should be low, got {center_pixel}")
+            self.assertGreater(center_pixel[2], 200, f"Transparent phase: Blue should be high, got {center_pixel}")
+
+            # Очистка
+            offscreen.delete()
+            state_opaque.clear_fbos()
+            state_transparent.clear_fbos()
+
+        finally:
+            context.destroy()
+
+    def test_material_from_shader_file(self):
+        """
+        Тест загрузки материала из файла шейдера.
+
+        Проверяет полный пайплайн:
+        1. Создаём .shader файл во временной директории
+        2. Читаем и парсим файл
+        3. Создаём Material из parsed данных
+        4. Рендерим куб с этим материалом
+        5. Проверяем, что цвет соответствует заданному в файле (зелёный)
+        """
+        from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
+        from termin.visualization.core.material import Material
+
+        # Сбрасываем кэш шейдеров (они могут быть невалидны после предыдущих тестов)
+        PresentToScreenPass._shader = None
+
+        # Создаём headless OpenGL контекст
+        context = self._create_headless_or_skip()
+
+        try:
+            graphics = OpenGLGraphicsBackend()
+            graphics.ensure_ready()
+
+            # Содержимое шейдер-файла — зелёный материал
+            shader_content = """\
+@program GreenMaterial
+
+@phase opaque
+@priority 0
+@glDepthTest true
+@glDepthMask true
+@uniform color u_color 0.0 1.0 0.0 1.0
+
+@stage vertex
+#version 330 core
+layout(location = 0) in vec3 a_position;
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+@endstage
+
+@stage fragment
+#version 330 core
+uniform vec4 u_color;
+out vec4 FragColor;
+void main() {
+    FragColor = u_color;
+}
+@endstage
+@endphase
+"""
+
+            # Создаём временный файл
+            with tempfile.TemporaryDirectory() as tmpdir:
+                shader_path = Path(tmpdir) / "green_material.shader"
+                shader_path.write_text(shader_content, encoding="utf-8")
+
+                # Загружаем и парсим из файла
+                loaded_text = shader_path.read_text(encoding="utf-8")
+                tree = parse_shader_text(loaded_text)
+                program = ShaderMultyPhaseProgramm.from_tree(tree)
+
+                # Проверяем, что парсинг прошёл успешно
+                self.assertEqual(program.program, "GreenMaterial")
+                self.assertEqual(len(program.phases), 1)
+                self.assertEqual(program.phases[0].phase_mark, "opaque")
+
+                # Создаём материал
+                material = Material.from_parsed(program)
+
+                # Проверяем uniforms
+                phase = material.phases[0]
+                self.assertIn("u_color", phase.uniforms)
+
+                # Создаём сцену с кубом
+                scene = Scene()
+
+                # Камера
+                camera_entity = Entity(name="camera")
+                scene.add(camera_entity)
+                camera = camera_entity.add_component(PerspectiveCameraComponent())
+                camera_entity.transform.relocate(Pose3.looking_at(
+                    eye=numpy.array([3.0, 3.0, 3.0]),
+                    target=numpy.array([0.0, 0.0, 0.0]),
+                    up=numpy.array([0.0, 0.0, 1.0]),
+                ))
+
+                # Куб с загруженным материалом
+                cube = Entity(name="cube")
+                scene.add(cube)
+                cube.add_component(MeshRenderer(CubeMesh(), material=material))
+
+                # Подготавливаем сцену
+                scene.ensure_ready(graphics)
+
+                # Pipeline с phase_mark="opaque"
+                color_pass = ColorPass(
+                    input_res="empty",
+                    output_res="color",
+                    shadow_res=None,
+                    pass_name="Color",
+                    phase_mark="opaque",
+                )
+                present_pass = PresentToScreenPass(
+                    input_res="color",
+                    output_res="DISPLAY",
+                    pass_name="Present",
+                )
+
+                pipeline = RenderPipeline(
+                    passes=[color_pass, present_pass],
+                    pipeline_specs=[
+                        ResourceSpec(
+                            resource="empty",
+                            clear_color=(0.0, 0.0, 0.0, 1.0),
+                            clear_depth=1.0,
+                        ),
+                    ],
+                )
+
+                view = RenderView(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
+                state = ViewportRenderState(pipeline=pipeline)
+
+                offscreen = OffscreenRenderSurface(graphics, width=128, height=128)
+                engine = RenderEngine(graphics)
+
+                engine.render_single_view(
+                    surface=offscreen,
+                    view=view,
+                    state=state,
+                    present=False,
+                )
+
+                pixels = offscreen.read_pixels()
+
+                # Проверяем центральный пиксель — должен быть зелёным
+                center_y, center_x = 64, 64
+                center_pixel = pixels[center_y, center_x]
+                self.assertLess(center_pixel[0], 50, f"Red should be low, got {center_pixel}")
+                self.assertGreater(center_pixel[1], 200, f"Green should be high, got {center_pixel}")
+                self.assertLess(center_pixel[2], 50, f"Blue should be low, got {center_pixel}")
+
+                # Очистка
+                offscreen.delete()
+                state.clear_fbos()
+
+        finally:
+            context.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()

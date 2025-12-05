@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, List, TYPE_CHECKING
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component, RenderContext
@@ -9,6 +9,9 @@ from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.render.lighting.upload import upload_lights_to_shader
 from termin.visualization.render.lighting.shadow_upload import upload_shadow_maps_to_shader
 from termin.visualization.render.renderpass import RenderState, RenderPass
+
+if TYPE_CHECKING:
+    from termin.visualization.core.material import MaterialPhase
 
 class MeshRenderer(Component):
     """Renderer component that draws MeshDrawable with one or multiple passes."""
@@ -130,3 +133,35 @@ class MeshRenderer(Component):
             self.mesh.draw(context)
 
         gfx.apply_render_state(RenderState())
+
+    def get_phases_for_mark(self, phase_mark: str | None) -> List["MaterialPhase"]:
+        """
+        Возвращает все фазы материалов с указанной меткой, отсортированные по priority.
+
+        Собирает фазы из всех RenderPass в self.passes. Для каждого pass.material
+        получает фазы с помощью material.get_phases_for_mark().
+
+        Параметры:
+            phase_mark: Метка фазы ("opaque", "transparent", "shadow" и т.д.).
+                        Если None, возвращает все фазы из всех материалов.
+
+        Возвращает:
+            Список MaterialPhase отсортированный по priority (меньше = раньше).
+        """
+        result: List["MaterialPhase"] = []
+
+        for render_pass in self.passes:
+            mat = render_pass.material
+            if mat is None:
+                continue
+
+            if phase_mark is None:
+                # Возвращаем все фазы
+                result.extend(mat.phases)
+            else:
+                # Фильтруем по phase_mark
+                result.extend(mat.get_phases_for_mark(phase_mark))
+
+        # Сортируем по priority
+        result.sort(key=lambda p: p.priority)
+        return result
