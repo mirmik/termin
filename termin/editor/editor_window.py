@@ -31,8 +31,13 @@ class EditorWindow(QMainWindow):
         self.undo_stack = UndoStack()
         self._action_undo = None
         self._action_redo = None
+        self._action_play = None
         self._undo_stack_viewer = None
         self._framegraph_debugger = None
+
+        # Game mode state
+        self._game_mode = False
+        self._saved_scene_state: dict | None = None
 
         self.world = world
         self.scene = scene
@@ -126,6 +131,7 @@ class EditorWindow(QMainWindow):
 
         file_menu = menu_bar.addMenu("File")
         edit_menu = menu_bar.addMenu("Edit")
+        game_menu = menu_bar.addMenu("Game")
         debug_menu = menu_bar.addMenu("Debug")
 
         new_world_action = file_menu.addAction("New World")
@@ -160,6 +166,11 @@ class EditorWindow(QMainWindow):
         self._action_redo = edit_menu.addAction("Redo")
         self._action_redo.setShortcut("Ctrl+Shift+Z")
         self._action_redo.triggered.connect(self.redo)
+
+        # Game menu - одна кнопка Play/Stop
+        self._action_play = game_menu.addAction("Play")
+        self._action_play.setShortcut("F5")
+        self._action_play.triggered.connect(self._toggle_game_mode)
 
         debug_action = debug_menu.addAction("Undo/Redo Stack...")
         tex_debug_action = debug_menu.addAction("Framegraph Texture Viewer...")
@@ -814,3 +825,124 @@ class EditorWindow(QMainWindow):
                 "Error Loading World",
                 f"Failed to load world from:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
             )
+
+    # ----------- game mode -----------
+
+    def _toggle_game_mode(self) -> None:
+        """Переключает режим игры."""
+        if self._game_mode:
+            self._exit_game_mode()
+        else:
+            self._enter_game_mode()
+
+    def _enter_game_mode(self) -> None:
+        """Входит в игровой режим, сохраняя состояние сцены."""
+        if self._game_mode:
+            return
+
+        import json
+        import numpy as np
+
+        # Конвертер numpy типов
+        def numpy_encoder(obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.integer):
+                return int(obj)
+            raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+        # Сохраняем состояние сцены
+        data = {
+            "resources": self.resource_manager.serialize(),
+            "scene": self.scene.serialize(),
+        }
+        # Сериализуем в JSON и обратно для глубокого копирования
+        json_str = json.dumps(data, default=numpy_encoder)
+        self._saved_scene_state = json.loads(json_str)
+
+        # Переключаем режим
+        self._game_mode = True
+        if self.viewport_window is not None:
+            self.viewport_window.set_world_mode("game")
+
+        # Скрываем гизмо
+        if self.gizmo_controller is not None:
+            self.gizmo_controller.set_visible(False)
+
+        # Сбрасываем выделение
+        self.on_selection_changed(None)
+        if self.inspector is not None:
+            self.inspector.set_target(None)
+
+        # Обновляем UI
+        self._update_game_mode_ui()
+        self._request_viewport_update()
+
+    def _exit_game_mode(self) -> None:
+        """Выходит из игрового режима, восстанавливая состояние сцены."""
+        if not self._game_mode:
+            return
+
+        if self._saved_scene_state is None:
+            self._game_mode = False
+            self._update_game_mode_ui()
+            return
+
+        # Удаляем все serializable entities (игровые объекты)
+        for entity in list(self.scene.entities):
+            if entity.serializable:
+                self.scene.remove(entity)
+
+        # Очищаем и восстанавливаем ресурсы
+        self.resource_manager.materials.clear()
+        self.resource_manager.meshes.clear()
+        self.resource_manager.textures.clear()
+
+        resources_data = self._saved_scene_state.get("resources", {})
+        if resources_data:
+            restored_rm = ResourceManager.deserialize(resources_data)
+            self.resource_manager.materials.update(restored_rm.materials)
+            self.resource_manager.meshes.update(restored_rm.meshes)
+            self.resource_manager.textures.update(restored_rm.textures)
+
+        # Восстанавливаем сцену
+        scene_data = self._saved_scene_state.get("scene", {})
+        if scene_data:
+            self.scene.load_from_data(scene_data, context=None, update_settings=True)
+
+        # Очищаем сохранённое состояние
+        self._saved_scene_state = None
+
+        # Переключаем режим
+        self._game_mode = False
+        if self.viewport_window is not None:
+            self.viewport_window.set_world_mode("editor")
+
+        # Показываем гизмо
+        if self.gizmo_controller is not None:
+            self.gizmo_controller.set_visible(True)
+
+        # Обновляем UI
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.rebuild()
+        self._update_game_mode_ui()
+        self._request_viewport_update()
+
+    def _update_game_mode_ui(self) -> None:
+        """Обновляет состояние UI элементов в зависимости от режима."""
+        if self._action_play is not None:
+            if self._game_mode:
+                self._action_play.setText("Stop")
+                self._action_play.setShortcut("F5")
+            else:
+                self._action_play.setText("Play")
+                self._action_play.setShortcut("F5")
+
+        # Обновляем заголовок окна
+        base_title = "Termin Editor"
+        if self._game_mode:
+            self.setWindowTitle(f"{base_title} [PLAYING]")
+        else:
+            self.setWindowTitle(base_title)

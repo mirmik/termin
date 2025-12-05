@@ -823,6 +823,11 @@ class&nbsp;GizmoController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;gizmo_ctrl&nbsp;is&nbsp;not&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gizmo_ctrl.set_target(target_entity)<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_visible(self,&nbsp;visible:&nbsp;bool)&nbsp;-&gt;&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Показывает&nbsp;или&nbsp;скрывает&nbsp;гизмо.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.gizmo&nbsp;is&nbsp;not&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.gizmo.set_visible(visible)<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;helper_geometry_entities(self)&nbsp;-&gt;&nbsp;list[Entity]:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;self.gizmo&nbsp;is&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;[]<br>

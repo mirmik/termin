@@ -815,6 +815,11 @@ class GizmoController:
         if gizmo_ctrl is not None:
             gizmo_ctrl.set_target(target_entity)
 
+    def set_visible(self, visible: bool) -> None:
+        """Показывает или скрывает гизмо."""
+        if self.gizmo is not None:
+            self.gizmo.set_visible(visible)
+
     def helper_geometry_entities(self) -> list[Entity]:
         if self.gizmo is None:
             return []
