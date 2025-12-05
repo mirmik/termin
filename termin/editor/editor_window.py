@@ -159,6 +159,9 @@ class EditorWindow(QMainWindow):
         load_material_action = file_menu.addAction("Load Material...")
         load_material_action.triggered.connect(self._load_material_from_file)
 
+        load_components_action = file_menu.addAction("Load Components...")
+        load_components_action.triggered.connect(self._load_components_from_file)
+
         file_menu.addSeparator()
 
         exit_action = file_menu.addAction("Exit")
@@ -626,6 +629,42 @@ class EditorWindow(QMainWindow):
                 self,
                 "Error Loading Material",
                 f"Failed to load material from:\n{file_path}\n\nError: {e}",
+            )
+
+    def _load_components_from_file(self) -> None:
+        """Загружает компоненты из Python файла или директории."""
+        path, ok = QInputDialog.getText(
+            self,
+            "Load Components",
+            "Enter path to .py file or directory with components:",
+        )
+        if not ok or not path:
+            return
+        path = os.path.expanduser(path)
+
+        try:
+            loaded = self.resource_manager.scan_components([path])
+
+            if loaded:
+                QMessageBox.information(
+                    self,
+                    "Components Loaded",
+                    f"Successfully loaded {len(loaded)} component(s):\n\n"
+                    + "\n".join(f"• {name}" for name in loaded),
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "No Components Found",
+                    f"No new Component subclasses found in:\n{path}",
+                )
+
+        except Exception as e:
+            import traceback
+            QMessageBox.critical(
+                self,
+                "Error Loading Components",
+                f"Failed to load components from:\n{path}\n\nError: {e}\n\n{traceback.format_exc()}",
             )
 
     # ----------- сохранение/загрузка мира -----------

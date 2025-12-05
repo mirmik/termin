@@ -75,11 +75,14 @@ class ResourceManager:
 
     def scan_components(self, paths: list[str]) -> list[str]:
         """
-        Сканирует директории/модули и загружает все Component подклассы.
+        Сканирует директории/модули/файлы и загружает все Component подклассы.
 
         Args:
-            paths: Список путей к директориям или имён модулей.
-                   Примеры: ["termin.visualization.components", "/home/user/my_components"]
+            paths: Список путей к директориям, .py файлам или имён модулей.
+                   Примеры:
+                   - "termin.visualization.components" (модуль)
+                   - "/home/user/my_components" (директория)
+                   - "/home/user/rotator.py" (файл)
 
         Returns:
             Список имён загруженных компонентов.
@@ -92,8 +95,10 @@ class ResourceManager:
         loaded = []
 
         for path in paths:
-            # Проверяем, это путь к директории или имя модуля
-            if os.path.isdir(path):
+            if os.path.isfile(path) and path.endswith(".py"):
+                # Загружаем отдельный .py файл
+                loaded.extend(self._scan_file(path))
+            elif os.path.isdir(path):
                 # Сканируем директорию
                 loaded.extend(self._scan_directory(path))
             else:
@@ -101,6 +106,33 @@ class ResourceManager:
                 loaded.extend(self._scan_module(path))
 
         return loaded
+
+    def _scan_file(self, filepath: str) -> list[str]:
+        """Загружает компоненты из одного .py файла."""
+        import importlib.util
+        import os
+        import sys
+
+        before = set(self.components.keys())
+
+        filename = os.path.basename(filepath)
+        module_name = f"_dynamic_components_.{os.path.splitext(filename)[0]}_{id(filepath)}"
+
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, filepath)
+            if spec is None or spec.loader is None:
+                return []
+
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+
+        except Exception as e:
+            print(f"Warning: Failed to load {filepath}: {e}")
+            return []
+
+        after = set(self.components.keys())
+        return list(after - before)
 
     def _scan_module(self, module_name: str) -> list[str]:
         """Загружает модуль и все его подмодули."""
