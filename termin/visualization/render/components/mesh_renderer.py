@@ -49,9 +49,7 @@ class MeshRenderer(Component):
             material = Material()
 
         self.mesh = mesh
-        if passes is None:
-            self.material = material
-
+        self._material: Material | None = None
         self.passes: list[RenderPass] = []
 
         if passes is not None:
@@ -67,36 +65,34 @@ class MeshRenderer(Component):
             # если материал задан в конструкторе — как раньше: один проход
             self.passes.append(RenderPass(material=material, state=RenderState()))
 
+    @property
+    def material(self) -> Material | None:
+        """Возвращает материал первого прохода (для обратной совместимости)."""
+        if self.passes:
+            return self.passes[0].material
+        return self._material
+
+    @material.setter
+    def material(self, value: Material | None):
+        """Устанавливает материал первого прохода."""
+        self._material = value
+        if self.passes:
+            self.passes[0].material = value
+
     def update_mesh(self, mesh: MeshDrawable | None):
         self.mesh = mesh
 
     def update_material(self, material: Material | None):
         """
-        Вызывается инспектором при смене материала (и конструктором — косвенно).
-        Гарантируем, что если появился материал, будет хотя бы один RenderPass.
+        Вызывается инспектором при смене материала.
+        Гарантирует наличие хотя бы одного RenderPass при установке материала.
         """
-        self.material = material
-
-        if material is None:
-            # Можно:
-            #  - либо очищать материал у всех проходов,
-            #  - либо вообще ничего не делать (но draw тогда должен уметь жить с этим).
-            # Я бы для простоты просто обнулил материал в одиночном проходе.
-            if len(self.passes) == 1:
-                self.passes[0].material = None
-            return
-
-        if not self.passes:
-            # Новый компонент, до этого не было проходов —
-            # создаём дефолтный.
+        if material is not None and not self.passes:
+            # Новый компонент, до этого не было проходов — создаём дефолтный
             self.passes.append(RenderPass(material=material, state=RenderState()))
-        elif len(self.passes) == 1:
-            # старый режим: один проход → просто обновляем материал
-            self.passes[0].material = material
         else:
-            # мультипасс — решай сам, как надо делать:
-            # можно менять только первый проход, можно все, можно вообще не трогать.
-            self.passes[0].material = material
+            # setter обновит первый pass
+            self.material = material
 
     # --- рендеринг ---
 
