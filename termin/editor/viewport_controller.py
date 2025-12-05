@@ -62,6 +62,12 @@ class ViewportController:
         self._pending_pick_release: Optional[Tuple[float, float, object]] = None
         self._pending_hover: Optional[Tuple[float, float, object]] = None
 
+        # Для определения клика vs drag: запоминаем позицию press
+        self._press_position: Optional[Tuple[float, float]] = None
+        self._gizmo_handled_press: bool = False
+        # Порог в пикселях для определения клика (если мышь сдвинулась меньше — это клик)
+        self._click_threshold: float = 5.0
+
         layout = self._container.layout()
         if layout is None:
             layout = QVBoxLayout(self._container)
@@ -222,8 +228,36 @@ class ViewportController:
         self._on_hover_entity(ent)
 
     def _process_pending_pick_release(self, pending_release, window) -> None:
+        """
+        Обрабатывает отпускание левой кнопки мыши.
+        
+        Выбор объекта (select) происходит только если:
+        1. Гизмо не обрабатывал нажатие (не было начато перемещение/вращение)
+        2. Мышь не сдвинулась значительно от точки нажатия (это клик, а не drag)
+        """
         x, y, viewport = pending_release
         self._pending_pick_release = None
+
+        # Если гизмо обработал press (начал drag), не делаем select
+        if self._gizmo_handled_press:
+            self._gizmo_handled_press = False
+            self._press_position = None
+            return
+
+        # Проверяем, был ли это клик (мышь не сдвинулась значительно)
+        if self._press_position is not None:
+            press_x, press_y = self._press_position
+            dx = x - press_x
+            dy = y - press_y
+            distance_sq = dx * dx + dy * dy
+            threshold_sq = self._click_threshold * self._click_threshold
+            if distance_sq > threshold_sq:
+                # Это был drag, не делаем select
+                self._press_position = None
+                return
+            self._press_position = None
+        # Если _press_position is None — press не был обработан,
+        # но делаем select для обратной совместимости.
 
         ent = self.pick_entity_at(x, y, viewport)
         if ent is not None and not ent.selectable:
@@ -232,14 +266,26 @@ class ViewportController:
         self._on_entity_picked(ent)
 
     def _process_pending_pick_press(self, pending_press, window) -> None:
+        """
+        Обрабатывает нажатие левой кнопки мыши.
+        
+        Запоминаем позицию для последующего определения, был ли это клик или drag.
+        Если клик попал по гизмо — начинаем drag гизмо и помечаем, что select не нужен.
+        """
         x, y, viewport = pending_press
         self._pending_pick_press = None
+
+        # Запоминаем позицию press для определения клика
+        self._press_position = (x, y)
+        self._gizmo_handled_press = False
 
         picked_color = self.pick_color_at(x, y, viewport, buffer_name="id")
         handled = self._gizmo_controller.handle_pick_press_with_color(
             x, y, viewport, picked_color
         )
         if handled:
+            # Гизмо обработал клик — помечаем, чтобы при release не делать select
+            self._gizmo_handled_press = True
             return
 
     # ---------- debug helpers ----------

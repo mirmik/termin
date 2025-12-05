@@ -121,7 +121,8 @@ class&nbsp;GizmoPass(RenderFramePass):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mr&nbsp;is&nbsp;None&nbsp;or&nbsp;mr.mesh&nbsp;is&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
 <br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alpha&nbsp;=&nbsp;index&nbsp;*&nbsp;1.0&nbsp;/&nbsp;maxindex<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;alpha&nbsp;&lt;&nbsp;1.0&nbsp;для&nbsp;гизмо,&nbsp;alpha=1.0&nbsp;зарезервирована&nbsp;для&nbsp;обычных&nbsp;объектов<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alpha&nbsp;=&nbsp;index&nbsp;*&nbsp;1.0&nbsp;/&nbsp;(maxindex&nbsp;+&nbsp;1)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_vec4(&quot;u_color&quot;,&nbsp;(0.0,&nbsp;0.0,&nbsp;0.0,&nbsp;alpha))<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;model&nbsp;=&nbsp;ent.model_matrix()<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shader.set_uniform_matrix4(&quot;u_model&quot;,&nbsp;model)<br>

@@ -810,21 +810,42 @@ class GizmoController:
             return []
         return self.gizmo.helper_geometry_entities()
 
+    def is_dragging(self) -> bool:
+        """Возвращает True, если гизмо находится в режиме drag."""
+        if self.gizmo is None:
+            return False
+        gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
+        if gizmo_ctrl is None:
+            return False
+        return gizmo_ctrl.dragging
+
     def handle_pick_press_with_color(self, x: float, y: float, viewport, picked_color) -> bool:
         """
         Возвращает True, если клик по pick-буферу был обработан гизмо
         (начата операция перемещения или вращения).
+        
+        Гизмо рендерится в id-буфер с alpha < 1.0, где alpha кодирует индекс элемента:
+            alpha = index / (maxindex + 1)
+        Обычные объекты рендерятся с alpha = 1.0.
         """
         if self.gizmo is None:
             return False
 
+        if picked_color is None:
+            return False
+
         alpha = picked_color[3]
-        if alpha == 0:
+        
+        # alpha = 0 — пустое пространство
+        # alpha = 1.0 — обычный объект (не гизмо)
+        # 0 < alpha < 1 — элемент гизмо
+        if alpha == 0 or alpha >= 1.0:
             return False
 
         helpers = self.gizmo.helper_geometry_entities()
         maxindex = len(helpers)
-        index = int(round(alpha * float(maxindex))) - 1
+        # Обратная формула: index = round(alpha * (maxindex + 1))
+        index = int(round(alpha * float(maxindex + 1))) - 1
         if index < 0 or index >= maxindex:
             return False
 

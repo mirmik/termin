@@ -113,7 +113,8 @@ class GizmoPass(RenderFramePass):
             if mr is None or mr.mesh is None:
                 continue
 
-            alpha = index * 1.0 / maxindex
+            # alpha < 1.0 для гизмо, alpha=1.0 зарезервирована для обычных объектов
+            alpha = index * 1.0 / (maxindex + 1)
             shader.set_uniform_vec4("u_color", (0.0, 0.0, 0.0, alpha))
             model = ent.model_matrix()
             shader.set_uniform_matrix4("u_model", model)
