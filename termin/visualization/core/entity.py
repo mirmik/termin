@@ -121,7 +121,9 @@ class Component:
         cls.__init__(obj)
 
         fields = cls.serializable_fields
-        if isinstance(fields, dict):
+        if fields is None:
+            pass  # Нет полей для десериализации
+        elif isinstance(fields, dict):
             for key, typ in fields.items():
                 value = data[key]
                 setattr(obj, key, typ.deserialize(value, context) if typ else value)
@@ -159,7 +161,8 @@ class Entity:
 
     def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float | numpy.ndarray = 1.0, priority: int = 0,
             pickable: bool = True,
-            selectable: bool = True):
+            selectable: bool = True,
+            serializable: bool = True):
 
         if scale is None:
             scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
@@ -176,6 +179,7 @@ class Entity:
         self.scene: Optional["Scene"] = None
         self.pickable = pickable
         self.selectable = selectable
+        self.serializable = serializable  # False для редакторных сущностей (гизмо и т.д.)
         self._pick_id: int | None = None
 
     @property
@@ -301,6 +305,9 @@ class Entity:
         self.scene = None
 
     def serialize(self):
+        if not self.serializable:
+            return None
+
         pose = self.transform.local_pose()
         data = {
             "name": self.name,
@@ -322,10 +329,13 @@ class Entity:
             "children": [],
         }
 
-        # Сериализуем дочерние Entity через Transform.children
+        # Сериализуем дочерние Entity через Transform.children (только serializable)
         for child_transform in self.transform.children:
-            if child_transform.entity is not None:
-                data["children"].append(child_transform.entity.serialize())
+            child_ent = child_transform.entity
+            if child_ent is not None and child_ent.serializable:
+                child_data = child_ent.serialize()
+                if child_data is not None:
+                    data["children"].append(child_data)
 
         return data
 

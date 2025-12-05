@@ -1,8 +1,8 @@
 # ===== termin/editor/editor_window.py =====
 import os
 from PyQt5 import uic
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog, QFileDialog, QMessageBox
-from PyQt5.QtCore import Qt, QPoint, QEvent, pyqtSignal, QTimer
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog, QMessageBox
+from PyQt5.QtCore import Qt, QPoint, QEvent, pyqtSignal
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
@@ -128,8 +128,9 @@ class EditorWindow(QMainWindow):
         edit_menu = menu_bar.addMenu("Edit")
         debug_menu = menu_bar.addMenu("Debug")
 
-        load_material_action = file_menu.addAction("Load Material...")
-        load_material_action.triggered.connect(self._load_material_from_file)
+        new_world_action = file_menu.addAction("New World")
+        new_world_action.setShortcut("Ctrl+N")
+        new_world_action.triggered.connect(self._new_world)
 
         file_menu.addSeparator()
 
@@ -140,6 +141,11 @@ class EditorWindow(QMainWindow):
         load_world_action = file_menu.addAction("Load World...")
         load_world_action.setShortcut("Ctrl+O")
         load_world_action.triggered.connect(self._load_world)
+
+        file_menu.addSeparator()
+
+        load_material_action = file_menu.addAction("Load Material...")
+        load_material_action.triggered.connect(self._load_material_from_file)
 
         file_menu.addSeparator()
 
@@ -311,7 +317,7 @@ class EditorWindow(QMainWindow):
                 self.editor_entities = ent
                 return
 
-        editor_entities = Entity(name="EditorEntities")
+        editor_entities = Entity(name="EditorEntities", serializable=False)
         self.scene.add(editor_entities)
         self.editor_entities = editor_entities
 
@@ -320,7 +326,7 @@ class EditorWindow(QMainWindow):
         Создаём редакторскую камеру и вешаем её под EditorEntities (если он есть).
         Никакого поиска по сцене – у редактора всегда своя камера.
         """
-        camera_entity = Entity(name="camera", pose=Pose3.identity())
+        camera_entity = Entity(name="camera", pose=Pose3.identity(), serializable=False)
         camera = PerspectiveCameraComponent()
         camera_entity.add_component(camera)
         camera_entity.add_component(OrbitCameraController())
@@ -540,31 +546,16 @@ class EditorWindow(QMainWindow):
     # ----------- загрузка материалов -----------
 
     def _load_material_from_file(self) -> None:
-        """
-        Открывает диалог выбора .shader файла, парсит его и добавляет в ResourceManager.
-        Откладываем вызов диалога чтобы избежать проблем с памятью.
-        """
-        QTimer.singleShot(0, self._load_material_dialog)
-
-    def _load_material_dialog(self) -> None:
-        """Реальный вызов диалога загрузки материала."""
-        dialog = QFileDialog(None, "Load Material")
-        dialog.setAcceptMode(QFileDialog.AcceptOpen)
-        dialog.setNameFilter("Shader Files (*.shader);;All Files (*)")
-        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
-        dialog.setOption(QFileDialog.DontUseCustomDirectoryIcons, True)
-        dialog.setDirectory(os.path.expanduser("~"))
-
-        if not dialog.exec_():
+        """Открывает диалог выбора .shader файла, парсит его и добавляет в ResourceManager."""
+        # QFileDialog зависает на директориях с .json/.js файлами - используем QInputDialog
+        file_path, ok = QInputDialog.getText(
+            self,
+            "Load Material",
+            "Enter shader file path:",
+        )
+        if not ok or not file_path:
             return
-
-        files = dialog.selectedFiles()
-        if not files:
-            return
-        file_path = files[0]
-
-        if not file_path:
-            return
+        file_path = os.path.expanduser(file_path)
 
         try:
             from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
@@ -610,32 +601,78 @@ class EditorWindow(QMainWindow):
 
     # ----------- сохранение/загрузка мира -----------
 
+    def _reset_world(self) -> None:
+        """Полная очистка мира и пересоздание редакторских сущностей."""
+        # Удаляем ВСЕ entities (включая редакторские)
+        for entity in list(self.scene.entities):
+            self.scene.remove(entity)
+
+        # Очищаем ресурсы
+        self.resource_manager.materials.clear()
+        self.resource_manager.meshes.clear()
+        self.resource_manager.textures.clear()
+
+        # Очищаем undo-стек (начинаем с чистого листа)
+        self.undo_stack.clear()
+        self._update_undo_redo_actions()
+        self.undo_stack_changed.emit()
+
+        # Сбрасываем выделение
+        self._selected_entity = None
+        self.selected_entity_id = 0
+        self.hover_entity_id = 0
+
+        # Пересоздаём редакторские сущности
+        self.editor_entities = None
+        self._ensure_editor_entities_root()
+        self._ensure_editor_camera()
+
+        # Пересоздаём гизмо
+        if self.gizmo_controller is not None:
+            self.gizmo_controller.recreate_gizmo(self.scene, self.editor_entities)
+
+        # Обновляем viewport камеру и сбрасываем выделение
+        if self.viewport_controller is not None:
+            self.viewport_controller.set_camera(self.camera)
+            self.viewport_controller.selected_entity_id = 0
+            self.viewport_controller.hover_entity_id = 0
+
+        # Сбрасываем инспектор
+        if self.inspector is not None:
+            self.inspector.set_target(None)
+
+    def _new_world(self) -> None:
+        """Создаёт новый пустой мир - полный перезапуск."""
+        reply = QMessageBox.question(
+            self,
+            "New World",
+            "Create a new empty world?\n\nThis will remove all entities and resources.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        self._reset_world()
+
+        # Обновляем UI
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.rebuild()
+        self._request_viewport_update()
+
     def _save_world(self) -> None:
-        """
-        Сохраняет текущий мир в JSON файл.
-        Откладываем вызов диалога чтобы избежать проблем с памятью.
-        """
-        QTimer.singleShot(0, self._save_world_dialog)
-
-    def _save_world_dialog(self) -> None:
-        """Реальный вызов диалога сохранения."""
-        dialog = QFileDialog(None, "Save World")
-        dialog.setAcceptMode(QFileDialog.AcceptSave)
-        dialog.setNameFilter("World Files (*.world.json);;JSON Files (*.json);;All Files (*)")
-        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
-        dialog.setOption(QFileDialog.DontUseCustomDirectoryIcons, True)
-        dialog.setDirectory(os.path.expanduser("~"))
-
-        if not dialog.exec_():
+        """Сохраняет текущий мир в JSON файл."""
+        # QFileDialog зависает на директориях с .json/.js файлами - используем QInputDialog
+        file_path, ok = QInputDialog.getText(
+            self,
+            "Save World",
+            "Enter file path:",
+            text="~/world.world.json",
+        )
+        if not ok or not file_path:
             return
-
-        files = dialog.selectedFiles()
-        if not files:
-            return
-        file_path = files[0]
-
-        if not file_path:
-            return
+        file_path = os.path.expanduser(file_path)
 
         # Добавляем расширение если не указано
         if not file_path.endswith(".json"):
@@ -643,6 +680,18 @@ class EditorWindow(QMainWindow):
 
         try:
             import json
+            import tempfile
+            import numpy as np
+
+            # Конвертер numpy типов в Python типы
+            def numpy_encoder(obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                if isinstance(obj, np.floating):
+                    return float(obj)
+                if isinstance(obj, np.integer):
+                    return int(obj)
+                raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
             data = {
                 "version": "1.0",
@@ -650,10 +699,23 @@ class EditorWindow(QMainWindow):
                 "scenes": [self.scene.serialize()],
             }
 
-            # Сначала сериализуем в строку, потом пишем
-            json_str = json.dumps(data, indent=2, ensure_ascii=False)
-            with open(file_path, "w", encoding="utf-8") as f:
+            # Сериализуем в строку с конвертером numpy типов
+            json_str = json.dumps(data, indent=2, ensure_ascii=False, default=numpy_encoder)
+
+            # Атомарная запись: сначала во временный файл, потом переименование
+            dir_path = os.path.dirname(file_path) or "."
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                suffix=".tmp",
+                dir=dir_path,
+                delete=False
+            ) as f:
                 f.write(json_str)
+                temp_path = f.name
+
+            # Переименование атомарно на POSIX системах
+            os.replace(temp_path, file_path)
 
             root_count = sum(1 for e in self.scene.entities if e.transform.parent is None)
             QMessageBox.information(
@@ -674,31 +736,17 @@ class EditorWindow(QMainWindow):
             )
 
     def _load_world(self) -> None:
-        """
-        Загружает мир из JSON файла.
-        Откладываем вызов диалога чтобы избежать проблем с памятью.
-        """
-        QTimer.singleShot(0, self._load_world_dialog)
-
-    def _load_world_dialog(self) -> None:
-        """Реальный вызов диалога загрузки."""
-        dialog = QFileDialog(None, "Load World")
-        dialog.setAcceptMode(QFileDialog.AcceptOpen)
-        dialog.setNameFilter("World Files (*.world.json);;JSON Files (*.json);;All Files (*)")
-        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
-        dialog.setOption(QFileDialog.DontUseCustomDirectoryIcons, True)
-        dialog.setDirectory(os.path.expanduser("~"))
-
-        if not dialog.exec_():
+        """Загружает мир из JSON файла."""
+        # QFileDialog зависает на директориях с .json/.js файлами - используем QInputDialog
+        file_path, ok = QInputDialog.getText(
+            self,
+            "Load World",
+            "Enter file path:",
+            text="~/world.world.json",
+        )
+        if not ok or not file_path:
             return
-
-        files = dialog.selectedFiles()
-        if not files:
-            return
-        file_path = files[0]
-
-        if not file_path:
-            return
+        file_path = os.path.expanduser(file_path)
 
         try:
             import json
@@ -723,6 +771,11 @@ class EditorWindow(QMainWindow):
             if reply == QMessageBox.Cancel:
                 return
 
+            clear_scene = (reply == QMessageBox.Yes)
+            if clear_scene:
+                # Полная очистка мира и пересоздание редакторских сущностей
+                self._reset_world()
+
             # Восстанавливаем ресурсы
             resources_data = data.get("resources", {})
             if resources_data:
@@ -730,11 +783,6 @@ class EditorWindow(QMainWindow):
                 self.resource_manager.materials.update(restored_rm.materials)
                 self.resource_manager.meshes.update(restored_rm.meshes)
                 self.resource_manager.textures.update(restored_rm.textures)
-
-            clear_scene = (reply == QMessageBox.Yes)
-            if clear_scene:
-                for entity in list(self.scene.entities):
-                    self.scene.remove(entity)
 
             # Загружаем первую сцену
             loaded_count = 0
@@ -746,7 +794,8 @@ class EditorWindow(QMainWindow):
                     update_settings=clear_scene
                 )
 
-            self._hierarchy_widget.refresh()
+            if self.scene_tree_controller is not None:
+                self.scene_tree_controller.rebuild()
             self._request_viewport_update()
 
             QMessageBox.information(

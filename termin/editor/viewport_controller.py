@@ -172,6 +172,13 @@ class ViewportController:
         """Доступ к состоянию рендера (pipeline, fbos)."""
         return self._render_state
 
+    def set_camera(self, camera) -> None:
+        """Устанавливает новую камеру для viewport."""
+        self._camera = camera
+        self._viewport.camera = camera
+        # Камера должна знать свой viewport для обработки ввода
+        camera.viewport = self._viewport
+
     def request_update(self) -> None:
         self._window._request_update()
 

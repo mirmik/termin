@@ -180,6 +180,13 @@ class&nbsp;ViewportController:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Доступ&nbsp;к&nbsp;состоянию&nbsp;рендера&nbsp;(pipeline,&nbsp;fbos).&quot;&quot;&quot;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;self._render_state<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;set_camera(self,&nbsp;camera)&nbsp;-&gt;&nbsp;None:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Устанавливает&nbsp;новую&nbsp;камеру&nbsp;для&nbsp;viewport.&quot;&quot;&quot;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._camera&nbsp;=&nbsp;camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._viewport.camera&nbsp;=&nbsp;camera<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;Камера&nbsp;должна&nbsp;знать&nbsp;свой&nbsp;viewport&nbsp;для&nbsp;обработки&nbsp;ввода<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;camera.viewport&nbsp;=&nbsp;self._viewport<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;request_update(self)&nbsp;-&gt;&nbsp;None:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._window._request_update()<br>
 <br>

@@ -91,6 +91,7 @@ class GizmoArrow(Entity):
             name=f"gizmo_axis_{axis}",
             pickable=False,
             selectable=False,
+            serializable=False,
         )
         self.axis = axis
         self.length = float(length)
@@ -206,6 +207,7 @@ class GizmoRing(Entity):
             name=f"gizmo_rot_{axis}",
             pickable=False,
             selectable=False,
+            serializable=False,
         )
 
         self.axis = axis
@@ -293,7 +295,8 @@ class GizmoEntity(Entity):
             Pose3.identity(),
             name="gizmo",
             pickable=False,
-            selectable=False
+            selectable=False,
+            serializable=False,
         )
 
         # стрелки перемещения
@@ -797,6 +800,13 @@ class GizmoController:
 
         self.scene.add(gizmo)
         self.gizmo = gizmo
+
+    def recreate_gizmo(self, scene, editor_entities=None) -> None:
+        """Пересоздаёт гизмо в новой сцене."""
+        self.scene = scene
+        self.editor_entities = editor_entities
+        self.gizmo = None
+        self._ensure_gizmo()
 
     def set_target(self, target_entity: Entity | None) -> None:
         if self.gizmo is None:

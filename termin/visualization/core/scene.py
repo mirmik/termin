@@ -209,18 +209,24 @@ class Scene:
         """
         Сериализует сцену.
 
-        Сохраняет только корневые Entity (без родителя).
+        Сохраняет только корневые serializable Entity (без родителя).
         Дочерние Entity сериализуются рекурсивно внутри своих родителей.
         """
         root_entities = [
             e for e in self.entities
-            if e.transform.parent is None
+            if e.transform.parent is None and e.serializable
         ]
+        serialized_entities = []
+        for e in root_entities:
+            data = e.serialize()
+            if data is not None:
+                serialized_entities.append(data)
+
         return {
             "background_color": list(self.background_color),
             "light_direction": list(self.light_direction),
             "light_color": list(self.light_color),
-            "entities": [e.serialize() for e in root_entities],
+            "entities": serialized_entities,
         }
 
     @classmethod
