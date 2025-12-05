@@ -2,47 +2,36 @@
 import os
 from PyQt5 import uic
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog, QMessageBox
-from PyQt5.QtCore import Qt, QPoint, QEvent, pyqtSignal, QTimer, QElapsedTimer
+from PyQt5.QtCore import Qt, QEvent, pyqtSignal
+
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
 from termin.editor.viewport_controller import ViewportController
 from termin.editor.gizmo import GizmoController
+from termin.editor.game_mode_controller import GameModeController
+from termin.editor.world_persistence import WorldPersistence
+from termin.editor.selection_manager import SelectionManager
 
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
-from termin.editor.editor_tree import SceneTreeModel
 from termin.editor.editor_inspector import EntityInspector
-from termin.visualization.core.picking import id_to_rgb
 from termin.visualization.core.resources import ResourceManager
 from termin.geombase.pose3 import Pose3
-from termin.editor.gizmo import GizmoEntity, GizmoMoveController
-from termin.visualization.platform.backends.base import Action, MouseButton
 
 
 class EditorWindow(QMainWindow):
     undo_stack_changed = pyqtSignal()
     def __init__(self, world, scene):
         super().__init__()
-        self.selected_entity_id = 0
-        self.hover_entity_id = 0
         self.undo_stack = UndoStack()
         self._action_undo = None
         self._action_redo = None
         self._action_play = None
         self._undo_stack_viewer = None
         self._framegraph_debugger = None
-
-        # Game mode state
-        self._game_mode = False
-        self._saved_scene_state: dict | None = None
-
-        # Game loop timer (60 FPS)
-        self._game_timer = QTimer(self)
-        self._game_timer.timeout.connect(self._game_tick)
-        self._elapsed_timer = QElapsedTimer()
 
         self.world = world
         self.scene = scene
@@ -51,6 +40,9 @@ class EditorWindow(QMainWindow):
         self.scene_tree_controller: SceneTreeController | None = None
         self.viewport_controller: ViewportController | None = None
         self.gizmo_controller: GizmoController | None = None
+        self.selection_manager: SelectionManager | None = None
+        self.game_mode_controller: GameModeController | None = None
+        self.world_persistence: WorldPersistence | None = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -124,7 +116,29 @@ class EditorWindow(QMainWindow):
         gl_widget = self.viewport_controller.gl_widget
         gl_widget.installEventFilter(self)
 
-        self._selected_entity: Entity | None = None
+        # --- SelectionManager ---
+        self.selection_manager = SelectionManager(
+            get_pick_id=self._get_pick_id_for_entity,
+            on_selection_changed=self._on_selection_changed_internal,
+            on_hover_changed=self._on_hover_changed_internal,
+        )
+
+        # --- GameModeController ---
+        self.game_mode_controller = GameModeController(
+            scene=self.scene,
+            resource_manager=self.resource_manager,
+            on_mode_changed=self._on_game_mode_changed,
+            on_request_update=self._request_viewport_update,
+        )
+
+        # --- WorldPersistence ---
+        self.world_persistence = WorldPersistence(
+            scene=self.scene,
+            resource_manager=self.resource_manager,
+            on_before_reset=self._on_before_world_reset,
+            on_after_reset=self._on_after_world_reset,
+            on_after_load=self._on_after_world_load,
+        )
 
     # ----------- undo / redo -----------
 
@@ -467,7 +481,8 @@ class EditorWindow(QMainWindow):
         else:
             ent = None
 
-        self.on_selection_changed(ent)
+        if self.selection_manager is not None:
+            self.selection_manager.select(ent)
         self._request_viewport_update()
 
     def _on_entity_picked_from_viewport(self, ent: Entity | None) -> None:
@@ -475,10 +490,8 @@ class EditorWindow(QMainWindow):
         Колбэк от ViewportController при выборе сущности кликом в вьюпорте.
         Синхронизируем выделение в дереве и инспекторе.
         """
-        if ent is not None and not ent.selectable:
-            ent = None
-
-        self.on_selection_changed(ent)
+        if self.selection_manager is not None:
+            self.selection_manager.select(ent)
 
         if self.scene_tree_controller is not None and ent is not None:
             self.scene_tree_controller.select_object(ent)
@@ -490,7 +503,8 @@ class EditorWindow(QMainWindow):
         """
         Колбэк от ViewportController при изменении подсвеченной (hover) сущности.
         """
-        self._update_hover_entity(ent)
+        if self.selection_manager is not None:
+            self.selection_manager.hover(ent)
 
     # ----------- Qt eventFilter -----------
 
@@ -504,7 +518,7 @@ class EditorWindow(QMainWindow):
             and event.type() == QEvent.KeyPress
             and event.key() == Qt.Key_Delete
         ):
-            ent = self._selected_entity
+            ent = self.selection_manager.selected if self.selection_manager else None
             if isinstance(ent, Entity):
                 # удаление через команду, дерево и вьюпорт обновятся через undo-стек
                 cmd = DeleteEntityCommand(self.scene, ent)
@@ -529,49 +543,30 @@ class EditorWindow(QMainWindow):
         if self.inspector is not None:
             self.inspector.set_target(obj)
 
-    # ----------- hover и выбор -----------
+    # ----------- SelectionManager колбэки -----------
 
-    def _update_hover_entity(self, ent: Entity | None):
-        """
-        Обновляем идентификатор hover-сущности для подсветки.
-        """
-        if ent is not None and not ent.selectable:
-            ent = None
-
+    def _get_pick_id_for_entity(self, entity: Entity | None) -> int:
+        """Получает pick ID для сущности через viewport_controller."""
         if self.viewport_controller is not None:
-            new_id = self.viewport_controller.get_pick_id_for_entity(ent)
-        else:
-            new_id = 0
+            return self.viewport_controller.get_pick_id_for_entity(entity)
+        return 0
 
-        if new_id == self.hover_entity_id:
-            return
+    def _on_selection_changed_internal(self, entity: Entity | None) -> None:
+        """Колбэк от SelectionManager при изменении выделения."""
+        # Обновляем viewport
+        if self.viewport_controller is not None and self.selection_manager is not None:
+            self.viewport_controller.selected_entity_id = self.selection_manager.selected_entity_id
 
-        self.hover_entity_id = new_id
-        if self.viewport_controller is not None:
-            self.viewport_controller.hover_entity_id = new_id
+        # Обновляем гизмо
+        if self.gizmo_controller is not None:
+            self.gizmo_controller.set_target(entity)
 
         self._request_viewport_update()
 
-    def on_selection_changed(self, selected_ent: Entity | None):
-        """
-        Обновляем текущее выделение, гизмо и id для подсветки.
-        """
-        if selected_ent is not None and not selected_ent.selectable:
-            return
-
-        self._selected_entity = selected_ent
-
-        if self.viewport_controller is not None:
-            new_id = self.viewport_controller.get_pick_id_for_entity(selected_ent)
-        else:
-            new_id = 0
-
-        self.selected_entity_id = new_id
-        if self.viewport_controller is not None:
-            self.viewport_controller.selected_entity_id = new_id
-
-        if self.gizmo_controller is not None:
-            self.gizmo_controller.set_target(selected_ent)
+    def _on_hover_changed_internal(self, entity: Entity | None) -> None:
+        """Колбэк от SelectionManager при изменении hover."""
+        if self.viewport_controller is not None and self.selection_manager is not None:
+            self.viewport_controller.hover_entity_id = self.selection_manager.hover_entity_id
 
         self._request_viewport_update()
 
@@ -667,28 +662,20 @@ class EditorWindow(QMainWindow):
                 f"Failed to load components from:\n{path}\n\nError: {e}\n\n{traceback.format_exc()}",
             )
 
-    # ----------- сохранение/загрузка мира -----------
+    # ----------- WorldPersistence колбэки -----------
 
-    def _reset_world(self) -> None:
-        """Полная очистка мира и пересоздание редакторских сущностей."""
-        # Удаляем ВСЕ entities (включая редакторские)
-        for entity in list(self.scene.entities):
-            self.scene.remove(entity)
-
-        # Очищаем ресурсы
-        self.resource_manager.materials.clear()
-        self.resource_manager.meshes.clear()
-        self.resource_manager.textures.clear()
-
-        # Очищаем undo-стек (начинаем с чистого листа)
+    def _on_before_world_reset(self) -> None:
+        """Колбэк перед сбросом мира."""
+        # Очищаем undo-стек
         self.undo_stack.clear()
         self._update_undo_redo_actions()
         self.undo_stack_changed.emit()
 
+    def _on_after_world_reset(self) -> None:
+        """Колбэк после сброса мира."""
         # Сбрасываем выделение
-        self._selected_entity = None
-        self.selected_entity_id = 0
-        self.hover_entity_id = 0
+        if self.selection_manager is not None:
+            self.selection_manager.clear()
 
         # Пересоздаём редакторские сущности
         self.editor_entities = None
@@ -699,7 +686,7 @@ class EditorWindow(QMainWindow):
         if self.gizmo_controller is not None:
             self.gizmo_controller.recreate_gizmo(self.scene, self.editor_entities)
 
-        # Обновляем viewport камеру и сбрасываем выделение
+        # Обновляем viewport камеру
         if self.viewport_controller is not None:
             self.viewport_controller.set_camera(self.camera)
             self.viewport_controller.selected_entity_id = 0
@@ -708,6 +695,20 @@ class EditorWindow(QMainWindow):
         # Сбрасываем инспектор
         if self.inspector is not None:
             self.inspector.set_target(None)
+
+    def _on_after_world_load(self) -> None:
+        """Колбэк после загрузки мира."""
+        # Обновляем дерево сцены
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.rebuild()
+        self._request_viewport_update()
+
+    # ----------- сохранение/загрузка мира -----------
+
+    def _reset_world(self) -> None:
+        """Полная очистка мира и пересоздание редакторских сущностей."""
+        if self.world_persistence is not None:
+            self.world_persistence.reset()
 
     def _new_world(self) -> None:
         """Создаёт новый пустой мир - полный перезапуск."""
@@ -731,7 +732,6 @@ class EditorWindow(QMainWindow):
 
     def _save_world(self) -> None:
         """Сохраняет текущий мир в JSON файл."""
-        # QFileDialog зависает на директориях с .json/.js файлами - используем QInputDialog
         file_path, ok = QInputDialog.getText(
             self,
             "Save World",
@@ -747,52 +747,17 @@ class EditorWindow(QMainWindow):
             file_path += ".world.json"
 
         try:
-            import json
-            import tempfile
-            import numpy as np
+            if self.world_persistence is None:
+                raise RuntimeError("WorldPersistence not initialized")
 
-            # Конвертер numpy типов в Python типы
-            def numpy_encoder(obj):
-                if isinstance(obj, np.ndarray):
-                    return obj.tolist()
-                if isinstance(obj, np.floating):
-                    return float(obj)
-                if isinstance(obj, np.integer):
-                    return int(obj)
-                raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
-
-            data = {
-                "version": "1.0",
-                "resources": self.resource_manager.serialize(),
-                "scenes": [self.scene.serialize()],
-            }
-
-            # Сериализуем в строку с конвертером numpy типов
-            json_str = json.dumps(data, indent=2, ensure_ascii=False, default=numpy_encoder)
-
-            # Атомарная запись: сначала во временный файл, потом переименование
-            dir_path = os.path.dirname(file_path) or "."
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                suffix=".tmp",
-                dir=dir_path,
-                delete=False
-            ) as f:
-                f.write(json_str)
-                temp_path = f.name
-
-            # Переименование атомарно на POSIX системах
-            os.replace(temp_path, file_path)
-
-            root_count = sum(1 for e in self.scene.entities if e.transform.parent is None)
+            stats = self.world_persistence.save(file_path)
             QMessageBox.information(
                 self,
                 "World Saved",
                 f"World saved successfully to:\n{file_path}\n\n"
-                f"Entities: {root_count}\n"
-                f"Materials: {len(self.resource_manager.materials)}\n"
-                f"Meshes: {len(self.resource_manager.meshes)}",
+                f"Entities: {stats['entities']}\n"
+                f"Materials: {stats['materials']}\n"
+                f"Meshes: {stats['meshes']}",
             )
 
         except Exception as e:
@@ -805,7 +770,6 @@ class EditorWindow(QMainWindow):
 
     def _load_world(self) -> None:
         """Загружает мир из JSON файла."""
-        # QFileDialog зависает на директориях с .json/.js файлами - используем QInputDialog
         file_path, ok = QInputDialog.getText(
             self,
             "Load World",
@@ -816,63 +780,40 @@ class EditorWindow(QMainWindow):
             return
         file_path = os.path.expanduser(file_path)
 
+        # Спрашиваем пользователя - очистить текущую сцену или добавить?
+        reply = QMessageBox.question(
+            self,
+            "Load World",
+            "Clear current scene before loading?\n\n"
+            "Yes - Clear scene and load new world\n"
+            "No - Add loaded entities to current scene",
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            QMessageBox.Yes,
+        )
+
+        if reply == QMessageBox.Cancel:
+            return
+
+        clear_scene = (reply == QMessageBox.Yes)
+
         try:
-            import json
-            from termin.visualization.core.resources import ResourceManager
+            if self.world_persistence is None:
+                raise RuntimeError("WorldPersistence not initialized")
 
-            # Сначала читаем файл, потом парсим
-            with open(file_path, "r", encoding="utf-8") as f:
-                json_str = f.read()
-            data = json.loads(json_str)
-
-            # Спрашиваем пользователя - очистить текущую сцену или добавить?
-            reply = QMessageBox.question(
-                self,
-                "Load World",
-                "Clear current scene before loading?\n\n"
-                "Yes - Clear scene and load new world\n"
-                "No - Add loaded entities to current scene",
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-                QMessageBox.Yes,
-            )
-
-            if reply == QMessageBox.Cancel:
-                return
-
-            clear_scene = (reply == QMessageBox.Yes)
             if clear_scene:
                 # Полная очистка мира и пересоздание редакторских сущностей
                 self._reset_world()
 
-            # Восстанавливаем ресурсы
-            resources_data = data.get("resources", {})
-            if resources_data:
-                restored_rm = ResourceManager.deserialize(resources_data)
-                self.resource_manager.materials.update(restored_rm.materials)
-                self.resource_manager.meshes.update(restored_rm.meshes)
-                self.resource_manager.textures.update(restored_rm.textures)
-
-            # Загружаем первую сцену
-            loaded_count = 0
-            scenes = data.get("scenes", [])
-            if scenes:
-                loaded_count = self.scene.load_from_data(
-                    scenes[0],
-                    context=None,
-                    update_settings=clear_scene
-                )
-
-            if self.scene_tree_controller is not None:
-                self.scene_tree_controller.rebuild()
-            self._request_viewport_update()
+            # Загружаем мир (clear_scene=False, т.к. _reset_world уже очистил)
+            stats = self.world_persistence.load(file_path, clear_scene=False)
 
             QMessageBox.information(
                 self,
                 "World Loaded",
                 f"World loaded successfully from:\n{file_path}\n\n"
-                f"Entities loaded: {loaded_count}\n"
-                f"Materials: {len(self.resource_manager.materials)}\n"
-                f"Meshes: {len(self.resource_manager.meshes)}",
+                f"Entities loaded: {stats['loaded_entities']}\n"
+                f"Materials: {stats['materials']}\n"
+                f"Meshes: {stats['meshes']}",
             )
 
         except Exception as e:
@@ -887,117 +828,47 @@ class EditorWindow(QMainWindow):
 
     def _toggle_game_mode(self) -> None:
         """Переключает режим игры."""
-        if self._game_mode:
-            self._exit_game_mode()
+        if self.game_mode_controller is not None:
+            self.game_mode_controller.toggle()
+
+    def _on_game_mode_changed(self, is_playing: bool) -> None:
+        """Колбэк от GameModeController при изменении режима."""
+        if is_playing:
+            # Входим в игровой режим
+            if self.viewport_window is not None:
+                self.viewport_window.set_world_mode("game")
+
+            # Скрываем гизмо
+            if self.gizmo_controller is not None:
+                self.gizmo_controller.set_visible(False)
+
+            # Сбрасываем выделение
+            if self.selection_manager is not None:
+                self.selection_manager.clear()
+            if self.inspector is not None:
+                self.inspector.set_target(None)
         else:
-            self._enter_game_mode()
+            # Выходим из игрового режима
+            if self.viewport_window is not None:
+                self.viewport_window.set_world_mode("editor")
 
-    def _enter_game_mode(self) -> None:
-        """Входит в игровой режим, сохраняя состояние сцены."""
-        if self._game_mode:
-            return
+            # Показываем гизмо
+            if self.gizmo_controller is not None:
+                self.gizmo_controller.set_visible(True)
 
-        import json
-        import numpy as np
+            # Обновляем дерево сцены
+            if self.scene_tree_controller is not None:
+                self.scene_tree_controller.rebuild()
 
-        # Конвертер numpy типов
-        def numpy_encoder(obj):
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            if isinstance(obj, np.floating):
-                return float(obj)
-            if isinstance(obj, np.integer):
-                return int(obj)
-            raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
-
-        # Сохраняем состояние сцены
-        data = {
-            "resources": self.resource_manager.serialize(),
-            "scene": self.scene.serialize(),
-        }
-        # Сериализуем в JSON и обратно для глубокого копирования
-        json_str = json.dumps(data, default=numpy_encoder)
-        self._saved_scene_state = json.loads(json_str)
-
-        # Переключаем режим
-        self._game_mode = True
-        if self.viewport_window is not None:
-            self.viewport_window.set_world_mode("game")
-
-        # Скрываем гизмо
-        if self.gizmo_controller is not None:
-            self.gizmo_controller.set_visible(False)
-
-        # Сбрасываем выделение
-        self.on_selection_changed(None)
-        if self.inspector is not None:
-            self.inspector.set_target(None)
-
-        # Запускаем игровой цикл
-        self._elapsed_timer.start()
-        self._game_timer.start(16)  # ~60 FPS
-
-        # Обновляем UI
-        self._update_game_mode_ui()
-        self._request_viewport_update()
-
-    def _exit_game_mode(self) -> None:
-        """Выходит из игрового режима, восстанавливая состояние сцены."""
-        if not self._game_mode:
-            return
-
-        # Останавливаем игровой цикл
-        self._game_timer.stop()
-
-        if self._saved_scene_state is None:
-            self._game_mode = False
-            self._update_game_mode_ui()
-            return
-
-        # Удаляем все serializable entities (игровые объекты)
-        for entity in list(self.scene.entities):
-            if entity.serializable:
-                self.scene.remove(entity)
-
-        # Очищаем и восстанавливаем ресурсы
-        self.resource_manager.materials.clear()
-        self.resource_manager.meshes.clear()
-        self.resource_manager.textures.clear()
-
-        resources_data = self._saved_scene_state.get("resources", {})
-        if resources_data:
-            restored_rm = ResourceManager.deserialize(resources_data)
-            self.resource_manager.materials.update(restored_rm.materials)
-            self.resource_manager.meshes.update(restored_rm.meshes)
-            self.resource_manager.textures.update(restored_rm.textures)
-
-        # Восстанавливаем сцену
-        scene_data = self._saved_scene_state.get("scene", {})
-        if scene_data:
-            self.scene.load_from_data(scene_data, context=None, update_settings=True)
-
-        # Очищаем сохранённое состояние
-        self._saved_scene_state = None
-
-        # Переключаем режим
-        self._game_mode = False
-        if self.viewport_window is not None:
-            self.viewport_window.set_world_mode("editor")
-
-        # Показываем гизмо
-        if self.gizmo_controller is not None:
-            self.gizmo_controller.set_visible(True)
-
-        # Обновляем UI
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.rebuild()
         self._update_game_mode_ui()
         self._request_viewport_update()
 
     def _update_game_mode_ui(self) -> None:
         """Обновляет состояние UI элементов в зависимости от режима."""
+        is_playing = self.game_mode_controller.is_playing if self.game_mode_controller else False
+
         if self._action_play is not None:
-            if self._game_mode:
+            if is_playing:
                 self._action_play.setText("Stop")
                 self._action_play.setShortcut("F5")
             else:
@@ -1006,22 +877,7 @@ class EditorWindow(QMainWindow):
 
         # Обновляем заголовок окна
         base_title = "Termin Editor"
-        if self._game_mode:
+        if is_playing:
             self.setWindowTitle(f"{base_title} [PLAYING]")
         else:
             self.setWindowTitle(base_title)
-
-    def _game_tick(self) -> None:
-        """Вызывается таймером в игровом режиме для обновления сцены."""
-        if not self._game_mode:
-            return
-
-        # Вычисляем dt в секундах
-        elapsed_ms = self._elapsed_timer.restart()
-        dt = elapsed_ms / 1000.0
-
-        # Обновляем сцену
-        self.scene.update(dt)
-
-        # Перерисовываем viewport
-        self._request_viewport_update()
