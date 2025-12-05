@@ -187,6 +187,9 @@ class&nbsp;Scene:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isinstance(component,&nbsp;InputComponent)&nbsp;and&nbsp;component&nbsp;in&nbsp;self._input_components:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._input_components.remove(component)<br>
 <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;component&nbsp;in&nbsp;self.update_list:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.update_list.remove(component)<br>
+<br>
 &nbsp;&nbsp;&nbsp;&nbsp;def&nbsp;update(self,&nbsp;dt:&nbsp;float):<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;component&nbsp;in&nbsp;self.update_list:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;component.update(dt)<br>

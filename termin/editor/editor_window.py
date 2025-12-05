@@ -2,7 +2,7 @@
 import os
 from PyQt5 import uic
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog, QMessageBox
-from PyQt5.QtCore import Qt, QPoint, QEvent, pyqtSignal
+from PyQt5.QtCore import Qt, QPoint, QEvent, pyqtSignal, QTimer, QElapsedTimer
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
@@ -39,6 +39,11 @@ class EditorWindow(QMainWindow):
         self._game_mode = False
         self._saved_scene_state: dict | None = None
 
+        # Game loop timer (60 FPS)
+        self._game_timer = QTimer(self)
+        self._game_timer.timeout.connect(self._game_tick)
+        self._elapsed_timer = QElapsedTimer()
+
         self.world = world
         self.scene = scene
 
@@ -54,6 +59,7 @@ class EditorWindow(QMainWindow):
 
         # --- ресурс-менеджер редактора ---
         self.resource_manager = ResourceManager.instance()
+        self._scan_builtin_components()
         self._init_resources_from_scene()
 
         # --- UI из .ui ---
@@ -346,6 +352,18 @@ class EditorWindow(QMainWindow):
             self.editor_entities.transform.link(camera_entity.transform)
         self.scene.add(camera_entity)
         self.camera = camera
+
+    def _scan_builtin_components(self):
+        """
+        Сканирует встроенные модули компонентов и регистрирует их в ResourceManager.
+        """
+        builtin_modules = [
+            "termin.visualization.components",
+            # Можно добавить другие модули
+        ]
+        loaded = self.resource_manager.scan_components(builtin_modules)
+        if loaded:
+            print(f"Loaded components: {loaded}")
 
     def _init_resources_from_scene(self):
         """
@@ -876,6 +894,10 @@ class EditorWindow(QMainWindow):
         if self.inspector is not None:
             self.inspector.set_target(None)
 
+        # Запускаем игровой цикл
+        self._elapsed_timer.start()
+        self._game_timer.start(16)  # ~60 FPS
+
         # Обновляем UI
         self._update_game_mode_ui()
         self._request_viewport_update()
@@ -884,6 +906,9 @@ class EditorWindow(QMainWindow):
         """Выходит из игрового режима, восстанавливая состояние сцены."""
         if not self._game_mode:
             return
+
+        # Останавливаем игровой цикл
+        self._game_timer.stop()
 
         if self._saved_scene_state is None:
             self._game_mode = False
@@ -946,3 +971,18 @@ class EditorWindow(QMainWindow):
             self.setWindowTitle(f"{base_title} [PLAYING]")
         else:
             self.setWindowTitle(base_title)
+
+    def _game_tick(self) -> None:
+        """Вызывается таймером в игровом режиме для обновления сцены."""
+        if not self._game_mode:
+            return
+
+        # Вычисляем dt в секундах
+        elapsed_ms = self._elapsed_timer.restart()
+        dt = elapsed_ms / 1000.0
+
+        # Обновляем сцену
+        self.scene.update(dt)
+
+        # Перерисовываем viewport
+        self._request_viewport_update()

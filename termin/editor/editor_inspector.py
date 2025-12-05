@@ -53,8 +53,19 @@ class ComponentsPanel(QWidget):
         layout.setContentsMargins(0, 8, 0, 0)
         layout.setSpacing(4)
 
+        # Заголовок с кнопкой добавления
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
         self._title = QLabel("Components")
-        layout.addWidget(self._title)
+        header.addWidget(self._title)
+        header.addStretch()
+
+        self._add_btn = QPushButton("+")
+        self._add_btn.setFixedSize(24, 24)
+        self._add_btn.setToolTip("Add Component")
+        self._add_btn.clicked.connect(self._show_add_component_menu)
+        header.addWidget(self._add_btn)
+        layout.addLayout(header)
 
         self._list = QListWidget()
         layout.addWidget(self._list)
@@ -96,6 +107,31 @@ class ComponentsPanel(QWidget):
             return None
         return self._entity.components[row]
 
+    def _get_component_library(self) -> list[tuple[str, type[Component]]]:
+        """Возвращает список доступных компонентов для добавления."""
+        if self._component_library:
+            return self._component_library
+        manager = ResourceManager.instance()
+        return sorted(manager.components.items())
+
+    def _show_add_component_menu(self):
+        """Показывает меню добавления компонента."""
+        if self._entity is None:
+            return
+
+        menu = QMenu(self)
+        component_library = self._get_component_library()
+
+        for label, cls in component_library:
+            act = QAction(label, self)
+            act.triggered.connect(
+                lambda _checked=False, c=cls: self._add_component(c)
+            )
+            menu.addAction(act)
+
+        # Показываем меню под кнопкой
+        menu.exec_(self._add_btn.mapToGlobal(self._add_btn.rect().bottomLeft()))
+
     def _on_context_menu(self, pos):
         if self._entity is None:
             return
@@ -108,10 +144,7 @@ class ComponentsPanel(QWidget):
         remove_action.triggered.connect(self._remove_current_component)
         menu.addAction(remove_action)
 
-        component_library = self._component_library
-        if not component_library:
-            manager = ResourceManager.instance()
-            component_library = sorted(manager.components.items())
+        component_library = self._get_component_library()
 
         if component_library:
             add_menu = menu.addMenu("Добавить компонент")

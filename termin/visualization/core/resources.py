@@ -63,7 +63,7 @@ class ResourceManager:
                 return n
         return None
 
-    # --------- Компоненты (на будущее) ---------
+    # --------- Компоненты ---------
     def register_component(self, name: str, cls: type["Component"]):
         self.components[name] = cls
 
@@ -72,6 +72,105 @@ class ResourceManager:
 
     def list_component_names(self) -> list[str]:
         return sorted(self.components.keys())
+
+    def scan_components(self, paths: list[str]) -> list[str]:
+        """
+        Сканирует директории/модули и загружает все Component подклассы.
+
+        Args:
+            paths: Список путей к директориям или имён модулей.
+                   Примеры: ["termin.visualization.components", "/home/user/my_components"]
+
+        Returns:
+            Список имён загруженных компонентов.
+        """
+        import importlib
+        import importlib.util
+        import os
+        import sys
+
+        loaded = []
+
+        for path in paths:
+            # Проверяем, это путь к директории или имя модуля
+            if os.path.isdir(path):
+                # Сканируем директорию
+                loaded.extend(self._scan_directory(path))
+            else:
+                # Пробуем как имя модуля
+                loaded.extend(self._scan_module(path))
+
+        return loaded
+
+    def _scan_module(self, module_name: str) -> list[str]:
+        """Загружает модуль и все его подмодули."""
+        import importlib
+        import pkgutil
+
+        loaded = []
+        before = set(self.components.keys())
+
+        try:
+            module = importlib.import_module(module_name)
+
+            # Если это пакет, сканируем подмодули
+            if hasattr(module, "__path__"):
+                for importer, name, is_pkg in pkgutil.walk_packages(
+                    module.__path__, prefix=module_name + "."
+                ):
+                    try:
+                        importlib.import_module(name)
+                    except Exception as e:
+                        print(f"Warning: Failed to import {name}: {e}")
+
+            after = set(self.components.keys())
+            loaded = list(after - before)
+
+        except Exception as e:
+            print(f"Warning: Failed to import module {module_name}: {e}")
+
+        return loaded
+
+    def _scan_directory(self, directory: str) -> list[str]:
+        """Сканирует директорию и загружает все .py файлы как модули."""
+        import importlib.util
+        import os
+        import sys
+
+        loaded = []
+        before = set(self.components.keys())
+
+        for root, dirs, files in os.walk(directory):
+            # Пропускаем __pycache__ и скрытые директории
+            dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
+
+            for filename in files:
+                if not filename.endswith(".py") or filename.startswith("_"):
+                    continue
+
+                filepath = os.path.join(root, filename)
+                module_name = os.path.splitext(filename)[0]
+
+                # Создаём уникальное имя модуля
+                rel_path = os.path.relpath(filepath, directory)
+                unique_name = f"_dynamic_components_.{rel_path.replace(os.sep, '.')[:-3]}"
+
+                try:
+                    spec = importlib.util.spec_from_file_location(unique_name, filepath)
+                    if spec is None or spec.loader is None:
+                        continue
+
+                    module = importlib.util.module_from_spec(spec)
+                    sys.modules[unique_name] = module
+                    spec.loader.exec_module(module)
+
+                except Exception as e:
+                    print(f"Warning: Failed to load {filepath}: {e}")
+
+        after = set(self.components.keys())
+        loaded = list(after - before)
+
+        return loaded
 
     # --------- Сериализация ---------
 

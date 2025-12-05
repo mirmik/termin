@@ -179,6 +179,9 @@ class Scene:
         if isinstance(component, InputComponent) and component in self._input_components:
             self._input_components.remove(component)
 
+        if component in self.update_list:
+            self.update_list.remove(component)
+
     def update(self, dt: float):
         for component in self.update_list:
             component.update(dt)
