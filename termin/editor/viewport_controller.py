@@ -324,8 +324,14 @@ class ViewportController:
         if pipeline is None:
             return result
         for p in pipeline.passes:
-            symbols = p.get_internal_symbols()
-            has_symbols = len(symbols) > 0
+            # Игнорируем внутренние символы для ShadowPass
+            # (ShadowMapArray не поддерживает отладку внутренних символов)
+            from termin.visualization.render.framegraph.passes.shadow import ShadowPass
+            if isinstance(p, ShadowPass):
+                has_symbols = False
+            else:
+                symbols = p.get_internal_symbols()
+                has_symbols = len(symbols) > 0
             result.append((p.pass_name, has_symbols))
         return result
 

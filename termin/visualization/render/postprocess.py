@@ -12,6 +12,7 @@ from termin.visualization.platform.backends.base import (
     TextureHandle,
 )
 from termin.visualization.render.framegraph import RenderFramePass, blit_fbo_to_fbo
+from termin.visualization.render.framegraph.passes.present import _get_texture_from_resource
 
 
 class PostEffect:
@@ -165,7 +166,10 @@ class PostProcessPass(RenderFramePass):
         if debug_symbol is not None and debug_output is not None:
             debug_fb = writes_fbos.get(debug_output)
 
-        color_tex = fb_in.color_texture()
+        # Извлекаем текстуру с учетом типа ресурса
+        color_tex = _get_texture_from_resource(fb_in)
+        if color_tex is None:
+            return
 
         # --- extra textures ---
         required_resources: set[str] = set()
@@ -179,7 +183,10 @@ class PostProcessPass(RenderFramePass):
             fb = reads_fbos.get(res_name)
             if fb is None:
                 continue
-            extra_textures[res_name] = fb.color_texture()
+            # Извлекаем текстуру с учетом типа ресурса
+            tex = _get_texture_from_resource(fb)
+            if tex is not None:
+                extra_textures[res_name] = tex
 
         fb_out_final = writes_fbos.get(self.output_res)
         if fb_out_final is None:
@@ -221,7 +228,10 @@ class PostProcessPass(RenderFramePass):
                 if debug_fb is not None and debug_symbol == effect_symbol:
                     self._blit_to_debug(graphics, fb_target, debug_fb, size, key)
 
-                current_tex = fb_target.color_texture()
+                # Извлекаем текстуру с учетом типа ресурса
+                current_tex = _get_texture_from_resource(fb_target)
+                if current_tex is None:
+                    break
         finally:
             # восстанавливаем "нормальное" состояние для последующих пассов
             graphics.set_depth_test(True)
