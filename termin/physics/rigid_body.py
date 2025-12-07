@@ -36,7 +36,8 @@ class RigidBody:
     ):
         # Пространственная инерция в СК тела (COM в начале координат по умолчанию)
         if spatial_inertia is None:
-            spatial_inertia = SpatialInertia3D(mass=1.0, inertia=np.eye(3) / 6.0)
+            # Единичный куб массой 1: I = 1/6 по каждой оси
+            spatial_inertia = SpatialInertia3D(mass=1.0, I_diag=np.array([1/6, 1/6, 1/6]))
         self.spatial_inertia = spatial_inertia
 
         # Поза: СК тела в мире
@@ -129,26 +130,31 @@ class RigidBody:
         if self.is_static:
             return
 
-        # Строим пространственный импульс в мировой СК
-        # r измеряется относительно позиции тела (начала СК тела)
+        # Пространственный импульс: J = (r × impulse, impulse)
         r = point - self.position
         J = Screw3(ang=np.cross(r, impulse), lin=impulse)
 
-        # Инерция повёрнутая в мировую СК (без трансляции COM)
+        # Инерция в мировой СК (только поворот, без трансляции COM)
         I_world = self.spatial_inertia.rotated_by(self.pose)
 
         # Δv = I⁻¹ · J
-        dv = I_world.solve(J)
-
-        self.velocity = self.velocity + dv
+        self.velocity = self.velocity + I_world.solve(J)
 
     # ----------------------------------------------------------------
     #  Кинематика
     # ----------------------------------------------------------------
     def point_velocity(self, point: np.ndarray) -> np.ndarray:
         """Скорость точки, закреплённой на теле (мировые координаты)."""
-        r = point - self.position
-        return self.velocity.lin + np.cross(self.velocity.ang, r)
+        rx = point[0] - self.position[0]
+        ry = point[1] - self.position[1]
+        rz = point[2] - self.position[2]
+        wx, wy, wz = self.velocity.ang
+        # ω × r = (wy*rz - wz*ry, wz*rx - wx*rz, wx*ry - wy*rx)
+        return np.array([
+            self.velocity.lin[0] + wy * rz - wz * ry,
+            self.velocity.lin[1] + wz * rx - wx * rz,
+            self.velocity.lin[2] + wx * ry - wy * rx,
+        ])
 
     # ----------------------------------------------------------------
     #  Интегрирование (в стиле Фезерстоуна)
@@ -223,17 +229,15 @@ class RigidBody:
         size = np.asarray(size, dtype=np.float64)
         sx, sy, sz = size
 
-        # Тензор инерции кубоида (относительно центра масс)
+        # Главные моменты инерции кубоида
         Ixx = (mass / 12.0) * (sy**2 + sz**2)
         Iyy = (mass / 12.0) * (sx**2 + sz**2)
         Izz = (mass / 12.0) * (sx**2 + sy**2)
-        inertia = np.diag([Ixx, Iyy, Izz])
 
-        # COM в начале СК тела
+        # COM в начале СК тела, главные оси совпадают с осями тела
         spatial_inertia = SpatialInertia3D(
             mass=mass,
-            inertia=inertia,
-            com=np.zeros(3),
+            I_diag=np.array([Ixx, Iyy, Izz]),
         )
 
         collider = BoxCollider(
@@ -258,14 +262,12 @@ class RigidBody:
         """Создать сферу с правильной пространственной инерцией."""
         from termin.colliders.sphere import SphereCollider
 
-        # Инерция сферы: I = (2/5) * m * r²
+        # Инерция сферы: I = (2/5) * m * r² (одинаковая по всем осям)
         I = (2.0 / 5.0) * mass * radius**2
-        inertia = np.diag([I, I, I])
 
         spatial_inertia = SpatialInertia3D(
             mass=mass,
-            inertia=inertia,
-            com=np.zeros(3),
+            I_diag=np.array([I, I, I]),
         )
 
         collider = SphereCollider(
