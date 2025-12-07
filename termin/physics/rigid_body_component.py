@@ -1,12 +1,13 @@
-"""Компонент RigidBody для сущностей визуализации."""
+"""Компонент RigidBody для сущностей визуализации (C++ backend)."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 import numpy as np
 
 from termin.visualization.core.entity import Component
-from termin.physics.rigid_body import RigidBody
+from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat, Screw3
+from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase.pose3 import Pose3
 
 if TYPE_CHECKING:
@@ -17,7 +18,7 @@ class RigidBodyComponent(Component):
     """
     Компонент, связывающий RigidBody с Entity.
 
-    Синхронизирует позу физического тела с трансформом сущности.
+    Использует C++ бэкенд. Синхронизирует позу физического тела с трансформом сущности.
     """
 
     def __init__(
@@ -33,12 +34,12 @@ class RigidBodyComponent(Component):
         self.restitution = restitution
         self.friction = friction
 
-        # Будет создано в start()
-        self._rigid_body: RigidBody | None = None
+        # Индекс тела в C++ PhysicsWorld (-1 = не зарегистрировано)
+        self._body_index: int = -1
+        self._physics_world: Optional[PhysicsWorld] = None
 
-    @property
-    def rigid_body(self) -> RigidBody | None:
-        return self._rigid_body
+        # Размеры коллайдера (определяются в start)
+        self._half_extents: np.ndarray = np.array([0.5, 0.5, 0.5])
 
     def start(self, scene: "Scene"):
         super().start(scene)
@@ -46,111 +47,116 @@ class RigidBodyComponent(Component):
         if self.entity is None:
             return
 
-        from termin.fem.inertia3d import SpatialInertia3D
+        # Определяем размеры коллайдера из меша сущности
+        self._half_extents = self._compute_half_extents()
 
-        # Получаем начальную позу из трансформа сущности
-        initial_pose = self.entity.transform.global_pose()
-
-        # Определяем коллайдер из меша сущности (если есть)
-        collider = self._create_collider_from_entity()
-
-        # Вычисляем главные моменты инерции на основе типа коллайдера
-        I_diag = self._compute_inertia_diag(collider)
-
-        # Создаём пространственную инерцию с COM в начале координат
-        spatial_inertia = SpatialInertia3D(
-            mass=self.mass if not self.is_static else 0.0,
-            I_diag=I_diag,
-        )
-
-        self._rigid_body = RigidBody(
-            spatial_inertia=spatial_inertia,
-            pose=initial_pose,
-            collider=collider,
-            is_static=self.is_static,
-        )
-
-    def _create_collider_from_entity(self):
-        """Попытка создать коллайдер на основе меша сущности."""
+    def _compute_half_extents(self) -> np.ndarray:
+        """Вычислить half_extents из меша или коллайдера сущности."""
         if self.entity is None:
-            return None
+            return np.array([0.5, 0.5, 0.5])
 
         # Проверяем наличие существующего компонента коллайдера
         from termin.colliders.collider_component import ColliderComponent
+        from termin.colliders.box import BoxCollider as PyBoxCollider
+        from termin.colliders.sphere import SphereCollider as PySphereCollider
+
         collider_comp = self.entity.get_component(ColliderComponent)
         if collider_comp is not None:
-            return collider_comp.collider
+            collider = collider_comp.collider
+            if isinstance(collider, PyBoxCollider):
+                return collider.size / 2.0
+            elif isinstance(collider, PySphereCollider):
+                r = collider.radius
+                return np.array([r, r, r])
 
         # Пробуем создать из меш-рендерера
         from termin.visualization.render.components.mesh_renderer import MeshRenderer
         mesh_renderer = self.entity.get_component(MeshRenderer)
         if mesh_renderer is not None and mesh_renderer.mesh is not None:
-            # Аппроксимируем box-коллайдером по границам меша
             mesh = mesh_renderer.mesh
             if hasattr(mesh, 'get_bounds'):
                 bounds = mesh.get_bounds()
-                from termin.colliders.box import BoxCollider
                 size = bounds.max_point - bounds.min_point
-                center = (bounds.max_point + bounds.min_point) / 2
-                return BoxCollider(center=center, size=size)
+                return size / 2.0
 
         # По умолчанию: единичный куб
-        from termin.colliders.box import BoxCollider
-        return BoxCollider(
-            center=np.zeros(3, dtype=np.float32),
-            size=np.ones(3, dtype=np.float32),
-        )
+        return np.array([0.5, 0.5, 0.5])
 
-    def _compute_inertia_diag(self, collider) -> np.ndarray:
-        """Вычисление главных моментов инерции на основе формы коллайдера."""
-        from termin.colliders.box import BoxCollider
-        from termin.colliders.sphere import SphereCollider
-
-        m = self.mass
-
-        if isinstance(collider, BoxCollider):
-            sx, sy, sz = collider.size
-            Ixx = (m / 12.0) * (sy**2 + sz**2)
-            Iyy = (m / 12.0) * (sx**2 + sz**2)
-            Izz = (m / 12.0) * (sx**2 + sy**2)
-            return np.array([Ixx, Iyy, Izz])
-
-        elif isinstance(collider, SphereCollider):
-            r = collider.radius
-            I = (2.0 / 5.0) * m * r**2
-            return np.array([I, I, I])
-
-        else:
-            # По умолчанию: инерция единичного куба
-            return np.array([m / 6.0, m / 6.0, m / 6.0])
-
-    def update(self, dt: float):
-        """Синхронизация трансформа сущности из физического тела."""
-        if self._rigid_body is None or self.entity is None:
+    def _register_with_world(self, world: PhysicsWorld):
+        """Зарегистрировать тело в C++ PhysicsWorld."""
+        if self.entity is None:
             return
 
-        # Копируем позу из физики в сущность
-        self.entity.transform.relocate(self._rigid_body.pose)
+        self._physics_world = world
+
+        # Получаем начальную позу
+        py_pose = self.entity.transform.global_pose()
+        cpp_pose = CppPose3(
+            Quat(py_pose.ang[0], py_pose.ang[1], py_pose.ang[2], py_pose.ang[3]),
+            Vec3(py_pose.lin[0], py_pose.lin[1], py_pose.lin[2])
+        )
+
+        # Добавляем тело в C++ мир
+        sx, sy, sz = self._half_extents * 2.0  # size = 2 * half_extents
+        self._body_index = world.add_box(
+            sx, sy, sz,
+            self.mass,
+            cpp_pose,
+            self.is_static
+        )
+
+    def _sync_from_physics(self):
+        """Синхронизация трансформа сущности из C++ физического тела."""
+        if self._body_index < 0 or self._physics_world is None or self.entity is None:
+            return
+
+        # Получаем тело из C++ мира
+        cpp_body = self._physics_world.get_body(self._body_index)
+        cpp_pose = cpp_body.pose
+
+        # Конвертируем в Python Pose3
+        py_pose = Pose3(
+            ang=np.array([cpp_pose.ang.x, cpp_pose.ang.y, cpp_pose.ang.z, cpp_pose.ang.w]),
+            lin=np.array([cpp_pose.lin.x, cpp_pose.lin.y, cpp_pose.lin.z])
+        )
+
+        # Обновляем трансформ сущности
+        self.entity.transform.relocate(py_pose)
 
     def sync_to_physics(self):
         """Синхронизация физического тела из трансформа сущности (для редактора)."""
-        if self._rigid_body is None or self.entity is None:
+        if self._body_index < 0 or self._physics_world is None or self.entity is None:
             return
 
-        self._rigid_body.pose = self.entity.transform.global_pose()
-        # Сбрасываем скорости при телепортации
-        from termin.geombase.screw import Screw3
-        self._rigid_body.velocity = Screw3(
-            ang=np.zeros(3, dtype=np.float64),
-            lin=np.zeros(3, dtype=np.float64),
+        py_pose = self.entity.transform.global_pose()
+        cpp_body = self._physics_world.get_body(self._body_index)
+
+        # Обновляем позу
+        cpp_body.pose = CppPose3(
+            Quat(py_pose.ang[0], py_pose.ang[1], py_pose.ang[2], py_pose.ang[3]),
+            Vec3(py_pose.lin[0], py_pose.lin[1], py_pose.lin[2])
         )
 
-    def apply_force(self, force: np.ndarray, point: np.ndarray | None = None):
-        """Приложить силу к твёрдому телу."""
-        if self._rigid_body is not None:
-            self._rigid_body.apply_force(force, point)
+        # Сбрасываем скорости при телепортации
+        cpp_body.velocity = Screw3()
 
     def apply_impulse(self, impulse: np.ndarray, point: np.ndarray):
         """Приложить импульс к твёрдому телу."""
-        if self._rigid_body is not None:
-            self._rigid_body.apply_impulse(impulse, point)
+        if self._body_index < 0 or self._physics_world is None:
+            return
+
+        cpp_body = self._physics_world.get_body(self._body_index)
+        cpp_body.apply_impulse(
+            Vec3(impulse[0], impulse[1], impulse[2]),
+            Vec3(point[0], point[1], point[2])
+        )
+
+    # Legacy compatibility
+    @property
+    def rigid_body(self):
+        """Для совместимости - возвращает None (тело теперь в C++)."""
+        return None
+
+    def update(self, dt: float):
+        """Legacy - синхронизация теперь через _sync_from_physics."""
+        self._sync_from_physics()

@@ -9,12 +9,15 @@ cd build
 
 # Configure
 cmake .. -DCMAKE_BUILD_TYPE=Release \
-         -DCMAKE_INSTALL_PREFIX=../../termin/geombase
+         -DCMAKE_INSTALL_PREFIX=../../termin
 
 # Build
 cmake --build . -j$(nproc)
 
-# Install to python package
+# Install to python packages
 cmake --install .
 
-echo "Build complete! Module installed to termin/geombase/_geom_native.so"
+echo "Build complete!"
+echo "  termin/geombase/_geom_native.so"
+echo "  termin/colliders/_colliders_native.so"
+echo "  termin/physics/_physics_native.so"
