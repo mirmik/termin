@@ -69,6 +69,18 @@ class SpatialInertia3D:
         Ic_new = R @ self.Ic @ R.T
         return SpatialInertia3D(self.m, Ic_new, c_new)
 
+    def rotated_by(self, pose: Pose3) -> "SpatialInertia3D":
+        """
+        Повернуть spatial inertia матрицей поворота из pose (без трансляции).
+
+        Используется для преобразования инерции в мировую СК при вычислении
+        импульсов, когда точка приложения уже задана относительно позиции тела.
+        """
+        R = pose.rotation_matrix()
+        c_new = R @ self.c
+        Ic_new = R @ self.Ic @ R.T
+        return SpatialInertia3D(self.m, Ic_new, c_new)
+
     # ------------------------------------------------------------
     #     Spatial inertia matrix (VW order)
     # ------------------------------------------------------------

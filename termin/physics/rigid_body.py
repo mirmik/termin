@@ -118,26 +118,29 @@ class RigidBody:
             self.wrench = self.wrench + Screw3(ang=np.zeros(3), lin=force)
         else:
             r = point - self.position
-            torque = np.cross(r, force)
-            self.wrench = self.wrench + Screw3(ang=torque, lin=force)
+            self.wrench = self.wrench + Screw3(ang=np.cross(r, force), lin=force)
 
     def apply_impulse(self, impulse: np.ndarray, point: np.ndarray):
         """
         Приложить импульс в точке. Меняет скорость напрямую.
-        Δv = M⁻¹ * J, где J — пространственный импульс.
+
+        Δv = I⁻¹ · J, где J — пространственный импульс (wrench).
         """
         if self.is_static:
             return
 
-        # Изменение линейной скорости
-        dv_lin = impulse * self.inv_mass
-
-        # Изменение угловой скорости: Δω = I⁻¹ * (r × impulse)
+        # Строим пространственный импульс в мировой СК
+        # r измеряется относительно позиции тела (начала СК тела)
         r = point - self.position
-        angular_impulse = np.cross(r, impulse)
-        dv_ang = self.world_inertia_inv() @ angular_impulse
+        J = Screw3(ang=np.cross(r, impulse), lin=impulse)
 
-        self.velocity = self.velocity + Screw3(ang=dv_ang, lin=dv_lin)
+        # Инерция повёрнутая в мировую СК (без трансляции COM)
+        I_world = self.spatial_inertia.rotated_by(self.pose)
+
+        # Δv = I⁻¹ · J
+        dv = I_world.solve(J)
+
+        self.velocity = self.velocity + dv
 
     # ----------------------------------------------------------------
     #  Кинематика
