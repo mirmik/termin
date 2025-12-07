@@ -97,6 +97,8 @@ class Scene:
         # Skybox (lazily initialized)
         self._skybox_mesh: "MeshDrawable | None" = None
         self._skybox_material: "Material | None" = None
+        self.skybox_type: str = "gradient"  # "gradient", "solid", "none"
+        self.skybox_color = np.array([0.3, 0.5, 0.8], dtype=np.float32)  # for solid skybox
 
     def _ensure_skybox_mesh(self) -> "MeshDrawable":
         """Lazily create skybox cube mesh."""
@@ -107,28 +109,52 @@ class Scene:
             self._skybox_mesh = MeshDrawable.from_vertices_indices(vertices, triangles)
         return self._skybox_mesh
 
-    def _ensure_skybox_material(self) -> "Material":
-        """Lazily create default skybox material with gradient shader."""
-        if self._skybox_material is None:
-            from termin.visualization.core.material import Material
-            from termin.visualization.render.shader import ShaderProgram
-            from termin.visualization.render.skybox import SKYBOX_VERTEX_SHADER, SKYBOX_FRAGMENT_SHADER
-            shader = ShaderProgram(
-                vertex_source=SKYBOX_VERTEX_SHADER,
-                fragment_source=SKYBOX_FRAGMENT_SHADER,
-            )
-            material = Material(shader=shader)
-            material.color = None  # Skybox doesn't use u_color
-            self._skybox_material = material
-        return self._skybox_material
+    def _create_gradient_skybox_material(self) -> "Material":
+        """Create gradient skybox material."""
+        from termin.visualization.core.material import Material
+        from termin.visualization.render.shader import ShaderProgram
+        from termin.visualization.render.skybox import SKYBOX_VERTEX_SHADER, SKYBOX_FRAGMENT_SHADER
+        shader = ShaderProgram(
+            vertex_source=SKYBOX_VERTEX_SHADER,
+            fragment_source=SKYBOX_FRAGMENT_SHADER,
+        )
+        material = Material(shader=shader)
+        material.color = None
+        return material
+
+    def _create_solid_skybox_material(self) -> "Material":
+        """Create solid color skybox material."""
+        from termin.visualization.core.material import Material
+        from termin.visualization.render.shader import ShaderProgram
+        from termin.visualization.render.skybox import SKYBOX_VERTEX_SHADER, SKYBOX_SOLID_FRAGMENT_SHADER
+        shader = ShaderProgram(
+            vertex_source=SKYBOX_VERTEX_SHADER,
+            fragment_source=SKYBOX_SOLID_FRAGMENT_SHADER,
+        )
+        material = Material(shader=shader)
+        material.color = None
+        return material
 
     def skybox_mesh(self) -> "MeshDrawable":
         """Get skybox cube mesh."""
         return self._ensure_skybox_mesh()
 
-    def skybox_material(self) -> "Material":
-        """Get skybox material."""
-        return self._ensure_skybox_material()
+    def skybox_material(self) -> "Material | None":
+        """Get skybox material based on current skybox_type."""
+        if self.skybox_type == "none":
+            return None
+        if self._skybox_material is None:
+            if self.skybox_type == "solid":
+                self._skybox_material = self._create_solid_skybox_material()
+            else:
+                self._skybox_material = self._create_gradient_skybox_material()
+        return self._skybox_material
+
+    def set_skybox_type(self, skybox_type: str) -> None:
+        """Set skybox type and reset material if type changed."""
+        if self.skybox_type != skybox_type:
+            self.skybox_type = skybox_type
+            self._skybox_material = None  # force recreation
 
     def build_lights(self) -> List[Light]:
         """
@@ -273,6 +299,8 @@ class Scene:
             "light_color": list(self.light_color),
             "ambient_color": list(self.ambient_color),
             "ambient_intensity": self.ambient_intensity,
+            "skybox_type": self.skybox_type,
+            "skybox_color": list(self.skybox_color),
             "entities": serialized_entities,
         }
 
@@ -313,6 +341,13 @@ class Scene:
                 dtype=np.float32
             )
             self.ambient_intensity = data.get("ambient_intensity", 0.1)
+
+            skybox_type = data.get("skybox_type", "gradient")
+            self.set_skybox_type(skybox_type)
+            self.skybox_color = np.asarray(
+                data.get("skybox_color", [0.3, 0.5, 0.8]),
+                dtype=np.float32
+            )
 
         loaded_count = 0
         for ent_data in data.get("entities", []):

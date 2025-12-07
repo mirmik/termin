@@ -37,6 +37,19 @@ void main() {
 }
 """
 
+SKYBOX_SOLID_FRAGMENT_SHADER = """
+#version 330 core
+
+in vec3 v_dir;
+out vec4 FragColor;
+
+uniform vec3 u_skybox_color;
+
+void main() {
+    FragColor = vec4(u_skybox_color, 1.0);
+}
+"""
+
 
 def _skybox_cube():
     F = 1.0  # большой размер куба

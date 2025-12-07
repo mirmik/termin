@@ -118,6 +118,13 @@ class SkyBoxPass(RenderFramePass):
             context_key=context_key,
         )
 
+        # Upload skybox color for solid skybox shader
+        if scene.skybox_type == "solid":
+            material.shader.set_uniform_vec3(
+                "u_skybox_color",
+                np.asarray(scene.skybox_color, dtype=np.float32),
+            )
+
         render_context = RenderContext(
             view=view_no_translation,
             projection=projection,

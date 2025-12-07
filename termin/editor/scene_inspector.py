@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QPushButton,
     QGroupBox,
+    QComboBox,
 )
 from PyQt5.QtGui import QColor
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -141,12 +142,31 @@ class SceneInspector(QWidget):
 
         layout.addWidget(ambient_group)
 
+        # Skybox group
+        skybox_group = QGroupBox("Skybox")
+        skybox_layout = QFormLayout(skybox_group)
+        skybox_layout.setLabelAlignment(Qt.AlignLeft)
+
+        self._skybox_type_combo = QComboBox()
+        self._skybox_type_combo.addItem("Gradient", "gradient")
+        self._skybox_type_combo.addItem("Solid Color", "solid")
+        self._skybox_type_combo.addItem("None", "none")
+        skybox_layout.addRow(QLabel("Type:"), self._skybox_type_combo)
+
+        self._skybox_color_btn = self._create_color_button()
+        self._skybox_color_label = QLabel("Color:")
+        skybox_layout.addRow(self._skybox_color_label, self._skybox_color_btn)
+
+        layout.addWidget(skybox_group)
+
         layout.addStretch()
 
         # Connect signals
         self._bg_color_btn.clicked.connect(self._on_bg_color_clicked)
         self._ambient_color_btn.clicked.connect(self._on_ambient_color_clicked)
         self._ambient_intensity_spin.valueChanged.connect(self._on_ambient_intensity_changed)
+        self._skybox_type_combo.currentIndexChanged.connect(self._on_skybox_type_changed)
+        self._skybox_color_btn.clicked.connect(self._on_skybox_color_clicked)
 
     def _create_color_button(self) -> QPushButton:
         """Create a color picker button."""
@@ -201,6 +221,21 @@ class SceneInspector(QWidget):
 
             # Ambient intensity
             self._ambient_intensity_spin.setValue(self._scene.ambient_intensity)
+
+            # Skybox type
+            skybox_type = self._scene.skybox_type
+            index = self._skybox_type_combo.findData(skybox_type)
+            if index >= 0:
+                self._skybox_type_combo.setCurrentIndex(index)
+
+            # Skybox color visibility and value
+            show_color = (skybox_type == "solid")
+            self._skybox_color_btn.setVisible(show_color)
+            self._skybox_color_label.setVisible(show_color)
+
+            skybox_color = self._scene.skybox_color
+            qcolor = _to_qcolor(skybox_color)
+            self._skybox_color_btn._set_color(qcolor)
         finally:
             self._updating_from_model = False
 
@@ -273,3 +308,71 @@ class SceneInspector(QWidget):
             self._scene.ambient_intensity = new_value
 
         self.scene_changed.emit()
+
+    def _on_skybox_type_changed(self, index: int) -> None:
+        """Handle skybox type combo change."""
+        if self._updating_from_model or self._scene is None:
+            return
+
+        new_type = self._skybox_type_combo.itemData(index)
+        old_type = self._scene.skybox_type
+
+        if new_type == old_type:
+            return
+
+        # Update visibility of color button
+        show_color = (new_type == "solid")
+        self._skybox_color_btn.setVisible(show_color)
+        self._skybox_color_label.setVisible(show_color)
+
+        if self._push_undo_command is not None:
+            cmd = SkyboxTypeEditCommand(self._scene, old_type, new_type)
+            self._push_undo_command(cmd, False)
+        else:
+            self._scene.set_skybox_type(new_type)
+
+        self.scene_changed.emit()
+
+    def _on_skybox_color_clicked(self) -> None:
+        """Handle skybox color button click."""
+        if self._scene is None:
+            return
+
+        current = self._scene.skybox_color
+        initial = (float(current[0]), float(current[1]), float(current[2]), 1.0)
+
+        result = ColorDialog.get_color(initial, self)
+        if result is None:
+            return
+
+        old_value = self._scene.skybox_color.copy()
+        new_value = np.array([result[0], result[1], result[2]], dtype=np.float32)
+
+        if self._push_undo_command is not None:
+            cmd = ScenePropertyEditCommand(
+                self._scene, "skybox_color", old_value, new_value
+            )
+            self._push_undo_command(cmd, False)
+        else:
+            self._scene.skybox_color = new_value
+
+        self._refresh_from_scene()
+        self.scene_changed.emit()
+
+
+class SkyboxTypeEditCommand(UndoCommand):
+    """Undo command for changing skybox type."""
+
+    def __init__(self, scene: Scene, old_type: str, new_type: str):
+        self._scene = scene
+        self._old_type = old_type
+        self._new_type = new_type
+
+    def do(self) -> None:
+        self._scene.set_skybox_type(self._new_type)
+
+    def undo(self) -> None:
+        self._scene.set_skybox_type(self._old_type)
+
+    def __repr__(self) -> str:
+        return f"SkyboxTypeEditCommand({self._old_type} -> {self._new_type})"
