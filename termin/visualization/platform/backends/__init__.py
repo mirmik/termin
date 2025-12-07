@@ -31,7 +31,10 @@ def set_default_graphics_backend(backend: GraphicsBackend):
     _default_graphics_backend = backend
 
 
-def get_default_graphics_backend() -> Optional[GraphicsBackend]:
+def get_default_graphics_backend() -> GraphicsBackend:
+    global _default_graphics_backend
+    if _default_graphics_backend is None:
+        _default_graphics_backend = OpenGLGraphicsBackend()
     return _default_graphics_backend
 
 
@@ -40,7 +43,10 @@ def set_default_window_backend(backend: WindowBackend):
     _default_window_backend = backend
 
 
-def get_default_window_backend() -> Optional[WindowBackend]:
+def get_default_window_backend() -> WindowBackend:
+    global _default_window_backend
+    if _default_window_backend is None:
+        _default_window_backend = GLFWWindowBackend()
     return _default_window_backend
 
 
