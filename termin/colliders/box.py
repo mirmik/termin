@@ -140,6 +140,109 @@ class BoxCollider(Collider):
         closest_sphere_point_world = self.pose.transform_point(closest_sphere_point)
         return closest_aabb_point_world, closest_sphere_point_world, distance
 
+    def closest_to_box(self, other: "BoxCollider"):
+        """
+        Box-Box collision using SAT (Separating Axis Theorem).
+        Returns (point_on_self, point_on_other, distance).
+        Distance is negative if penetrating.
+
+        For penetrating boxes, point_on_self contains the contact normal
+        (hack to pass extra info without changing API).
+        """
+        import numpy as np
+
+        # Get world-space centers and rotation matrices
+        center_a = self.pose.transform_point(self.center)
+        center_b = other.pose.transform_point(other.center)
+
+        R_a = self.pose.rotation_matrix()
+        R_b = other.pose.rotation_matrix()
+
+        half_a = self.size / 2.0
+        half_b = other.size / 2.0
+
+        # Axes of box A (columns of rotation matrix)
+        axes_a = [R_a[:, i] for i in range(3)]
+        # Axes of box B
+        axes_b = [R_b[:, i] for i in range(3)]
+
+        # Vector from center A to center B
+        d = center_b - center_a
+
+        # SAT: test 15 axes
+        min_overlap = float('inf')
+        best_axis = None
+
+        def project_box(center, axes, half_extents, axis):
+            """Project box onto axis, return (min, max)."""
+            c_proj = np.dot(center, axis)
+            r = sum(abs(np.dot(axes[i], axis)) * half_extents[i] for i in range(3))
+            return c_proj - r, c_proj + r
+
+        def test_axis(axis):
+            nonlocal min_overlap, best_axis
+
+            length = np.linalg.norm(axis)
+            if length < 1e-8:
+                return True  # Degenerate axis, skip
+
+            axis = axis / length
+
+            min_a, max_a = project_box(center_a, axes_a, half_a, axis)
+            min_b, max_b = project_box(center_b, axes_b, half_b, axis)
+
+            # Check overlap
+            if max_a < min_b or max_b < min_a:
+                return False  # Separating axis found
+
+            # Calculate overlap
+            overlap = min(max_a, max_b) - max(min_a, min_b)
+            if overlap < min_overlap:
+                min_overlap = overlap
+                # Make axis point from A to B
+                if np.dot(d, axis) < 0:
+                    axis = -axis
+                best_axis = axis.copy()
+
+            return True
+
+        # Test face normals of A
+        for i in range(3):
+            if not test_axis(axes_a[i]):
+                # Separating axis found - boxes don't collide
+                # Find closest points (approximate)
+                p_a = center_a + np.clip(d, -half_a, half_a)
+                p_b = center_b + np.clip(-d, -half_b, half_b)
+                return p_a, p_b, np.linalg.norm(p_b - p_a)
+
+        # Test face normals of B
+        for i in range(3):
+            if not test_axis(axes_b[i]):
+                p_a = center_a + np.clip(d, -half_a, half_a)
+                p_b = center_b + np.clip(-d, -half_b, half_b)
+                return p_a, p_b, np.linalg.norm(p_b - p_a)
+
+        # Test edge-edge cross products
+        for i in range(3):
+            for j in range(3):
+                axis = np.cross(axes_a[i], axes_b[j])
+                if not test_axis(axis):
+                    p_a = center_a + np.clip(d, -half_a, half_a)
+                    p_b = center_b + np.clip(-d, -half_b, half_b)
+                    return p_a, p_b, np.linalg.norm(p_b - p_a)
+
+        # Boxes are colliding - find contact point
+        # Use the axis with minimum penetration
+        if best_axis is None:
+            best_axis = np.array([0, 0, 1], dtype=np.float64)
+
+        penetration = min_overlap
+        contact_point = (center_a + center_b) / 2.0
+
+        # Return: (contact_normal, contact_point, -penetration)
+        # Using p_a slot for normal since we're penetrating
+        return best_axis, contact_point, -penetration
+
     def closest_to_collider(self, other: "Collider"):
         from .capsule import CapsuleCollider
         from .sphere import SphereCollider
@@ -147,5 +250,7 @@ class BoxCollider(Collider):
             return self.closest_point_to_capsule(other)
         elif isinstance(other, SphereCollider):
             return self.closest_to_sphere(other)
+        elif isinstance(other, BoxCollider):
+            return self.closest_to_box(other)
         else:
             raise NotImplementedError(f"closest_to_collider not implemented for {type(other)}")

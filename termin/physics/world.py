@@ -206,17 +206,25 @@ class PhysicsWorld:
         try:
             p_a, p_b, distance = collider_a.closest_to_collider(collider_b)
 
-            if distance < 0.01:  # Contact threshold
-                # Normal from A to B
-                diff = p_b - p_a
-                dist = np.linalg.norm(diff)
-                if dist > 1e-8:
-                    normal = diff / dist
+            # Negative distance means penetration (from SAT)
+            if distance <= 0.01:  # Contact threshold
+                if distance < 0:
+                    # Penetrating - for Box-Box SAT:
+                    # p_a = contact normal (pointing from A to B)
+                    # p_b = contact point
+                    penetration = -distance
+                    normal = np.asarray(p_a, dtype=np.float64)
+                    contact_point = np.asarray(p_b, dtype=np.float64)
                 else:
-                    normal = np.array([0, 0, 1], dtype=np.float64)
-
-                contact_point = (p_a + p_b) / 2
-                penetration = max(0, 0.01 - distance)
+                    # Close but not penetrating
+                    diff = p_b - p_a
+                    dist = np.linalg.norm(diff)
+                    if dist > 1e-8:
+                        normal = diff / dist
+                    else:
+                        normal = np.array([0, 0, 1], dtype=np.float64)
+                    contact_point = (p_a + p_b) / 2
+                    penetration = max(0, 0.01 - distance)
 
                 contacts.append(Contact(
                     body_a=body_a,
