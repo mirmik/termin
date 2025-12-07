@@ -191,7 +191,7 @@ class RigidBody:
 
         delta = Screw3(ang=self.velocity.ang * dt, lin=self.velocity.lin * dt)
         delta_pose = delta.to_pose()
-        self.pose = delta_pose.small_compose(self.pose) # Почему при замене small_compose на compose система разваливается?
+        self.pose = delta_pose.small_compose(self.pose)
 
     def world_collider(self) -> Collider | None:
         """Get collider transformed to world frame."""
