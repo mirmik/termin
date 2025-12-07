@@ -123,7 +123,7 @@ class RigidBodyComponent(Component):
             return
 
         # Copy pose from physics to entity
-        self.entity.transform.local_pose = self._rigid_body.pose
+        self.entity.transform.relocate(self._rigid_body.pose)
 
     def sync_to_physics(self):
         """Sync physics body from entity transform (for editor manipulation)."""
