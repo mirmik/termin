@@ -1,4 +1,4 @@
-"""RigidBody component for visualization entities."""
+"""Компонент RigidBody для сущностей визуализации."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 
 class RigidBodyComponent(Component):
     """
-    Component that binds a RigidBody to an Entity.
+    Компонент, связывающий RigidBody с Entity.
 
-    Synchronizes physics pose with entity transform.
+    Синхронизирует позу физического тела с трансформом сущности.
     """
 
     def __init__(
@@ -33,7 +33,7 @@ class RigidBodyComponent(Component):
         self.restitution = restitution
         self.friction = friction
 
-        # Will be created in start()
+        # Будет создано в start()
         self._rigid_body: RigidBody | None = None
 
     @property
@@ -46,39 +46,47 @@ class RigidBodyComponent(Component):
         if self.entity is None:
             return
 
-        # Get initial pose from entity transform
+        from termin.fem.inertia3d import SpatialInertia3D
+
+        # Получаем начальную позу из трансформа сущности
         initial_pose = self.entity.transform.global_pose()
 
-        # Determine collider from entity's mesh (if any)
+        # Определяем коллайдер из меша сущности (если есть)
         collider = self._create_collider_from_entity()
 
-        # Compute inertia based on collider type
+        # Вычисляем инерцию на основе типа коллайдера
         inertia = self._compute_inertia(collider)
 
-        self._rigid_body = RigidBody(
+        # Создаём пространственную инерцию с COM в начале координат
+        spatial_inertia = SpatialInertia3D(
             mass=self.mass if not self.is_static else 0.0,
             inertia=inertia,
+            com=np.zeros(3),
+        )
+
+        self._rigid_body = RigidBody(
+            spatial_inertia=spatial_inertia,
             pose=initial_pose,
             collider=collider,
             is_static=self.is_static,
         )
 
     def _create_collider_from_entity(self):
-        """Try to create a collider based on entity's mesh."""
+        """Попытка создать коллайдер на основе меша сущности."""
         if self.entity is None:
             return None
 
-        # Check for existing collider component
+        # Проверяем наличие существующего компонента коллайдера
         from termin.colliders.collider_component import ColliderComponent
         collider_comp = self.entity.get_component(ColliderComponent)
         if collider_comp is not None:
             return collider_comp.collider
 
-        # Try to create from mesh renderer
+        # Пробуем создать из меш-рендерера
         from termin.visualization.render.components.mesh_renderer import MeshRenderer
         mesh_renderer = self.entity.get_component(MeshRenderer)
         if mesh_renderer is not None and mesh_renderer.mesh is not None:
-            # Approximate with box collider from mesh bounds
+            # Аппроксимируем box-коллайдером по границам меша
             mesh = mesh_renderer.mesh
             if hasattr(mesh, 'get_bounds'):
                 bounds = mesh.get_bounds()
@@ -87,7 +95,7 @@ class RigidBodyComponent(Component):
                 center = (bounds.max_point + bounds.min_point) / 2
                 return BoxCollider(center=center, size=size)
 
-        # Default: unit box
+        # По умолчанию: единичный куб
         from termin.colliders.box import BoxCollider
         return BoxCollider(
             center=np.zeros(3, dtype=np.float32),
@@ -95,7 +103,7 @@ class RigidBodyComponent(Component):
         )
 
     def _compute_inertia(self, collider) -> np.ndarray:
-        """Compute inertia tensor based on collider shape."""
+        """Вычисление тензора инерции на основе формы коллайдера."""
         from termin.colliders.box import BoxCollider
         from termin.colliders.sphere import SphereCollider
 
@@ -114,24 +122,24 @@ class RigidBodyComponent(Component):
             return np.diag([I, I, I])
 
         else:
-            # Default: unit sphere inertia
+            # По умолчанию: инерция единичной сферы
             return np.eye(3) * (m / 6.0)
 
     def update(self, dt: float):
-        """Sync entity transform from physics body."""
+        """Синхронизация трансформа сущности из физического тела."""
         if self._rigid_body is None or self.entity is None:
             return
 
-        # Copy pose from physics to entity
+        # Копируем позу из физики в сущность
         self.entity.transform.relocate(self._rigid_body.pose)
 
     def sync_to_physics(self):
-        """Sync physics body from entity transform (for editor manipulation)."""
+        """Синхронизация физического тела из трансформа сущности (для редактора)."""
         if self._rigid_body is None or self.entity is None:
             return
 
         self._rigid_body.pose = self.entity.transform.global_pose()
-        # Reset velocities when teleported
+        # Сбрасываем скорости при телепортации
         from termin.geombase.screw import Screw3
         self._rigid_body.velocity = Screw3(
             ang=np.zeros(3, dtype=np.float64),
@@ -139,11 +147,11 @@ class RigidBodyComponent(Component):
         )
 
     def apply_force(self, force: np.ndarray, point: np.ndarray | None = None):
-        """Apply force to the rigid body."""
+        """Приложить силу к твёрдому телу."""
         if self._rigid_body is not None:
             self._rigid_body.apply_force(force, point)
 
     def apply_impulse(self, impulse: np.ndarray, point: np.ndarray):
-        """Apply impulse to the rigid body."""
+        """Приложить импульс к твёрдому телу."""
         if self._rigid_body is not None:
             self._rigid_body.apply_impulse(impulse, point)

@@ -170,3 +170,38 @@ class SpatialInertia3D:
         """
         v2 = np.dot(velocity, velocity)
         return 0.5 * self.m * v2 + 0.5 * (omega @ (self.Ic @ omega))
+
+    def kinetic_energy(self, twist: Screw3) -> float:
+        """
+        Кинетическая энергия: 0.5 * v^T * I * v
+        """
+        h = self.apply(twist)
+        return 0.5 * twist.dot(h)
+
+    # ------------------------------------------------------------
+    #     Apply (multiply by twist -> momentum)
+    # ------------------------------------------------------------
+    def apply(self, twist: Screw3) -> Screw3:
+        """
+        Умножение spatial inertia на твист: I * v -> momentum (wrench-like).
+        h = I * v, где h = [h_ang, h_lin] — пространственный импульс.
+
+        Для body-frame инерции с COM в точке c:
+        h_lin = m * (v_lin + ω × c)
+        h_ang = I_c * ω + m * c × v_lin
+        """
+        m = self.m
+        c = self.c
+        Ic = self.Ic
+
+        v_lin = twist.lin
+        v_ang = twist.ang
+
+        h_lin = m * (v_lin + np.cross(v_ang, c))
+        h_ang = Ic @ v_ang + m * np.cross(c, v_lin)
+
+        return Screw3(ang=h_ang, lin=h_lin)
+
+    def __matmul__(self, twist: Screw3) -> Screw3:
+        """Operator @ for I @ twist."""
+        return self.apply(twist)

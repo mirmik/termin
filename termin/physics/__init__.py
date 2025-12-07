@@ -1,4 +1,4 @@
-"""Physics simulation module for rigid body dynamics."""
+"""Модуль физической симуляции для динамики твёрдых тел."""
 
 from termin.physics.rigid_body import RigidBody
 from termin.physics.world import PhysicsWorld

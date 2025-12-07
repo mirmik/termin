@@ -1,4 +1,4 @@
-"""Physics world simulation."""
+"""Физический мир — симуляция твёрдых тел."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ from termin.physics.contact import Contact, ContactConstraint
 
 class PhysicsWorld:
     """
-    Physics simulation world.
+    Физический мир для симуляции твёрдых тел.
 
-    Handles rigid body dynamics with collision detection and response
-    using Sequential Impulses.
+    Обрабатывает динамику твёрдых тел с обнаружением и откликом на коллизии
+    методом Sequential Impulses.
     """
 
     def __init__(
@@ -36,43 +36,43 @@ class PhysicsWorld:
         self.bodies: List[RigidBody] = []
         self._contact_constraints: List[ContactConstraint] = []
 
-        # Ground plane (z = 0 by default)
+        # Плоскость земли (z = 0 по умолчанию)
         self.ground_height = 0.0
         self.ground_enabled = True
 
     def add_body(self, body: RigidBody) -> RigidBody:
-        """Add a rigid body to the world."""
+        """Добавить твёрдое тело в мир."""
         self.bodies.append(body)
         return body
 
     def remove_body(self, body: RigidBody):
-        """Remove a rigid body from the world."""
+        """Удалить твёрдое тело из мира."""
         if body in self.bodies:
             self.bodies.remove(body)
 
     def step(self, dt: float):
         """
-        Advance simulation by dt seconds.
+        Продвинуть симуляцию на dt секунд.
 
-        Uses semi-implicit Euler with speculative contacts:
-        1. Apply forces → update velocities
-        2. Integrate positions (tentative)
-        3. Detect collisions at new positions
-        4. Solve velocity constraints (Sequential Impulses)
-        5. Position correction
+        Использует полу-неявный Эйлер со спекулятивными контактами:
+        1. Приложение сил → обновление скоростей
+        2. Интегрирование позиций (предварительное)
+        3. Обнаружение коллизий в новых позициях
+        4. Решение скоростных ограничений (Sequential Impulses)
+        5. Коррекция позиций
         """
-        # 1. Integrate forces (gravity, external forces)
+        # 1. Интегрирование сил (гравитация, внешние силы)
         for body in self.bodies:
             body.integrate_forces(dt, self.gravity)
 
-        # 2. Integrate positions first (tentative)
+        # 2. Сначала интегрируем позиции (предварительно)
         for body in self.bodies:
             body.integrate_positions(dt)
 
-        # 3. Collision detection at new positions
+        # 3. Обнаружение коллизий в новых позициях
         contacts = self._detect_collisions()
 
-        # 4. Create contact constraints
+        # 4. Создание контактных ограничений
         self._contact_constraints = [
             ContactConstraint(
                 contact=c,
@@ -82,20 +82,20 @@ class PhysicsWorld:
             for c in contacts
         ]
 
-        # 5. Velocity solve (Sequential Impulses)
+        # 5. Решение скоростей (Sequential Impulses)
         for _ in range(self.iterations):
             for constraint in self._contact_constraints:
                 constraint.solve_normal(dt)
                 constraint.solve_friction()
 
-        # 6. Position correction (push bodies apart)
+        # 6. Коррекция позиций (раздвигаем тела)
         self._solve_position_constraints()
 
     def _detect_collisions(self) -> List[Contact]:
-        """Detect collisions between all bodies and ground."""
+        """Обнаружить коллизии между всеми телами и землёй."""
         contacts = []
 
-        # Ground collisions
+        # Коллизии с землёй
         if self.ground_enabled:
             for body in self.bodies:
                 if body.is_static:
@@ -104,7 +104,7 @@ class PhysicsWorld:
                 ground_contacts = self._detect_ground_collision(body)
                 contacts.extend(ground_contacts)
 
-        # Body-body collisions
+        # Коллизии между телами
         for i, body_a in enumerate(self.bodies):
             for body_b in self.bodies[i + 1:]:
                 if body_a.is_static and body_b.is_static:
@@ -116,12 +116,12 @@ class PhysicsWorld:
         return contacts
 
     def _detect_ground_collision(self, body: RigidBody) -> List[Contact]:
-        """Detect collision between body and ground plane."""
+        """Обнаружить коллизию тела с плоскостью земли."""
         contacts = []
 
         collider = body.world_collider()
         if collider is None:
-            # Simple sphere approximation for bodies without collider
+            # Простая сферическая аппроксимация для тел без коллайдера
             z = body.position[2]
             if z < self.ground_height:
                 contacts.append(Contact(
@@ -133,12 +133,12 @@ class PhysicsWorld:
                 ))
             return contacts
 
-        # Use collider for collision detection
+        # Используем коллайдер для обнаружения коллизий
         from termin.colliders.box import BoxCollider
         from termin.colliders.sphere import SphereCollider
 
         if isinstance(collider, SphereCollider):
-            # Sphere vs ground
+            # Сфера vs земля
             center = collider.center
             radius = collider.radius
             z = center[2]
@@ -155,7 +155,7 @@ class PhysicsWorld:
                 ))
 
         elif isinstance(collider, BoxCollider):
-            # Box vs ground - check all 8 corners
+            # Кубоид vs земля — проверяем все 8 вершин
             aabb = collider.local_aabb()
             corners_local = [
                 np.array([aabb.min_point[0], aabb.min_point[1], aabb.min_point[2]]),
@@ -193,7 +193,7 @@ class PhysicsWorld:
     def _detect_body_collision(
         self, body_a: RigidBody, body_b: RigidBody
     ) -> List[Contact]:
-        """Detect collision between two bodies."""
+        """Обнаружить коллизию между двумя телами."""
         contacts = []
 
         collider_a = body_a.world_collider()
@@ -202,21 +202,21 @@ class PhysicsWorld:
         if collider_a is None or collider_b is None:
             return contacts
 
-        # Use closest_to_collider for collision detection
+        # Используем closest_to_collider для обнаружения коллизий
         try:
             p_a, p_b, distance = collider_a.closest_to_collider(collider_b)
 
-            # Negative distance means penetration (from SAT)
-            if distance <= 0.01:  # Contact threshold
+            # Отрицательное расстояние означает пенетрацию (из SAT)
+            if distance <= 0.01:  # Порог контакта
                 if distance < 0:
-                    # Penetrating - for Box-Box SAT:
-                    # p_a = contact normal (pointing from A to B)
-                    # p_b = contact point
+                    # Пенетрация — для Box-Box SAT:
+                    # p_a = нормаль контакта (от A к B)
+                    # p_b = точка контакта
                     penetration = -distance
                     normal = np.asarray(p_a, dtype=np.float64)
                     contact_point = np.asarray(p_b, dtype=np.float64)
                 else:
-                    # Close but not penetrating
+                    # Близко, но не пенетрируют
                     diff = p_b - p_a
                     dist = np.linalg.norm(diff)
                     if dist > 1e-8:
@@ -234,7 +234,7 @@ class PhysicsWorld:
                     penetration=penetration,
                 ))
         except NotImplementedError:
-            # Collision detection not implemented for this pair
+            # Обнаружение коллизий не реализовано для этой пары
             pass
 
         return contacts
@@ -246,10 +246,10 @@ class PhysicsWorld:
         max_distance: float = 1000.0,
     ) -> tuple[RigidBody | None, np.ndarray | None, float]:
         """
-        Cast a ray and return the first hit body.
+        Бросить луч и вернуть первое пересечённое тело.
 
-        Returns:
-            (body, hit_point, distance) or (None, None, inf) if no hit
+        Возвращает:
+            (body, hit_point, distance) или (None, None, inf) если нет попадания
         """
         from termin.geombase.ray import Ray3
 
@@ -278,12 +278,12 @@ class PhysicsWorld:
 
     def _solve_position_constraints(self):
         """
-        Direct position correction to resolve penetration.
+        Прямая коррекция позиций для разрешения пенетрации.
 
-        This is a simple approach: push bodies apart along contact normal
-        proportionally to penetration depth.
+        Простой подход: раздвигаем тела вдоль нормали контакта
+        пропорционально глубине пенетрации.
         """
-        # Re-detect collisions after position integration
+        # Повторно обнаруживаем коллизии после интегрирования позиций
         contacts = self._detect_collisions()
 
         for contact in contacts:
@@ -291,14 +291,14 @@ class PhysicsWorld:
                 continue
 
             n = contact.normal
-            correction = contact.penetration * 0.8  # 80% correction
+            correction = contact.penetration * 0.8  # 80% коррекция
 
             if contact.body_a is None:
-                # Ground contact - only move body_b
+                # Контакт с землёй — двигаем только body_b
                 if not contact.body_b.is_static:
                     contact.body_b.position = contact.body_b.position + n * correction
             else:
-                # Body-body contact
+                # Контакт между телами
                 total_inv_mass = 0.0
                 if not contact.body_a.is_static:
                     total_inv_mass += contact.body_a.inv_mass

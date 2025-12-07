@@ -157,6 +157,11 @@ class Screw3(Screw):
     def __init__(self, ang: numpy.ndarray = numpy.array([0,0,0]), lin: numpy.ndarray = numpy.array([0,0,0])):
         super().__init__(ang=ang, lin=lin)
 
+    @staticmethod
+    def zero() -> "Screw3":
+        """Create a zero screw."""
+        return Screw3(ang=numpy.zeros(3, dtype=numpy.float64), lin=numpy.zeros(3, dtype=numpy.float64))
+
     def copy(self) -> "Screw3":
         """Create a copy of the Screw3."""
         return Screw3(ang=self.ang.copy(), lin=self.lin.copy())
@@ -266,6 +271,42 @@ class Screw3(Screw):
 
     def __mul__(self, oth):
         return Screw3(self.ang * oth, self.lin * oth)
+
+    def __rmul__(self, oth):
+        return Screw3(self.ang * oth, self.lin * oth)
+
+    def __add__(self, oth):
+        return Screw3(self.ang + oth.ang, self.lin + oth.lin)
+
+    def __sub__(self, oth):
+        return Screw3(self.ang - oth.ang, self.lin - oth.lin)
+
+    def __neg__(self):
+        return Screw3(-self.ang, -self.lin)
+
+    def dot(self, oth: "Screw3") -> float:
+        """Dot product of two screws (for power computation: wrench · twist)."""
+        return numpy.dot(self.ang, oth.ang) + numpy.dot(self.lin, oth.lin)
+
+    def cross_motion(self, oth: "Screw3") -> "Screw3":
+        """
+        Spatial cross product for motion vectors (twist × twist).
+        [ω₁ × ω₂, ω₁ × v₂ + v₁ × ω₂]
+        """
+        return Screw3(
+            ang=numpy.cross(self.ang, oth.ang),
+            lin=numpy.cross(self.ang, oth.lin) + numpy.cross(self.lin, oth.ang)
+        )
+
+    def cross_force(self, oth: "Screw3") -> "Screw3":
+        """
+        Spatial cross product for force vectors (twist ×* wrench).
+        [ω × τ + v × f, ω × f]
+        """
+        return Screw3(
+            ang=numpy.cross(self.ang, oth.ang) + numpy.cross(self.lin, oth.lin),
+            lin=numpy.cross(self.ang, oth.lin)
+        )
 
     def to_vw_array(self) -> numpy.ndarray:
         """Return the screw as a 6x1 array in [vx, vy, vz, wx, wy, wz] order."""

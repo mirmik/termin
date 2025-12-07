@@ -1,74 +1,73 @@
-"""Rigid body for physics simulation."""
+"""Твёрдое тело для физической симуляции (spatial algebra в стиле Фезерстоуна)."""
 
 from __future__ import annotations
 
 import numpy as np
 from termin.geombase.pose3 import Pose3
 from termin.geombase.screw import Screw3
+from termin.fem.inertia3d import SpatialInertia3D
 from termin.colliders.collider import Collider
 
 
 class RigidBody:
     """
-    A rigid body with mass, inertia, pose, and velocity.
+    Твёрдое тело в формализме spatial algebra (нотация Фезерстоуна).
 
-    - Pose: Pose3 (position + orientation)
-    - Velocity: Screw3 (ang=omega, lin=v) in world frame
-    - Wrench: Screw3 (ang=torque, lin=force) accumulated per step
+    Состояние:
+    - pose: Pose3 — система координат тела относительно мира (X_WB)
+    - velocity: Screw3 — пространственная скорость в МИРОВОЙ СК (ang=ω, lin=v)
+
+    Динамика:
+    - spatial_inertia: SpatialInertia3D — в системе координат тела
+    - wrench: Screw3 — накопленный внешний винт сил в мировой СК
+
+    Уравнение движения (в СК тела):
+        I * a = f - v ×* (I * v)
+
+    Где v ×* h — пространственное силовое скрещивание (bias/кориолисов член).
     """
 
     def __init__(
         self,
-        mass: float = 1.0,
-        inertia: np.ndarray | None = None,
+        spatial_inertia: SpatialInertia3D | None = None,
         pose: Pose3 | None = None,
         collider: Collider | None = None,
         is_static: bool = False,
     ):
-        self.mass = mass
+        # Пространственная инерция в СК тела (COM в начале координат по умолчанию)
+        if spatial_inertia is None:
+            spatial_inertia = SpatialInertia3D(mass=1.0, inertia=np.eye(3) / 6.0)
+        self.spatial_inertia = spatial_inertia
 
-        # Inertia tensor in body frame (3x3)
-        if inertia is None:
-            # Default: unit cube inertia
-            self.inertia = np.eye(3, dtype=np.float64) * (mass / 6.0)
-        else:
-            self.inertia = np.asarray(inertia, dtype=np.float64)
+        # Поза: СК тела в мире
+        self.pose = pose if pose is not None else Pose3.identity()
 
-        # Inverse inertia (precomputed)
-        if is_static or mass <= 0:
-            self.inv_mass = 0.0
-            self.inv_inertia = np.zeros((3, 3), dtype=np.float64)
-        else:
-            self.inv_mass = 1.0 / mass
-            self.inv_inertia = np.linalg.inv(self.inertia)
+        # Скорость: пространственный твист в МИРОВОЙ СК
+        self.velocity = Screw3.zero()
 
-        # Pose (position + orientation)
-        if pose is None:
-            self.pose = Pose3.identity()
-        else:
-            self.pose = pose
+        # Накопленный внешний винт сил в МИРОВОЙ СК
+        self.wrench = Screw3.zero()
 
-        # Velocity as Screw3 (ang=omega, lin=v) in world frame
-        self.velocity = Screw3(
-            ang=np.zeros(3, dtype=np.float64),
-            lin=np.zeros(3, dtype=np.float64),
-        )
-
-        # Accumulated wrench (ang=torque, lin=force) - reset each step
-        self.wrench = Screw3(
-            ang=np.zeros(3, dtype=np.float64),
-            lin=np.zeros(3, dtype=np.float64),
-        )
-
-        # Collider (in local frame)
+        # Коллайдер (в СК тела)
         self.collider = collider
 
-        # Static bodies don't move
+        # Статические тела не двигаются
         self.is_static = is_static
+
+    # ----------------------------------------------------------------
+    #  Вспомогательные свойства (для совместимости)
+    # ----------------------------------------------------------------
+    @property
+    def mass(self) -> float:
+        return self.spatial_inertia.m
+
+    @property
+    def inv_mass(self) -> float:
+        return 0.0 if self.is_static or self.mass <= 0 else 1.0 / self.mass
 
     @property
     def position(self) -> np.ndarray:
-        """Position (center of mass) in world frame."""
+        """Позиция (начало СК тела) в мировой СК."""
         return self.pose.lin
 
     @position.setter
@@ -77,128 +76,148 @@ class RigidBody:
 
     @property
     def rotation(self) -> np.ndarray:
-        """Rotation matrix (body to world)."""
+        """Матрица поворота (из СК тела в мир)."""
         return self.pose.rotation_matrix()
 
     @property
     def omega(self) -> np.ndarray:
-        """Angular velocity in world frame."""
+        """Угловая скорость в мировой СК."""
         return self.velocity.ang
-
-    @omega.setter
-    def omega(self, w: np.ndarray):
-        self.velocity = Screw3(ang=np.asarray(w, dtype=np.float64), lin=self.velocity.lin)
 
     @property
     def linear_velocity(self) -> np.ndarray:
-        """Linear velocity in world frame."""
+        """Линейная скорость в мировой СК."""
         return self.velocity.lin
 
-    @linear_velocity.setter
-    def linear_velocity(self, v: np.ndarray):
-        self.velocity = Screw3(ang=self.velocity.ang, lin=np.asarray(v, dtype=np.float64))
+    # ----------------------------------------------------------------
+    #  Пространственная инерция в мировой СК
+    # ----------------------------------------------------------------
+    def world_inertia(self) -> SpatialInertia3D:
+        """Пространственная инерция, преобразованная в мировую СК."""
+        return self.spatial_inertia.transform_by(self.pose)
 
     def world_inertia_inv(self) -> np.ndarray:
-        """Inverse inertia tensor in world frame."""
+        """Обратный тензор инерции 3x3 в мировой СК (для импульсов)."""
         R = self.rotation
-        return R @ self.inv_inertia @ R.T
+        Ic_inv = np.linalg.inv(self.spatial_inertia.Ic) if self.mass > 0 else np.zeros((3, 3))
+        return R @ Ic_inv @ R.T
 
+    # ----------------------------------------------------------------
+    #  Приложение сил и винтов
+    # ----------------------------------------------------------------
     def apply_wrench(self, w: Screw3):
-        """Apply wrench (ang=torque, lin=force) at center of mass."""
-        # self.wrench = Screw3(
-        #     ang=self.wrench.ang + w.ang,
-        #     lin=self.wrench.lin + w.lin,
-        # )
+        """Приложить винт сил в мировой СК."""
         self.wrench = self.wrench + w
 
     def apply_force(self, force: np.ndarray, point: np.ndarray | None = None):
         """
-        Apply force at a point (world coordinates).
-        If point is None, applies at center of mass (no torque).
+        Приложить силу в точке (мировые координаты).
+        Если point=None, прикладывается в начале СК тела (без момента).
         """
-        torque = np.zeros(3, dtype=np.float64)
-        if point is not None:
+        if point is None:
+            self.wrench = self.wrench + Screw3(ang=np.zeros(3), lin=force)
+        else:
             r = point - self.position
             torque = np.cross(r, force)
-
-        # self.wrench = Screw3(
-        #     ang=self.wrench.ang + torque,
-        #     lin=self.wrench.lin + force,
-        # )
-        self.wrench = self.wrench + Screw3(ang=torque, lin=force)
+            self.wrench = self.wrench + Screw3(ang=torque, lin=force)
 
     def apply_impulse(self, impulse: np.ndarray, point: np.ndarray):
         """
-        Apply linear impulse at a specific point.
-        Creates both linear and angular velocity change.
+        Приложить импульс в точке. Меняет скорость напрямую.
+        Δv = M⁻¹ * J, где J — пространственный импульс.
         """
         if self.is_static:
             return
 
-        new_lin = self.velocity.lin + impulse * self.inv_mass
+        # Изменение линейной скорости
+        dv_lin = impulse * self.inv_mass
 
+        # Изменение угловой скорости: Δω = I⁻¹ * (r × impulse)
         r = point - self.position
         angular_impulse = np.cross(r, impulse)
-        new_ang = self.velocity.ang + self.world_inertia_inv() @ angular_impulse
+        dv_ang = self.world_inertia_inv() @ angular_impulse
 
-        self.velocity = Screw3(ang=new_ang, lin=new_lin)
+        self.velocity = self.velocity + Screw3(ang=dv_ang, lin=dv_lin)
 
+    # ----------------------------------------------------------------
+    #  Кинематика
+    # ----------------------------------------------------------------
     def point_velocity(self, point: np.ndarray) -> np.ndarray:
-        """Velocity of a point on the body (world coordinates)."""
+        """Скорость точки, закреплённой на теле (мировые координаты)."""
         r = point - self.position
         return self.velocity.lin + np.cross(self.velocity.ang, r)
 
+    # ----------------------------------------------------------------
+    #  Интегрирование (в стиле Фезерстоуна)
+    # ----------------------------------------------------------------
     def integrate_forces(self, dt: float, gravity: np.ndarray):
-        """Integrate forces to update velocities."""
+        """
+        Интегрирование сил для обновления скорости.
+
+        Уравнение: I * a = f_ext + f_gravity - v ×* (I * v)
+
+        Где v ×* h — bias-сила (Кориолис/центробежная).
+        """
         if self.is_static:
+            self.wrench = Screw3.zero()
             return
 
-        # Apply gravity
-        total_force = self.wrench.lin + self.mass * gravity
-        total_torque = self.wrench.ang
+        # Преобразуем скорость в СК тела для вычисления bias
+        v_body = self.velocity.inverse_transform_as_twist_by(self.pose)
 
-        # Linear: v += (F/m) * dt
-        new_lin = self.velocity.lin + (total_force * self.inv_mass) * dt
+        # Bias-винт в СК тела: v ×* (I * v)
+        bias_body = self.spatial_inertia.bias_wrench(v_body)
 
-        # Angular: omega += I^{-1} * torque * dt
-        new_ang = self.velocity.ang + (self.world_inertia_inv() @ total_torque) * dt
+        # Гравитационный винт в СК тела
+        g_body = self.pose.inverse_transform_vector(gravity)
+        gravity_wrench_body = self.spatial_inertia.gravity_wrench(g_body)
 
-        self.velocity = Screw3(ang=new_ang, lin=new_lin)
+        # Внешний винт, преобразованный в СК тела
+        f_ext_body = self.wrench.inverse_transform_as_wrench_by(self.pose)
 
-        # Clear accumulated wrench
-        self.wrench = Screw3(
-            ang=np.zeros(3, dtype=np.float64),
-            lin=np.zeros(3, dtype=np.float64),
-        )
+        # Суммарный винт в СК тела
+        f_total_body = f_ext_body + gravity_wrench_body - bias_body
+
+        # Ускорение в СК тела: a = I⁻¹ * f
+        # Используем матричную форму для простоты
+        I_matrix = self.spatial_inertia.to_matrix_vw_order()
+        f_vec = f_total_body.to_vw_array()
+        a_vec = np.linalg.solve(I_matrix, f_vec)
+        a_body = Screw3.from_vw_array(a_vec)
+
+        # Преобразуем ускорение в мировую СК
+        a_world = a_body.transform_as_twist_by(self.pose)
+
+        # Обновляем скорость
+        self.velocity = self.velocity + a_world * dt
+
+        # Очищаем накопленный винт
+        self.wrench = Screw3.zero()
 
     def integrate_positions(self, dt: float):
-        """Integrate velocities to update pose."""
+        """
+        Интегрирование скорости для обновления позы.
+        Использует экспоненциальную карту для вращения.
+        """
         if self.is_static:
             return
 
-        # Linear: x += v * dt
-        new_position = self.position + self.velocity.lin * dt
-
-        # Angular: use Screw3.to_pose() for exponential map
-        omega_dt = Screw3(ang=self.velocity.ang * dt, lin=np.zeros(3))
-        delta_pose = omega_dt.to_pose()
-
-        # New orientation: delta_pose * current_pose (rotation part)
-        new_pose = Pose3(
-            ang=_quat_multiply(delta_pose.ang, self.pose.ang),
-            lin=new_position,
-        )
-
-        delta = Screw3(ang=self.velocity.ang * dt, lin=self.velocity.lin * dt)
+        # Пространственное смещение в мировой СК
+        delta = self.velocity * dt
         delta_pose = delta.to_pose()
+
+        # Композиция: new_pose = delta_pose * old_pose
         self.pose = delta_pose.small_compose(self.pose)
 
     def world_collider(self) -> Collider | None:
-        """Get collider transformed to world frame."""
+        """Коллайдер, преобразованный в мировую СК."""
         if self.collider is None:
             return None
         return self.collider.transform_by(self.pose)
 
+    # ----------------------------------------------------------------
+    #  Фабричные методы
+    # ----------------------------------------------------------------
     @staticmethod
     def create_box(
         size: np.ndarray | tuple = (1, 1, 1),
@@ -206,17 +225,24 @@ class RigidBody:
         pose: Pose3 | None = None,
         is_static: bool = False,
     ) -> RigidBody:
-        """Create a box rigid body with correct inertia."""
+        """Создать кубоид с правильной пространственной инерцией."""
         from termin.colliders.box import BoxCollider
 
         size = np.asarray(size, dtype=np.float64)
         sx, sy, sz = size
 
-        # Box inertia tensor (around center of mass)
+        # Тензор инерции кубоида (относительно центра масс)
         Ixx = (mass / 12.0) * (sy**2 + sz**2)
         Iyy = (mass / 12.0) * (sx**2 + sz**2)
         Izz = (mass / 12.0) * (sx**2 + sy**2)
         inertia = np.diag([Ixx, Iyy, Izz])
+
+        # COM в начале СК тела
+        spatial_inertia = SpatialInertia3D(
+            mass=mass,
+            inertia=inertia,
+            com=np.zeros(3),
+        )
 
         collider = BoxCollider(
             center=np.zeros(3, dtype=np.float32),
@@ -224,8 +250,7 @@ class RigidBody:
         )
 
         return RigidBody(
-            mass=mass,
-            inertia=inertia,
+            spatial_inertia=spatial_inertia,
             pose=pose,
             collider=collider,
             is_static=is_static,
@@ -238,12 +263,18 @@ class RigidBody:
         pose: Pose3 | None = None,
         is_static: bool = False,
     ) -> RigidBody:
-        """Create a sphere rigid body with correct inertia."""
+        """Создать сферу с правильной пространственной инерцией."""
         from termin.colliders.sphere import SphereCollider
 
-        # Sphere inertia: I = (2/5) * m * r^2
+        # Инерция сферы: I = (2/5) * m * r²
         I = (2.0 / 5.0) * mass * radius**2
         inertia = np.diag([I, I, I])
+
+        spatial_inertia = SpatialInertia3D(
+            mass=mass,
+            inertia=inertia,
+            com=np.zeros(3),
+        )
 
         collider = SphereCollider(
             center=np.zeros(3, dtype=np.float32),
@@ -251,8 +282,7 @@ class RigidBody:
         )
 
         return RigidBody(
-            mass=mass,
-            inertia=inertia,
+            spatial_inertia=spatial_inertia,
             pose=pose,
             collider=collider,
             is_static=is_static,
@@ -263,7 +293,7 @@ class RigidBody:
         size: tuple = (100, 100, 1),
         height: float = 0.0,
     ) -> RigidBody:
-        """Create a static ground plane (large flat box)."""
+        """Создать статическую плоскость земли (большой плоский кубоид)."""
         pose = Pose3.identity().with_translation(np.array([0, 0, height - size[2] / 2]))
 
         return RigidBody.create_box(

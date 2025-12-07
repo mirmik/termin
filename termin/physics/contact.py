@@ -1,4 +1,4 @@
-"""Contact detection and constraint solving."""
+"""Обнаружение контактов и решение ограничений."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ from termin.physics.rigid_body import RigidBody
 @dataclass
 class Contact:
     """
-    A contact point between two rigid bodies.
+    Точка контакта между двумя твёрдыми телами.
 
-    Attributes:
-        body_a: First body (can be None for world/ground contact)
-        body_b: Second body
-        point: Contact point in world coordinates
-        normal: Contact normal (pointing from A to B, or up for ground)
-        penetration: Penetration depth (positive = overlapping)
+    Атрибуты:
+        body_a: Первое тело (может быть None для контакта с землёй)
+        body_b: Второе тело
+        point: Точка контакта в мировых координатах
+        normal: Нормаль контакта (направлена от A к B, или вверх для земли)
+        penetration: Глубина проникновения (положительная = пересечение)
     """
     body_a: RigidBody | None
     body_b: RigidBody
@@ -26,7 +26,7 @@ class Contact:
     normal: np.ndarray
     penetration: float
 
-    # For warm starting (accumulated impulse from previous frame)
+    # Для warm starting (накопленный импульс с предыдущего кадра)
     accumulated_normal_impulse: float = 0.0
     accumulated_tangent_impulse: np.ndarray = None
 
@@ -37,7 +37,7 @@ class Contact:
 
 class ContactConstraint:
     """
-    Solver for contact constraints using Sequential Impulses.
+    Решатель контактных ограничений методом Sequential Impulses.
     """
 
     def __init__(
@@ -54,18 +54,18 @@ class ContactConstraint:
         self.baumgarte = baumgarte
         self.slop = slop
 
-        # Precompute constraint data
+        # Предвычисление данных ограничения
         self._precompute()
 
-        # Store initial closing velocity for restitution (computed once)
+        # Сохраняем начальную скорость сближения для реституции (вычисляется один раз)
         self._initial_v_n = None
 
     def _precompute(self):
-        """Precompute effective mass and bias."""
+        """Предвычисление эффективной массы и смещения."""
         c = self.contact
         n = c.normal
 
-        # Compute effective mass for normal impulse
+        # Вычисление эффективной массы для нормального импульса
         # w = 1/m_a + 1/m_b + n·(I_a^{-1} @ (r_a×n))×r_a + n·(I_b^{-1} @ (r_b×n))×r_b
 
         w = 0.0
@@ -84,8 +84,8 @@ class ContactConstraint:
 
         self.effective_mass_normal = 1.0 / w if w > 1e-10 else 0.0
 
-        # Compute tangent directions for friction
-        # Find two orthogonal tangent vectors
+        # Вычисление касательных направлений для трения
+        # Находим два ортогональных касательных вектора
         if abs(n[0]) < 0.9:
             t1 = np.cross(n, np.array([1, 0, 0], dtype=np.float64))
         else:
@@ -96,12 +96,12 @@ class ContactConstraint:
         self.tangent1 = t1
         self.tangent2 = t2
 
-        # Effective mass for tangent impulses
+        # Эффективная масса для касательных импульсов
         self.effective_mass_tangent1 = self._compute_effective_mass(t1)
         self.effective_mass_tangent2 = self._compute_effective_mass(t2)
 
     def _compute_effective_mass(self, direction: np.ndarray) -> float:
-        """Compute effective mass in a given direction."""
+        """Вычисление эффективной массы в заданном направлении."""
         c = self.contact
         w = 0.0
 
@@ -120,7 +120,7 @@ class ContactConstraint:
         return 1.0 / w if w > 1e-10 else 0.0
 
     def relative_velocity(self) -> np.ndarray:
-        """Compute relative velocity at contact point (v_b - v_a)."""
+        """Вычисление относительной скорости в точке контакта (v_b - v_a)."""
         c = self.contact
 
         v_b = np.zeros(3, dtype=np.float64)
@@ -134,49 +134,49 @@ class ContactConstraint:
         return v_b - v_a
 
     def solve_normal(self, dt: float):
-        """Solve normal (non-penetration) constraint."""
+        """Решение нормального ограничения (непроникновение)."""
         c = self.contact
         n = c.normal
 
-        # Relative velocity along normal (positive = separating, negative = closing)
+        # Относительная скорость вдоль нормали (положительная = расхождение, отрицательная = сближение)
         v_rel = self.relative_velocity()
         v_n = np.dot(v_rel, n)
 
-        # Store initial closing velocity for restitution (only once)
+        # Сохраняем начальную скорость сближения для реституции (только один раз)
         if self._initial_v_n is None:
             self._initial_v_n = v_n
 
-        # Target velocity: we want v_n >= 0 (non-penetrating)
-        # For resting contact: v_n = 0
-        # For bouncing contact: v_n = -restitution * initial_v_n
+        # Целевая скорость: хотим v_n >= 0 (непроникновение)
+        # Для покоящегося контакта: v_n = 0
+        # Для отскока: v_n = -restitution * initial_v_n
 
         target_v_n = 0.0
 
-        # Apply restitution only on first impact (when initially closing fast)
+        # Применяем реституцию только при первом ударе (когда быстро сближаемся)
         if self._initial_v_n < -1.0:
             target_v_n = -self.restitution * self._initial_v_n
 
-        # Compute impulse to reach target velocity
+        # Вычисляем импульс для достижения целевой скорости
         # impulse = m_eff * (target_v_n - v_n)
         impulse = self.effective_mass_normal * (target_v_n - v_n)
 
-        # Clamp accumulated impulse (contact can only push, not pull)
+        # Ограничиваем накопленный импульс (контакт может только толкать, не тянуть)
         old_accumulated = c.accumulated_normal_impulse
         c.accumulated_normal_impulse = max(0.0, old_accumulated + impulse)
         impulse = c.accumulated_normal_impulse - old_accumulated
 
-        # Apply impulse
+        # Применяем импульс
         impulse_vec = n * impulse
         self._apply_impulse(impulse_vec)
 
     def solve_friction(self):
-        """Solve tangential (friction) constraints."""
+        """Решение касательных ограничений (трение)."""
         c = self.contact
 
-        # Maximum friction impulse (Coulomb friction)
+        # Максимальный импульс трения (кулоновское трение)
         max_friction = self.friction * c.accumulated_normal_impulse
 
-        # Solve tangent1
+        # Решаем tangent1
         v_rel = self.relative_velocity()
         v_t1 = np.dot(v_rel, self.tangent1)
         impulse_t1 = self.effective_mass_tangent1 * (-v_t1)
@@ -187,7 +187,7 @@ class ContactConstraint:
         )
         impulse_t1 = c.accumulated_tangent_impulse[0] - old_t1
 
-        # Solve tangent2
+        # Решаем tangent2
         v_rel = self.relative_velocity()
         v_t2 = np.dot(v_rel, self.tangent2)
         impulse_t2 = self.effective_mass_tangent2 * (-v_t2)
@@ -198,12 +198,12 @@ class ContactConstraint:
         )
         impulse_t2 = c.accumulated_tangent_impulse[1] - old_t2
 
-        # Apply friction impulses
+        # Применяем импульсы трения
         impulse_vec = self.tangent1 * impulse_t1 + self.tangent2 * impulse_t2
         self._apply_impulse(impulse_vec)
 
     def _apply_impulse(self, impulse: np.ndarray):
-        """Apply impulse to both bodies."""
+        """Применить импульс к обоим телам."""
         c = self.contact
 
         if c.body_a is not None and not c.body_a.is_static:

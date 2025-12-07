@@ -1,4 +1,4 @@
-"""PhysicsWorld component for scene integration."""
+"""Компонент PhysicsWorld для интеграции со сценой."""
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ if TYPE_CHECKING:
 
 class PhysicsWorldComponent(Component):
     """
-    Component that manages physics simulation for a scene.
+    Компонент, управляющий физической симуляцией для сцены.
 
-    Attach this to any entity in the scene. It will:
-    1. Collect all RigidBodyComponents in the scene
-    2. Run physics simulation each frame
-    3. Sync transforms back to entities
+    Прикрепите к любой сущности в сцене. Он будет:
+    1. Собирать все RigidBodyComponent в сцене
+    2. Выполнять физическую симуляцию каждый кадр
+    3. Синхронизировать трансформы обратно в сущности
     """
 
     def __init__(
@@ -59,45 +59,45 @@ class PhysicsWorldComponent(Component):
         self._initialized = True
 
     def _collect_rigid_bodies(self, scene: "Scene"):
-        """Find all RigidBodyComponents in the scene and register them."""
+        """Найти все RigidBodyComponent в сцене и зарегистрировать их."""
         self._rigid_body_components.clear()
 
         for entity in scene.entities:
             self._collect_from_entity(entity)
 
     def _collect_from_entity(self, entity):
-        """Recursively collect RigidBodyComponents from entity tree."""
+        """Рекурсивно собрать RigidBodyComponent из дерева сущностей."""
         rb_comp = entity.get_component(RigidBodyComponent)
         if rb_comp is not None and rb_comp.rigid_body is not None:
             self._rigid_body_components.append(rb_comp)
             self._physics_world.add_body(rb_comp.rigid_body)
 
-        # Check children via transform
+        # Проверяем дочерние элементы через трансформ
         for child_transform in entity.transform.children:
             if child_transform.entity is not None:
                 self._collect_from_entity(child_transform.entity)
 
     def add_rigid_body_component(self, rb_comp: RigidBodyComponent):
-        """Dynamically add a RigidBodyComponent after initialization."""
+        """Динамически добавить RigidBodyComponent после инициализации."""
         if rb_comp.rigid_body is not None:
             self._rigid_body_components.append(rb_comp)
             self._physics_world.add_body(rb_comp.rigid_body)
 
     def remove_rigid_body_component(self, rb_comp: RigidBodyComponent):
-        """Remove a RigidBodyComponent from simulation."""
+        """Удалить RigidBodyComponent из симуляции."""
         if rb_comp in self._rigid_body_components:
             self._rigid_body_components.remove(rb_comp)
             if rb_comp.rigid_body is not None:
                 self._physics_world.remove_body(rb_comp.rigid_body)
 
     def update(self, dt: float):
-        """Step physics and sync transforms."""
+        """Шаг физики и синхронизация трансформов."""
         if not self._initialized or not self.enabled:
             return
 
-        # Step physics simulation
+        # Шаг физической симуляции
         self._physics_world.step(dt)
 
-        # Sync transforms from physics to entities
+        # Синхронизация трансформов из физики в сущности
         for rb_comp in self._rigid_body_components:
             rb_comp.update(dt)
