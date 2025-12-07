@@ -99,6 +99,8 @@ class Scene:
         self._skybox_material: "Material | None" = None
         self.skybox_type: str = "gradient"  # "gradient", "solid", "none"
         self.skybox_color = np.array([0.3, 0.5, 0.8], dtype=np.float32)  # for solid skybox
+        self.skybox_top_color = np.array([0.05, 0.1, 0.25], dtype=np.float32)  # gradient top
+        self.skybox_bottom_color = np.array([0.3, 0.3, 0.35], dtype=np.float32)  # gradient bottom
 
     def _ensure_skybox_mesh(self) -> "MeshDrawable":
         """Lazily create skybox cube mesh."""
@@ -301,6 +303,8 @@ class Scene:
             "ambient_intensity": self.ambient_intensity,
             "skybox_type": self.skybox_type,
             "skybox_color": list(self.skybox_color),
+            "skybox_top_color": list(self.skybox_top_color),
+            "skybox_bottom_color": list(self.skybox_bottom_color),
             "entities": serialized_entities,
         }
 
@@ -346,6 +350,14 @@ class Scene:
             self.set_skybox_type(skybox_type)
             self.skybox_color = np.asarray(
                 data.get("skybox_color", [0.3, 0.5, 0.8]),
+                dtype=np.float32
+            )
+            self.skybox_top_color = np.asarray(
+                data.get("skybox_top_color", [0.05, 0.1, 0.25]),
+                dtype=np.float32
+            )
+            self.skybox_bottom_color = np.asarray(
+                data.get("skybox_bottom_color", [0.3, 0.3, 0.35]),
                 dtype=np.float32
             )
 

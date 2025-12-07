@@ -22,20 +22,24 @@ void main() {
 }
 """
 
-SKYBOX_FRAGMENT_SHADER = """
+SKYBOX_GRADIENT_FRAGMENT_SHADER = """
 #version 330 core
 
 in vec3 v_dir;
 out vec4 FragColor;
 
+uniform vec3 u_skybox_top_color;
+uniform vec3 u_skybox_bottom_color;
+
 void main() {
-    // Простой вертикальный градиент неба
-    float t = normalize(v_dir).y * 0.5 + 0.5;
-    vec3 top = vec3(0.05, 0.1, 0.25);
-    vec3 bottom = vec3(0.3, 0.3, 0.35);
-    FragColor = vec4(mix(bottom, top, t), 1.0);
+    // Вертикальный градиент по оси Z (вверх в нашей СК)
+    float t = normalize(v_dir).z * 0.5 + 0.5;
+    FragColor = vec4(mix(u_skybox_bottom_color, u_skybox_top_color, t), 1.0);
 }
 """
+
+# Keep old name for compatibility
+SKYBOX_FRAGMENT_SHADER = SKYBOX_GRADIENT_FRAGMENT_SHADER
 
 SKYBOX_SOLID_FRAGMENT_SHADER = """
 #version 330 core

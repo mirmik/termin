@@ -153,9 +153,19 @@ class SceneInspector(QWidget):
         self._skybox_type_combo.addItem("None", "none")
         skybox_layout.addRow(QLabel("Type:"), self._skybox_type_combo)
 
+        # Solid color
         self._skybox_color_btn = self._create_color_button()
         self._skybox_color_label = QLabel("Color:")
         skybox_layout.addRow(self._skybox_color_label, self._skybox_color_btn)
+
+        # Gradient colors
+        self._skybox_top_color_btn = self._create_color_button()
+        self._skybox_top_color_label = QLabel("Top:")
+        skybox_layout.addRow(self._skybox_top_color_label, self._skybox_top_color_btn)
+
+        self._skybox_bottom_color_btn = self._create_color_button()
+        self._skybox_bottom_color_label = QLabel("Bottom:")
+        skybox_layout.addRow(self._skybox_bottom_color_label, self._skybox_bottom_color_btn)
 
         layout.addWidget(skybox_group)
 
@@ -167,6 +177,8 @@ class SceneInspector(QWidget):
         self._ambient_intensity_spin.valueChanged.connect(self._on_ambient_intensity_changed)
         self._skybox_type_combo.currentIndexChanged.connect(self._on_skybox_type_changed)
         self._skybox_color_btn.clicked.connect(self._on_skybox_color_clicked)
+        self._skybox_top_color_btn.clicked.connect(self._on_skybox_top_color_clicked)
+        self._skybox_bottom_color_btn.clicked.connect(self._on_skybox_bottom_color_clicked)
 
     def _create_color_button(self) -> QPushButton:
         """Create a color picker button."""
@@ -228,14 +240,30 @@ class SceneInspector(QWidget):
             if index >= 0:
                 self._skybox_type_combo.setCurrentIndex(index)
 
-            # Skybox color visibility and value
-            show_color = (skybox_type == "solid")
-            self._skybox_color_btn.setVisible(show_color)
-            self._skybox_color_label.setVisible(show_color)
+            # Skybox color visibility based on type
+            show_solid = (skybox_type == "solid")
+            show_gradient = (skybox_type == "gradient")
 
+            self._skybox_color_btn.setVisible(show_solid)
+            self._skybox_color_label.setVisible(show_solid)
+            self._skybox_top_color_btn.setVisible(show_gradient)
+            self._skybox_top_color_label.setVisible(show_gradient)
+            self._skybox_bottom_color_btn.setVisible(show_gradient)
+            self._skybox_bottom_color_label.setVisible(show_gradient)
+
+            # Solid color
             skybox_color = self._scene.skybox_color
             qcolor = _to_qcolor(skybox_color)
             self._skybox_color_btn._set_color(qcolor)
+
+            # Gradient colors
+            top_color = self._scene.skybox_top_color
+            qcolor = _to_qcolor(top_color)
+            self._skybox_top_color_btn._set_color(qcolor)
+
+            bottom_color = self._scene.skybox_bottom_color
+            qcolor = _to_qcolor(bottom_color)
+            self._skybox_bottom_color_btn._set_color(qcolor)
         finally:
             self._updating_from_model = False
 
@@ -320,10 +348,15 @@ class SceneInspector(QWidget):
         if new_type == old_type:
             return
 
-        # Update visibility of color button
-        show_color = (new_type == "solid")
-        self._skybox_color_btn.setVisible(show_color)
-        self._skybox_color_label.setVisible(show_color)
+        # Update visibility of color buttons
+        show_solid = (new_type == "solid")
+        show_gradient = (new_type == "gradient")
+        self._skybox_color_btn.setVisible(show_solid)
+        self._skybox_color_label.setVisible(show_solid)
+        self._skybox_top_color_btn.setVisible(show_gradient)
+        self._skybox_top_color_label.setVisible(show_gradient)
+        self._skybox_bottom_color_btn.setVisible(show_gradient)
+        self._skybox_bottom_color_label.setVisible(show_gradient)
 
         if self._push_undo_command is not None:
             cmd = SkyboxTypeEditCommand(self._scene, old_type, new_type)
@@ -355,6 +388,58 @@ class SceneInspector(QWidget):
             self._push_undo_command(cmd, False)
         else:
             self._scene.skybox_color = new_value
+
+        self._refresh_from_scene()
+        self.scene_changed.emit()
+
+    def _on_skybox_top_color_clicked(self) -> None:
+        """Handle skybox top color button click."""
+        if self._scene is None:
+            return
+
+        current = self._scene.skybox_top_color
+        initial = (float(current[0]), float(current[1]), float(current[2]), 1.0)
+
+        result = ColorDialog.get_color(initial, self)
+        if result is None:
+            return
+
+        old_value = self._scene.skybox_top_color.copy()
+        new_value = np.array([result[0], result[1], result[2]], dtype=np.float32)
+
+        if self._push_undo_command is not None:
+            cmd = ScenePropertyEditCommand(
+                self._scene, "skybox_top_color", old_value, new_value
+            )
+            self._push_undo_command(cmd, False)
+        else:
+            self._scene.skybox_top_color = new_value
+
+        self._refresh_from_scene()
+        self.scene_changed.emit()
+
+    def _on_skybox_bottom_color_clicked(self) -> None:
+        """Handle skybox bottom color button click."""
+        if self._scene is None:
+            return
+
+        current = self._scene.skybox_bottom_color
+        initial = (float(current[0]), float(current[1]), float(current[2]), 1.0)
+
+        result = ColorDialog.get_color(initial, self)
+        if result is None:
+            return
+
+        old_value = self._scene.skybox_bottom_color.copy()
+        new_value = np.array([result[0], result[1], result[2]], dtype=np.float32)
+
+        if self._push_undo_command is not None:
+            cmd = ScenePropertyEditCommand(
+                self._scene, "skybox_bottom_color", old_value, new_value
+            )
+            self._push_undo_command(cmd, False)
+        else:
+            self._scene.skybox_bottom_color = new_value
 
         self._refresh_from_scene()
         self.scene_changed.emit()
