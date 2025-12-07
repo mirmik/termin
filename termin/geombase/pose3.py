@@ -106,14 +106,6 @@ class Pose3:
         t = self.lin + qrot(self.ang, other.lin)
         return Pose3(ang=q, lin=t)
 
-    def small_compose(self, other):
-        """Compose this pose with another pose."""
-        if not isinstance(other, Pose3):
-            raise TypeError("Can only multiply Pose3 with Pose3")
-        q = qmul(self.ang, other.ang)
-        t = self.lin + other.lin
-        return Pose3(ang=q, lin=t)
-
     def __matmul__(self, other):
         """Compose this pose with another pose using @ operator."""
         return self * other

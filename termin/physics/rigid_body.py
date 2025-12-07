@@ -183,18 +183,20 @@ class RigidBody:
     def integrate_positions(self, dt: float):
         """
         Интегрирование скорости для обновления позы.
-        Использует экспоненциальную карту для вращения.
+
+        Скорость в СК тела, композиция справа:
+            pose_new = pose_old * exp(v_body * dt)
         """
         if self.is_static:
             return
 
-        # Пространственное смещение в мировой СК
-        delta = self.velocity * dt
-        delta_pose = delta.to_pose()
+        # Переводим скорость из мировой СК в СК тела
+        v_body = self.velocity.inverse_transform_by(self.pose)
 
-        # Композиция: new_pose = delta_pose * old_pose
-        # Нормализуем кватернион для предотвращения накопления ошибки
-        self.pose = delta_pose.small_compose(self.pose).normalized()
+        delta_pose = (v_body * dt).to_pose()
+
+        # Стандартная композиция SE(3): pose * delta
+        self.pose = (self.pose * delta_pose).normalized()
 
     def world_collider(self) -> Collider | None:
         """Коллайдер, преобразованный в мировую СК."""
@@ -289,15 +291,3 @@ class RigidBody:
             pose=pose,
             is_static=True,
         )
-
-
-def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-    """Multiply two quaternions (x, y, z, w format)."""
-    x1, y1, z1, w1 = q1
-    x2, y2, z2, w2 = q2
-    return np.array([
-        w1*x2 + x1*w2 + y1*z2 - z1*y2,
-        w1*y2 - x1*z2 + y1*w2 + z1*x2,
-        w1*z2 + x1*y2 - y1*x2 + z1*w2,
-        w1*w2 - x1*x2 - y1*y2 - z1*z2,
-    ], dtype=np.float64)
