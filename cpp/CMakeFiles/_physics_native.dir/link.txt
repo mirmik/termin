@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -march=native -DNDEBUG -flto=auto -shared  -o _physics_native.cpython-310-x86_64-linux-gnu.so CMakeFiles/_physics_native.dir/src/physics_bindings.cpp.o 

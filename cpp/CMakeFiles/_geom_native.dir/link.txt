@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -march=native -DNDEBUG -flto=auto -shared  -o _geom_native.cpython-310-x86_64-linux-gnu.so CMakeFiles/_geom_native.dir/src/bindings.cpp.o 

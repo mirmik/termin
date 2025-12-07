@@ -5,15 +5,29 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Optimization flags
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
+# Platform-specific optimization flags
+if(MSVC)
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
+    set(OPTIMIZE_FLAGS /O2 /fp:fast)
+else()
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
+    set(OPTIMIZE_FLAGS -O3 -march=native -ffast-math)
+endif()
 
-# Find pybind11 via pip
-execute_process(
-    COMMAND python3 -m pybind11 --cmakedir
-    OUTPUT_VARIABLE pybind11_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+# Find pybind11 via pip (works on both Windows and Linux)
+if(WIN32)
+    execute_process(
+        COMMAND python -m pybind11 --cmakedir
+        OUTPUT_VARIABLE pybind11_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    execute_process(
+        COMMAND python3 -m pybind11 --cmakedir
+        OUTPUT_VARIABLE pybind11_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+endif()
 find_package(pybind11 CONFIG REQUIRED)
 
 # Include directories
@@ -22,19 +36,19 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 # Geom native module (Vec3, Quat, Pose3, Screw3)
 pybind11_add_module(_geom_native src/bindings.cpp)
 target_compile_options(_geom_native PRIVATE
-    $<$<CONFIG:Release>:-O3 -march=native -ffast-math>
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
 # Colliders native module (BoxCollider, SphereCollider)
 pybind11_add_module(_colliders_native src/colliders_bindings.cpp)
 target_compile_options(_colliders_native PRIVATE
-    $<$<CONFIG:Release>:-O3 -march=native -ffast-math>
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
 # Physics native module (RigidBody, PhysicsWorld, Contact)
 pybind11_add_module(_physics_native src/physics_bindings.cpp)
 target_compile_options(_physics_native PRIVATE
-    $<$<CONFIG:Release>:-O3 -march=native -ffast-math>
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
 # Install to python packages

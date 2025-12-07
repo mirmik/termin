@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -march=native -DNDEBUG -flto=auto -shared  -o _colliders_native.cpython-310-x86_64-linux-gnu.so CMakeFiles/_colliders_native.dir/src/colliders_bindings.cpp.o 
