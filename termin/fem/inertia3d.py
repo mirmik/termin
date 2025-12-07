@@ -194,3 +194,14 @@ class SpatialInertia3D:
     def __matmul__(self, twist: Screw3) -> Screw3:
         """Operator @ for I @ twist."""
         return self.apply(twist)
+
+    def solve(self, wrench: Screw3) -> Screw3:
+        """
+        Решение I * a = f для a: a = I⁻¹ * f.
+        wrench — винт сил (τ, F)
+        Возвращает твист ускорения (α, a).
+        """
+        I_matrix = self.to_matrix_vw_order()
+        f_vec = wrench.to_vw_array()
+        a_vec = np.linalg.solve(I_matrix, f_vec)
+        return Screw3.from_vw_array(a_vec)

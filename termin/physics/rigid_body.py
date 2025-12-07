@@ -154,44 +154,30 @@ class RigidBody:
         """
         Интегрирование сил для обновления скорости.
 
-        Уравнение: I * a = f_ext + f_gravity - v ×* (I * v)
+        Уравнение движения в СК тела:
+            I * a = f_ext + f_gravity - v ×* (I * v)
 
-        Где v ×* h — bias-сила (Кориолис/центробежная).
+        Где v ×* h — пространственное силовое скрещивание (bias/кориолисов член).
         """
         if self.is_static:
             self.wrench = Screw3.zero()
             return
 
-        # Преобразуем скорость в СК тела для вычисления bias
-        v_body = self.velocity.inverse_transform_as_twist_by(self.pose)
+        I = self.spatial_inertia
 
-        # Bias-винт в СК тела: v ×* (I * v)
-        bias_body = self.spatial_inertia.bias_wrench(v_body)
-
-        # Гравитационный винт в СК тела
+        # Всё в СК тела
+        v_body = self.velocity.inverse_transform_by(self.pose)
         g_body = self.pose.inverse_transform_vector(gravity)
-        gravity_wrench_body = self.spatial_inertia.gravity_wrench(g_body)
+        f_ext_body = self.wrench.inverse_transform_by(self.pose)
 
-        # Внешний винт, преобразованный в СК тела
-        f_ext_body = self.wrench.inverse_transform_as_wrench_by(self.pose)
+        # Суммарный винт: внешний + гравитация - bias
+        f_total = f_ext_body + I.gravity_wrench(g_body) - I.bias_wrench(v_body)
 
-        # Суммарный винт в СК тела
-        f_total_body = f_ext_body + gravity_wrench_body - bias_body
+        # Ускорение: a = I⁻¹ * f
+        a_body = I.solve(f_total)
 
-        # Ускорение в СК тела: a = I⁻¹ * f
-        # Используем матричную форму для простоты
-        I_matrix = self.spatial_inertia.to_matrix_vw_order()
-        f_vec = f_total_body.to_vw_array()
-        a_vec = np.linalg.solve(I_matrix, f_vec)
-        a_body = Screw3.from_vw_array(a_vec)
-
-        # Преобразуем ускорение в мировую СК
-        a_world = a_body.transform_as_twist_by(self.pose)
-
-        # Обновляем скорость
-        self.velocity = self.velocity + a_world * dt
-
-        # Очищаем накопленный винт
+        # В мировую СК и обновляем скорость
+        self.velocity = self.velocity + a_body.transform_by(self.pose) * dt
         self.wrench = Screw3.zero()
 
     def integrate_positions(self, dt: float):
