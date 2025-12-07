@@ -4,6 +4,7 @@ from termin.physics.rigid_body import RigidBody
 from termin.physics.world import PhysicsWorld
 from termin.physics.contact import Contact, ContactConstraint
 from termin.physics.rigid_body_component import RigidBodyComponent
+from termin.physics.physics_world_component import PhysicsWorldComponent
 
 __all__ = [
     "RigidBody",
@@ -11,4 +12,5 @@ __all__ = [
     "Contact",
     "ContactConstraint",
     "RigidBodyComponent",
+    "PhysicsWorldComponent",
 ]
