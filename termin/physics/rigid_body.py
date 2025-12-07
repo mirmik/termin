@@ -105,10 +105,11 @@ class RigidBody:
 
     def apply_wrench(self, w: Screw3):
         """Apply wrench (ang=torque, lin=force) at center of mass."""
-        self.wrench = Screw3(
-            ang=self.wrench.ang + w.ang,
-            lin=self.wrench.lin + w.lin,
-        )
+        # self.wrench = Screw3(
+        #     ang=self.wrench.ang + w.ang,
+        #     lin=self.wrench.lin + w.lin,
+        # )
+        self.wrench = self.wrench + w
 
     def apply_force(self, force: np.ndarray, point: np.ndarray | None = None):
         """
@@ -120,10 +121,11 @@ class RigidBody:
             r = point - self.position
             torque = np.cross(r, force)
 
-        self.wrench = Screw3(
-            ang=self.wrench.ang + torque,
-            lin=self.wrench.lin + force,
-        )
+        # self.wrench = Screw3(
+        #     ang=self.wrench.ang + torque,
+        #     lin=self.wrench.lin + force,
+        # )
+        self.wrench = self.wrench + Screw3(ang=torque, lin=force)
 
     def apply_impulse(self, impulse: np.ndarray, point: np.ndarray):
         """
@@ -186,7 +188,10 @@ class RigidBody:
             ang=_quat_multiply(delta_pose.ang, self.pose.ang),
             lin=new_position,
         )
-        self.pose = new_pose
+
+        delta = Screw3(ang=self.velocity.ang * dt, lin=self.velocity.lin * dt)
+        delta_pose = delta.to_pose()
+        self.pose = delta_pose.small_compose(self.pose) # Почему при замене small_compose на compose система разваливается?
 
     def world_collider(self) -> Collider | None:
         """Get collider transformed to world frame."""
