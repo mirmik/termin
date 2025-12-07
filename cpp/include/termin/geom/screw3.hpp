@@ -5,6 +5,7 @@
 #include <cmath>
 
 namespace termin {
+namespace geom {
 
 struct Screw3 {
     Vec3 ang;  // Angular part (omega)
@@ -24,6 +25,9 @@ struct Screw3 {
     Screw3& operator+=(const Screw3& s) { ang += s.ang; lin += s.lin; return *this; }
     Screw3& operator-=(const Screw3& s) { ang -= s.ang; lin -= s.lin; return *this; }
     Screw3& operator*=(double k) { ang *= k; lin *= k; return *this; }
+
+    // Scale (for v_body * dt)
+    Screw3 scaled(double k) const { return {ang * k, lin * k}; }
 
     // Dot product (for power: wrench · twist)
     double dot(const Screw3& s) const {
@@ -85,4 +89,5 @@ struct Screw3 {
 
 inline Screw3 operator*(double k, const Screw3& s) { return s * k; }
 
+} // namespace geom
 } // namespace termin
