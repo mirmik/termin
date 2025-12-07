@@ -35,9 +35,12 @@ uniform vec4 u_color; // RGBA базового материала
 const int LIGHT_TYPE_DIRECTIONAL = 0;
 const int LIGHT_TYPE_POINT       = 1;
 const int LIGHT_TYPE_SPOT        = 2;
-const int LIGHT_TYPE_AMBIENT     = 3;
 
 const int MAX_LIGHTS = 8;
+
+// ============== Ambient lighting (scene-level) ==============
+uniform vec3  u_ambient_color;
+uniform float u_ambient_intensity;
 
 uniform int   u_light_count;
 uniform int   u_light_type[MAX_LIGHTS];
@@ -144,16 +147,13 @@ float compute_shadow(int light_index) {
 void main() {
     vec3 N = normalize(v_normal);
     vec3 base_color = u_color.rgb;
-    vec3 result = vec3(0.0);
+
+    // Scene-level ambient lighting
+    vec3 result = base_color * u_ambient_color * u_ambient_intensity;
 
     for (int i = 0; i < u_light_count; ++i) {
         int type = u_light_type[i];
         vec3 radiance = u_light_color[i] * u_light_intensity[i];
-
-        if (type == LIGHT_TYPE_AMBIENT) {
-            result += base_color * radiance;
-            continue;
-        }
 
         vec3 L;
         float dist;

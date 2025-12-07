@@ -20,8 +20,6 @@ def _light_type_to_int(light_type: LightType) -> int:
         return 1
     if light_type == LightType.SPOT:
         return 2
-    if light_type == LightType.AMBIENT:
-        return 3
     raise ValueError(f"Unknown LightType: {light_type}")
 
 
@@ -64,3 +62,13 @@ def upload_lights_to_shader(shader: ShaderProgram, lights: Sequence[Light]) -> N
         shader.set_uniform_vec3(f"{prefix}attenuation[{index}]", _attenuation_vector(light))
         shader.set_uniform_float(f"{prefix}inner_angle[{index}]", float(light.inner_angle))
         shader.set_uniform_float(f"{prefix}outer_angle[{index}]", float(light.outer_angle))
+
+
+def upload_ambient_to_shader(
+    shader: ShaderProgram,
+    ambient_color: np.ndarray,
+    ambient_intensity: float,
+) -> None:
+    """Upload scene-level ambient lighting uniforms."""
+    shader.set_uniform_vec3("u_ambient_color", np.asarray(ambient_color, dtype=np.float32))
+    shader.set_uniform_float("u_ambient_intensity", float(ambient_intensity))

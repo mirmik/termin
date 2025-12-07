@@ -18,6 +18,7 @@ from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.editor.editor_inspector import EntityInspector
+from termin.editor.scene_inspector import SceneInspector
 from termin.visualization.core.resources import ResourceManager
 from termin.geombase.pose3 import Pose3
 
@@ -32,6 +33,7 @@ class EditorWindow(QMainWindow):
         self._action_play = None
         self._undo_stack_viewer = None
         self._framegraph_debugger = None
+        self._scene_inspector_dialog = None
 
         self.world = world
         self.scene = scene
@@ -151,6 +153,7 @@ class EditorWindow(QMainWindow):
 
         file_menu = menu_bar.addMenu("File")
         edit_menu = menu_bar.addMenu("Edit")
+        scene_menu = menu_bar.addMenu("Scene")
         game_menu = menu_bar.addMenu("Game")
         debug_menu = menu_bar.addMenu("Debug")
 
@@ -189,6 +192,10 @@ class EditorWindow(QMainWindow):
         self._action_redo = edit_menu.addAction("Redo")
         self._action_redo.setShortcut("Ctrl+Shift+Z")
         self._action_redo.triggered.connect(self.redo)
+
+        # Scene menu
+        scene_properties_action = scene_menu.addAction("Scene Properties...")
+        scene_properties_action.triggered.connect(self._show_scene_properties)
 
         # Game menu - одна кнопка Play/Stop
         self._action_play = game_menu.addAction("Play")
@@ -260,6 +267,40 @@ class EditorWindow(QMainWindow):
         self._update_undo_redo_actions()
         if cmd is not None:
             self.undo_stack_changed.emit()
+    def _show_scene_properties(self) -> None:
+        """
+        Открывает диалог редактирования свойств сцены (ambient, background и т.п.).
+        """
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox
+
+        if self._scene_inspector_dialog is None:
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Scene Properties")
+            dialog.setMinimumWidth(300)
+
+            layout = QVBoxLayout(dialog)
+
+            inspector = SceneInspector(dialog)
+            inspector.set_scene(self.scene)
+            inspector.set_undo_command_handler(self.push_undo_command)
+            inspector.scene_changed.connect(self._request_viewport_update)
+
+            layout.addWidget(inspector)
+
+            button_box = QDialogButtonBox(QDialogButtonBox.Close)
+            button_box.rejected.connect(dialog.close)
+            layout.addWidget(button_box)
+
+            dialog._inspector = inspector
+            self._scene_inspector_dialog = dialog
+
+        # Обновляем значения при каждом открытии
+        self._scene_inspector_dialog._inspector.set_scene(self.scene)
+
+        self._scene_inspector_dialog.show()
+        self._scene_inspector_dialog.raise_()
+        self._scene_inspector_dialog.activateWindow()
+
     def _show_undo_stack_viewer(self) -> None:
         """
         Открывает отдельное окно с содержимым undo/redo стека.

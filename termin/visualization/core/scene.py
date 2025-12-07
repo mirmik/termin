@@ -88,6 +88,10 @@ class Scene:
         self.light_direction = np.array([-0.5, -1.0, -0.3], dtype=np.float32)
         self.light_color = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
+        # Ambient lighting (global, affects all surfaces uniformly)
+        self.ambient_color = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+        self.ambient_intensity = 0.1
+
     def build_lights(self) -> List[Light]:
         """
         Собрать мировые параметры всех источников света.
@@ -229,6 +233,8 @@ class Scene:
             "background_color": list(self.background_color),
             "light_direction": list(self.light_direction),
             "light_color": list(self.light_color),
+            "ambient_color": list(self.ambient_color),
+            "ambient_intensity": self.ambient_intensity,
             "entities": serialized_entities,
         }
 
@@ -264,6 +270,11 @@ class Scene:
                 data.get("light_color", [1.0, 1.0, 1.0]),
                 dtype=np.float32
             )
+            self.ambient_color = np.asarray(
+                data.get("ambient_color", [1.0, 1.0, 1.0]),
+                dtype=np.float32
+            )
+            self.ambient_intensity = data.get("ambient_intensity", 0.1)
 
         loaded_count = 0
         for ent_data in data.get("entities", []):

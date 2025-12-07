@@ -17,7 +17,6 @@ class LightType(str, Enum):
     DIRECTIONAL = "directional"
     POINT = "point"
     SPOT = "spot"
-    AMBIENT = "ambient"
 
 
 @dataclass
@@ -123,14 +122,6 @@ class Light:
 
     def sample(self, point: np.ndarray) -> LightSample:
         """Оценить вклад света в точке ``point`` (мировое пространство)."""
-        if self.type == LightType.AMBIENT:
-            return LightSample(
-                L=np.zeros(3, dtype=np.float32),
-                distance=np.inf,
-                attenuation=1.0,
-                radiance=self.intensity_rgb,
-            )
-
         if self.type == LightType.DIRECTIONAL:
             incoming = -_normalize(self.direction)
             return LightSample(

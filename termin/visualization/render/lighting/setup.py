@@ -15,7 +15,6 @@ class LightBudget:
     directional: int = 2
     point: int = 16
     spot: int = 8
-    ambient: int = 1
 
     def fits(self, light: Light, counts: dict[LightType, int]) -> bool:
         match light.type:
@@ -25,8 +24,6 @@ class LightBudget:
                 return counts[LightType.POINT] < self.point
             case LightType.SPOT:
                 return counts[LightType.SPOT] < self.spot
-            case LightType.AMBIENT:
-                return counts[LightType.AMBIENT] < self.ambient
         return False
 
 
@@ -40,7 +37,6 @@ class LightSetup:
             LightType.DIRECTIONAL: 0,
             LightType.POINT: 0,
             LightType.SPOT: 0,
-            LightType.AMBIENT: 0,
         }
 
     def add_light(self, light: Light) -> bool:
@@ -65,7 +61,6 @@ class LightSetup:
             "directional": [],
             "point": [],
             "spot": [],
-            "ambient": [],
         }
         for light in self._lights:
             payload[light.type.value].append(light.to_uniform_dict())

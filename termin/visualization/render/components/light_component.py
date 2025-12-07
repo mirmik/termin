@@ -24,7 +24,6 @@ class LightComponent(Component):
                 (LightType.DIRECTIONAL, "Directional"),
                 (LightType.POINT, "Point"),
                 (LightType.SPOT, "Spot"),
-                (LightType.AMBIENT, "Ambient"),
             ],
         ),
         "color": InspectField(
