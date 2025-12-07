@@ -15,6 +15,8 @@ class PhysicsWorld:
 
     Обрабатывает динамику твёрдых тел с обнаружением и откликом на коллизии
     методом Sequential Impulses.
+
+    Использует fixed timestep для детерминированной симуляции.
     """
 
     def __init__(
@@ -23,6 +25,8 @@ class PhysicsWorld:
         iterations: int = 10,
         restitution: float = 0.3,
         friction: float = 0.5,
+        fixed_dt: float = 1.0 / 60.0,
+        max_substeps: int = 8,
     ):
         if gravity is None:
             self.gravity = np.array([0, 0, -9.81], dtype=np.float64)
@@ -32,6 +36,11 @@ class PhysicsWorld:
         self.iterations = iterations
         self.restitution = restitution
         self.friction = friction
+
+        # Fixed timestep для детерминизма
+        self.fixed_dt = fixed_dt
+        self.max_substeps = max_substeps
+        self._time_accumulator = 0.0
 
         self.bodies: List[RigidBody] = []
         self._contact_constraints: List[ContactConstraint] = []
@@ -52,7 +61,26 @@ class PhysicsWorld:
 
     def step(self, dt: float):
         """
-        Продвинуть симуляцию на dt секунд.
+        Продвинуть симуляцию на dt секунд (время кадра).
+
+        Использует fixed timestep с аккумулятором для детерминизма.
+        Выполняет несколько подшагов с фиксированным dt, если нужно.
+        """
+        self._time_accumulator += dt
+
+        substeps = 0
+        while self._time_accumulator >= self.fixed_dt and substeps < self.max_substeps:
+            self._step_fixed(self.fixed_dt)
+            self._time_accumulator -= self.fixed_dt
+            substeps += 1
+
+        # Если накопилось слишком много времени — сбрасываем (spiral of death protection)
+        if self._time_accumulator > self.fixed_dt * self.max_substeps:
+            self._time_accumulator = 0.0
+
+    def _step_fixed(self, dt: float):
+        """
+        Один шаг симуляции с фиксированным dt.
 
         Использует полу-неявный Эйлер со спекулятивными контактами:
         1. Приложение сил → обновление скоростей
