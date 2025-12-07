@@ -1,16 +1,8 @@
 # skybox.py
+"""Skybox shaders and geometry utilities."""
 
 from __future__ import annotations
 import numpy as np
-
-from termin.geombase.pose3 import Pose3
-
-from termin.mesh.mesh import Mesh3
-from termin.visualization.core.entity import Entity
-from termin.visualization.core.mesh import MeshDrawable
-from termin.visualization.core.material import Material
-from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.components import SkyboxRenderer
 
 
 SKYBOX_VERTEX_SHADER = """
@@ -69,31 +61,3 @@ def _skybox_cube():
     ], dtype=np.uint32)
 
     return vertices, triangles
-
-
-class SkyBoxEntity(Entity):
-    """
-    Небесный куб, который всегда окружает камеру.
-    Не использует освещение, цвет и прочее — отдельный шейдер.
-    """
-
-    def __init__(self, size: float = 1.0):
-        verts, tris = _skybox_cube()
-        mesh = MeshDrawable(Mesh3(vertices=verts, triangles=tris))
-
-        shader = ShaderProgram(
-            vertex_source=SKYBOX_VERTEX_SHADER,
-            fragment_source=SKYBOX_FRAGMENT_SHADER
-        )
-        material = Material(shader=shader)
-        material.color = None  # skybox не использует u_color
-
-        super().__init__(
-            pose=Pose3.identity(),
-            scale=size,
-            name="skybox",
-            priority=-100,  # рисуем в самом начале
-            pickable=False,
-            selectable=False,
-        )
-        self.renderer = self.add_component(SkyboxRenderer(mesh, material))

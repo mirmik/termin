@@ -23,7 +23,6 @@ from termin.visualization.render.texture import Texture
 from termin.visualization.core.world import VisualizationWorld
 from termin.visualization.platform.backends.base import GraphicsBackend, WindowBackend, MouseButton, Key, Action
 from termin.visualization.platform.backends.qt import QtWindowBackend, QtGLWindowHandle
-from termin.visualization.render.skybox import SkyBoxEntity
 
 __all__ = [
     "Window",
@@ -54,5 +53,4 @@ __all__ = [
     "Action",
     "QtWindowBackend",
     "QtGLWindowHandle",
-    "SkyBoxEntity",
 ]

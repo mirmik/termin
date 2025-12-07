@@ -14,9 +14,8 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.render.components import MeshRenderer, LineRenderer  
+from termin.visualization.render.components import MeshRenderer, LineRenderer
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.skybox import SkyBoxEntity
 
 vert = """
 #version 330 core
@@ -111,8 +110,6 @@ def build_scene(world: VisualizationWorld, mesh: "Mesh") -> tuple[Scene, Perspec
     
     scene.add(entity)
 
-    skybox = SkyBoxEntity()
-    scene.add(skybox)
     world.add_scene(scene)
 
     T = 10000.0

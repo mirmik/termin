@@ -11,9 +11,9 @@ from termin.visualization.core.entity import RenderContext
 
 class SkyBoxPass(RenderFramePass):
     """
-    Render-проход, рисующий skybox-куб, привязанный к активной камере.
+    Render-проход, рисующий skybox-куб.
 
-    Pass ожидает, что камера предоставляет методы:
+    Pass ожидает, что сцена предоставляет методы:
       - skybox_mesh() -> MeshDrawable
       - skybox_material() -> Material
 
@@ -76,12 +76,11 @@ class SkyBoxPass(RenderFramePass):
           - V берётся без трансляции, чтобы куб всегда оставался вокруг камеры
             при движении.
         """
-        try:
-            mesh = camera.skybox_mesh()
-            material = camera.skybox_material()
-        except AttributeError:
-            # Камера не предоставляет skybox — ничего не рисуем.
+        if scene is None:
             return
+
+        mesh = scene.skybox_mesh()
+        material = scene.skybox_material()
 
         if mesh is None or material is None:
             return

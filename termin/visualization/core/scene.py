@@ -17,6 +17,8 @@ from termin.colliders.collider_component import ColliderComponent
 
 if TYPE_CHECKING:  # pragma: no cover
     from termin.visualization.render.shader import ShaderProgram
+    from termin.visualization.core.mesh import MeshDrawable
+    from termin.visualization.core.material import Material
 
 def is_overrides_method(obj, method_name, base_class):
     return getattr(obj.__class__, method_name) is not getattr(base_class, method_name)
@@ -91,6 +93,42 @@ class Scene:
         # Ambient lighting (global, affects all surfaces uniformly)
         self.ambient_color = np.array([1.0, 1.0, 1.0], dtype=np.float32)
         self.ambient_intensity = 0.1
+
+        # Skybox (lazily initialized)
+        self._skybox_mesh: "MeshDrawable | None" = None
+        self._skybox_material: "Material | None" = None
+
+    def _ensure_skybox_mesh(self) -> "MeshDrawable":
+        """Lazily create skybox cube mesh."""
+        if self._skybox_mesh is None:
+            from termin.visualization.core.mesh import MeshDrawable
+            from termin.visualization.render.skybox import _skybox_cube
+            vertices, triangles = _skybox_cube()
+            self._skybox_mesh = MeshDrawable.from_vertices_indices(vertices, triangles)
+        return self._skybox_mesh
+
+    def _ensure_skybox_material(self) -> "Material":
+        """Lazily create default skybox material with gradient shader."""
+        if self._skybox_material is None:
+            from termin.visualization.core.material import Material
+            from termin.visualization.render.shader import ShaderProgram
+            from termin.visualization.render.skybox import SKYBOX_VERTEX_SHADER, SKYBOX_FRAGMENT_SHADER
+            shader = ShaderProgram(
+                vertex_source=SKYBOX_VERTEX_SHADER,
+                fragment_source=SKYBOX_FRAGMENT_SHADER,
+            )
+            material = Material(shader=shader)
+            material.color = None  # Skybox doesn't use u_color
+            self._skybox_material = material
+        return self._skybox_material
+
+    def skybox_mesh(self) -> "MeshDrawable":
+        """Get skybox cube mesh."""
+        return self._ensure_skybox_mesh()
+
+    def skybox_material(self) -> "Material":
+        """Get skybox material."""
+        return self._ensure_skybox_material()
 
     def build_lights(self) -> List[Light]:
         """
