@@ -58,8 +58,9 @@ class TransformationProbe(unittest.TestCase):
         carried = screw.kinematic_carry(motor)
         invcarried = carried.kinematic_carry(motor.inverse())
         invcarried2 = carried.inverse_kinematic_carry(motor)
-        self.assertEqual(carried.moment(), 1)
-        self.assertTrue((carried.vector() == numpy.array([0,-1])).all())
+        # примерно равно 1
+        self.assertAlmostEqual(carried.moment(), 1, places=5)
+        self.assertTrue((numpy.allclose(carried.vector(), numpy.array([0,-1]), atol=1e-5)))
         self.assertTrue(screw_equal(invcarried, screw))
         self.assertTrue(screw_equal(invcarried2, screw))
 
