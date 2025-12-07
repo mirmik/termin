@@ -2,6 +2,7 @@
 import os
 from PyQt5 import uic
 from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog, QMessageBox
+from PyQt5.QtWidgets import QStatusBar
 from PyQt5.QtCore import Qt, QEvent, pyqtSignal
 
 from termin.editor.undo_stack import UndoStack, UndoCommand
@@ -34,6 +35,9 @@ class EditorWindow(QMainWindow):
         self._undo_stack_viewer = None
         self._framegraph_debugger = None
         self._scene_inspector_dialog = None
+        self._status_bar_label: QLabel | None = None
+        self._fps_smooth: float | None = None
+        self._fps_alpha: float = 0.1  # экспоненциальное сглаживание: f_new = f_prev*(1-α) + f_curr*α
 
         self.world = world
         self.scene = scene
@@ -48,6 +52,8 @@ class EditorWindow(QMainWindow):
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
+
+        self._init_status_bar()
 
         self._setup_menu_bar()
 
@@ -131,6 +137,7 @@ class EditorWindow(QMainWindow):
             resource_manager=self.resource_manager,
             on_mode_changed=self._on_game_mode_changed,
             on_request_update=self._request_viewport_update,
+            on_tick=self._on_game_tick,
         )
 
         # --- WorldPersistence ---
@@ -501,6 +508,17 @@ class EditorWindow(QMainWindow):
 
         self.topSplitter.setSizes([300, 1000, 300])
         self.verticalSplitter.setSizes([600, 200])
+
+    def _init_status_bar(self) -> None:
+        """
+        Создаёт полосу статуса внизу окна. FPS будем писать сюда в игровом режиме.
+        """
+        status_bar: QStatusBar = self.statusBar()
+        status_bar.setSizeGripEnabled(False)
+
+        label = QLabel("Editor mode")
+        status_bar.addPermanentWidget(label, 1)
+        self._status_bar_label = label
 
     # ----------- связи с контроллерами -----------
 
@@ -901,8 +919,27 @@ class EditorWindow(QMainWindow):
             if self.scene_tree_controller is not None:
                 self.scene_tree_controller.rebuild()
 
+        # Сбрасываем сглаженное значение FPS при входе/выходе
+        self._fps_smooth = None
         self._update_game_mode_ui()
         self._request_viewport_update()
+
+    def _on_game_tick(self, dt: float) -> None:
+        """
+        При вызове игрового тика считаем FPS как 1/dt и сглаживаем экспонентой.
+        Формула: f_new = f_prev * (1 - α) + f_curr * α, α берём из _fps_alpha.
+        """
+        if dt <= 0.0:
+            return
+
+        fps_instant = 1.0 / dt
+        if self._fps_smooth is None:
+            self._fps_smooth = fps_instant
+        else:
+            alpha = self._fps_alpha
+            self._fps_smooth = self._fps_smooth * (1.0 - alpha) + fps_instant * alpha
+
+        self._update_status_bar()
 
     def _update_game_mode_ui(self) -> None:
         """Обновляет состояние UI элементов в зависимости от режима."""
@@ -922,3 +959,21 @@ class EditorWindow(QMainWindow):
             self.setWindowTitle(f"{base_title} [PLAYING]")
         else:
             self.setWindowTitle(base_title)
+
+        self._update_status_bar()
+
+    def _update_status_bar(self) -> None:
+        """Заполняет текст статус-бара (FPS в игре, режим редактора вне игры)."""
+        if self._status_bar_label is None:
+            return
+
+        is_playing = self.game_mode_controller.is_playing if self.game_mode_controller else False
+        if not is_playing:
+            self._status_bar_label.setText("Editor mode")
+            return
+
+        if self._fps_smooth is None:
+            self._status_bar_label.setText("FPS: --")
+            return
+
+        self._status_bar_label.setText(f"FPS: {self._fps_smooth:.1f}")

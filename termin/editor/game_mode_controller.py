@@ -29,11 +29,13 @@ class GameModeController:
         resource_manager: "ResourceManager",
         on_mode_changed: Optional[Callable[[bool], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
+        on_tick: Optional[Callable[[float], None]] = None,
     ):
         self._scene = scene
         self._resource_manager = resource_manager
         self._on_mode_changed = on_mode_changed
         self._on_request_update = on_request_update
+        self._on_tick = on_tick
 
         self._game_mode = False
         self._saved_scene_state: dict | None = None
@@ -101,6 +103,9 @@ class GameModeController:
 
         # Обновляем сцену
         self._scene.update(dt)
+
+        if self._on_tick is not None:
+            self._on_tick(dt)
 
         # Перерисовываем viewport
         if self._on_request_update:
