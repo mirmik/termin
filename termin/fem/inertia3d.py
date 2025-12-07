@@ -111,28 +111,17 @@ class SpatialInertia3D:
     def bias_wrench(self, velocity: Screw3) -> Screw3:
         """
         Пространственный bias-винт: v ×* (I v).
-        Полный 3D аналог твоего 2D-кода.
+
+        Формула для force cross product (twist ×* wrench):
+        [ω, v] ×* [τ, f] = [ω × τ + v × f, ω × f]
+
+        где h = I * v — пространственный импульс (wrench-like).
         """
-        m = self.m
-        c = self.c
-        Ic = self.Ic
+        # h = I * v
+        h = self.apply(velocity)
 
-        v_lin = velocity.lin
-        v_ang = velocity.ang
-
-        S = skew3(c)
-
-        # spatial inertia * v:
-        h_lin = m * (v_lin + np.cross(v_ang, c))
-        h_ang = Ic @ v_ang + m * np.cross(c, v_lin)
-
-        # теперь bias = v ×* h
-        # линейная часть:
-        b_lin = np.cross(v_ang, h_lin) + np.cross(v_lin, h_ang)*0.0  # линейная от линейной не даёт
-        # угловая часть:
-        b_ang = np.cross(v_ang, h_ang)
-
-        return Screw3(ang=b_ang, lin=b_lin)
+        # bias = v ×* h (force cross product)
+        return velocity.cross_force(h)
 
     # ------------------------------------------------------------
     #     Сложение spatial inertia
