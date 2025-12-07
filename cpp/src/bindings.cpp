@@ -7,6 +7,7 @@
 #include "termin/physics/spatial_inertia.hpp"
 #include "termin/physics/rigid_body.hpp"
 #include "termin/physics/contact.hpp"
+#include "termin/physics/physics_world.hpp"
 #include "termin/colliders/box_collider.hpp"
 #include "termin/colliders/sphere_collider.hpp"
 
@@ -313,4 +314,55 @@ PYBIND11_MODULE(_geom_native, m) {
         .def("collide_sphere", &SphereCollider::collide_sphere)
         .def("collide_box", &SphereCollider::collide_box)
         .def("collide_ground", &SphereCollider::collide_ground);
+
+    // PhysicsWorld
+    py::class_<PhysicsWorld>(m, "PhysicsWorld")
+        .def(py::init<>())
+        .def_readwrite("gravity", &PhysicsWorld::gravity)
+        .def_readwrite("iterations", &PhysicsWorld::iterations)
+        .def_readwrite("restitution", &PhysicsWorld::restitution)
+        .def_readwrite("friction", &PhysicsWorld::friction)
+        .def_readwrite("ground_height", &PhysicsWorld::ground_height)
+        .def_readwrite("ground_enabled", &PhysicsWorld::ground_enabled)
+        .def_readwrite("fixed_dt", &PhysicsWorld::fixed_dt)
+        .def_readwrite("max_substeps", &PhysicsWorld::max_substeps)
+        .def("add_body", &PhysicsWorld::add_body)
+        .def("get_body", py::overload_cast<size_t>(&PhysicsWorld::get_body),
+             py::return_value_policy::reference)
+        .def("body_count", &PhysicsWorld::body_count)
+        .def("step", &PhysicsWorld::step)
+        // Helper to add a box body directly
+        .def("add_box", [](PhysicsWorld& world, double sx, double sy, double sz,
+                          double mass, const Pose3& pose, bool is_static) {
+            RigidBody body = RigidBody::create_box(sx, sy, sz, mass, pose, is_static);
+            return world.add_body(body);
+        }, py::arg("sx"), py::arg("sy"), py::arg("sz"),
+           py::arg("mass"), py::arg("pose"), py::arg("is_static") = false)
+        // Get body positions as numpy array
+        .def("get_positions", [](const PhysicsWorld& world) {
+            size_t n = world.body_count();
+            py::array_t<double> result({(int)n, 3});
+            auto buf = result.mutable_unchecked<2>();
+            for (size_t i = 0; i < n; ++i) {
+                const auto& pos = world.get_body(i).pose.lin;
+                buf(i, 0) = pos.x;
+                buf(i, 1) = pos.y;
+                buf(i, 2) = pos.z;
+            }
+            return result;
+        })
+        // Get body quaternions as numpy array
+        .def("get_rotations", [](const PhysicsWorld& world) {
+            size_t n = world.body_count();
+            py::array_t<double> result({(int)n, 4});
+            auto buf = result.mutable_unchecked<2>();
+            for (size_t i = 0; i < n; ++i) {
+                const auto& q = world.get_body(i).pose.ang;
+                buf(i, 0) = q.x;
+                buf(i, 1) = q.y;
+                buf(i, 2) = q.z;
+                buf(i, 3) = q.w;
+            }
+            return result;
+        });
 }
