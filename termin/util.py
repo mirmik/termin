@@ -24,10 +24,22 @@ def qmul_vector(q: numpy.ndarray, v: numpy.ndarray) -> numpy.ndarray:
 
 
 def qrot(q: numpy.ndarray, v: numpy.ndarray) -> numpy.ndarray:
-    """Rotate vector v by quaternion q."""
-    q_conj = numpy.array([-q[0], -q[1], -q[2], q[3]])
-    rotated_v = qmul(qmul_vector(q, v), q_conj)
-    return rotated_v[:3]
+    """Rotate vector v by quaternion q using optimized formula."""
+    # q = (qx, qy, qz, qw)
+    qx, qy, qz, qw = q[0], q[1], q[2], q[3]
+    vx, vy, vz = v[0], v[1], v[2]
+
+    # t = 2 * cross(q.xyz, v)
+    tx = 2.0 * (qy * vz - qz * vy)
+    ty = 2.0 * (qz * vx - qx * vz)
+    tz = 2.0 * (qx * vy - qy * vx)
+
+    # result = v + qw * t + cross(q.xyz, t)
+    return numpy.array([
+        vx + qw * tx + qy * tz - qz * ty,
+        vy + qw * ty + qz * tx - qx * tz,
+        vz + qw * tz + qx * ty - qy * tx,
+    ])
 
 def qslerp(q1: numpy.ndarray, q2: numpy.ndarray, t: float) -> numpy.ndarray:
     """Spherical linear interpolation between two quaternions."""

@@ -130,16 +130,44 @@ class RigidBody:
         if self.is_static:
             return
 
-        # Пространственный импульс: J = (r × impulse, impulse)
+        # r × impulse (inline cross)
         pos = self.pose.lin
-        r = point - pos
-        J = Screw3(ang=np.cross(r, impulse), lin=impulse)
+        rx = point[0] - pos[0]
+        ry = point[1] - pos[1]
+        rz = point[2] - pos[2]
+        ix, iy, iz = impulse[0], impulse[1], impulse[2]
 
-        # Инерция в мировой СК (только поворот, без трансляции COM)
-        I_world = self.spatial_inertia.rotated_by(self.pose)
+        tau_x = ry * iz - rz * iy
+        tau_y = rz * ix - rx * iz
+        tau_z = rx * iy - ry * ix
 
-        # Δv = I⁻¹ · J
-        self.velocity = self.velocity + I_world.solve(J)
+        # Δv_lin = impulse / m
+        m = self.spatial_inertia.m
+        if m > 0:
+            dv_lin = impulse / m
+        else:
+            dv_lin = np.zeros(3, dtype=np.float64)
+
+        # Δω = I⁻¹_world @ τ
+        # I_world = R @ diag(I_diag) @ R.T, so I⁻¹_world = R @ diag(1/I_diag) @ R.T
+        # Δω = R @ (diag(1/I_diag) @ (R.T @ τ))
+        R = self.rotation
+        I_diag = self.spatial_inertia.I_diag
+
+        # R.T @ τ (rotate torque to body frame)
+        tau_body = R.T @ np.array([tau_x, tau_y, tau_z])
+
+        # diag(1/I_diag) @ tau_body
+        dw_body = tau_body / I_diag
+
+        # R @ dw_body (rotate back to world)
+        dw = R @ dw_body
+
+        # Обновляем скорость напрямую
+        self.velocity = Screw3(
+            ang=self.velocity.ang + dw,
+            lin=self.velocity.lin + dv_lin
+        )
 
     # ----------------------------------------------------------------
     #  Кинематика

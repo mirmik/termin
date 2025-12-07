@@ -8,6 +8,15 @@ import numpy as np
 from termin.physics.rigid_body import RigidBody
 
 
+def _cross3(a, b):
+    """Inline cross product for 3D vectors."""
+    return np.array([
+        a[1]*b[2] - a[2]*b[1],
+        a[2]*b[0] - a[0]*b[2],
+        a[0]*b[1] - a[1]*b[0]
+    ], dtype=np.float64)
+
+
 @dataclass
 class Contact:
     """
@@ -72,26 +81,26 @@ class ContactConstraint:
 
         if c.body_a is not None and not c.body_a.is_static:
             r_a = c.point - c.body_a.pose.lin
-            rxn_a = np.cross(r_a, n)
+            rxn_a = _cross3(r_a, n)
             w += c.body_a.inv_mass
-            w += np.dot(n, np.cross(c.body_a.world_inertia_inv() @ rxn_a, r_a))
+            w += np.dot(n, _cross3(c.body_a.world_inertia_inv() @ rxn_a, r_a))
 
         if c.body_b is not None and not c.body_b.is_static:
             r_b = c.point - c.body_b.pose.lin
-            rxn_b = np.cross(r_b, n)
+            rxn_b = _cross3(r_b, n)
             w += c.body_b.inv_mass
-            w += np.dot(n, np.cross(c.body_b.world_inertia_inv() @ rxn_b, r_b))
+            w += np.dot(n, _cross3(c.body_b.world_inertia_inv() @ rxn_b, r_b))
 
         self.effective_mass_normal = 1.0 / w if w > 1e-10 else 0.0
 
         # Вычисление касательных направлений для трения
         # Находим два ортогональных касательных вектора
         if abs(n[0]) < 0.9:
-            t1 = np.cross(n, np.array([1, 0, 0], dtype=np.float64))
+            t1 = _cross3(n, np.array([1, 0, 0], dtype=np.float64))
         else:
-            t1 = np.cross(n, np.array([0, 1, 0], dtype=np.float64))
+            t1 = _cross3(n, np.array([0, 1, 0], dtype=np.float64))
         t1 = t1 / np.linalg.norm(t1)
-        t2 = np.cross(n, t1)
+        t2 = _cross3(n, t1)
 
         self.tangent1 = t1
         self.tangent2 = t2
@@ -107,15 +116,15 @@ class ContactConstraint:
 
         if c.body_a is not None and not c.body_a.is_static:
             r_a = c.point - c.body_a.pose.lin
-            rxd_a = np.cross(r_a, direction)
+            rxd_a = _cross3(r_a, direction)
             w += c.body_a.inv_mass
-            w += np.dot(direction, np.cross(c.body_a.world_inertia_inv() @ rxd_a, r_a))
+            w += np.dot(direction, _cross3(c.body_a.world_inertia_inv() @ rxd_a, r_a))
 
         if c.body_b is not None and not c.body_b.is_static:
             r_b = c.point - c.body_b.pose.lin
-            rxd_b = np.cross(r_b, direction)
+            rxd_b = _cross3(r_b, direction)
             w += c.body_b.inv_mass
-            w += np.dot(direction, np.cross(c.body_b.world_inertia_inv() @ rxd_b, r_b))
+            w += np.dot(direction, _cross3(c.body_b.world_inertia_inv() @ rxd_b, r_b))
 
         return 1.0 / w if w > 1e-10 else 0.0
 
