@@ -52,6 +52,12 @@ def blit_fbo_to_fbo(
     size: tuple[int, int],
     context_key: int,
 ):
+    from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
+
+    # Для NOP бэкенда пропускаем реальные OpenGL операции
+    if isinstance(gfx, NOPGraphicsBackend):
+        return
+
     w, h = size
 
     # целевой FBO
@@ -219,6 +225,12 @@ class PresentToScreenPass(RenderFramePass):
         lights=None,
         canvas=None,
     ):
+        from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
+
+        # Для NOP бэкенда пропускаем реальные OpenGL операции
+        if isinstance(graphics, NOPGraphicsBackend):
+            return
+
         px, py, pw, ph = rect
         key = context_key
 

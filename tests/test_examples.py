@@ -13,6 +13,7 @@ from termin.visualization.platform.backends import (
 
 from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
 from termin.visualization.platform.backends.nop_window import NOPWindowBackend
+from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
 
 
 def collect_example_modules():
@@ -48,6 +49,9 @@ def test_example_runs_one_frame(module_name, monkeypatch):
     # --- 2. Врубить NOP-бекэнды ---
     set_default_graphics_backend(NOPGraphicsBackend())
     set_default_window_backend(NOPWindowBackend())
+
+    # --- 2.1. Сбросить статические шейдеры (могли быть скомпилированы с другим бэкендом) ---
+    PresentToScreenPass._shader = None
 
     # --- 3. Перехват Texture.from_file, чтобы не грузить реальные картинки ---
     # import termin.visualization.render.texture as texture_mod

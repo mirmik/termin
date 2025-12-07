@@ -151,6 +151,12 @@ class PostProcessPass(RenderFramePass):
         lights=None,
         canvas=None,
     ):
+        from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
+
+        # Для NOP бэкенда пропускаем реальные OpenGL операции
+        if isinstance(graphics, NOPGraphicsBackend):
+            return
+
         px, py, pw, ph = rect
         key = context_key
 
