@@ -6,13 +6,15 @@ from termin.util import qmul, qrot, qslerp, qinv
 class Pose3:
     """A 3D Pose represented by rotation quaternion and translation vector."""
 
+    __slots__ = ('ang', 'lin', '_rot_matrix', '_mat', '_mat34')
+
     def __init__(self, ang: numpy.ndarray = None, lin: numpy.ndarray = None):
         if ang is None:
             ang = numpy.array([0.0, 0.0, 0.0, 1.0])
         if lin is None:
             lin = numpy.array([0.0, 0.0, 0.0])
-        self._ang = ang
-        self._lin = lin
+        self.ang = ang
+        self.lin = lin
         self._rot_matrix = None  # Lazy computation
         self._mat = None  # Lazy computation
         self._mat34 = None  # Lazy computation
@@ -20,16 +22,6 @@ class Pose3:
     def copy(self) -> 'Pose3':
         """Create a copy of the Pose3."""
         return Pose3(ang=self.ang.copy(), lin=self.lin.copy())
-
-    @property
-    def ang(self) -> numpy.ndarray:
-        """Get the rotation quaternion."""
-        return self._ang
-
-    @property
-    def lin(self) -> numpy.ndarray:
-        """Get the translation vector."""
-        return self._lin
 
     @staticmethod
     def identity():

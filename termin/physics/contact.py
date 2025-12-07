@@ -71,13 +71,13 @@ class ContactConstraint:
         w = 0.0
 
         if c.body_a is not None and not c.body_a.is_static:
-            r_a = c.point - c.body_a.position
+            r_a = c.point - c.body_a.pose.lin
             rxn_a = np.cross(r_a, n)
             w += c.body_a.inv_mass
             w += np.dot(n, np.cross(c.body_a.world_inertia_inv() @ rxn_a, r_a))
 
         if c.body_b is not None and not c.body_b.is_static:
-            r_b = c.point - c.body_b.position
+            r_b = c.point - c.body_b.pose.lin
             rxn_b = np.cross(r_b, n)
             w += c.body_b.inv_mass
             w += np.dot(n, np.cross(c.body_b.world_inertia_inv() @ rxn_b, r_b))
@@ -106,13 +106,13 @@ class ContactConstraint:
         w = 0.0
 
         if c.body_a is not None and not c.body_a.is_static:
-            r_a = c.point - c.body_a.position
+            r_a = c.point - c.body_a.pose.lin
             rxd_a = np.cross(r_a, direction)
             w += c.body_a.inv_mass
             w += np.dot(direction, np.cross(c.body_a.world_inertia_inv() @ rxd_a, r_a))
 
         if c.body_b is not None and not c.body_b.is_static:
-            r_b = c.point - c.body_b.position
+            r_b = c.point - c.body_b.pose.lin
             rxd_b = np.cross(r_b, direction)
             w += c.body_b.inv_mass
             w += np.dot(direction, np.cross(c.body_b.world_inertia_inv() @ rxd_b, r_b))

@@ -131,7 +131,8 @@ class RigidBody:
             return
 
         # Пространственный импульс: J = (r × impulse, impulse)
-        r = point - self.position
+        pos = self.pose.lin
+        r = point - pos
         J = Screw3(ang=np.cross(r, impulse), lin=impulse)
 
         # Инерция в мировой СК (только поворот, без трансляции COM)
@@ -145,15 +146,17 @@ class RigidBody:
     # ----------------------------------------------------------------
     def point_velocity(self, point: np.ndarray) -> np.ndarray:
         """Скорость точки, закреплённой на теле (мировые координаты)."""
-        rx = point[0] - self.position[0]
-        ry = point[1] - self.position[1]
-        rz = point[2] - self.position[2]
-        wx, wy, wz = self.velocity.ang
-        # ω × r = (wy*rz - wz*ry, wz*rx - wx*rz, wx*ry - wy*rx)
+        pos = self.pose.lin
+        rx = point[0] - pos[0]
+        ry = point[1] - pos[1]
+        rz = point[2] - pos[2]
+        wx, wy, wz = self.velocity.ang[0], self.velocity.ang[1], self.velocity.ang[2]
+        vx, vy, vz = self.velocity.lin[0], self.velocity.lin[1], self.velocity.lin[2]
+        # v + ω × r
         return np.array([
-            self.velocity.lin[0] + wy * rz - wz * ry,
-            self.velocity.lin[1] + wz * rx - wx * rz,
-            self.velocity.lin[2] + wx * ry - wy * rx,
+            vx + wy * rz - wz * ry,
+            vy + wz * rx - wx * rz,
+            vz + wx * ry - wy * rx,
         ])
 
     # ----------------------------------------------------------------

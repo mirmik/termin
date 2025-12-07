@@ -5,6 +5,9 @@ from termin.geomalgo.project import project_point_on_aabb, project_segment_on_aa
 
 class AABB:
     """Axis-Aligned Bounding Box in 3D space."""
+
+    __slots__ = ('min_point', 'max_point')
+
     def __init__(self, min_point: numpy.ndarray, max_point: numpy.ndarray):
         self.min_point = min_point
         self.max_point = max_point
@@ -61,6 +64,9 @@ class AABB:
 class TransformAABB:
     """AABB associated with a Transform."""
     transform_to_taabb_map = WeakKeyDictionary()
+
+    __slots__ = ('_transform', '_my_aabb', '_my_world_aabb', '_compiled_aabb',
+                 '_last_inspected_version', '_last_tree_inspected_version')
 
     def __init__(self, transform: 'Transform', aabb: AABB):
         self._transform = transform

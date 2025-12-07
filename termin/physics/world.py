@@ -7,6 +7,7 @@ import numpy as np
 
 from termin.physics.rigid_body import RigidBody
 from termin.physics.contact import Contact, ContactConstraint
+from termin.geombase.pose3 import Pose3
 
 
 class PhysicsWorld:
@@ -150,12 +151,13 @@ class PhysicsWorld:
         collider = body.world_collider()
         if collider is None:
             # Простая сферическая аппроксимация для тел без коллайдера
-            z = body.position[2]
+            pos = body.pose.lin
+            z = pos[2]
             if z < self.ground_height:
                 contacts.append(Contact(
                     body_a=None,
                     body_b=body,
-                    point=np.array([body.position[0], body.position[1], self.ground_height]),
+                    point=np.array([pos[0], pos[1], self.ground_height]),
                     normal=np.array([0, 0, 1], dtype=np.float64),
                     penetration=self.ground_height - z,
                 ))
@@ -185,35 +187,33 @@ class PhysicsWorld:
         elif isinstance(collider, BoxCollider):
             # Кубоид vs земля — проверяем все 8 вершин
             aabb = collider.local_aabb()
-            corners_local = [
-                np.array([aabb.min_point[0], aabb.min_point[1], aabb.min_point[2]]),
-                np.array([aabb.max_point[0], aabb.min_point[1], aabb.min_point[2]]),
-                np.array([aabb.min_point[0], aabb.max_point[1], aabb.min_point[2]]),
-                np.array([aabb.max_point[0], aabb.max_point[1], aabb.min_point[2]]),
-                np.array([aabb.min_point[0], aabb.min_point[1], aabb.max_point[2]]),
-                np.array([aabb.max_point[0], aabb.min_point[1], aabb.max_point[2]]),
-                np.array([aabb.min_point[0], aabb.max_point[1], aabb.max_point[2]]),
-                np.array([aabb.max_point[0], aabb.max_point[1], aabb.max_point[2]]),
-            ]
+            minp, maxp = aabb.min_point, aabb.max_point
 
-            for corner_local in corners_local:
-                corner_world = collider.pose.transform_point(corner_local)
+            # Все 8 вершин в локальных координатах
+            corners_local = (
+                (minp[0], minp[1], minp[2]),
+                (maxp[0], minp[1], minp[2]),
+                (minp[0], maxp[1], minp[2]),
+                (maxp[0], maxp[1], minp[2]),
+                (minp[0], minp[1], maxp[2]),
+                (maxp[0], minp[1], maxp[2]),
+                (minp[0], maxp[1], maxp[2]),
+                (maxp[0], maxp[1], maxp[2]),
+            )
+
+            ground_normal = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+
+            for cx, cy, cz in corners_local:
+                corner_world = collider.pose.transform_point(np.array([cx, cy, cz]))
                 z = corner_world[2]
 
                 if z < self.ground_height:
-                    contact_point = np.array([
-                        corner_world[0],
-                        corner_world[1],
-                        self.ground_height,
-                    ], dtype=np.float64)
-                    penetration = self.ground_height - z
-
                     contacts.append(Contact(
                         body_a=None,
                         body_b=body,
-                        point=contact_point,
-                        normal=np.array([0, 0, 1], dtype=np.float64),
-                        penetration=penetration,
+                        point=np.array([corner_world[0], corner_world[1], self.ground_height], dtype=np.float64),
+                        normal=ground_normal,
+                        penetration=self.ground_height - z,
                     ))
 
         return contacts
@@ -324,7 +324,8 @@ class PhysicsWorld:
             if contact.body_a is None:
                 # Контакт с землёй — двигаем только body_b
                 if not contact.body_b.is_static:
-                    contact.body_b.position = contact.body_b.position + n * correction
+                    b = contact.body_b
+                    b.pose = Pose3(ang=b.pose.ang, lin=b.pose.lin + n * correction)
             else:
                 # Контакт между телами
                 total_inv_mass = 0.0
@@ -335,8 +336,10 @@ class PhysicsWorld:
 
                 if total_inv_mass > 1e-10:
                     if not contact.body_a.is_static:
-                        ratio_a = contact.body_a.inv_mass / total_inv_mass
-                        contact.body_a.position = contact.body_a.position - n * correction * ratio_a
+                        a = contact.body_a
+                        ratio_a = a.inv_mass / total_inv_mass
+                        a.pose = Pose3(ang=a.pose.ang, lin=a.pose.lin - n * correction * ratio_a)
                     if not contact.body_b.is_static:
-                        ratio_b = contact.body_b.inv_mass / total_inv_mass
-                        contact.body_b.position = contact.body_b.position + n * correction * ratio_b
+                        b = contact.body_b
+                        ratio_b = b.inv_mass / total_inv_mass
+                        b.pose = Pose3(ang=b.pose.ang, lin=b.pose.lin + n * correction * ratio_b)

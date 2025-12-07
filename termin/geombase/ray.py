@@ -6,6 +6,9 @@ class Ray3:
     origin — начало
     direction — нормализованное направление
     """
+
+    __slots__ = ('origin', 'direction')
+
     def __init__(self, origin: np.ndarray, direction: np.ndarray):
         self.origin = np.asarray(origin, dtype=np.float32)
         d = np.asarray(direction, dtype=np.float32)

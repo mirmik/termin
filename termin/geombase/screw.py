@@ -16,6 +16,9 @@ def cross2d_xz(vec, scalar):
 
 class Screw:
     """A class representing a pair of vector and bivector"""
+
+    __slots__ = ('ang', 'lin')
+
     def __init__(self, ang, lin):
         self.ang = ang  # Bivector part
         self.lin = lin  # Vector part
@@ -31,6 +34,9 @@ class Screw:
 
 class Screw2(Screw):
     """A 2D Screw specialized for planar motions."""
+
+    __slots__ = ()
+
     def __init__(self, ang: numpy.ndarray, lin: numpy.ndarray):
 
         if not isinstance(ang, numpy.ndarray):
@@ -154,6 +160,9 @@ class Screw2(Screw):
 
 class Screw3(Screw):
     """A 3D Screw specialized for spatial motions."""
+
+    __slots__ = ()
+
     def __init__(self, ang: numpy.ndarray = numpy.array([0,0,0]), lin: numpy.ndarray = numpy.array([0,0,0])):
         super().__init__(ang=ang, lin=lin)
 

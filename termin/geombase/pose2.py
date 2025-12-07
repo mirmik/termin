@@ -5,6 +5,8 @@ import numpy
 class Pose2:
     """A 2D Pose represented by rotation angle and translation vector."""
 
+    __slots__ = ('ang', 'lin', '_rot_matrix', '_mat')
+
     def __init__(self, ang: float = 0.0, lin: numpy.ndarray = numpy.array([0.0, 0.0])):
         """
         Args:
