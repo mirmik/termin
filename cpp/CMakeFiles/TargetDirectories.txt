@@ -1,9 +1,0 @@
-/home/koven/mycode/termin/cpp/CMakeFiles/_geom_native.dir
-/home/koven/mycode/termin/cpp/CMakeFiles/_colliders_native.dir
-/home/koven/mycode/termin/cpp/CMakeFiles/_physics_native.dir
-/home/koven/mycode/termin/cpp/CMakeFiles/edit_cache.dir
-/home/koven/mycode/termin/cpp/CMakeFiles/rebuild_cache.dir
-/home/koven/mycode/termin/cpp/CMakeFiles/list_install_components.dir
-/home/koven/mycode/termin/cpp/CMakeFiles/install.dir
-/home/koven/mycode/termin/cpp/CMakeFiles/install/local.dir
-/home/koven/mycode/termin/cpp/CMakeFiles/install/strip.dir
