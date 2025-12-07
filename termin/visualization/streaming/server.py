@@ -107,7 +107,9 @@ class WebStreamServer:
         from termin.visualization.render.headless import HeadlessContext
         from termin.visualization.render.surface import OffscreenRenderSurface
         from termin.visualization.render import RenderEngine, RenderView, ViewportRenderState
-        from termin.visualization.core.viewport import make_default_pipeline
+        from termin.visualization.render.framegraph import RenderPipeline, ResourceSpec
+        from termin.visualization.render.framegraph.passes.color import ColorPass
+        from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
 
         self._headless = HeadlessContext()
         self._headless.make_current()
@@ -119,7 +121,30 @@ class WebStreamServer:
         )
 
         self._engine = RenderEngine(self.world.graphics)
-        self._pipeline = make_default_pipeline()
+
+        # Pipeline для offscreen рендера
+        color_pass = ColorPass(
+            input_res="empty",
+            output_res="color",
+            shadow_res=None,
+            pass_name="Color",
+        )
+        present_pass = PresentToScreenPass(
+            input_res="color",
+            output_res="DISPLAY",
+            pass_name="Present",
+        )
+
+        self._pipeline = RenderPipeline(
+            passes=[color_pass, present_pass],
+            pipeline_specs=[
+                ResourceSpec(
+                    resource="empty",
+                    clear_color=(0.1, 0.1, 0.15, 1.0),
+                    clear_depth=1.0,
+                ),
+            ],
+        )
         self._state = ViewportRenderState(pipeline=self._pipeline)
 
     def _render_frame(self) -> bytes:
@@ -141,6 +166,9 @@ class WebStreamServer:
 
         # Обновляем сцену
         self.scene.update(1.0 / self.target_fps)
+
+        # Инициализируем сцену если нужно
+        self.scene.ensure_ready(self.world.graphics)
 
         # Создаём RenderView
         view = RenderView(
