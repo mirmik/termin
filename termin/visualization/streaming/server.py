@@ -513,6 +513,12 @@ class WebStreamServer:
 
     def _generate_html_client(self, ws_host: str, ws_port: int) -> str:
         """Генерирует HTML/JS клиент для браузера."""
+        # Браузер не может подключиться к 0.0.0.0, используем window.location.hostname
+        if ws_host == "0.0.0.0":
+            ws_url = f"'ws://' + window.location.hostname + ':{ws_port}'"
+        else:
+            ws_url = f"'ws://{ws_host}:{ws_port}'"
+
         return f'''<!DOCTYPE html>
 <html>
 <head>
@@ -574,7 +580,7 @@ class WebStreamServer:
         let lastMouseY = 0;
 
         function connect() {{
-            ws = new WebSocket('ws://{ws_host}:{ws_port}');
+            ws = new WebSocket({ws_url});
 
             ws.onopen = () => {{
                 status.textContent = 'Connected';
