@@ -207,7 +207,8 @@ class RigidBody:
         delta_pose = delta.to_pose()
 
         # Композиция: new_pose = delta_pose * old_pose
-        self.pose = delta_pose.small_compose(self.pose)
+        # Нормализуем кватернион для предотвращения накопления ошибки
+        self.pose = delta_pose.small_compose(self.pose).normalized()
 
     def world_collider(self) -> Collider | None:
         """Коллайдер, преобразованный в мировую СК."""
