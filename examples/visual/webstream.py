@@ -68,8 +68,10 @@ def main():
 
     # Запускаем с HTTP сервером
     # WebSocket на порту 8765, HTTP на 8080
+try:
     server.run_with_http(host="0.0.0.0", ws_port=8765, http_port=8080)
-
+except:
+    server.run_with_http(host="0.0.0.0", ws_port=8745, http_port=8060)
 
 if __name__ == "__main__":
     main()
