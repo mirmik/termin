@@ -54,14 +54,13 @@ class RigidBodyComponent(Component):
         # Определяем коллайдер из меша сущности (если есть)
         collider = self._create_collider_from_entity()
 
-        # Вычисляем инерцию на основе типа коллайдера
-        inertia = self._compute_inertia(collider)
+        # Вычисляем главные моменты инерции на основе типа коллайдера
+        I_diag = self._compute_inertia_diag(collider)
 
         # Создаём пространственную инерцию с COM в начале координат
         spatial_inertia = SpatialInertia3D(
             mass=self.mass if not self.is_static else 0.0,
-            inertia=inertia,
-            com=np.zeros(3),
+            I_diag=I_diag,
         )
 
         self._rigid_body = RigidBody(
@@ -102,8 +101,8 @@ class RigidBodyComponent(Component):
             size=np.ones(3, dtype=np.float32),
         )
 
-    def _compute_inertia(self, collider) -> np.ndarray:
-        """Вычисление тензора инерции на основе формы коллайдера."""
+    def _compute_inertia_diag(self, collider) -> np.ndarray:
+        """Вычисление главных моментов инерции на основе формы коллайдера."""
         from termin.colliders.box import BoxCollider
         from termin.colliders.sphere import SphereCollider
 
@@ -114,16 +113,16 @@ class RigidBodyComponent(Component):
             Ixx = (m / 12.0) * (sy**2 + sz**2)
             Iyy = (m / 12.0) * (sx**2 + sz**2)
             Izz = (m / 12.0) * (sx**2 + sy**2)
-            return np.diag([Ixx, Iyy, Izz])
+            return np.array([Ixx, Iyy, Izz])
 
         elif isinstance(collider, SphereCollider):
             r = collider.radius
             I = (2.0 / 5.0) * m * r**2
-            return np.diag([I, I, I])
+            return np.array([I, I, I])
 
         else:
-            # По умолчанию: инерция единичной сферы
-            return np.eye(3) * (m / 6.0)
+            # По умолчанию: инерция единичного куба
+            return np.array([m / 6.0, m / 6.0, m / 6.0])
 
     def update(self, dt: float):
         """Синхронизация трансформа сущности из физического тела."""
