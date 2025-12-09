@@ -104,6 +104,63 @@ class EditorSettings:
         """Получить путь к внешнему текстовому редактору."""
         return self.get(self.KEY_TEXT_EDITOR)
 
+    def init_text_editor_if_empty(self) -> None:
+        """
+        Инициализирует настройку текстового редактора, если она не задана.
+
+        Вызывается при старте редактора. Ищет VS Code в стандартных путях
+        и сохраняет найденный путь в настройки.
+        """
+        editor = self.get(self.KEY_TEXT_EDITOR)
+        if editor:
+            return
+
+        # Пытаемся найти VS Code по умолчанию
+        detected = self._detect_vscode()
+        if detected:
+            self.set_text_editor(detected)
+            self.sync()
+
+    def _detect_vscode(self) -> str | None:
+        """
+        Ищет VS Code в стандартных путях установки.
+
+        Returns:
+            Путь к исполняемому файлу VS Code или None.
+        """
+        import platform
+        import os
+
+        system = platform.system()
+
+        if system == "Windows":
+            # Windows: проверяем стандартные пути установки VS Code
+            candidates = [
+                # User installation
+                Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Microsoft VS Code" / "Code.exe",
+                # System installation
+                Path(os.environ.get("PROGRAMFILES", "")) / "Microsoft VS Code" / "Code.exe",
+                Path(os.environ.get("PROGRAMFILES(X86)", "")) / "Microsoft VS Code" / "Code.exe",
+            ]
+        elif system == "Darwin":  # macOS
+            candidates = [
+                Path("/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"),
+                Path.home() / "Applications" / "Visual Studio Code.app" / "Contents" / "Resources" / "app" / "bin" / "code",
+            ]
+        else:  # Linux
+            candidates = [
+                Path("/usr/bin/code"),
+                Path("/usr/local/bin/code"),
+                Path("/snap/bin/code"),
+                Path.home() / ".local" / "bin" / "code",
+            ]
+
+        for path in candidates:
+            if path.exists():
+                return str(path)
+
+        return None
+
     def set_text_editor(self, editor_path: str | None) -> None:
         """Сохранить путь к текстовому редактору."""
         if editor_path:

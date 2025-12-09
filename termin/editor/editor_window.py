@@ -159,6 +159,9 @@ class EditorWindow(QMainWindow):
         # --- Project Browser ---
         self._init_project_browser()
 
+        # --- Инициализация настроек (поиск VS Code и т.п.) ---
+        EditorSettings.instance().init_text_editor_if_empty()
+
     @property
     def scene(self):
         """Текущая сцена. Всегда получаем из WorldPersistence."""
