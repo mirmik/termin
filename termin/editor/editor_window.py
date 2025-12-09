@@ -168,6 +168,9 @@ class EditorWindow(QMainWindow):
             on_resource_reloaded=self._on_resource_reloaded
         )
 
+        # --- Сканируем ресурсы проекта ---
+        self._scan_project_resources()
+
     @property
     def scene(self):
         """Текущая сцена. Всегда получаем из WorldPersistence."""
@@ -727,6 +730,9 @@ class EditorWindow(QMainWindow):
             if self.consoleOutput is not None:
                 self.consoleOutput.appendPlainText(f"Opened project: {dir_path}")
 
+            # Сканируем ресурсы нового проекта
+            self._scan_project_resources()
+
     def _open_material_inspector(self, file_path: str, is_material: bool = False) -> None:
         """
         Открывает инспектор материалов.
@@ -840,6 +846,22 @@ class EditorWindow(QMainWindow):
 
         # Перерисовываем viewport
         self._request_viewport_update()
+
+    def _scan_project_resources(self) -> None:
+        """Сканирует директорию проекта и загружает ресурсы."""
+        if not hasattr(self, 'project_browser') or self.project_browser.root_path is None:
+            return
+
+        project_path = str(self.project_browser.root_path)
+        stats = self.resource_manager.scan_project_resources(project_path)
+
+        if self.consoleOutput is not None:
+            total = stats["materials"] + stats["shaders"]
+            if total > 0 or stats["errors"] > 0:
+                self.consoleOutput.appendPlainText(
+                    f"Scanned project: {stats['materials']} materials, "
+                    f"{stats['shaders']} shaders, {stats['errors']} errors"
+                )
 
     def _init_status_bar(self) -> None:
         """

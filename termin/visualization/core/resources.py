@@ -233,6 +233,95 @@ class ResourceManager:
         except Exception as e:
             print(f"[ResourceManager] Failed to reload texture {name}: {e}")
 
+    def scan_project_resources(self, project_path: str) -> dict:
+        """
+        Сканирует директорию проекта и загружает все ресурсы.
+
+        Ищет и загружает:
+        - .material файлы
+        - .shader файлы (создаёт материалы из них)
+
+        Args:
+            project_path: Путь к корневой директории проекта
+
+        Returns:
+            Статистика: {"materials": int, "shaders": int, "errors": int}
+        """
+        import os
+        from pathlib import Path
+
+        stats = {"materials": 0, "shaders": 0, "errors": 0}
+        project_path = Path(project_path)
+
+        if not project_path.exists():
+            return stats
+
+        # Находим все .material и .shader файлы
+        material_files = list(project_path.rglob("*.material"))
+        shader_files = list(project_path.rglob("*.shader"))
+
+        # Загружаем материалы
+        for mat_path in material_files:
+            try:
+                self._load_material_file(str(mat_path))
+                stats["materials"] += 1
+            except Exception as e:
+                print(f"[ResourceManager] Failed to load material {mat_path}: {e}")
+                stats["errors"] += 1
+
+        # Загружаем шейдеры как материалы
+        for shader_path in shader_files:
+            try:
+                self._load_shader_file(str(shader_path))
+                stats["shaders"] += 1
+            except Exception as e:
+                print(f"[ResourceManager] Failed to load shader {shader_path}: {e}")
+                stats["errors"] += 1
+
+        return stats
+
+    def _load_material_file(self, file_path: str) -> None:
+        """Загружает .material файл и регистрирует его."""
+        from pathlib import Path
+        from termin.visualization.core.material import Material
+
+        path = Path(file_path)
+        name = path.stem
+
+        # Проверяем, не загружен ли уже
+        if name in self.materials:
+            return
+
+        mat = Material.load_from_material_file(file_path)
+        mat.name = name
+        self.register_material(name, mat)
+
+    def _load_shader_file(self, file_path: str) -> None:
+        """Загружает .shader файл и создаёт материал из него."""
+        from pathlib import Path
+        from termin.visualization.core.material import Material
+        from termin.visualization.render.shader_parser import (
+            parse_shader_text,
+            ShaderMultyPhaseProgramm,
+        )
+
+        path = Path(file_path)
+        name = path.stem
+
+        # Проверяем, не загружен ли уже
+        if name in self.materials:
+            return
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            shader_text = f.read()
+
+        tree = parse_shader_text(shader_text)
+        program = ShaderMultyPhaseProgramm.from_tree(tree)
+        mat = Material.from_parsed(program, source_path=file_path)
+        mat.name = name
+        mat.shader_path = file_path
+        self.register_material(name, mat)
+
     # --------- Материалы ---------
     def register_material(self, name: str, mat: "Material"):
         self.materials[name] = mat
