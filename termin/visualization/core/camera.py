@@ -152,11 +152,15 @@ class OrthographicCameraComponent(CameraComponent):
 class CameraController(InputComponent):
     """Base class for camera manipulation controllers."""
 
-    def start(self, scene):
-        super().start(scene)
+    def __init__(self, enabled: bool = True):
+        super().__init__(enabled)
+        self.camera_component: CameraComponent | None = None
+
+    def on_added(self, scene):
+        super().on_added(scene)
         self.camera_component = self.entity.get_component(CameraComponent)
         if self.camera_component is None:
-            raise RuntimeError("OrbitCameraController requires a CameraComponent on the same entity.")
+            raise RuntimeError("CameraController requires a CameraComponent on the same entity.")
 
     def orbit(self, d_azimuth: float, d_elevation: float):
         return
