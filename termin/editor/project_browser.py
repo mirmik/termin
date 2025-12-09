@@ -109,15 +109,23 @@ class ProjectBrowser:
             return
 
         self._root_path = path
+        self._current_file_dir = path  # Текущая директория в правой панели
         path_str = str(path)
 
         # Устанавливаем корень для обеих моделей
         self._dir_model.setRootPath(path_str)
         self._file_model.setRootPath(path_str)
 
-        # Устанавливаем корневой индекс для дерева
+        # Устанавливаем корневой индекс для дерева — показываем РОДИТЕЛЯ корня,
+        # чтобы сам корень был виден как элемент
+        parent_path = path.parent
+        parent_index = self._dir_model.index(str(parent_path))
+        self._dir_tree.setRootIndex(parent_index)
+
+        # Выбираем и раскрываем корневую директорию
         root_index = self._dir_model.index(path_str)
-        self._dir_tree.setRootIndex(root_index)
+        self._dir_tree.setCurrentIndex(root_index)
+        self._dir_tree.expand(root_index)
 
         # Устанавливаем корневой индекс для списка файлов
         file_root_index = self._file_model.index(path_str)
@@ -130,11 +138,8 @@ class ProjectBrowser:
 
     @property
     def current_directory(self) -> Path | None:
-        """Текущая выбранная директория."""
-        index = self._dir_tree.currentIndex()
-        if not index.isValid():
-            return self._root_path
-        return Path(self._dir_model.filePath(index))
+        """Текущая директория (отображаемая в правой панели)."""
+        return getattr(self, "_current_file_dir", None) or self._root_path
 
     @property
     def selected_file(self) -> Path | None:
@@ -149,10 +154,22 @@ class ProjectBrowser:
         if not current.isValid():
             return
 
-        dir_path = self._dir_model.filePath(current)
+        dir_path = Path(self._dir_model.filePath(current))
+
+        # Проверяем, что не выходим за пределы корня проекта
+        if self._root_path is not None:
+            try:
+                dir_path.relative_to(self._root_path)
+            except ValueError:
+                # Пытаемся выйти за пределы корня — возвращаемся
+                if previous.isValid():
+                    self._dir_tree.setCurrentIndex(previous)
+                return
+
+        self._current_file_dir = dir_path
 
         # Обновляем список файлов для выбранной директории
-        file_index = self._file_model.index(dir_path)
+        file_index = self._file_model.index(str(dir_path))
         self._file_list.setRootIndex(file_index)
 
     def _on_file_click(self, index: QModelIndex) -> None:
@@ -186,17 +203,54 @@ class ProjectBrowser:
 
     def _navigate_to_directory(self, dir_path: Path) -> None:
         """Перейти в указанную директорию."""
+        # Проверяем, что не выходим за пределы корня
+        if self._root_path is not None:
+            try:
+                dir_path.relative_to(self._root_path)
+            except ValueError:
+                return
+
+        self._current_file_dir = dir_path
+
         # Находим и выбираем директорию в дереве
         dir_index = self._dir_model.index(str(dir_path))
         if dir_index.isValid():
             self._dir_tree.setCurrentIndex(dir_index)
             self._dir_tree.expand(dir_index)
 
+        # Обновляем список файлов
+        file_index = self._file_model.index(str(dir_path))
+        self._file_list.setRootIndex(file_index)
+
+    def _can_go_up(self) -> bool:
+        """Проверяет, можно ли перейти на уровень вверх."""
+        current = self.current_directory
+        root = self._root_path
+        if current is None or root is None:
+            return False
+        return current != root
+
+    def _go_up(self) -> None:
+        """Перейти на уровень вверх."""
+        current = self.current_directory
+        if current is None or not self._can_go_up():
+            return
+
+        parent = current.parent
+        self._navigate_to_directory(parent)
+
     def _show_file_context_menu(self, pos) -> None:
         """Показать контекстное меню для файла."""
         index = self._file_list.indexAt(pos)
 
         menu = QMenu(self._file_list)
+
+        # Кнопка "Вверх" — если мы не в корне
+        if self._can_go_up():
+            go_up_action = QAction("Go Up", self._file_list)
+            go_up_action.triggered.connect(self._go_up)
+            menu.addAction(go_up_action)
+            menu.addSeparator()
 
         if index.isValid():
             file_path = Path(self._file_model.filePath(index))
