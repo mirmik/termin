@@ -38,6 +38,7 @@ class EditorWindow(QMainWindow):
         self._action_play = None
         self._undo_stack_viewer = None
         self._framegraph_debugger = None
+        self._resource_manager_viewer = None
         self._scene_inspector_dialog = None
         self._material_inspector_dialog = None
         self._status_bar_label: QLabel | None = None
@@ -162,6 +163,11 @@ class EditorWindow(QMainWindow):
         # --- Инициализация настроек (поиск VS Code и т.п.) ---
         EditorSettings.instance().init_text_editor_if_empty()
 
+        # --- Включаем отслеживание изменений файлов ресурсов ---
+        self.resource_manager.enable_file_watching(
+            on_resource_reloaded=self._on_resource_reloaded
+        )
+
     @property
     def scene(self):
         """Текущая сцена. Всегда получаем из WorldPersistence."""
@@ -238,9 +244,13 @@ class EditorWindow(QMainWindow):
         self._action_play.triggered.connect(self._toggle_game_mode)
 
         debug_action = debug_menu.addAction("Undo/Redo Stack...")
+        debug_action.triggered.connect(self._show_undo_stack_viewer)
+
         tex_debug_action = debug_menu.addAction("Framegraph Texture Viewer...")
         tex_debug_action.triggered.connect(self._show_framegraph_debugger)
-        debug_action.triggered.connect(self._show_undo_stack_viewer)
+
+        resource_debug_action = debug_menu.addAction("Resource Manager...")
+        resource_debug_action.triggered.connect(self._show_resource_manager_viewer)
 
         self._update_undo_redo_actions()
 
@@ -414,6 +424,23 @@ class EditorWindow(QMainWindow):
         self._framegraph_debugger.show()
         self._framegraph_debugger.raise_()
         self._framegraph_debugger.activateWindow()
+
+    def _show_resource_manager_viewer(self) -> None:
+        """
+        Открывает диалог просмотра состояния ResourceManager.
+        """
+        if self._resource_manager_viewer is None:
+            from termin.editor.resource_manager_viewer import ResourceManagerViewer
+
+            self._resource_manager_viewer = ResourceManagerViewer(
+                self.resource_manager,
+                parent=self,
+            )
+
+        self._resource_manager_viewer.refresh()
+        self._resource_manager_viewer.show()
+        self._resource_manager_viewer.raise_()
+        self._resource_manager_viewer.activateWindow()
 
     # ----------- вспомогательные сущности редактора -----------
 
@@ -805,6 +832,14 @@ class EditorWindow(QMainWindow):
                 "Error",
                 f"Failed to open file in text editor:\n{file_path}\n\nError: {e}",
             )
+
+    def _on_resource_reloaded(self, resource_type: str, resource_name: str) -> None:
+        """Обработчик перезагрузки ресурса."""
+        if self.consoleOutput is not None:
+            self.consoleOutput.appendPlainText(f"Reloaded {resource_type}: {resource_name}")
+
+        # Перерисовываем viewport
+        self._request_viewport_update()
 
     def _init_status_bar(self) -> None:
         """

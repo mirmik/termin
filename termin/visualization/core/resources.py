@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # только для типов, чтобы не ловить циклы импортов
     from termin.visualization.core.material import Material
     from termin.visualization.core.mesh import MeshDrawable
     from termin.visualization.render.texture import Texture
     from termin.visualization.core.entity import Component
+    from PyQt6.QtCore import QFileSystemWatcher
 
 
 # Список стандартных компонентов для предрегистрации.
@@ -45,15 +46,197 @@ class ResourceManager:
         self.textures: Dict[str, "Texture"] = {}
         self.components: Dict[str, type["Component"]] = {}
 
+        # Отслеживание файлов
+        self._file_watcher: "QFileSystemWatcher | None" = None
+        self._file_to_materials: Dict[str, Set[str]] = {}  # path -> set of material names
+        self._file_to_textures: Dict[str, Set[str]] = {}   # path -> set of texture names
+        self._on_resource_reloaded: Callable[[str, str], None] | None = None  # (type, name)
+
     @classmethod
     def instance(cls) -> "ResourceManager":
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
+    # --------- File Watching ---------
+
+    def enable_file_watching(self, on_resource_reloaded: Callable[[str, str], None] | None = None) -> None:
+        """
+        Включает отслеживание изменений в файлах ресурсов.
+
+        Args:
+            on_resource_reloaded: Callback вызываемый после перезагрузки ресурса.
+                                  Аргументы: (resource_type, resource_name)
+        """
+        if self._file_watcher is not None:
+            return
+
+        from PyQt6.QtCore import QFileSystemWatcher
+
+        self._file_watcher = QFileSystemWatcher()
+        self._file_watcher.fileChanged.connect(self._on_file_changed)
+        self._on_resource_reloaded = on_resource_reloaded
+
+        # Добавляем уже зарегистрированные файлы
+        for name, mat in self.materials.items():
+            self._watch_material(name, mat)
+
+        for name, tex in self.textures.items():
+            self._watch_texture(name, tex)
+
+    def disable_file_watching(self) -> None:
+        """Отключает отслеживание файлов."""
+        if self._file_watcher is not None:
+            self._file_watcher.fileChanged.disconnect(self._on_file_changed)
+            self._file_watcher = None
+        self._file_to_materials.clear()
+        self._file_to_textures.clear()
+        self._on_resource_reloaded = None
+
+    def _watch_material(self, name: str, mat: "Material") -> None:
+        """Добавляет файлы материала в отслеживание."""
+        if self._file_watcher is None:
+            return
+
+        paths_to_watch: List[str] = []
+
+        # source_path материала (.material файл)
+        if mat.source_path:
+            paths_to_watch.append(mat.source_path)
+
+        # shader_path (.shader файл)
+        shader_path = getattr(mat, 'shader_path', None)
+        if shader_path:
+            paths_to_watch.append(shader_path)
+
+        for path in paths_to_watch:
+            if path not in self._file_to_materials:
+                self._file_to_materials[path] = set()
+                self._file_watcher.addPath(path)
+            self._file_to_materials[path].add(name)
+
+    def _unwatch_material(self, name: str) -> None:
+        """Удаляет материал из отслеживания."""
+        if self._file_watcher is None:
+            return
+
+        paths_to_remove = []
+        for path, names in self._file_to_materials.items():
+            if name in names:
+                names.discard(name)
+                if not names:
+                    paths_to_remove.append(path)
+
+        for path in paths_to_remove:
+            del self._file_to_materials[path]
+            self._file_watcher.removePath(path)
+
+    def _watch_texture(self, name: str, tex: "Texture") -> None:
+        """Добавляет файл текстуры в отслеживание."""
+        if self._file_watcher is None:
+            return
+
+        source_path = getattr(tex, 'source_path', None)
+        if not source_path:
+            return
+
+        if source_path not in self._file_to_textures:
+            self._file_to_textures[source_path] = set()
+            self._file_watcher.addPath(source_path)
+        self._file_to_textures[source_path].add(name)
+
+    def _on_file_changed(self, path: str) -> None:
+        """Обработчик изменения файла."""
+        import os
+
+        # QFileSystemWatcher может удалить путь после изменения (особенно на Linux)
+        # Нужно переподписаться
+        if self._file_watcher is not None and os.path.exists(path):
+            if path not in self._file_watcher.files():
+                self._file_watcher.addPath(path)
+
+        # Перезагружаем материалы
+        if path in self._file_to_materials:
+            material_names = list(self._file_to_materials[path])
+            for name in material_names:
+                self._reload_material(name)
+
+        # Перезагружаем текстуры
+        if path in self._file_to_textures:
+            texture_names = list(self._file_to_textures[path])
+            for name in texture_names:
+                self._reload_texture(name)
+
+    def _reload_material(self, name: str) -> None:
+        """Перезагружает материал из файла."""
+        mat = self.materials.get(name)
+        if mat is None:
+            return
+
+        source_path = mat.source_path
+        if not source_path:
+            return
+
+        try:
+            from termin.visualization.core.material import Material
+
+            if source_path.endswith('.material'):
+                new_mat = Material.load_from_material_file(source_path)
+            elif source_path.endswith('.shader'):
+                from termin.visualization.render.shader_parser import (
+                    parse_shader_text,
+                    ShaderMultyPhaseProgramm,
+                )
+                with open(source_path, "r", encoding="utf-8") as f:
+                    shader_text = f.read()
+                tree = parse_shader_text(shader_text)
+                program = ShaderMultyPhaseProgramm.from_tree(tree)
+                new_mat = Material.from_parsed(program, source_path=source_path)
+            else:
+                return
+
+            # Обновляем материал in-place
+            new_mat.name = name
+            self.materials[name] = new_mat
+
+            # Переподписываемся на файлы нового материала
+            self._unwatch_material(name)
+            self._watch_material(name, new_mat)
+
+            print(f"[ResourceManager] Reloaded material: {name}")
+
+            if self._on_resource_reloaded:
+                self._on_resource_reloaded("material", name)
+
+        except Exception as e:
+            print(f"[ResourceManager] Failed to reload material {name}: {e}")
+
+    def _reload_texture(self, name: str) -> None:
+        """Перезагружает текстуру из файла."""
+        tex = self.textures.get(name)
+        if tex is None:
+            return
+
+        source_path = getattr(tex, 'source_path', None)
+        if not source_path:
+            return
+
+        try:
+            # Инвалидируем текстуру - она перезагрузится при следующем использовании
+            tex.invalidate()
+
+            print(f"[ResourceManager] Reloaded texture: {name}")
+
+            if self._on_resource_reloaded:
+                self._on_resource_reloaded("texture", name)
+
+        except Exception as e:
+            print(f"[ResourceManager] Failed to reload texture {name}: {e}")
+
     # --------- Материалы ---------
     def register_material(self, name: str, mat: "Material"):
         self.materials[name] = mat
+        self._watch_material(name, mat)
 
     def get_material(self, name: str) -> Optional["Material"]:
         return self.materials.get(name)
