@@ -183,19 +183,19 @@ class EditorWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        new_world_action = file_menu.addAction("New World")
-        new_world_action.setShortcut("Ctrl+N")
-        new_world_action.triggered.connect(self._new_world)
+        new_scene_action = file_menu.addAction("New Scene")
+        new_scene_action.setShortcut("Ctrl+N")
+        new_scene_action.triggered.connect(self._new_scene)
 
         file_menu.addSeparator()
 
-        save_world_action = file_menu.addAction("Save World...")
-        save_world_action.setShortcut("Ctrl+S")
-        save_world_action.triggered.connect(self._save_world)
+        save_scene_action = file_menu.addAction("Save Scene...")
+        save_scene_action.setShortcut("Ctrl+S")
+        save_scene_action.triggered.connect(self._save_scene)
 
-        load_world_action = file_menu.addAction("Load World...")
-        load_world_action.setShortcut("Ctrl+O")
-        load_world_action.triggered.connect(self._load_world)
+        load_scene_action = file_menu.addAction("Load Scene...")
+        load_scene_action.setShortcut("Ctrl+O")
+        load_scene_action.triggered.connect(self._load_scene)
 
         file_menu.addSeparator()
 
@@ -650,16 +650,9 @@ class EditorWindow(QMainWindow):
         path = Path(file_path)
 
         # Обработка разных типов файлов
-        if path.suffix == ".json":
-            # Возможно это сцена — предлагаем загрузить
-            reply = QMessageBox.question(
-                self,
-                "Load Scene",
-                f"Load scene from {path.name}?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                self._load_scene_from_file(str(path))
+        if path.suffix == ".scene":
+            # Это файл сцены — загружаем
+            self._load_scene_from_file(str(path))
 
         elif path.suffix == ".shader":
             # Шейдер — пока просто показываем в консоли
@@ -957,12 +950,12 @@ class EditorWindow(QMainWindow):
         if self.world_persistence is not None:
             self.world_persistence.reset()
 
-    def _new_world(self) -> None:
-        """Создаёт новый пустой мир - полный перезапуск."""
+    def _new_scene(self) -> None:
+        """Создаёт новую пустую сцену - полный перезапуск."""
         reply = QMessageBox.question(
             self,
-            "New World",
-            "Create a new empty world?\n\nThis will remove all entities and resources.",
+            "New Scene",
+            "Create a new empty scene?\n\nThis will remove all entities and resources.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -977,20 +970,20 @@ class EditorWindow(QMainWindow):
             self.scene_tree_controller.rebuild()
         self._request_viewport_update()
 
-    def _save_world(self) -> None:
-        """Сохраняет текущий мир в JSON файл."""
+    def _save_scene(self) -> None:
+        """Сохраняет текущую сцену в файл."""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save World",
-            "world.world.json",
-            "World Files (*.world.json);;JSON Files (*.json);;All Files (*)",
+            "Save Scene",
+            "scene.scene",
+            "Scene Files (*.scene);;All Files (*)",
         )
         if not file_path:
             return
 
         # Добавляем расширение если не указано
-        if not file_path.endswith(".json"):
-            file_path += ".world.json"
+        if not file_path.endswith(".scene"):
+            file_path += ".scene"
 
         try:
             if self.world_persistence is None:
@@ -999,8 +992,8 @@ class EditorWindow(QMainWindow):
             stats = self.world_persistence.save(file_path)
             QMessageBox.information(
                 self,
-                "World Saved",
-                f"World saved successfully to:\n{file_path}\n\n"
+                "Scene Saved",
+                f"Scene saved successfully to:\n{file_path}\n\n"
                 f"Entities: {stats['entities']}\n"
                 f"Materials: {stats['materials']}\n"
                 f"Meshes: {stats['meshes']}",
@@ -1010,21 +1003,25 @@ class EditorWindow(QMainWindow):
             import traceback
             QMessageBox.critical(
                 self,
-                "Error Saving World",
-                f"Failed to save world to:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
+                "Error Saving Scene",
+                f"Failed to save scene to:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
             )
 
-    def _load_world(self) -> None:
-        """Загружает мир из JSON файла."""
+    def _load_scene(self) -> None:
+        """Загружает сцену из файла."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Load World",
+            "Load Scene",
             "",
-            "World Files (*.world.json);;JSON Files (*.json);;All Files (*)",
+            "Scene Files (*.scene);;All Files (*)",
         )
         if not file_path:
             return
 
+        self._load_scene_from_file(file_path)
+
+    def _load_scene_from_file(self, file_path: str) -> None:
+        """Загружает сцену из указанного файла."""
         try:
             if self.world_persistence is None:
                 raise RuntimeError("WorldPersistence not initialized")
@@ -1034,8 +1031,8 @@ class EditorWindow(QMainWindow):
 
             QMessageBox.information(
                 self,
-                "World Loaded",
-                f"World loaded successfully from:\n{file_path}\n\n"
+                "Scene Loaded",
+                f"Scene loaded successfully from:\n{file_path}\n\n"
                 f"Entities loaded: {stats['loaded_entities']}\n"
                 f"Materials: {stats['materials']}\n"
                 f"Meshes: {stats['meshes']}",
@@ -1045,8 +1042,8 @@ class EditorWindow(QMainWindow):
             import traceback
             QMessageBox.critical(
                 self,
-                "Error Loading World",
-                f"Failed to load world from:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
+                "Error Loading Scene",
+                f"Failed to load scene from:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
             )
 
     # ----------- game mode -----------

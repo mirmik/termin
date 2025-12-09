@@ -107,20 +107,44 @@ class WorldPersistence:
 
     def save(self, file_path: str) -> dict:
         """
-        Сохраняет мир в JSON файл.
+        Сохраняет сцену в JSON файл.
+
+        Формат файла .scene:
+        {
+            "version": "1.0",
+            "scene": { ... },
+            "editor": {
+                "camera": { ... },
+                "selected_entity": "..."
+            },
+            "resources": { ... }
+        }
 
         Returns:
             Статистика: entities, materials, meshes count
         """
-        # Получаем данные камеры редактора, если доступно
+        # Получаем данные камеры редактора
         editor_camera_data = None
         if self._get_editor_camera_data is not None:
             editor_camera_data = self._get_editor_camera_data()
 
+        # Получаем имя выделенной сущности
+        selected_entity_name = None
+        if self._get_selected_entity_name is not None:
+            selected_entity_name = self._get_selected_entity_name()
+
+        # Формируем данные редактора
+        editor_data = {}
+        if editor_camera_data is not None:
+            editor_data["camera"] = editor_camera_data
+        if selected_entity_name is not None:
+            editor_data["selected_entity"] = selected_entity_name
+
         data = {
             "version": "1.0",
+            "scene": self._scene.serialize(),
+            "editor": editor_data,
             "resources": self._resource_manager.serialize(),
-            "scenes": [self._scene.serialize(editor_camera_data=editor_camera_data)],
         }
 
         json_str = json.dumps(data, indent=2, ensure_ascii=False, default=numpy_encoder)
@@ -193,12 +217,17 @@ class WorldPersistence:
         if self._get_selected_entity_name is not None:
             selected_entity_name = self._get_selected_entity_name()
 
+        # Формируем данные редактора
+        editor_data = {}
+        if editor_camera_data is not None:
+            editor_data["camera"] = editor_camera_data
+        if selected_entity_name is not None:
+            editor_data["selected_entity"] = selected_entity_name
+
         data = {
             "resources": self._resource_manager.serialize(),
-            "scene": self._scene.serialize(editor_camera_data=editor_camera_data),
-            "editor_state": {
-                "selected_entity_name": selected_entity_name,
-            },
+            "scene": self._scene.serialize(),
+            "editor": editor_data,
         }
         return copy.deepcopy(data)
 
@@ -216,6 +245,19 @@ class WorldPersistence:
         """
         Внутренний метод восстановления из данных.
         Создаёт новую сцену и загружает в неё данные.
+
+        Поддерживает новый формат .scene:
+        {
+            "scene": {...},
+            "editor": {"camera": {...}, "selected_entity": "..."},
+            "resources": {...}
+        }
+
+        И старый формат .world.json для обратной совместимости:
+        {
+            "scenes": [{...}],
+            "resources": {...}
+        }
         """
         from termin.visualization.core.resources import ResourceManager
 
@@ -235,6 +277,7 @@ class WorldPersistence:
         new_scene = self._create_new_scene()
 
         # Загружаем данные в новую сцену
+        # Поддержка нового формата "scene" и старого "scenes"
         scene_data = data.get("scene") or (data.get("scenes", [None])[0])
         loaded_count = 0
         if scene_data:
@@ -247,15 +290,25 @@ class WorldPersistence:
         # Заменяем текущую сцену
         self._replace_scene(new_scene)
 
-        # Восстанавливаем параметры камеры редактора (после смены сцены!)
-        if scene_data and self._set_editor_camera_data is not None:
-            editor_camera_data = scene_data.get("editor_camera")
-            if editor_camera_data is not None:
-                self._set_editor_camera_data(editor_camera_data)
+        # Восстанавливаем состояние редактора
+        # Новый формат: data["editor"]["camera"], data["editor"]["selected_entity"]
+        # Старый формат: scene_data["editor_camera"], data["editor_state"]["selected_entity_name"]
+        editor_data = data.get("editor", {})
 
-        # Восстанавливаем выделение (после смены сцены!)
-        editor_state = data.get("editor_state", {})
-        selected_name = editor_state.get("selected_entity_name")
+        # Камера редактора
+        editor_camera_data = editor_data.get("camera")
+        # Обратная совместимость: старый формат в scene_data
+        if editor_camera_data is None and scene_data:
+            editor_camera_data = scene_data.get("editor_camera")
+        if editor_camera_data is not None and self._set_editor_camera_data is not None:
+            self._set_editor_camera_data(editor_camera_data)
+
+        # Выделение
+        selected_name = editor_data.get("selected_entity")
+        # Обратная совместимость: старый формат
+        if selected_name is None:
+            editor_state = data.get("editor_state", {})
+            selected_name = editor_state.get("selected_entity_name")
         if selected_name and self._select_entity_by_name is not None:
             self._select_entity_by_name(selected_name)
 

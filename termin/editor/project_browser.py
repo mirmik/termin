@@ -41,8 +41,9 @@ class ProjectBrowser:
 
     # Расширения файлов, которые показываем
     SUPPORTED_EXTENSIONS = {
+        ".scene",     # Сцены
         ".shader",    # Шейдеры/материалы
-        ".json",      # Сцены, конфиги
+        ".json",      # Конфиги
         ".png", ".jpg", ".jpeg", ".tga", ".bmp",  # Текстуры
         ".obj", ".fbx", ".gltf", ".glb",  # Модели
         ".py",        # Скрипты
