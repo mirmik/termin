@@ -27,7 +27,8 @@ from termin.geombase.pose3 import Pose3
 
 class EditorWindow(QMainWindow):
     undo_stack_changed = pyqtSignal()
-    def __init__(self, world, scene):
+
+    def __init__(self, world, initial_scene):
         super().__init__()
         self.undo_stack = UndoStack()
         self._action_undo = None
@@ -41,7 +42,17 @@ class EditorWindow(QMainWindow):
         self._fps_alpha: float = 0.1  # экспоненциальное сглаживание: f_new = f_prev*(1-α) + f_curr*α
 
         self.world = world
-        self.scene = scene
+
+        # --- ресурс-менеджер редактора ---
+        self.resource_manager = ResourceManager.instance()
+
+        # --- WorldPersistence - ЕДИНСТВЕННЫЙ владелец сцены ---
+        # Создаётся ПЕРВЫМ, до всех контроллеров
+        self.world_persistence = WorldPersistence(
+            scene=initial_scene,
+            resource_manager=self.resource_manager,
+            on_scene_changed=self._on_scene_changed,
+        )
 
         # контроллеры создадим чуть позже
         self.scene_tree_controller: SceneTreeController | None = None
@@ -49,7 +60,6 @@ class EditorWindow(QMainWindow):
         self.gizmo_controller: GizmoController | None = None
         self.selection_manager: SelectionManager | None = None
         self.game_mode_controller: GameModeController | None = None
-        self.world_persistence: WorldPersistence | None = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -58,8 +68,6 @@ class EditorWindow(QMainWindow):
 
         self._setup_menu_bar()
 
-        # --- ресурс-менеджер редактора ---
-        self.resource_manager = ResourceManager.instance()
         self._scan_builtin_components()
         self._init_resources_from_scene()
 
@@ -132,23 +140,18 @@ class EditorWindow(QMainWindow):
             on_hover_changed=self._on_hover_changed_internal,
         )
 
-        # --- GameModeController ---
+        # --- GameModeController - использует WorldPersistence ---
         self.game_mode_controller = GameModeController(
-            scene=self.scene,
-            resource_manager=self.resource_manager,
+            world_persistence=self.world_persistence,
             on_mode_changed=self._on_game_mode_changed,
             on_request_update=self._request_viewport_update,
             on_tick=self._on_game_tick,
         )
 
-        # --- WorldPersistence ---
-        self.world_persistence = WorldPersistence(
-            scene=self.scene,
-            resource_manager=self.resource_manager,
-            on_before_reset=self._on_before_world_reset,
-            on_after_reset=self._on_after_world_reset,
-            on_after_load=self._on_after_world_load,
-        )
+    @property
+    def scene(self):
+        """Текущая сцена. Всегда получаем из WorldPersistence."""
+        return self.world_persistence.scene
 
     # ----------- undo / redo -----------
 
@@ -723,43 +726,46 @@ class EditorWindow(QMainWindow):
 
     # ----------- WorldPersistence колбэки -----------
 
-    def _on_before_world_reset(self) -> None:
-        """Колбэк перед сбросом мира."""
+    def _on_scene_changed(self, new_scene) -> None:
+        """
+        Колбэк от WorldPersistence при смене сцены.
+        Вызывается при reset(), load(), restore_state().
+        Пересоздаёт все editor entities в новой сцене.
+        """
         # Очищаем undo-стек
         self.undo_stack.clear()
         self._update_undo_redo_actions()
         self.undo_stack_changed.emit()
 
-    def _on_after_world_reset(self) -> None:
-        """Колбэк после сброса мира."""
         # Сбрасываем выделение
         if self.selection_manager is not None:
             self.selection_manager.clear()
 
-        # Пересоздаём редакторские сущности
+        # Пересоздаём редакторские сущности в НОВОЙ сцене
         self.editor_entities = None
         self._ensure_editor_entities_root()
         self._ensure_editor_camera()
 
-        # Пересоздаём гизмо
+        # Пересоздаём гизмо в новой сцене
         if self.gizmo_controller is not None:
-            self.gizmo_controller.recreate_gizmo(self.scene, self.editor_entities)
+            self.gizmo_controller.recreate_gizmo(new_scene, self.editor_entities)
 
-        # Обновляем viewport камеру
+        # Обновляем viewport - теперь он работает с новой сценой
         if self.viewport_controller is not None:
+            self.viewport_controller.set_scene(new_scene)
             self.viewport_controller.set_camera(self.camera)
             self.viewport_controller.selected_entity_id = 0
             self.viewport_controller.hover_entity_id = 0
+
+        # Обновляем дерево сцены
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller._scene = new_scene
+            self.scene_tree_controller.rebuild()
 
         # Сбрасываем инспектор
         if self.inspector is not None:
             self.inspector.set_target(None)
 
-    def _on_after_world_load(self) -> None:
-        """Колбэк после загрузки мира."""
-        # Обновляем дерево сцены
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.rebuild()
         self._request_viewport_update()
 
     # ----------- сохранение/загрузка мира -----------
@@ -837,32 +843,12 @@ class EditorWindow(QMainWindow):
         if not file_path:
             return
 
-        # Спрашиваем пользователя - очистить текущую сцену или добавить?
-        reply = QMessageBox.question(
-            self,
-            "Load World",
-            "Clear current scene before loading?\n\n"
-            "Yes - Clear scene and load new world\n"
-            "No - Add loaded entities to current scene",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Yes,
-        )
-
-        if reply == QMessageBox.StandardButton.Cancel:
-            return
-
-        clear_scene = (reply == QMessageBox.StandardButton.Yes)
-
         try:
             if self.world_persistence is None:
                 raise RuntimeError("WorldPersistence not initialized")
 
-            if clear_scene:
-                # Полная очистка мира и пересоздание редакторских сущностей
-                self._reset_world()
-
-            # Загружаем мир (clear_scene=False, т.к. _reset_world уже очистил)
-            stats = self.world_persistence.load(file_path, clear_scene=False)
+            # load() создаёт новую сцену и вызывает on_scene_changed
+            stats = self.world_persistence.load(file_path)
 
             QMessageBox.information(
                 self,

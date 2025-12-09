@@ -179,6 +179,11 @@ class ViewportController:
         # Камера должна знать свой viewport для обработки ввода
         camera.viewport = self._viewport
 
+    def set_scene(self, scene) -> None:
+        """Устанавливает новую сцену для viewport."""
+        self._scene = scene
+        self._viewport.scene = scene
+
     def request_update(self) -> None:
         self._window._request_update()
 

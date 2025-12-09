@@ -788,12 +788,8 @@ class GizmoController:
                 gizmo_ctrl = ent.find_component(GizmoMoveController)
                 if gizmo_ctrl is not None:
                     gizmo_ctrl.set_undo_command_handler(self._undo_handler)
-                print(f"[DEBUG] _ensure_gizmo: found existing gizmo {ent}, in scene: {ent in self.scene.entities}")
-                print(f"[DEBUG] _ensure_gizmo: gizmo.x={self.gizmo.x}, x.shaft_ent={self.gizmo.x.shaft_ent}")
-                print(f"[DEBUG] _ensure_gizmo: x.shaft_ent in scene: {self.gizmo.x.shaft_ent in self.scene.entities}")
                 return
 
-        print(f"[DEBUG] _ensure_gizmo: creating NEW gizmo")
         gizmo = GizmoEntity(size=1.5)
         gizmo_controller = GizmoMoveController(gizmo, self.scene)
         gizmo_controller.set_undo_command_handler(self._undo_handler)
@@ -804,11 +800,9 @@ class GizmoController:
 
         self.scene.add(gizmo)
         self.gizmo = gizmo
-        print(f"[DEBUG] _ensure_gizmo: after add - x.shaft_ent in scene: {gizmo.x.shaft_ent in self.scene.entities}")
 
     def recreate_gizmo(self, scene, editor_entities=None) -> None:
         """Пересоздаёт гизмо в новой сцене."""
-        print(f"[DEBUG] recreate_gizmo called, scene has {len(scene.entities)} entities")
         self.scene = scene
         self.editor_entities = editor_entities
         self.gizmo = None
@@ -816,25 +810,11 @@ class GizmoController:
 
     def set_target(self, target_entity: Entity | None) -> None:
         if self.gizmo is None:
-            print(f"[DEBUG] GizmoController.set_target: gizmo is None!")
             return
         gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
         if gizmo_ctrl is None:
-            print(f"[DEBUG] GizmoController.set_target: GizmoMoveController not found!")
             return
-        print(f"[DEBUG] GizmoController.set_target({target_entity.name if target_entity else None}), gizmo.visible={self.gizmo.visible}")
         gizmo_ctrl.set_target(target_entity)
-        # Проверяем видимость дочерних элементов
-        x_arrow = self.gizmo.x
-        x_shaft = x_arrow.shaft_ent if hasattr(x_arrow, 'shaft_ent') else None
-        print(f"[DEBUG] After set_target: gizmo.visible={self.gizmo.visible}, x_arrow.visible={x_arrow.visible}, x_shaft.visible={x_shaft.visible if x_shaft else 'N/A'}")
-        print(f"[DEBUG] gizmo in scene.entities: {self.gizmo in self.scene.entities}, x_arrow in scene: {x_arrow in self.scene.entities}")
-        # Проверяем позицию и MeshRenderer
-        gizmo_pos = self.gizmo.transform.global_pose().lin
-        print(f"[DEBUG] gizmo position: {gizmo_pos}")
-        from termin.visualization.render.components import MeshRenderer
-        mr = x_shaft.get_component(MeshRenderer) if x_shaft else None
-        print(f"[DEBUG] x_shaft MeshRenderer: {mr}, enabled={mr.enabled if mr else 'N/A'}, mesh={mr.mesh if mr else 'N/A'}")
 
     def set_visible(self, visible: bool) -> None:
         """Показывает или скрывает гизмо."""

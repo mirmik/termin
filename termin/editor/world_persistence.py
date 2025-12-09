@@ -1,4 +1,8 @@
-"""World persistence - save/load/reset functionality."""
+"""World persistence - save/load/reset functionality.
+
+WorldPersistence is the SINGLE OWNER of Scene lifecycle.
+All other components should access scene via world_persistence.scene property.
+"""
 
 from __future__ import annotations
 
@@ -27,27 +31,66 @@ def numpy_encoder(obj):
 
 class WorldPersistence:
     """
-    Управляет сохранением/загрузкой/сбросом мира.
+    Единственный владелец жизненного цикла Scene.
 
     Ответственности:
+    - Владение Scene (создание, уничтожение, замена)
     - Сериализация/десериализация сцены и ресурсов
     - Атомарная запись файлов
-    - Очистка и пересоздание мира
+    - Уведомление подписчиков о смене сцены
+
+    ВАЖНО: Все остальные компоненты должны получать scene через
+    свойство world_persistence.scene, а не хранить свою ссылку.
     """
 
     def __init__(
         self,
         scene: "Scene",
         resource_manager: "ResourceManager",
-        on_before_reset: Optional[Callable[[], None]] = None,
-        on_after_reset: Optional[Callable[[], None]] = None,
-        on_after_load: Optional[Callable[[], None]] = None,
+        scene_factory: Optional[Callable[[], "Scene"]] = None,
+        on_scene_changed: Optional[Callable[["Scene"], None]] = None,
     ):
+        """
+        Args:
+            scene: Начальная сцена
+            resource_manager: Менеджер ресурсов
+            scene_factory: Фабрика для создания новой пустой сцены.
+                          Если None, используется Scene()
+            on_scene_changed: Колбэк, вызываемый при смене сцены.
+                             Получает новую сцену как аргумент.
+        """
         self._scene = scene
         self._resource_manager = resource_manager
-        self._on_before_reset = on_before_reset
-        self._on_after_reset = on_after_reset
-        self._on_after_load = on_after_load
+        self._scene_factory = scene_factory
+        self._on_scene_changed = on_scene_changed
+
+    @property
+    def scene(self) -> "Scene":
+        """Текущая сцена. Всегда используйте это свойство для доступа к сцене."""
+        return self._scene
+
+    @property
+    def resource_manager(self) -> "ResourceManager":
+        """Менеджер ресурсов."""
+        return self._resource_manager
+
+    def _create_new_scene(self) -> "Scene":
+        """Создаёт новую пустую сцену."""
+        if self._scene_factory is not None:
+            return self._scene_factory()
+        from termin.visualization.core.scene import Scene
+        return Scene()
+
+    def _replace_scene(self, new_scene: "Scene") -> None:
+        """
+        Заменяет текущую сцену на новую и уведомляет подписчиков.
+        """
+        old_scene = self._scene
+        self._scene = new_scene
+
+        # Уведомляем подписчиков
+        if self._on_scene_changed is not None:
+            self._on_scene_changed(new_scene)
 
     def save(self, file_path: str) -> dict:
         """
@@ -84,13 +127,13 @@ class WorldPersistence:
             "meshes": len(self._resource_manager.meshes),
         }
 
-    def load(self, file_path: str, clear_scene: bool = True) -> dict:
+    def load(self, file_path: str) -> dict:
         """
         Загружает мир из JSON файла.
+        Создаёт НОВУЮ сцену и заменяет текущую.
 
         Args:
             file_path: Путь к файлу
-            clear_scene: Очистить сцену перед загрузкой
 
         Returns:
             Статистика: loaded_entities, materials, meshes count
@@ -99,65 +142,84 @@ class WorldPersistence:
             json_str = f.read()
         data = json.loads(json_str)
 
-        if clear_scene:
-            self._clear_serializable_entities()
+        return self._restore_from_data(data)
 
-        # Восстанавливаем ресурсы
-        self._load_resources(data.get("resources", {}))
+    def reset(self) -> None:
+        """
+        Полная очистка мира.
+        Создаёт НОВУЮ пустую сцену и очищает ресурсы.
+        """
+        # Очищаем ресурсы
+        self._resource_manager.materials.clear()
+        self._resource_manager.meshes.clear()
+        self._resource_manager.textures.clear()
 
-        # Загружаем первую сцену
+        # Создаём новую пустую сцену
+        new_scene = self._create_new_scene()
+        self._replace_scene(new_scene)
+
+    def save_state(self) -> dict:
+        """
+        Сохраняет текущее состояние в память (для game mode).
+
+        Returns:
+            Сериализованное состояние (глубокая копия)
+        """
+        data = {
+            "resources": self._resource_manager.serialize(),
+            "scene": self._scene.serialize(),
+        }
+        # Сериализуем в JSON и обратно для глубокого копирования
+        json_str = json.dumps(data, default=numpy_encoder)
+        return json.loads(json_str)
+
+    def restore_state(self, state: dict) -> None:
+        """
+        Восстанавливает состояние из памяти (для game mode).
+        Создаёт НОВУЮ сцену из сохранённых данных.
+
+        Args:
+            state: Сохранённое состояние из save_state()
+        """
+        self._restore_from_data(state)
+
+    def _restore_from_data(self, data: dict) -> dict:
+        """
+        Внутренний метод восстановления из данных.
+        Создаёт новую сцену и загружает в неё данные.
+        """
+        from termin.visualization.core.resources import ResourceManager
+
+        # Очищаем и восстанавливаем ресурсы
+        self._resource_manager.materials.clear()
+        self._resource_manager.meshes.clear()
+        self._resource_manager.textures.clear()
+
+        resources_data = data.get("resources", {})
+        if resources_data:
+            restored_rm = ResourceManager.deserialize(resources_data)
+            self._resource_manager.materials.update(restored_rm.materials)
+            self._resource_manager.meshes.update(restored_rm.meshes)
+            self._resource_manager.textures.update(restored_rm.textures)
+
+        # Создаём новую сцену
+        new_scene = self._create_new_scene()
+
+        # Загружаем данные в новую сцену
+        scene_data = data.get("scene") or (data.get("scenes", [None])[0])
         loaded_count = 0
-        scenes = data.get("scenes", [])
-        if scenes:
-            loaded_count = self._scene.load_from_data(
-                scenes[0],
+        if scene_data:
+            loaded_count = new_scene.load_from_data(
+                scene_data,
                 context=None,
-                update_settings=clear_scene
+                update_settings=True
             )
 
-        if self._on_after_load:
-            self._on_after_load()
+        # Заменяем текущую сцену
+        self._replace_scene(new_scene)
 
         return {
             "loaded_entities": loaded_count,
             "materials": len(self._resource_manager.materials),
             "meshes": len(self._resource_manager.meshes),
         }
-
-    def reset(self) -> None:
-        """
-        Полная очистка мира.
-        Удаляет ВСЕ entities (включая редакторские) и ресурсы.
-        """
-        if self._on_before_reset:
-            self._on_before_reset()
-
-        # Удаляем ВСЕ entities
-        for entity in list(self._scene.entities):
-            self._scene.remove(entity)
-
-        # Очищаем ресурсы
-        self._resource_manager.materials.clear()
-        self._resource_manager.meshes.clear()
-        self._resource_manager.textures.clear()
-
-        if self._on_after_reset:
-            self._on_after_reset()
-
-    def _clear_serializable_entities(self) -> None:
-        """Удаляет только serializable entities."""
-        for entity in list(self._scene.entities):
-            if entity.serializable:
-                self._scene.remove(entity)
-
-    def _load_resources(self, resources_data: dict) -> None:
-        """Загружает ресурсы из сериализованных данных."""
-        from termin.visualization.core.resources import ResourceManager
-
-        if not resources_data:
-            return
-
-        restored_rm = ResourceManager.deserialize(resources_data)
-        self._resource_manager.materials.update(restored_rm.materials)
-        self._resource_manager.meshes.update(restored_rm.meshes)
-        self._resource_manager.textures.update(restored_rm.textures)
