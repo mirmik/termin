@@ -30,20 +30,29 @@ void main() {
 """
 
 
+from typing import Callable
+
 class GizmoPass(RenderFramePass):
     def __init__(self, input_res: str = "id", output_res: str = "id", pass_name: str = "GizmoPass",
-                 gizmo_entities: Optional[List["Entity"]] = None):
+                 gizmo_entities: Optional[List["Entity"] | Callable[[], List["Entity"]]] = None):
         super().__init__(
             pass_name=pass_name,
             reads={input_res},
             writes={output_res},
         )
-        if gizmo_entities is None:
-            gizmo_entities = []
-        self._gizmo_entities = gizmo_entities
+        # gizmo_entities может быть списком или callable, возвращающим список
+        self._gizmo_entities_source = gizmo_entities
         self.input_res = input_res
         self.output_res = output_res
         self._shader: ShaderProgram | None = None
+
+    def _get_gizmo_entities(self) -> List["Entity"]:
+        """Возвращает актуальный список gizmo entities."""
+        if self._gizmo_entities_source is None:
+            return []
+        if callable(self._gizmo_entities_source):
+            return self._gizmo_entities_source()
+        return self._gizmo_entities_source
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """GizmoPass читает input_res и пишет output_res inplace."""
@@ -103,10 +112,11 @@ class GizmoPass(RenderFramePass):
 
         from termin.visualization.render.components import MeshRenderer
 
+        gizmo_entities = self._get_gizmo_entities()
         index = 1
-        maxindex = len(self._gizmo_entities)
+        maxindex = len(gizmo_entities)
 
-        for ent in self._gizmo_entities:
+        for ent in gizmo_entities:
             if not ent.active or not ent.visible:
                 continue
             mr = ent.get_component(MeshRenderer)

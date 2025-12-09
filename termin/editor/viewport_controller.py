@@ -387,7 +387,10 @@ class ViewportController:
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
 
-        gizmo_entities = self._gizmo_controller.helper_geometry_entities()
+        # Передаём lambda, чтобы gizmo entities обновлялись динамически
+        # (важно после recreate_gizmo при выходе из game mode)
+        def get_gizmo_entities():
+            return self._gizmo_controller.helper_geometry_entities()
 
         postprocess = PostProcessPass(
             effects=[],
@@ -439,7 +442,7 @@ class ViewportController:
                 input_res="preid",
                 output_res="id",
                 pass_name="Gizmo",
-                gizmo_entities=gizmo_entities,
+                gizmo_entities=get_gizmo_entities,
             ),
             postprocess,
             blit_pass,

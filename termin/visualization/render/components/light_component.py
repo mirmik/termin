@@ -5,6 +5,7 @@ from typing import Optional
 import numpy as np
 
 from termin.visualization.core.entity import Component
+from termin.visualization.core.serialization import COMPONENT_REGISTRY
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.lighting.light import LightType, Light, LightShadowParams
 
@@ -14,6 +15,9 @@ class LightComponent(Component):
     Простейший компонент источника света.
     Хранит тип, цвет, интенсивность и параметры теней.
     """
+
+    # Используем кастомную сериализацию вместо serializable_fields
+    serializable_fields = []
 
     inspect_fields = {
         "light_type": InspectField(
@@ -65,3 +69,34 @@ class LightComponent(Component):
             intensity=self.intensity,
             shadows=self.shadows,
         )
+
+    def serialize_data(self):
+        """Сериализует компонент в словарь."""
+        return {
+            "light_type": self.light_type.value,
+            "color": list(self.color),
+            "intensity": self.intensity,
+            "shadows_enabled": self.shadows.enabled,
+            "shadows_map_resolution": self.shadows.map_resolution,
+        }
+
+    @classmethod
+    def deserialize(cls, data, context=None):
+        """Десериализует компонент из словаря."""
+        light_type = LightType(data.get("light_type", LightType.DIRECTIONAL.value))
+        color = data.get("color", (1.0, 1.0, 1.0))
+        intensity = data.get("intensity", 1.0)
+        shadows = LightShadowParams(
+            enabled=data.get("shadows_enabled", False),
+            map_resolution=data.get("shadows_map_resolution", 1024),
+        )
+        return cls(
+            light_type=light_type,
+            color=color,
+            intensity=intensity,
+            shadows=shadows,
+        )
+
+
+# Регистрируем для десериализации
+COMPONENT_REGISTRY["LightComponent"] = LightComponent
