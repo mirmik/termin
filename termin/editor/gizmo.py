@@ -810,10 +810,15 @@ class GizmoController:
 
     def set_target(self, target_entity: Entity | None) -> None:
         if self.gizmo is None:
+            print(f"[DEBUG] GizmoController.set_target: gizmo is None!")
             return
         gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
-        if gizmo_ctrl is not None:
-            gizmo_ctrl.set_target(target_entity)
+        if gizmo_ctrl is None:
+            print(f"[DEBUG] GizmoController.set_target: GizmoMoveController not found!")
+            return
+        print(f"[DEBUG] GizmoController.set_target({target_entity.name if target_entity else None}), gizmo.visible={self.gizmo.visible}")
+        gizmo_ctrl.set_target(target_entity)
+        print(f"[DEBUG] After set_target: gizmo.visible={self.gizmo.visible}, gizmo_ctrl.enabled={gizmo_ctrl.enabled}")
 
     def set_visible(self, visible: bool) -> None:
         """Показывает или скрывает гизмо."""
