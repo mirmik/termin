@@ -63,6 +63,16 @@ class UndoStack:
         return bool(self._undone)
 
     @property
+    def done_commands(self) -> List[UndoCommand]:
+        """Список выполненных команд (только для чтения)."""
+        return list(self._done)
+
+    @property
+    def undone_commands(self) -> List[UndoCommand]:
+        """Список отменённых команд (только для чтения)."""
+        return list(self._undone)
+
+    @property
     def max_depth(self) -> int:
         return self._max_depth
 

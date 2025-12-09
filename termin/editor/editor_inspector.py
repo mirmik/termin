@@ -657,7 +657,7 @@ class EntityInspector(QWidget):
             trans = obj.transform
         elif isinstance(obj, Transform3):
             trans = obj
-            ent = getattr(obj, "entity", None)
+            ent = obj.entity
         else:
             ent = None
             trans = None

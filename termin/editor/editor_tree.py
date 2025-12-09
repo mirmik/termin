@@ -55,8 +55,8 @@ class SceneTreeModel(QAbstractItemModel):
         for ent in self.scene.entities:
             node = self._obj_to_node[ent]
 
-            parent_tf = getattr(ent.transform, "parent", None)
-            parent_ent = getattr(parent_tf, "entity", None) if parent_tf is not None else None
+            parent_tf = ent.transform.parent
+            parent_ent = parent_tf.entity if parent_tf is not None else None
 
             # если трансформ родителя не привязан к Entity – считаем, что это корень
             if isinstance(parent_ent, Entity) and parent_ent in self._obj_to_node:
@@ -123,7 +123,7 @@ class SceneTreeModel(QAbstractItemModel):
         """
         if not isinstance(obj, Entity):
             # если вдруг прилетел Transform3 – попробуем найти его владельца
-            if isinstance(obj, Transform3) and getattr(obj, "entity", None) is not None:
+            if isinstance(obj, Transform3) and obj.entity is not None:
                 obj = obj.entity
             else:
                 return QModelIndex()

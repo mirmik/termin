@@ -506,7 +506,7 @@ class GizmoMoveController(InputComponent):
         tf = self._drag_transform
         end_pose = tf.global_pose()
 
-        ent = getattr(tf, "entity", None)
+        ent = tf.entity
         end_scale = None
         if ent is not None:
             try:
@@ -792,7 +792,7 @@ class GizmoController:
 
     def _ensure_gizmo(self):
         for ent in self.scene.entities:
-            if isinstance(ent, GizmoEntity) or getattr(ent, "name", "") == "gizmo":
+            if isinstance(ent, GizmoEntity) or ent.name == "gizmo":
                 self.gizmo = ent
                 gizmo_ctrl = ent.find_component(GizmoMoveController)
                 if gizmo_ctrl is not None:

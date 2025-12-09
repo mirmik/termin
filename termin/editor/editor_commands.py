@@ -217,7 +217,7 @@ class AddEntityCommand(UndoCommand):
     def parent_entity(self) -> Entity | None:
         if self._parent_transform is None:
             return None
-        return getattr(self._parent_transform, "entity", None)
+        return self._parent_transform.entity if self._parent_transform is not None else None
 
     def do(self) -> None:
         if self._parent_transform is not None:
@@ -245,8 +245,7 @@ class DeleteEntityCommand(UndoCommand):
         super().__init__(text)
         self._scene = scene
         self._entity = entity
-        tf = getattr(entity, "transform", None)
-        self._parent_transform = getattr(tf, "parent", None) if tf is not None else None
+        self._parent_transform = entity.transform.parent
 
     @property
     def entity(self) -> Entity:
@@ -256,7 +255,7 @@ class DeleteEntityCommand(UndoCommand):
     def parent_entity(self) -> Entity | None:
         if self._parent_transform is None:
             return None
-        return getattr(self._parent_transform, "entity", None)
+        return self._parent_transform.entity if self._parent_transform is not None else None
 
     def do(self) -> None:
         self._scene.remove(self._entity)

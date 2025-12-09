@@ -76,7 +76,7 @@ class UndoStackViewer(QDialog):
 
     def _format_command(self, index: int, cmd: UndoCommand, is_done: bool) -> str:
         kind = "undo" if is_done else "redo"
-        text = getattr(cmd, "text", "") or cmd.__class__.__name__
+        text = cmd.text or cmd.__class__.__name__
         return f"[{kind} #{index}] {text}"
 
     def refresh(self) -> None:
@@ -86,8 +86,8 @@ class UndoStackViewer(QDialog):
         self.done_list.clear()
         self.undone_list.clear()
 
-        done = getattr(self._undo_stack, "_done", [])
-        undone = getattr(self._undo_stack, "_undone", [])
+        done = self._undo_stack.done_commands
+        undone = self._undo_stack.undone_commands
 
         for i, cmd in enumerate(done):
             self.done_list.addItem(self._format_command(i, cmd, True))

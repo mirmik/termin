@@ -96,7 +96,7 @@ class IdPass(RenderFramePass):
             mr = ent.get_component(MeshRenderer)
             if mr is None:
                 continue
-            pid = getattr(ent, "pick_id", 0)
+            pid = ent.pick_id
             pick_ids[ent] = pid
             self._entity_names.append(ent.name)
 
