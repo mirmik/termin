@@ -297,11 +297,24 @@ def parse_shader_text(text: str) -> Dict[str, Any]:
     for raw_line in lines:
         line = raw_line.strip()
 
-        # Если мы внутри @stage, любые строки, кроме директив @endstage, копим как есть
+        # Если мы внутри @stage, любые строки, кроме директив, копим как есть
         if current_stage_name is not None:
             if line.startswith("@endstage"):
                 close_current_stage()
                 continue
+            elif line.startswith("@stage "):
+                # Новый @stage — закрываем предыдущий и обрабатываем этот
+                close_current_stage()
+                # Не делаем continue — пусть обработается ниже как @stage
+            elif line.startswith("@phase "):
+                # Новая фаза — закрываем текущий stage и текущую фазу
+                close_current_stage()
+                close_current_phase()
+                # Не делаем continue — пусть обработается ниже
+            elif line.startswith("@endphase"):
+                # Закрываем текущий stage и фазу
+                close_current_stage()
+                # Не делаем continue — пусть обработается ниже
             else:
                 current_stage_lines.append(raw_line)
                 continue
