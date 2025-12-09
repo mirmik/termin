@@ -177,6 +177,11 @@ class EditorWindow(QMainWindow):
         game_menu = menu_bar.addMenu("Game")
         debug_menu = menu_bar.addMenu("Debug")
 
+        open_project_action = file_menu.addAction("Open Project...")
+        open_project_action.triggered.connect(self._open_project)
+
+        file_menu.addSeparator()
+
         new_world_action = file_menu.addAction("New World")
         new_world_action.setShortcut("Ctrl+N")
         new_world_action.triggered.connect(self._new_world)
@@ -659,6 +664,27 @@ class EditorWindow(QMainWindow):
             # Другие файлы — логируем
             if self.consoleOutput is not None:
                 self.consoleOutput.appendPlainText(f"Opened: {file_path}")
+
+    def _open_project(self) -> None:
+        """Открыть директорию проекта."""
+        from pathlib import Path
+
+        current_root = None
+        if hasattr(self, 'project_browser') and self.project_browser.root_path:
+            current_root = str(self.project_browser.root_path)
+
+        dir_path = QFileDialog.getExistingDirectory(
+            self,
+            "Open Project Directory",
+            current_root or str(Path.cwd()),
+        )
+
+        if dir_path:
+            self.project_browser.set_root_path(dir_path)
+            self.setWindowTitle(f"Termin Editor - {Path(dir_path).name}")
+
+            if self.consoleOutput is not None:
+                self.consoleOutput.appendPlainText(f"Opened project: {dir_path}")
 
     def _init_status_bar(self) -> None:
         """
