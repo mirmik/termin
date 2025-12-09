@@ -384,7 +384,9 @@ class ResourceManager:
     # --------- Материалы ---------
     def register_material(self, name: str, mat: "Material"):
         self.materials[name] = mat
-        self._watch_material(name, mat)
+        # Обновляем маппинг файлов если отслеживание включено
+        if self._file_watcher is not None:
+            self._rebuild_file_mappings()
 
     def get_material(self, name: str) -> Optional["Material"]:
         return self.materials.get(name)
