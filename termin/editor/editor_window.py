@@ -1,7 +1,7 @@
 # ===== termin/editor/editor_window.py =====
 import os
 from PyQt6 import uic
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit
+from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit, QStackedWidget
 from PyQt6.QtWidgets import QStatusBar
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
@@ -20,6 +20,7 @@ from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.editor.editor_inspector import EntityInspector
+from termin.editor.material_inspector import MaterialInspector
 from termin.editor.scene_inspector import SceneInspector
 from termin.editor.project_browser import ProjectBrowser
 from termin.editor.settings import EditorSettings
@@ -69,6 +70,7 @@ class EditorWindow(QMainWindow):
         self.gizmo_controller: GizmoController | None = None
         self.selection_manager: SelectionManager | None = None
         self.game_mode_controller: GameModeController | None = None
+        self.project_browser = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -94,12 +96,25 @@ class EditorWindow(QMainWindow):
 
         self._fix_splitters()
 
-        # --- инспектор ---
-        self.inspector = EntityInspector(self.resource_manager, self.inspectorContainer)
+        # --- инспекторы (переключаемые через QStackedWidget) ---
+        self._inspector_stack = QStackedWidget()
+
+        # EntityInspector (index 0)
+        self.entity_inspector = EntityInspector(self.resource_manager)
+        self.entity_inspector.transform_changed.connect(self._on_inspector_transform_changed)
+        self.entity_inspector.component_changed.connect(self._on_inspector_component_changed)
+        self.entity_inspector.set_undo_command_handler(self.push_undo_command)
+        self._inspector_stack.addWidget(self.entity_inspector)
+
+        # MaterialInspector (index 1)
+        self.material_inspector = MaterialInspector()
+        self.material_inspector.material_changed.connect(self._on_material_inspector_changed)
+        self._inspector_stack.addWidget(self.material_inspector)
+
+        # Для обратной совместимости
+        self.inspector = self.entity_inspector
+
         self._init_inspector_widget()
-        self.inspector.transform_changed.connect(self._on_inspector_transform_changed)
-        self.inspector.component_changed.connect(self._on_inspector_component_changed)
-        self.inspector.set_undo_command_handler(self.push_undo_command)
 
         # --- создаём редакторские сущности (root, камера) ---
         self.editor_entities = None
@@ -578,7 +593,7 @@ class EditorWindow(QMainWindow):
             if mesh is not None:
                 existing_mesh_name = self.resource_manager.find_mesh_name(mesh)
                 if existing_mesh_name is None:
-                    name = mesh.name if hasattr(mesh, "name") else None
+                    name = mesh.name
                     if not name:
                         base = f"{ent.name}_mesh" if ent.name else "Mesh"
                         name = base
@@ -618,6 +633,34 @@ class EditorWindow(QMainWindow):
     def _on_inspector_component_changed(self):
         self._request_viewport_update()
 
+    def _on_material_inspector_changed(self):
+        """Обработчик изменения материала в инспекторе."""
+        self._request_viewport_update()
+
+    def show_entity_inspector(self, entity: Entity | None = None):
+        """Показать EntityInspector и установить target."""
+        self._inspector_stack.setCurrentWidget(self.entity_inspector)
+        if entity is not None:
+            self.entity_inspector.set_target(entity)
+
+    def show_material_inspector(self, material_name: str | None = None):
+        """Показать MaterialInspector и загрузить материал по имени."""
+        self._inspector_stack.setCurrentWidget(self.material_inspector)
+        if material_name is not None:
+            mat = self.resource_manager.get_material(material_name)
+            if mat is not None:
+                self.material_inspector.set_material(mat)
+                # Установить shader_program для отображения свойств
+                shader = self.resource_manager.get_shader(mat.shader_name)
+                if shader is not None:
+                    self.material_inspector._shader_program = shader
+                    self.material_inspector._rebuild_ui()
+
+    def show_material_inspector_for_file(self, file_path: str):
+        """Показать MaterialInspector и загрузить материал из файла."""
+        self._inspector_stack.setCurrentWidget(self.material_inspector)
+        self.material_inspector.load_material_file(file_path)
+
     # ----------- инициализация инспектора и сплиттеров -----------
 
     def _init_inspector_widget(self):
@@ -625,8 +668,9 @@ class EditorWindow(QMainWindow):
         layout = parent.layout()
         if layout is None:
             layout = QVBoxLayout(parent)
+            layout.setContentsMargins(0, 0, 0, 0)
             parent.setLayout(layout)
-        layout.addWidget(self.inspector)
+        layout.addWidget(self._inspector_stack)
 
     def _fix_splitters(self):
         self.topSplitter.setOpaqueResize(False)
@@ -706,7 +750,7 @@ class EditorWindow(QMainWindow):
         from pathlib import Path
 
         current_root = None
-        if hasattr(self, 'project_browser') and self.project_browser.root_path:
+        if self.project_browser is not None and self.project_browser.root_path:
             current_root = str(self.project_browser.root_path)
 
         dir_path = QFileDialog.getExistingDirectory(
@@ -730,65 +774,19 @@ class EditorWindow(QMainWindow):
 
     def _open_material_inspector(self, file_path: str, is_material: bool = False) -> None:
         """
-        Открывает инспектор материалов.
+        Открывает инспектор материалов в правой панели.
 
         Args:
             file_path: Путь к файлу (.material или .shader)
             is_material: True если это .material файл, False если .shader
         """
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox
-        from termin.editor.material_inspector import MaterialInspector
         from pathlib import Path
-
-        if self._material_inspector_dialog is None:
-            dialog = QDialog(self)
-            dialog.setWindowTitle("Material Inspector")
-            dialog.setMinimumSize(400, 500)
-
-            layout = QVBoxLayout(dialog)
-
-            inspector = MaterialInspector(dialog)
-            layout.addWidget(inspector)
-
-            button_box = QDialogButtonBox(
-                QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close
-            )
-            button_box.rejected.connect(dialog.close)
-            button_box.accepted.connect(lambda: self._save_material_from_inspector())
-            layout.addWidget(button_box)
-
-            dialog._inspector = inspector
-            self._material_inspector_dialog = dialog
-
-        inspector = self._material_inspector_dialog._inspector
 
         # Загружаем файл в инспектор
         if is_material:
-            inspector.load_material_file(file_path)
-            self._material_inspector_dialog.setWindowTitle(f"Material - {Path(file_path).name}")
-        else:
-            inspector.load_shader_file(file_path)
-            self._material_inspector_dialog.setWindowTitle(f"New Material from {Path(file_path).name}")
-
-        self._material_inspector_dialog.show()
-        self._material_inspector_dialog.raise_()
-        self._material_inspector_dialog.activateWindow()
-
-    def _save_material_from_inspector(self) -> None:
-        """Сохраняет материал из инспектора в файл."""
-        if self._material_inspector_dialog is None:
-            return
-
-        inspector = self._material_inspector_dialog._inspector
-        if inspector.save_material_file():
-            material = inspector.material
-            if material is not None:
-                # Регистрируем материал в ResourceManager
-                name = material.name or "NewMaterial"
-                self.resource_manager.register_material(name, material)
-
-                if self.consoleOutput is not None:
-                    self.consoleOutput.appendPlainText(f"Material '{name}' saved")
+            self.show_material_inspector_for_file(file_path)
+        # .shader файлы теперь не создают материал, просто показываем пустой инспектор
+        # TODO: можно добавить ShaderInspector в будущем
 
     def _show_settings_dialog(self) -> None:
         """Открывает диалог настроек редактора."""
@@ -844,7 +842,7 @@ class EditorWindow(QMainWindow):
 
     def _scan_project_resources(self) -> None:
         """Сканирует директорию проекта, загружает ресурсы и включает отслеживание."""
-        if not hasattr(self, 'project_browser') or self.project_browser.root_path is None:
+        if self.project_browser is None or self.project_browser.root_path is None:
             return
 
         project_path = str(self.project_browser.root_path)
@@ -952,15 +950,18 @@ class EditorWindow(QMainWindow):
         """
         index = self.sceneTree.currentIndex()
         if not index.isValid():
-            if self.inspector is not None:
-                self.inspector.set_target(None)
+            self.show_entity_inspector(None)
             return
 
         node = index.internalPointer()
         obj = node.obj if node is not None else None
 
-        if self.inspector is not None:
-            self.inspector.set_target(obj)
+        # При выборе Entity показываем EntityInspector
+        if isinstance(obj, Entity):
+            self.show_entity_inspector(obj)
+        else:
+            self.entity_inspector.set_target(obj)
+            self._inspector_stack.setCurrentWidget(self.entity_inspector)
 
     # ----------- SelectionManager колбэки -----------
 

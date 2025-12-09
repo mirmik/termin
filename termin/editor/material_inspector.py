@@ -278,6 +278,11 @@ class MaterialInspector(QWidget):
         scroll.setWidget(self._properties_widget)
         main_layout.addWidget(scroll, 1)
 
+        # Кнопка Save
+        self._save_btn = QPushButton("Save")
+        self._save_btn.clicked.connect(self._on_save_clicked)
+        main_layout.addWidget(self._save_btn)
+
     def set_material(self, material: Material | None) -> None:
         """Установить материал для редактирования."""
         self._material = material
@@ -393,7 +398,7 @@ class MaterialInspector(QWidget):
         self._name_edit.setText(self._material.name or "")
 
         # Выбор шейдера
-        shader_name = self._material.shader_name if hasattr(self._material, 'shader_name') else "DefaultShader"
+        shader_name = self._material.shader_name
         idx = self._shader_combo.findText(shader_name)
         if idx >= 0:
             self._shader_combo.setCurrentIndex(idx)
@@ -610,6 +615,12 @@ class MaterialInspector(QWidget):
             label.setText(Path(path).name)
             # TODO: Загрузить текстуру и установить в материал
             self.material_changed.emit()
+
+    def _on_save_clicked(self) -> None:
+        """Обработчик нажатия кнопки Save."""
+        if self._material is None:
+            return
+        self.save_material_file()
 
     @property
     def material(self) -> Material | None:
