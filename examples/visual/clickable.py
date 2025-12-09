@@ -19,7 +19,6 @@ from termin.visualization import (
 from termin.visualization.core.entity import Entity, Component
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.skybox import SkyBoxEntity
 from termin.colliders.box import BoxCollider
 from termin.colliders.collider_component import ColliderComponent
 
@@ -118,7 +117,6 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
     scene = Scene()
     scene.add(cube1)
     scene.add(cube2)
-    scene.add(SkyBoxEntity())
     world.add_scene(scene)
 
     camera_entity = Entity(name="camera")

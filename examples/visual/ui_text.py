@@ -16,7 +16,6 @@ from termin.visualization import (
 )
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.skybox import SkyBoxEntity
 from termin.visualization.ui import Canvas, UIRectangle
 from termin.visualization.ui.elements import UIText
 from termin.visualization.ui.font import FontTextureAtlas
@@ -99,7 +98,6 @@ def build_scene(world: VisualizationWorld):
 
     scene = Scene()
     scene.add(cube)
-    scene.add(SkyBoxEntity())
     world.add_scene(scene)
 
     cam_e = Entity(name="camera")

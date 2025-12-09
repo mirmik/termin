@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional, Callable
 
 import numpy as np
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget,
     QFormLayout,
     QDoubleSpinBox,
@@ -15,8 +15,8 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QComboBox,
 )
-from PyQt5.QtGui import QColor
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
+from PyQt6.QtCore import Qt, pyqtSignal
 
 from termin.editor.color_dialog import ColorDialog
 from termin.editor.undo_stack import UndoCommand
@@ -120,7 +120,7 @@ class SceneInspector(QWidget):
         # Background color group
         bg_group = QGroupBox("Background")
         bg_layout = QFormLayout(bg_group)
-        bg_layout.setLabelAlignment(Qt.AlignLeft)
+        bg_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self._bg_color_btn = self._create_color_button()
         bg_layout.addRow(QLabel("Color:"), self._bg_color_btn)
@@ -129,7 +129,7 @@ class SceneInspector(QWidget):
         # Ambient lighting group
         ambient_group = QGroupBox("Ambient Lighting")
         ambient_layout = QFormLayout(ambient_group)
-        ambient_layout.setLabelAlignment(Qt.AlignLeft)
+        ambient_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self._ambient_color_btn = self._create_color_button()
         ambient_layout.addRow(QLabel("Color:"), self._ambient_color_btn)
@@ -145,7 +145,7 @@ class SceneInspector(QWidget):
         # Skybox group
         skybox_group = QGroupBox("Skybox")
         skybox_layout = QFormLayout(skybox_group)
-        skybox_layout.setLabelAlignment(Qt.AlignLeft)
+        skybox_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self._skybox_type_combo = QComboBox()
         self._skybox_type_combo.addItem("Gradient", "gradient")

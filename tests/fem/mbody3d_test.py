@@ -21,7 +21,7 @@ class TestIntegrationMultibody3D(unittest.TestCase):
         assembler = DynamicMatrixAssembler()
         
         body = RigidBody3D(
-            inertia=SpatialInertia3D(mass=2.0, inertia=np.diag([1.0, 1.0, 1.0]), com=np.zeros(3)),
+            inertia=SpatialInertia3D.from_matrix(mass=2.0, inertia=np.diag([1.0, 1.0, 1.0]), com=np.zeros(3)),
             gravity=np.array([0.0, 0.0, -9.81]),
             assembler=assembler)
 
@@ -47,7 +47,7 @@ class TestIntegrationMultibody3D(unittest.TestCase):
         assembler = DynamicMatrixAssembler()
         
         body = RigidBody3D(
-            inertia=SpatialInertia3D(mass=2.0, inertia=np.diag([1.0, 1.0, 1.0]), com=np.array([1.5, 0.0, 0.0])),
+            inertia=SpatialInertia3D.from_matrix(mass=2.0, inertia=np.diag([1.0, 1.0, 1.0]), com=np.array([1.5, 0.0, 0.0])),
             gravity=np.array([0.0, 0.0, -9.81]),
             assembler=assembler)
 
@@ -100,7 +100,7 @@ class TestIntegrationMultibody3D(unittest.TestCase):
         assembler = DynamicMatrixAssembler()
         
         body = RigidBody3D(
-            inertia=SpatialInertia3D(mass=2.0, inertia=np.diag([1.0, 1.0, 1.0]), com=np.array([0.0, 1.5, 0.0])),
+            inertia=SpatialInertia3D.from_matrix(mass=2.0, inertia=np.diag([1.0, 1.0, 1.0]), com=np.array([0.0, 1.5, 0.0])),
             gravity=np.array([0.0, 0.0, -9.81]),
             assembler=assembler)
 
@@ -151,7 +151,7 @@ class TestIntegrationMultibody3D(unittest.TestCase):
         assembler = DynamicMatrixAssembler()
         
         body = RigidBody3D(
-            inertia=SpatialInertia3D(mass=5.0, inertia=np.diag([5.0, 5.0, 5.0]), com=np.zeros(3)),
+            inertia=SpatialInertia3D.from_matrix(mass=5.0, inertia=np.diag([5.0, 5.0, 5.0]), com=np.zeros(3)),
             gravity=np.array([0.0, 0.0, -10.00]),
             assembler=assembler)
 
@@ -212,7 +212,7 @@ class TestIntegrationMultibody3D(unittest.TestCase):
         assembler = DynamicMatrixAssembler()
         
         body = RigidBody3D(
-            inertia=SpatialInertia3D(mass=5.0, inertia=np.diag([5.0, 5.0, 5.0]), com=np.array([0.75, 0.0, 0.0])),
+            inertia=SpatialInertia3D.from_matrix(mass=5.0, inertia=np.diag([5.0, 5.0, 5.0]), com=np.array([0.75, 0.0, 0.0])),
             gravity=np.array([0.0, 0.0, -10.00]),
             assembler=assembler)
 

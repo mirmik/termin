@@ -4,8 +4,8 @@ from termin.geombase.pose3 import Pose3
 
 def test_spatial_inertia3d_add():
     # Два тела с разными центрами масс и тензорами
-    I1 = SpatialInertia3D(2.0, np.eye(3), [0.0, 0.0, 0.0])
-    I2 = SpatialInertia3D(3.0, 2*np.eye(3), [1.0, 0.0, 0.0])
+    I1 = SpatialInertia3D.from_matrix(mass=2.0, inertia=np.eye(3), com=[0.0, 0.0, 0.0])
+    I2 = SpatialInertia3D.from_matrix(mass=3.0, inertia=2*np.eye(3), com=[1.0, 0.0, 0.0])
     I_sum = I1 + I2
     # Проверяем массу
     assert np.isclose(I_sum.m, 5.0)

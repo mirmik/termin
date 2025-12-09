@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QGridLayout,
 )
-from PyQt5.QtGui import (
+from PyQt6.QtGui import (
     QColor,
     QPainter,
     QLinearGradient,
@@ -47,7 +47,7 @@ from PyQt5.QtGui import (
     QMouseEvent,
     QPaintEvent,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRect, QSize
 
 
 class HueStrip(QWidget):
@@ -80,7 +80,7 @@ class HueStrip(QWidget):
         if h <= 0 or w <= 0:
             return QImage()
 
-        image = QImage(w, h, QImage.Format_RGB32)
+        image = QImage(w, h, QImage.Format.Format_RGB32)
         for y in range(h):
             # Hue от 0 (top) до 1 (bottom)
             hue_value = y / max(h - 1, 1)
@@ -92,7 +92,7 @@ class HueStrip(QWidget):
 
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Рисуем полосу Hue
         if self._image is None or self._image.size() != self.size():
@@ -103,9 +103,9 @@ class HueStrip(QWidget):
         # Рисуем маркер текущего Hue
         y = int(self._hue * (self.height() - 1))
         marker_rect = QRect(0, y - 2, self.width(), 4)
-        painter.setPen(QPen(Qt.white, 2))
+        painter.setPen(QPen(Qt.GlobalColor.white, 2))
         painter.drawRect(marker_rect)
-        painter.setPen(QPen(Qt.black, 1))
+        painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.drawRect(marker_rect.adjusted(1, 1, -1, -1))
 
         painter.end()
@@ -171,7 +171,7 @@ class SVSquare(QWidget):
         if w <= 0 or h <= 0:
             return QImage()
 
-        image = QImage(w, h, QImage.Format_RGB32)
+        image = QImage(w, h, QImage.Format.Format_RGB32)
         for y in range(h):
             # Value: 1 сверху, 0 снизу
             val = 1.0 - (y / max(h - 1, 1))
@@ -184,7 +184,7 @@ class SVSquare(QWidget):
 
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Перестраиваем изображение, если Hue изменился
         if self._image is None or self._cached_hue != self._hue or self._image.size() != self.size():
@@ -201,10 +201,10 @@ class SVSquare(QWidget):
 
         # Круглый маркер
         radius = 6
-        painter.setPen(QPen(Qt.white, 2))
-        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(Qt.GlobalColor.white, 2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(QPoint(cx, cy), radius, radius)
-        painter.setPen(QPen(Qt.black, 1))
+        painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.drawEllipse(QPoint(cx, cy), radius - 1, radius - 1)
 
         painter.end()
@@ -289,15 +289,15 @@ class ColorPreview(QWidget):
         painter.fillRect(right_rect, self._new_color)
 
         # Рамка
-        painter.setPen(QPen(Qt.black, 1))
+        painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.drawRect(0, 0, w - 1, h - 1)
         painter.drawLine(w // 2, 0, w // 2, h)
 
         # Подписи
-        painter.setPen(Qt.black if self._old_color.lightnessF() > 0.5 else Qt.white)
-        painter.drawText(QRect(0, 0, w // 2, h), Qt.AlignCenter, "Old")
-        painter.setPen(Qt.black if self._new_color.lightnessF() > 0.5 else Qt.white)
-        painter.drawText(QRect(w // 2, 0, w - w // 2, h), Qt.AlignCenter, "New")
+        painter.setPen(Qt.GlobalColor.black if self._old_color.lightnessF() > 0.5 else Qt.GlobalColor.white)
+        painter.drawText(QRect(0, 0, w // 2, h), Qt.AlignmentFlag.AlignCenter, "Old")
+        painter.setPen(Qt.GlobalColor.black if self._new_color.lightnessF() > 0.5 else Qt.GlobalColor.white)
+        painter.drawText(QRect(w // 2, 0, w - w // 2, h), Qt.AlignmentFlag.AlignCenter, "New")
 
         painter.end()
 
@@ -309,7 +309,7 @@ class ColorDialog(QDialog):
 
     Использование:
         dlg = ColorDialog(initial_color=(0.5, 0.2, 0.8, 1.0), parent=self)
-        if dlg.exec_() == QDialog.Accepted:
+        if dlg.exec() == QDialog.DialogCode.Accepted:
             r, g, b, a = dlg.get_color_01()
     """
 
@@ -362,7 +362,7 @@ class ColorDialog(QDialog):
 
         # R
         rgba_layout.addWidget(QLabel("R:"), 0, 0)
-        self._r_slider = QSlider(Qt.Horizontal)
+        self._r_slider = QSlider(Qt.Orientation.Horizontal)
         self._r_slider.setRange(0, 1000)
         rgba_layout.addWidget(self._r_slider, 0, 1)
         self._r_spin = QDoubleSpinBox()
@@ -374,7 +374,7 @@ class ColorDialog(QDialog):
 
         # G
         rgba_layout.addWidget(QLabel("G:"), 1, 0)
-        self._g_slider = QSlider(Qt.Horizontal)
+        self._g_slider = QSlider(Qt.Orientation.Horizontal)
         self._g_slider.setRange(0, 1000)
         rgba_layout.addWidget(self._g_slider, 1, 1)
         self._g_spin = QDoubleSpinBox()
@@ -386,7 +386,7 @@ class ColorDialog(QDialog):
 
         # B
         rgba_layout.addWidget(QLabel("B:"), 2, 0)
-        self._b_slider = QSlider(Qt.Horizontal)
+        self._b_slider = QSlider(Qt.Orientation.Horizontal)
         self._b_slider.setRange(0, 1000)
         rgba_layout.addWidget(self._b_slider, 2, 1)
         self._b_spin = QDoubleSpinBox()
@@ -398,7 +398,7 @@ class ColorDialog(QDialog):
 
         # A (Alpha)
         rgba_layout.addWidget(QLabel("A:"), 3, 0)
-        self._a_slider = QSlider(Qt.Horizontal)
+        self._a_slider = QSlider(Qt.Orientation.Horizontal)
         self._a_slider.setRange(0, 1000)
         rgba_layout.addWidget(self._a_slider, 3, 1)
         self._a_spin = QDoubleSpinBox()
@@ -679,6 +679,6 @@ class ColorDialog(QDialog):
         Возвращает кортеж (r, g, b, a) в диапазоне 0..1 или None при отмене.
         """
         dlg = ColorDialog(initial, parent)
-        if dlg.exec_() == QDialog.Accepted:
+        if dlg.exec() == QDialog.DialogCode.Accepted:
             return dlg.get_color_01()
         return None

@@ -1,9 +1,9 @@
-"""Embed termin visualization view inside a PyQt5 application."""
+"""Embed termin visualization view inside a PyQt6 application."""
 
 from __future__ import annotations
 
 import numpy as np
-from PyQt5 import QtWidgets
+from PyQt6 import QtWidgets
 
 from termin.geombase.pose3 import Pose3
 from termin.mesh.mesh import UVSphereMesh
@@ -18,7 +18,6 @@ from termin.visualization import (
 )
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.skybox import SkyBoxEntity
 from termin.visualization.platform.backends.qt import QtWindowBackend
 
 
@@ -70,7 +69,6 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
 
     scene = Scene()
     scene.add(sphere)
-    scene.add(SkyBoxEntity())
     world.add_scene(scene)
 
     cam_entity = Entity(name="camera")

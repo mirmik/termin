@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
@@ -31,7 +31,7 @@ class UndoStackViewer(QDialog):
         self.setModal(False)
         # Не используем Qt.WA_WindowTitleHint — в PyQt5 его нет
         # Оставляем только управление удалением по закрытию
-        self.setAttribute(Qt.WA_DeleteOnClose, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         layout = QVBoxLayout(self)
 

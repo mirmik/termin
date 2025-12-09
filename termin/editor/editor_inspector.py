@@ -5,7 +5,7 @@ from typing import Optional, Callable
 import logging
 
 import numpy as np
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget,
     QFormLayout,
     QHBoxLayout,
@@ -17,13 +17,12 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QLineEdit,
     QMenu,
-    QAction,
     QComboBox,
     QPushButton,
 )
+from PyQt6.QtGui import QColor, QAction
 from termin.editor.color_dialog import ColorDialog
-from PyQt5.QtGui import QColor
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 
 from termin.kinematic.transform import Transform3
 from termin.visualization.core.entity import Entity, Component
@@ -75,7 +74,7 @@ class ComponentsPanel(QWidget):
 
         self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
 
-        self._list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._on_context_menu)
 
     def set_undo_command_handler(
@@ -130,7 +129,7 @@ class ComponentsPanel(QWidget):
             menu.addAction(act)
 
         # Показываем меню под кнопкой
-        menu.exec_(self._add_btn.mapToGlobal(self._add_btn.rect().bottomLeft()))
+        menu.exec(self._add_btn.mapToGlobal(self._add_btn.rect().bottomLeft()))
 
     def _on_context_menu(self, pos):
         if self._entity is None:
@@ -155,7 +154,7 @@ class ComponentsPanel(QWidget):
                 )
                 add_menu.addAction(act)
 
-        menu.exec_(global_pos)
+        menu.exec(global_pos)
 
     def _remove_current_component(self):
         if self._entity is None:
@@ -252,8 +251,8 @@ class ComponentInspectorPanel(QWidget):
         self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
 
         layout = QFormLayout(self)
-        layout.setLabelAlignment(Qt.AlignLeft)
-        layout.setFormAlignment(Qt.AlignTop)
+        layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        layout.setFormAlignment(Qt.AlignmentFlag.AlignTop)
         self._layout = layout
 
     def set_undo_command_handler(

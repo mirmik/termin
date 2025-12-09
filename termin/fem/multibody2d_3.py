@@ -303,10 +303,10 @@ class RevoluteJoint2D(Contribution):
 
         # блок по aB, выраженный в СК A:
         # - [ R,  R * perp(rB) ], где perp(r) = [-r_y, r_x]
-        col_alphaB = self.poseAB.rotate_vector(self._perp_col(self.rB_local))  # = perp(rB_A)
+        col_alphaB = self.poseAB.rotate_vector(self._perp_col(self.rB_local))  # = R_AB @ perp(rB_local)
         H[np.ix_(F, aB)] += np.array([
-            [-R[0,0], -R[0,1],  col_alphaB[0]],
-            [-R[1,0], -R[1,1],  col_alphaB[1]],
+            [-R[0,0], -R[0,1], -col_alphaB[0]],
+            [-R[1,0], -R[1,1], -col_alphaB[1]],
         ])
 
     def contribute_for_constraints_correction(self, matrices, index_maps):

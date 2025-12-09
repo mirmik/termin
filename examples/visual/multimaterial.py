@@ -28,7 +28,6 @@ from termin.visualization import (
 )
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.skybox import SkyBoxEntity
 
 from termin.visualization.render.renderpass import RenderPass, RenderState
 
@@ -260,12 +259,9 @@ def build_scene(world: VisualizationWorld):
         )
     )
 
-    # --- Scene + skybox + камера ---
+    # --- Scene + камера ---
     scene = Scene()
     scene.add(entity)
-
-    skybox = SkyBoxEntity()
-    scene.add(skybox)
 
     world.add_scene(scene)
 

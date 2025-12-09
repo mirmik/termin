@@ -1,9 +1,10 @@
 # ===== termin/editor/editor_window.py =====
 import os
-from PyQt5 import uic
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QAction, QInputDialog, QMessageBox
-from PyQt5.QtWidgets import QStatusBar
-from PyQt5.QtCore import Qt, QEvent, pyqtSignal
+from PyQt6 import uic
+from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog
+from PyQt6.QtWidgets import QStatusBar
+from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt, QEvent, pyqtSignal
 
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
@@ -65,12 +66,12 @@ class EditorWindow(QMainWindow):
         # --- UI из .ui ---
         self.sceneTree: QTreeView = self.findChild(QTreeView, "sceneTree")
 
-        self.sceneTree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.sceneTree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
         self.viewportContainer: QWidget = self.findChild(QWidget, "viewportContainer")
         self.inspectorContainer: QWidget = self.findChild(QWidget, "inspectorContainer")
 
-        from PyQt5.QtWidgets import QSplitter
+        from PyQt6.QtWidgets import QSplitter
         self.topSplitter: QSplitter = self.findChild(QSplitter, "topSplitter")
         self.verticalSplitter: QSplitter = self.findChild(QSplitter, "verticalSplitter")
 
@@ -278,7 +279,7 @@ class EditorWindow(QMainWindow):
         """
         Открывает диалог редактирования свойств сцены (ambient, background и т.п.).
         """
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox
 
         if self._scene_inspector_dialog is None:
             dialog = QDialog(self)
@@ -574,8 +575,8 @@ class EditorWindow(QMainWindow):
         if (
             self.viewport_window is not None
             and obj is self.viewport_window.handle.widget
-            and event.type() == QEvent.KeyPress
-            and event.key() == Qt.Key_Delete
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_Delete
         ):
             ent = self.selection_manager.selected if self.selection_manager else None
             if isinstance(ent, Entity):
@@ -633,15 +634,14 @@ class EditorWindow(QMainWindow):
 
     def _load_material_from_file(self) -> None:
         """Открывает диалог выбора .shader файла, парсит его и добавляет в ResourceManager."""
-        # QFileDialog зависает на директориях с .json/.js файлами - используем QInputDialog
-        file_path, ok = QInputDialog.getText(
+        file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Load Material",
-            "Enter shader file path:",
+            "",
+            "Shader Files (*.shader);;All Files (*)",
         )
-        if not ok or not file_path:
+        if not file_path:
             return
-        file_path = os.path.expanduser(file_path)
 
         try:
             from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
@@ -687,14 +687,14 @@ class EditorWindow(QMainWindow):
 
     def _load_components_from_file(self) -> None:
         """Загружает компоненты из Python файла или директории."""
-        path, ok = QInputDialog.getText(
+        path, _ = QFileDialog.getOpenFileName(
             self,
             "Load Components",
-            "Enter path to .py file or directory with components:",
+            "",
+            "Python Files (*.py);;All Files (*)",
         )
-        if not ok or not path:
+        if not path:
             return
-        path = os.path.expanduser(path)
 
         try:
             loaded = self.resource_manager.scan_components([path])
@@ -775,11 +775,11 @@ class EditorWindow(QMainWindow):
             self,
             "New World",
             "Create a new empty world?\n\nThis will remove all entities and resources.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
 
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         self._reset_world()
@@ -791,15 +791,14 @@ class EditorWindow(QMainWindow):
 
     def _save_world(self) -> None:
         """Сохраняет текущий мир в JSON файл."""
-        file_path, ok = QInputDialog.getText(
+        file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save World",
-            "Enter file path:",
-            text="~/world.world.json",
+            "world.world.json",
+            "World Files (*.world.json);;JSON Files (*.json);;All Files (*)",
         )
-        if not ok or not file_path:
+        if not file_path:
             return
-        file_path = os.path.expanduser(file_path)
 
         # Добавляем расширение если не указано
         if not file_path.endswith(".json"):
@@ -829,15 +828,14 @@ class EditorWindow(QMainWindow):
 
     def _load_world(self) -> None:
         """Загружает мир из JSON файла."""
-        file_path, ok = QInputDialog.getText(
+        file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Load World",
-            "Enter file path:",
-            text="~/world.world.json",
+            "",
+            "World Files (*.world.json);;JSON Files (*.json);;All Files (*)",
         )
-        if not ok or not file_path:
+        if not file_path:
             return
-        file_path = os.path.expanduser(file_path)
 
         # Спрашиваем пользователя - очистить текущую сцену или добавить?
         reply = QMessageBox.question(
@@ -846,14 +844,14 @@ class EditorWindow(QMainWindow):
             "Clear current scene before loading?\n\n"
             "Yes - Clear scene and load new world\n"
             "No - Add loaded entities to current scene",
-            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-            QMessageBox.Yes,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes,
         )
 
-        if reply == QMessageBox.Cancel:
+        if reply == QMessageBox.StandardButton.Cancel:
             return
 
-        clear_scene = (reply == QMessageBox.Yes)
+        clear_scene = (reply == QMessageBox.StandardButton.Yes)
 
         try:
             if self.world_persistence is None:

@@ -119,6 +119,42 @@ class SpatialInertia3D:
         return R @ np.diag(self.I_diag) @ R.T
 
     # ----------------------------------------------------------------
+    #  Spatial inertia matrix 6x6
+    # ----------------------------------------------------------------
+    def to_matrix_vw_order(self) -> np.ndarray:
+        """
+        Матрица пространственной инерции 6x6 в порядке [v, ω].
+
+        Формат:
+            [ m*I    m*skew(c)^T ]
+            [ m*skew(c)    Ic    ]
+
+        где skew(c) — кососимметричная матрица для c×.
+        """
+        m = self.m
+        c = self.frame.lin
+        Ic = self.Ic
+
+        # skew(c) такая что skew(c) @ x = c × x
+        def skew(v):
+            return np.array([
+                [0, -v[2], v[1]],
+                [v[2], 0, -v[0]],
+                [-v[1], v[0], 0]
+            ], dtype=float)
+
+        S = skew(c)
+        upper_left = m * np.eye(3)
+        upper_right = m * S.T
+        lower_left = m * S
+        lower_right = Ic + m * (np.dot(c, c) * np.eye(3) - np.outer(c, c))
+
+        return np.block([
+            [upper_left, upper_right],
+            [lower_left, lower_right]
+        ])
+
+    # ----------------------------------------------------------------
     #  Преобразования
     # ----------------------------------------------------------------
     def rotated_by(self, pose: Pose3) -> "SpatialInertia3D":

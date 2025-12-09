@@ -6,7 +6,7 @@ import json
 from typing import TYPE_CHECKING, Callable, Optional
 
 import numpy as np
-from PyQt5.QtCore import QTimer, QElapsedTimer
+from PyQt6.QtCore import QTimer, QElapsedTimer
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

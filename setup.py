@@ -53,7 +53,7 @@ setup(
         "Pillow>=9.0",
         "pyassimp",
         "scipy",
-        "PyQt5>=5.15",
+        "PyQt6>=6.4",
     ],
     extras_require={
     },

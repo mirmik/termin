@@ -1,10 +1,11 @@
-"""PyQt5-based window backend using QOpenGLWindow."""
+"""PyQt6-based window backend using QOpenGLWidget."""
 
 from __future__ import annotations
 
 from typing import Callable, Optional, Any
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 
@@ -21,11 +22,11 @@ def _qt_app() -> QtWidgets.QApplication:
 
 
 def _translate_mouse(button: QtCore.Qt.MouseButton) -> MouseButton:
-    if button == QtCore.Qt.LeftButton:
+    if button == QtCore.Qt.MouseButton.LeftButton:
         return MouseButton.LEFT
-    if button == QtCore.Qt.RightButton:
+    if button == QtCore.Qt.MouseButton.RightButton:
         return MouseButton.RIGHT
-    if button == QtCore.Qt.MiddleButton:
+    if button == QtCore.Qt.MouseButton.MiddleButton:
         return MouseButton.MIDDLE
     return MouseButton.LEFT
 
@@ -35,9 +36,9 @@ def _translate_action(action: bool) -> Action:
 
 
 def _translate_key(key: int) -> Key:
-    if key == QtCore.Qt.Key_Escape:
+    if key == QtCore.Qt.Key.Key_Escape:
         return Key.ESCAPE
-    if key == QtCore.Qt.Key_Space:
+    if key == QtCore.Qt.Key.Key_Space:
         return Key.SPACE
     try:
         return Key(key)
@@ -45,12 +46,12 @@ def _translate_key(key: int) -> Key:
         return Key.UNKNOWN
 
 
-class _QtGLWidget(QtWidgets.QOpenGLWidget):
+class _QtGLWidget(QOpenGLWidget):
     def __init__(self, owner: "QtGLWindowHandle", parent=None):
         super().__init__(parent)
         self._owner = owner
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)
-        self.setUpdateBehavior(QtWidgets.QOpenGLWidget.PartialUpdate)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+        self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.PartialUpdate)
         self.setMouseTracking(True)
 
     # --- События мыши / клавиатуры --------------------------------------
@@ -68,7 +69,8 @@ class _QtGLWidget(QtWidgets.QOpenGLWidget):
     def mouseMoveEvent(self, event):
         cb = self._owner._cursor_callback
         if cb:
-            cb(self._owner, float(event.x()), float(event.y()))
+            pos = event.position()
+            cb(self._owner, float(pos.x()), float(pos.y()))
 
     def wheelEvent(self, event):
         angle = event.angleDelta()

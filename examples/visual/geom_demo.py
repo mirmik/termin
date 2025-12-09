@@ -19,7 +19,6 @@ from termin.visualization import (
 )
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.skybox import SkyBoxEntity
 
 
 # =============================
@@ -121,10 +120,6 @@ def build_scene(world: VisualizationWorld):
 
     scene = Scene()
     scene.add(entity)
-
-    # оставляем небо для красоты
-    skybox = SkyBoxEntity()
-    scene.add(skybox)
 
     world.add_scene(scene)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional, Callable
 
 import numpy as np
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget,
     QFormLayout,
     QHBoxLayout,
@@ -17,10 +17,10 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QLineEdit,
     QMenu,
-    QAction,
     QComboBox,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt, pyqtSignal
 
 from termin.kinematic.transform import Transform3
 from termin.visualization.core.entity import Entity, Component
@@ -56,8 +56,8 @@ class TransformInspector(QWidget):
         self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
 
         layout = QFormLayout(self)
-        layout.setLabelAlignment(Qt.AlignLeft)
-        layout.setFormAlignment(Qt.AlignTop)
+        layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        layout.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
         def make_vec3_row():
             row = QHBoxLayout()

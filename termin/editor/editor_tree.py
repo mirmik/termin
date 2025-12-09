@@ -1,5 +1,5 @@
 # ===== termin/editor/editor_tree.py =====
-from PyQt5.QtCore import Qt, QAbstractItemModel, QModelIndex
+from PyQt6.QtCore import Qt, QAbstractItemModel, QModelIndex
 
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity
@@ -108,7 +108,7 @@ class SceneTreeModel(QAbstractItemModel):
         if not index.isValid():
             return None
         node: NodeWrapper = index.internalPointer()
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return node.name
         return None
 

@@ -17,7 +17,6 @@ from termin.visualization import (
 )
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.skybox import SkyBoxEntity
 
 def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComponent]:
     cube_mesh = CubeMesh()
@@ -28,8 +27,6 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
     scene = Scene()
     scene.add(entity)
 
-    skybox = SkyBoxEntity()
-    scene.add(skybox)
     world.add_scene(scene)
 
     camera_entity = Entity(name="camera")

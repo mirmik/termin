@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Callable, Optional, Tuple
 
 import numpy as np
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QWidget, QVBoxLayout
 
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.viewport import Viewport
@@ -99,7 +99,7 @@ class ViewportController:
         window.on_mouse_move_event = self._on_mouse_move
 
         gl_widget = window.handle.widget
-        gl_widget.setFocusPolicy(Qt.StrongFocus)
+        gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         gl_widget.setMinimumSize(50, 50)
         layout.addWidget(gl_widget)
 

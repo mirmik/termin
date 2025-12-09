@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-from PyQt5.QtCore import Qt, QPoint
-from PyQt5.QtWidgets import QTreeView, QMenu, QAction, QInputDialog
+from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtWidgets import QTreeView, QMenu, QInputDialog
+from PyQt6.QtGui import QAction
 
 from termin.editor.undo_stack import UndoCommand
 from termin.editor.editor_commands import (
@@ -49,7 +50,7 @@ class SceneTreeController:
     def _setup_tree(self) -> None:
         self._tree.setModel(self._model)
         self._tree.expandAll()
-        self._tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._on_tree_context_menu)
 
         sel_model = self._tree.selectionModel()
@@ -111,7 +112,7 @@ class SceneTreeController:
             action_delete = menu.addAction("Delete entity")
 
         global_pos = self._tree.viewport().mapToGlobal(pos)
-        action = menu.exec_(global_pos)
+        action = menu.exec(global_pos)
 
         if action == action_add:
             self._create_entity_from_context(target_obj)

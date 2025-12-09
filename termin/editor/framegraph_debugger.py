@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, Callable, List, Tuple, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
-from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt6 import QtWidgets, QtCore, QtGui
 
 from OpenGL import GL as gl
 import numpy as np
@@ -225,7 +225,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
         }
 
         self.setMinimumSize(200, 150)
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
 
     def sizeHint(self) -> QtCore.QSize:
         return QtCore.QSize(400, 300)
@@ -396,7 +396,7 @@ class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
             width_i,
             height_i,
             bytes_per_line,
-            QtGui.QImage.Format_Grayscale8,
+            QtGui.QImage.Format.Format_Grayscale8,
         )
         qimage = qimage.copy()
         self.depthImageUpdated.emit(qimage)
@@ -507,7 +507,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _build_ui(self) -> None:
         self.setWindowTitle("Framegraph Debugger")
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
         self.setModal(False)
         self.setMinimumSize(450, 400)
 
@@ -587,14 +587,14 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         )
 
         self._depth_label = QtWidgets.QLabel("Depth")
-        self._depth_label.setAlignment(QtCore.Qt.AlignCenter)
+        self._depth_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._depth_label.setMinimumSize(100, 100)
         self._depth_label.setSizePolicy(
-            QtWidgets.QSizePolicy.Expanding,
-            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
         )
 
-        viewer_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        viewer_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         viewer_splitter.addWidget(self._gl_widget)
         viewer_splitter.addWidget(self._depth_label)
         viewer_splitter.setStretchFactor(0, 3)
@@ -619,8 +619,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         if target_size.width() > 0 and target_size.height() > 0:
             pixmap = pixmap.scaled(
                 target_size,
-                QtCore.Qt.KeepAspectRatio,
-                QtCore.Qt.SmoothTransformation,
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
             )
         self._depth_label.setPixmap(pixmap)
 
