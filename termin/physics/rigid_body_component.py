@@ -9,6 +9,7 @@ from termin.visualization.core.entity import Component
 from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat, Screw3
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase.pose3 import Pose3
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -20,6 +21,38 @@ class RigidBodyComponent(Component):
 
     Использует C++ бэкенд. Синхронизирует позу физического тела с трансформом сущности.
     """
+
+    inspect_fields = {
+        "mass": InspectField(
+            path="mass",
+            label="Mass",
+            kind="float",
+            min=0.001,
+            max=10000.0,
+            step=0.1,
+        ),
+        "is_static": InspectField(
+            path="is_static",
+            label="Static",
+            kind="bool",
+        ),
+        "restitution": InspectField(
+            path="restitution",
+            label="Restitution",
+            kind="float",
+            min=0.0,
+            max=1.0,
+            step=0.05,
+        ),
+        "friction": InspectField(
+            path="friction",
+            label="Friction",
+            kind="float",
+            min=0.0,
+            max=2.0,
+            step=0.05,
+        ),
+    }
 
     def __init__(
         self,

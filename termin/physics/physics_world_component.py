@@ -8,6 +8,7 @@ import numpy as np
 from termin.visualization.core.entity import Component
 from termin.geombase._geom_native import Vec3
 from termin.physics._physics_native import PhysicsWorld
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -25,6 +26,54 @@ class PhysicsWorldComponent(Component):
     2. Выполнять физическую симуляцию каждый кадр
     3. Синхронизировать трансформы обратно в сущности
     """
+
+    inspect_fields = {
+        "gravity": InspectField(
+            path="gravity",
+            label="Gravity",
+            kind="vec3",
+            non_serializable=True,  # getter/setter работают с C++ объектом
+        ),
+        "iterations": InspectField(
+            path="iterations",
+            label="Iterations",
+            kind="int",
+            min=1,
+            max=100,
+            non_serializable=True,
+        ),
+        "restitution": InspectField(
+            path="restitution",
+            label="Restitution",
+            kind="float",
+            min=0.0,
+            max=1.0,
+            step=0.05,
+            non_serializable=True,
+        ),
+        "friction": InspectField(
+            path="friction",
+            label="Friction",
+            kind="float",
+            min=0.0,
+            max=2.0,
+            step=0.05,
+            non_serializable=True,
+        ),
+        "ground_enabled": InspectField(
+            path="ground_enabled",
+            label="Ground Enabled",
+            kind="bool",
+            non_serializable=True,
+        ),
+        "ground_height": InspectField(
+            path="ground_height",
+            label="Ground Height",
+            kind="float",
+            step=0.1,
+            non_serializable=True,
+        ),
+    }
 
     def __init__(
         self,
@@ -55,6 +104,57 @@ class PhysicsWorldComponent(Component):
     @property
     def physics_world(self) -> PhysicsWorld:
         return self._physics_world
+
+    # --- Свойства-прокси для инспектора ---
+
+    @property
+    def gravity(self) -> np.ndarray:
+        g = self._physics_world.gravity
+        return np.array([g.x, g.y, g.z], dtype=np.float64)
+
+    @gravity.setter
+    def gravity(self, value: np.ndarray):
+        self._physics_world.gravity = Vec3(value[0], value[1], value[2])
+
+    @property
+    def iterations(self) -> int:
+        return self._physics_world.iterations
+
+    @iterations.setter
+    def iterations(self, value: int):
+        self._physics_world.iterations = value
+
+    @property
+    def restitution(self) -> float:
+        return self._physics_world.restitution
+
+    @restitution.setter
+    def restitution(self, value: float):
+        self._physics_world.restitution = value
+
+    @property
+    def friction(self) -> float:
+        return self._physics_world.friction
+
+    @friction.setter
+    def friction(self, value: float):
+        self._physics_world.friction = value
+
+    @property
+    def ground_enabled(self) -> bool:
+        return self._physics_world.ground_enabled
+
+    @ground_enabled.setter
+    def ground_enabled(self, value: bool):
+        self._physics_world.ground_enabled = value
+
+    @property
+    def ground_height(self) -> float:
+        return self._physics_world.ground_height
+
+    @ground_height.setter
+    def ground_height(self, value: float):
+        self._physics_world.ground_height = value
 
     def start(self, scene: "Scene"):
         super().start(scene)
