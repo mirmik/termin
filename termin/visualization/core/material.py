@@ -247,6 +247,9 @@ class MaterialPhase:
 class Material:
     """Collection of shader parameters applied before drawing a mesh."""
 
+    # Атрибуты класса с дефолтными значениями
+    shader_name: str = "DefaultShader"
+
     def __init__(
         self,
         shader: ShaderProgram = None,
@@ -258,21 +261,19 @@ class Material:
         phase_mark: str = "main",
         priority: int = 0,
         source_path: str | None = None,
+        shader_name: str = "DefaultShader",
     ):
-        shader = shader or getattr(self, "_pre_shader", None) or getattr(self, "shader", None)
         if shader is None:
             shader = ShaderProgram.default_shader()
 
-        base_color = color if color is not None else getattr(self, "_pre_color", None) or getattr(self, "color", None)
-        if base_color is None:
-            base_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+        if color is not None:
+            base_color = _rgba(color)
         else:
-            base_color = _rgba(base_color)
+            base_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
 
-        base_textures = textures if textures is not None else getattr(self, "textures", None)
-        base_uniforms = uniforms if uniforms is not None else getattr(self, "uniforms", None)
         self.name = name
         self.source_path = source_path
+        self.shader_name = shader_name
 
         phase = MaterialPhase(
             shader_programm=shader,
@@ -280,8 +281,8 @@ class Material:
             phase_mark=phase_mark,
             priority=priority,
             color=base_color,
-            textures=base_textures,
-            uniforms=base_uniforms,
+            textures=textures,
+            uniforms=uniforms,
         )
         self.phases: List[MaterialPhase] = [phase]
 
@@ -404,10 +405,7 @@ class Material:
                 if name not in textures and hasattr(tex, 'source_path'):
                     textures[name] = tex.source_path
 
-        # shader_name — имя шейдера из ResourceManager
-        shader_name = getattr(self, 'shader_name', None) or "DefaultShader"
-
-        result = {"shader": shader_name}
+        result = {"shader": self.shader_name}
         if uniforms:
             result["uniforms"] = uniforms
         if textures:

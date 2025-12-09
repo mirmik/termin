@@ -849,6 +849,9 @@ class EditorWindow(QMainWindow):
 
         project_path = str(self.project_browser.root_path)
 
+        # Регистрируем встроенный DefaultShader
+        self.resource_manager.register_default_shader()
+
         # Сканируем и загружаем ресурсы
         stats = self.resource_manager.scan_project_resources(project_path)
 

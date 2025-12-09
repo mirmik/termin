@@ -295,7 +295,7 @@ class MaterialInspector(QWidget):
             self._material = Material.load_from_material_file(str(path))
 
             # Загружаем shader_program из ResourceManager
-            shader_name = getattr(self._material, 'shader_name', None) or "DefaultShader"
+            shader_name = self._material.shader_name
             rm = ResourceManager.instance()
             self._shader_program = rm.get_shader(shader_name)
 
@@ -393,7 +393,7 @@ class MaterialInspector(QWidget):
         self._name_edit.setText(self._material.name or "")
 
         # Выбор шейдера
-        shader_name = getattr(self._material, 'shader_name', None) or "DefaultShader"
+        shader_name = self._material.shader_name if hasattr(self._material, 'shader_name') else "DefaultShader"
         idx = self._shader_combo.findText(shader_name)
         if idx >= 0:
             self._shader_combo.setCurrentIndex(idx)
