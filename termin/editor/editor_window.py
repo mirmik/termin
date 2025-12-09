@@ -717,10 +717,13 @@ class EditorWindow(QMainWindow):
         self.setWindowTitle(f"Termin Editor - {project_root.name}")
 
     def _on_project_file_selected(self, file_path) -> None:
-        """Обработчик выбора файла в Project Browser."""
-        # Пока просто логируем в консоль
-        if self.consoleOutput is not None:
-            self.consoleOutput.appendPlainText(f"Selected: {file_path}")
+        """Обработчик выбора файла в Project Browser (одинарный клик)."""
+        from pathlib import Path
+        path = Path(file_path)
+
+        if path.suffix == ".material":
+            # Материал — открываем в инспекторе материалов
+            self.show_material_inspector_for_file(str(path))
 
     def _on_project_file_double_clicked(self, file_path) -> None:
         """Обработчик двойного клика на файл в Project Browser."""
@@ -732,12 +735,8 @@ class EditorWindow(QMainWindow):
             # Это файл сцены — загружаем
             self._load_scene_from_file(str(path))
 
-        elif path.suffix == ".material":
-            # Материал — открываем в инспекторе материалов
-            self._open_material_inspector(str(path), is_material=True)
-
-        elif path.suffix == ".shader":
-            # Шейдер — открываем во внешнем текстовом редакторе
+        elif path.suffix in (".material", ".shader"):
+            # Материал и шейдер — открываем во внешнем текстовом редакторе
             self._open_in_text_editor(str(path))
 
         else:
