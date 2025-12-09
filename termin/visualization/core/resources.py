@@ -6,6 +6,7 @@ from typing import Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # только для типов, чтобы не ловить циклы импортов
     from termin.visualization.core.material import Material
+    from termin.visualization.core.material_handle import MaterialKeeper
     from termin.visualization.core.mesh import MeshDrawable
     from termin.visualization.render.texture import Texture
     from termin.visualization.core.entity import Component
@@ -47,6 +48,9 @@ class ResourceManager:
         self.meshes: Dict[str, "MeshDrawable"] = {}
         self.textures: Dict[str, "Texture"] = {}
         self.components: Dict[str, type["Component"]] = {}
+
+        # MaterialKeeper'ы — владельцы материалов по имени
+        self._material_keepers: Dict[str, "MaterialKeeper"] = {}
 
         # Отслеживание файлов
         self._file_watcher: "QFileSystemWatcher | None" = None
@@ -234,40 +238,26 @@ class ResourceManager:
                 self._reload_texture(name)
 
     def _reload_material(self, name: str) -> None:
-        """Перезагружает материал из файла."""
-        mat = self.materials.get(name)
-        if mat is None:
+        """Перезагружает материал из файла через keeper."""
+        keeper = self._material_keepers.get(name)
+        if keeper is None or keeper.source_path is None:
             return
 
-        source_path = mat.source_path
-        if not source_path:
+        source_path = keeper.source_path
+        if not source_path.endswith('.material'):
             return
 
         try:
             from termin.visualization.core.material import Material
 
-            if source_path.endswith('.material'):
-                new_mat = Material.load_from_material_file(source_path)
-            elif source_path.endswith('.shader'):
-                from termin.visualization.render.shader_parser import (
-                    parse_shader_text,
-                    ShaderMultyPhaseProgramm,
-                )
-                with open(source_path, "r", encoding="utf-8") as f:
-                    shader_text = f.read()
-                tree = parse_shader_text(shader_text)
-                program = ShaderMultyPhaseProgramm.from_tree(tree)
-                new_mat = Material.from_parsed(program, source_path=source_path)
-                new_mat.shader_path = source_path
-            else:
-                return
+            new_mat = Material.load_from_material_file(source_path)
 
-            # Обновляем материал
-            new_mat.name = name
-            self.materials[name] = new_mat
+            # Обновляем через keeper (сохраняет идентичность объекта)
+            keeper.update_material(new_mat)
 
-            # Обновляем маппинг
-            self._rebuild_file_mappings()
+            # Обновляем и в старом dict для совместимости
+            if keeper.material is not None:
+                self.materials[name] = keeper.material
 
             print(f"[ResourceManager] Reloaded material: {name}")
 
@@ -377,13 +367,14 @@ class ResourceManager:
         path = Path(file_path)
         name = path.stem
 
-        # Проверяем, не загружен ли уже
-        if name in self.materials:
+        # Проверяем keeper — если материал уже есть, не загружаем
+        keeper = self.get_or_create_keeper(name)
+        if keeper.has_material:
             return
 
         mat = Material.load_from_material_file(file_path)
         mat.name = name
-        self.register_material(name, mat)
+        self.register_material(name, mat, source_path=file_path)
 
     def _load_shader_file(self, file_path: str) -> None:
         """Загружает .shader файл и регистрирует шейдер."""
@@ -407,20 +398,65 @@ class ResourceManager:
         program = ShaderMultyPhaseProgramm.from_tree(tree)
         self.register_shader(name, program, source_path=file_path)
 
+    # --------- MaterialKeeper'ы ---------
+    def get_or_create_keeper(self, name: str) -> "MaterialKeeper":
+        """
+        Получить или создать MaterialKeeper для имени.
+
+        Всегда возвращает keeper — создаёт новый если не существует.
+        """
+        from termin.visualization.core.material_handle import MaterialKeeper
+
+        if name not in self._material_keepers:
+            self._material_keepers[name] = MaterialKeeper(name)
+        return self._material_keepers[name]
+
+    def get_keeper(self, name: str) -> Optional["MaterialKeeper"]:
+        """Получить MaterialKeeper по имени или None."""
+        return self._material_keepers.get(name)
+
+    def list_keeper_names(self) -> list[str]:
+        """Список имён всех keeper'ов."""
+        return sorted(self._material_keepers.keys())
+
     # --------- Материалы ---------
-    def register_material(self, name: str, mat: "Material"):
+    def register_material(self, name: str, mat: "Material", source_path: str | None = None):
+        """
+        Регистрирует материал через keeper.
+
+        Args:
+            name: Имя материала
+            mat: Материал
+            source_path: Путь к файлу-источнику
+        """
+        keeper = self.get_or_create_keeper(name)
+        keeper.set_material(mat, source_path)
+
+        # Для обратной совместимости сохраняем и в старый dict
         self.materials[name] = mat
+
         # Обновляем маппинг файлов если отслеживание включено
         if self._file_watcher is not None:
             self._rebuild_file_mappings()
 
     def get_material(self, name: str) -> Optional["Material"]:
+        """Получить материал по имени."""
+        keeper = self._material_keepers.get(name)
+        if keeper is not None:
+            return keeper.material
         return self.materials.get(name)
 
     def list_material_names(self) -> list[str]:
-        return sorted(self.materials.keys())
+        # Объединяем имена из keeper'ов и старого dict
+        names = set(self._material_keepers.keys()) | set(self.materials.keys())
+        return sorted(names)
 
     def find_material_name(self, mat: "Material") -> Optional[str]:
+        # Сначала ищем в keeper'ах
+        for name, keeper in self._material_keepers.items():
+            if keeper.material is mat:
+                return name
+        # Затем в старом dict
         for n, m in self.materials.items():
             if m is mat:
                 return n

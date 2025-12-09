@@ -356,6 +356,17 @@ class Material:
         """Bind shader, upload MVP matrices and all statically defined uniforms."""
         self._default_phase.apply(model, view, projection, graphics, context_key=context_key)
 
+    def update_from(self, other: "Material") -> None:
+        """
+        Обновляет данные материала из другого материала.
+
+        Используется для hot-reload: сохраняет идентичность объекта,
+        но обновляет все его данные.
+        """
+        self.phases = other.phases
+        self.shader_name = other.shader_name
+        # name и source_path не меняем — они идентифицируют материал
+
     def serialize(self) -> dict:
         """
         Сериализует материал.
@@ -589,3 +600,27 @@ class Material:
         """
         matching = [p for p in self.phases if p.phase_mark == phase_mark]
         return sorted(matching, key=lambda p: p.priority)
+
+
+# --- ErrorMaterial ---
+
+_error_material: Material | None = None
+
+
+def get_error_material() -> Material:
+    """
+    Возвращает материал ошибки (ярко-розовый).
+
+    Используется когда MaterialHandle не может получить материал.
+    Синглтон — создаётся один раз.
+    """
+    global _error_material
+
+    if _error_material is None:
+        _error_material = Material(
+            color=np.array([1.0, 0.0, 1.0, 1.0], dtype=np.float32),  # Magenta
+            name="__ErrorMaterial__",
+            shader_name="DefaultShader",
+        )
+
+    return _error_material

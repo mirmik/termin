@@ -5,6 +5,7 @@ from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
+from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.render.lighting.upload import upload_lights_to_shader, upload_ambient_to_shader
@@ -49,7 +50,6 @@ class MeshRenderer(Component):
             material = Material()
 
         self.mesh = mesh
-        self._material: Material | None = None
         self.passes: list[RenderPass] = []
 
         if passes is not None:
@@ -58,24 +58,23 @@ class MeshRenderer(Component):
                 if isinstance(p, RenderPass):
                     self.passes.append(p)
                 elif isinstance(p, Material):
-                    self.passes.append(RenderPass(material=p, state=RenderState()))
+                    self.passes.append(RenderPass.from_material(p))
                 else:
                     raise TypeError("passes must contain Material or RenderPass")
         elif material is not None:
             # если материал задан в конструкторе — как раньше: один проход
-            self.passes.append(RenderPass(material=material, state=RenderState()))
+            self.passes.append(RenderPass.from_material(material))
 
     @property
     def material(self) -> Material | None:
         """Возвращает материал первого прохода (для обратной совместимости)."""
         if self.passes:
             return self.passes[0].material
-        return self._material
+        return None
 
     @material.setter
     def material(self, value: Material | None):
         """Устанавливает материал первого прохода."""
-        self._material = value
         if self.passes:
             self.passes[0].material = value
 
@@ -89,7 +88,7 @@ class MeshRenderer(Component):
         """
         if material is not None and not self.passes:
             # Новый компонент, до этого не было проходов — создаём дефолтный
-            self.passes.append(RenderPass(material=material, state=RenderState()))
+            self.passes.append(RenderPass.from_material(material))
         else:
             # setter обновит первый pass
             self.material = material
@@ -226,15 +225,14 @@ class MeshRenderer(Component):
         if mesh_name:
             mesh = rm.get_mesh(mesh_name)
 
-        # Получаем passes/materials
+        # Получаем passes/materials — используем MaterialHandle по имени
         passes = []
         for pass_data in data.get("passes", []):
             mat_name = pass_data.get("material")
-            material = None
             if mat_name:
-                material = rm.get_material(mat_name)
-            if material is not None:
-                passes.append(RenderPass(material=material, state=RenderState()))
+                # Создаём RenderPass с MaterialHandle по имени
+                # Материал будет получен из keeper'а при рендере
+                passes.append(RenderPass.from_material_name(mat_name))
 
         # Создаём MeshRenderer
         if passes:
