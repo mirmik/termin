@@ -271,6 +271,11 @@ class ProjectBrowser:
             reveal_action.triggered.connect(lambda: self._reveal_in_explorer(file_path))
             menu.addAction(reveal_action)
 
+            # Удалить
+            delete_action = QAction("Delete", self._file_list)
+            delete_action.triggered.connect(lambda: self._delete_item(file_path))
+            menu.addAction(delete_action)
+
             menu.addSeparator()
 
         # --- Подменю Create ---
@@ -357,6 +362,39 @@ class ProjectBrowser:
         """Обновить содержимое."""
         if self._root_path is not None:
             self.set_root_path(self._root_path)
+
+    def _delete_item(self, path: Path) -> None:
+        """Удалить файл или директорию."""
+        import shutil
+
+        if path.is_file():
+            msg = f"Delete file '{path.name}'?"
+        else:
+            msg = f"Delete directory '{path.name}' and all its contents?"
+
+        reply = QMessageBox.question(
+            self._file_list,
+            "Confirm Delete",
+            msg,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            if path.is_file():
+                path.unlink()
+            else:
+                shutil.rmtree(path)
+            self._refresh()
+        except OSError as e:
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"Failed to delete: {e}",
+            )
 
     def _create_material(self) -> None:
         """Создать новый файл материала."""
