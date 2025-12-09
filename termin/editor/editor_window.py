@@ -22,6 +22,7 @@ from termin.kinematic.transform import Transform3
 from termin.editor.editor_inspector import EntityInspector
 from termin.editor.scene_inspector import SceneInspector
 from termin.editor.project_browser import ProjectBrowser
+from termin.editor.settings import EditorSettings
 from termin.visualization.core.resources import ResourceManager
 from termin.geombase.pose3 import Pose3
 
@@ -620,9 +621,11 @@ class EditorWindow(QMainWindow):
         if self.projectDirTree is None or self.projectFileList is None:
             return
 
-        # Определяем корневую директорию проекта
-        # Используем текущую рабочую директорию или директорию termin
-        project_root = Path.cwd()
+        # Загружаем последний открытый проект или используем cwd
+        settings = EditorSettings.instance()
+        project_root = settings.get_last_project_path()
+        if project_root is None:
+            project_root = Path.cwd()
 
         self.project_browser = ProjectBrowser(
             dir_tree=self.projectDirTree,
@@ -631,6 +634,9 @@ class EditorWindow(QMainWindow):
             on_file_selected=self._on_project_file_selected,
             on_file_double_clicked=self._on_project_file_double_clicked,
         )
+
+        # Обновляем заголовок окна
+        self.setWindowTitle(f"Termin Editor - {project_root.name}")
 
     def _on_project_file_selected(self, file_path) -> None:
         """Обработчик выбора файла в Project Browser."""
@@ -682,6 +688,9 @@ class EditorWindow(QMainWindow):
         if dir_path:
             self.project_browser.set_root_path(dir_path)
             self.setWindowTitle(f"Termin Editor - {Path(dir_path).name}")
+
+            # Сохраняем путь для следующего запуска
+            EditorSettings.instance().set_last_project_path(dir_path)
 
             if self.consoleOutput is not None:
                 self.consoleOutput.appendPlainText(f"Opened project: {dir_path}")

@@ -16,9 +16,13 @@ from PyQt6.QtWidgets import (
     QListView,
     QAbstractItemView,
     QMenu,
+    QInputDialog,
+    QMessageBox,
 )
 from PyQt6.QtGui import QFileSystemModel, QAction
 from PyQt6.QtCore import Qt, QModelIndex, QDir
+
+from termin.editor.settings import EditorSettings
 
 
 class ProjectBrowser:
@@ -207,11 +211,19 @@ class ProjectBrowser:
             reveal_action.triggered.connect(lambda: self._reveal_in_explorer(file_path))
             menu.addAction(reveal_action)
 
-        else:
-            # Клик на пустом месте
-            refresh_action = QAction("Refresh", self._file_list)
-            refresh_action.triggered.connect(self._refresh)
-            menu.addAction(refresh_action)
+            menu.addSeparator()
+
+        # Создать директорию (доступно всегда)
+        create_dir_action = QAction("Create Directory...", self._file_list)
+        create_dir_action.triggered.connect(self._create_directory)
+        menu.addAction(create_dir_action)
+
+        menu.addSeparator()
+
+        # Обновить
+        refresh_action = QAction("Refresh", self._file_list)
+        refresh_action.triggered.connect(self._refresh)
+        menu.addAction(refresh_action)
 
         menu.exec(self._file_list.mapToGlobal(pos))
 
@@ -234,6 +246,36 @@ class ProjectBrowser:
             subprocess.run(["open", "-R", str(path)])
         else:  # Linux
             subprocess.run(["xdg-open", str(path.parent if path.is_file() else path)])
+
+    def _create_directory(self) -> None:
+        """Создать новую директорию в текущей папке."""
+        current_dir = self.current_directory
+        if current_dir is None:
+            return
+
+        name, ok = QInputDialog.getText(
+            self._file_list,
+            "Create Directory",
+            "Directory name:",
+        )
+
+        if ok and name:
+            new_dir = current_dir / name
+            try:
+                new_dir.mkdir(parents=False, exist_ok=False)
+                self._refresh()
+            except FileExistsError:
+                QMessageBox.warning(
+                    self._file_list,
+                    "Error",
+                    f"Directory '{name}' already exists.",
+                )
+            except OSError as e:
+                QMessageBox.warning(
+                    self._file_list,
+                    "Error",
+                    f"Failed to create directory: {e}",
+                )
 
     def _refresh(self) -> None:
         """Обновить содержимое."""
