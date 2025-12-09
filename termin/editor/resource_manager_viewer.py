@@ -183,33 +183,51 @@ class ResourceManagerViewer(QDialog):
         self._components_tree.resizeColumnToContents(1)
 
     def _refresh_watched(self) -> None:
-        """Обновляет список отслеживаемых файлов."""
+        """Обновляет список отслеживаемых файлов и директорий."""
         self._watched_tree.clear()
 
-        # Материалы
-        for path, names in sorted(self._resource_manager._file_to_materials.items()):
-            resources = ", ".join(sorted(names))
-            item = QTreeWidgetItem([path, f"Materials: {resources}"])
-            self._watched_tree.addTopLevelItem(item)
+        rm = self._resource_manager
 
-        # Текстуры
-        for path, names in sorted(self._resource_manager._file_to_textures.items()):
-            resources = ", ".join(sorted(names))
-            item = QTreeWidgetItem([path, f"Textures: {resources}"])
-            self._watched_tree.addTopLevelItem(item)
+        # Директории
+        if rm._watched_dirs:
+            dirs_item = QTreeWidgetItem(["Watched Directories", f"{len(rm._watched_dirs)} dirs"])
+            self._watched_tree.addTopLevelItem(dirs_item)
+            for path in sorted(rm._watched_dirs):
+                child = QTreeWidgetItem([path, "directory"])
+                dirs_item.addChild(child)
 
+        # Файлы материалов
+        if rm._file_to_materials:
+            mats_item = QTreeWidgetItem(["Material Files", f"{len(rm._file_to_materials)} files"])
+            self._watched_tree.addTopLevelItem(mats_item)
+            for path, names in sorted(rm._file_to_materials.items()):
+                resources = ", ".join(sorted(names))
+                child = QTreeWidgetItem([path, resources])
+                mats_item.addChild(child)
+
+        # Файлы текстур
+        if rm._file_to_textures:
+            tex_item = QTreeWidgetItem(["Texture Files", f"{len(rm._file_to_textures)} files"])
+            self._watched_tree.addTopLevelItem(tex_item)
+            for path, names in sorted(rm._file_to_textures.items()):
+                resources = ", ".join(sorted(names))
+                child = QTreeWidgetItem([path, resources])
+                tex_item.addChild(child)
+
+        self._watched_tree.expandAll()
         self._watched_tree.resizeColumnToContents(0)
 
     def _update_status(self) -> None:
         """Обновляет строку статуса."""
         rm = self._resource_manager
         watching = "enabled" if rm._file_watcher is not None else "disabled"
-        watched_count = len(rm._file_to_materials) + len(rm._file_to_textures)
+        watched_dirs = len(rm._watched_dirs)
+        watched_files = len(rm._file_to_materials) + len(rm._file_to_textures)
 
         self._status_label.setText(
             f"Materials: {len(rm.materials)} | "
             f"Meshes: {len(rm.meshes)} | "
             f"Textures: {len(rm.textures)} | "
             f"Components: {len(rm.components)} | "
-            f"File watching: {watching} ({watched_count} files)"
+            f"Watching: {watching} ({watched_dirs} dirs, {watched_files} files)"
         )

@@ -48,6 +48,8 @@ class ResourceManager:
 
         # Отслеживание файлов
         self._file_watcher: "QFileSystemWatcher | None" = None
+        self._project_path: str | None = None
+        self._watched_dirs: Set[str] = set()
         self._file_to_materials: Dict[str, Set[str]] = {}  # path -> set of material names
         self._file_to_textures: Dict[str, Set[str]] = {}   # path -> set of texture names
         self._on_resource_reloaded: Callable[[str, str], None] | None = None  # (type, name)
@@ -60,11 +62,16 @@ class ResourceManager:
 
     # --------- File Watching ---------
 
-    def enable_file_watching(self, on_resource_reloaded: Callable[[str, str], None] | None = None) -> None:
+    def enable_file_watching(
+        self,
+        project_path: str | None = None,
+        on_resource_reloaded: Callable[[str, str], None] | None = None,
+    ) -> None:
         """
-        Включает отслеживание изменений в файлах ресурсов.
+        Включает отслеживание изменений в директории проекта.
 
         Args:
+            project_path: Путь к директории проекта для отслеживания.
             on_resource_reloaded: Callback вызываемый после перезагрузки ресурса.
                                   Аргументы: (resource_type, resource_name)
         """
@@ -74,76 +81,123 @@ class ResourceManager:
         from PyQt6.QtCore import QFileSystemWatcher
 
         self._file_watcher = QFileSystemWatcher()
+        self._file_watcher.directoryChanged.connect(self._on_directory_changed)
         self._file_watcher.fileChanged.connect(self._on_file_changed)
         self._on_resource_reloaded = on_resource_reloaded
 
-        # Добавляем уже зарегистрированные файлы
+        if project_path:
+            self.watch_project_directory(project_path)
+
+    def watch_project_directory(self, project_path: str) -> None:
+        """
+        Добавляет директорию проекта в отслеживание.
+
+        Рекурсивно добавляет все поддиректории.
+        """
+        if self._file_watcher is None:
+            return
+
+        import os
+        from pathlib import Path
+
+        self._project_path = project_path
+        project = Path(project_path)
+
+        if not project.exists():
+            return
+
+        # Добавляем корневую директорию и все поддиректории
+        for root, dirs, files in os.walk(project_path):
+            # Пропускаем скрытые и служебные директории
+            dirs[:] = [d for d in dirs if not d.startswith(('.', '__'))]
+
+            if root not in self._watched_dirs:
+                self._file_watcher.addPath(root)
+                self._watched_dirs.add(root)
+
+            # Добавляем файлы ресурсов в отслеживание
+            for filename in files:
+                if filename.endswith(('.material', '.shader', '.png', '.jpg', '.jpeg')):
+                    file_path = os.path.join(root, filename)
+                    if file_path not in self._file_watcher.files():
+                        self._file_watcher.addPath(file_path)
+
+        # Строим маппинг файл -> материалы
+        self._rebuild_file_mappings()
+
+    def _rebuild_file_mappings(self) -> None:
+        """Перестраивает маппинг файлов к ресурсам."""
+        self._file_to_materials.clear()
+        self._file_to_textures.clear()
+
         for name, mat in self.materials.items():
-            self._watch_material(name, mat)
+            # source_path материала
+            if mat.source_path:
+                if mat.source_path not in self._file_to_materials:
+                    self._file_to_materials[mat.source_path] = set()
+                self._file_to_materials[mat.source_path].add(name)
+
+            # shader_path
+            shader_path = getattr(mat, 'shader_path', None)
+            if shader_path:
+                if shader_path not in self._file_to_materials:
+                    self._file_to_materials[shader_path] = set()
+                self._file_to_materials[shader_path].add(name)
 
         for name, tex in self.textures.items():
-            self._watch_texture(name, tex)
+            source_path = getattr(tex, 'source_path', None)
+            if source_path:
+                if source_path not in self._file_to_textures:
+                    self._file_to_textures[source_path] = set()
+                self._file_to_textures[source_path].add(name)
 
     def disable_file_watching(self) -> None:
         """Отключает отслеживание файлов."""
         if self._file_watcher is not None:
+            self._file_watcher.directoryChanged.disconnect(self._on_directory_changed)
             self._file_watcher.fileChanged.disconnect(self._on_file_changed)
             self._file_watcher = None
+        self._project_path = None
+        self._watched_dirs.clear()
         self._file_to_materials.clear()
         self._file_to_textures.clear()
         self._on_resource_reloaded = None
 
-    def _watch_material(self, name: str, mat: "Material") -> None:
-        """Добавляет файлы материала в отслеживание."""
+    def _on_directory_changed(self, path: str) -> None:
+        """Обработчик изменения директории (новые/удалённые файлы)."""
+        import os
+
         if self._file_watcher is None:
             return
 
-        paths_to_watch: List[str] = []
+        # Проверяем новые файлы в директории
+        for filename in os.listdir(path):
+            file_path = os.path.join(path, filename)
 
-        # source_path материала (.material файл)
-        if mat.source_path:
-            paths_to_watch.append(mat.source_path)
+            if os.path.isdir(file_path):
+                # Новая поддиректория — добавляем в отслеживание
+                if file_path not in self._watched_dirs and not filename.startswith(('.', '__')):
+                    self._file_watcher.addPath(file_path)
+                    self._watched_dirs.add(file_path)
+            elif filename.endswith(('.material', '.shader')):
+                # Новый файл ресурса — загружаем
+                if file_path not in self._file_watcher.files():
+                    self._file_watcher.addPath(file_path)
 
-        # shader_path (.shader файл)
-        shader_path = getattr(mat, 'shader_path', None)
-        if shader_path:
-            paths_to_watch.append(shader_path)
+                name = os.path.splitext(filename)[0]
+                if name not in self.materials:
+                    try:
+                        if filename.endswith('.material'):
+                            self._load_material_file(file_path)
+                        elif filename.endswith('.shader'):
+                            self._load_shader_file(file_path)
 
-        for path in paths_to_watch:
-            if path not in self._file_to_materials:
-                self._file_to_materials[path] = set()
-                self._file_watcher.addPath(path)
-            self._file_to_materials[path].add(name)
+                        print(f"[ResourceManager] Loaded new resource: {name}")
 
-    def _unwatch_material(self, name: str) -> None:
-        """Удаляет материал из отслеживания."""
-        if self._file_watcher is None:
-            return
-
-        paths_to_remove = []
-        for path, names in self._file_to_materials.items():
-            if name in names:
-                names.discard(name)
-                if not names:
-                    paths_to_remove.append(path)
-
-        for path in paths_to_remove:
-            del self._file_to_materials[path]
-            self._file_watcher.removePath(path)
-
-    def _watch_texture(self, name: str, tex: "Texture") -> None:
-        """Добавляет файл текстуры в отслеживание."""
-        if self._file_watcher is None:
-            return
-
-        source_path = getattr(tex, 'source_path', None)
-        if not source_path:
-            return
-
-        if source_path not in self._file_to_textures:
-            self._file_to_textures[source_path] = set()
-            self._file_watcher.addPath(source_path)
-        self._file_to_textures[source_path].add(name)
+                        if self._on_resource_reloaded:
+                            self._on_resource_reloaded("material", name)
+                    except Exception as e:
+                        print(f"[ResourceManager] Failed to load {file_path}: {e}")
 
     def _on_file_changed(self, path: str) -> None:
         """Обработчик изменения файла."""
@@ -155,10 +209,15 @@ class ResourceManager:
             if path not in self._file_watcher.files():
                 self._file_watcher.addPath(path)
 
-        # Перезагружаем материалы
+        # Перезагружаем материалы, связанные с этим файлом
         if path in self._file_to_materials:
             material_names = list(self._file_to_materials[path])
             for name in material_names:
+                self._reload_material(name)
+        elif path.endswith(('.material', '.shader')):
+            # Файл изменился, но не связан с материалом — возможно новый
+            name = os.path.splitext(os.path.basename(path))[0]
+            if name in self.materials:
                 self._reload_material(name)
 
         # Перезагружаем текстуры
@@ -192,16 +251,16 @@ class ResourceManager:
                 tree = parse_shader_text(shader_text)
                 program = ShaderMultyPhaseProgramm.from_tree(tree)
                 new_mat = Material.from_parsed(program, source_path=source_path)
+                new_mat.shader_path = source_path
             else:
                 return
 
-            # Обновляем материал in-place
+            # Обновляем материал
             new_mat.name = name
             self.materials[name] = new_mat
 
-            # Переподписываемся на файлы нового материала
-            self._unwatch_material(name)
-            self._watch_material(name, new_mat)
+            # Обновляем маппинг
+            self._rebuild_file_mappings()
 
             print(f"[ResourceManager] Reloaded material: {name}")
 
