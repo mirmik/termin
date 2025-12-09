@@ -46,7 +46,7 @@ public:
         , restitution(0.3)
         , friction(0.5)
         , ground_height(0.0)
-        , ground_enabled(true)
+        , ground_enabled(false)
         , fixed_dt(1.0 / 60.0)
         , max_substeps(8)
         , time_accumulator(0.0)

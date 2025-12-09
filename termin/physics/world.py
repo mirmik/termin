@@ -46,9 +46,9 @@ class PhysicsWorld:
         self.bodies: List[RigidBody] = []
         self._contact_constraints: List[ContactConstraint] = []
 
-        # Плоскость земли (z = 0 по умолчанию)
+        # Плоскость земли (z = 0 по умолчанию, выключена)
         self.ground_height = 0.0
-        self.ground_enabled = True
+        self.ground_enabled = False
 
     def add_body(self, body: RigidBody) -> RigidBody:
         """Добавить твёрдое тело в мир."""

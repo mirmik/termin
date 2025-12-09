@@ -82,7 +82,7 @@ class PhysicsWorldComponent(Component):
         restitution: float = 0.3,
         friction: float = 0.5,
         ground_height: float = 0.0,
-        ground_enabled: bool = True,
+        ground_enabled: bool = False,
     ):
         super().__init__(enabled=True)
 
