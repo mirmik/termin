@@ -59,12 +59,12 @@ class _QtGLWidget(QOpenGLWidget):
     def mousePressEvent(self, event):
         cb = self._owner._mouse_callback
         if cb:
-            cb(self._owner, _translate_mouse(event.button()), Action.PRESS, int(event.modifiers()))
+            cb(self._owner, _translate_mouse(event.button()), Action.PRESS, event.modifiers().value)
 
     def mouseReleaseEvent(self, event):
         cb = self._owner._mouse_callback
         if cb:
-            cb(self._owner, _translate_mouse(event.button()), Action.RELEASE, int(event.modifiers()))
+            cb(self._owner, _translate_mouse(event.button()), Action.RELEASE, event.modifiers().value)
 
     def mouseMoveEvent(self, event):
         cb = self._owner._cursor_callback
@@ -81,12 +81,12 @@ class _QtGLWidget(QOpenGLWidget):
     def keyPressEvent(self, event):
         cb = self._owner._key_callback
         if cb:
-            cb(self._owner, _translate_key(event.key()), event.nativeScanCode(), Action.PRESS, int(event.modifiers()))
+            cb(self._owner, _translate_key(event.key()), event.nativeScanCode(), Action.PRESS, event.modifiers().value)
 
     def keyReleaseEvent(self, event):
         cb = self._owner._key_callback
         if cb:
-            cb(self._owner, _translate_key(event.key()), event.nativeScanCode(), Action.RELEASE, int(event.modifiers()))
+            cb(self._owner, _translate_key(event.key()), event.nativeScanCode(), Action.RELEASE, event.modifiers().value)
 
     # --- Рендер ----------------------------------------------------------
 
