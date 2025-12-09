@@ -306,23 +306,23 @@ class MaterialInspector(QWidget):
         if not path.exists():
             return
 
-        try:
-            self._material = Material.load_from_material_file(str(path))
+        rm = ResourceManager.instance()
 
-            # Загружаем shader_program из ResourceManager
-            shader_name = self._material.shader_name
-            rm = ResourceManager.instance()
-            self._shader_program = rm.get_shader(shader_name)
+        # Получаем имя материала из имени файла
+        material_name = path.stem
 
-            self._rebuild_ui()
-            self.material_changed.emit()
+        # Получаем материал из ResourceManager (он уже загружен при сканировании)
+        self._material = rm.get_material(material_name)
 
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Error Loading Material",
-                f"Failed to load material:\n{path}\n\nError: {e}",
-            )
+        if self._material is None:
+            return
+
+        # Загружаем shader_program из ResourceManager
+        shader_name = self._material.shader_name
+        self._shader_program = rm.get_shader(shader_name)
+
+        self._rebuild_ui()
+        self.material_changed.emit()
 
     def save_material_file(self, path: str | Path | None = None) -> bool:
         """
