@@ -44,6 +44,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QGroupBox,
     QMessageBox,
+    QDialog,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
@@ -87,11 +88,20 @@ class ColorButton(QPushButton):
         )
 
     def _on_clicked(self) -> None:
-        result = ColorDialog.get_color(self._color, self)
-        if result is not None:
-            self._color = result
+        dlg = ColorDialog(self._color, self)
+        dlg.color_changed.connect(self._on_dialog_color_changed)
+        if dlg.exec() == ColorDialog.DialogCode.Accepted:
+            self._color = dlg.get_color_01()
             self._update_style()
-            self.color_changed.emit(result)
+            self.color_changed.emit(self._color)
+
+    def _on_dialog_color_changed(self) -> None:
+        """Обработчик изменения цвета в диалоге (live preview)."""
+        dlg = self.sender()
+        if dlg is not None:
+            self._color = dlg.get_color_01()
+            self._update_style()
+            self.color_changed.emit(self._color)
 
 
 class Vec2Editor(QWidget):
