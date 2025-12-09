@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # только для типов, чтобы не ловить циклы импортов
     from termin.visualization.core.material import Material
@@ -10,6 +10,26 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.render.texture import Texture
     from termin.visualization.core.entity import Component
 
+
+# Список стандартных компонентов для предрегистрации.
+# Формат: (имя_модуля, имя_класса)
+_BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
+    # Рендеринг
+    ("termin.visualization.render.components.mesh_renderer", "MeshRenderer"),
+    ("termin.visualization.render.components.line_renderer", "LineRenderer"),
+    ("termin.visualization.render.components.light_component", "LightComponent"),
+    # Камера
+    ("termin.visualization.core.camera", "CameraComponent"),
+    ("termin.visualization.core.camera", "CameraController"),
+    # Анимация
+    ("termin.visualization.animation.player", "AnimationPlayer"),
+    ("termin.visualization.components.rotator", "RotatorComponent"),
+    # Физика
+    ("termin.physics.physics_world_component", "PhysicsWorldComponent"),
+    ("termin.physics.rigid_body_component", "RigidBodyComponent"),
+    # Коллайдеры
+    ("termin.colliders.collider_component", "ColliderComponent"),
+]
 
 
 class ResourceManager:
@@ -72,6 +92,37 @@ class ResourceManager:
 
     def list_component_names(self) -> list[str]:
         return sorted(self.components.keys())
+
+    def register_builtin_components(self) -> List[str]:
+        """
+        Регистрирует все встроенные компоненты из _BUILTIN_COMPONENTS.
+
+        Вызывается при инициализации редактора, чтобы гарантировать
+        доступность стандартных компонентов независимо от порядка импортов.
+
+        Returns:
+            Список имён успешно зарегистрированных компонентов.
+        """
+        import importlib
+
+        registered = []
+
+        for module_name, class_name in _BUILTIN_COMPONENTS:
+            if class_name in self.components:
+                # Уже зарегистрирован (например, через __init_subclass__)
+                registered.append(class_name)
+                continue
+
+            try:
+                module = importlib.import_module(module_name)
+                cls = getattr(module, class_name, None)
+                if cls is not None:
+                    self.components[class_name] = cls
+                    registered.append(class_name)
+            except Exception as e:
+                print(f"Warning: Failed to register component {class_name} from {module_name}: {e}")
+
+        return registered
 
     def scan_components(self, paths: list[str]) -> list[str]:
         """
