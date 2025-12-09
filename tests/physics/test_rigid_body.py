@@ -14,6 +14,7 @@ def test_drop_cube():
         restitution=0.5,
         friction=0.3,
     )
+    world.ground_enabled = True
 
     # Кубик на высоте 2
     cube = RigidBody.create_box(
@@ -42,6 +43,7 @@ def test_tilted_cube():
         restitution=0.3,
         friction=0.5,
     )
+    world.ground_enabled = True
 
     # Кубик наклонён на 30 градусов вокруг оси X
     angle = math.radians(30)
@@ -75,6 +77,7 @@ def test_box_box_collision():
         restitution=0.2,
         friction=0.5,
     )
+    world.ground_enabled = True
 
     # Нижний кубик (на земле)
     cube_bottom = RigidBody.create_box(
