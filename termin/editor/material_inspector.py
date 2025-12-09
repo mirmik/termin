@@ -61,6 +61,7 @@ class ColorButton(QPushButton):
     """Кнопка для выбора цвета с превью."""
 
     color_changed = pyqtSignal(tuple)
+    editing_finished = pyqtSignal()
 
     def __init__(self, color: tuple = (1.0, 1.0, 1.0, 1.0), parent: QWidget | None = None):
         super().__init__(parent)
@@ -90,10 +91,12 @@ class ColorButton(QPushButton):
     def _on_clicked(self) -> None:
         dlg = ColorDialog(self._color, self)
         dlg.color_changed.connect(self._on_dialog_color_changed)
-        if dlg.exec() == ColorDialog.DialogCode.Accepted:
-            self._color = dlg.get_color_01()
-            self._update_style()
-            self.color_changed.emit(self._color)
+        dlg.exec()
+        # При закрытии диалога (OK или Cancel) — сохраняем
+        self._color = dlg.get_color_01()
+        self._update_style()
+        self.color_changed.emit(self._color)
+        self.editing_finished.emit()
 
     def _on_dialog_color_changed(self) -> None:
         """Обработчик изменения цвета в диалоге (live preview)."""
@@ -108,6 +111,7 @@ class Vec2Editor(QWidget):
     """Редактор для vec2."""
 
     value_changed = pyqtSignal(tuple)
+    editing_finished = pyqtSignal()
 
     def __init__(self, value: tuple = (0.0, 0.0), parent: QWidget | None = None):
         super().__init__(parent)
@@ -127,6 +131,7 @@ class Vec2Editor(QWidget):
             spin.setSingleStep(0.1)
             spin.setValue(value[i] if i < len(value) else 0.0)
             spin.valueChanged.connect(self._on_value_changed)
+            spin.editingFinished.connect(self._on_editing_finished)
             layout.addWidget(spin)
             self._spins.append(spin)
 
@@ -142,11 +147,15 @@ class Vec2Editor(QWidget):
     def _on_value_changed(self) -> None:
         self.value_changed.emit(self.get_value())
 
+    def _on_editing_finished(self) -> None:
+        self.editing_finished.emit()
+
 
 class Vec3Editor(QWidget):
     """Редактор для vec3."""
 
     value_changed = pyqtSignal(tuple)
+    editing_finished = pyqtSignal()
 
     def __init__(self, value: tuple = (0.0, 0.0, 0.0), parent: QWidget | None = None):
         super().__init__(parent)
@@ -166,6 +175,7 @@ class Vec3Editor(QWidget):
             spin.setSingleStep(0.1)
             spin.setValue(value[i] if i < len(value) else 0.0)
             spin.valueChanged.connect(self._on_value_changed)
+            spin.editingFinished.connect(self._on_editing_finished)
             layout.addWidget(spin)
             self._spins.append(spin)
 
@@ -181,11 +191,15 @@ class Vec3Editor(QWidget):
     def _on_value_changed(self) -> None:
         self.value_changed.emit(self.get_value())
 
+    def _on_editing_finished(self) -> None:
+        self.editing_finished.emit()
+
 
 class Vec4Editor(QWidget):
     """Редактор для vec4."""
 
     value_changed = pyqtSignal(tuple)
+    editing_finished = pyqtSignal()
 
     def __init__(self, value: tuple = (0.0, 0.0, 0.0, 0.0), parent: QWidget | None = None):
         super().__init__(parent)
@@ -205,6 +219,7 @@ class Vec4Editor(QWidget):
             spin.setSingleStep(0.1)
             spin.setValue(value[i] if i < len(value) else 0.0)
             spin.valueChanged.connect(self._on_value_changed)
+            spin.editingFinished.connect(self._on_editing_finished)
             layout.addWidget(spin)
             self._spins.append(spin)
 
@@ -219,6 +234,9 @@ class Vec4Editor(QWidget):
 
     def _on_value_changed(self) -> None:
         self.value_changed.emit(self.get_value())
+
+    def _on_editing_finished(self) -> None:
+        self.editing_finished.emit()
 
 
 class MaterialInspector(QWidget):
@@ -287,11 +305,6 @@ class MaterialInspector(QWidget):
 
         scroll.setWidget(self._properties_widget)
         main_layout.addWidget(scroll, 1)
-
-        # Кнопка Save
-        self._save_btn = QPushButton("Save")
-        self._save_btn.clicked.connect(self._on_save_clicked)
-        main_layout.addWidget(self._save_btn)
 
     def set_material(self, material: Material | None) -> None:
         """Установить материал для редактирования."""
@@ -491,6 +504,7 @@ class MaterialInspector(QWidget):
         spin.valueChanged.connect(
             lambda v, name=prop.name: self._on_uniform_changed(name, v)
         )
+        spin.editingFinished.connect(self._on_editing_finished)
         return spin
 
     def _create_int_editor(self, prop: MaterialProperty, value: Any) -> QSpinBox:
@@ -505,6 +519,7 @@ class MaterialInspector(QWidget):
         spin.valueChanged.connect(
             lambda v, name=prop.name: self._on_uniform_changed(name, v)
         )
+        spin.editingFinished.connect(self._on_editing_finished)
         return spin
 
     def _create_bool_editor(self, prop: MaterialProperty, value: Any) -> QCheckBox:
@@ -513,6 +528,7 @@ class MaterialInspector(QWidget):
         checkbox.stateChanged.connect(
             lambda state, name=prop.name: self._on_uniform_changed(name, state == Qt.CheckState.Checked.value)
         )
+        checkbox.stateChanged.connect(lambda _: self._on_editing_finished())
         return checkbox
 
     def _create_vec2_editor(self, prop: MaterialProperty, value: Any) -> Vec2Editor:
@@ -523,6 +539,7 @@ class MaterialInspector(QWidget):
         editor.value_changed.connect(
             lambda v, name=prop.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
         )
+        editor.editing_finished.connect(self._on_editing_finished)
         return editor
 
     def _create_vec3_editor(self, prop: MaterialProperty, value: Any) -> Vec3Editor:
@@ -533,6 +550,7 @@ class MaterialInspector(QWidget):
         editor.value_changed.connect(
             lambda v, name=prop.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
         )
+        editor.editing_finished.connect(self._on_editing_finished)
         return editor
 
     def _create_vec4_editor(self, prop: MaterialProperty, value: Any) -> Vec4Editor:
@@ -543,6 +561,7 @@ class MaterialInspector(QWidget):
         editor.value_changed.connect(
             lambda v, name=prop.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
         )
+        editor.editing_finished.connect(self._on_editing_finished)
         return editor
 
     def _create_color_editor(self, prop: MaterialProperty, value: Any) -> ColorButton:
@@ -553,6 +572,7 @@ class MaterialInspector(QWidget):
         editor.color_changed.connect(
             lambda v, name=prop.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
         )
+        editor.editing_finished.connect(self._on_editing_finished)
         return editor
 
     def _create_texture_editor(self, prop: MaterialProperty, value: Any) -> QWidget:
@@ -591,6 +611,7 @@ class MaterialInspector(QWidget):
             return
         self._material.name = self._name_edit.text()
         self.material_changed.emit()
+        self.save_material_file()
 
     def _on_shader_changed(self, shader_name: str) -> None:
         """Обработчик изменения шейдера в комбобоксе."""
@@ -612,6 +633,7 @@ class MaterialInspector(QWidget):
         # Перестраиваем UI (редакторы свойств)
         self._rebuild_ui()
         self.material_changed.emit()
+        self.save_material_file()
 
     def _on_browse_texture(self, uniform_name: str, label: QLabel) -> None:
         """Обработчик выбора текстуры."""
@@ -625,11 +647,10 @@ class MaterialInspector(QWidget):
             label.setText(Path(path).name)
             # TODO: Загрузить текстуру и установить в материал
             self.material_changed.emit()
+            self.save_material_file()
 
-    def _on_save_clicked(self) -> None:
-        """Обработчик нажатия кнопки Save."""
-        if self._material is None:
-            return
+    def _on_editing_finished(self) -> None:
+        """Обработчик окончания редактирования — автосохранение."""
         self.save_material_file()
 
     @property
