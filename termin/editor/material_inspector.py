@@ -51,7 +51,6 @@ from PyQt6.QtGui import QColor
 from termin.editor.color_dialog import ColorDialog
 from termin.visualization.core.material import Material
 from termin.visualization.render.shader_parser import (
-    parse_shader_text,
     ShaderMultyPhaseProgramm,
     MaterialProperty,
 )
@@ -251,17 +250,12 @@ class MaterialInspector(QWidget):
         name_layout.addWidget(self._name_edit)
         main_layout.addLayout(name_layout)
 
-        # Путь к шейдеру
+        # Выбор шейдера
         shader_layout = QHBoxLayout()
         shader_layout.addWidget(QLabel("Shader:"))
-        self._shader_label = QLabel("None")
-        self._shader_label.setStyleSheet("color: #888;")
-        shader_layout.addWidget(self._shader_label, 1)
-
-        self._load_shader_btn = QPushButton("Load...")
-        self._load_shader_btn.setFixedWidth(60)
-        self._load_shader_btn.clicked.connect(self._on_load_shader)
-        shader_layout.addWidget(self._load_shader_btn)
+        self._shader_combo = QComboBox()
+        self._shader_combo.currentTextChanged.connect(self._on_shader_changed)
+        shader_layout.addWidget(self._shader_combo, 1)
         main_layout.addLayout(shader_layout)
 
         # Разделитель
@@ -289,35 +283,10 @@ class MaterialInspector(QWidget):
         self._material = material
         self._rebuild_ui()
 
-    def load_shader_file(self, path: str | Path) -> None:
-        """Загрузить шейдер из файла и создать новый материал."""
-        path = Path(path)
-        if not path.exists():
-            return
-
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                shader_text = f.read()
-
-            tree = parse_shader_text(shader_text)
-            self._shader_program = ShaderMultyPhaseProgramm.from_tree(tree)
-
-            # Создаём материал из шейдера
-            self._material = Material.from_parsed(
-                self._shader_program,
-                name=path.stem,
-            )
-            self._material.shader_path = str(path)
-            self._material.source_path = None  # Это новый материал, ещё не сохранён
-
-            self._rebuild_ui()
-            self.material_changed.emit()
-
-        except Exception as e:
-            print(f"Error loading shader: {e}")
-
     def load_material_file(self, path: str | Path) -> None:
         """Загрузить материал из .material файла."""
+        from termin.visualization.core.resources import ResourceManager
+
         path = Path(path)
         if not path.exists():
             return
@@ -325,15 +294,10 @@ class MaterialInspector(QWidget):
         try:
             self._material = Material.load_from_material_file(str(path))
 
-            # Загружаем shader_program для UI
-            shader_path = self._material.shader_path
-            if shader_path and Path(shader_path).exists():
-                with open(shader_path, "r", encoding="utf-8") as f:
-                    shader_text = f.read()
-                tree = parse_shader_text(shader_text)
-                self._shader_program = ShaderMultyPhaseProgramm.from_tree(tree)
-            else:
-                self._shader_program = None
+            # Загружаем shader_program из ResourceManager
+            shader_name = getattr(self._material, 'shader_name', None) or "DefaultShader"
+            rm = ResourceManager.instance()
+            self._shader_program = rm.get_shader(shader_name)
 
             self._rebuild_ui()
             self.material_changed.emit()
@@ -403,6 +367,8 @@ class MaterialInspector(QWidget):
 
     def _rebuild_ui(self) -> None:
         """Перестроить UI под текущий материал."""
+        from termin.visualization.core.resources import ResourceManager
+
         # Очищаем старые виджеты свойств
         self._uniform_widgets.clear()
         while self._properties_layout.count() > 1:
@@ -410,20 +376,28 @@ class MaterialInspector(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
+        # Обновляем список шейдеров в комбобоксе
+        rm = ResourceManager.instance()
+        self._shader_combo.blockSignals(True)
+        self._shader_combo.clear()
+        shader_names = rm.list_shader_names()
+        self._shader_combo.addItems(shader_names)
+
         if self._material is None:
             self._name_edit.setText("")
-            self._shader_label.setText("None")
+            self._shader_combo.setCurrentIndex(-1)
+            self._shader_combo.blockSignals(False)
             return
 
         # Имя материала
         self._name_edit.setText(self._material.name or "")
 
-        # Путь к шейдеру
-        shader_path = getattr(self._material, 'shader_path', None)
-        if shader_path:
-            self._shader_label.setText(Path(shader_path).name)
-        else:
-            self._shader_label.setText("None")
+        # Выбор шейдера
+        shader_name = getattr(self._material, 'shader_name', None) or "DefaultShader"
+        idx = self._shader_combo.findText(shader_name)
+        if idx >= 0:
+            self._shader_combo.setCurrentIndex(idx)
+        self._shader_combo.blockSignals(False)
 
         # Собираем все properties из всех фаз
         all_properties: Dict[str, MaterialProperty] = {}
@@ -603,16 +577,26 @@ class MaterialInspector(QWidget):
         self._material.name = self._name_edit.text()
         self.material_changed.emit()
 
-    def _on_load_shader(self) -> None:
-        """Обработчик загрузки шейдера."""
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Shader",
-            "",
-            "Shader Files (*.shader);;All Files (*)",
-        )
-        if path:
-            self.load_shader_file(path)
+    def _on_shader_changed(self, shader_name: str) -> None:
+        """Обработчик изменения шейдера в комбобоксе."""
+        if not shader_name or self._material is None:
+            return
+
+        from termin.visualization.core.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        program = rm.get_shader(shader_name)
+
+        if program is None:
+            return
+
+        # Обновляем shader_program и shader_name
+        self._shader_program = program
+        self._material.shader_name = shader_name
+
+        # Перестраиваем UI (редакторы свойств)
+        self._rebuild_ui()
+        self.material_changed.emit()
 
     def _on_browse_texture(self, uniform_name: str, label: QLabel) -> None:
         """Обработчик выбора текстуры."""

@@ -428,7 +428,7 @@ class ProjectBrowser:
 
         # Болванка материала
         template = '''{
-    "shader": "path/to/shader.shader",
+    "shader": "DefaultShader",
     "uniforms": {
     },
     "textures": {

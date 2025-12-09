@@ -9,6 +9,7 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.core.mesh import MeshDrawable
     from termin.visualization.render.texture import Texture
     from termin.visualization.core.entity import Component
+    from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm
     from PyQt6.QtCore import QFileSystemWatcher
 
 
@@ -42,6 +43,7 @@ class ResourceManager:
 
     def __init__(self):
         self.materials: Dict[str, "Material"] = {}
+        self.shaders: Dict[str, "ShaderMultyPhaseProgramm"] = {}
         self.meshes: Dict[str, "MeshDrawable"] = {}
         self.textures: Dict[str, "Texture"] = {}
         self.components: Dict[str, type["Component"]] = {}
@@ -185,19 +187,21 @@ class ResourceManager:
                     self._file_watcher.addPath(file_path)
 
                 name = os.path.splitext(filename)[0]
-                if name not in self.materials:
-                    try:
-                        if filename.endswith('.material'):
+                try:
+                    if filename.endswith('.material'):
+                        if name not in self.materials:
                             self._load_material_file(file_path)
-                        elif filename.endswith('.shader'):
+                            print(f"[ResourceManager] Loaded new material: {name}")
+                            if self._on_resource_reloaded:
+                                self._on_resource_reloaded("material", name)
+                    elif filename.endswith('.shader'):
+                        if name not in self.shaders:
                             self._load_shader_file(file_path)
-
-                        print(f"[ResourceManager] Loaded new resource: {name}")
-
-                        if self._on_resource_reloaded:
-                            self._on_resource_reloaded("material", name)
-                    except Exception as e:
-                        print(f"[ResourceManager] Failed to load {file_path}: {e}")
+                            print(f"[ResourceManager] Loaded new shader: {name}")
+                            if self._on_resource_reloaded:
+                                self._on_resource_reloaded("shader", name)
+                except Exception as e:
+                    print(f"[ResourceManager] Failed to load {file_path}: {e}")
 
     def _on_file_changed(self, path: str) -> None:
         """Обработчик изменения файла."""
@@ -214,11 +218,14 @@ class ResourceManager:
             material_names = list(self._file_to_materials[path])
             for name in material_names:
                 self._reload_material(name)
-        elif path.endswith(('.material', '.shader')):
-            # Файл изменился, но не связан с материалом — возможно новый
+        elif path.endswith('.material'):
             name = os.path.splitext(os.path.basename(path))[0]
             if name in self.materials:
                 self._reload_material(name)
+        elif path.endswith('.shader'):
+            name = os.path.splitext(os.path.basename(path))[0]
+            if name in self.shaders:
+                self._reload_shader(name, path)
 
         # Перезагружаем текстуры
         if path in self._file_to_textures:
@@ -269,6 +276,29 @@ class ResourceManager:
 
         except Exception as e:
             print(f"[ResourceManager] Failed to reload material {name}: {e}")
+
+    def _reload_shader(self, name: str, file_path: str) -> None:
+        """Перезагружает шейдер из файла."""
+        try:
+            from termin.visualization.render.shader_parser import (
+                parse_shader_text,
+                ShaderMultyPhaseProgramm,
+            )
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                shader_text = f.read()
+
+            tree = parse_shader_text(shader_text)
+            program = ShaderMultyPhaseProgramm.from_tree(tree)
+            self.register_shader(name, program, source_path=file_path)
+
+            print(f"[ResourceManager] Reloaded shader: {name}")
+
+            if self._on_resource_reloaded:
+                self._on_resource_reloaded("shader", name)
+
+        except Exception as e:
+            print(f"[ResourceManager] Failed to reload shader {name}: {e}")
 
     def _reload_texture(self, name: str) -> None:
         """Перезагружает текстуру из файла."""
@@ -356,9 +386,8 @@ class ResourceManager:
         self.register_material(name, mat)
 
     def _load_shader_file(self, file_path: str) -> None:
-        """Загружает .shader файл и создаёт материал из него."""
+        """Загружает .shader файл и регистрирует шейдер."""
         from pathlib import Path
-        from termin.visualization.core.material import Material
         from termin.visualization.render.shader_parser import (
             parse_shader_text,
             ShaderMultyPhaseProgramm,
@@ -368,7 +397,7 @@ class ResourceManager:
         name = path.stem
 
         # Проверяем, не загружен ли уже
-        if name in self.materials:
+        if name in self.shaders:
             return
 
         with open(file_path, "r", encoding="utf-8") as f:
@@ -376,10 +405,7 @@ class ResourceManager:
 
         tree = parse_shader_text(shader_text)
         program = ShaderMultyPhaseProgramm.from_tree(tree)
-        mat = Material.from_parsed(program, source_path=file_path)
-        mat.name = name
-        mat.shader_path = file_path
-        self.register_material(name, mat)
+        self.register_shader(name, program, source_path=file_path)
 
     # --------- Материалы ---------
     def register_material(self, name: str, mat: "Material"):
@@ -399,6 +425,58 @@ class ResourceManager:
             if m is mat:
                 return n
         return None
+
+    # --------- Шейдеры ---------
+    def register_shader(self, name: str, shader: "ShaderMultyPhaseProgramm", source_path: str | None = None):
+        """Регистрирует шейдер программу."""
+        self.shaders[name] = shader
+        # Сохраняем путь к исходнику если есть
+        if source_path:
+            shader.source_path = source_path
+
+    def get_shader(self, name: str) -> Optional["ShaderMultyPhaseProgramm"]:
+        return self.shaders.get(name)
+
+    def list_shader_names(self) -> list[str]:
+        return sorted(self.shaders.keys())
+
+    def register_default_shader(self) -> None:
+        """Регистрирует встроенный DefaultShader."""
+        if "DefaultShader" in self.shaders:
+            return
+
+        from termin.visualization.render.materials.default_material import (
+            DEFAULT_VERT,
+            DEFAULT_FRAG,
+        )
+        from termin.visualization.render.shader_parser import (
+            ShaderMultyPhaseProgramm,
+            ShaderPhase,
+            ShasderStage,
+            MaterialProperty,
+        )
+
+        # Создаём ShaderMultyPhaseProgramm для DefaultShader
+        vertex_stage = ShasderStage("vertex", DEFAULT_VERT)
+        fragment_stage = ShasderStage("fragment", DEFAULT_FRAG)
+
+        phase = ShaderPhase(
+            phase_mark="opaque",
+            priority=0,
+            gl_depth_mask=True,
+            gl_depth_test=True,
+            gl_blend=False,
+            gl_cull=True,
+            stages={"vertex": vertex_stage, "fragment": fragment_stage},
+            uniforms=[
+                MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
+                MaterialProperty("u_ambient", "Float", 0.1, 0.0, 1.0),
+                MaterialProperty("u_shininess", "Float", 32.0, 1.0, 128.0),
+            ],
+        )
+
+        program = ShaderMultyPhaseProgramm(program="DefaultShader", phases=[phase])
+        self.shaders["DefaultShader"] = program
 
     # --------- Меши ---------
     def register_mesh(self, name: str, mesh: "MeshDrawable"):

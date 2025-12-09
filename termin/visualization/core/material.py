@@ -382,7 +382,7 @@ class Material:
 
         Формат:
         {
-            "shader": "path/to/shader.shader",
+            "shader": "ShaderName",  # имя шейдера из ResourceManager
             "uniforms": {...},
             "textures": {...}
         }
@@ -395,7 +395,6 @@ class Material:
         # Собираем uniforms из всех фаз (они должны быть одинаковые)
         uniforms = {}
         textures = {}
-        shader_path = None
 
         for phase in self.phases:
             for name, value in phase.uniforms.items():
@@ -405,13 +404,10 @@ class Material:
                 if name not in textures and hasattr(tex, 'source_path'):
                     textures[name] = tex.source_path
 
-        # shader_path берём из source_path материала (если это .shader)
-        # или из отдельного атрибута
-        shader_path = getattr(self, 'shader_path', None)
+        # shader_name — имя шейдера из ResourceManager
+        shader_name = getattr(self, 'shader_name', None) or "DefaultShader"
 
-        result = {}
-        if shader_path:
-            result["shader"] = shader_path
+        result = {"shader": shader_name}
         if uniforms:
             result["uniforms"] = uniforms
         if textures:
@@ -486,41 +482,28 @@ class Material:
 
         Формат файла:
         {
-            "shader": "path/to/shader.shader",
+            "shader": "ShaderName",  # имя шейдера из ResourceManager
             "uniforms": {...},
             "textures": {...}
         }
         """
         import json
         from pathlib import Path
-        from termin.visualization.render.shader_parser import (
-            parse_shader_text,
-            ShaderMultyPhaseProgramm,
-        )
+        from termin.visualization.core.resources import ResourceManager
 
         material_path = Path(material_path)
 
         with open(material_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        shader_path = data.get("shader")
-        if not shader_path:
-            raise ValueError(f"Material file {material_path} missing 'shader' field")
+        shader_name = data.get("shader", "DefaultShader")
 
-        # Резолвим путь шейдера относительно .material файла
-        shader_path = Path(shader_path)
-        if not shader_path.is_absolute():
-            shader_path = material_path.parent / shader_path
+        # Получаем шейдер из ResourceManager
+        rm = ResourceManager.instance()
+        program = rm.get_shader(shader_name)
 
-        if not shader_path.exists():
-            raise FileNotFoundError(f"Shader not found: {shader_path}")
-
-        # Парсим шейдер
-        with open(shader_path, "r", encoding="utf-8") as f:
-            shader_text = f.read()
-
-        tree = parse_shader_text(shader_text)
-        program = ShaderMultyPhaseProgramm.from_tree(tree)
+        if program is None:
+            raise ValueError(f"Shader '{shader_name}' not found in ResourceManager")
 
         # Конвертируем uniforms
         uniforms_data = data.get("uniforms", {})
@@ -538,7 +521,7 @@ class Material:
             name=material_path.stem,
             source_path=str(material_path),
         )
-        mat.shader_path = str(shader_path)
+        mat.shader_name = shader_name
 
         # TODO: загрузка текстур из data.get("textures", {})
 
