@@ -20,53 +20,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 from PyQt6.QtGui import QFileSystemModel, QAction
-from PyQt6.QtCore import Qt, QModelIndex, QDir, QSortFilterProxyModel
-
-
-class _RootOnlyProxyModel(QSortFilterProxyModel):
-    """
-    Прокси-модель, которая показывает только корень проекта и его поддиректории.
-    Скрывает соседние директории корня.
-    """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._root_path: str | None = None
-
-    def set_root_path(self, path: str) -> None:
-        """Устанавливает путь корня проекта."""
-        self._root_path = path
-        self.invalidateFilter()
-
-    def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex) -> bool:
-        """Фильтрует строки — показывает только корень и его детей."""
-        if self._root_path is None:
-            return True
-
-        source_model = self.sourceModel()
-        if source_model is None:
-            return True
-
-        index = source_model.index(source_row, 0, source_parent)
-        if not index.isValid():
-            return True
-
-        file_path = source_model.filePath(index)
-
-        # Если это сам корень — показываем
-        if file_path == self._root_path:
-            return True
-
-        # Если это потомок корня — показываем
-        if file_path.startswith(self._root_path + "/") or file_path.startswith(self._root_path + "\\"):
-            return True
-
-        # Если это родитель корня — показываем (чтобы дерево работало)
-        if self._root_path.startswith(file_path + "/") or self._root_path.startswith(file_path + "\\"):
-            return True
-
-        # Остальное скрываем
-        return False
+from PyQt6.QtCore import Qt, QModelIndex, QDir
 
 from termin.editor.settings import EditorSettings
 
@@ -117,10 +71,6 @@ class ProjectBrowser:
         self._dir_model.setFilter(QDir.Filter.Dirs | QDir.Filter.NoDotAndDotDot)
         self._dir_model.setReadOnly(True)
 
-        # Прокси-модель для фильтрации дерева директорий
-        self._dir_proxy = _RootOnlyProxyModel()
-        self._dir_proxy.setSourceModel(self._dir_model)
-
         # Настройка модели файлов (файлы и папки)
         self._file_model.setFilter(
             QDir.Filter.Files | QDir.Filter.Dirs | QDir.Filter.NoDotAndDotDot
@@ -128,7 +78,7 @@ class ProjectBrowser:
         self._file_model.setReadOnly(True)
 
         # Применяем модели к виджетам
-        self._dir_tree.setModel(self._dir_proxy)
+        self._dir_tree.setModel(self._dir_model)
         self._file_list.setModel(self._file_model)
 
         # Настройка дерева директорий
@@ -166,21 +116,10 @@ class ProjectBrowser:
         self._dir_model.setRootPath(path_str)
         self._file_model.setRootPath(path_str)
 
-        # Настраиваем фильтр прокси-модели
-        self._dir_proxy.set_root_path(path_str)
-
-        # Устанавливаем корневой индекс для дерева — показываем РОДИТЕЛЯ корня,
-        # чтобы сам корень был виден как элемент (но соседи отфильтрованы)
-        parent_path = path.parent
-        parent_index = self._dir_model.index(str(parent_path))
-        proxy_parent_index = self._dir_proxy.mapFromSource(parent_index)
-        self._dir_tree.setRootIndex(proxy_parent_index)
-
-        # Выбираем и раскрываем корневую директорию
+        # Устанавливаем корневой индекс для дерева — показываем сам корень
+        # (его содержимое будет видно, но выйти выше нельзя)
         root_index = self._dir_model.index(path_str)
-        proxy_root_index = self._dir_proxy.mapFromSource(root_index)
-        self._dir_tree.setCurrentIndex(proxy_root_index)
-        self._dir_tree.expand(proxy_root_index)
+        self._dir_tree.setRootIndex(root_index)
 
         # Устанавливаем корневой индекс для списка файлов
         file_root_index = self._file_model.index(path_str)
@@ -209,9 +148,7 @@ class ProjectBrowser:
         if not current.isValid():
             return
 
-        # Преобразуем прокси-индекс в исходный
-        source_index = self._dir_proxy.mapToSource(current)
-        dir_path = Path(self._dir_model.filePath(source_index))
+        dir_path = Path(self._dir_model.filePath(current))
 
         # Проверяем, что не выходим за пределы корня проекта
         if self._root_path is not None:
@@ -269,12 +206,11 @@ class ProjectBrowser:
 
         self._current_file_dir = dir_path
 
-        # Находим и выбираем директорию в дереве (через прокси-модель)
+        # Находим и выбираем директорию в дереве
         dir_index = self._dir_model.index(str(dir_path))
         if dir_index.isValid():
-            proxy_index = self._dir_proxy.mapFromSource(dir_index)
-            self._dir_tree.setCurrentIndex(proxy_index)
-            self._dir_tree.expand(proxy_index)
+            self._dir_tree.setCurrentIndex(dir_index)
+            self._dir_tree.expand(dir_index)
 
         # Обновляем список файлов
         file_index = self._file_model.index(str(dir_path))
@@ -297,17 +233,27 @@ class ProjectBrowser:
         parent = current.parent
         self._navigate_to_directory(parent)
 
+    def _go_to_root(self) -> None:
+        """Перейти в корень проекта."""
+        if self._root_path is not None:
+            self._navigate_to_directory(self._root_path)
+
     def _show_file_context_menu(self, pos) -> None:
         """Показать контекстное меню для файла."""
         index = self._file_list.indexAt(pos)
 
         menu = QMenu(self._file_list)
 
-        # Кнопка "Вверх" — если мы не в корне
+        # Навигация — если мы не в корне
         if self._can_go_up():
             go_up_action = QAction("Go Up", self._file_list)
             go_up_action.triggered.connect(self._go_up)
             menu.addAction(go_up_action)
+
+            go_root_action = QAction("Go to Root", self._file_list)
+            go_root_action.triggered.connect(self._go_to_root)
+            menu.addAction(go_root_action)
+
             menu.addSeparator()
 
         if index.isValid():
