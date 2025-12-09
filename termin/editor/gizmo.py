@@ -788,8 +788,12 @@ class GizmoController:
                 gizmo_ctrl = ent.find_component(GizmoMoveController)
                 if gizmo_ctrl is not None:
                     gizmo_ctrl.set_undo_command_handler(self._undo_handler)
+                print(f"[DEBUG] _ensure_gizmo: found existing gizmo {ent}, in scene: {ent in self.scene.entities}")
+                print(f"[DEBUG] _ensure_gizmo: gizmo.x={self.gizmo.x}, x.shaft_ent={self.gizmo.x.shaft_ent}")
+                print(f"[DEBUG] _ensure_gizmo: x.shaft_ent in scene: {self.gizmo.x.shaft_ent in self.scene.entities}")
                 return
 
+        print(f"[DEBUG] _ensure_gizmo: creating NEW gizmo")
         gizmo = GizmoEntity(size=1.5)
         gizmo_controller = GizmoMoveController(gizmo, self.scene)
         gizmo_controller.set_undo_command_handler(self._undo_handler)
@@ -800,9 +804,11 @@ class GizmoController:
 
         self.scene.add(gizmo)
         self.gizmo = gizmo
+        print(f"[DEBUG] _ensure_gizmo: after add - x.shaft_ent in scene: {gizmo.x.shaft_ent in self.scene.entities}")
 
     def recreate_gizmo(self, scene, editor_entities=None) -> None:
         """Пересоздаёт гизмо в новой сцене."""
+        print(f"[DEBUG] recreate_gizmo called, scene has {len(scene.entities)} entities")
         self.scene = scene
         self.editor_entities = editor_entities
         self.gizmo = None
