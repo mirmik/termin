@@ -125,42 +125,101 @@
 
       </widget>
 
-      <!-- Нижняя панель (Console) -->
-      <widget class="QWidget" name="bottomPanel">
+      <!-- Нижняя панель (Project / Console tabs) -->
+      <widget class="QTabWidget" name="bottomTabWidget">
        <property name="minimumSize">
         <size>
          <width>0</width>
-         <height>80</height>
+         <height>150</height>
         </size>
        </property>
-       <layout class="QVBoxLayout" name="bottomLayout">
-        <property name="spacing">
-         <number>0</number>
-        </property>
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>0</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>0</number>
-        </property>
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
 
-        <item>
-         <widget class="QLabel" name="consoleLabel">
-          <property name="text">
-           <string>Console</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignTop</set>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <!-- Project tab -->
+       <widget class="QWidget" name="projectTab">
+        <attribute name="title">
+         <string>Project</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="projectTabLayout">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QSplitter" name="projectSplitter">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <!-- Directory tree -->
+           <widget class="QTreeView" name="projectDirTree">
+            <property name="minimumSize">
+             <size>
+              <width>150</width>
+              <height>0</height>
+             </size>
+            </property>
+           </widget>
+           <!-- File list -->
+           <widget class="QListView" name="projectFileList">
+            <property name="minimumSize">
+             <size>
+              <width>200</width>
+              <height>0</height>
+             </size>
+            </property>
+           </widget>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+
+       <!-- Console tab -->
+       <widget class="QWidget" name="consoleTab">
+        <attribute name="title">
+         <string>Console</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="consoleTabLayout">
+         <property name="spacing">
+          <number>4</number>
+         </property>
+         <property name="leftMargin">
+          <number>4</number>
+         </property>
+         <property name="topMargin">
+          <number>4</number>
+         </property>
+         <property name="rightMargin">
+          <number>4</number>
+         </property>
+         <property name="bottomMargin">
+          <number>4</number>
+         </property>
+         <item>
+          <widget class="QPlainTextEdit" name="consoleOutput">
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+           <property name="plainText">
+            <string></string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+
       </widget>
 
      </widget>

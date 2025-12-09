@@ -1,7 +1,7 @@
 # ===== termin/editor/editor_window.py =====
 import os
 from PyQt6 import uic
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog
+from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit
 from PyQt6.QtWidgets import QStatusBar
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
@@ -21,6 +21,7 @@ from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.editor.editor_inspector import EntityInspector
 from termin.editor.scene_inspector import SceneInspector
+from termin.editor.project_browser import ProjectBrowser
 from termin.visualization.core.resources import ResourceManager
 from termin.geombase.pose3 import Pose3
 
@@ -152,6 +153,9 @@ class EditorWindow(QMainWindow):
             on_request_update=self._request_viewport_update,
             on_tick=self._on_game_tick,
         )
+
+        # --- Project Browser ---
+        self._init_project_browser()
 
     @property
     def scene(self):
@@ -597,6 +601,64 @@ class EditorWindow(QMainWindow):
 
         self.topSplitter.setSizes([300, 1000, 300])
         self.verticalSplitter.setSizes([600, 200])
+
+    def _init_project_browser(self):
+        """Инициализация файлового браузера проекта."""
+        from pathlib import Path
+
+        # Находим виджеты из .ui
+        self.projectDirTree: QTreeView = self.findChild(QTreeView, "projectDirTree")
+        self.projectFileList: QListView = self.findChild(QListView, "projectFileList")
+        self.bottomTabWidget: QTabWidget = self.findChild(QTabWidget, "bottomTabWidget")
+        self.consoleOutput: QPlainTextEdit = self.findChild(QPlainTextEdit, "consoleOutput")
+
+        if self.projectDirTree is None or self.projectFileList is None:
+            return
+
+        # Определяем корневую директорию проекта
+        # Используем текущую рабочую директорию или директорию termin
+        project_root = Path.cwd()
+
+        self.project_browser = ProjectBrowser(
+            dir_tree=self.projectDirTree,
+            file_list=self.projectFileList,
+            root_path=project_root,
+            on_file_selected=self._on_project_file_selected,
+            on_file_double_clicked=self._on_project_file_double_clicked,
+        )
+
+    def _on_project_file_selected(self, file_path) -> None:
+        """Обработчик выбора файла в Project Browser."""
+        # Пока просто логируем в консоль
+        if self.consoleOutput is not None:
+            self.consoleOutput.appendPlainText(f"Selected: {file_path}")
+
+    def _on_project_file_double_clicked(self, file_path) -> None:
+        """Обработчик двойного клика на файл в Project Browser."""
+        from pathlib import Path
+        path = Path(file_path)
+
+        # Обработка разных типов файлов
+        if path.suffix == ".json":
+            # Возможно это сцена — предлагаем загрузить
+            reply = QMessageBox.question(
+                self,
+                "Load Scene",
+                f"Load scene from {path.name}?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._load_scene_from_file(str(path))
+
+        elif path.suffix == ".shader":
+            # Шейдер — пока просто показываем в консоли
+            if self.consoleOutput is not None:
+                self.consoleOutput.appendPlainText(f"Shader: {path.name}")
+
+        else:
+            # Другие файлы — логируем
+            if self.consoleOutput is not None:
+                self.consoleOutput.appendPlainText(f"Opened: {file_path}")
 
     def _init_status_bar(self) -> None:
         """
