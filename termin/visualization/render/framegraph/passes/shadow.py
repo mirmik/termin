@@ -239,8 +239,12 @@ class ShadowPass(RenderFramePass):
                 mr = entity.get_component(MeshRenderer)
                 if mr is None or mr.mesh is None:
                     continue
-                
+
                 if not entity.visible:
+                    continue
+
+                # Пропускаем объекты, не отбрасывающие тень
+                if not entity.cast_shadow:
                     continue
                 
                 # Добавляем в debug-список только для первого источника

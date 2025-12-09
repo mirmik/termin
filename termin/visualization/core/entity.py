@@ -162,7 +162,8 @@ class Entity:
     def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float | numpy.ndarray = 1.0, priority: int = 0,
             pickable: bool = True,
             selectable: bool = True,
-            serializable: bool = True):
+            serializable: bool = True,
+            cast_shadow: bool = True):
 
         if scale is None:
             scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
@@ -180,6 +181,7 @@ class Entity:
         self.pickable = pickable
         self.selectable = selectable
         self.serializable = serializable  # False для редакторных сущностей (гизмо и т.д.)
+        self.cast_shadow = cast_shadow  # False = не отбрасывает тень
         self._pick_id: int | None = None
 
     @property

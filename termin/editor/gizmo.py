@@ -92,6 +92,7 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
             serializable=False,
+            cast_shadow=False,
         )
         self.axis = axis
         self.length = float(length)
@@ -134,6 +135,7 @@ class GizmoArrow(Entity):
             name=f"{axis}_shaft",
             pickable=False,
             selectable=False,
+            cast_shadow=False,
         )
         shaft_ent.add_component(MeshRenderer(shaft_mesh, mat))
         self.shaft_ent = shaft_ent
@@ -145,6 +147,7 @@ class GizmoArrow(Entity):
             name=f"{axis}_head",
             pickable=False,
             selectable=False,
+            cast_shadow=False,
         )
         head_ent.add_component(MeshRenderer(head_mesh, mat))
         self.head_ent = head_ent
@@ -169,6 +172,7 @@ class GizmoArrow(Entity):
             name=f"{axis}_pick_shaft",
             pickable=False,
             selectable=False,
+            cast_shadow=False,
         )
         pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, passes=[]))
         self.pick_shaft_ent = pick_shaft_ent
@@ -181,6 +185,7 @@ class GizmoArrow(Entity):
             name=f"{axis}_pick_head",
             pickable=False,
             selectable=False,
+            cast_shadow=False,
         )
         pick_head_ent.add_component(MeshRenderer(pick_head_mesh, passes=[]))
         self.pick_head_ent = pick_head_ent
@@ -208,6 +213,7 @@ class GizmoRing(Entity):
             pickable=False,
             selectable=False,
             serializable=False,
+            cast_shadow=False,
         )
 
         self.axis = axis
@@ -245,6 +251,7 @@ class GizmoRing(Entity):
             name=f"{axis}_ring",
             pickable=False,
             selectable=False,
+            cast_shadow=False,
         )
         pass_without_culling = RenderPass(material=mat, state=RenderState(cull=False))
         #ring_ent.add_component(MeshRenderer(ring_mesh, passes=[pass_without_culling]))
@@ -276,6 +283,7 @@ class GizmoRing(Entity):
             name=f"{axis}_pick_ring",
             pickable=False,
             selectable=False,
+            cast_shadow=False,
         )
         pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, passes=[]))
         self.pick_ring_ent = pick_ring_ent
@@ -297,6 +305,7 @@ class GizmoEntity(Entity):
             pickable=False,
             selectable=False,
             serializable=False,
+            cast_shadow=False,
         )
 
         # стрелки перемещения
