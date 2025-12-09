@@ -210,12 +210,12 @@ class MaterialPhase:
             cull=shader_phase.gl_cull if shader_phase.gl_cull is not None else True,
         )
 
-        # 3. Собираем uniforms из UniformProperty defaults
+        # 3. Собираем uniforms из MaterialProperty defaults
         uniforms: Dict[str, Any] = {}
         for prop in shader_phase.uniforms:
             if prop.default is not None:
                 # Конвертируем tuple в numpy array для векторных типов
-                if prop.uniform_type in ("vec2", "vec3", "vec4", "color"):
+                if prop.property_type in ("Vec2", "Vec3", "Vec4", "Color"):
                     uniforms[prop.name] = np.array(prop.default, dtype=np.float32)
                 else:
                     uniforms[prop.name] = prop.default
