@@ -4,9 +4,9 @@
 
 Позволяет:
 - Выбирать шейдер из загруженных .shader файлов
-- Редактировать все uniform-свойства шейдера
+- Редактировать все @property из шейдера
 - Сохранять/загружать материалы из .material файлов
-- Поддерживает типы: float, int, bool, vec2, vec3, vec4, color, texture2d
+- Поддерживает типы: Float, Int, Bool, Vec2, Vec3, Vec4, Color, Texture
 
 Формат .material файла:
 {
@@ -53,7 +53,7 @@ from termin.visualization.core.material import Material
 from termin.visualization.render.shader_parser import (
     parse_shader_text,
     ShaderMultyPhaseProgramm,
-    UniformProperty,
+    MaterialProperty,
 )
 
 
@@ -425,29 +425,29 @@ class MaterialInspector(QWidget):
         else:
             self._shader_label.setText("None")
 
-        # Собираем все uniforms из всех фаз
-        all_uniforms: Dict[str, UniformProperty] = {}
+        # Собираем все properties из всех фаз
+        all_properties: Dict[str, MaterialProperty] = {}
         if self._shader_program is not None:
             for phase in self._shader_program.phases:
-                for uniform in phase.uniforms:
-                    if uniform.name not in all_uniforms:
-                        all_uniforms[uniform.name] = uniform
+                for prop in phase.uniforms:
+                    if prop.name not in all_properties:
+                        all_properties[prop.name] = prop
 
-        # Создаём редакторы для каждого uniform
-        for uniform in all_uniforms.values():
-            self._create_uniform_editor(uniform)
+        # Создаём редакторы для каждого property
+        for prop in all_properties.values():
+            self._create_property_editor(prop)
 
-    def _create_uniform_editor(self, uniform: UniformProperty) -> None:
-        """Создать редактор для uniform-свойства."""
+    def _create_property_editor(self, prop: MaterialProperty) -> None:
+        """Создать редактор для свойства материала."""
         # Получаем текущее значение из материала
         current_value = None
         if self._material is not None:
-            current_value = self._material.uniforms.get(uniform.name)
+            current_value = self._material.uniforms.get(prop.name)
         if current_value is None:
-            current_value = uniform.default
+            current_value = prop.default
 
         # Лейбл
-        label_text = uniform.label or uniform.name
+        label_text = prop.label or prop.name
 
         # Создаём редактор в зависимости от типа
         row_widget = QWidget()
@@ -461,26 +461,26 @@ class MaterialInspector(QWidget):
 
         editor: QWidget | None = None
 
-        if uniform.uniform_type == "float":
-            editor = self._create_float_editor(uniform, current_value)
-        elif uniform.uniform_type == "int":
-            editor = self._create_int_editor(uniform, current_value)
-        elif uniform.uniform_type == "bool":
-            editor = self._create_bool_editor(uniform, current_value)
-        elif uniform.uniform_type == "vec2":
-            editor = self._create_vec2_editor(uniform, current_value)
-        elif uniform.uniform_type == "vec3":
-            editor = self._create_vec3_editor(uniform, current_value)
-        elif uniform.uniform_type == "vec4":
-            editor = self._create_vec4_editor(uniform, current_value)
-        elif uniform.uniform_type == "color":
-            editor = self._create_color_editor(uniform, current_value)
-        elif uniform.uniform_type == "texture2d":
-            editor = self._create_texture_editor(uniform, current_value)
+        if prop.property_type == "Float":
+            editor = self._create_float_editor(prop, current_value)
+        elif prop.property_type == "Int":
+            editor = self._create_int_editor(prop, current_value)
+        elif prop.property_type == "Bool":
+            editor = self._create_bool_editor(prop, current_value)
+        elif prop.property_type == "Vec2":
+            editor = self._create_vec2_editor(prop, current_value)
+        elif prop.property_type == "Vec3":
+            editor = self._create_vec3_editor(prop, current_value)
+        elif prop.property_type == "Vec4":
+            editor = self._create_vec4_editor(prop, current_value)
+        elif prop.property_type == "Color":
+            editor = self._create_color_editor(prop, current_value)
+        elif prop.property_type == "Texture":
+            editor = self._create_texture_editor(prop, current_value)
 
         if editor is not None:
             row_layout.addWidget(editor, 1)
-            self._uniform_widgets[uniform.name] = editor
+            self._uniform_widgets[prop.name] = editor
 
         # Вставляем перед stretch
         self._properties_layout.insertWidget(
@@ -488,85 +488,85 @@ class MaterialInspector(QWidget):
             row_widget
         )
 
-    def _create_float_editor(self, uniform: UniformProperty, value: Any) -> QDoubleSpinBox:
+    def _create_float_editor(self, prop: MaterialProperty, value: Any) -> QDoubleSpinBox:
         spin = QDoubleSpinBox()
         spin.setDecimals(3)
         spin.setSingleStep(0.1)
 
-        if uniform.range_min is not None and uniform.range_max is not None:
-            spin.setRange(uniform.range_min, uniform.range_max)
+        if prop.range_min is not None and prop.range_max is not None:
+            spin.setRange(prop.range_min, prop.range_max)
         else:
             spin.setRange(-9999.0, 9999.0)
 
         spin.setValue(float(value) if value is not None else 0.0)
         spin.valueChanged.connect(
-            lambda v, name=uniform.name: self._on_uniform_changed(name, v)
+            lambda v, name=prop.name: self._on_uniform_changed(name, v)
         )
         return spin
 
-    def _create_int_editor(self, uniform: UniformProperty, value: Any) -> QSpinBox:
+    def _create_int_editor(self, prop: MaterialProperty, value: Any) -> QSpinBox:
         spin = QSpinBox()
 
-        if uniform.range_min is not None and uniform.range_max is not None:
-            spin.setRange(int(uniform.range_min), int(uniform.range_max))
+        if prop.range_min is not None and prop.range_max is not None:
+            spin.setRange(int(prop.range_min), int(prop.range_max))
         else:
             spin.setRange(-9999, 9999)
 
         spin.setValue(int(value) if value is not None else 0)
         spin.valueChanged.connect(
-            lambda v, name=uniform.name: self._on_uniform_changed(name, v)
+            lambda v, name=prop.name: self._on_uniform_changed(name, v)
         )
         return spin
 
-    def _create_bool_editor(self, uniform: UniformProperty, value: Any) -> QCheckBox:
+    def _create_bool_editor(self, prop: MaterialProperty, value: Any) -> QCheckBox:
         checkbox = QCheckBox()
         checkbox.setChecked(bool(value) if value is not None else False)
         checkbox.stateChanged.connect(
-            lambda state, name=uniform.name: self._on_uniform_changed(name, state == Qt.CheckState.Checked.value)
+            lambda state, name=prop.name: self._on_uniform_changed(name, state == Qt.CheckState.Checked.value)
         )
         return checkbox
 
-    def _create_vec2_editor(self, uniform: UniformProperty, value: Any) -> Vec2Editor:
+    def _create_vec2_editor(self, prop: MaterialProperty, value: Any) -> Vec2Editor:
         val = value if value is not None else (0.0, 0.0)
         if isinstance(val, np.ndarray):
             val = tuple(val.tolist())
         editor = Vec2Editor(val)
         editor.value_changed.connect(
-            lambda v, name=uniform.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
+            lambda v, name=prop.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
         )
         return editor
 
-    def _create_vec3_editor(self, uniform: UniformProperty, value: Any) -> Vec3Editor:
+    def _create_vec3_editor(self, prop: MaterialProperty, value: Any) -> Vec3Editor:
         val = value if value is not None else (0.0, 0.0, 0.0)
         if isinstance(val, np.ndarray):
             val = tuple(val.tolist())
         editor = Vec3Editor(val)
         editor.value_changed.connect(
-            lambda v, name=uniform.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
+            lambda v, name=prop.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
         )
         return editor
 
-    def _create_vec4_editor(self, uniform: UniformProperty, value: Any) -> Vec4Editor:
+    def _create_vec4_editor(self, prop: MaterialProperty, value: Any) -> Vec4Editor:
         val = value if value is not None else (0.0, 0.0, 0.0, 0.0)
         if isinstance(val, np.ndarray):
             val = tuple(val.tolist())
         editor = Vec4Editor(val)
         editor.value_changed.connect(
-            lambda v, name=uniform.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
+            lambda v, name=prop.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
         )
         return editor
 
-    def _create_color_editor(self, uniform: UniformProperty, value: Any) -> ColorButton:
+    def _create_color_editor(self, prop: MaterialProperty, value: Any) -> ColorButton:
         val = value if value is not None else (1.0, 1.0, 1.0, 1.0)
         if isinstance(val, np.ndarray):
             val = tuple(val.tolist())
         editor = ColorButton(val)
         editor.color_changed.connect(
-            lambda v, name=uniform.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
+            lambda v, name=prop.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
         )
         return editor
 
-    def _create_texture_editor(self, uniform: UniformProperty, value: Any) -> QWidget:
+    def _create_texture_editor(self, prop: MaterialProperty, value: Any) -> QWidget:
         widget = QWidget()
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -579,7 +579,7 @@ class MaterialInspector(QWidget):
         browse_btn = QPushButton("...")
         browse_btn.setFixedWidth(30)
         browse_btn.clicked.connect(
-            lambda _, name=uniform.name, lbl=path_label: self._on_browse_texture(name, lbl)
+            lambda _, name=prop.name, lbl=path_label: self._on_browse_texture(name, lbl)
         )
         layout.addWidget(browse_btn)
 

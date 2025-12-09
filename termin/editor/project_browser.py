@@ -481,8 +481,8 @@ class ProjectBrowser:
 
 @phase opaque
 
-@uniform float u_time = 0.0
-@uniform vec3 u_color = vec3(1.0, 1.0, 1.0)
+@property Float u_time = 0.0
+@property Color u_color = Color(1.0, 1.0, 1.0, 1.0)
 
 @stage vertex
 #version 330 core
@@ -510,14 +510,14 @@ void main() {{
 in vec3 v_normal;
 in vec2 v_texcoord;
 
-uniform vec3 u_color;
+uniform vec4 u_color;
 
 out vec4 frag_color;
 
 void main() {{
     vec3 normal = normalize(v_normal);
     float light = max(dot(normal, vec3(0.0, 1.0, 0.0)), 0.2);
-    frag_color = vec4(u_color * light, 1.0);
+    frag_color = vec4(u_color.rgb * light, u_color.a);
 }}
 '''
 

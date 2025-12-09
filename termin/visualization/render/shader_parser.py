@@ -6,63 +6,99 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 @dataclass
-class UniformProperty:
+class MaterialProperty:
     """
-    Описание uniform-свойства материала.
+    Описание свойства материала для инспектора.
 
     Атрибуты:
-        name: Имя uniform'а (например, "u_glossiness")
-        uniform_type: Тип ("float", "int", "bool", "vec2", "vec3", "vec4", "color", "texture2d")
-        default: Значение по умолчанию (None для текстур без дефолта)
+        name: Имя uniform'а в шейдере (например, "u_color")
+        property_type: Тип свойства для инспектора:
+            - "Float", "Int", "Bool" — скалярные
+            - "Vec2", "Vec3", "Vec4" — векторные
+            - "Color" — RGBA цвет (отображается как color picker)
+            - "Texture" — текстура
+        default: Значение по умолчанию
         range_min: Минимум для range (опционально)
         range_max: Максимум для range (опционально)
         label: Человекочитаемое имя для инспектора (опционально)
     """
     name: str
-    uniform_type: str
+    property_type: str
     default: Any = None
     range_min: Optional[float] = None
     range_max: Optional[float] = None
     label: Optional[str] = None
 
 
-def _parse_glsl_vector(text: str) -> Tuple[float, ...]:
+# Алиас для обратной совместимости
+UniformProperty = MaterialProperty
+
+
+def _parse_property_value(value_str: str, property_type: str) -> Any:
     """
-    Парсит GLSL-стиль вектора: vec3(1.0, 2.0, 3.0) -> (1.0, 2.0, 3.0)
+    Парсит значение свойства из строки.
+
+    Args:
+        value_str: Строка со значением (например, "1.0" или "Color(1.0, 0.5, 0.0, 1.0)")
+        property_type: Тип свойства
+
+    Returns:
+        Распаршенное значение
     """
-    # Ищем содержимое в скобках
-    match = re.search(r'\w+\s*\(\s*([^)]+)\s*\)', text)
-    if match:
-        inner = match.group(1)
-        values = [float(v.strip()) for v in inner.split(',')]
-        return tuple(values)
-    raise ValueError(f"Не удалось распарсить вектор: {text!r}")
+    value_str = value_str.strip()
+
+    if property_type == "Float":
+        return float(value_str)
+    elif property_type == "Int":
+        return int(value_str)
+    elif property_type == "Bool":
+        return parse_bool(value_str)
+    elif property_type in ("Vec2", "Vec3", "Vec4", "Color"):
+        # Парсим конструктор: Color(1.0, 0.5, 0.0, 1.0) или Vec3(1, 2, 3)
+        match = re.search(r'\w+\s*\(\s*([^)]+)\s*\)', value_str)
+        if match:
+            inner = match.group(1)
+            values = tuple(float(v.strip()) for v in inner.split(','))
+        else:
+            # Пробельный формат: 1.0 0.5 0.0 1.0
+            values = tuple(float(v) for v in value_str.split())
+
+        # Проверяем/дополняем размерность
+        expected_len = {"Vec2": 2, "Vec3": 3, "Vec4": 4, "Color": 4}[property_type]
+        if len(values) < expected_len:
+            if property_type == "Color":
+                values = values + (1.0,) * (expected_len - len(values))
+            else:
+                values = values + (0.0,) * (expected_len - len(values))
+        return values
+    elif property_type == "Texture":
+        return value_str.strip('"\'') if value_str else None
+    else:
+        raise ValueError(f"Неизвестный тип свойства: {property_type!r}")
 
 
-def parse_uniform_directive(line: str) -> UniformProperty:
+def parse_property_directive(line: str) -> MaterialProperty:
     """
-    Парсит директиву @uniform.
+    Парсит директиву @property.
 
-    Поддерживаемые форматы:
+    Формат:
+        @property Type name = DefaultValue [range(min, max)]
 
-    Простой (пробелы между значениями):
-        @uniform float u_name 0.5
-        @uniform float u_name 0.5 range(0.0, 1.0)
-        @uniform color u_name 1.0 1.0 1.0 1.0
-        @uniform vec3 u_name 0.0 1.0 0.0
-        @uniform texture2d u_name
-        @uniform texture2d u_name "default_texture"
+    Примеры:
+        @property Float u_time = 0.0
+        @property Float u_metallic = 0.5 range(0.0, 1.0)
+        @property Color u_color = Color(1.0, 1.0, 1.0, 1.0)
+        @property Vec3 u_lightDir = Vec3(0.0, 1.0, 0.0)
+        @property Texture u_mainTex
+        @property Texture u_normalMap = "default_normal"
 
-    GLSL-стиль (с = и конструкторами векторов):
-        @uniform float u_name = 0.5
-        @uniform vec3 u_name = vec3(1.0, 1.0, 1.0)
-        @uniform vec4 u_color = vec4(1.0, 0.5, 0.0, 1.0)
-        @uniform color u_color = color(1.0, 1.0, 1.0, 1.0)
+    Поддерживаемые типы:
+        Float, Int, Bool, Vec2, Vec3, Vec4, Color, Texture
     """
-    # Убираем @uniform и лишние пробелы
-    content = line[len("@uniform"):].strip()
+    # Убираем @property и лишние пробелы
+    content = line[len("@property"):].strip()
 
-    # Извлекаем range(...) если есть — но не путаем с vec3(...) и т.п.
+    # Извлекаем range(...) если есть
     range_min: Optional[float] = None
     range_max: Optional[float] = None
     range_match = re.search(r'\brange\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)', content)
@@ -75,118 +111,52 @@ def parse_uniform_directive(line: str) -> UniformProperty:
         # Убираем range(...) из content
         content = content[:range_match.start()].strip()
 
-    # Проверяем GLSL-стиль с '='
+    # Парсим: Type name = value
     if '=' in content:
-        # Формат: type name = value
         left, right = content.split('=', 1)
         left_parts = left.strip().split()
         if len(left_parts) < 2:
-            raise ValueError(f"@uniform требует минимум тип и имя: {line!r}")
+            raise ValueError(f"@property требует тип и имя: {line!r}")
 
-        uniform_type = left_parts[0].lower()
+        property_type = left_parts[0]
         name = left_parts[1]
         value_str = right.strip()
+    else:
+        # Без значения по умолчанию
+        parts = content.split()
+        if len(parts) < 2:
+            raise ValueError(f"@property требует тип и имя: {line!r}")
 
-        # Валидация типа
-        valid_types = {"float", "int", "bool", "vec2", "vec3", "vec4", "color", "texture2d"}
-        if uniform_type not in valid_types:
-            raise ValueError(f"Неизвестный тип uniform: {uniform_type!r}")
+        property_type = parts[0]
+        name = parts[1]
+        value_str = ""
 
-        # Парсим значение
-        default: Any = None
+    # Валидация типа (с учётом регистра)
+    valid_types = {"Float", "Int", "Bool", "Vec2", "Vec3", "Vec4", "Color", "Texture"}
+    if property_type not in valid_types:
+        raise ValueError(f"Неизвестный тип свойства: {property_type!r}. "
+                        f"Допустимые: {', '.join(sorted(valid_types))}")
 
-        if uniform_type == "float":
-            default = float(value_str)
-        elif uniform_type == "int":
-            default = int(value_str)
-        elif uniform_type == "bool":
-            default = parse_bool(value_str)
-        elif uniform_type in ("vec2", "vec3", "vec4", "color"):
-            # Может быть vec3(1.0, 2.0, 3.0) или просто 1.0 2.0 3.0
-            if '(' in value_str:
-                default = _parse_glsl_vector(value_str)
-            else:
-                # Пробельный формат
-                vals = value_str.split()
-                default = tuple(float(v) for v in vals)
+    # Парсим значение по умолчанию
+    if value_str:
+        default = _parse_property_value(value_str, property_type)
+    else:
+        # Дефолты по типам
+        defaults = {
+            "Float": 0.0,
+            "Int": 0,
+            "Bool": False,
+            "Vec2": (0.0, 0.0),
+            "Vec3": (0.0, 0.0, 0.0),
+            "Vec4": (0.0, 0.0, 0.0, 0.0),
+            "Color": (1.0, 1.0, 1.0, 1.0),
+            "Texture": None,
+        }
+        default = defaults[property_type]
 
-            # Проверяем размерность
-            expected_len = {"vec2": 2, "vec3": 3, "vec4": 4, "color": 4}[uniform_type]
-            if len(default) != expected_len:
-                # Если меньше — дополняем дефолтами
-                if uniform_type == "color":
-                    default = default + (1.0,) * (4 - len(default))
-                else:
-                    default = default + (0.0,) * (expected_len - len(default))
-        elif uniform_type == "texture2d":
-            default = value_str.strip('"\'') if value_str else None
-
-        return UniformProperty(
-            name=name,
-            uniform_type=uniform_type,
-            default=default,
-            range_min=range_min,
-            range_max=range_max,
-        )
-
-    # Старый формат без '='
-    parts = content.split()
-    if len(parts) < 2:
-        raise ValueError(f"@uniform требует минимум тип и имя: {line!r}")
-
-    uniform_type = parts[0].lower()
-    name = parts[1]
-
-    # Валидация типа
-    valid_types = {"float", "int", "bool", "vec2", "vec3", "vec4", "color", "texture2d"}
-    if uniform_type not in valid_types:
-        raise ValueError(f"Неизвестный тип uniform: {uniform_type!r}")
-
-    # Парсим default value
-    default = None
-    remaining = parts[2:]
-
-    if uniform_type == "float":
-        if remaining:
-            default = float(remaining[0])
-        else:
-            default = 0.0
-    elif uniform_type == "int":
-        if remaining:
-            default = int(remaining[0])
-        else:
-            default = 0
-    elif uniform_type == "bool":
-        if remaining:
-            default = parse_bool(remaining[0])
-        else:
-            default = False
-    elif uniform_type in ("vec2",):
-        if len(remaining) >= 2:
-            default = (float(remaining[0]), float(remaining[1]))
-        else:
-            default = (0.0, 0.0)
-    elif uniform_type in ("vec3",):
-        if len(remaining) >= 3:
-            default = (float(remaining[0]), float(remaining[1]), float(remaining[2]))
-        else:
-            default = (0.0, 0.0, 0.0)
-    elif uniform_type in ("vec4", "color"):
-        if len(remaining) >= 4:
-            default = (float(remaining[0]), float(remaining[1]),
-                      float(remaining[2]), float(remaining[3]))
-        else:
-            default = (1.0, 1.0, 1.0, 1.0) if uniform_type == "color" else (0.0, 0.0, 0.0, 0.0)
-    elif uniform_type == "texture2d":
-        if remaining:
-            # Может быть имя текстуры в кавычках или без
-            default = remaining[0].strip('"\'')
-        else:
-            default = None
-
-    return UniformProperty(
+    return MaterialProperty(
         name=name,
-        uniform_type=uniform_type,
+        property_type=property_type,
         default=default,
         range_min=range_min,
         range_max=range_max,
@@ -214,19 +184,19 @@ def parse_shader_text(text: str) -> Dict[str, Any]:
         @glDepthTest <bool>
         @glBlend <bool>
         @glCull <bool>
-        @uniform <type> <name> [default] [range(min, max)]
+        @property <Type> <name> [= DefaultValue] [range(min, max)]
         @stage <stage_name>
         @endstage
         @endphase
 
-    Типы для @uniform:
-        float, int, bool, vec2, vec3, vec4, color, texture2d
+    Типы для @property:
+        Float, Int, Bool, Vec2, Vec3, Vec4, Color, Texture
 
-    Примеры @uniform:
-        @uniform float u_glossiness 0.5
-        @uniform float u_metallic 0.0 range(0.0, 1.0)
-        @uniform color u_color 1.0 1.0 1.0 1.0
-        @uniform texture2d u_mainTex
+    Примеры @property:
+        @property Float u_glossiness = 0.5
+        @property Float u_metallic = 0.0 range(0.0, 1.0)
+        @property Color u_color = Color(1.0, 1.0, 1.0, 1.0)
+        @property Texture u_mainTex
 
     Структура результата:
         {
@@ -411,12 +381,12 @@ def parse_shader_text(text: str) -> Dict[str, Any]:
             close_current_stage()
             continue
 
-        if directive == "@uniform":
+        if directive == "@property":
             if current_phase is None:
-                raise ValueError("@uniform вне @phase")
-            uniform_prop = parse_uniform_directive(line)
-            uniforms_list: List[UniformProperty] = current_phase["uniforms"]
-            uniforms_list.append(uniform_prop)
+                raise ValueError("@property вне @phase")
+            prop = parse_property_directive(line)
+            uniforms_list: List[MaterialProperty] = current_phase["uniforms"]
+            uniforms_list.append(prop)
             continue
 
         # Неизвестная директива — на этом этапе просто бросаем ошибку.
