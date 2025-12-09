@@ -818,7 +818,11 @@ class GizmoController:
             return
         print(f"[DEBUG] GizmoController.set_target({target_entity.name if target_entity else None}), gizmo.visible={self.gizmo.visible}")
         gizmo_ctrl.set_target(target_entity)
-        print(f"[DEBUG] After set_target: gizmo.visible={self.gizmo.visible}, gizmo_ctrl.enabled={gizmo_ctrl.enabled}")
+        # Проверяем видимость дочерних элементов
+        x_arrow = self.gizmo.x
+        x_shaft = x_arrow.shaft_ent if hasattr(x_arrow, 'shaft_ent') else None
+        print(f"[DEBUG] After set_target: gizmo.visible={self.gizmo.visible}, x_arrow.visible={x_arrow.visible}, x_shaft.visible={x_shaft.visible if x_shaft else 'N/A'}")
+        print(f"[DEBUG] gizmo in scene.entities: {self.gizmo in self.scene.entities}, x_arrow in scene: {x_arrow in self.scene.entities}")
 
     def set_visible(self, visible: bool) -> None:
         """Показывает или скрывает гизмо."""
