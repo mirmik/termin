@@ -215,10 +215,26 @@ class ProjectBrowser:
 
             menu.addSeparator()
 
-        # Создать директорию (доступно всегда)
-        create_dir_action = QAction("Create Directory...", self._file_list)
+        # --- Подменю Create ---
+        create_menu = menu.addMenu("Create")
+
+        create_dir_action = QAction("Directory...", self._file_list)
         create_dir_action.triggered.connect(self._create_directory)
-        menu.addAction(create_dir_action)
+        create_menu.addAction(create_dir_action)
+
+        create_menu.addSeparator()
+
+        create_material_action = QAction("Material...", self._file_list)
+        create_material_action.triggered.connect(self._create_material)
+        create_menu.addAction(create_material_action)
+
+        create_shader_action = QAction("Shader...", self._file_list)
+        create_shader_action.triggered.connect(self._create_shader)
+        create_menu.addAction(create_shader_action)
+
+        create_component_action = QAction("Component...", self._file_list)
+        create_component_action.triggered.connect(self._create_component)
+        create_menu.addAction(create_component_action)
 
         menu.addSeparator()
 
@@ -283,3 +299,221 @@ class ProjectBrowser:
         """Обновить содержимое."""
         if self._root_path is not None:
             self.set_root_path(self._root_path)
+
+    def _create_material(self) -> None:
+        """Создать новый файл материала."""
+        current_dir = self.current_directory
+        if current_dir is None:
+            return
+
+        name, ok = QInputDialog.getText(
+            self._file_list,
+            "Create Material",
+            "Material name:",
+            text="NewMaterial",
+        )
+
+        if not ok or not name:
+            return
+
+        # Убираем расширение если пользователь его ввёл
+        if name.endswith(".material"):
+            name = name[:-9]
+
+        file_path = current_dir / f"{name}.material"
+
+        if file_path.exists():
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"File '{file_path.name}' already exists.",
+            )
+            return
+
+        # Болванка материала
+        template = '''{
+    "shader": "path/to/shader.shader",
+    "uniforms": {
+    },
+    "textures": {
+    }
+}
+'''
+
+        try:
+            file_path.write_text(template, encoding="utf-8")
+            self._refresh()
+        except OSError as e:
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"Failed to create material: {e}",
+            )
+
+    def _create_shader(self) -> None:
+        """Создать новый файл шейдера."""
+        current_dir = self.current_directory
+        if current_dir is None:
+            return
+
+        name, ok = QInputDialog.getText(
+            self._file_list,
+            "Create Shader",
+            "Shader name:",
+            text="NewShader",
+        )
+
+        if not ok or not name:
+            return
+
+        # Убираем расширение если пользователь его ввёл
+        if name.endswith(".shader"):
+            name = name[:-7]
+
+        file_path = current_dir / f"{name}.shader"
+
+        if file_path.exists():
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"File '{file_path.name}' already exists.",
+            )
+            return
+
+        # Болванка шейдера
+        template = f'''@program {name}
+
+@phase opaque
+
+@uniform float u_time = 0.0
+@uniform vec3 u_color = vec3(1.0, 1.0, 1.0)
+
+@stage vertex
+#version 330 core
+
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_texcoord;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+out vec3 v_normal;
+out vec2 v_texcoord;
+
+void main() {{
+    v_normal = mat3(u_model) * a_normal;
+    v_texcoord = a_texcoord;
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}}
+
+@stage fragment
+#version 330 core
+
+in vec3 v_normal;
+in vec2 v_texcoord;
+
+uniform vec3 u_color;
+
+out vec4 frag_color;
+
+void main() {{
+    vec3 normal = normalize(v_normal);
+    float light = max(dot(normal, vec3(0.0, 1.0, 0.0)), 0.2);
+    frag_color = vec4(u_color * light, 1.0);
+}}
+'''
+
+        try:
+            file_path.write_text(template, encoding="utf-8")
+            self._refresh()
+        except OSError as e:
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"Failed to create shader: {e}",
+            )
+
+    def _create_component(self) -> None:
+        """Создать новый файл компонента."""
+        current_dir = self.current_directory
+        if current_dir is None:
+            return
+
+        name, ok = QInputDialog.getText(
+            self._file_list,
+            "Create Component",
+            "Component class name:",
+            text="NewComponent",
+        )
+
+        if not ok or not name:
+            return
+
+        # Преобразуем имя класса в snake_case для имени файла
+        import re
+        file_name = re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
+
+        # Убираем расширение если пользователь его ввёл
+        if file_name.endswith(".py"):
+            file_name = file_name[:-3]
+
+        file_path = current_dir / f"{file_name}.py"
+
+        if file_path.exists():
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"File '{file_path.name}' already exists.",
+            )
+            return
+
+        # Болванка компонента
+        template = f'''"""
+{name} component.
+"""
+
+from __future__ import annotations
+
+from termin.visualization.core.component import Component
+
+
+class {name}(Component):
+    """
+    Custom component.
+
+    Attributes:
+        speed: Movement speed.
+    """
+
+    def __init__(self, speed: float = 1.0):
+        super().__init__()
+        self.speed = speed
+
+    def on_start(self) -> None:
+        """Called when the component is first activated."""
+        pass
+
+    def on_update(self, dt: float) -> None:
+        """Called every frame.
+
+        Args:
+            dt: Delta time in seconds.
+        """
+        pass
+
+    def on_destroy(self) -> None:
+        """Called when the component is destroyed."""
+        pass
+'''
+
+        try:
+            file_path.write_text(template, encoding="utf-8")
+            self._refresh()
+        except OSError as e:
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"Failed to create component: {e}",
+            )

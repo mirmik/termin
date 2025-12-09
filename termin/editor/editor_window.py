@@ -319,7 +319,7 @@ class EditorWindow(QMainWindow):
 
             layout.addWidget(inspector)
 
-            button_box = QDialogButtonBox(QDialogButtonBox.Close)
+            button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
             button_box.rejected.connect(dialog.close)
             layout.addWidget(button_box)
 
