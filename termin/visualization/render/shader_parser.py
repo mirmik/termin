@@ -26,25 +26,46 @@ class UniformProperty:
     label: Optional[str] = None
 
 
+def _parse_glsl_vector(text: str) -> Tuple[float, ...]:
+    """
+    Парсит GLSL-стиль вектора: vec3(1.0, 2.0, 3.0) -> (1.0, 2.0, 3.0)
+    """
+    # Ищем содержимое в скобках
+    match = re.search(r'\w+\s*\(\s*([^)]+)\s*\)', text)
+    if match:
+        inner = match.group(1)
+        values = [float(v.strip()) for v in inner.split(',')]
+        return tuple(values)
+    raise ValueError(f"Не удалось распарсить вектор: {text!r}")
+
+
 def parse_uniform_directive(line: str) -> UniformProperty:
     """
     Парсит директиву @uniform.
 
-    Форматы:
+    Поддерживаемые форматы:
+
+    Простой (пробелы между значениями):
         @uniform float u_name 0.5
         @uniform float u_name 0.5 range(0.0, 1.0)
         @uniform color u_name 1.0 1.0 1.0 1.0
         @uniform vec3 u_name 0.0 1.0 0.0
         @uniform texture2d u_name
         @uniform texture2d u_name "default_texture"
+
+    GLSL-стиль (с = и конструкторами векторов):
+        @uniform float u_name = 0.5
+        @uniform vec3 u_name = vec3(1.0, 1.0, 1.0)
+        @uniform vec4 u_color = vec4(1.0, 0.5, 0.0, 1.0)
+        @uniform color u_color = color(1.0, 1.0, 1.0, 1.0)
     """
     # Убираем @uniform и лишние пробелы
     content = line[len("@uniform"):].strip()
 
-    # Извлекаем range(...) если есть
+    # Извлекаем range(...) если есть — но не путаем с vec3(...) и т.п.
     range_min: Optional[float] = None
     range_max: Optional[float] = None
-    range_match = re.search(r'range\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)', content)
+    range_match = re.search(r'\brange\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)', content)
     if range_match:
         try:
             range_min = float(range_match.group(1).strip())
@@ -54,6 +75,61 @@ def parse_uniform_directive(line: str) -> UniformProperty:
         # Убираем range(...) из content
         content = content[:range_match.start()].strip()
 
+    # Проверяем GLSL-стиль с '='
+    if '=' in content:
+        # Формат: type name = value
+        left, right = content.split('=', 1)
+        left_parts = left.strip().split()
+        if len(left_parts) < 2:
+            raise ValueError(f"@uniform требует минимум тип и имя: {line!r}")
+
+        uniform_type = left_parts[0].lower()
+        name = left_parts[1]
+        value_str = right.strip()
+
+        # Валидация типа
+        valid_types = {"float", "int", "bool", "vec2", "vec3", "vec4", "color", "texture2d"}
+        if uniform_type not in valid_types:
+            raise ValueError(f"Неизвестный тип uniform: {uniform_type!r}")
+
+        # Парсим значение
+        default: Any = None
+
+        if uniform_type == "float":
+            default = float(value_str)
+        elif uniform_type == "int":
+            default = int(value_str)
+        elif uniform_type == "bool":
+            default = parse_bool(value_str)
+        elif uniform_type in ("vec2", "vec3", "vec4", "color"):
+            # Может быть vec3(1.0, 2.0, 3.0) или просто 1.0 2.0 3.0
+            if '(' in value_str:
+                default = _parse_glsl_vector(value_str)
+            else:
+                # Пробельный формат
+                vals = value_str.split()
+                default = tuple(float(v) for v in vals)
+
+            # Проверяем размерность
+            expected_len = {"vec2": 2, "vec3": 3, "vec4": 4, "color": 4}[uniform_type]
+            if len(default) != expected_len:
+                # Если меньше — дополняем дефолтами
+                if uniform_type == "color":
+                    default = default + (1.0,) * (4 - len(default))
+                else:
+                    default = default + (0.0,) * (expected_len - len(default))
+        elif uniform_type == "texture2d":
+            default = value_str.strip('"\'') if value_str else None
+
+        return UniformProperty(
+            name=name,
+            uniform_type=uniform_type,
+            default=default,
+            range_min=range_min,
+            range_max=range_max,
+        )
+
+    # Старый формат без '='
     parts = content.split()
     if len(parts) < 2:
         raise ValueError(f"@uniform требует минимум тип и имя: {line!r}")
@@ -67,7 +143,7 @@ def parse_uniform_directive(line: str) -> UniformProperty:
         raise ValueError(f"Неизвестный тип uniform: {uniform_type!r}")
 
     # Парсим default value
-    default: Any = None
+    default = None
     remaining = parts[2:]
 
     if uniform_type == "float":
