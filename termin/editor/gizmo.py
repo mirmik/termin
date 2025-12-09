@@ -253,7 +253,7 @@ class GizmoRing(Entity):
             selectable=False,
             cast_shadow=False,
         )
-        pass_without_culling = RenderPass(material=mat, state=RenderState(cull=False))
+        pass_without_culling = RenderPass.from_material(mat, state=RenderState(cull=False))
         #ring_ent.add_component(MeshRenderer(ring_mesh, passes=[pass_without_culling]))
         #mr = MeshRenderer(ring_mesh, material=mat)
         mr = MeshRenderer(ring_mesh, passes=[pass_without_culling])
