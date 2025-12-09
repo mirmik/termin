@@ -278,12 +278,15 @@ class Scene:
             if handler:
                 handler(viewport, **kwargs)
 
-    def serialize(self) -> dict:
+    def serialize(self, editor_camera_data: dict | None = None) -> dict:
         """
         Сериализует сцену.
 
         Сохраняет только корневые serializable Entity (без родителя).
         Дочерние Entity сериализуются рекурсивно внутри своих родителей.
+
+        Args:
+            editor_camera_data: Опциональные данные камеры редактора для сохранения.
         """
         root_entities = [
             e for e in self.entities
@@ -295,7 +298,7 @@ class Scene:
             if data is not None:
                 serialized_entities.append(data)
 
-        return {
+        result = {
             "background_color": list(self.background_color),
             "light_direction": list(self.light_direction),
             "light_color": list(self.light_color),
@@ -307,6 +310,11 @@ class Scene:
             "skybox_bottom_color": list(self.skybox_bottom_color),
             "entities": serialized_entities,
         }
+
+        if editor_camera_data is not None:
+            result["editor_camera"] = editor_camera_data
+
+        return result
 
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "Scene":

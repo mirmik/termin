@@ -52,6 +52,8 @@ class EditorWindow(QMainWindow):
             scene=initial_scene,
             resource_manager=self.resource_manager,
             on_scene_changed=self._on_scene_changed,
+            get_editor_camera_data=self._get_editor_camera_data,
+            set_editor_camera_data=self._set_editor_camera_data,
         )
 
         # контроллеры создадим чуть позже
@@ -421,6 +423,49 @@ class EditorWindow(QMainWindow):
             self.editor_entities.transform.link(camera_entity.transform)
         self.scene.add(camera_entity)
         self.camera = camera
+
+    def _get_editor_camera_data(self) -> dict | None:
+        """
+        Возвращает данные камеры редактора для сериализации.
+        """
+        if self.camera is None or self.camera.entity is None:
+            return None
+
+        orbit_ctrl = self.camera.entity.get_component(OrbitCameraController)
+        if orbit_ctrl is None:
+            return None
+
+        return {
+            "target": list(orbit_ctrl.target),
+            "radius": float(orbit_ctrl.radius),
+            "azimuth": float(orbit_ctrl.azimuth),
+            "elevation": float(orbit_ctrl.elevation),
+        }
+
+    def _set_editor_camera_data(self, data: dict) -> None:
+        """
+        Применяет сохранённые данные к камере редактора.
+        """
+        if self.camera is None or self.camera.entity is None:
+            return
+
+        orbit_ctrl = self.camera.entity.get_component(OrbitCameraController)
+        if orbit_ctrl is None:
+            return
+
+        import numpy as np
+
+        if "target" in data:
+            orbit_ctrl.target = np.array(data["target"], dtype=np.float32)
+        if "radius" in data:
+            orbit_ctrl.radius = float(data["radius"])
+        if "azimuth" in data:
+            orbit_ctrl.azimuth = float(data["azimuth"])
+        if "elevation" in data:
+            orbit_ctrl.elevation = float(data["elevation"])
+
+        # Обновляем позу камеры
+        orbit_ctrl._update_pose()
 
     def _scan_builtin_components(self):
         """

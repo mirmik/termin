@@ -49,6 +49,8 @@ class WorldPersistence:
         resource_manager: "ResourceManager",
         scene_factory: Optional[Callable[[], "Scene"]] = None,
         on_scene_changed: Optional[Callable[["Scene"], None]] = None,
+        get_editor_camera_data: Optional[Callable[[], dict]] = None,
+        set_editor_camera_data: Optional[Callable[[dict], None]] = None,
     ):
         """
         Args:
@@ -58,11 +60,15 @@ class WorldPersistence:
                           Если None, используется Scene()
             on_scene_changed: Колбэк, вызываемый при смене сцены.
                              Получает новую сцену как аргумент.
+            get_editor_camera_data: Колбэк для получения данных камеры редактора.
+            set_editor_camera_data: Колбэк для установки данных камеры редактора.
         """
         self._scene = scene
         self._resource_manager = resource_manager
         self._scene_factory = scene_factory
         self._on_scene_changed = on_scene_changed
+        self._get_editor_camera_data = get_editor_camera_data
+        self._set_editor_camera_data = set_editor_camera_data
 
     @property
     def scene(self) -> "Scene":
@@ -99,10 +105,15 @@ class WorldPersistence:
         Returns:
             Статистика: entities, materials, meshes count
         """
+        # Получаем данные камеры редактора, если доступно
+        editor_camera_data = None
+        if self._get_editor_camera_data is not None:
+            editor_camera_data = self._get_editor_camera_data()
+
         data = {
             "version": "1.0",
             "resources": self._resource_manager.serialize(),
-            "scenes": [self._scene.serialize()],
+            "scenes": [self._scene.serialize(editor_camera_data=editor_camera_data)],
         }
 
         json_str = json.dumps(data, indent=2, ensure_ascii=False, default=numpy_encoder)
@@ -165,9 +176,14 @@ class WorldPersistence:
         Returns:
             Сериализованное состояние (глубокая копия)
         """
+        # Получаем данные камеры редактора
+        editor_camera_data = None
+        if self._get_editor_camera_data is not None:
+            editor_camera_data = self._get_editor_camera_data()
+
         data = {
             "resources": self._resource_manager.serialize(),
-            "scene": self._scene.serialize(),
+            "scene": self._scene.serialize(editor_camera_data=editor_camera_data),
         }
         # Сериализуем в JSON и обратно для глубокого копирования
         json_str = json.dumps(data, default=numpy_encoder)
@@ -217,6 +233,12 @@ class WorldPersistence:
 
         # Заменяем текущую сцену
         self._replace_scene(new_scene)
+
+        # Восстанавливаем параметры камеры редактора (после смены сцены!)
+        if scene_data and self._set_editor_camera_data is not None:
+            editor_camera_data = scene_data.get("editor_camera")
+            if editor_camera_data is not None:
+                self._set_editor_camera_data(editor_camera_data)
 
         return {
             "loaded_entities": loaded_count,
