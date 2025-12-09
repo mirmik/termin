@@ -53,10 +53,10 @@ class CameraComponent(Component):
         self.far = far
         self.viewport = None
 
-    def start(self, scene):
-        if self.entity is None:
-            raise RuntimeError("CameraComponent must be attached to an entity.")
-        super().start(scene)
+    # def on_added(self, scene):
+    #     if self.entity is None:
+    #         raise RuntimeError("CameraComponent must be attached to an entity.")
+    #     super().on_added(scene)
 
     def get_view_matrix(self) -> np.ndarray:
         if self.entity is None:
@@ -214,10 +214,10 @@ class OrbitCameraController(CameraController):
         self.target = val
         self._update_pose()
 
-    def start(self, scene):
+    def on_added(self, scene):
         if self.entity is None:
             raise RuntimeError("OrbitCameraController must be attached to an entity.")
-        super().start(scene)
+        super().on_added(scene)
         self._update_pose()
 
     def prevent_moving(self):
