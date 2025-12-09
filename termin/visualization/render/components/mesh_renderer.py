@@ -31,7 +31,7 @@ class MeshRenderer(Component):
             path="material",
             label="Material",
             kind="material",
-            setter=lambda obj, value: obj.update_material(value),
+            setter=lambda obj, value: obj.set_material_by_name(value.name) if value else obj.update_material(None),
         ),
     }
 
@@ -83,8 +83,8 @@ class MeshRenderer(Component):
 
     def update_material(self, material: Material | None):
         """
-        Вызывается инспектором при смене материала.
-        Гарантирует наличие хотя бы одного RenderPass при установке материала.
+        Устанавливает материал напрямую (direct handle).
+        Используется когда материал создан в коде.
         """
         if material is not None and not self.passes:
             # Новый компонент, до этого не было проходов — создаём дефолтный
@@ -92,6 +92,16 @@ class MeshRenderer(Component):
         else:
             # setter обновит первый pass
             self.material = material
+
+    def set_material_by_name(self, name: str):
+        """
+        Устанавливает материал по имени из ResourceManager (named handle).
+        Материал будет автоматически обновляться при hot-reload.
+        """
+        if not self.passes:
+            self.passes.append(RenderPass.from_material_name(name))
+        else:
+            self.passes[0].material_handle = MaterialHandle.from_name(name)
 
     # --- рендеринг ---
 
