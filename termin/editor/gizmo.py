@@ -823,6 +823,12 @@ class GizmoController:
         x_shaft = x_arrow.shaft_ent if hasattr(x_arrow, 'shaft_ent') else None
         print(f"[DEBUG] After set_target: gizmo.visible={self.gizmo.visible}, x_arrow.visible={x_arrow.visible}, x_shaft.visible={x_shaft.visible if x_shaft else 'N/A'}")
         print(f"[DEBUG] gizmo in scene.entities: {self.gizmo in self.scene.entities}, x_arrow in scene: {x_arrow in self.scene.entities}")
+        # Проверяем позицию и MeshRenderer
+        gizmo_pos = self.gizmo.transform.global_pose().lin
+        print(f"[DEBUG] gizmo position: {gizmo_pos}")
+        from termin.visualization.render.components import MeshRenderer
+        mr = x_shaft.get_component(MeshRenderer) if x_shaft else None
+        print(f"[DEBUG] x_shaft MeshRenderer: {mr}, enabled={mr.enabled if mr else 'N/A'}, mesh={mr.mesh if mr else 'N/A'}")
 
     def set_visible(self, visible: bool) -> None:
         """Показывает или скрывает гизмо."""
