@@ -304,6 +304,11 @@ class Entity:
             component.entity = None
         self.scene = None
 
+        # Очищаем pick_id из глобального реестра
+        if self._pick_id is not None:
+            Entity._entities_by_pick_id.pop(self._pick_id, None)
+            self._pick_id = None
+
     def serialize(self):
         if not self.serializable:
             return None
