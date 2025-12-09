@@ -83,6 +83,9 @@ class RigidBodyComponent(Component):
         # Определяем размеры коллайдера из меша сущности
         self._half_extents = self._compute_half_extents()
 
+        # Ищем PhysicsWorldComponent в сцене и регистрируемся
+        self._find_and_register_with_physics_world(scene)
+
     def _compute_half_extents(self) -> np.ndarray:
         """Вычислить half_extents из меша или коллайдера сущности."""
         if self.entity is None:
@@ -114,6 +117,20 @@ class RigidBodyComponent(Component):
 
         # По умолчанию: единичный куб
         return np.array([0.5, 0.5, 0.5])
+
+    def _find_and_register_with_physics_world(self, scene: "Scene"):
+        """Найти PhysicsWorldComponent в сцене и зарегистрироваться."""
+        if self._body_index >= 0:
+            # Уже зарегистрированы
+            return
+
+        from termin.physics.physics_world_component import PhysicsWorldComponent
+
+        for entity in scene.entities:
+            pw_comp = entity.get_component(PhysicsWorldComponent)
+            if pw_comp is not None:
+                pw_comp.add_rigid_body_component(self)
+                return
 
     def _register_with_world(self, world: PhysicsWorld):
         """Зарегистрировать тело в C++ PhysicsWorld."""

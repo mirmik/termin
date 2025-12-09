@@ -65,8 +65,12 @@ class Component:
         """Return shaders that must be compiled before rendering."""
         return ()
 
+    def on_added(self, scene: "Scene"):
+        """Called immediately when the component is added to an active scene."""
+        pass
+
     def start(self, scene: "Scene"):
-        """Called once when the component becomes part of an active scene."""
+        """Called once before the first update, after all components are added."""
         self._started = True
 
     def update(self, dt: float):
@@ -244,8 +248,7 @@ class Entity:
         self._components.append(component)
         if self.scene is not None:
             self.scene.register_component(component)
-            if not component._started:
-                component.start(self.scene)
+            component.on_added(self.scene)
         return component
 
     def remove_component(self, component: Component):
@@ -295,8 +298,7 @@ class Entity:
         self.scene = scene
         for component in self._components:
             scene.register_component(component)
-            if not component._started:
-                component.start(scene)
+            component.on_added(scene)
 
     def on_removed(self):
         for component in self._components:

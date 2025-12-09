@@ -85,6 +85,7 @@ class Scene:
         self.colliders = []
         self.light_components: List[LightComponent] = []
         self.update_list: List[Component] = []
+        self._pending_start: List[Component] = []
 
         # Lights
         self.light_direction = np.array([-0.5, -1.0, -0.3], dtype=np.float32)
@@ -237,6 +238,10 @@ class Scene:
         if is_overrides_method(component, "update", Component):
             self.update_list.append(component)
 
+        # Добавляем в список ожидающих start()
+        if not component._started:
+            self._pending_start.append(component)
+
     def unregister_component(self, component: Component):
         from termin.colliders.collider_component import ColliderComponent
 
@@ -252,7 +257,18 @@ class Scene:
         if component in self.update_list:
             self.update_list.remove(component)
 
+        if component in self._pending_start:
+            self._pending_start.remove(component)
+
     def update(self, dt: float):
+        # Вызываем start() для всех новых компонентов перед первым update
+        if self._pending_start:
+            pending = self._pending_start
+            self._pending_start = []
+            for component in pending:
+                if not component._started:
+                    component.start(self)
+
         for component in self.update_list:
             component.update(dt)
 
