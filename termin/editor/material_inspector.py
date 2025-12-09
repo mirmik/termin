@@ -1,0 +1,633 @@
+# ===== termin/editor/material_inspector.py =====
+"""
+Инспектор материалов для редактора.
+
+Позволяет:
+- Выбирать шейдер из загруженных .shader файлов
+- Редактировать все uniform-свойства шейдера
+- Сохранять/загружать материалы из .material файлов
+- Поддерживает типы: float, int, bool, vec2, vec3, vec4, color, texture2d
+
+Формат .material файла:
+{
+    "shader": "path/to/shader.shader",
+    "uniforms": {
+        "u_color": [1.0, 0.5, 0.0, 1.0],
+        "u_roughness": 0.5
+    },
+    "textures": {
+        "u_mainTex": "path/to/texture.png"
+    }
+}
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+import numpy as np
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QLabel,
+    QDoubleSpinBox,
+    QSpinBox,
+    QCheckBox,
+    QComboBox,
+    QPushButton,
+    QLineEdit,
+    QScrollArea,
+    QFrame,
+    QFileDialog,
+    QGroupBox,
+    QMessageBox,
+)
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
+
+from termin.editor.color_dialog import ColorDialog
+from termin.visualization.core.material import Material
+from termin.visualization.render.shader_parser import (
+    parse_shader_text,
+    ShaderMultyPhaseProgramm,
+    UniformProperty,
+)
+
+
+class ColorButton(QPushButton):
+    """Кнопка для выбора цвета с превью."""
+
+    color_changed = pyqtSignal(tuple)
+
+    def __init__(self, color: tuple = (1.0, 1.0, 1.0, 1.0), parent: QWidget | None = None):
+        super().__init__(parent)
+        self._color = color
+        self.setFixedSize(60, 24)
+        self._update_style()
+        self.clicked.connect(self._on_clicked)
+
+    def set_color(self, color: tuple) -> None:
+        self._color = color
+        self._update_style()
+
+    def get_color(self) -> tuple:
+        return self._color
+
+    def _update_style(self) -> None:
+        r, g, b, a = self._color
+        # Конвертируем в 0-255
+        r255 = int(r * 255)
+        g255 = int(g * 255)
+        b255 = int(b * 255)
+        self.setStyleSheet(
+            f"background-color: rgba({r255}, {g255}, {b255}, {int(a * 255)}); "
+            f"border: 1px solid #555;"
+        )
+
+    def _on_clicked(self) -> None:
+        result = ColorDialog.get_color(self._color, self)
+        if result is not None:
+            self._color = result
+            self._update_style()
+            self.color_changed.emit(result)
+
+
+class Vec2Editor(QWidget):
+    """Редактор для vec2."""
+
+    value_changed = pyqtSignal(tuple)
+
+    def __init__(self, value: tuple = (0.0, 0.0), parent: QWidget | None = None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self._spins: List[QDoubleSpinBox] = []
+        for i, label in enumerate(["X", "Y"]):
+            lbl = QLabel(label)
+            lbl.setFixedWidth(12)
+            layout.addWidget(lbl)
+
+            spin = QDoubleSpinBox()
+            spin.setRange(-9999.0, 9999.0)
+            spin.setDecimals(3)
+            spin.setSingleStep(0.1)
+            spin.setValue(value[i] if i < len(value) else 0.0)
+            spin.valueChanged.connect(self._on_value_changed)
+            layout.addWidget(spin)
+            self._spins.append(spin)
+
+    def set_value(self, value: tuple) -> None:
+        for i, spin in enumerate(self._spins):
+            spin.blockSignals(True)
+            spin.setValue(value[i] if i < len(value) else 0.0)
+            spin.blockSignals(False)
+
+    def get_value(self) -> tuple:
+        return tuple(spin.value() for spin in self._spins)
+
+    def _on_value_changed(self) -> None:
+        self.value_changed.emit(self.get_value())
+
+
+class Vec3Editor(QWidget):
+    """Редактор для vec3."""
+
+    value_changed = pyqtSignal(tuple)
+
+    def __init__(self, value: tuple = (0.0, 0.0, 0.0), parent: QWidget | None = None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self._spins: List[QDoubleSpinBox] = []
+        for i, label in enumerate(["X", "Y", "Z"]):
+            lbl = QLabel(label)
+            lbl.setFixedWidth(12)
+            layout.addWidget(lbl)
+
+            spin = QDoubleSpinBox()
+            spin.setRange(-9999.0, 9999.0)
+            spin.setDecimals(3)
+            spin.setSingleStep(0.1)
+            spin.setValue(value[i] if i < len(value) else 0.0)
+            spin.valueChanged.connect(self._on_value_changed)
+            layout.addWidget(spin)
+            self._spins.append(spin)
+
+    def set_value(self, value: tuple) -> None:
+        for i, spin in enumerate(self._spins):
+            spin.blockSignals(True)
+            spin.setValue(value[i] if i < len(value) else 0.0)
+            spin.blockSignals(False)
+
+    def get_value(self) -> tuple:
+        return tuple(spin.value() for spin in self._spins)
+
+    def _on_value_changed(self) -> None:
+        self.value_changed.emit(self.get_value())
+
+
+class Vec4Editor(QWidget):
+    """Редактор для vec4."""
+
+    value_changed = pyqtSignal(tuple)
+
+    def __init__(self, value: tuple = (0.0, 0.0, 0.0, 0.0), parent: QWidget | None = None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self._spins: List[QDoubleSpinBox] = []
+        for i, label in enumerate(["X", "Y", "Z", "W"]):
+            lbl = QLabel(label)
+            lbl.setFixedWidth(12)
+            layout.addWidget(lbl)
+
+            spin = QDoubleSpinBox()
+            spin.setRange(-9999.0, 9999.0)
+            spin.setDecimals(3)
+            spin.setSingleStep(0.1)
+            spin.setValue(value[i] if i < len(value) else 0.0)
+            spin.valueChanged.connect(self._on_value_changed)
+            layout.addWidget(spin)
+            self._spins.append(spin)
+
+    def set_value(self, value: tuple) -> None:
+        for i, spin in enumerate(self._spins):
+            spin.blockSignals(True)
+            spin.setValue(value[i] if i < len(value) else 0.0)
+            spin.blockSignals(False)
+
+    def get_value(self) -> tuple:
+        return tuple(spin.value() for spin in self._spins)
+
+    def _on_value_changed(self) -> None:
+        self.value_changed.emit(self.get_value())
+
+
+class MaterialInspector(QWidget):
+    """
+    Инспектор материала.
+
+    Отображает:
+    - Имя материала
+    - Путь к шейдеру
+    - Все uniform-свойства с редакторами по типу
+    """
+
+    material_changed = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._material: Material | None = None
+        self._shader_program: ShaderMultyPhaseProgramm | None = None
+        self._uniform_widgets: Dict[str, QWidget] = {}
+
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(4, 4, 4, 4)
+        main_layout.setSpacing(8)
+
+        # Заголовок
+        title = QLabel("Material Inspector")
+        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        main_layout.addWidget(title)
+
+        # Имя материала
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("Name:"))
+        self._name_edit = QLineEdit()
+        self._name_edit.setPlaceholderText("Material name")
+        self._name_edit.editingFinished.connect(self._on_name_changed)
+        name_layout.addWidget(self._name_edit)
+        main_layout.addLayout(name_layout)
+
+        # Путь к шейдеру
+        shader_layout = QHBoxLayout()
+        shader_layout.addWidget(QLabel("Shader:"))
+        self._shader_label = QLabel("None")
+        self._shader_label.setStyleSheet("color: #888;")
+        shader_layout.addWidget(self._shader_label, 1)
+
+        self._load_shader_btn = QPushButton("Load...")
+        self._load_shader_btn.setFixedWidth(60)
+        self._load_shader_btn.clicked.connect(self._on_load_shader)
+        shader_layout.addWidget(self._load_shader_btn)
+        main_layout.addLayout(shader_layout)
+
+        # Разделитель
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        main_layout.addWidget(line)
+
+        # Скролл-область для свойств
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        self._properties_widget = QWidget()
+        self._properties_layout = QVBoxLayout(self._properties_widget)
+        self._properties_layout.setContentsMargins(0, 0, 0, 0)
+        self._properties_layout.setSpacing(4)
+        self._properties_layout.addStretch()
+
+        scroll.setWidget(self._properties_widget)
+        main_layout.addWidget(scroll, 1)
+
+    def set_material(self, material: Material | None) -> None:
+        """Установить материал для редактирования."""
+        self._material = material
+        self._rebuild_ui()
+
+    def load_shader_file(self, path: str | Path) -> None:
+        """Загрузить шейдер из файла и создать новый материал."""
+        path = Path(path)
+        if not path.exists():
+            return
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                shader_text = f.read()
+
+            tree = parse_shader_text(shader_text)
+            self._shader_program = ShaderMultyPhaseProgramm.from_tree(tree)
+
+            # Создаём материал из шейдера
+            self._material = Material.from_parsed(
+                self._shader_program,
+                name=path.stem,
+            )
+            self._material.shader_path = str(path)
+            self._material.source_path = None  # Это новый материал, ещё не сохранён
+
+            self._rebuild_ui()
+            self.material_changed.emit()
+
+        except Exception as e:
+            print(f"Error loading shader: {e}")
+
+    def load_material_file(self, path: str | Path) -> None:
+        """Загрузить материал из .material файла."""
+        path = Path(path)
+        if not path.exists():
+            return
+
+        try:
+            self._material = Material.load_from_material_file(str(path))
+
+            # Загружаем shader_program для UI
+            shader_path = self._material.shader_path
+            if shader_path and Path(shader_path).exists():
+                with open(shader_path, "r", encoding="utf-8") as f:
+                    shader_text = f.read()
+                tree = parse_shader_text(shader_text)
+                self._shader_program = ShaderMultyPhaseProgramm.from_tree(tree)
+            else:
+                self._shader_program = None
+
+            self._rebuild_ui()
+            self.material_changed.emit()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error Loading Material",
+                f"Failed to load material:\n{path}\n\nError: {e}",
+            )
+
+    def save_material_file(self, path: str | Path | None = None) -> bool:
+        """
+        Сохранить материал в .material файл.
+
+        Args:
+            path: Путь для сохранения. Если None, используется source_path материала
+                  или открывается диалог выбора файла.
+
+        Returns:
+            True если сохранение успешно
+        """
+        if self._material is None:
+            return False
+
+        # Определяем путь для сохранения
+        if path is None:
+            path = self._material.source_path
+
+        if path is None:
+            # Открываем диалог выбора файла
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save Material",
+                f"{self._material.name or 'material'}.material",
+                "Material Files (*.material);;All Files (*)",
+            )
+            if not path:
+                return False
+
+        path = Path(path)
+
+        # Добавляем расширение если не указано
+        if path.suffix != ".material":
+            path = path.with_suffix(".material")
+
+        try:
+            # Формируем данные материала
+            data = self._material.serialize_to_material_file()
+
+            # Сохраняем
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+            # Обновляем source_path
+            self._material.source_path = str(path)
+
+            return True
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error Saving Material",
+                f"Failed to save material:\n{path}\n\nError: {e}",
+            )
+            return False
+
+    def _rebuild_ui(self) -> None:
+        """Перестроить UI под текущий материал."""
+        # Очищаем старые виджеты свойств
+        self._uniform_widgets.clear()
+        while self._properties_layout.count() > 1:
+            item = self._properties_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if self._material is None:
+            self._name_edit.setText("")
+            self._shader_label.setText("None")
+            return
+
+        # Имя материала
+        self._name_edit.setText(self._material.name or "")
+
+        # Путь к шейдеру
+        shader_path = getattr(self._material, 'shader_path', None)
+        if shader_path:
+            self._shader_label.setText(Path(shader_path).name)
+        else:
+            self._shader_label.setText("None")
+
+        # Собираем все uniforms из всех фаз
+        all_uniforms: Dict[str, UniformProperty] = {}
+        if self._shader_program is not None:
+            for phase in self._shader_program.phases:
+                for uniform in phase.uniforms:
+                    if uniform.name not in all_uniforms:
+                        all_uniforms[uniform.name] = uniform
+
+        # Создаём редакторы для каждого uniform
+        for uniform in all_uniforms.values():
+            self._create_uniform_editor(uniform)
+
+    def _create_uniform_editor(self, uniform: UniformProperty) -> None:
+        """Создать редактор для uniform-свойства."""
+        # Получаем текущее значение из материала
+        current_value = None
+        if self._material is not None:
+            current_value = self._material.uniforms.get(uniform.name)
+        if current_value is None:
+            current_value = uniform.default
+
+        # Лейбл
+        label_text = uniform.label or uniform.name
+
+        # Создаём редактор в зависимости от типа
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 2, 0, 2)
+        row_layout.setSpacing(8)
+
+        label = QLabel(label_text + ":")
+        label.setFixedWidth(100)
+        row_layout.addWidget(label)
+
+        editor: QWidget | None = None
+
+        if uniform.uniform_type == "float":
+            editor = self._create_float_editor(uniform, current_value)
+        elif uniform.uniform_type == "int":
+            editor = self._create_int_editor(uniform, current_value)
+        elif uniform.uniform_type == "bool":
+            editor = self._create_bool_editor(uniform, current_value)
+        elif uniform.uniform_type == "vec2":
+            editor = self._create_vec2_editor(uniform, current_value)
+        elif uniform.uniform_type == "vec3":
+            editor = self._create_vec3_editor(uniform, current_value)
+        elif uniform.uniform_type == "vec4":
+            editor = self._create_vec4_editor(uniform, current_value)
+        elif uniform.uniform_type == "color":
+            editor = self._create_color_editor(uniform, current_value)
+        elif uniform.uniform_type == "texture2d":
+            editor = self._create_texture_editor(uniform, current_value)
+
+        if editor is not None:
+            row_layout.addWidget(editor, 1)
+            self._uniform_widgets[uniform.name] = editor
+
+        # Вставляем перед stretch
+        self._properties_layout.insertWidget(
+            self._properties_layout.count() - 1,
+            row_widget
+        )
+
+    def _create_float_editor(self, uniform: UniformProperty, value: Any) -> QDoubleSpinBox:
+        spin = QDoubleSpinBox()
+        spin.setDecimals(3)
+        spin.setSingleStep(0.1)
+
+        if uniform.range_min is not None and uniform.range_max is not None:
+            spin.setRange(uniform.range_min, uniform.range_max)
+        else:
+            spin.setRange(-9999.0, 9999.0)
+
+        spin.setValue(float(value) if value is not None else 0.0)
+        spin.valueChanged.connect(
+            lambda v, name=uniform.name: self._on_uniform_changed(name, v)
+        )
+        return spin
+
+    def _create_int_editor(self, uniform: UniformProperty, value: Any) -> QSpinBox:
+        spin = QSpinBox()
+
+        if uniform.range_min is not None and uniform.range_max is not None:
+            spin.setRange(int(uniform.range_min), int(uniform.range_max))
+        else:
+            spin.setRange(-9999, 9999)
+
+        spin.setValue(int(value) if value is not None else 0)
+        spin.valueChanged.connect(
+            lambda v, name=uniform.name: self._on_uniform_changed(name, v)
+        )
+        return spin
+
+    def _create_bool_editor(self, uniform: UniformProperty, value: Any) -> QCheckBox:
+        checkbox = QCheckBox()
+        checkbox.setChecked(bool(value) if value is not None else False)
+        checkbox.stateChanged.connect(
+            lambda state, name=uniform.name: self._on_uniform_changed(name, state == Qt.CheckState.Checked.value)
+        )
+        return checkbox
+
+    def _create_vec2_editor(self, uniform: UniformProperty, value: Any) -> Vec2Editor:
+        val = value if value is not None else (0.0, 0.0)
+        if isinstance(val, np.ndarray):
+            val = tuple(val.tolist())
+        editor = Vec2Editor(val)
+        editor.value_changed.connect(
+            lambda v, name=uniform.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
+        )
+        return editor
+
+    def _create_vec3_editor(self, uniform: UniformProperty, value: Any) -> Vec3Editor:
+        val = value if value is not None else (0.0, 0.0, 0.0)
+        if isinstance(val, np.ndarray):
+            val = tuple(val.tolist())
+        editor = Vec3Editor(val)
+        editor.value_changed.connect(
+            lambda v, name=uniform.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
+        )
+        return editor
+
+    def _create_vec4_editor(self, uniform: UniformProperty, value: Any) -> Vec4Editor:
+        val = value if value is not None else (0.0, 0.0, 0.0, 0.0)
+        if isinstance(val, np.ndarray):
+            val = tuple(val.tolist())
+        editor = Vec4Editor(val)
+        editor.value_changed.connect(
+            lambda v, name=uniform.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
+        )
+        return editor
+
+    def _create_color_editor(self, uniform: UniformProperty, value: Any) -> ColorButton:
+        val = value if value is not None else (1.0, 1.0, 1.0, 1.0)
+        if isinstance(val, np.ndarray):
+            val = tuple(val.tolist())
+        editor = ColorButton(val)
+        editor.color_changed.connect(
+            lambda v, name=uniform.name: self._on_uniform_changed(name, np.array(v, dtype=np.float32))
+        )
+        return editor
+
+    def _create_texture_editor(self, uniform: UniformProperty, value: Any) -> QWidget:
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        path_label = QLabel(str(value) if value else "None")
+        path_label.setStyleSheet("color: #888;")
+        layout.addWidget(path_label, 1)
+
+        browse_btn = QPushButton("...")
+        browse_btn.setFixedWidth(30)
+        browse_btn.clicked.connect(
+            lambda _, name=uniform.name, lbl=path_label: self._on_browse_texture(name, lbl)
+        )
+        layout.addWidget(browse_btn)
+
+        return widget
+
+    def _on_uniform_changed(self, name: str, value: Any) -> None:
+        """Обработчик изменения uniform-значения."""
+        if self._material is None:
+            return
+
+        # Обновляем значение во всех фазах материала
+        for phase in self._material.phases:
+            phase.uniforms[name] = value
+
+        self.material_changed.emit()
+
+    def _on_name_changed(self) -> None:
+        """Обработчик изменения имени материала."""
+        if self._material is None:
+            return
+        self._material.name = self._name_edit.text()
+        self.material_changed.emit()
+
+    def _on_load_shader(self) -> None:
+        """Обработчик загрузки шейдера."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Shader",
+            "",
+            "Shader Files (*.shader);;All Files (*)",
+        )
+        if path:
+            self.load_shader_file(path)
+
+    def _on_browse_texture(self, uniform_name: str, label: QLabel) -> None:
+        """Обработчик выбора текстуры."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Texture",
+            "",
+            "Image Files (*.png *.jpg *.jpeg *.tga *.bmp);;All Files (*)",
+        )
+        if path:
+            label.setText(Path(path).name)
+            # TODO: Загрузить текстуру и установить в материал
+            self.material_changed.emit()
+
+    @property
+    def material(self) -> Material | None:
+        """Текущий материал."""
+        return self._material

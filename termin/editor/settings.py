@@ -32,6 +32,7 @@ class EditorSettings:
     KEY_WINDOW_GEOMETRY = "Editor/windowGeometry"
     KEY_WINDOW_STATE = "Editor/windowState"
     KEY_SPLITTER_SIZES = "Editor/splitterSizes"
+    KEY_TEXT_EDITOR = "Editor/textEditor"
 
     def __init__(self):
         self._settings = QSettings("Termin", "TerminEditor")
@@ -98,3 +99,14 @@ class EditorSettings:
     def set_window_state(self, state: bytes) -> None:
         """Сохранить состояние окна."""
         self.set(self.KEY_WINDOW_STATE, state)
+
+    def get_text_editor(self) -> str | None:
+        """Получить путь к внешнему текстовому редактору."""
+        return self.get(self.KEY_TEXT_EDITOR)
+
+    def set_text_editor(self, editor_path: str | None) -> None:
+        """Сохранить путь к текстовому редактору."""
+        if editor_path:
+            self.set(self.KEY_TEXT_EDITOR, editor_path)
+        else:
+            self._settings.remove(self.KEY_TEXT_EDITOR)

@@ -39,6 +39,7 @@ class EditorWindow(QMainWindow):
         self._undo_stack_viewer = None
         self._framegraph_debugger = None
         self._scene_inspector_dialog = None
+        self._material_inspector_dialog = None
         self._status_bar_label: QLabel | None = None
         self._fps_smooth: float | None = None
         self._fps_alpha: float = 0.1  # экспоненциальное сглаживание: f_new = f_prev*(1-α) + f_curr*α
@@ -218,6 +219,11 @@ class EditorWindow(QMainWindow):
         self._action_redo = edit_menu.addAction("Redo")
         self._action_redo.setShortcut("Ctrl+Shift+Z")
         self._action_redo.triggered.connect(self.redo)
+
+        edit_menu.addSeparator()
+
+        settings_action = edit_menu.addAction("Settings...")
+        settings_action.triggered.connect(self._show_settings_dialog)
 
         # Scene menu
         scene_properties_action = scene_menu.addAction("Scene Properties...")
@@ -654,10 +660,13 @@ class EditorWindow(QMainWindow):
             # Это файл сцены — загружаем
             self._load_scene_from_file(str(path))
 
+        elif path.suffix == ".material":
+            # Материал — открываем в инспекторе материалов
+            self._open_material_inspector(str(path), is_material=True)
+
         elif path.suffix == ".shader":
-            # Шейдер — пока просто показываем в консоли
-            if self.consoleOutput is not None:
-                self.consoleOutput.appendPlainText(f"Shader: {path.name}")
+            # Шейдер — открываем во внешнем текстовом редакторе
+            self._open_in_text_editor(str(path))
 
         else:
             # Другие файлы — логируем
@@ -687,6 +696,112 @@ class EditorWindow(QMainWindow):
 
             if self.consoleOutput is not None:
                 self.consoleOutput.appendPlainText(f"Opened project: {dir_path}")
+
+    def _open_material_inspector(self, file_path: str, is_material: bool = False) -> None:
+        """
+        Открывает инспектор материалов.
+
+        Args:
+            file_path: Путь к файлу (.material или .shader)
+            is_material: True если это .material файл, False если .shader
+        """
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox
+        from termin.editor.material_inspector import MaterialInspector
+        from pathlib import Path
+
+        if self._material_inspector_dialog is None:
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Material Inspector")
+            dialog.setMinimumSize(400, 500)
+
+            layout = QVBoxLayout(dialog)
+
+            inspector = MaterialInspector(dialog)
+            layout.addWidget(inspector)
+
+            button_box = QDialogButtonBox(
+                QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close
+            )
+            button_box.rejected.connect(dialog.close)
+            button_box.accepted.connect(lambda: self._save_material_from_inspector())
+            layout.addWidget(button_box)
+
+            dialog._inspector = inspector
+            self._material_inspector_dialog = dialog
+
+        inspector = self._material_inspector_dialog._inspector
+
+        # Загружаем файл в инспектор
+        if is_material:
+            inspector.load_material_file(file_path)
+            self._material_inspector_dialog.setWindowTitle(f"Material - {Path(file_path).name}")
+        else:
+            inspector.load_shader_file(file_path)
+            self._material_inspector_dialog.setWindowTitle(f"New Material from {Path(file_path).name}")
+
+        self._material_inspector_dialog.show()
+        self._material_inspector_dialog.raise_()
+        self._material_inspector_dialog.activateWindow()
+
+    def _save_material_from_inspector(self) -> None:
+        """Сохраняет материал из инспектора в файл."""
+        if self._material_inspector_dialog is None:
+            return
+
+        inspector = self._material_inspector_dialog._inspector
+        if inspector.save_material_file():
+            material = inspector.material
+            if material is not None:
+                # Регистрируем материал в ResourceManager
+                name = material.name or "NewMaterial"
+                self.resource_manager.register_material(name, material)
+
+                if self.consoleOutput is not None:
+                    self.consoleOutput.appendPlainText(f"Material '{name}' saved")
+
+    def _show_settings_dialog(self) -> None:
+        """Открывает диалог настроек редактора."""
+        from termin.editor.settings_dialog import SettingsDialog
+
+        dialog = SettingsDialog(self)
+        dialog.exec()
+
+    def _open_in_text_editor(self, file_path: str) -> None:
+        """
+        Открывает файл во внешнем текстовом редакторе.
+
+        Использует редактор из настроек, если задан.
+        Иначе использует системный редактор по умолчанию.
+        """
+        import subprocess
+        import platform
+
+        settings = EditorSettings.instance()
+        editor = settings.get_text_editor()
+
+        try:
+            if editor:
+                # Используем указанный редактор
+                subprocess.Popen([editor, file_path])
+            else:
+                # Системный редактор по умолчанию
+                system = platform.system()
+                if system == "Windows":
+                    os.startfile(file_path)
+                elif system == "Darwin":  # macOS
+                    subprocess.Popen(["open", file_path])
+                else:  # Linux
+                    subprocess.Popen(["xdg-open", file_path])
+
+            if self.consoleOutput is not None:
+                self.consoleOutput.appendPlainText(f"Opened in editor: {file_path}")
+
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"Failed to open file in text editor:\n{file_path}\n\nError: {e}",
+            )
 
     def _init_status_bar(self) -> None:
         """

@@ -359,12 +359,13 @@ class Material:
         """
         Сериализует материал.
 
-        Если материал загружен из файла (source_path задан), возвращает только путь.
+        Если материал загружен из .material файла, возвращает ссылку на файл.
         Иначе сериализует inline со всеми фазами.
         """
         if self.source_path is not None:
+            # Материал из файла - сохраняем только ссылку
             return {
-                "type": "file",
+                "type": "material_file",
                 "source_path": self.source_path,
                 "name": self.name,
             }
@@ -375,14 +376,58 @@ class Material:
             "phases": [phase.serialize() for phase in self.phases],
         }
 
+    def serialize_to_material_file(self) -> dict:
+        """
+        Сериализует материал в формат .material файла.
+
+        Формат:
+        {
+            "shader": "path/to/shader.shader",
+            "uniforms": {...},
+            "textures": {...}
+        }
+        """
+        def serialize_value(val):
+            if isinstance(val, np.ndarray):
+                return val.tolist()
+            return val
+
+        # Собираем uniforms из всех фаз (они должны быть одинаковые)
+        uniforms = {}
+        textures = {}
+        shader_path = None
+
+        for phase in self.phases:
+            for name, value in phase.uniforms.items():
+                if name not in uniforms:
+                    uniforms[name] = serialize_value(value)
+            for name, tex in phase.textures.items():
+                if name not in textures and hasattr(tex, 'source_path'):
+                    textures[name] = tex.source_path
+
+        # shader_path берём из source_path материала (если это .shader)
+        # или из отдельного атрибута
+        shader_path = getattr(self, 'shader_path', None)
+
+        result = {}
+        if shader_path:
+            result["shader"] = shader_path
+        if uniforms:
+            result["uniforms"] = uniforms
+        if textures:
+            result["textures"] = textures
+
+        return result
+
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "Material":
         """
         Десериализует материал.
 
-        Поддерживает два типа:
-        - "file": загрузка из файла шейдера
+        Поддерживает типы:
+        - "material_file": ссылка на .material файл
         - "inline": полная inline-сериализация
+        - "file": legacy формат (ссылка на .shader)
 
         Параметры:
             data: Сериализованные данные
@@ -393,8 +438,13 @@ class Material:
         """
         material_type = data.get("type", "legacy")
 
-        if material_type == "file":
-            # Материал из файла - парсим и создаём
+        if material_type == "material_file":
+            # Загрузка из .material файла
+            source_path = data["source_path"]
+            return cls.load_from_material_file(source_path)
+
+        elif material_type == "file":
+            # Legacy: материал из .shader файла
             source_path = data["source_path"]
             from termin.visualization.render.shader_parser import (
                 parse_shader_text,
@@ -412,6 +462,7 @@ class Material:
             mat = cls.__new__(cls)
             mat.name = data.get("name")
             mat.source_path = None
+            mat.shader_path = None
             mat.phases = [
                 MaterialPhase.deserialize(phase_data, context)
                 for phase_data in data.get("phases", [])
@@ -427,6 +478,71 @@ class Material:
                     mat.textures[k] = context.load_texture(p)
             mat.uniforms.update(data.get("uniforms", {}))
             return mat
+
+    @classmethod
+    def load_from_material_file(cls, material_path: str) -> "Material":
+        """
+        Загружает материал из .material файла.
+
+        Формат файла:
+        {
+            "shader": "path/to/shader.shader",
+            "uniforms": {...},
+            "textures": {...}
+        }
+        """
+        import json
+        from pathlib import Path
+        from termin.visualization.render.shader_parser import (
+            parse_shader_text,
+            ShaderMultyPhaseProgramm,
+        )
+
+        material_path = Path(material_path)
+
+        with open(material_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        shader_path = data.get("shader")
+        if not shader_path:
+            raise ValueError(f"Material file {material_path} missing 'shader' field")
+
+        # Резолвим путь шейдера относительно .material файла
+        shader_path = Path(shader_path)
+        if not shader_path.is_absolute():
+            shader_path = material_path.parent / shader_path
+
+        if not shader_path.exists():
+            raise FileNotFoundError(f"Shader not found: {shader_path}")
+
+        # Парсим шейдер
+        with open(shader_path, "r", encoding="utf-8") as f:
+            shader_text = f.read()
+
+        tree = parse_shader_text(shader_text)
+        program = ShaderMultyPhaseProgramm.from_tree(tree)
+
+        # Конвертируем uniforms
+        uniforms_data = data.get("uniforms", {})
+        uniforms = {}
+        for name, value in uniforms_data.items():
+            if isinstance(value, list):
+                uniforms[name] = np.array(value, dtype=np.float32)
+            else:
+                uniforms[name] = value
+
+        # Создаём материал
+        mat = cls.from_parsed(
+            program,
+            uniforms=uniforms,
+            name=material_path.stem,
+            source_path=str(material_path),
+        )
+        mat.shader_path = str(shader_path)
+
+        # TODO: загрузка текстур из data.get("textures", {})
+
+        return mat
 
     @classmethod
     def from_parsed(
@@ -466,6 +582,7 @@ class Material:
         mat = cls.__new__(cls)
         mat.name = name or program.program
         mat.source_path = source_path
+        mat.shader_path = None  # Будет установлен при загрузке из .material файла
         mat.phases = []
 
         for shader_phase in program.phases:
