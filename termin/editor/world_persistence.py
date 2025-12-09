@@ -6,6 +6,7 @@ All other components should access scene via world_persistence.scene property.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import tempfile
@@ -51,6 +52,8 @@ class WorldPersistence:
         on_scene_changed: Optional[Callable[["Scene"], None]] = None,
         get_editor_camera_data: Optional[Callable[[], dict]] = None,
         set_editor_camera_data: Optional[Callable[[dict], None]] = None,
+        get_selected_entity_name: Optional[Callable[[], str | None]] = None,
+        select_entity_by_name: Optional[Callable[[str], None]] = None,
     ):
         """
         Args:
@@ -62,6 +65,8 @@ class WorldPersistence:
                              Получает новую сцену как аргумент.
             get_editor_camera_data: Колбэк для получения данных камеры редактора.
             set_editor_camera_data: Колбэк для установки данных камеры редактора.
+            get_selected_entity_name: Колбэк для получения имени выделенной сущности.
+            select_entity_by_name: Колбэк для выделения сущности по имени.
         """
         self._scene = scene
         self._resource_manager = resource_manager
@@ -69,6 +74,8 @@ class WorldPersistence:
         self._on_scene_changed = on_scene_changed
         self._get_editor_camera_data = get_editor_camera_data
         self._set_editor_camera_data = set_editor_camera_data
+        self._get_selected_entity_name = get_selected_entity_name
+        self._select_entity_by_name = select_entity_by_name
 
     @property
     def scene(self) -> "Scene":
@@ -181,13 +188,19 @@ class WorldPersistence:
         if self._get_editor_camera_data is not None:
             editor_camera_data = self._get_editor_camera_data()
 
+        # Получаем имя выделенной сущности
+        selected_entity_name = None
+        if self._get_selected_entity_name is not None:
+            selected_entity_name = self._get_selected_entity_name()
+
         data = {
             "resources": self._resource_manager.serialize(),
             "scene": self._scene.serialize(editor_camera_data=editor_camera_data),
+            "editor_state": {
+                "selected_entity_name": selected_entity_name,
+            },
         }
-        # Сериализуем в JSON и обратно для глубокого копирования
-        json_str = json.dumps(data, default=numpy_encoder)
-        return json.loads(json_str)
+        return copy.deepcopy(data)
 
     def restore_state(self, state: dict) -> None:
         """
@@ -239,6 +252,12 @@ class WorldPersistence:
             editor_camera_data = scene_data.get("editor_camera")
             if editor_camera_data is not None:
                 self._set_editor_camera_data(editor_camera_data)
+
+        # Восстанавливаем выделение (после смены сцены!)
+        editor_state = data.get("editor_state", {})
+        selected_name = editor_state.get("selected_entity_name")
+        if selected_name and self._select_entity_by_name is not None:
+            self._select_entity_by_name(selected_name)
 
         return {
             "loaded_entities": loaded_count,

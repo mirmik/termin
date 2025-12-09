@@ -54,6 +54,8 @@ class EditorWindow(QMainWindow):
             on_scene_changed=self._on_scene_changed,
             get_editor_camera_data=self._get_editor_camera_data,
             set_editor_camera_data=self._set_editor_camera_data,
+            get_selected_entity_name=self._get_selected_entity_name,
+            select_entity_by_name=self._select_entity_by_name,
         )
 
         # контроллеры создадим чуть позже
@@ -466,6 +468,43 @@ class EditorWindow(QMainWindow):
 
         # Обновляем позу камеры
         orbit_ctrl._update_pose()
+
+    def _get_selected_entity_name(self) -> str | None:
+        """
+        Возвращает имя выделенной сущности.
+        """
+        if self.selection_manager is None:
+            return None
+        selected = self.selection_manager.selected
+        if selected is None:
+            return None
+        return selected.name
+
+    def _select_entity_by_name(self, name: str) -> None:
+        """
+        Выделяет сущность по имени.
+        """
+        # Ищем сущность в сцене
+        entity = None
+        for ent in self.scene.entities:
+            if ent.name == name and ent.selectable:
+                entity = ent
+                break
+
+        if entity is None:
+            return
+
+        # Выделяем через SelectionManager
+        if self.selection_manager is not None:
+            self.selection_manager.select(entity)
+
+        # Обновляем дерево сцены
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.select_object(entity)
+
+        # Обновляем инспектор
+        if self.inspector is not None:
+            self.inspector.set_target(entity)
 
     def _scan_builtin_components(self):
         """
