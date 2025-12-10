@@ -182,6 +182,9 @@ class EditorWindow(QMainWindow):
         # --- Сканируем ресурсы проекта и включаем отслеживание ---
         self._scan_project_resources()
 
+        # --- Загружаем последнюю открытую сцену ---
+        self._load_last_scene()
+
     @property
     def scene(self):
         """Текущая сцена. Всегда получаем из WorldPersistence."""
@@ -1195,6 +1198,9 @@ class EditorWindow(QMainWindow):
             self.world_persistence.save(file_path)
             self._update_window_title()
 
+            # Сохраняем путь для следующего запуска
+            EditorSettings.instance().set_last_scene_path(file_path)
+
             if self.consoleOutput is not None:
                 self.consoleOutput.appendPlainText(f"Scene saved: {file_path}")
 
@@ -1229,6 +1235,9 @@ class EditorWindow(QMainWindow):
             self.world_persistence.load(file_path)
             self._update_window_title()
 
+            # Сохраняем путь для следующего запуска
+            EditorSettings.instance().set_last_scene_path(file_path)
+
             if self.consoleOutput is not None:
                 self.consoleOutput.appendPlainText(f"Scene loaded: {file_path}")
 
@@ -1239,6 +1248,31 @@ class EditorWindow(QMainWindow):
                 "Error Loading Scene",
                 f"Failed to load scene from:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
             )
+
+    def _load_last_scene(self) -> None:
+        """Загружает последнюю открытую сцену при старте редактора."""
+        settings = EditorSettings.instance()
+        last_scene_path = settings.get_last_scene_path()
+
+        if last_scene_path is None:
+            self._update_window_title()
+            return
+
+        try:
+            if self.world_persistence is None:
+                return
+
+            self.world_persistence.load(str(last_scene_path))
+            self._update_window_title()
+
+            if self.consoleOutput is not None:
+                self.consoleOutput.appendPlainText(f"Restored last scene: {last_scene_path}")
+
+        except Exception as e:
+            # Не показываем ошибку, просто логируем — сцена могла быть удалена
+            if self.consoleOutput is not None:
+                self.consoleOutput.appendPlainText(f"Could not restore last scene: {e}")
+            self._update_window_title()
 
     # ----------- game mode -----------
 

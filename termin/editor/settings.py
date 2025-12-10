@@ -28,7 +28,7 @@ class EditorSettings:
 
     # Ключи настроек
     KEY_LAST_PROJECT_PATH = "ProjectBrowser/lastProjectPath"
-    KEY_LAST_WORLD_PATH = "Editor/lastWorldPath"
+    KEY_LAST_SCENE_PATH = "Editor/lastScenePath"
     KEY_WINDOW_GEOMETRY = "Editor/windowGeometry"
     KEY_WINDOW_STATE = "Editor/windowState"
     KEY_SPLITTER_SIZES = "Editor/splitterSizes"
@@ -71,18 +71,18 @@ class EditorSettings:
         """Сохранить путь проекта."""
         self.set(self.KEY_LAST_PROJECT_PATH, str(path))
 
-    def get_last_world_path(self) -> Path | None:
-        """Получить путь последнего сохранённого/загруженного мира."""
-        path_str = self.get(self.KEY_LAST_WORLD_PATH)
+    def get_last_scene_path(self) -> Path | None:
+        """Получить путь последней открытой сцены."""
+        path_str = self.get(self.KEY_LAST_SCENE_PATH)
         if path_str:
             path = Path(path_str)
             if path.exists():
                 return path
         return None
 
-    def set_last_world_path(self, path: Path | str) -> None:
-        """Сохранить путь мира."""
-        self.set(self.KEY_LAST_WORLD_PATH, str(path))
+    def set_last_scene_path(self, path: Path | str) -> None:
+        """Сохранить путь сцены."""
+        self.set(self.KEY_LAST_SCENE_PATH, str(path))
 
     def get_window_geometry(self) -> bytes | None:
         """Получить геометрию окна."""
