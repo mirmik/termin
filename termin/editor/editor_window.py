@@ -17,15 +17,16 @@ from termin.editor.selection_manager import SelectionManager
 from termin.editor.dialog_manager import DialogManager
 from termin.editor.inspector_controller import InspectorController
 from termin.editor.menu_bar_controller import MenuBarController
+from termin.editor.editor_camera import EditorCameraManager
+from termin.editor.resource_loader import ResourceLoader
+from termin.editor.external_editor import open_in_text_editor
 
-from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
-from termin.visualization.render.components.mesh_renderer import MeshRenderer
+from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.editor.project_browser import ProjectBrowser
 from termin.editor.settings import EditorSettings
 from termin.visualization.core.resources import ResourceManager
-from termin.geombase.pose3 import Pose3
 
 
 class EditorWindow(QMainWindow):
@@ -73,8 +74,18 @@ class EditorWindow(QMainWindow):
 
         self._setup_menu_bar()
 
-        self._scan_builtin_components()
-        self._init_resources_from_scene()
+        # --- ResourceLoader ---
+        self._resource_loader = ResourceLoader(
+            parent=self,
+            resource_manager=self.resource_manager,
+            get_scene=lambda: self.scene,
+            get_project_path=self._get_project_path,
+            on_resource_reloaded=self._on_resource_reloaded,
+            log_message=self._log_to_console,
+        )
+
+        self._resource_loader.scan_builtin_components()
+        self._resource_loader.init_resources_from_scene()
 
         # --- UI из .ui ---
         self.sceneTree: QTreeView = self.findChild(QTreeView, "sceneTree")
@@ -116,16 +127,17 @@ class EditorWindow(QMainWindow):
             request_viewport_update=self._request_viewport_update,
         )
 
-        # --- создаём редакторские сущности (root, камера) ---
-        self.editor_entities = None
-        self.camera = None
-        self._ensure_editor_entities_root()
-        self._ensure_editor_camera()
+        # --- EditorCameraManager ---
+        self._camera_manager = EditorCameraManager(self.scene)
+
+        # Для обратной совместимости
+        self.editor_entities = self._camera_manager.editor_entities
+        self.camera = self._camera_manager.camera
 
         # --- гизмо-контроллер ---
         self.gizmo_controller = GizmoController(
             scene=self.scene,
-            editor_entities=self.editor_entities,
+            editor_entities=self._camera_manager.editor_entities,
             undo_handler=self.push_undo_command,
         )
 
@@ -290,79 +302,15 @@ class EditorWindow(QMainWindow):
         """Opens resource manager viewer dialog."""
         self._dialog_manager.show_resource_manager_viewer()
 
-    # ----------- вспомогательные сущности редактора -----------
-
-    def _ensure_editor_entities_root(self):
-        """
-        Ищем/создаём корневую сущность для редакторских вещей:
-        камера, гизмо и т.п.
-        """
-        for ent in self.scene.entities:
-            if ent.name == "EditorEntities":
-                self.editor_entities = ent
-                return
-
-        editor_entities = Entity(name="EditorEntities", serializable=False)
-        self.scene.add(editor_entities)
-        self.editor_entities = editor_entities
-
-    def _ensure_editor_camera(self):
-        """
-        Создаём редакторскую камеру и вешаем её под EditorEntities (если он есть).
-        Никакого поиска по сцене – у редактора всегда своя камера.
-        """
-        camera_entity = Entity(name="camera", pose=Pose3.identity(), serializable=False)
-        camera = PerspectiveCameraComponent()
-        camera_entity.add_component(camera)
-        camera_entity.add_component(OrbitCameraController())
-
-        if self.editor_entities is not None:
-            self.editor_entities.transform.link(camera_entity.transform)
-        self.scene.add(camera_entity)
-        self.camera = camera
+    # ----------- editor camera -----------
 
     def _get_editor_camera_data(self) -> dict | None:
-        """
-        Возвращает данные камеры редактора для сериализации.
-        """
-        if self.camera is None or self.camera.entity is None:
-            return None
-
-        orbit_ctrl = self.camera.entity.get_component(OrbitCameraController)
-        if orbit_ctrl is None:
-            return None
-
-        return {
-            "target": list(orbit_ctrl.target),
-            "radius": float(orbit_ctrl.radius),
-            "azimuth": float(orbit_ctrl.azimuth),
-            "elevation": float(orbit_ctrl.elevation),
-        }
+        """Get editor camera data for serialization."""
+        return self._camera_manager.get_camera_data()
 
     def _set_editor_camera_data(self, data: dict) -> None:
-        """
-        Применяет сохранённые данные к камере редактора.
-        """
-        if self.camera is None or self.camera.entity is None:
-            return
-
-        orbit_ctrl = self.camera.entity.get_component(OrbitCameraController)
-        if orbit_ctrl is None:
-            return
-
-        import numpy as np
-
-        if "target" in data:
-            orbit_ctrl.target = np.array(data["target"], dtype=np.float32)
-        if "radius" in data:
-            orbit_ctrl.radius = float(data["radius"])
-        if "azimuth" in data:
-            orbit_ctrl.azimuth = float(data["azimuth"])
-        if "elevation" in data:
-            orbit_ctrl.elevation = float(data["elevation"])
-
-        # Обновляем позу камеры
-        orbit_ctrl._update_pose()
+        """Apply saved camera data."""
+        self._camera_manager.set_camera_data(data)
 
     def _get_selected_entity_name(self) -> str | None:
         """
@@ -401,64 +349,16 @@ class EditorWindow(QMainWindow):
         if self.inspector is not None:
             self.inspector.set_target(entity)
 
-    def _scan_builtin_components(self):
-        """
-        Сканирует встроенные модули компонентов и регистрирует их в ResourceManager.
-        """
-        builtin_modules = [
-            "termin.visualization.components",
-            # Можно добавить другие модули
-        ]
-        loaded = self.resource_manager.scan_components(builtin_modules)
-        if loaded:
-            print(f"Loaded components: {loaded}")
+    def _get_project_path(self) -> str | None:
+        """Get current project path from project browser."""
+        if self.project_browser is None or self.project_browser.root_path is None:
+            return None
+        return str(self.project_browser.root_path)
 
-    def _init_resources_from_scene(self):
-        """
-        Складываем в ResourceManager материалы и меши, использованные в сцене.
-        И даём им хоть какие-то имена, если их ещё нет.
-        """
-        for ent in self.scene.entities:
-            mr = ent.get_component(MeshRenderer)
-            if mr is None:
-                continue
-
-            # ------------ МЕШИ ------------
-            mesh = mr.mesh
-            if mesh is not None:
-                existing_mesh_name = self.resource_manager.find_mesh_name(mesh)
-                if existing_mesh_name is None:
-                    name = mesh.name
-                    if not name:
-                        base = f"{ent.name}_mesh" if ent.name else "Mesh"
-                        name = base
-                        i = 1
-                        while name in self.resource_manager.meshes:
-                            i += 1
-                            name = f"{base}_{i}"
-                    mesh.name = name
-                    self.resource_manager.register_mesh(name, mesh)
-
-            # ------------ МАТЕРИАЛЫ ------------
-            mat = mr.material
-            if mat is None:
-                continue
-
-            existing_name = self.resource_manager.find_material_name(mat)
-            if existing_name is not None:
-                continue
-
-            name = mat.name
-            if not name:
-                base = f"{ent.name}_mat" if ent.name else "Material"
-                name = base
-                i = 1
-                while name in self.resource_manager.materials:
-                    i += 1
-                    name = f"{base}_{i}"
-                mat.name = name
-
-            self.resource_manager.register_material(name, mat)
+    def _log_to_console(self, message: str) -> None:
+        """Log message to console output."""
+        if self.consoleOutput is not None:
+            self.consoleOutput.appendPlainText(message)
 
     # ----------- реакции инспектора -----------
 
@@ -587,97 +487,22 @@ class EditorWindow(QMainWindow):
             # Сканируем ресурсы нового проекта
             self._scan_project_resources()
 
-    def _open_material_inspector(self, file_path: str, is_material: bool = False) -> None:
-        """
-        Открывает инспектор материалов в правой панели.
-
-        Args:
-            file_path: Путь к файлу (.material или .shader)
-            is_material: True если это .material файл, False если .shader
-        """
-        from pathlib import Path
-
-        # Загружаем файл в инспектор
-        if is_material:
-            self.show_material_inspector_for_file(file_path)
-        # .shader файлы теперь не создают материал, просто показываем пустой инспектор
-        # TODO: можно добавить ShaderInspector в будущем
-
     def _show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""
         self._dialog_manager.show_settings_dialog()
 
     def _open_in_text_editor(self, file_path: str) -> None:
-        """
-        Открывает файл во внешнем текстовом редакторе.
-
-        Использует редактор из настроек, если задан.
-        Иначе использует системный редактор по умолчанию.
-        """
-        import subprocess
-        import platform
-
-        settings = EditorSettings.instance()
-        editor = settings.get_text_editor()
-
-        try:
-            if editor:
-                # Используем указанный редактор
-                subprocess.Popen([editor, file_path])
-            else:
-                # Системный редактор по умолчанию
-                system = platform.system()
-                if system == "Windows":
-                    os.startfile(file_path)
-                elif system == "Darwin":  # macOS
-                    subprocess.Popen(["open", file_path])
-                else:  # Linux
-                    subprocess.Popen(["xdg-open", file_path])
-
-            if self.consoleOutput is not None:
-                self.consoleOutput.appendPlainText(f"Opened in editor: {file_path}")
-
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                "Error",
-                f"Failed to open file in text editor:\n{file_path}\n\nError: {e}",
-            )
+        """Open file in external text editor."""
+        open_in_text_editor(file_path, parent=self, log_message=self._log_to_console)
 
     def _on_resource_reloaded(self, resource_type: str, resource_name: str) -> None:
-        """Обработчик перезагрузки ресурса."""
-        if self.consoleOutput is not None:
-            self.consoleOutput.appendPlainText(f"Reloaded {resource_type}: {resource_name}")
-
-        # Перерисовываем viewport
+        """Callback for resource reload."""
+        self._log_to_console(f"Reloaded {resource_type}: {resource_name}")
         self._request_viewport_update()
 
     def _scan_project_resources(self) -> None:
-        """Сканирует директорию проекта, загружает ресурсы и включает отслеживание."""
-        if self.project_browser is None or self.project_browser.root_path is None:
-            return
-
-        project_path = str(self.project_browser.root_path)
-
-        # Регистрируем встроенный DefaultShader
-        self.resource_manager.register_default_shader()
-
-        # Сканируем и загружаем ресурсы
-        stats = self.resource_manager.scan_project_resources(project_path)
-
-        # Включаем отслеживание директории проекта
-        self.resource_manager.enable_file_watching(
-            project_path=project_path,
-            on_resource_reloaded=self._on_resource_reloaded,
-        )
-
-        if self.consoleOutput is not None:
-            total = stats["materials"] + stats["shaders"]
-            if total > 0 or stats["errors"] > 0:
-                self.consoleOutput.appendPlainText(
-                    f"Scanned project: {stats['materials']} materials, "
-                    f"{stats['shaders']} shaders, {stats['errors']} errors"
-                )
+        """Scan project directory for resources."""
+        self._resource_loader.scan_project_resources()
 
     def _init_status_bar(self) -> None:
         """
@@ -789,133 +614,52 @@ class EditorWindow(QMainWindow):
     # ----------- загрузка материалов -----------
 
     def _load_material_from_file(self) -> None:
-        """Открывает диалог выбора .shader файла, парсит его и добавляет в ResourceManager."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Material",
-            "",
-            "Shader Files (*.shader);;All Files (*)",
-        )
-        if not file_path:
-            return
-
-        try:
-            from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
-            from termin.visualization.core.material import Material
-
-            with open(file_path, "r", encoding="utf-8") as f:
-                shader_text = f.read()
-
-            tree = parse_shader_text(shader_text)
-            program = ShaderMultyPhaseProgramm.from_tree(tree)
-            material = Material.from_parsed(program, source_path=file_path)
-
-            # Определяем имя материала
-            material_name = program.program
-            if not material_name:
-                # Используем имя файла без расширения
-                material_name = os.path.splitext(os.path.basename(file_path))[0]
-
-            # Проверяем уникальность имени
-            base_name = material_name
-            counter = 1
-            while material_name in self.resource_manager.materials:
-                counter += 1
-                material_name = f"{base_name}_{counter}"
-
-            material.name = material_name
-            self.resource_manager.register_material(material_name, material)
-
-            QMessageBox.information(
-                self,
-                "Material Loaded",
-                f"Material '{material_name}' loaded successfully.\n"
-                f"Phases: {len(material.phases)}\n"
-                f"Phase marks: {', '.join(p.phase_mark for p in material.phases)}",
-            )
-
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Error Loading Material",
-                f"Failed to load material from:\n{file_path}\n\nError: {e}",
-            )
+        """Load material from .shader file."""
+        self._resource_loader.load_material_from_file()
 
     def _load_components_from_file(self) -> None:
-        """Загружает компоненты из Python файла или директории."""
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Components",
-            "",
-            "Python Files (*.py);;All Files (*)",
-        )
-        if not path:
-            return
-
-        try:
-            loaded = self.resource_manager.scan_components([path])
-
-            if loaded:
-                QMessageBox.information(
-                    self,
-                    "Components Loaded",
-                    f"Successfully loaded {len(loaded)} component(s):\n\n"
-                    + "\n".join(f"• {name}" for name in loaded),
-                )
-            else:
-                QMessageBox.warning(
-                    self,
-                    "No Components Found",
-                    f"No new Component subclasses found in:\n{path}",
-                )
-
-        except Exception as e:
-            import traceback
-            QMessageBox.critical(
-                self,
-                "Error Loading Components",
-                f"Failed to load components from:\n{path}\n\nError: {e}\n\n{traceback.format_exc()}",
-            )
+        """Load components from Python file."""
+        self._resource_loader.load_components_from_file()
 
     # ----------- WorldPersistence колбэки -----------
 
     def _on_scene_changed(self, new_scene) -> None:
         """
-        Колбэк от WorldPersistence при смене сцены.
-        Вызывается при reset(), load(), restore_state().
-        Пересоздаёт все editor entities в новой сцене.
+        Callback from WorldPersistence when scene changes.
+        Called on reset(), load(), restore_state().
+        Recreates all editor entities in the new scene.
         """
-        # Очищаем undo-стек
+        # Clear undo stack
         self.undo_stack.clear()
         self._update_undo_redo_actions()
         self.undo_stack_changed.emit()
 
-        # Сбрасываем выделение
+        # Clear selection
         if self.selection_manager is not None:
             self.selection_manager.clear()
 
-        # Пересоздаём редакторские сущности в НОВОЙ сцене
-        self.editor_entities = None
-        self._ensure_editor_entities_root()
-        self._ensure_editor_camera()
+        # Recreate editor entities in new scene
+        self._camera_manager.recreate_in_scene(new_scene)
+        self.editor_entities = self._camera_manager.editor_entities
+        self.camera = self._camera_manager.camera
 
-        # Пересоздаём гизмо в новой сцене
+        # Recreate gizmo in new scene
         if self.gizmo_controller is not None:
-            self.gizmo_controller.recreate_gizmo(new_scene, self.editor_entities)
+            self.gizmo_controller.recreate_gizmo(new_scene, self._camera_manager.editor_entities)
 
-        # Обновляем viewport - теперь он работает с новой сценой
+        # Update viewport
         if self.viewport_controller is not None:
             self.viewport_controller.set_scene(new_scene)
-            self.viewport_controller.set_camera(self.camera)
+            self.viewport_controller.set_camera(self._camera_manager.camera)
             self.viewport_controller.selected_entity_id = 0
             self.viewport_controller.hover_entity_id = 0
 
-        # Обновляем дерево сцены
+        # Update scene tree
         if self.scene_tree_controller is not None:
             self.scene_tree_controller._scene = new_scene
             self.scene_tree_controller.rebuild()
 
-        # Сбрасываем инспектор
+        # Clear inspector
         if self.inspector is not None:
             self.inspector.set_target(None)
 
