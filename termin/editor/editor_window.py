@@ -71,6 +71,7 @@ class EditorWindow(QMainWindow):
         self.selection_manager: SelectionManager | None = None
         self.game_mode_controller: GameModeController | None = None
         self.project_browser = None
+        self._project_name: str | None = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -717,8 +718,9 @@ class EditorWindow(QMainWindow):
             on_file_double_clicked=self._on_project_file_double_clicked,
         )
 
-        # Обновляем заголовок окна
-        self.setWindowTitle(f"Termin Editor - {project_root.name}")
+        # Обновляем имя проекта и заголовок окна
+        self._project_name = project_root.name
+        self._update_window_title()
 
     def _on_project_file_selected(self, file_path) -> None:
         """Обработчик выбора файла в Project Browser (одинарный клик)."""
@@ -764,7 +766,8 @@ class EditorWindow(QMainWindow):
 
         if dir_path:
             self.project_browser.set_root_path(dir_path)
-            self.setWindowTitle(f"Termin Editor - {Path(dir_path).name}")
+            self._project_name = Path(dir_path).name
+            self._update_window_title()
 
             # Сохраняем путь для следующего запуска
             EditorSettings.instance().set_last_project_path(dir_path)
@@ -1313,24 +1316,28 @@ class EditorWindow(QMainWindow):
         self._update_status_bar()
 
     def _update_window_title(self) -> None:
-        """Обновляет заголовок окна с учётом текущей сцены и режима."""
+        """Обновляет заголовок окна с учётом проекта, сцены и режима."""
         from pathlib import Path
 
         parts = ["Termin Editor"]
+
+        # Добавляем имя проекта
+        if self._project_name is not None:
+            parts.append(f"- {self._project_name}")
 
         # Добавляем имя сцены
         if self.world_persistence is not None:
             scene_path = self.world_persistence.current_scene_path
             if scene_path is not None:
                 scene_name = Path(scene_path).stem
-                parts.append(f"- {scene_name}")
+                parts.append(f"[{scene_name}]")
             else:
-                parts.append("- Untitled")
+                parts.append("[Untitled]")
 
         # Добавляем режим игры
         is_playing = self.game_mode_controller.is_playing if self.game_mode_controller else False
         if is_playing:
-            parts.append("[PLAYING]")
+            parts.append("- PLAYING")
 
         self.setWindowTitle(" ".join(parts))
 
