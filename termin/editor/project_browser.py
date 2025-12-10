@@ -19,10 +19,159 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QMessageBox,
 )
-from PyQt6.QtGui import QFileSystemModel, QAction
-from PyQt6.QtCore import Qt, QModelIndex, QDir
+from PyQt6.QtGui import QFileSystemModel, QAction, QPixmap, QPainter, QColor, QBrush, QPen, QIcon
+from PyQt6.QtCore import Qt, QModelIndex, QDir, QFileInfo
+from PyQt6.QtWidgets import QFileIconProvider
 
 from termin.editor.settings import EditorSettings
+
+
+def _create_material_icon() -> QIcon:
+    """Создаёт иконку материала — сфера с градиентом."""
+    size = 32
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    # Фон — тёмный круг (тень)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QBrush(QColor(40, 40, 40)))
+    painter.drawEllipse(2, 2, size - 4, size - 4)
+
+    # Основная сфера с градиентом
+    from PyQt6.QtGui import QRadialGradient
+    gradient = QRadialGradient(size * 0.35, size * 0.35, size * 0.45)
+    gradient.setColorAt(0.0, QColor(180, 120, 220))  # Светлый центр (фиолетовый)
+    gradient.setColorAt(0.5, QColor(120, 60, 180))   # Средний тон
+    gradient.setColorAt(1.0, QColor(60, 20, 100))    # Тёмный край
+
+    painter.setBrush(QBrush(gradient))
+    painter.drawEllipse(2, 2, size - 4, size - 4)
+
+    # Блик
+    highlight = QRadialGradient(size * 0.3, size * 0.25, size * 0.15)
+    highlight.setColorAt(0.0, QColor(255, 255, 255, 180))
+    highlight.setColorAt(1.0, QColor(255, 255, 255, 0))
+    painter.setBrush(QBrush(highlight))
+    painter.drawEllipse(int(size * 0.2), int(size * 0.15), int(size * 0.3), int(size * 0.25))
+
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _create_shader_icon() -> QIcon:
+    """Создаёт иконку шейдера — документ с кодом."""
+    size = 32
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    # Фон документа
+    painter.setPen(QPen(QColor(80, 80, 80), 1))
+    painter.setBrush(QBrush(QColor(50, 55, 65)))
+    painter.drawRoundedRect(2, 2, size - 4, size - 4, 3, 3)
+
+    # "Код" — цветные линии
+    painter.setPen(Qt.PenStyle.NoPen)
+
+    # Строка 1 — ключевое слово (оранжевый)
+    painter.setBrush(QBrush(QColor(230, 150, 80)))
+    painter.drawRect(6, 7, 10, 2)
+
+    # Строка 2 — тип (голубой)
+    painter.setBrush(QBrush(QColor(100, 180, 220)))
+    painter.drawRect(6, 12, 8, 2)
+    painter.setBrush(QBrush(QColor(180, 180, 180)))
+    painter.drawRect(16, 12, 6, 2)
+
+    # Строка 3 — функция (зелёный)
+    painter.setBrush(QBrush(QColor(130, 200, 130)))
+    painter.drawRect(6, 17, 12, 2)
+
+    # Строка 4 — значение (фиолетовый)
+    painter.setBrush(QBrush(QColor(180, 130, 200)))
+    painter.drawRect(6, 22, 14, 2)
+
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _create_scene_icon() -> QIcon:
+    """Создаёт иконку сцены — кубик в перспективе."""
+    size = 32
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    # Изометрический куб
+    from PyQt6.QtGui import QPolygon
+    from PyQt6.QtCore import QPoint
+
+    cx, cy = size // 2, size // 2 + 2
+    s = 10  # размер грани
+
+    # Верхняя грань (светлая)
+    top = QPolygon([
+        QPoint(cx, cy - s),
+        QPoint(cx + s, cy - s // 2),
+        QPoint(cx, cy),
+        QPoint(cx - s, cy - s // 2),
+    ])
+    painter.setPen(QPen(QColor(60, 60, 60), 1))
+    painter.setBrush(QBrush(QColor(100, 160, 220)))
+    painter.drawPolygon(top)
+
+    # Левая грань (средняя)
+    left = QPolygon([
+        QPoint(cx - s, cy - s // 2),
+        QPoint(cx, cy),
+        QPoint(cx, cy + s),
+        QPoint(cx - s, cy + s // 2),
+    ])
+    painter.setBrush(QBrush(QColor(70, 120, 180)))
+    painter.drawPolygon(left)
+
+    # Правая грань (тёмная)
+    right = QPolygon([
+        QPoint(cx, cy),
+        QPoint(cx + s, cy - s // 2),
+        QPoint(cx + s, cy + s // 2),
+        QPoint(cx, cy + s),
+    ])
+    painter.setBrush(QBrush(QColor(50, 90, 140)))
+    painter.drawPolygon(right)
+
+    painter.end()
+    return QIcon(pixmap)
+
+
+class AssetIconProvider(QFileIconProvider):
+    """Провайдер иконок для ассетов проекта."""
+
+    def __init__(self):
+        super().__init__()
+        self._material_icon = _create_material_icon()
+        self._shader_icon = _create_shader_icon()
+        self._scene_icon = _create_scene_icon()
+
+    def icon(self, info_or_type):
+        # info_or_type может быть QFileInfo или IconType
+        if isinstance(info_or_type, QFileInfo):
+            suffix = info_or_type.suffix().lower()
+            if suffix == "material":
+                return self._material_icon
+            elif suffix == "shader":
+                return self._shader_icon
+            elif suffix == "scene":
+                return self._scene_icon
+
+        return super().icon(info_or_type)
 
 
 class ProjectBrowser:
@@ -63,9 +212,15 @@ class ProjectBrowser:
         self._on_file_selected = on_file_selected
         self._on_file_double_clicked = on_file_double_clicked
 
+        # Провайдер иконок для ассетов
+        self._icon_provider = AssetIconProvider()
+
         # Модели файловой системы
         self._dir_model = QFileSystemModel()
         self._file_model = QFileSystemModel()
+
+        # Устанавливаем провайдер иконок
+        self._file_model.setIconProvider(self._icon_provider)
 
         # Настройка модели директорий (только папки)
         self._dir_model.setFilter(QDir.Filter.Dirs | QDir.Filter.NoDotAndDotDot)
