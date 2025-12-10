@@ -20,6 +20,7 @@ from termin.editor.menu_bar_controller import MenuBarController
 from termin.editor.editor_camera import EditorCameraManager
 from termin.editor.resource_loader import ResourceLoader
 from termin.editor.external_editor import open_in_text_editor
+from termin.editor.scene_file_controller import SceneFileController
 
 from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.entity import Entity
@@ -184,6 +185,16 @@ class EditorWindow(QMainWindow):
             on_tick=self._on_game_tick,
         )
 
+        # --- SceneFileController ---
+        self._scene_file_controller = SceneFileController(
+            parent=self,
+            get_world_persistence=lambda: self.world_persistence,
+            on_after_new=self._on_after_scene_new,
+            on_after_save=self._update_window_title,
+            on_after_load=self._update_window_title,
+            log_message=self._log_to_console,
+        )
+
         # --- Project Browser ---
         self._init_project_browser()
 
@@ -194,7 +205,7 @@ class EditorWindow(QMainWindow):
         self._scan_project_resources()
 
         # --- Загружаем последнюю открытую сцену ---
-        self._load_last_scene()
+        self._scene_file_controller.load_last_scene()
 
     @property
     def scene(self):
@@ -665,146 +676,33 @@ class EditorWindow(QMainWindow):
 
         self._request_viewport_update()
 
-    # ----------- сохранение/загрузка мира -----------
-
-    def _reset_world(self) -> None:
-        """Полная очистка мира и пересоздание редакторских сущностей."""
-        if self.world_persistence is not None:
-            self.world_persistence.reset()
+    # ----------- сохранение/загрузка сцены -----------
 
     def _new_scene(self) -> None:
-        """Создаёт новую пустую сцену - полный перезапуск."""
-        reply = QMessageBox.question(
-            self,
-            "New Scene",
-            "Create a new empty scene?\n\nThis will remove all entities and resources.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
+        """Create new empty scene."""
+        self._scene_file_controller.new_scene()
 
-        if reply != QMessageBox.StandardButton.Yes:
-            return
+    def _save_scene(self) -> None:
+        """Save scene to current file or prompt for new file."""
+        self._scene_file_controller.save_scene()
 
-        self._reset_world()
+    def _save_scene_as(self) -> None:
+        """Save scene to new file."""
+        self._scene_file_controller.save_scene_as()
 
-        # Обновляем UI
+    def _load_scene(self) -> None:
+        """Load scene from file."""
+        self._scene_file_controller.load_scene()
+
+    def _load_scene_from_file(self, file_path: str) -> None:
+        """Load scene from specified file."""
+        self._scene_file_controller.load_scene_from_file(file_path)
+
+    def _on_after_scene_new(self) -> None:
+        """Callback after new scene created."""
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.rebuild()
         self._request_viewport_update()
-
-    def _save_scene(self) -> None:
-        """Сохраняет текущую сцену в файл (Ctrl+S — в текущий файл, иначе Save As)."""
-        if self.world_persistence is None:
-            return
-
-        # Если сцена уже сохранена — сохраняем в тот же файл
-        current_path = self.world_persistence.current_scene_path
-        if current_path is not None:
-            self._save_scene_to_file(current_path)
-        else:
-            self._save_scene_as()
-
-    def _save_scene_as(self) -> None:
-        """Сохраняет сцену в новый файл (Save As)."""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Scene As",
-            "scene.scene",
-            "Scene Files (*.scene);;All Files (*)",
-        )
-        if not file_path:
-            return
-
-        # Добавляем расширение если не указано
-        if not file_path.endswith(".scene"):
-            file_path += ".scene"
-
-        self._save_scene_to_file(file_path)
-
-    def _save_scene_to_file(self, file_path: str) -> None:
-        """Сохраняет сцену в указанный файл."""
-        try:
-            if self.world_persistence is None:
-                raise RuntimeError("WorldPersistence not initialized")
-
-            self.world_persistence.save(file_path)
-            self._update_window_title()
-
-            # Сохраняем путь для следующего запуска
-            EditorSettings.instance().set_last_scene_path(file_path)
-
-            if self.consoleOutput is not None:
-                self.consoleOutput.appendPlainText(f"Scene saved: {file_path}")
-
-        except Exception as e:
-            import traceback
-            QMessageBox.critical(
-                self,
-                "Error Saving Scene",
-                f"Failed to save scene to:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
-            )
-
-    def _load_scene(self) -> None:
-        """Загружает сцену из файла."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Scene",
-            "",
-            "Scene Files (*.scene);;All Files (*)",
-        )
-        if not file_path:
-            return
-
-        self._load_scene_from_file(file_path)
-
-    def _load_scene_from_file(self, file_path: str) -> None:
-        """Загружает сцену из указанного файла."""
-        try:
-            if self.world_persistence is None:
-                raise RuntimeError("WorldPersistence not initialized")
-
-            # load() создаёт новую сцену и вызывает on_scene_changed
-            self.world_persistence.load(file_path)
-            self._update_window_title()
-
-            # Сохраняем путь для следующего запуска
-            EditorSettings.instance().set_last_scene_path(file_path)
-
-            if self.consoleOutput is not None:
-                self.consoleOutput.appendPlainText(f"Scene loaded: {file_path}")
-
-        except Exception as e:
-            import traceback
-            QMessageBox.critical(
-                self,
-                "Error Loading Scene",
-                f"Failed to load scene from:\n{file_path}\n\nError: {e}\n\n{traceback.format_exc()}",
-            )
-
-    def _load_last_scene(self) -> None:
-        """Загружает последнюю открытую сцену при старте редактора."""
-        settings = EditorSettings.instance()
-        last_scene_path = settings.get_last_scene_path()
-
-        if last_scene_path is None:
-            self._update_window_title()
-            return
-
-        try:
-            if self.world_persistence is None:
-                return
-
-            self.world_persistence.load(str(last_scene_path))
-            self._update_window_title()
-
-            if self.consoleOutput is not None:
-                self.consoleOutput.appendPlainText(f"Restored last scene: {last_scene_path}")
-
-        except Exception as e:
-            # Не показываем ошибку, просто логируем — сцена могла быть удалена
-            if self.consoleOutput is not None:
-                self.consoleOutput.appendPlainText(f"Could not restore last scene: {e}")
-            self._update_window_title()
 
     # ----------- game mode -----------
 
