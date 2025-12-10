@@ -4,6 +4,7 @@ from typing import Optional, Callable, List, Tuple, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
 from PyQt6 import QtWidgets, QtCore, QtGui
+from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from OpenGL import GL as gl
 import numpy as np
@@ -187,7 +188,7 @@ class ShadowMapArrayHandler(ResourceHandler):
             self._on_index_changed(index)
 
 
-class FramegraphTextureWidget(QtWidgets.QOpenGLWidget):
+class FramegraphTextureWidget(QOpenGLWidget):
     """
     QOpenGLWidget, который берёт FBO из внешнего источника и рисует его color-текстуру
     фуллскрин-квадом. Работает напрямую через OpenGL, без участия Window/FrameGraph.
