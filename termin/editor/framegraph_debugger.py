@@ -173,7 +173,7 @@ class ShadowMapArrayHandler(ResourceHandler):
                     entry = resource[i]
                     light_index = entry.light_index if hasattr(entry, 'light_index') else i
                     self._combo.addItem(f"Light {light_index}", i)
-                except:
+                except (IndexError, AttributeError, TypeError):
                     self._combo.addItem(f"Shadow Map {i}", i)
 
         # Устанавливаем первый элемент по умолчанию

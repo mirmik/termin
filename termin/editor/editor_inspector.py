@@ -37,7 +37,6 @@ from termin.editor.editor_commands import (
     RemoveComponentCommand,
 )
 from termin.editor.transform_inspector import TransformInspector
-from termin.editor.transform_inspector import TransformInspector
 
 logger = logging.getLogger(__name__)
 

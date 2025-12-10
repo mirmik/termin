@@ -47,7 +47,7 @@ class FontTextureAtlas:
                 bbox = self.font.getbbox(ch)
                 w = bbox[2] - bbox[0]
                 h = bbox[3] - bbox[1]
-            except:
+            except (TypeError, AttributeError, ValueError):
                 continue
 
             # создаём глиф высотой всей строки

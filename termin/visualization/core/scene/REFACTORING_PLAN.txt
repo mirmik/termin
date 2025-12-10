@@ -1,0 +1,117 @@
+Scene Refactoring Plan
+======================
+
+Completed:
+----------
+1. [DONE] Created scene/ directory structure
+2. [DONE] Extracted SkyboxManager into skybox.py
+3. [DONE] Extracted LightingManager into lighting.py
+4. [DONE] Scene delegates to managers via properties for backward compatibility
+
+Remaining refactoring opportunities:
+------------------------------------
+
+1. RAYCAST SYSTEM (High priority)
+
+   Current state:
+   - raycast() and closest_to_ray() methods directly iterate over self.colliders
+   - Tightly coupled to ColliderComponent
+
+   Proposal:
+   - Extract into RaycastSystem class in scene/raycast.py
+   - Could implement spatial partitioning (octree/BVH) for large scenes
+   - Scene delegates via self._raycast = RaycastSystem()
+
+   Benefits:
+   - Better separation of concerns
+   - Easier to optimize with spatial acceleration structures
+   - Testable in isolation
+
+2. ENTITY MANAGEMENT (Medium priority)
+
+   Current state:
+   - add(), add_non_recurse(), remove() methods in Scene
+   - Priority-sorted insertion logic
+
+   Proposal:
+   - Extract into EntityRegistry class in scene/entity_registry.py
+   - Handle entity lifecycle, sorting, parent-child relations
+
+   Benefits:
+   - Scene becomes thinner coordinator
+   - Clear entity lifecycle management
+
+3. COMPONENT REGISTRATION (Medium priority)
+
+   Current state:
+   - register_component() / unregister_component() with multiple isinstance checks
+   - Manual management of colliders, light_components, input_components, update_list
+
+   Proposal:
+   - Use observer/event pattern instead of isinstance checks
+   - Components register themselves via scene.register(self, capabilities=[...])
+   - Or use component type registry with auto-dispatch
+
+   Benefits:
+   - Adding new component types doesn't require modifying Scene
+   - More extensible architecture
+
+4. UPDATE LOOP (Low priority)
+
+   Current state:
+   - update() handles pending start() calls and iterates update_list
+
+   Proposal:
+   - Consider extracting into UpdateScheduler if more complex scheduling needed
+   - For now, current implementation is simple and sufficient
+
+   Notes:
+   - Only extract if update ordering or priorities become complex
+   - Current implementation is clean enough
+
+5. INPUT DISPATCH (Low priority)
+
+   Current state:
+   - dispatch_input() iterates _input_components
+
+   Proposal:
+   - Could extract into InputDispatcher if event routing becomes complex
+   - Current implementation is minimal and works
+
+   Notes:
+   - Leave as-is unless input handling grows significantly
+
+6. SERIALIZATION (Low priority)
+
+   Current state:
+   - serialize() / deserialize() / load_from_data() in Scene
+   - Delegates to manager serialize/load_from_data
+
+   Proposal:
+   - Could extract into SceneSerializer for complex serialization needs
+   - Current delegation pattern is clean
+
+   Notes:
+   - Already improved by delegating to SkyboxManager and LightingManager
+   - Leave as-is unless format changes become frequent
+
+Architecture notes:
+-------------------
+Current refactoring follows "composition over inheritance":
+- Scene is now a coordinator/facade that delegates to specialized managers
+- SkyboxManager and LightingManager are self-contained
+- Properties provide backward compatibility - existing code doesn't need changes
+- Future managers (RaycastSystem, EntityRegistry) should follow same pattern
+
+File structure:
+---------------
+scene/
+├── __init__.py         # Re-exports Scene, SkyboxManager, LightingManager
+├── _scene.py           # Main Scene class (coordinator)
+├── skybox.py           # SkyboxManager
+├── lighting.py         # LightingManager
+├── REFACTORING_PLAN.txt
+│
+│ Future files (when implemented):
+├── raycast.py          # RaycastSystem (proposed)
+└── entity_registry.py  # EntityRegistry (proposed)
