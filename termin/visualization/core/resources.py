@@ -319,17 +319,18 @@ class ResourceManager:
         Ищет и загружает:
         - .material файлы
         - .shader файлы (создаёт материалы из них)
+        - .py файлы с компонентами
 
         Args:
             project_path: Путь к корневой директории проекта
 
         Returns:
-            Статистика: {"materials": int, "shaders": int, "errors": int}
+            Статистика: {"materials": int, "shaders": int, "components": int, "errors": int}
         """
         import os
         from pathlib import Path
 
-        stats = {"materials": 0, "shaders": 0, "errors": 0}
+        stats = {"materials": 0, "shaders": 0, "components": 0, "errors": 0}
         project_path = Path(project_path)
 
         if not project_path.exists():
@@ -356,6 +357,13 @@ class ResourceManager:
             except Exception as e:
                 print(f"[ResourceManager] Failed to load shader {shader_path}: {e}")
                 stats["errors"] += 1
+
+        try:
+            loaded_components = self.scan_components([str(project_path)])
+            stats["components"] += len(loaded_components)
+        except Exception as e:
+            print(f"[ResourceManager] Failed to load components from {project_path}: {e}")
+            stats["errors"] += 1
 
         return stats
 

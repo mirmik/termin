@@ -120,11 +120,17 @@ class ResourceLoader:
             on_resource_reloaded=self._on_resource_reloaded,
         )
 
-        total = stats["materials"] + stats["shaders"]
+        total = (
+            stats["materials"]
+            + stats["shaders"]
+            + stats.get("components", 0)
+        )
         if total > 0 or stats["errors"] > 0:
             self._log(
                 f"Scanned project: {stats['materials']} materials, "
-                f"{stats['shaders']} shaders, {stats['errors']} errors"
+                f"{stats['shaders']} shaders, "
+                f"{stats.get('components', 0)} components, "
+                f"{stats['errors']} errors"
             )
 
     def load_material_from_file(self) -> None:
