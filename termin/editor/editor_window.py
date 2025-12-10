@@ -1,7 +1,7 @@
 # ===== termin/editor/editor_window.py =====
 import os
 from PyQt6 import uic
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit, QStackedWidget
+from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit
 from PyQt6.QtWidgets import QStatusBar
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
@@ -14,14 +14,14 @@ from termin.editor.gizmo import GizmoController
 from termin.editor.game_mode_controller import GameModeController
 from termin.editor.world_persistence import WorldPersistence
 from termin.editor.selection_manager import SelectionManager
+from termin.editor.dialog_manager import DialogManager
+from termin.editor.inspector_controller import InspectorController
+from termin.editor.menu_bar_controller import MenuBarController
 
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
-from termin.editor.editor_inspector import EntityInspector
-from termin.editor.material_inspector import MaterialInspector
-from termin.editor.scene_inspector import SceneInspector
 from termin.editor.project_browser import ProjectBrowser
 from termin.editor.settings import EditorSettings
 from termin.visualization.core.resources import ResourceManager
@@ -34,14 +34,7 @@ class EditorWindow(QMainWindow):
     def __init__(self, world, initial_scene):
         super().__init__()
         self.undo_stack = UndoStack()
-        self._action_undo = None
-        self._action_redo = None
-        self._action_play = None
-        self._undo_stack_viewer = None
-        self._framegraph_debugger = None
-        self._resource_manager_viewer = None
-        self._scene_inspector_dialog = None
-        self._material_inspector_dialog = None
+        self._menu_bar_controller: MenuBarController | None = None
         self._status_bar_label: QLabel | None = None
         self._fps_smooth: float | None = None
         self._fps_alpha: float = 0.1  # экспоненциальное сглаживание: f_new = f_prev*(1-α) + f_curr*α
@@ -97,25 +90,31 @@ class EditorWindow(QMainWindow):
 
         self._fix_splitters()
 
-        # --- инспекторы (переключаемые через QStackedWidget) ---
-        self._inspector_stack = QStackedWidget()
-
-        # EntityInspector (index 0)
-        self.entity_inspector = EntityInspector(self.resource_manager)
-        self.entity_inspector.transform_changed.connect(self._on_inspector_transform_changed)
-        self.entity_inspector.component_changed.connect(self._on_inspector_component_changed)
-        self.entity_inspector.set_undo_command_handler(self.push_undo_command)
-        self._inspector_stack.addWidget(self.entity_inspector)
-
-        # MaterialInspector (index 1)
-        self.material_inspector = MaterialInspector()
-        self.material_inspector.material_changed.connect(self._on_material_inspector_changed)
-        self._inspector_stack.addWidget(self.material_inspector)
+        # --- InspectorController ---
+        self._inspector_controller = InspectorController(
+            container=self.inspectorContainer,
+            resource_manager=self.resource_manager,
+            push_undo_command=self.push_undo_command,
+            on_transform_changed=self._on_inspector_transform_changed,
+            on_component_changed=self._on_inspector_component_changed,
+            on_material_changed=self._on_material_inspector_changed,
+        )
 
         # Для обратной совместимости
+        self.entity_inspector = self._inspector_controller.entity_inspector
+        self.material_inspector = self._inspector_controller.material_inspector
         self.inspector = self.entity_inspector
 
-        self._init_inspector_widget()
+        # --- DialogManager ---
+        self._dialog_manager = DialogManager(
+            parent=self,
+            undo_stack=self.undo_stack,
+            undo_stack_changed_signal=self.undo_stack_changed,
+            get_scene=lambda: self.scene,
+            resource_manager=self.resource_manager,
+            push_undo_command=self.push_undo_command,
+            request_viewport_update=self._request_viewport_update,
+        )
 
         # --- создаём редакторские сущности (root, камера) ---
         self.editor_entities = None
@@ -193,96 +192,33 @@ class EditorWindow(QMainWindow):
     # ----------- undo / redo -----------
 
     def _setup_menu_bar(self) -> None:
-        """
-        Создаёт верхнее меню редактора и вешает действия Undo/Redo с шорткатами.
-        Также добавляет отладочное меню Debug с просмотром undo/redo стека.
-        """
-        menu_bar = self.menuBar()
-
-        file_menu = menu_bar.addMenu("File")
-        edit_menu = menu_bar.addMenu("Edit")
-        scene_menu = menu_bar.addMenu("Scene")
-        game_menu = menu_bar.addMenu("Game")
-        debug_menu = menu_bar.addMenu("Debug")
-
-        open_project_action = file_menu.addAction("Open Project...")
-        open_project_action.triggered.connect(self._open_project)
-
-        file_menu.addSeparator()
-
-        new_scene_action = file_menu.addAction("New Scene")
-        new_scene_action.setShortcut("Ctrl+N")
-        new_scene_action.triggered.connect(self._new_scene)
-
-        file_menu.addSeparator()
-
-        save_scene_action = file_menu.addAction("Save Scene")
-        save_scene_action.setShortcut("Ctrl+S")
-        save_scene_action.triggered.connect(self._save_scene)
-
-        save_scene_as_action = file_menu.addAction("Save Scene As...")
-        save_scene_as_action.setShortcut("Ctrl+Shift+S")
-        save_scene_as_action.triggered.connect(self._save_scene_as)
-
-        load_scene_action = file_menu.addAction("Load Scene...")
-        load_scene_action.setShortcut("Ctrl+O")
-        load_scene_action.triggered.connect(self._load_scene)
-
-        file_menu.addSeparator()
-
-        load_material_action = file_menu.addAction("Load Material...")
-        load_material_action.triggered.connect(self._load_material_from_file)
-
-        load_components_action = file_menu.addAction("Load Components...")
-        load_components_action.triggered.connect(self._load_components_from_file)
-
-        file_menu.addSeparator()
-
-        exit_action = file_menu.addAction("Exit")
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self.close)
-
-        self._action_undo = edit_menu.addAction("Undo")
-        self._action_undo.setShortcut("Ctrl+Z")
-        self._action_undo.triggered.connect(self.undo)
-
-        self._action_redo = edit_menu.addAction("Redo")
-        self._action_redo.setShortcut("Ctrl+Shift+Z")
-        self._action_redo.triggered.connect(self.redo)
-
-        edit_menu.addSeparator()
-
-        settings_action = edit_menu.addAction("Settings...")
-        settings_action.triggered.connect(self._show_settings_dialog)
-
-        # Scene menu
-        scene_properties_action = scene_menu.addAction("Scene Properties...")
-        scene_properties_action.triggered.connect(self._show_scene_properties)
-
-        # Game menu - одна кнопка Play/Stop
-        self._action_play = game_menu.addAction("Play")
-        self._action_play.setShortcut("F5")
-        self._action_play.triggered.connect(self._toggle_game_mode)
-
-        debug_action = debug_menu.addAction("Undo/Redo Stack...")
-        debug_action.triggered.connect(self._show_undo_stack_viewer)
-
-        tex_debug_action = debug_menu.addAction("Framegraph Texture Viewer...")
-        tex_debug_action.triggered.connect(self._show_framegraph_debugger)
-
-        resource_debug_action = debug_menu.addAction("Resource Manager...")
-        resource_debug_action.triggered.connect(self._show_resource_manager_viewer)
-
-        self._update_undo_redo_actions()
+        """Create editor menu bar via MenuBarController."""
+        self._menu_bar_controller = MenuBarController(
+            menu_bar=self.menuBar(),
+            on_open_project=self._open_project,
+            on_new_scene=self._new_scene,
+            on_save_scene=self._save_scene,
+            on_save_scene_as=self._save_scene_as,
+            on_load_scene=self._load_scene,
+            on_load_material=self._load_material_from_file,
+            on_load_components=self._load_components_from_file,
+            on_exit=self.close,
+            on_undo=self.undo,
+            on_redo=self.redo,
+            on_settings=self._show_settings_dialog,
+            on_scene_properties=self._show_scene_properties,
+            on_toggle_game_mode=self._toggle_game_mode,
+            on_show_undo_stack_viewer=self._show_undo_stack_viewer,
+            on_show_framegraph_debugger=self._show_framegraph_debugger,
+            on_show_resource_manager_viewer=self._show_resource_manager_viewer,
+            can_undo=lambda: self.undo_stack.can_undo,
+            can_redo=lambda: self.undo_stack.can_redo,
+        )
 
     def _update_undo_redo_actions(self) -> None:
-        """
-        Обновляет enabled-состояние пунктов меню Undo/Redo.
-        """
-        if self._action_undo is not None:
-            self._action_undo.setEnabled(self.undo_stack.can_undo)
-        if self._action_redo is not None:
-            self._action_redo.setEnabled(self.undo_stack.can_redo)
+        """Update enabled state of Undo/Redo menu items."""
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_undo_redo_actions()
 
     def push_undo_command(self, cmd: UndoCommand, merge: bool = False) -> None:
         """
@@ -334,134 +270,25 @@ class EditorWindow(QMainWindow):
         if cmd is not None:
             self.undo_stack_changed.emit()
     def _show_scene_properties(self) -> None:
-        """
-        Открывает диалог редактирования свойств сцены (ambient, background и т.п.).
-        """
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox
-
-        if self._scene_inspector_dialog is None:
-            dialog = QDialog(self)
-            dialog.setWindowTitle("Scene Properties")
-            dialog.setMinimumWidth(300)
-
-            layout = QVBoxLayout(dialog)
-
-            inspector = SceneInspector(dialog)
-            inspector.set_scene(self.scene)
-            inspector.set_undo_command_handler(self.push_undo_command)
-            inspector.scene_changed.connect(self._request_viewport_update)
-
-            layout.addWidget(inspector)
-
-            button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-            button_box.rejected.connect(dialog.close)
-            layout.addWidget(button_box)
-
-            dialog._inspector = inspector
-            self._scene_inspector_dialog = dialog
-
-        # Обновляем значения при каждом открытии
-        self._scene_inspector_dialog._inspector.set_scene(self.scene)
-
-        self._scene_inspector_dialog.show()
-        self._scene_inspector_dialog.raise_()
-        self._scene_inspector_dialog.activateWindow()
+        """Opens scene properties dialog."""
+        self._dialog_manager.show_scene_properties()
 
     def _show_undo_stack_viewer(self) -> None:
-        """
-        Открывает отдельное окно с содержимым undo/redo стека.
-        Окно живёт как независимый top-level, не блокируя основной интерфейс.
-        """
-        if self._undo_stack_viewer is None:
-            from termin.editor.undo_stack_viewer import UndoStackViewer
-            self._undo_stack_viewer = UndoStackViewer(
-                self.undo_stack,
-                self,
-                stack_changed_signal=self.undo_stack_changed,
-            )
-
-        self._undo_stack_viewer.refresh()
-        self._undo_stack_viewer.show()
-        self._undo_stack_viewer.raise_()
-        self._undo_stack_viewer.activateWindow()
+        """Opens undo/redo stack viewer window."""
+        self._dialog_manager.show_undo_stack_viewer()
 
     def _show_framegraph_debugger(self) -> None:
-        """
-        Открывает отдельное окно с просмотром текстуры из framegraph
-        (по умолчанию ресурса 'debug', который заполняет BlitPass).
-        """
-        if self.viewport_window is None:
+        """Opens framegraph texture viewer dialog."""
+        if self.viewport_window is None or self.viewport is None:
             return
-        if self.viewport is None:
-            return
-
-        if self._framegraph_debugger is None:
-            from termin.editor.framegraph_debugger import FramegraphDebugDialog
-
-            graphics = self.viewport_window.graphics
-
-            get_resources = None
-            set_source = None
-            get_paused = None
-            set_paused = None
-            get_passes_info = None
-            get_pass_internal_symbols = None
-            set_pass_internal_symbol = None
-            get_debug_blit_pass = None
-            get_fbos = lambda: {}
-
-            if self.viewport_controller is not None:
-                get_resources = self.viewport_controller.get_available_framegraph_resources
-                set_source = self.viewport_controller.set_debug_source_resource
-                get_paused = self.viewport_controller.get_debug_paused
-                set_paused = self.viewport_controller.set_debug_paused
-                get_passes_info = self.viewport_controller.get_passes_info
-                get_pass_internal_symbols = self.viewport_controller.get_pass_internal_symbols
-                set_pass_internal_symbol = self.viewport_controller.set_pass_internal_symbol
-                get_debug_blit_pass = self.viewport_controller.get_debug_blit_pass
-                get_fbos = lambda: self.viewport_controller.render_state.fbos
-
-            self._framegraph_debugger = FramegraphDebugDialog(
-                graphics=graphics,
-                get_fbos=get_fbos,
-                resource_name="debug",
-                parent=self,
-                get_available_resources=get_resources,
-                set_source_resource=set_source,
-                get_paused=get_paused,
-                set_paused=set_paused,
-                get_passes_info=get_passes_info,
-                get_pass_internal_symbols=get_pass_internal_symbols,
-                set_pass_internal_symbol=set_pass_internal_symbol,
-                get_debug_blit_pass=get_debug_blit_pass,
-            )
-
-            if self.viewport_controller is not None:
-                self.viewport_controller.set_framegraph_debugger(self._framegraph_debugger)
-
-        # перед показом синхронизируем состояние и просим перерисовку
-        self._framegraph_debugger.debugger_request_update()
-
-        self._framegraph_debugger.show()
-        self._framegraph_debugger.raise_()
-        self._framegraph_debugger.activateWindow()
+        self._dialog_manager.show_framegraph_debugger(
+            graphics=self.viewport_window.graphics,
+            viewport_controller=self.viewport_controller,
+        )
 
     def _show_resource_manager_viewer(self) -> None:
-        """
-        Открывает диалог просмотра состояния ResourceManager.
-        """
-        if self._resource_manager_viewer is None:
-            from termin.editor.resource_manager_viewer import ResourceManagerViewer
-
-            self._resource_manager_viewer = ResourceManagerViewer(
-                self.resource_manager,
-                parent=self,
-            )
-
-        self._resource_manager_viewer.refresh()
-        self._resource_manager_viewer.show()
-        self._resource_manager_viewer.raise_()
-        self._resource_manager_viewer.activateWindow()
+        """Opens resource manager viewer dialog."""
+        self._dialog_manager.show_resource_manager_viewer()
 
     # ----------- вспомогательные сущности редактора -----------
 
@@ -646,39 +473,18 @@ class EditorWindow(QMainWindow):
         self._request_viewport_update()
 
     def show_entity_inspector(self, entity: Entity | None = None):
-        """Показать EntityInspector и установить target."""
-        self._inspector_stack.setCurrentWidget(self.entity_inspector)
-        if entity is not None:
-            self.entity_inspector.set_target(entity)
+        """Show EntityInspector and set target."""
+        self._inspector_controller.show_entity_inspector(entity)
 
     def show_material_inspector(self, material_name: str | None = None):
-        """Показать MaterialInspector и загрузить материал по имени."""
-        self._inspector_stack.setCurrentWidget(self.material_inspector)
-        if material_name is not None:
-            mat = self.resource_manager.get_material(material_name)
-            if mat is not None:
-                self.material_inspector.set_material(mat)
-                # Установить shader_program для отображения свойств
-                shader = self.resource_manager.get_shader(mat.shader_name)
-                if shader is not None:
-                    self.material_inspector._shader_program = shader
-                    self.material_inspector._rebuild_ui()
+        """Show MaterialInspector and load material by name."""
+        self._inspector_controller.show_material_inspector(material_name)
 
     def show_material_inspector_for_file(self, file_path: str):
-        """Показать MaterialInspector и загрузить материал из файла."""
-        self._inspector_stack.setCurrentWidget(self.material_inspector)
-        self.material_inspector.load_material_file(file_path)
+        """Show MaterialInspector and load material from file."""
+        self._inspector_controller.show_material_inspector_for_file(file_path)
 
-    # ----------- инициализация инспектора и сплиттеров -----------
-
-    def _init_inspector_widget(self):
-        parent = self.inspectorContainer
-        layout = parent.layout()
-        if layout is None:
-            layout = QVBoxLayout(parent)
-            layout.setContentsMargins(0, 0, 0, 0)
-            parent.setLayout(layout)
-        layout.addWidget(self._inspector_stack)
+    # ----------- инициализация сплиттеров -----------
 
     def _fix_splitters(self):
         self.topSplitter.setOpaqueResize(False)
@@ -798,11 +604,8 @@ class EditorWindow(QMainWindow):
         # TODO: можно добавить ShaderInspector в будущем
 
     def _show_settings_dialog(self) -> None:
-        """Открывает диалог настроек редактора."""
-        from termin.editor.settings_dialog import SettingsDialog
-
-        dialog = SettingsDialog(self)
-        dialog.exec()
+        """Opens editor settings dialog."""
+        self._dialog_manager.show_settings_dialog()
 
     def _open_in_text_editor(self, file_path: str) -> None:
         """
@@ -953,23 +756,8 @@ class EditorWindow(QMainWindow):
         return super().eventFilter(obj, event)
 
     def _resync_inspector_from_selection(self):
-        """
-        Обновляет инспектор в соответствии с текущим выделением в дереве.
-        """
-        index = self.sceneTree.currentIndex()
-        if not index.isValid():
-            self.show_entity_inspector(None)
-            return
-
-        node = index.internalPointer()
-        obj = node.obj if node is not None else None
-
-        # При выборе Entity показываем EntityInspector
-        if isinstance(obj, Entity):
-            self.show_entity_inspector(obj)
-        else:
-            self.entity_inspector.set_target(obj)
-            self._inspector_stack.setCurrentWidget(self.entity_inspector)
+        """Resync inspector based on current tree selection."""
+        self._inspector_controller.resync_from_tree_selection(self.sceneTree, self.scene)
 
     # ----------- SelectionManager колбэки -----------
 
@@ -1333,20 +1121,13 @@ class EditorWindow(QMainWindow):
         self._update_status_bar()
 
     def _update_game_mode_ui(self) -> None:
-        """Обновляет состояние UI элементов в зависимости от режима."""
+        """Update UI elements based on game mode state."""
         is_playing = self.game_mode_controller.is_playing if self.game_mode_controller else False
 
-        if self._action_play is not None:
-            if is_playing:
-                self._action_play.setText("Stop")
-                self._action_play.setShortcut("F5")
-            else:
-                self._action_play.setText("Play")
-                self._action_play.setShortcut("F5")
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_play_action(is_playing)
 
-        # Обновляем заголовок окна
         self._update_window_title()
-
         self._update_status_bar()
 
     def _update_window_title(self) -> None:
