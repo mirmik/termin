@@ -211,8 +211,8 @@ def build_scene(world: VisualizationWorld):
         color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32),
     )
 
-    solid_pass = RenderPass(
-        material=solid_material,
+    solid_pass = RenderPass.from_material(
+        solid_material,
         state=RenderState(
             polygon_mode="fill",
             cull=True,
@@ -238,8 +238,8 @@ def build_scene(world: VisualizationWorld):
         },
     )
 
-    wire_pass = RenderPass(
-    material=wire_material,
+    wire_pass = RenderPass.from_material(
+        wire_material,
         state=RenderState(
             polygon_mode="fill",   # <-- ВАЖНО: теперь fill, не line
             cull=False,

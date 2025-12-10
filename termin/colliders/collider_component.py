@@ -12,8 +12,8 @@ class ColliderComponent(Component):
         self._source_collider = collider
         self.attached = None
 
-    def start(self, scene):
-        super().start(scene)
+    def on_added(self, scene):
+        super().on_added(scene)
         if self.entity is None:
             return
         # entity.transform всегда Transform3

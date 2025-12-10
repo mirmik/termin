@@ -4,9 +4,9 @@ from termin.visualization.render.shader_parser import (
     ShasderStage,
     ShaderMultyPhaseProgramm,
     ShaderPhase,
-    UniformProperty,
+    MaterialProperty,
     parse_shader_text,
-    parse_uniform_directive,
+    parse_property_directive,
 )
 
 
@@ -137,58 +137,58 @@ def test_tree_builders_have_uniform_signature():
     assert isinstance(depth_phase.stages["vertex"], ShasderStage)
 
 
-def test_parse_uniform_directive_float():
-    """Тест парсинга @uniform директивы для float."""
-    prop = parse_uniform_directive("@uniform float u_roughness 0.5")
+def test_parse_property_directive_float():
+    """Тест парсинга @property директивы для Float."""
+    prop = parse_property_directive("@property Float u_roughness = 0.5")
     assert prop.name == "u_roughness"
-    assert prop.uniform_type == "float"
+    assert prop.property_type == "Float"
     assert prop.default == 0.5
     assert prop.range_min is None
     assert prop.range_max is None
 
 
-def test_parse_uniform_directive_float_with_range():
-    """Тест парсинга @uniform директивы для float с range."""
-    prop = parse_uniform_directive("@uniform float u_metallic 0.0 range(0.0, 1.0)")
+def test_parse_property_directive_float_with_range():
+    """Тест парсинга @property директивы для Float с range."""
+    prop = parse_property_directive("@property Float u_metallic = 0.0 range(0.0, 1.0)")
     assert prop.name == "u_metallic"
-    assert prop.uniform_type == "float"
+    assert prop.property_type == "Float"
     assert prop.default == 0.0
     assert prop.range_min == 0.0
     assert prop.range_max == 1.0
 
 
-def test_parse_uniform_directive_color():
-    """Тест парсинга @uniform директивы для color."""
-    prop = parse_uniform_directive("@uniform color u_color 1.0 0.5 0.0 1.0")
+def test_parse_property_directive_color():
+    """Тест парсинга @property директивы для Color."""
+    prop = parse_property_directive("@property Color u_color = Color(1.0, 0.5, 0.0, 1.0)")
     assert prop.name == "u_color"
-    assert prop.uniform_type == "color"
+    assert prop.property_type == "Color"
     assert prop.default == (1.0, 0.5, 0.0, 1.0)
 
 
-def test_parse_uniform_directive_vec3():
-    """Тест парсинга @uniform директивы для vec3."""
-    prop = parse_uniform_directive("@uniform vec3 u_lightDir 0.0 1.0 0.0")
+def test_parse_property_directive_vec3():
+    """Тест парсинга @property директивы для Vec3."""
+    prop = parse_property_directive("@property Vec3 u_lightDir = Vec3(0.0, 1.0, 0.0)")
     assert prop.name == "u_lightDir"
-    assert prop.uniform_type == "vec3"
+    assert prop.property_type == "Vec3"
     assert prop.default == (0.0, 1.0, 0.0)
 
 
-def test_parse_uniform_directive_texture2d():
-    """Тест парсинга @uniform директивы для texture2d."""
-    prop = parse_uniform_directive("@uniform texture2d u_mainTex")
+def test_parse_property_directive_texture2d():
+    """Тест парсинга @property директивы для Texture."""
+    prop = parse_property_directive("@property Texture u_mainTex")
     assert prop.name == "u_mainTex"
-    assert prop.uniform_type == "texture2d"
+    assert prop.property_type == "Texture"
     assert prop.default is None
 
 
-def test_parse_uniform_in_phase():
-    """Тест парсинга @uniform внутри @phase."""
+def test_parse_property_in_phase():
+    """Тест парсинга @property внутри @phase."""
     shader_text = "\n".join([
         "@program test",
         "@phase main",
-        "@uniform float u_roughness 0.5",
-        "@uniform color u_color 1.0 0.0 0.0 1.0",
-        "@uniform float u_metallic 0.0 range(0.0, 1.0)",
+        "@property Float u_roughness = 0.5",
+        "@property Color u_color = Color(1.0, 0.0, 0.0, 1.0)",
+        "@property Float u_metallic = 0.0 range(0.0, 1.0)",
         "@stage vertex",
         "void main() {}",
         "@endstage",
@@ -201,13 +201,13 @@ def test_parse_uniform_in_phase():
     assert len(phase["uniforms"]) == 3
 
     u_roughness = phase["uniforms"][0]
-    assert isinstance(u_roughness, UniformProperty)
+    assert isinstance(u_roughness, MaterialProperty)
     assert u_roughness.name == "u_roughness"
     assert u_roughness.default == 0.5
 
     u_color = phase["uniforms"][1]
     assert u_color.name == "u_color"
-    assert u_color.uniform_type == "color"
+    assert u_color.property_type == "Color"
     assert u_color.default == (1.0, 0.0, 0.0, 1.0)
 
     u_metallic = phase["uniforms"][2]
@@ -216,11 +216,11 @@ def test_parse_uniform_in_phase():
     assert u_metallic.range_max == 1.0
 
 
-def test_shader_phase_from_tree_with_uniforms():
-    """Тест создания ShaderPhase с uniforms через from_tree."""
+def test_shader_phase_from_tree_with_properties():
+    """Тест создания ShaderPhase с properties через from_tree."""
     shader_text = "\n".join([
         "@phase opaque",
-        "@uniform float u_value 0.7",
+        "@property Float u_value = 0.7",
         "@stage vertex",
         "void main() {}",
         "@endstage",
@@ -238,7 +238,7 @@ def test_shader_phase_from_tree_with_uniforms():
     assert phase.uniforms[0].default == 0.7
 
 
-def test_uniform_requires_phase():
-    """@uniform вне @phase должен бросить ошибку."""
-    with pytest.raises(ValueError, match="@uniform вне @phase"):
-        parse_shader_text("@uniform float u_value 0.5")
+def test_property_requires_phase():
+    """@property вне @phase должен бросить ошибку."""
+    with pytest.raises(ValueError, match="@property вне @phase"):
+        parse_shader_text("@property Float u_value = 0.5")

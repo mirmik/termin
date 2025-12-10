@@ -101,7 +101,7 @@ def test_material_serialize_file_reference():
 
     data = mat.serialize()
 
-    assert data["type"] == "file"
+    assert data["type"] == "material_file"
     assert data["source_path"] == "/path/to/material.shader"
     assert data["name"] == "file_material"
 
