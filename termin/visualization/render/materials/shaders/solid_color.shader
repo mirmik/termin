@@ -6,7 +6,7 @@
 @glDepthMask true
 @glCull true
 
-@uniform color u_color 0.8 0.2 0.2 1.0
+@property Color u_color = Color(0.8, 0.2, 0.2, 1.0)
 
 @stage vertex
 #version 330 core

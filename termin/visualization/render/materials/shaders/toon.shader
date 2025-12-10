@@ -6,10 +6,10 @@
 @glDepthMask true
 @glCull true
 
-@uniform color u_color 1.0 0.5 0.0 1.0
-@uniform float u_levels 4.0 range(2.0, 8.0)
-@uniform color u_outline_color 0.0 0.0 0.0 1.0
-@uniform float u_outline_width 0.02 range(0.0, 0.1)
+@property Color u_color = Color(1.0, 0.5, 0.0, 1.0)
+@property Float u_levels = 4.0 range(2.0, 8.0)
+@property Color u_outline_color = Color(0.0, 0.0, 0.0, 1.0)
+@property Float u_outline_width = 0.02 range(0.0, 0.1)
 
 @stage vertex
 #version 330 core

@@ -7,8 +7,8 @@
 @glCull true
 @glBlend false
 
-@uniform color u_color 0.1 0.3 0.8 1.0
-@uniform float u_opacity 0.3 range(0.0, 1.0)
+@property Color u_color = Color(0.1, 0.3, 0.8, 1.0)
+@property Float u_opacity = 0.3 range(0.0, 1.0)
 
 @stage vertex
 #version 330 core
@@ -79,8 +79,8 @@ void main() {
 @glCull false
 @glBlend true
 
-@uniform color u_color 0.1 0.3 0.8 1.0
-@uniform float u_opacity 0.3 range(0.0, 1.0)
+@property Color u_color = Color(0.1, 0.3, 0.8, 1.0)
+@property Float u_opacity = 0.3 range(0.0, 1.0)
 
 @stage vertex
 #version 330 core

@@ -281,7 +281,7 @@ class TestPasses(unittest.TestCase):
 @priority 0
 @glDepthTest true
 @glDepthMask true
-@uniform color u_color 1.0 0.0 0.0 1.0
+@property Color u_color = Color(1.0, 0.0, 0.0, 1.0)
 
 @stage vertex
 #version 330 core
@@ -309,7 +309,7 @@ void main() {
 @glDepthTest true
 @glDepthMask false
 @glBlend true
-@uniform color u_color 0.0 0.0 1.0 1.0
+@property Color u_color = Color(0.0, 0.0, 1.0, 1.0)
 
 @stage vertex
 #version 330 core
@@ -489,7 +489,7 @@ void main() {
 @priority 0
 @glDepthTest true
 @glDepthMask true
-@uniform color u_color 0.0 1.0 0.0 1.0
+@property Color u_color = Color(0.0, 1.0, 0.0, 1.0)
 
 @stage vertex
 #version 330 core
