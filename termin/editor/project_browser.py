@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QMessageBox,
 )
-from PyQt6.QtGui import QFileSystemModel, QAction, QPixmap, QPainter, QColor, QBrush, QPen, QIcon
+from PyQt6.QtGui import QFileSystemModel, QAction, QPixmap, QPainter, QColor, QBrush, QPen, QIcon, QShortcut, QKeySequence
 from PyQt6.QtCore import Qt, QModelIndex, QDir, QFileInfo
 from PyQt6.QtWidgets import QFileIconProvider
 
@@ -252,6 +252,10 @@ class ProjectBrowser:
         self._file_list.doubleClicked.connect(self._on_file_double_click)
         self._file_list.clicked.connect(self._on_file_click)
         self._file_list.customContextMenuRequested.connect(self._show_file_context_menu)
+
+        # Горячая клавиша Delete для удаления
+        self._delete_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self._file_list)
+        self._delete_shortcut.activated.connect(self._on_delete_pressed)
 
         # Устанавливаем корневую директорию
         if root_path is not None:
@@ -517,6 +521,12 @@ class ProjectBrowser:
         """Обновить содержимое."""
         if self._root_path is not None:
             self.set_root_path(self._root_path)
+
+    def _on_delete_pressed(self) -> None:
+        """Обработчик нажатия клавиши Delete."""
+        selected = self.selected_file
+        if selected is not None:
+            self._delete_item(selected)
 
     def _delete_item(self, path: Path) -> None:
         """Удалить файл или директорию."""
