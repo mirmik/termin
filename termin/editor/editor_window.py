@@ -887,15 +887,15 @@ class EditorWindow(QMainWindow):
         """
         Колбэк от SceneTreeController при изменении выделения в дереве.
         """
-        if self.inspector is not None:
-            self.inspector.set_target(obj)
-
         if isinstance(obj, Entity):
+            self.show_entity_inspector(obj)
             ent = obj
         elif isinstance(obj, Transform3):
             ent = next((e for e in self.scene.entities if e.transform is obj), None)
+            self.show_entity_inspector(ent)
         else:
             ent = None
+            self.show_entity_inspector(None)
 
         if self.selection_manager is not None:
             self.selection_manager.select(ent)
@@ -912,8 +912,7 @@ class EditorWindow(QMainWindow):
         if self.scene_tree_controller is not None and ent is not None:
             self.scene_tree_controller.select_object(ent)
 
-        if self.inspector is not None:
-            self.inspector.set_target(ent)
+        self.show_entity_inspector(ent)
 
     def _on_hover_entity_from_viewport(self, ent: Entity | None) -> None:
         """
