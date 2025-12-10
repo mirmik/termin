@@ -76,6 +76,7 @@ class WorldPersistence:
         self._set_editor_camera_data = set_editor_camera_data
         self._get_selected_entity_name = get_selected_entity_name
         self._select_entity_by_name = select_entity_by_name
+        self._current_scene_path: str | None = None
 
     @property
     def scene(self) -> "Scene":
@@ -86,6 +87,11 @@ class WorldPersistence:
     def resource_manager(self) -> "ResourceManager":
         """Менеджер ресурсов."""
         return self._resource_manager
+
+    @property
+    def current_scene_path(self) -> str | None:
+        """Путь к текущему файлу сцены (None если сцена не сохранена)."""
+        return self._current_scene_path
 
     def _create_new_scene(self) -> "Scene":
         """Создаёт новую пустую сцену."""
@@ -163,6 +169,9 @@ class WorldPersistence:
 
         os.replace(temp_path, file_path)
 
+        # Запоминаем путь к сцене
+        self._current_scene_path = file_path
+
         return {
             "entities": sum(1 for e in self._scene.entities if e.transform.parent is None and e.serializable),
             "materials": len(self._resource_manager.materials),
@@ -184,7 +193,12 @@ class WorldPersistence:
             json_str = f.read()
         data = json.loads(json_str)
 
-        return self._restore_from_data(data)
+        result = self._restore_from_data(data)
+
+        # Запоминаем путь к сцене
+        self._current_scene_path = file_path
+
+        return result
 
     def reset(self) -> None:
         """
@@ -195,6 +209,9 @@ class WorldPersistence:
         self._resource_manager.materials.clear()
         self._resource_manager.meshes.clear()
         self._resource_manager.textures.clear()
+
+        # Сбрасываем путь к сцене
+        self._current_scene_path = None
 
         # Создаём новую пустую сцену
         new_scene = self._create_new_scene()

@@ -212,9 +212,13 @@ class EditorWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        save_scene_action = file_menu.addAction("Save Scene...")
+        save_scene_action = file_menu.addAction("Save Scene")
         save_scene_action.setShortcut("Ctrl+S")
         save_scene_action.triggered.connect(self._save_scene)
+
+        save_scene_as_action = file_menu.addAction("Save Scene As...")
+        save_scene_as_action.setShortcut("Ctrl+Shift+S")
+        save_scene_as_action.triggered.connect(self._save_scene_as)
 
         load_scene_action = file_menu.addAction("Load Scene...")
         load_scene_action.setShortcut("Ctrl+O")
@@ -1151,10 +1155,22 @@ class EditorWindow(QMainWindow):
         self._request_viewport_update()
 
     def _save_scene(self) -> None:
-        """Сохраняет текущую сцену в файл."""
+        """Сохраняет текущую сцену в файл (Ctrl+S — в текущий файл, иначе Save As)."""
+        if self.world_persistence is None:
+            return
+
+        # Если сцена уже сохранена — сохраняем в тот же файл
+        current_path = self.world_persistence.current_scene_path
+        if current_path is not None:
+            self._save_scene_to_file(current_path)
+        else:
+            self._save_scene_as()
+
+    def _save_scene_as(self) -> None:
+        """Сохраняет сцену в новый файл (Save As)."""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save Scene",
+            "Save Scene As",
             "scene.scene",
             "Scene Files (*.scene);;All Files (*)",
         )
@@ -1165,19 +1181,19 @@ class EditorWindow(QMainWindow):
         if not file_path.endswith(".scene"):
             file_path += ".scene"
 
+        self._save_scene_to_file(file_path)
+
+    def _save_scene_to_file(self, file_path: str) -> None:
+        """Сохраняет сцену в указанный файл."""
         try:
             if self.world_persistence is None:
                 raise RuntimeError("WorldPersistence not initialized")
 
-            stats = self.world_persistence.save(file_path)
-            QMessageBox.information(
-                self,
-                "Scene Saved",
-                f"Scene saved successfully to:\n{file_path}\n\n"
-                f"Entities: {stats['entities']}\n"
-                f"Materials: {stats['materials']}\n"
-                f"Meshes: {stats['meshes']}",
-            )
+            self.world_persistence.save(file_path)
+            self._update_window_title()
+
+            if self.consoleOutput is not None:
+                self.consoleOutput.appendPlainText(f"Scene saved: {file_path}")
 
         except Exception as e:
             import traceback
@@ -1207,16 +1223,11 @@ class EditorWindow(QMainWindow):
                 raise RuntimeError("WorldPersistence not initialized")
 
             # load() создаёт новую сцену и вызывает on_scene_changed
-            stats = self.world_persistence.load(file_path)
+            self.world_persistence.load(file_path)
+            self._update_window_title()
 
-            QMessageBox.information(
-                self,
-                "Scene Loaded",
-                f"Scene loaded successfully from:\n{file_path}\n\n"
-                f"Entities loaded: {stats['loaded_entities']}\n"
-                f"Materials: {stats['materials']}\n"
-                f"Meshes: {stats['meshes']}",
-            )
+            if self.consoleOutput is not None:
+                self.consoleOutput.appendPlainText(f"Scene loaded: {file_path}")
 
         except Exception as e:
             import traceback
@@ -1297,13 +1308,31 @@ class EditorWindow(QMainWindow):
                 self._action_play.setShortcut("F5")
 
         # Обновляем заголовок окна
-        base_title = "Termin Editor"
-        if is_playing:
-            self.setWindowTitle(f"{base_title} [PLAYING]")
-        else:
-            self.setWindowTitle(base_title)
+        self._update_window_title()
 
         self._update_status_bar()
+
+    def _update_window_title(self) -> None:
+        """Обновляет заголовок окна с учётом текущей сцены и режима."""
+        from pathlib import Path
+
+        parts = ["Termin Editor"]
+
+        # Добавляем имя сцены
+        if self.world_persistence is not None:
+            scene_path = self.world_persistence.current_scene_path
+            if scene_path is not None:
+                scene_name = Path(scene_path).stem
+                parts.append(f"- {scene_name}")
+            else:
+                parts.append("- Untitled")
+
+        # Добавляем режим игры
+        is_playing = self.game_mode_controller.is_playing if self.game_mode_controller else False
+        if is_playing:
+            parts.append("[PLAYING]")
+
+        self.setWindowTitle(" ".join(parts))
 
     def _update_status_bar(self) -> None:
         """Заполняет текст статус-бара (FPS в игре, режим редактора вне игры)."""
