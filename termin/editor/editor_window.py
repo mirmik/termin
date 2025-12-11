@@ -26,6 +26,7 @@ from termin.editor.file_processors import (
     MaterialFileProcessor,
     ShaderFileProcessor,
     TextureFileProcessor,
+    ComponentFileProcessor,
 )
 
 from termin.visualization.core.camera import OrbitCameraController
@@ -112,6 +113,12 @@ class EditorWindow(QMainWindow):
         )
         self._project_file_watcher.register_processor(
             TextureFileProcessor(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            ComponentFileProcessor(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
