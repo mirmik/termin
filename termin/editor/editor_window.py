@@ -1,8 +1,8 @@
 # ===== termin/editor/editor_window.py =====
 import os
 from PyQt6 import uic
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit
-from PyQt6.QtWidgets import QStatusBar
+from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit
+from PyQt6.QtWidgets import QStatusBar, QToolBar, QPushButton, QSizePolicy
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
 
@@ -74,6 +74,7 @@ class EditorWindow(QMainWindow):
         self.game_mode_controller: GameModeController | None = None
         self.project_browser = None
         self._project_name: str | None = None
+        self._play_button: QPushButton | None = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -187,6 +188,9 @@ class EditorWindow(QMainWindow):
             on_object_selected=self._on_tree_object_selected,
             request_viewport_update=self._request_viewport_update,
         )
+
+        # --- viewport toolbar ---
+        self._init_viewport_toolbar()
 
         # --- viewport ---
         self.viewport_window = None
@@ -579,6 +583,55 @@ class EditorWindow(QMainWindow):
         status_bar.addPermanentWidget(label, 1)
         self._status_bar_label = label
 
+    def _init_viewport_toolbar(self) -> None:
+        """
+        Создаёт панель инструментов над viewport с кнопкой Play в центре.
+        """
+        toolbar = QWidget()
+        toolbar.setFixedHeight(32)
+        toolbar.setStyleSheet("background-color: #3c3c3c;")
+
+        layout = QHBoxLayout(toolbar)
+        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(4)
+
+        # Левый спейсер для центрирования кнопки
+        layout.addStretch(1)
+
+        # Кнопка Play/Stop
+        play_btn = QPushButton("Play")
+        play_btn.setFixedSize(60, 24)
+        play_btn.setCheckable(True)
+        play_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #505050;
+                color: #ffffff;
+                border: 1px solid #606060;
+                border-radius: 3px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5a5a5a;
+            }
+            QPushButton:checked {
+                background-color: #4a90d9;
+                border-color: #5aa0e9;
+            }
+            QPushButton:checked:hover {
+                background-color: #5aa0e9;
+            }
+        """)
+        play_btn.clicked.connect(self._toggle_game_mode)
+        layout.addWidget(play_btn)
+        self._play_button = play_btn
+
+        # Правый спейсер для центрирования кнопки
+        layout.addStretch(1)
+
+        # Вставляем toolbar в viewportLayout (первым элементом, перед viewport)
+        viewport_layout = self.viewportContainer.layout()
+        viewport_layout.insertWidget(0, toolbar)
+
     # ----------- связи с контроллерами -----------
 
     def _request_viewport_update(self) -> None:
@@ -821,6 +874,11 @@ class EditorWindow(QMainWindow):
 
         if self._menu_bar_controller is not None:
             self._menu_bar_controller.update_play_action(is_playing)
+
+        # Обновляем кнопку Play в toolbar
+        if self._play_button is not None:
+            self._play_button.setChecked(is_playing)
+            self._play_button.setText("Stop" if is_playing else "Play")
 
         self._update_window_title()
         self._update_status_bar()
