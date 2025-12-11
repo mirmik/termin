@@ -100,16 +100,22 @@ class ViewportController:
         viewport = self._display.create_viewport(self._scene, self._camera)
         self._viewport = viewport
 
-        # Создаём RenderEngine и RenderState
+        # Создаём RenderEngine
         self._render_engine = RenderEngine(self._graphics)
-        self._render_state = ViewportRenderState(pipeline=self._make_pipeline())
+
+        # Словарь ViewportRenderState для каждого viewport (по id)
+        # Каждый viewport имеет свой FBO пул
+        self._viewport_states: dict[int, ViewportRenderState] = {}
+
+        # Создаём state для первого viewport
+        self._viewport_states[id(viewport)] = ViewportRenderState(pipeline=self._make_pipeline())
 
         # Создаём EditorDisplayInputManager
         self._input_manager = EditorDisplayInputManager(
             backend_window=self._backend_window,
             display=self._display,
             graphics=self._graphics,
-            get_fbo_pool=lambda: self._render_state.fbos,
+            get_fbo_pool=self._get_fbo_pool_for_picking,
             on_request_update=self.request_update,
             on_mouse_button_event=self._on_mouse_button_event,
             on_mouse_move_event=self._on_mouse_move,
@@ -142,28 +148,50 @@ class ViewportController:
     def _do_render(self) -> None:
         """
         Выполняет рендеринг через RenderEngine.
+
+        Рендерит все viewport'ы из display'а.
         """
         self._graphics.ensure_ready()
         self._render_surface.make_current()
 
-        # Создаём RenderView из Viewport
-        view = RenderView(
-            scene=self._viewport.scene,
-            camera=self._viewport.camera,
-            rect=self._viewport.rect,
-            canvas=self._viewport.canvas,
-        )
+        # Собираем пары (RenderView, ViewportRenderState) для всех viewport'ов
+        views_and_states = []
+        for viewport in self._display.viewports:
+            # Получаем или создаём state для viewport'а
+            state = self._get_or_create_state(viewport)
 
-        # Рендерим
-        self._render_engine.render_single_view(
+            view = RenderView(
+                scene=viewport.scene,
+                camera=viewport.camera,
+                rect=viewport.rect,
+                canvas=viewport.canvas,
+            )
+            views_and_states.append((view, state))
+
+        # Рендерим все viewport'ы
+        self._render_engine.render_views(
             surface=self._render_surface,
-            view=view,
-            state=self._render_state,
+            views=views_and_states,
             present=False,  # Qt сам делает swap buffers
         )
 
         # Обрабатываем отложенные события после рендера
         self._after_render()
+
+    def _get_or_create_state(self, viewport: Viewport) -> ViewportRenderState:
+        """Получает или создаёт ViewportRenderState для viewport'а."""
+        key = id(viewport)
+        if key not in self._viewport_states:
+            self._viewport_states[key] = ViewportRenderState(pipeline=self._make_pipeline())
+        return self._viewport_states[key]
+
+    def _get_primary_state(self) -> ViewportRenderState:
+        """Возвращает state первого (основного) viewport'а."""
+        return self._get_or_create_state(self._viewport)
+
+    def _get_fbo_pool_for_picking(self) -> dict:
+        """Возвращает FBO пул для picking (от основного viewport'а)."""
+        return self._get_primary_state().fbos
 
     # ---------- свойства для EditorWindow ----------
 
@@ -197,8 +225,8 @@ class ViewportController:
 
     @property
     def render_state(self) -> ViewportRenderState:
-        """Доступ к состоянию рендера (pipeline, fbos)."""
-        return self._render_state
+        """Доступ к состоянию рендера основного viewport'а (pipeline, fbos)."""
+        return self._get_primary_state()
 
     @property
     def input_manager(self) -> EditorDisplayInputManager:
@@ -351,13 +379,13 @@ class ViewportController:
         return self._debug_source_res
 
     def get_debug_blit_pass(self):
-        pipeline = self._render_state.pipeline
+        pipeline = self._get_primary_state().pipeline
         if pipeline is not None:
             return pipeline.debug_blit_pass
         return None
 
     def get_available_framegraph_resources(self) -> list[str]:
-        return list(self._render_state.fbos.keys())
+        return list(self._get_primary_state().fbos.keys())
 
     def set_debug_paused(self, paused: bool) -> None:
         self._debug_paused = paused
@@ -370,7 +398,7 @@ class ViewportController:
 
     def get_passes_info(self) -> list[tuple[str, bool]]:
         result: list[tuple[str, bool]] = []
-        pipeline = self._render_state.pipeline
+        pipeline = self._get_primary_state().pipeline
         if pipeline is None:
             return result
         for p in pipeline.passes:
@@ -386,7 +414,7 @@ class ViewportController:
         return result
 
     def get_pass_internal_symbols(self, pass_name: str) -> list[str]:
-        pipeline = self._render_state.pipeline
+        pipeline = self._get_primary_state().pipeline
         if pipeline is None:
             return []
         for p in pipeline.passes:
@@ -395,7 +423,7 @@ class ViewportController:
         return []
 
     def set_pass_internal_symbol(self, pass_name: str, symbol: str | None) -> None:
-        pipeline = self._render_state.pipeline
+        pipeline = self._get_primary_state().pipeline
         if pipeline is None:
             return
         blit_pass = pipeline.debug_blit_pass
