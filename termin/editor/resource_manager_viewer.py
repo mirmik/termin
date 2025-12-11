@@ -201,11 +201,11 @@ class ResourceManagerViewer(QDialog):
         if watcher is None:
             return
 
-        # All Files — статистика по всем расширениям
+        # By Extension — статистика по всем расширениям
         all_files_stats = watcher.get_all_files_by_extension()
         if all_files_stats:
             total_files = watcher.get_all_files_count()
-            all_item = QTreeWidgetItem(["All Files", f"{total_files} files"])
+            all_item = QTreeWidgetItem(["By Extension", f"{total_files} files"])
             self._watched_tree.addTopLevelItem(all_item)
             for ext, count in all_files_stats.items():
                 child = QTreeWidgetItem([ext, str(count)])
