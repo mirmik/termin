@@ -183,6 +183,9 @@ class RenderingController:
         self._selected_viewport = viewport
 
         if viewport is not None:
+            # Update selected display from viewport's parent
+            self._selected_display = viewport.display
+
             scene = self._get_scene() if self._get_scene is not None else None
             self._inspector.show_viewport_inspector(
                 viewport=viewport,

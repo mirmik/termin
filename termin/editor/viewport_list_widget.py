@@ -189,10 +189,7 @@ class ViewportListWidget(QWidget):
         if isinstance(item, ViewportItem):
             self._add_viewport_btn.setEnabled(True)
             self.viewport_selected.emit(item.viewport)
-            # Also emit display for context
-            parent = item.parent()
-            if isinstance(parent, DisplayItem):
-                self.display_selected.emit(parent.display)
+            # Don't emit display_selected here - it would override viewport inspector
         elif isinstance(item, DisplayItem):
             self._add_viewport_btn.setEnabled(True)
             self.display_selected.emit(item.display)
