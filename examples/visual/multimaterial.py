@@ -16,8 +16,6 @@ import numpy as np
 
 from termin.geombase.pose3 import Pose3
 from termin.mesh.mesh import CubeMesh
-
-from termin.geombase.rot3 import Rot3
 from termin.visualization import (
     Entity,
     MeshDrawable,
@@ -268,7 +266,7 @@ def build_scene(world: VisualizationWorld):
 
     # Light
     light_entity = Entity(
-        pose=Pose3(Rot3.from_euler_xyz(np.deg2rad(-45), np.deg2rad(-45), 0), [0, 0, 0]),
+        pose=Pose3.from_euler(np.deg2rad(-45), np.deg2rad(-45), 0),
         name="light",
     )
     light_entity.add_component(LightComponent())
