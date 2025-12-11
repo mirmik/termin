@@ -69,7 +69,7 @@ class Viewport:
 def make_default_pipeline() -> "RenderPipeline":
     """
     Собирает дефолтный конвейер рендера.
-    
+
     Вынесено из класса Viewport как свободная функция.
     """
     from termin.visualization.render.framegraph import (
@@ -78,10 +78,12 @@ def make_default_pipeline() -> "RenderPipeline":
         PresentToScreenPass,
         RenderPipeline
     )
+    from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
     from termin.visualization.render.postprocess import PostProcessPass
 
     passes: List = [
-        ColorPass(input_res="empty", output_res="color", pass_name="Color"),
+        SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox"),
+        ColorPass(input_res="skybox", output_res="color", shadow_res=None, pass_name="Color"),
         PostProcessPass(
             effects=[],
             input_res="color",
@@ -98,5 +100,5 @@ def make_default_pipeline() -> "RenderPipeline":
             pass_name="Present",
         )
     ]
-    
+
     return RenderPipeline(passes=passes)
