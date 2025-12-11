@@ -5,7 +5,8 @@ from __future__ import annotations
 import numpy as np
 
 from termin.geombase.pose3 import Pose3
-from termin.mesh.mesh import UVSphereMesh, Mesh, CubeMesh
+from termin.geombase.rot3 import Rot3
+from termin.mesh.mesh import CubeMesh
 from termin.visualization import (
     Entity,
     MeshDrawable,
@@ -15,8 +16,8 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.shader import ShaderProgram
+from termin.visualization.render.components import MeshRenderer, LightComponent
+
 
 def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComponent]:
     cube_mesh = CubeMesh()
@@ -29,6 +30,15 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
 
     world.add_scene(scene)
 
+    # Light
+    light_entity = Entity(
+        pose=Pose3(Rot3.from_euler_xyz(np.deg2rad(-45), np.deg2rad(-45), 0), [0, 0, 0]),
+        name="light",
+    )
+    light_entity.add_component(LightComponent())
+    scene.add(light_entity)
+
+    # Camera
     camera_entity = Entity(name="camera")
     camera = PerspectiveCameraComponent()
     camera_entity.add_component(camera)

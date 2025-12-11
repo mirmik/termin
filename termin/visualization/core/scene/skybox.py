@@ -27,7 +27,7 @@ class SkyboxManager:
         self.skybox_type: str = "gradient"
         self.skybox_color = np.array([0.5, 0.7, 0.9], dtype=np.float32)
         self.skybox_top_color = np.array([0.4, 0.6, 0.9], dtype=np.float32)
-        self.skybox_bottom_color = np.array([0.85, 0.85, 0.9], dtype=np.float32)
+        self.skybox_bottom_color = np.array([0.6, 0.5, 0.4], dtype=np.float32)
 
     def _ensure_skybox_mesh(self) -> "MeshDrawable":
         """Lazily create skybox cube mesh."""
@@ -108,6 +108,6 @@ class SkyboxManager:
             dtype=np.float32
         )
         self.skybox_bottom_color = np.asarray(
-            data.get("skybox_bottom_color", [0.85, 0.85, 0.9]),
+            data.get("skybox_bottom_color", [0.6, 0.5, 0.4]),
             dtype=np.float32
         )

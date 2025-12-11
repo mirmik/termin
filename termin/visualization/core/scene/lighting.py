@@ -45,12 +45,7 @@ class LightingManager:
 
         Transforms local -Z axis to world space through entity rotation:
         dir_world = R * (0, 0, -1)
-
-        If no light components are present, creates a default directional light
-        using the scene's light_direction and light_color.
         """
-        from termin.visualization.core.lighting.light import Light, LightType
-
         lights: List[Light] = []
         forward_local = np.array([0.0, 0.0, -1.0], dtype=np.float32)
 
@@ -71,18 +66,6 @@ class LightingManager:
             light.position = position
             light.direction = forward_world
             lights.append(light)
-
-        # If no light components, add default directional light
-        if len(lights) == 0:
-            direction = self.light_direction / np.linalg.norm(self.light_direction)
-            default_light = Light(
-                type=LightType.DIRECTIONAL,
-                position=np.zeros(3, dtype=np.float32),
-                direction=direction,
-                color=self.light_color,
-                intensity=1.0,
-            )
-            lights.append(default_light)
 
         self.lights = lights
         return lights

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from termin.geombase.pose3 import Pose3
+from termin.geombase.rot3 import Rot3
 from termin.visualization import (
     Entity,
     Material,
@@ -13,6 +15,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.core.line import LineEntity
+from termin.visualization.render.components import LightComponent
 from termin.visualization.render.shader import ShaderProgram
 
 
@@ -59,6 +62,15 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
     scene.add(line2)
     world.add_scene(scene)
 
+    # Light
+    light_entity = Entity(
+        pose=Pose3(Rot3.from_euler_xyz(np.deg2rad(-45), np.deg2rad(-45), 0), [0, 0, 0]),
+        name="light",
+    )
+    light_entity.add_component(LightComponent())
+    scene.add(light_entity)
+
+    # Camera
     camera_entity = Entity(name="camera")
     camera = PerspectiveCameraComponent()
     camera_entity.add_component(camera)
