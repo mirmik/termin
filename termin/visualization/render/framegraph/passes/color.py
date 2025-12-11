@@ -6,6 +6,7 @@ from typing import List, Tuple, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.components import MeshRenderer
 
@@ -127,6 +128,21 @@ class ColorPass(RenderFramePass):
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """ColorPass читает input_res и пишет output_res inplace."""
         return [(self.input_res, self.output_res)]
+
+    def get_resource_specs(self) -> List[ResourceSpec]:
+        """
+        Объявляет требования к входному ресурсу.
+
+        Очищает буфер тёмно-серым цветом и depth=1.0.
+        Если есть SkyBoxPass перед ColorPass, он перезапишет эти настройки.
+        """
+        return [
+            ResourceSpec(
+                resource=self.input_res,
+                clear_color=(0.2, 0.2, 0.2, 1.0),
+                clear_depth=1.0,
+            )
+        ]
 
     def get_internal_symbols(self) -> List[str]:
         """
