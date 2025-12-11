@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 
+from termin.visualization.core.display import Display
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.viewport import Viewport
 from termin.visualization.platform.backends.base import Action, MouseButton
@@ -14,24 +15,28 @@ from termin.visualization.render import (
     RenderEngine,
     RenderView,
     ViewportRenderState,
+    WindowRenderSurface,
 )
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 
 from termin.editor.gizmo import GizmoController
+from termin.editor.editor_display_input_manager import EditorDisplayInputManager
+
+if TYPE_CHECKING:
+    from termin.visualization.platform.backends.base import BackendWindow, GraphicsBackend
 
 
 class ViewportController:
     """
     Управляет рендерингом в окне редактора.
-    
+
     Владеет:
+    - Display (viewports + surface)
+    - EditorDisplayInputManager (обработка ввода)
     - RenderEngine (выполняет рендеринг)
     - ViewportRenderState (pipeline + FBO пул)
-    - WindowRenderSurface (куда рендерим)
-    
-    Ссылается на:
-    - Window (события мыши/клавиатуры)
-    - Viewport (scene + camera + rect)
+
+    Использует новую архитектуру Display вместо Window.
     """
 
     def __init__(
@@ -73,32 +78,46 @@ class ViewportController:
             layout = QVBoxLayout(self._container)
             self._container.setLayout(layout)
 
-        # Создаём окно через world
-        window = self._world.create_window(
+        # Получаем graphics и window_backend от world
+        self._graphics: "GraphicsBackend" = self._world.graphics
+        window_backend = self._world.window_backend
+
+        # Создаём BackendWindow через window_backend (Qt виджет)
+        self._backend_window: "BackendWindow" = window_backend.create_window(
             width=900,
             height=800,
             title="viewport",
             parent=self._container,
         )
-        
-        # Создаём viewport (теперь без pipeline и fbos)
-        viewport = window.add_viewport(self._scene, self._camera)
-        window.set_world_mode("editor")
 
-        self._window = window
+        # Создаём WindowRenderSurface
+        self._render_surface = WindowRenderSurface(self._backend_window)
+
+        # Создаём Display
+        self._display = Display(self._render_surface)
+
+        # Создаём viewport
+        viewport = self._display.create_viewport(self._scene, self._camera)
         self._viewport = viewport
 
-        # Создаём новую архитектуру рендеринга
-        self._render_engine = RenderEngine(window.graphics)
-        self._render_surface = window.render_surface  # Берём surface из окна
+        # Создаём RenderEngine и RenderState
+        self._render_engine = RenderEngine(self._graphics)
         self._render_state = ViewportRenderState(pipeline=self._make_pipeline())
 
-        # Подписываемся на события
-        window.on_mouse_button_event = self._on_mouse_button_event
-        window.after_render_handler = self._after_render
-        window.on_mouse_move_event = self._on_mouse_move
+        # Создаём EditorDisplayInputManager
+        self._input_manager = EditorDisplayInputManager(
+            backend_window=self._backend_window,
+            display=self._display,
+            graphics=self._graphics,
+            get_fbo_pool=lambda: self._render_state.fbos,
+            on_request_update=self.request_update,
+            on_mouse_button_event=self._on_mouse_button_event,
+            on_mouse_move_event=self._on_mouse_move,
+        )
+        self._input_manager.set_world_mode("editor")
 
-        gl_widget = window.handle.widget
+        # Qt виджет
+        gl_widget = self._backend_window.widget
         gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         gl_widget.setMinimumSize(50, 50)
         layout.addWidget(gl_widget)
@@ -111,26 +130,20 @@ class ViewportController:
     def _setup_qt_render(self) -> None:
         """
         Настраивает рендеринг для Qt виджета.
-        
+
         Qt OpenGL виджет вызывает paintGL при необходимости перерисовки.
         Нам нужно перехватить это и вызвать наш RenderEngine.
         """
-        # Qt backend сам вызывает render, нужно подменить метод
-        original_paint = self._gl_widget.paintGL
-        
         def custom_paint():
             self._do_render()
-        
+
         self._gl_widget.paintGL = custom_paint
 
     def _do_render(self) -> None:
         """
         Выполняет рендеринг через RenderEngine.
         """
-        if self._window.handle is None:
-            return
-
-        self._window.graphics.ensure_ready()
+        self._graphics.ensure_ready()
         self._render_surface.make_current()
 
         # Создаём RenderView из Viewport
@@ -149,15 +162,30 @@ class ViewportController:
             present=False,  # Qt сам делает swap buffers
         )
 
-        # Вызываем after_render_handler
-        if self._window.after_render_handler is not None:
-            self._window.after_render_handler(self._window)
+        # Обрабатываем отложенные события после рендера
+        self._after_render()
 
     # ---------- свойства для EditorWindow ----------
 
     @property
+    def display(self) -> Display:
+        """Display с viewport'ами."""
+        return self._display
+
+    @property
     def window(self):
-        return self._window
+        """Для обратной совместимости. Возвращает объект с нужными атрибутами."""
+        return self
+
+    @property
+    def handle(self):
+        """BackendWindow для совместимости."""
+        return self._backend_window
+
+    @property
+    def graphics(self):
+        """GraphicsBackend."""
+        return self._graphics
 
     @property
     def viewport(self):
@@ -172,6 +200,11 @@ class ViewportController:
         """Доступ к состоянию рендера (pipeline, fbos)."""
         return self._render_state
 
+    @property
+    def input_manager(self) -> EditorDisplayInputManager:
+        """Менеджер ввода редактора."""
+        return self._input_manager
+
     def set_camera(self, camera) -> None:
         """Устанавливает новую камеру для viewport."""
         self._camera = camera
@@ -184,23 +217,28 @@ class ViewportController:
         self._scene = scene
         self._viewport.scene = scene
 
+    def set_world_mode(self, mode: str) -> None:
+        """Устанавливает режим работы (editor/game)."""
+        self._input_manager.set_world_mode(mode)
+
     def request_update(self) -> None:
-        self._window._request_update()
+        """Запрашивает перерисовку."""
+        self._backend_window.request_update()
 
     def get_pick_id_for_entity(self, ent: Entity | None) -> int:
         if ent is None:
             return 0
         return ent.pick_id
 
-    # ---------- picking через новый API ----------
+    # ---------- picking через EditorDisplayInputManager ----------
 
     def pick_entity_at(self, x: float, y: float, viewport: Viewport) -> Entity | None:
         """Читает entity из id-карты через FBO пул."""
-        return self._window.pick_entity_at(x, y, self._render_state.fbos, viewport)
+        return self._input_manager.pick_entity_at(x, y, viewport)
 
     def pick_color_at(self, x: float, y: float, viewport: Viewport, buffer_name: str = "id"):
         """Читает цвет пикселя из FBO пула."""
-        return self._window.pick_color_at(x, y, self._render_state.fbos, viewport, buffer_name)
+        return self._input_manager.pick_color_at(x, y, viewport, buffer_name)
 
     # ---------- внутренние обработчики событий ----------
 
@@ -216,20 +254,20 @@ class ViewportController:
             return
         self._pending_hover = (x, y, viewport)
 
-    def _after_render(self, window) -> None:
+    def _after_render(self) -> None:
         if self._pending_pick_press is not None:
-            self._process_pending_pick_press(self._pending_pick_press, window)
+            self._process_pending_pick_press(self._pending_pick_press)
         if self._pending_pick_release is not None:
-            self._process_pending_pick_release(self._pending_pick_release, window)
+            self._process_pending_pick_release(self._pending_pick_release)
         if self._pending_hover is not None:
-            self._process_pending_hover(self._pending_hover, window)
+            self._process_pending_hover(self._pending_hover)
 
         if self._framegraph_debugger is not None and self._framegraph_debugger.isVisible():
             self._framegraph_debugger.debugger_request_update()
 
     # ---------- обработка hover / выбора / гизмо ----------
 
-    def _process_pending_hover(self, pending_hover, window) -> None:
+    def _process_pending_hover(self, pending_hover) -> None:
         x, y, viewport = pending_hover
         self._pending_hover = None
 
@@ -239,10 +277,10 @@ class ViewportController:
 
         self._on_hover_entity(ent)
 
-    def _process_pending_pick_release(self, pending_release, window) -> None:
+    def _process_pending_pick_release(self, pending_release) -> None:
         """
         Обрабатывает отпускание левой кнопки мыши.
-        
+
         Выбор объекта (select) происходит только если:
         1. Гизмо не обрабатывал нажатие (не было начато перемещение/вращение)
         2. Мышь не сдвинулась значительно от точки нажатия (это клик, а не drag)
@@ -277,10 +315,10 @@ class ViewportController:
 
         self._on_entity_picked(ent)
 
-    def _process_pending_pick_press(self, pending_press, window) -> None:
+    def _process_pending_pick_press(self, pending_press) -> None:
         """
         Обрабатывает нажатие левой кнопки мыши.
-        
+
         Запоминаем позицию для последующего определения, был ли это клик или drag.
         Если клик попал по гизмо — начинаем drag гизмо и помечаем, что select не нужен.
         """

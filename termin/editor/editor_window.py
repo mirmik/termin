@@ -193,7 +193,6 @@ class EditorWindow(QMainWindow):
         self._init_viewport_toolbar()
 
         # --- viewport ---
-        self.viewport_window = None
         self.viewport = None
         self.viewport_controller = ViewportController(
             container=self.viewportContainer,
@@ -205,8 +204,7 @@ class EditorWindow(QMainWindow):
             on_hover_entity=self._on_hover_entity_from_viewport,
         )
 
-        self.viewport_window = self.viewport_controller.window
-        self.viewport = self.viewport_controller.viewport  # viewport из контроллера
+        self.viewport = self.viewport_controller.viewport
 
         gl_widget = self.viewport_controller.gl_widget
         gl_widget.installEventFilter(self)
@@ -343,10 +341,10 @@ class EditorWindow(QMainWindow):
 
     def _show_framegraph_debugger(self) -> None:
         """Opens framegraph texture viewer dialog."""
-        if self.viewport_window is None or self.viewport is None:
+        if self.viewport_controller is None or self.viewport is None:
             return
         self._dialog_manager.show_framegraph_debugger(
-            graphics=self.viewport_window.graphics,
+            graphics=self.viewport_controller.graphics,
             viewport_controller=self.viewport_controller,
         )
 
@@ -683,8 +681,8 @@ class EditorWindow(QMainWindow):
         Перехватываем нажатие Delete в виджете вьюпорта и удаляем выделенную сущность.
         """
         if (
-            self.viewport_window is not None
-            and obj is self.viewport_window.handle.widget
+            self.viewport_controller is not None
+            and obj is self.viewport_controller.handle.widget
             and event.type() == QEvent.Type.KeyPress
             and event.key() == Qt.Key.Key_Delete
         ):
@@ -821,8 +819,8 @@ class EditorWindow(QMainWindow):
         """Колбэк от GameModeController при изменении режима."""
         if is_playing:
             # Входим в игровой режим
-            if self.viewport_window is not None:
-                self.viewport_window.set_world_mode("game")
+            if self.viewport_controller is not None:
+                self.viewport_controller.set_world_mode("game")
 
             # Скрываем гизмо
             if self.gizmo_controller is not None:
@@ -835,8 +833,8 @@ class EditorWindow(QMainWindow):
                 self.inspector.set_target(None)
         else:
             # Выходим из игрового режима
-            if self.viewport_window is not None:
-                self.viewport_window.set_world_mode("editor")
+            if self.viewport_controller is not None:
+                self.viewport_controller.set_world_mode("editor")
 
             # Показываем гизмо
             if self.gizmo_controller is not None:
