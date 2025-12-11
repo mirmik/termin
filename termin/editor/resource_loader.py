@@ -102,31 +102,6 @@ class ResourceLoader:
 
             self._resource_manager.register_material(name, mat)
 
-    def scan_project_resources(self) -> None:
-        """Scan project directory, load resources, and enable file watching."""
-        project_path = self._get_project_path()
-        if project_path is None:
-            return
-
-        # Register built-in DefaultShader
-        self._resource_manager.register_default_shader()
-
-        # Scan and load resources
-        stats = self._resource_manager.scan_project_resources(project_path)
-
-        # Enable file watching
-        self._resource_manager.enable_file_watching(
-            project_path=project_path,
-            on_resource_reloaded=self._on_resource_reloaded,
-        )
-
-        total = stats["materials"] + stats["shaders"]
-        if total > 0 or stats["errors"] > 0:
-            self._log(
-                f"Scanned project: {stats['materials']} materials, "
-                f"{stats['shaders']} shaders, {stats['errors']} errors"
-            )
-
     def load_material_from_file(self) -> None:
         """Open dialog to select .shader file, parse it and add to ResourceManager."""
         file_path, _ = QFileDialog.getOpenFileName(

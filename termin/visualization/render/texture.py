@@ -17,6 +17,7 @@ class Texture:
         self._handles: dict[int | None, TextureHandle] = {}
         self._image_data: Optional[np.ndarray] = None
         self._size: Optional[tuple[int, int]] = None
+        self.source_path: str | None = None
         if path is not None:
             self.load(path)
 
@@ -29,6 +30,17 @@ class Texture:
         self._image_data = data
         self._size = (width, height)
         self._handles.clear()
+        self.source_path = str(path)
+
+    def invalidate(self) -> None:
+        """
+        Invalidate cached GPU handles, forcing texture reload on next use.
+
+        If source_path is set, reloads the texture from disk.
+        """
+        self._handles.clear()
+        if self.source_path is not None:
+            self.load(self.source_path)
 
     def _ensure_handle(self, graphics: GraphicsBackend, context_key: int | None) -> TextureHandle:
         handle = self._handles.get(context_key)

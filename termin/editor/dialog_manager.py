@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from termin.editor.undo_stack_viewer import UndoStackViewer
     from termin.editor.framegraph_debugger import FramegraphDebugDialog
     from termin.editor.resource_manager_viewer import ResourceManagerViewer
+    from termin.editor.project_file_watcher import ProjectFileWatcher
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.resources import ResourceManager
     from termin.visualization.platform.backends.base import GraphicsBackend
@@ -36,6 +37,7 @@ class DialogManager:
         resource_manager: "ResourceManager",
         push_undo_command: Callable,
         request_viewport_update: Callable,
+        project_file_watcher: "ProjectFileWatcher | None" = None,
     ):
         self._parent = parent
         self._undo_stack = undo_stack
@@ -44,6 +46,7 @@ class DialogManager:
         self._resource_manager = resource_manager
         self._push_undo_command = push_undo_command
         self._request_viewport_update = request_viewport_update
+        self._project_file_watcher = project_file_watcher
 
         # Lazy-initialized dialogs
         self._scene_inspector_dialog = None
@@ -165,6 +168,7 @@ class DialogManager:
 
             self._resource_manager_viewer = ResourceManagerViewer(
                 self._resource_manager,
+                project_file_watcher=self._project_file_watcher,
                 parent=self._parent,
             )
 

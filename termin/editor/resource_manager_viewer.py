@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -19,6 +21,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
+if TYPE_CHECKING:
+    from termin.editor.project_file_watcher import ProjectFileWatcher
+
 from termin.visualization.core.resources import ResourceManager
 
 
@@ -27,9 +32,15 @@ class ResourceManagerViewer(QDialog):
     Диалог просмотра состояния ResourceManager.
     """
 
-    def __init__(self, resource_manager: ResourceManager, parent=None):
+    def __init__(
+        self,
+        resource_manager: ResourceManager,
+        project_file_watcher: "ProjectFileWatcher | None" = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self._resource_manager = resource_manager
+        self._project_file_watcher = project_file_watcher
 
         self.setWindowTitle("Resource Manager")
         self.setMinimumSize(600, 400)
@@ -186,33 +197,30 @@ class ResourceManagerViewer(QDialog):
         """Обновляет список отслеживаемых файлов и директорий."""
         self._watched_tree.clear()
 
-        rm = self._resource_manager
+        watcher = self._project_file_watcher
+        if watcher is None:
+            return
 
         # Директории
-        if rm._watched_dirs:
-            dirs_item = QTreeWidgetItem(["Watched Directories", f"{len(rm._watched_dirs)} dirs"])
+        watched_dirs = watcher.watched_dirs
+        if watched_dirs:
+            dirs_item = QTreeWidgetItem(["Watched Directories", f"{len(watched_dirs)} dirs"])
             self._watched_tree.addTopLevelItem(dirs_item)
-            for path in sorted(rm._watched_dirs):
+            for path in sorted(watched_dirs):
                 child = QTreeWidgetItem([path, "directory"])
                 dirs_item.addChild(child)
 
-        # Файлы материалов
-        if rm._file_to_materials:
-            mats_item = QTreeWidgetItem(["Material Files", f"{len(rm._file_to_materials)} files"])
-            self._watched_tree.addTopLevelItem(mats_item)
-            for path, names in sorted(rm._file_to_materials.items()):
-                resources = ", ".join(sorted(names))
-                child = QTreeWidgetItem([path, resources])
-                mats_item.addChild(child)
-
-        # Файлы текстур
-        if rm._file_to_textures:
-            tex_item = QTreeWidgetItem(["Texture Files", f"{len(rm._file_to_textures)} files"])
-            self._watched_tree.addTopLevelItem(tex_item)
-            for path, names in sorted(rm._file_to_textures.items()):
-                resources = ", ".join(sorted(names))
-                child = QTreeWidgetItem([path, resources])
-                tex_item.addChild(child)
+        # Файлы по типам (из процессоров)
+        for processor in watcher.get_all_processors():
+            tracked = processor.get_tracked_files()
+            if tracked:
+                type_name = processor.resource_type.capitalize()
+                type_item = QTreeWidgetItem([f"{type_name} Files", f"{len(tracked)} files"])
+                self._watched_tree.addTopLevelItem(type_item)
+                for path, names in sorted(tracked.items()):
+                    resources = ", ".join(sorted(names)) if names else "(pending)"
+                    child = QTreeWidgetItem([path, resources])
+                    type_item.addChild(child)
 
         self._watched_tree.expandAll()
         self._watched_tree.resizeColumnToContents(0)
@@ -220,9 +228,16 @@ class ResourceManagerViewer(QDialog):
     def _update_status(self) -> None:
         """Обновляет строку статуса."""
         rm = self._resource_manager
-        watching = "enabled" if rm._file_watcher is not None else "disabled"
-        watched_dirs = len(rm._watched_dirs)
-        watched_files = len(rm._file_to_materials) + len(rm._file_to_textures)
+        watcher = self._project_file_watcher
+
+        if watcher is not None:
+            watching = "enabled" if watcher.is_enabled else "disabled"
+            watched_dirs = len(watcher.watched_dirs)
+            watched_files = watcher.get_file_count()
+        else:
+            watching = "disabled"
+            watched_dirs = 0
+            watched_files = 0
 
         self._status_label.setText(
             f"Materials: {len(rm.materials)} | "

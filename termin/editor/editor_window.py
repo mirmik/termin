@@ -21,6 +21,12 @@ from termin.editor.editor_camera import EditorCameraManager
 from termin.editor.resource_loader import ResourceLoader
 from termin.editor.external_editor import open_in_text_editor
 from termin.editor.scene_file_controller import SceneFileController
+from termin.editor.project_file_watcher import ProjectFileWatcher
+from termin.editor.file_processors import (
+    MaterialFileProcessor,
+    ShaderFileProcessor,
+    TextureFileProcessor,
+)
 
 from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.entity import Entity
@@ -88,6 +94,29 @@ class EditorWindow(QMainWindow):
         self._resource_loader.scan_builtin_components()
         self._resource_loader.init_resources_from_scene()
 
+        # --- ProjectFileWatcher ---
+        self._project_file_watcher = ProjectFileWatcher(
+            on_resource_reloaded=self._on_resource_reloaded,
+        )
+        self._project_file_watcher.register_processor(
+            MaterialFileProcessor(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            ShaderFileProcessor(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            TextureFileProcessor(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+
         # --- UI из .ui ---
         self.sceneTree: QTreeView = self.findChild(QTreeView, "sceneTree")
 
@@ -126,6 +155,7 @@ class EditorWindow(QMainWindow):
             resource_manager=self.resource_manager,
             push_undo_command=self.push_undo_command,
             request_viewport_update=self._request_viewport_update,
+            project_file_watcher=self._project_file_watcher,
         )
 
         # --- EditorCameraManager ---
@@ -512,8 +542,24 @@ class EditorWindow(QMainWindow):
         self._request_viewport_update()
 
     def _scan_project_resources(self) -> None:
-        """Scan project directory for resources."""
-        self._resource_loader.scan_project_resources()
+        """Scan project directory for resources using ProjectFileWatcher."""
+        project_path = self._get_project_path()
+        if project_path is None:
+            return
+
+        # Register built-in DefaultShader
+        self.resource_manager.register_default_shader()
+
+        # Enable file watching and scan project
+        self._project_file_watcher.enable(project_path)
+
+        stats = self._project_file_watcher.get_stats()
+        total = sum(stats.values())
+        if total > 0:
+            self._log_to_console(
+                f"Scanned project: {stats.get('material', 0)} materials, "
+                f"{stats.get('shader', 0)} shaders, {stats.get('texture', 0)} textures"
+            )
 
     def _init_status_bar(self) -> None:
         """
