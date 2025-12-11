@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
+    from termin.visualization.platform.backends.base import GraphicsBackend
     from termin.editor.viewport_list_widget import ViewportListWidget
     from termin.editor.inspector_controller import InspectorController
 
@@ -40,6 +41,7 @@ class RenderingController:
         inspector_controller: "InspectorController",
         center_tab_widget: Optional[QTabWidget] = None,
         get_scene: Optional[Callable[[], "Scene"]] = None,
+        get_graphics: Optional[Callable[[], "GraphicsBackend"]] = None,
         on_display_selected: Optional[Callable[["Display"], None]] = None,
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
@@ -52,6 +54,7 @@ class RenderingController:
             inspector_controller: Controller for inspector panels.
             center_tab_widget: Optional tab widget for display switching.
             get_scene: Callback to get current scene.
+            get_graphics: Callback to get GraphicsBackend for creating surfaces.
             on_display_selected: Callback when display is selected.
             on_viewport_selected: Callback when viewport is selected.
             on_request_update: Callback to request viewport redraw.
@@ -60,6 +63,7 @@ class RenderingController:
         self._inspector = inspector_controller
         self._center_tabs = center_tab_widget
         self._get_scene = get_scene
+        self._get_graphics = get_graphics
         self._on_display_selected = on_display_selected
         self._on_viewport_selected = on_viewport_selected
         self._on_request_update = on_request_update
@@ -194,9 +198,31 @@ class RenderingController:
 
     def _on_add_display_requested(self) -> None:
         """Handle request to add new display."""
-        # For now, just log - actual display creation requires surface
-        # This will be implemented when we add WindowSurface creation
-        pass
+        if self._get_graphics is None:
+            return
+
+        graphics = self._get_graphics()
+        if graphics is None:
+            return
+
+        # Create offscreen surface for new display
+        from termin.visualization.render.surface import OffscreenRenderSurface
+        from termin.visualization.core.display import Display
+
+        surface = OffscreenRenderSurface(graphics, width=800, height=600)
+        display = Display(surface)
+
+        # Generate unique name
+        existing_names = set(self._display_names.values())
+        idx = 0
+        while True:
+            name = f"Display {idx}"
+            if name not in existing_names:
+                break
+            idx += 1
+
+        self.add_display(display, name)
+        self._request_update()
 
     def _on_add_viewport_requested(self, display: "Display") -> None:
         """Handle request to add viewport to display."""

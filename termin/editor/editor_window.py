@@ -416,6 +416,12 @@ class EditorWindow(QMainWindow):
             return None
         return str(self.project_browser.root_path)
 
+    def _get_graphics(self):
+        """Get GraphicsBackend from viewport controller."""
+        if self.viewport_controller is not None:
+            return self.viewport_controller.graphics
+        return None
+
     def _log_to_console(self, message: str) -> None:
         """Log message to console output."""
         if self.consoleOutput is not None:
@@ -480,6 +486,7 @@ class EditorWindow(QMainWindow):
             inspector_controller=self._inspector_controller,
             center_tab_widget=self._center_tab_widget,
             get_scene=lambda: self.scene,
+            get_graphics=self._get_graphics,
             on_request_update=self._request_viewport_update,
         )
 
