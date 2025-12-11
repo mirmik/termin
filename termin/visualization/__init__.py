@@ -20,7 +20,7 @@ from termin.visualization.ui import Canvas, UIElement, UIRectangle
 from termin.visualization.core.material import Material
 from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.render.texture import Texture
-from termin.visualization.core.world import VisualizationWorld
+from termin.visualization.core.world import VisualizationWorld, Visualization
 from termin.visualization.platform.backends.base import GraphicsBackend, WindowBackend, MouseButton, Key, Action
 from termin.visualization.platform.backends.qt import QtWindowBackend, QtGLWindowHandle
 
@@ -45,6 +45,7 @@ __all__ = [
     "Material",
     "ShaderProgram",
     "Texture",
+    "Visualization",
     "VisualizationWorld",
     "GraphicsBackend",
     "WindowBackend",

@@ -12,6 +12,7 @@ from termin.visualization import (
     Scene,
     Material,
     Texture,
+    Visualization,
     VisualizationWorld,
     PerspectiveCameraComponent,
     OrbitCameraController,
@@ -129,10 +130,12 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
 
 
 def main():
+    print("Запуск текстурированного куба...")
     world = VisualizationWorld()
     scene, camera = build_scene(world)
     window = world.create_window(title="termin textured cube")
     window.add_viewport(scene, camera)
+    print("Запуск основного цикла визуализации...")
     world.run()
 
 
