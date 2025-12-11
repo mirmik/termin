@@ -5,6 +5,7 @@ from termin.visualization.render.headless import HeadlessContext
 from termin.visualization.render.surface import (
     RenderSurface,
     OffscreenRenderSurface,
+    WindowRenderSurface,
 )
 from termin.visualization.render.view import RenderView
 from termin.visualization.render.state import ViewportRenderState
@@ -14,6 +15,7 @@ __all__ = [
     "HeadlessContext",
     "RenderSurface",
     "OffscreenRenderSurface",
+    "WindowRenderSurface",
     "RenderView",
     "ViewportRenderState",
 ]

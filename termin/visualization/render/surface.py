@@ -11,10 +11,11 @@ RenderSurface — абстракция целевой поверхности р�
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Tuple
+from typing import Callable, TYPE_CHECKING, Tuple
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import (
+        BackendWindow,
         FramebufferHandle,
         GraphicsBackend,
     )
@@ -163,3 +164,75 @@ class OffscreenRenderSurface(RenderSurface):
         if self._framebuffer is not None:
             self._framebuffer.delete()
             self._framebuffer = None
+
+
+class WindowRenderSurface(RenderSurface):
+    """
+    RenderSurface для окна.
+
+    Владеет ссылкой на BackendWindow и предоставляет доступ к его framebuffer.
+    """
+
+    def __init__(
+        self,
+        backend_window: "BackendWindow",
+        on_resize: Callable[[int, int], None] | None = None,
+    ):
+        """
+        Создаёт WindowRenderSurface.
+
+        Параметры:
+            backend_window: Платформенное окно (GLFW, Qt, etc.).
+            on_resize: Опциональный колбэк при изменении размера framebuffer.
+        """
+        self._backend_window = backend_window
+        self._on_resize = on_resize
+
+        # Подписываемся на resize если нужно
+        if on_resize is not None:
+            backend_window.set_framebuffer_size_callback(self._handle_resize)
+
+    @property
+    def backend_window(self) -> "BackendWindow":
+        """Платформенное окно."""
+        return self._backend_window
+
+    def _handle_resize(self, window, width: int, height: int) -> None:
+        """Обработчик изменения размера framebuffer."""
+        if self._on_resize is not None:
+            self._on_resize(width, height)
+
+    def get_framebuffer(self) -> "FramebufferHandle":
+        return self._backend_window.get_window_framebuffer()
+
+    def get_size(self) -> Tuple[int, int]:
+        return self._backend_window.framebuffer_size()
+
+    def window_size(self) -> Tuple[int, int]:
+        """Возвращает логический размер окна (может отличаться от framebuffer на HiDPI)."""
+        return self._backend_window.window_size()
+
+    def make_current(self) -> None:
+        self._backend_window.make_current()
+
+    def present(self) -> None:
+        self._backend_window.swap_buffers()
+
+    def context_key(self) -> int:
+        return id(self._backend_window)
+
+    def should_close(self) -> bool:
+        """Проверяет, должно ли окно закрыться."""
+        return self._backend_window.should_close()
+
+    def set_should_close(self, value: bool) -> None:
+        """Устанавливает флаг закрытия окна."""
+        self._backend_window.set_should_close(value)
+
+    def request_update(self) -> None:
+        """Запрашивает перерисовку окна."""
+        self._backend_window.request_update()
+
+    def get_cursor_pos(self) -> Tuple[float, float]:
+        """Возвращает позицию курсора в пикселях окна."""
+        return self._backend_window.get_cursor_pos()

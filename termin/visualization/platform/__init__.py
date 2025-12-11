@@ -1,6 +1,7 @@
 """Platform-specific windowing and backend glue."""
 
 from termin.visualization.platform.window import Window
+from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 from termin.visualization.platform.backends import (
     Action,
     BackendWindow,
@@ -17,6 +18,7 @@ from termin.visualization.platform.backends import (
 
 __all__ = [
     "Window",
+    "SimpleDisplayInputManager",
     "Action",
     "BackendWindow",
     "GraphicsBackend",

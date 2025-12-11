@@ -5,53 +5,56 @@ from termin.visualization.core.scene import Scene
 from termin.visualization.core.camera import CameraComponent
 
 if TYPE_CHECKING:
+    from termin.visualization.core.display import Display
     from termin.visualization.ui.canvas import Canvas
 
 
 @dataclass
 class Viewport:
     """
-    Viewport — "что рендерим и куда" в рамках окна.
-    
+    Viewport — "что рендерим и куда" в рамках дисплея.
+
     Содержит только данные:
     - scene: сцена с объектами
     - camera: камера для рендеринга
-    - window: родительское окно
+    - display: родительский дисплей
     - rect: нормализованный прямоугольник (x, y, w, h) в [0..1]
     - canvas: опциональная 2D канва для UI
-    
+
     НЕ содержит:
     - pipeline (управляется снаружи)
     - fbos (управляются снаружи через ViewportRenderState)
-    
+
     Для рендеринга используйте RenderEngine с RenderView и ViewportRenderState.
     """
     scene: Scene
     camera: CameraComponent
-    window: "Window"
     rect: Tuple[float, float, float, float]  # x, y, width, height in normalized coords (0.0:1.0)
+    display: Optional["Display"] = None
     canvas: Optional["Canvas"] = None
 
     def screen_point_to_ray(self, x: float, y: float):
         """
         Преобразует экранные координаты в луч в мировом пространстве.
-        
+
         Параметры:
             x, y: координаты в пикселях окна.
-        
+
         Возвращает:
             Ray3 из камеры через указанную точку.
         """
-        rect = self.window.viewport_rect_to_pixels(self)
+        if self.display is None:
+            raise ValueError("Viewport has no display")
+        rect = self.display.viewport_rect_to_pixels(self)
         return self.camera.screen_point_to_ray(x, y, viewport_rect=rect)
 
     def compute_pixel_rect(self, width: int, height: int) -> Tuple[int, int, int, int]:
         """
         Вычисляет прямоугольник viewport'а в пикселях.
-        
+
         Параметры:
             width, height: размер родительской поверхности.
-        
+
         Возвращает:
             (px, py, pw, ph) — позиция и размер в пикселях.
         """
