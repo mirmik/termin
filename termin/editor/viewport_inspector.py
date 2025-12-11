@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -49,6 +50,7 @@ class ViewportInspector(QWidget):
     display_changed = pyqtSignal(object)  # new Display
     camera_changed = pyqtSignal(object)  # new CameraComponent
     rect_changed = pyqtSignal(tuple)  # new rect (x, y, w, h)
+    depth_changed = pyqtSignal(int)  # new depth value
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -126,6 +128,14 @@ class ViewportInspector(QWidget):
 
         form.addRow(wh_widget)
 
+        # Depth (render priority)
+        self._depth_spin = QSpinBox()
+        self._depth_spin.setRange(-1000, 1000)
+        self._depth_spin.setValue(0)
+        self._depth_spin.setToolTip("Render priority: lower values render first")
+        self._depth_spin.valueChanged.connect(self._on_depth_changed)
+        form.addRow("Depth:", self._depth_spin)
+
         layout.addLayout(form)
         layout.addStretch()
 
@@ -202,6 +212,9 @@ class ViewportInspector(QWidget):
             self._y_spin.setValue(y)
             self._w_spin.setValue(w)
             self._h_spin.setValue(h)
+
+            # Update depth
+            self._depth_spin.setValue(viewport.depth)
         finally:
             self._updating = False
 
@@ -215,6 +228,7 @@ class ViewportInspector(QWidget):
             self._y_spin.setValue(0.0)
             self._w_spin.setValue(1.0)
             self._h_spin.setValue(1.0)
+            self._depth_spin.setValue(0)
         finally:
             self._updating = False
 
@@ -303,6 +317,14 @@ class ViewportInspector(QWidget):
             self._h_spin.value(),
         )
         self.rect_changed.emit(new_rect)
+        self.viewport_changed.emit()
+
+    def _on_depth_changed(self, value: int) -> None:
+        """Handle depth value change."""
+        if self._updating or self._viewport is None:
+            return
+
+        self.depth_changed.emit(value)
         self.viewport_changed.emit()
 
     def refresh(self) -> None:

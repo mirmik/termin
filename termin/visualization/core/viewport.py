@@ -20,6 +20,7 @@ class Viewport:
     - display: родительский дисплей
     - rect: нормализованный прямоугольник (x, y, w, h) в [0..1]
     - canvas: опциональная 2D канва для UI
+    - depth: приоритет рендеринга (меньше = раньше, как Camera.depth в Unity)
 
     НЕ содержит:
     - pipeline (управляется снаружи)
@@ -32,6 +33,7 @@ class Viewport:
     rect: Tuple[float, float, float, float]  # x, y, width, height in normalized coords (0.0:1.0)
     display: Optional["Display"] = None
     canvas: Optional["Canvas"] = None
+    depth: int = 0  # Render priority: lower values render first
 
     def screen_point_to_ray(self, x: float, y: float):
         """

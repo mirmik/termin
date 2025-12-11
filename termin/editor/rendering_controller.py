@@ -89,6 +89,7 @@ class RenderingController:
         self._inspector.viewport_inspector.display_changed.connect(self._on_viewport_display_changed)
         self._inspector.viewport_inspector.camera_changed.connect(self._on_viewport_camera_changed)
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
+        self._inspector.viewport_inspector.depth_changed.connect(self._on_viewport_depth_changed)
 
     @property
     def displays(self) -> List["Display"]:
@@ -316,6 +317,14 @@ class RenderingController:
         # Viewport.rect is a tuple, need to replace it
         # Since Viewport is a dataclass, we can assign directly
         self._selected_viewport.rect = new_rect
+        self._request_update()
+
+    def _on_viewport_depth_changed(self, new_depth: int) -> None:
+        """Handle viewport depth change from inspector."""
+        if self._selected_viewport is None:
+            return
+
+        self._selected_viewport.depth = new_depth
         self._request_update()
 
     # --- Center tabs management ---

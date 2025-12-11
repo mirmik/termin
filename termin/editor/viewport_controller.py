@@ -155,8 +155,10 @@ class ViewportController:
         self._render_surface.make_current()
 
         # Собираем пары (RenderView, ViewportRenderState) для всех viewport'ов
+        # Сортируем по depth (меньше = раньше)
         views_and_states = []
-        for viewport in self._display.viewports:
+        sorted_viewports = sorted(self._display.viewports, key=lambda v: v.depth)
+        for viewport in sorted_viewports:
             # Получаем или создаём state для viewport'а
             state = self._get_or_create_state(viewport)
 
