@@ -114,6 +114,9 @@ class ProjectFileWatcher:
         self._processors: Dict[str, FileTypeProcessor] = {}
         self._on_resource_reloaded = on_resource_reloaded
 
+        # All project files by extension (for statistics)
+        self._all_files_by_ext: Dict[str, Set[str]] = {}  # ext -> set of paths
+
     def register_processor(self, processor: FileTypeProcessor) -> None:
         """
         Register a FileTypeProcessor for its extensions.
@@ -154,6 +157,7 @@ class ProjectFileWatcher:
         self._project_path = None
         self._watched_dirs.clear()
         self._watched_files.clear()
+        self._all_files_by_ext.clear()
 
     def watch_directory(self, path: str) -> None:
         """
@@ -177,11 +181,23 @@ class ProjectFileWatcher:
                 self._file_watcher.addPath(root)
                 self._watched_dirs.add(root)
 
-            # Watch and process resource files
+            # Process all files
             for filename in files:
+                # Skip hidden files
+                if filename.startswith("."):
+                    continue
+
+                file_path = os.path.join(root, filename)
                 ext = os.path.splitext(filename)[1].lower()
+
+                # Track all files for statistics
+                if ext:  # Only files with extension
+                    if ext not in self._all_files_by_ext:
+                        self._all_files_by_ext[ext] = set()
+                    self._all_files_by_ext[ext].add(file_path)
+
+                # Watch and process resource files with registered processors
                 if ext in self._processors:
-                    file_path = os.path.join(root, filename)
                     self._add_file(file_path)
 
     def _add_file(self, path: str) -> None:
@@ -246,10 +262,10 @@ class ProjectFileWatcher:
 
     def get_file_count(self, ext: str | None = None) -> int:
         """
-        Get count of watched files.
+        Get count of watched files (files with registered processors).
 
         Args:
-            ext: Filter by extension (e.g., '.material'). None for all files.
+            ext: Filter by extension (e.g., '.material'). None for all watched files.
         """
         if ext is None:
             return len(self._watched_files)
@@ -257,6 +273,21 @@ class ProjectFileWatcher:
         return sum(
             1 for f in self._watched_files if os.path.splitext(f)[1].lower() == ext
         )
+
+    def get_all_files_count(self) -> int:
+        """Get total count of all project files."""
+        return sum(len(files) for files in self._all_files_by_ext.values())
+
+    def get_all_files_by_extension(self) -> Dict[str, int]:
+        """
+        Get statistics of all project files by extension.
+
+        Returns:
+            Dict mapping extension (e.g., '.py') to file count, sorted by count descending.
+        """
+        stats = {ext: len(files) for ext, files in self._all_files_by_ext.items()}
+        # Sort by count descending, then by extension
+        return dict(sorted(stats.items(), key=lambda x: (-x[1], x[0])))
 
     def get_stats(self) -> Dict[str, int]:
         """
