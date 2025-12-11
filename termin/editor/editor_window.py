@@ -19,6 +19,8 @@ from termin.editor.inspector_controller import InspectorController
 from termin.editor.menu_bar_controller import MenuBarController
 from termin.editor.editor_camera import EditorCameraManager
 from termin.editor.resource_loader import ResourceLoader
+from termin.editor.viewport_list_widget import ViewportListWidget
+from termin.editor.rendering_controller import RenderingController
 from termin.editor.external_editor import open_in_text_editor
 from termin.editor.scene_file_controller import SceneFileController
 from termin.editor.project_file_watcher import ProjectFileWatcher
@@ -75,6 +77,9 @@ class EditorWindow(QMainWindow):
         self.project_browser = None
         self._project_name: str | None = None
         self._play_button: QPushButton | None = None
+        self._viewport_list_widget: ViewportListWidget | None = None
+        self._rendering_controller: RenderingController | None = None
+        self._center_tab_widget: QTabWidget | None = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -127,8 +132,11 @@ class EditorWindow(QMainWindow):
 
         # --- UI из .ui ---
         self.sceneTree: QTreeView = self.findChild(QTreeView, "sceneTree")
-
         self.sceneTree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+
+        # Left tab widget (Scene + Rendering tabs)
+        self.leftTabWidget: QTabWidget = self.findChild(QTabWidget, "leftTabWidget")
+        self.renderingTab: QWidget = self.findChild(QWidget, "renderingTab")
 
         self.viewportContainer: QWidget = self.findChild(QWidget, "viewportContainer")
         self.inspectorContainer: QWidget = self.findChild(QWidget, "inspectorContainer")
@@ -208,6 +216,9 @@ class EditorWindow(QMainWindow):
 
         gl_widget = self.viewport_controller.gl_widget
         gl_widget.installEventFilter(self)
+
+        # --- ViewportListWidget (in Rendering tab) ---
+        self._init_viewport_list_widget()
 
         # --- SelectionManager ---
         self.selection_manager = SelectionManager(
@@ -449,6 +460,34 @@ class EditorWindow(QMainWindow):
 
         self.topSplitter.setSizes([300, 1000, 300])
         self.verticalSplitter.setSizes([600, 200])
+
+    def _init_viewport_list_widget(self) -> None:
+        """Initialize ViewportListWidget and RenderingController."""
+        if self.renderingTab is None:
+            return
+
+        # Create ViewportListWidget
+        self._viewport_list_widget = ViewportListWidget()
+
+        # Add to rendering tab layout
+        rendering_layout = self.renderingTab.layout()
+        if rendering_layout is not None:
+            rendering_layout.addWidget(self._viewport_list_widget)
+
+        # Create RenderingController
+        self._rendering_controller = RenderingController(
+            viewport_list_widget=self._viewport_list_widget,
+            inspector_controller=self._inspector_controller,
+            center_tab_widget=self._center_tab_widget,
+            get_scene=lambda: self.scene,
+            on_request_update=self._request_viewport_update,
+        )
+
+        # Add the editor display (main viewport)
+        if self.viewport_controller is not None:
+            editor_display = self.viewport_controller.display
+            if editor_display is not None:
+                self._rendering_controller.add_display(editor_display, "Editor")
 
     def _init_project_browser(self):
         """Инициализация файлового браузера проекта."""

@@ -1,13 +1,14 @@
 """
 Controller for managing inspector panels in the editor.
 
-Handles switching between EntityInspector and MaterialInspector,
-and synchronizes inspector state with selection.
+Handles switching between EntityInspector, MaterialInspector,
+DisplayInspector, and ViewportInspector.
+Synchronizes inspector state with selection.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, List, Optional
 
 from PyQt6.QtWidgets import QStackedWidget, QVBoxLayout
 
@@ -15,8 +16,13 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QWidget
     from termin.visualization.core.entity import Entity
     from termin.visualization.core.resources import ResourceManager
+    from termin.visualization.core.display import Display
+    from termin.visualization.core.viewport import Viewport
+    from termin.visualization.core.scene import Scene
     from termin.editor.editor_inspector import EntityInspector
     from termin.editor.material_inspector import MaterialInspector
+    from termin.editor.display_inspector import DisplayInspector
+    from termin.editor.viewport_inspector import ViewportInspector
 
 
 class InspectorController:
@@ -24,13 +30,16 @@ class InspectorController:
     Manages inspector panels and their switching.
 
     Handles:
-    - Switching between EntityInspector and MaterialInspector
-    - Loading entities/materials into inspectors
+    - Switching between EntityInspector, MaterialInspector,
+      DisplayInspector, and ViewportInspector
+    - Loading entities/materials/displays/viewports into inspectors
     - Syncing inspector with selection state
     """
 
     ENTITY_INSPECTOR_INDEX = 0
     MATERIAL_INSPECTOR_INDEX = 1
+    DISPLAY_INSPECTOR_INDEX = 2
+    VIEWPORT_INSPECTOR_INDEX = 3
 
     def __init__(
         self,
@@ -40,9 +49,13 @@ class InspectorController:
         on_transform_changed: Callable,
         on_component_changed: Callable,
         on_material_changed: Callable,
+        on_display_changed: Optional[Callable] = None,
+        on_viewport_changed: Optional[Callable] = None,
     ):
         self._resource_manager = resource_manager
         self._push_undo_command = push_undo_command
+        self._on_display_changed = on_display_changed
+        self._on_viewport_changed = on_viewport_changed
 
         # Create stack widget
         self._stack = QStackedWidget()
@@ -62,6 +75,22 @@ class InspectorController:
         self._material_inspector = MaterialInspector()
         self._material_inspector.material_changed.connect(on_material_changed)
         self._stack.addWidget(self._material_inspector)
+
+        # Create DisplayInspector
+        from termin.editor.display_inspector import DisplayInspector
+
+        self._display_inspector = DisplayInspector()
+        if on_display_changed is not None:
+            self._display_inspector.display_changed.connect(on_display_changed)
+        self._stack.addWidget(self._display_inspector)
+
+        # Create ViewportInspector
+        from termin.editor.viewport_inspector import ViewportInspector
+
+        self._viewport_inspector = ViewportInspector()
+        if on_viewport_changed is not None:
+            self._viewport_inspector.viewport_changed.connect(on_viewport_changed)
+        self._stack.addWidget(self._viewport_inspector)
 
         # Add to container
         self._init_in_container(container)
@@ -84,6 +113,16 @@ class InspectorController:
     def material_inspector(self) -> "MaterialInspector":
         """Access to MaterialInspector widget."""
         return self._material_inspector
+
+    @property
+    def display_inspector(self) -> "DisplayInspector":
+        """Access to DisplayInspector widget."""
+        return self._display_inspector
+
+    @property
+    def viewport_inspector(self) -> "ViewportInspector":
+        """Access to ViewportInspector widget."""
+        return self._viewport_inspector
 
     @property
     def stack(self) -> QStackedWidget:
@@ -112,6 +151,38 @@ class InspectorController:
         """Show MaterialInspector and load material from file."""
         self._stack.setCurrentIndex(self.MATERIAL_INSPECTOR_INDEX)
         self._material_inspector.load_material_file(file_path)
+
+    def show_display_inspector(
+        self,
+        display: "Display | None" = None,
+        name: str = ""
+    ) -> None:
+        """Show DisplayInspector and set target display."""
+        self._stack.setCurrentIndex(self.DISPLAY_INSPECTOR_INDEX)
+        self._display_inspector.set_display(display, name)
+
+    def show_viewport_inspector(
+        self,
+        viewport: "Viewport | None" = None,
+        displays: Optional[List["Display"]] = None,
+        display_names: Optional[dict[int, str]] = None,
+        scene: "Scene | None" = None,
+    ) -> None:
+        """
+        Show ViewportInspector and set target viewport.
+
+        Args:
+            viewport: Viewport to inspect.
+            displays: Available displays for selection.
+            display_names: Optional display names mapping.
+            scene: Scene to find cameras from.
+        """
+        self._stack.setCurrentIndex(self.VIEWPORT_INSPECTOR_INDEX)
+        if displays is not None:
+            self._viewport_inspector.set_displays(displays, display_names)
+        if scene is not None:
+            self._viewport_inspector.set_scene(scene)
+        self._viewport_inspector.set_viewport(viewport)
 
     def set_entity_target(self, target) -> None:
         """Set target for EntityInspector (can be Entity or other object)."""

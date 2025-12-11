@@ -48,14 +48,77 @@
         <enum>Qt::Horizontal</enum>
        </property>
 
-       <!-- Left panel (Hierarchy) -->
-       <widget class="QTreeView" name="sceneTree">
+       <!-- Left panel (Hierarchy + Rendering tabs) -->
+       <widget class="QTabWidget" name="leftTabWidget">
         <property name="minimumSize">
          <size>
           <width>200</width>
           <height>0</height>
          </size>
         </property>
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
+
+        <!-- Scene tab -->
+        <widget class="QWidget" name="sceneTab">
+         <attribute name="title">
+          <string>Scene</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="sceneTabLayout">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QTreeView" name="sceneTree">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+
+        <!-- Rendering tab -->
+        <widget class="QWidget" name="renderingTab">
+         <attribute name="title">
+          <string>Rendering</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="renderingTabLayout">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <!-- ViewportListWidget will be added here programmatically -->
+         </layout>
+        </widget>
+
        </widget>
 
        <!-- Center viewport container -->
