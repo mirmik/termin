@@ -1,0 +1,878 @@
+{
+  "version": "1.0",
+  "scene": {
+    "background_color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.07999999821186066,
+      1.0
+    ],
+    "light_direction": [
+      -0.5,
+      -1.0,
+      -0.30000001192092896
+    ],
+    "light_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_intensity": 0.1,
+    "skybox_type": "gradient",
+    "skybox_color": [
+      0.30000001192092896,
+      0.5,
+      0.800000011920929
+    ],
+    "skybox_top_color": [
+      0.05000000074505806,
+      0.10000000149011612,
+      0.25
+    ],
+    "skybox_bottom_color": [
+      0.30000001192092896,
+      0.30000001192092896,
+      0.3499999940395355
+    ],
+    "entities": [
+      {
+        "name": "cylinder",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            -2.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": "mesh_2",
+              "passes": [
+                {
+                  "material": "cylinder_mat"
+                }
+              ]
+            },
+            "type": "MeshRenderer"
+          }
+        ],
+        "children": []
+      },
+      {
+        "name": "cube1",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": "mesh_1",
+              "passes": [
+                {
+                  "material": "cube1_mat"
+                }
+              ]
+            },
+            "type": "MeshRenderer"
+          }
+        ],
+        "children": []
+      },
+      {
+        "name": "cube2",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            3.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": "mesh_1",
+              "passes": [
+                {
+                  "material": "cube2_mat"
+                }
+              ]
+            },
+            "type": "MeshRenderer"
+          }
+        ],
+        "children": []
+      },
+      {
+        "name": "cube2",
+        "priority": 0,
+        "scale": [
+          10.0,
+          10.0,
+          0.1
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            -3.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": "mesh_1",
+              "passes": [
+                {
+                  "material": "cube2_mat"
+                }
+              ]
+            },
+            "type": "MeshRenderer"
+          }
+        ],
+        "children": []
+      },
+      {
+        "name": "directional_light",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "light_type": "directional",
+              "color": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "intensity": 1.0,
+              "shadows_enabled": true,
+              "shadows_map_resolution": 2048
+            },
+            "type": "LightComponent"
+          }
+        ],
+        "children": []
+      }
+    ]
+  },
+  "editor": {
+    "camera": {
+      "target": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "radius": 5.5,
+      "azimuth": 1.0925761117484503,
+      "elevation": 0.5201081170943102
+    },
+    "selected_entity": "cylinder"
+  },
+  "resources": {
+    "materials": {
+      "cylinder_mat": {
+        "type": "inline",
+        "name": "cylinder_mat",
+        "phases": [
+          {
+            "phase_mark": "main",
+            "priority": 0,
+            "color": [
+              0.30000001192092896,
+              0.800000011920929,
+              0.30000001192092896,
+              1.0
+            ],
+            "uniforms": {
+              "u_color": [
+                0.30000001192092896,
+                0.800000011920929,
+                0.30000001192092896,
+                1.0
+              ]
+            },
+            "textures": {},
+            "render_state": {
+              "depth_test": true,
+              "depth_write": true,
+              "blend": false,
+              "cull": true
+            },
+            "shader": {
+              "vertex": "#version 330 core\n\nlayout(location = 0) in vec3 a_position;\nlayout(location = 1) in vec3 a_normal;\n\nuniform mat4 u_model;\nuniform mat4 u_view;\nuniform mat4 u_projection;\n\nout vec3 v_world_pos;\nout vec3 v_normal;\n\nvoid main() {\n    vec4 world = u_model * vec4(a_position, 1.0);\n    v_world_pos = world.xyz;\n    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n    gl_Position = u_projection * u_view * world;\n}\n",
+              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\n\nuniform vec4 u_color; // RGBA базового материала\n\n// ============== Источники света ==============\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT       = 1;\nconst int LIGHT_TYPE_SPOT        = 2;\n\nconst int MAX_LIGHTS = 8;\n\n// ============== Ambient lighting (scene-level) ==============\nuniform vec3  u_ambient_color;\nuniform float u_ambient_intensity;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS]; // (constant, linear, quadratic)\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// ============== Shadow Mapping ==============\nconst int MAX_SHADOW_MAPS = 4;\n\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\n\n// Bias для устранения shadow acne\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) {\n        return 1.0;\n    }\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) {\n        w = 0.0;\n    }\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t); // smoothstep\n}\n\n/**\n * Вычисляет коэффициент тени для источника света.\n *\n * Алгоритм:\n * 1. Преобразуем мировую позицию в light-space: p_light = L * p_world\n * 2. Переводим в NDC: ndc = p_light.xyz / p_light.w\n * 3. Переводим в текстурные координаты: uv = ndc.xy * 0.5 + 0.5\n * 4. Сравниваем глубину фрагмента с глубиной в shadow map\n *\n * Возвращает:\n *   1.0 — фрагмент освещён\n *   0.0 — фрагмент в тени\n */\nfloat compute_shadow(int light_index) {\n    // Ищем shadow map для этого источника\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) {\n            continue;\n        }\n        \n        // Преобразуем в light-space\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        \n        // Perspective divide (для ортографической проекции w=1, но делаем для общности)\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        \n        // Переводим из [-1, 1] в [0, 1] для текстурных координат\n        proj_coords = proj_coords * 0.5 + 0.5;\n        \n        // Проверяем, что координаты внутри shadow map\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0; // Вне frustum'а — считаем освещённым\n        }\n        \n        // Читаем глубину из shadow map (записана в R канал как серый цвет)\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        \n        // Текущая глубина фрагмента\n        float current_depth = proj_coords.z;\n        \n        // Сравниваем с bias для устранения shadow acne\n        float shadow = current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n        \n        return shadow;\n    }\n    \n    // Нет shadow map для этого источника — полностью освещён\n    return 1.0;\n}\n\nvoid main() {\n    vec3 N = normalize(v_normal);\n    vec3 base_color = u_color.rgb;\n\n    // Scene-level ambient lighting\n    vec3 result = base_color * u_ambient_color * u_ambient_intensity;\n\n    for (int i = 0; i < u_light_count; ++i) {\n        int type = u_light_type[i];\n        vec3 radiance = u_light_color[i] * u_light_intensity[i];\n\n        vec3 L;\n        float dist;\n        float weight = 1.0;\n\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            L = normalize(-u_light_direction[i]); // направление на свет\n            dist = 1e9;\n        } else {\n            vec3 to_light = u_light_position[i] - v_world_pos;\n            dist = length(to_light);\n            if (dist > 0.0001)\n                L = to_light / dist;\n            else\n                L = vec3(0.0, 1.0, 0.0);\n\n            weight *= compute_distance_attenuation(i, dist);\n\n            if (type == LIGHT_TYPE_SPOT) {\n                weight *= compute_spot_weight(i, L);\n            }\n        }\n\n        // Вычисляем тень для directional lights\n        float shadow = 1.0;\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            shadow = compute_shadow(i);\n        }\n\n        float ndotl = max(dot(N, L), 0.0);\n        vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)\n\n        vec3 V = normalize(-v_world_pos); // камера в (0,0,0) для простоты\n        vec3 H = normalize(L + V);\n        float ndoth = max(dot(N, H), 0.0);\n        float shininess = 16.0;\n        float spec = pow(ndoth, shininess);\n\n        vec3 specular_color = vec3(1.0);\n        vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n\n\n        // Применяем тень к диффузу и спекуляру\n        result += (diffuse + specular) * radiance * weight * shadow;\n    }\n\n    FragColor = vec4(result, u_color.a);\n}\n",
+              "geometry": null
+            }
+          }
+        ]
+      },
+      "cube1_mat": {
+        "type": "inline",
+        "name": "cube1_mat",
+        "phases": [
+          {
+            "phase_mark": "main",
+            "priority": 0,
+            "color": [
+              0.800000011920929,
+              0.30000001192092896,
+              0.30000001192092896,
+              1.0
+            ],
+            "uniforms": {
+              "u_color": [
+                0.800000011920929,
+                0.30000001192092896,
+                0.30000001192092896,
+                1.0
+              ]
+            },
+            "textures": {},
+            "render_state": {
+              "depth_test": true,
+              "depth_write": true,
+              "blend": false,
+              "cull": true
+            },
+            "shader": {
+              "vertex": "#version 330 core\n\nlayout(location = 0) in vec3 a_position;\nlayout(location = 1) in vec3 a_normal;\n\nuniform mat4 u_model;\nuniform mat4 u_view;\nuniform mat4 u_projection;\n\nout vec3 v_world_pos;\nout vec3 v_normal;\n\nvoid main() {\n    vec4 world = u_model * vec4(a_position, 1.0);\n    v_world_pos = world.xyz;\n    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n    gl_Position = u_projection * u_view * world;\n}\n",
+              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\n\nuniform vec4 u_color; // RGBA базового материала\n\n// ============== Источники света ==============\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT       = 1;\nconst int LIGHT_TYPE_SPOT        = 2;\n\nconst int MAX_LIGHTS = 8;\n\n// ============== Ambient lighting (scene-level) ==============\nuniform vec3  u_ambient_color;\nuniform float u_ambient_intensity;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS]; // (constant, linear, quadratic)\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// ============== Shadow Mapping ==============\nconst int MAX_SHADOW_MAPS = 4;\n\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\n\n// Bias для устранения shadow acne\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) {\n        return 1.0;\n    }\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) {\n        w = 0.0;\n    }\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t); // smoothstep\n}\n\n/**\n * Вычисляет коэффициент тени для источника света.\n *\n * Алгоритм:\n * 1. Преобразуем мировую позицию в light-space: p_light = L * p_world\n * 2. Переводим в NDC: ndc = p_light.xyz / p_light.w\n * 3. Переводим в текстурные координаты: uv = ndc.xy * 0.5 + 0.5\n * 4. Сравниваем глубину фрагмента с глубиной в shadow map\n *\n * Возвращает:\n *   1.0 — фрагмент освещён\n *   0.0 — фрагмент в тени\n */\nfloat compute_shadow(int light_index) {\n    // Ищем shadow map для этого источника\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) {\n            continue;\n        }\n        \n        // Преобразуем в light-space\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        \n        // Perspective divide (для ортографической проекции w=1, но делаем для общности)\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        \n        // Переводим из [-1, 1] в [0, 1] для текстурных координат\n        proj_coords = proj_coords * 0.5 + 0.5;\n        \n        // Проверяем, что координаты внутри shadow map\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0; // Вне frustum'а — считаем освещённым\n        }\n        \n        // Читаем глубину из shadow map (записана в R канал как серый цвет)\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        \n        // Текущая глубина фрагмента\n        float current_depth = proj_coords.z;\n        \n        // Сравниваем с bias для устранения shadow acne\n        float shadow = current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n        \n        return shadow;\n    }\n    \n    // Нет shadow map для этого источника — полностью освещён\n    return 1.0;\n}\n\nvoid main() {\n    vec3 N = normalize(v_normal);\n    vec3 base_color = u_color.rgb;\n\n    // Scene-level ambient lighting\n    vec3 result = base_color * u_ambient_color * u_ambient_intensity;\n\n    for (int i = 0; i < u_light_count; ++i) {\n        int type = u_light_type[i];\n        vec3 radiance = u_light_color[i] * u_light_intensity[i];\n\n        vec3 L;\n        float dist;\n        float weight = 1.0;\n\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            L = normalize(-u_light_direction[i]); // направление на свет\n            dist = 1e9;\n        } else {\n            vec3 to_light = u_light_position[i] - v_world_pos;\n            dist = length(to_light);\n            if (dist > 0.0001)\n                L = to_light / dist;\n            else\n                L = vec3(0.0, 1.0, 0.0);\n\n            weight *= compute_distance_attenuation(i, dist);\n\n            if (type == LIGHT_TYPE_SPOT) {\n                weight *= compute_spot_weight(i, L);\n            }\n        }\n\n        // Вычисляем тень для directional lights\n        float shadow = 1.0;\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            shadow = compute_shadow(i);\n        }\n\n        float ndotl = max(dot(N, L), 0.0);\n        vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)\n\n        vec3 V = normalize(-v_world_pos); // камера в (0,0,0) для простоты\n        vec3 H = normalize(L + V);\n        float ndoth = max(dot(N, H), 0.0);\n        float shininess = 16.0;\n        float spec = pow(ndoth, shininess);\n\n        vec3 specular_color = vec3(1.0);\n        vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n\n\n        // Применяем тень к диффузу и спекуляру\n        result += (diffuse + specular) * radiance * weight * shadow;\n    }\n\n    FragColor = vec4(result, u_color.a);\n}\n",
+              "geometry": null
+            }
+          }
+        ]
+      },
+      "cube2_mat": {
+        "type": "inline",
+        "name": "cube2_mat",
+        "phases": [
+          {
+            "phase_mark": "main",
+            "priority": 0,
+            "color": [
+              0.30000001192092896,
+              0.30000001192092896,
+              0.800000011920929,
+              1.0
+            ],
+            "uniforms": {
+              "u_color": [
+                0.30000001192092896,
+                0.30000001192092896,
+                0.800000011920929,
+                1.0
+              ]
+            },
+            "textures": {},
+            "render_state": {
+              "depth_test": true,
+              "depth_write": true,
+              "blend": false,
+              "cull": true
+            },
+            "shader": {
+              "vertex": "#version 330 core\n\nlayout(location = 0) in vec3 a_position;\nlayout(location = 1) in vec3 a_normal;\n\nuniform mat4 u_model;\nuniform mat4 u_view;\nuniform mat4 u_projection;\n\nout vec3 v_world_pos;\nout vec3 v_normal;\n\nvoid main() {\n    vec4 world = u_model * vec4(a_position, 1.0);\n    v_world_pos = world.xyz;\n    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n    gl_Position = u_projection * u_view * world;\n}\n",
+              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\n\nuniform vec4 u_color; // RGBA базового материала\n\n// ============== Источники света ==============\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT       = 1;\nconst int LIGHT_TYPE_SPOT        = 2;\n\nconst int MAX_LIGHTS = 8;\n\n// ============== Ambient lighting (scene-level) ==============\nuniform vec3  u_ambient_color;\nuniform float u_ambient_intensity;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS]; // (constant, linear, quadratic)\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// ============== Shadow Mapping ==============\nconst int MAX_SHADOW_MAPS = 4;\n\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\n\n// Bias для устранения shadow acne\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) {\n        return 1.0;\n    }\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) {\n        w = 0.0;\n    }\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t); // smoothstep\n}\n\n/**\n * Вычисляет коэффициент тени для источника света.\n *\n * Алгоритм:\n * 1. Преобразуем мировую позицию в light-space: p_light = L * p_world\n * 2. Переводим в NDC: ndc = p_light.xyz / p_light.w\n * 3. Переводим в текстурные координаты: uv = ndc.xy * 0.5 + 0.5\n * 4. Сравниваем глубину фрагмента с глубиной в shadow map\n *\n * Возвращает:\n *   1.0 — фрагмент освещён\n *   0.0 — фрагмент в тени\n */\nfloat compute_shadow(int light_index) {\n    // Ищем shadow map для этого источника\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) {\n            continue;\n        }\n        \n        // Преобразуем в light-space\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        \n        // Perspective divide (для ортографической проекции w=1, но делаем для общности)\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        \n        // Переводим из [-1, 1] в [0, 1] для текстурных координат\n        proj_coords = proj_coords * 0.5 + 0.5;\n        \n        // Проверяем, что координаты внутри shadow map\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0; // Вне frustum'а — считаем освещённым\n        }\n        \n        // Читаем глубину из shadow map (записана в R канал как серый цвет)\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        \n        // Текущая глубина фрагмента\n        float current_depth = proj_coords.z;\n        \n        // Сравниваем с bias для устранения shadow acne\n        float shadow = current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n        \n        return shadow;\n    }\n    \n    // Нет shadow map для этого источника — полностью освещён\n    return 1.0;\n}\n\nvoid main() {\n    vec3 N = normalize(v_normal);\n    vec3 base_color = u_color.rgb;\n\n    // Scene-level ambient lighting\n    vec3 result = base_color * u_ambient_color * u_ambient_intensity;\n\n    for (int i = 0; i < u_light_count; ++i) {\n        int type = u_light_type[i];\n        vec3 radiance = u_light_color[i] * u_light_intensity[i];\n\n        vec3 L;\n        float dist;\n        float weight = 1.0;\n\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            L = normalize(-u_light_direction[i]); // направление на свет\n            dist = 1e9;\n        } else {\n            vec3 to_light = u_light_position[i] - v_world_pos;\n            dist = length(to_light);\n            if (dist > 0.0001)\n                L = to_light / dist;\n            else\n                L = vec3(0.0, 1.0, 0.0);\n\n            weight *= compute_distance_attenuation(i, dist);\n\n            if (type == LIGHT_TYPE_SPOT) {\n                weight *= compute_spot_weight(i, L);\n            }\n        }\n\n        // Вычисляем тень для directional lights\n        float shadow = 1.0;\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            shadow = compute_shadow(i);\n        }\n\n        float ndotl = max(dot(N, L), 0.0);\n        vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)\n\n        vec3 V = normalize(-v_world_pos); // камера в (0,0,0) для простоты\n        vec3 H = normalize(L + V);\n        float ndoth = max(dot(N, H), 0.0);\n        float shininess = 16.0;\n        float spec = pow(ndoth, shininess);\n\n        vec3 specular_color = vec3(1.0);\n        vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n\n\n        // Применяем тень к диффузу и спекуляру\n        result += (diffuse + specular) * radiance * weight * shadow;\n    }\n\n    FragColor = vec4(result, u_color.a);\n}\n",
+              "geometry": null
+            }
+          }
+        ]
+      }
+    },
+    "meshes": {
+      "mesh_2": {
+        "type": "inline",
+        "vertices": [
+          0.5,
+          -1.0,
+          0.0,
+          0.4619397521018982,
+          -1.0,
+          0.19134171307086945,
+          0.3535533845424652,
+          -1.0,
+          0.3535533845424652,
+          0.19134171307086945,
+          -1.0,
+          0.4619397521018982,
+          3.0616171314629196e-17,
+          -1.0,
+          0.5,
+          -0.19134171307086945,
+          -1.0,
+          0.4619397521018982,
+          -0.3535533845424652,
+          -1.0,
+          0.3535533845424652,
+          -0.4619397521018982,
+          -1.0,
+          0.19134171307086945,
+          -0.5,
+          -1.0,
+          6.123234262925839e-17,
+          -0.4619397521018982,
+          -1.0,
+          -0.19134171307086945,
+          -0.3535533845424652,
+          -1.0,
+          -0.3535533845424652,
+          -0.19134171307086945,
+          -1.0,
+          -0.4619397521018982,
+          -9.184850732644269e-17,
+          -1.0,
+          -0.5,
+          0.19134171307086945,
+          -1.0,
+          -0.4619397521018982,
+          0.3535533845424652,
+          -1.0,
+          -0.3535533845424652,
+          0.4619397521018982,
+          -1.0,
+          -0.19134171307086945,
+          0.5,
+          1.0,
+          0.0,
+          0.4619397521018982,
+          1.0,
+          0.19134171307086945,
+          0.3535533845424652,
+          1.0,
+          0.3535533845424652,
+          0.19134171307086945,
+          1.0,
+          0.4619397521018982,
+          3.0616171314629196e-17,
+          1.0,
+          0.5,
+          -0.19134171307086945,
+          1.0,
+          0.4619397521018982,
+          -0.3535533845424652,
+          1.0,
+          0.3535533845424652,
+          -0.4619397521018982,
+          1.0,
+          0.19134171307086945,
+          -0.5,
+          1.0,
+          6.123234262925839e-17,
+          -0.4619397521018982,
+          1.0,
+          -0.19134171307086945,
+          -0.3535533845424652,
+          1.0,
+          -0.3535533845424652,
+          -0.19134171307086945,
+          1.0,
+          -0.4619397521018982,
+          -9.184850732644269e-17,
+          1.0,
+          -0.5,
+          0.19134171307086945,
+          1.0,
+          -0.4619397521018982,
+          0.3535533845424652,
+          1.0,
+          -0.3535533845424652,
+          0.4619397521018982,
+          1.0,
+          -0.19134171307086945,
+          0.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "triangles": [
+          0,
+          16,
+          1,
+          1,
+          16,
+          17,
+          1,
+          17,
+          2,
+          2,
+          17,
+          18,
+          2,
+          18,
+          3,
+          3,
+          18,
+          19,
+          3,
+          19,
+          4,
+          4,
+          19,
+          20,
+          4,
+          20,
+          5,
+          5,
+          20,
+          21,
+          5,
+          21,
+          6,
+          6,
+          21,
+          22,
+          6,
+          22,
+          7,
+          7,
+          22,
+          23,
+          7,
+          23,
+          8,
+          8,
+          23,
+          24,
+          8,
+          24,
+          9,
+          9,
+          24,
+          25,
+          9,
+          25,
+          10,
+          10,
+          25,
+          26,
+          10,
+          26,
+          11,
+          11,
+          26,
+          27,
+          11,
+          27,
+          12,
+          12,
+          27,
+          28,
+          12,
+          28,
+          13,
+          13,
+          28,
+          29,
+          13,
+          29,
+          14,
+          14,
+          29,
+          30,
+          14,
+          30,
+          15,
+          15,
+          30,
+          31,
+          15,
+          31,
+          0,
+          0,
+          31,
+          16,
+          1,
+          32,
+          0,
+          16,
+          33,
+          17,
+          2,
+          32,
+          1,
+          17,
+          33,
+          18,
+          3,
+          32,
+          2,
+          18,
+          33,
+          19,
+          4,
+          32,
+          3,
+          19,
+          33,
+          20,
+          5,
+          32,
+          4,
+          20,
+          33,
+          21,
+          6,
+          32,
+          5,
+          21,
+          33,
+          22,
+          7,
+          32,
+          6,
+          22,
+          33,
+          23,
+          8,
+          32,
+          7,
+          23,
+          33,
+          24,
+          9,
+          32,
+          8,
+          24,
+          33,
+          25,
+          10,
+          32,
+          9,
+          25,
+          33,
+          26,
+          11,
+          32,
+          10,
+          26,
+          33,
+          27,
+          12,
+          32,
+          11,
+          27,
+          33,
+          28,
+          13,
+          32,
+          12,
+          28,
+          33,
+          29,
+          14,
+          32,
+          13,
+          29,
+          33,
+          30,
+          15,
+          32,
+          14,
+          30,
+          33,
+          31,
+          0,
+          32,
+          15,
+          31,
+          33,
+          16
+        ],
+        "normals": [
+          0.9842910766601562,
+          -0.16404850780963898,
+          -0.0652625784277916,
+          0.9343412518501282,
+          -0.16404850780963898,
+          0.316377192735672,
+          0.7421464920043945,
+          -0.16404850780963898,
+          0.6498512625694275,
+          0.4369666278362274,
+          -0.16404850780963898,
+          0.8843914866447449,
+          0.0652625784277916,
+          -0.16404850780963898,
+          0.9842910766601562,
+          -0.316377192735672,
+          -0.16404850780963898,
+          0.9343412518501282,
+          -0.6498512625694275,
+          -0.16404850780963898,
+          0.7421464920043945,
+          -0.8843914866447449,
+          -0.16404850780963898,
+          0.4369666278362274,
+          -0.9842910766601562,
+          -0.16404850780963898,
+          0.0652625784277916,
+          -0.9343412518501282,
+          -0.16404850780963898,
+          -0.316377192735672,
+          -0.7421464920043945,
+          -0.16404850780963898,
+          -0.6498512625694275,
+          -0.4369666278362274,
+          -0.16404850780963898,
+          -0.8843914866447449,
+          -0.0652625784277916,
+          -0.16404850780963898,
+          -0.9842910766601562,
+          0.316377192735672,
+          -0.16404850780963898,
+          -0.9343412518501282,
+          0.6498512625694275,
+          -0.16404850780963898,
+          -0.7421464920043945,
+          0.8843914866447449,
+          -0.16404850780963898,
+          -0.4369666278362274,
+          0.9842910766601562,
+          0.16404850780963898,
+          0.0652625784277916,
+          0.8843914866447449,
+          0.16404850780963898,
+          0.4369666278362274,
+          0.6498512625694275,
+          0.16404850780963898,
+          0.7421464920043945,
+          0.316377192735672,
+          0.16404850780963898,
+          0.9343412518501282,
+          -0.0652625784277916,
+          0.16404850780963898,
+          0.9842910766601562,
+          -0.4369666278362274,
+          0.16404850780963898,
+          0.8843914866447449,
+          -0.7421464920043945,
+          0.16404850780963898,
+          0.6498512625694275,
+          -0.9343412518501282,
+          0.16404850780963898,
+          0.316377192735672,
+          -0.9842910766601562,
+          0.16404850780963898,
+          -0.0652625784277916,
+          -0.8843914866447449,
+          0.16404850780963898,
+          -0.4369666278362274,
+          -0.6498512625694275,
+          0.16404850780963898,
+          -0.7421464920043945,
+          -0.316377192735672,
+          0.16404850780963898,
+          -0.9343412518501282,
+          0.0652625784277916,
+          0.16404850780963898,
+          -0.9842910766601562,
+          0.4369666278362274,
+          0.16404850780963898,
+          -0.8843914866447449,
+          0.7421464920043945,
+          0.16404850780963898,
+          -0.6498512625694275,
+          0.9343412518501282,
+          0.16404850780963898,
+          -0.316377192735672,
+          0.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "mesh_1": {
+        "type": "inline",
+        "vertices": [
+          -0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          -0.5,
+          -0.5,
+          -0.5,
+          0.5,
+          0.5,
+          -0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          -0.5,
+          0.5,
+          0.5
+        ],
+        "triangles": [
+          1,
+          0,
+          2,
+          2,
+          0,
+          3,
+          4,
+          5,
+          7,
+          5,
+          6,
+          7,
+          0,
+          1,
+          4,
+          1,
+          5,
+          4,
+          2,
+          3,
+          6,
+          3,
+          7,
+          6,
+          3,
+          0,
+          4,
+          7,
+          3,
+          4,
+          1,
+          2,
+          5,
+          2,
+          6,
+          5
+        ],
+        "normals": [
+          -0.40824830532073975,
+          -0.40824830532073975,
+          -0.8164966106414795,
+          0.40824830532073975,
+          -0.8164966106414795,
+          -0.40824830532073975,
+          0.6666666865348816,
+          0.3333333432674408,
+          -0.6666666865348816,
+          -0.6666666865348816,
+          0.6666666865348816,
+          -0.3333333432674408,
+          -0.6666666865348816,
+          -0.6666666865348816,
+          0.3333333432674408,
+          0.6666666865348816,
+          -0.3333333432674408,
+          0.6666666865348816,
+          0.40824830532073975,
+          0.8164966106414795,
+          0.40824830532073975,
+          -0.40824830532073975,
+          0.40824830532073975,
+          0.8164966106414795
+        ]
+      }
+    },
+    "textures": {}
+  }
+}

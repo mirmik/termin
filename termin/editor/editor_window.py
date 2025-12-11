@@ -491,8 +491,8 @@ class EditorWindow(QMainWindow):
             # Это файл сцены — загружаем
             self._load_scene_from_file(str(path))
 
-        elif path.suffix in (".material", ".shader"):
-            # Материал и шейдер — открываем во внешнем текстовом редакторе
+        elif path.suffix in (".material", ".shader", ".py"):
+            # Материалы, шейдеры и скрипты — открываем во внешнем текстовом редакторе
             self._open_in_text_editor(str(path))
 
         else:
