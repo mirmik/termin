@@ -379,6 +379,7 @@ class EditorWindow(QMainWindow):
         if self.viewport_controller is None or self.viewport is None:
             return
         self._dialog_manager.show_framegraph_debugger(
+            window_backend=self.viewport_controller.sdl_backend,
             graphics=self.viewport_controller.graphics,
             viewport_controller=self.viewport_controller,
         )

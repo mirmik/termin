@@ -228,6 +228,11 @@ class ViewportController:
         return self._graphics
 
     @property
+    def sdl_backend(self):
+        """SDLEmbeddedWindowBackend для создания дополнительных окон с shared context."""
+        return self._sdl_backend
+
+    @property
     def viewport(self):
         return self._viewport
 

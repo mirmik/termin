@@ -110,6 +110,7 @@ class DialogManager:
 
     def show_framegraph_debugger(
         self,
+        window_backend,
         graphics: "GraphicsBackend",
         viewport_controller,
     ) -> None:
@@ -139,6 +140,7 @@ class DialogManager:
                 get_fbos = lambda: viewport_controller.render_state.fbos
 
             self._framegraph_debugger = FramegraphDebugDialog(
+                window_backend=window_backend,
                 graphics=graphics,
                 get_fbos=get_fbos,
                 resource_name="debug",

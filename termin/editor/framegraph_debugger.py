@@ -4,7 +4,7 @@ from typing import Optional, Callable, List, Tuple, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
 from PyQt6 import QtWidgets, QtCore, QtGui
-from PyQt6.QtOpenGLWidgets import QOpenGLWidget
+from PyQt6.QtGui import QWindow
 
 from OpenGL import GL as gl
 import numpy as np
@@ -15,6 +15,7 @@ from termin.visualization.render.framegraph.passes.frame_debugger import FrameDe
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import TextureHandle
+    from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 
 
 # ============================================================
@@ -188,15 +189,18 @@ class ShadowMapArrayHandler(ResourceHandler):
             self._on_index_changed(index)
 
 
-class FramegraphTextureWidget(QOpenGLWidget):
+class FramegraphTextureWidget(QtWidgets.QWidget):
     """
-    QOpenGLWidget, который берёт FBO из внешнего источника и рисует его color-текстуру
-    фуллскрин-квадом. Работает напрямую через OpenGL, без участия Window/FrameGraph.
+    Виджет для отображения FBO текстуры из framegraph.
+
+    Использует SDL окно с shared OpenGL context для доступа к текстурам,
+    созданным в основном рендер-контексте.
     """
     depthImageUpdated = QtCore.pyqtSignal(QtGui.QImage)
 
     def __init__(
         self,
+        window_backend: "SDLEmbeddedWindowBackend",
         graphics: GraphicsBackend,
         get_fbos: Callable[[], dict],
         resource_name: str = "debug",
@@ -205,6 +209,7 @@ class FramegraphTextureWidget(QOpenGLWidget):
     ) -> None:
         super().__init__(parent)
 
+        self._window_backend = window_backend
         self._graphics = graphics
         self._get_fbos = get_fbos
         self._resource_name = resource_name
@@ -213,6 +218,7 @@ class FramegraphTextureWidget(QOpenGLWidget):
         self._shader: Optional[ShaderProgram] = None
         self._vao: Optional[int] = None
         self._vbo: Optional[int] = None
+        self._initialized = False
 
         # Реестр обработчиков ресурсов
         self._handlers: dict[str, ResourceHandler] = {
@@ -228,8 +234,32 @@ class FramegraphTextureWidget(QOpenGLWidget):
         self.setMinimumSize(200, 150)
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
 
+        # Создаём SDL окно с shared context
+        self._sdl_window = window_backend.create_embedded_window(
+            width=400, height=300, title="Framegraph Debug"
+        )
+
+        # Встраиваем SDL окно в Qt
+        native_handle = self._sdl_window.native_handle
+        self._qwindow = QWindow.fromWinId(native_handle)
+        self._gl_container = QtWidgets.QWidget.createWindowContainer(self._qwindow, self)
+
+        # Layout для контейнера
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._gl_container)
+
     def sizeHint(self) -> QtCore.QSize:
         return QtCore.QSize(400, 300)
+
+    def _ensure_initialized(self) -> None:
+        """Инициализирует OpenGL ресурсы при первом использовании."""
+        if self._initialized:
+            return
+        self._sdl_window.make_current()
+        self._get_shader()
+        self._init_fullscreen_quad()
+        self._initialized = True
 
     def _get_shader(self) -> ShaderProgram:
         """Ленивая инициализация шейдера фуллскрин-квада."""
@@ -292,10 +322,6 @@ class FramegraphTextureWidget(QOpenGLWidget):
         self._vao = vao
         self._vbo = vbo
 
-    def initializeGL(self) -> None:
-        self._get_shader()
-        self._init_fullscreen_quad()
-
     def _current_resource(self):
         """Возвращает текущий ресурс из словаря fbos."""
         fbos = self._get_fbos()
@@ -341,7 +367,7 @@ class FramegraphTextureWidget(QOpenGLWidget):
             index: индекс в массиве ShadowMapArrayResource
         """
         self._handler_context['shadow_map_index'] = max(0, index)
-        self.update()
+        self.render()
 
     def get_resource_type(self) -> str | None:
         """
@@ -402,10 +428,15 @@ class FramegraphTextureWidget(QOpenGLWidget):
         qimage = qimage.copy()
         self.depthImageUpdated.emit(qimage)
 
-    def paintGL(self) -> None:
-        dpr = self.devicePixelRatioF()
-        w = int(self.width() * dpr)
-        h = int(self.height() * dpr)
+    def render(self) -> None:
+        """Рендерит текстуру в SDL окно."""
+        self._ensure_initialized()
+        self._sdl_window.make_current()
+
+        # Bind default framebuffer (window)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+
+        w, h = self._sdl_window.get_framebuffer_size()
 
         gl.glViewport(0, 0, w, h)
         gl.glDisable(gl.GL_SCISSOR_TEST)
@@ -415,6 +446,7 @@ class FramegraphTextureWidget(QOpenGLWidget):
         # Получаем текстуру из ресурса (независимо от типа)
         tex = self._get_texture()
         if tex is None:
+            self._sdl_window.swap_buffers()
             return
 
         shader = self._get_shader()
@@ -434,7 +466,21 @@ class FramegraphTextureWidget(QOpenGLWidget):
         gl.glDepthMask(gl.GL_TRUE)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
+        self._sdl_window.swap_buffers()
         self._update_depth_image()
+
+    def update(self) -> None:
+        """Переопределяем update() для вызова render()."""
+        super().update()
+        self.render()
+
+    def closeEvent(self, event) -> None:
+        """Закрываем SDL окно при закрытии виджета."""
+        if self._sdl_window is not None:
+            self._window_backend.remove_window(self._sdl_window)
+            self._sdl_window.close()
+            self._sdl_window = None
+        super().closeEvent(event)
 
 
 class FramegraphDebugDialog(QtWidgets.QDialog):
@@ -458,6 +504,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def __init__(
         self,
+        window_backend: "SDLEmbeddedWindowBackend",
         graphics: GraphicsBackend,
         get_fbos: Callable[[], dict],
         resource_name: str = "debug",
@@ -479,6 +526,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         get_debug_blit_pass: Optional[Callable[[], object]] = None,
     ) -> None:
         super().__init__(parent)
+        self._window_backend = window_backend
         self._graphics = graphics
         self._get_fbos = get_fbos
         self._resource_name = resource_name
@@ -580,6 +628,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         # ============ Просмотр ============
         self._gl_widget = FramegraphTextureWidget(
+            window_backend=self._window_backend,
             graphics=self._graphics,
             get_fbos=self._get_fbos,
             resource_name=self._resource_name,
