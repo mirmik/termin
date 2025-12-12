@@ -85,12 +85,10 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
 
         # Create SDL window with OpenGL support
-        # SDL_WINDOW_HIDDEN - will be shown when embedded
-        # SDL_WINDOW_BORDERLESS - no decorations needed when embedded
         flags = (
             video.SDL_WINDOW_OPENGL
             | video.SDL_WINDOW_RESIZABLE
-            | video.SDL_WINDOW_HIDDEN
+            | video.SDL_WINDOW_SHOWN
         )
 
         self._window = video.SDL_CreateWindow(

@@ -100,9 +100,6 @@ class ViewportController:
             title="SDL Viewport (standalone test)",
         )
 
-        # Показываем SDL окно как отдельное окно
-        self._backend_window.show()
-
         # Создаём WindowRenderSurface
         self._render_surface = WindowRenderSurface(self._backend_window)
 
@@ -148,7 +145,16 @@ class ViewportController:
         # DEBUG: Clear to red to see if GL commands work at all
         from OpenGL import GL
         GL.glClearColor(1.0, 0.0, 0.0, 1.0)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
+
+        # Check for GL errors
+        err = GL.glGetError()
+        if err != GL.GL_NO_ERROR:
+            print(f"GL error after clear: {err}")
+
+        # MINIMAL TEST: Just swap the red buffer
+        self._backend_window.swap_buffers()
+        return
 
         # Проверяем resize
         self._backend_window.check_resize()
