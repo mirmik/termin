@@ -84,6 +84,9 @@ class Display:
         if viewport in self._viewports:
             self._viewports.remove(viewport)
             viewport.display = None
+            # Remove viewport from camera's list
+            if viewport.camera is not None:
+                viewport.camera.remove_viewport(viewport)
 
     def create_viewport(
         self,
@@ -113,7 +116,7 @@ class Display:
             rect=rect,
             canvas=canvas,
         )
-        camera.viewport = viewport
+        camera.add_viewport(viewport)
         self._viewports.append(viewport)
         return viewport
 

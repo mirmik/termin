@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from termin.visualization.core.viewport import Viewport
 
 import numpy as np
 
@@ -51,7 +54,40 @@ class CameraComponent(Component):
         super().__init__(enabled=True)
         self.near = near
         self.far = far
-        self.viewport = None
+        self._viewports: List["Viewport"] = []
+
+    @property
+    def viewport(self) -> Optional["Viewport"]:
+        """First viewport (for backward compatibility)."""
+        return self._viewports[0] if self._viewports else None
+
+    @viewport.setter
+    def viewport(self, value: Optional["Viewport"]) -> None:
+        """Set single viewport (for backward compatibility)."""
+        if value is None:
+            self._viewports.clear()
+        elif value not in self._viewports:
+            self._viewports.clear()
+            self._viewports.append(value)
+
+    @property
+    def viewports(self) -> List["Viewport"]:
+        """List of viewports this camera renders to."""
+        return self._viewports
+
+    def add_viewport(self, viewport: "Viewport") -> None:
+        """Add viewport to camera's viewport list."""
+        if viewport not in self._viewports:
+            self._viewports.append(viewport)
+
+    def remove_viewport(self, viewport: "Viewport") -> None:
+        """Remove viewport from camera's viewport list."""
+        if viewport in self._viewports:
+            self._viewports.remove(viewport)
+
+    def has_viewport(self, viewport: "Viewport") -> bool:
+        """Check if camera is bound to viewport."""
+        return viewport in self._viewports
 
     # def on_added(self, scene):
     #     if self.entity is None:
@@ -265,7 +301,7 @@ class OrbitCameraController(CameraController):
         return self._states[key]
 
     def on_mouse_button(self, viewport, button: int, action: int, mods: int):
-        if viewport != self.camera_component.viewport:
+        if not self.camera_component.has_viewport(viewport):
             return
 
         state = self._state(viewport)
@@ -279,7 +315,7 @@ class OrbitCameraController(CameraController):
     def on_mouse_move(self, viewport, x: float, y: float, dx: float, dy: float):
         if self._prevent_moving:
             return
-        if viewport != self.camera_component.viewport:
+        if not self.camera_component.has_viewport(viewport):
             return
         state = self._state(viewport)
         if state.get("last") is None:
@@ -294,6 +330,6 @@ class OrbitCameraController(CameraController):
     def on_scroll(self, viewport, xoffset: float, yoffset: float):
         if self._prevent_moving:
             return
-        if viewport != self.camera_component.viewport:
+        if not self.camera_component.has_viewport(viewport):
             return
         self.zoom(-yoffset * self._zoom_speed)

@@ -300,11 +300,16 @@ class RenderingController:
         if self._selected_viewport is None:
             return
 
-        # Update viewport camera
-        # Note: This is a direct assignment for now
-        # In proper implementation, we'd want a setter method
-        self._selected_viewport.camera = new_camera
-        new_camera.viewport = self._selected_viewport
+        viewport = self._selected_viewport
+
+        # Remove viewport from old camera's list
+        old_camera = viewport.camera
+        if old_camera is not None and old_camera is not new_camera:
+            old_camera.remove_viewport(viewport)
+
+        # Update viewport camera and add to new camera's list
+        viewport.camera = new_camera
+        new_camera.add_viewport(viewport)
 
         self._viewport_list.refresh()
         self._request_update()
