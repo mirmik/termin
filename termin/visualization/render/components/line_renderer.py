@@ -376,7 +376,9 @@ class LineRenderer(Component):
         """
         drawable = self._get_drawable()
         if drawable is None:
+            print(f"[LineRenderer.draw_geometry] No drawable!")
             return
+        print(f"[LineRenderer.draw_geometry] Drawing with {type(drawable).__name__}, raw_lines={self._raw_lines}")
         drawable.draw(context)
 
     def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
