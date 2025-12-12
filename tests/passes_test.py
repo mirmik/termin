@@ -611,5 +611,288 @@ void main() {
             context.destroy()
 
 
+class TestPipelineSerialization(unittest.TestCase):
+    """Тесты сериализации/десериализации RenderPipeline."""
+
+    def setUp(self):
+        """Регистрируем встроенные пассы и эффекты перед каждым тестом."""
+        from termin.visualization.core.resources import ResourceManager
+        self.rm = ResourceManager.instance()
+        self.rm.register_builtin_frame_passes()
+        self.rm.register_builtin_post_effects()
+
+    def test_color_pass_serialization(self):
+        """Тест сериализации ColorPass."""
+        color_pass = ColorPass(
+            input_res="skybox",
+            output_res="color",
+            shadow_res="shadows",
+            pass_name="MyColorPass",
+            phase_mark="opaque",
+        )
+        color_pass.enabled = False
+
+        data = color_pass.serialize()
+
+        self.assertEqual(data["type"], "ColorPass")
+        self.assertEqual(data["pass_name"], "MyColorPass")
+        self.assertEqual(data["enabled"], False)
+        self.assertEqual(data["input_res"], "skybox")
+        self.assertEqual(data["output_res"], "color")
+        self.assertEqual(data["shadow_res"], "shadows")
+        self.assertEqual(data["phase_mark"], "opaque")
+
+        # Десериализация
+        from termin.visualization.render.framegraph.core import FramePass
+        restored = FramePass.deserialize(data, self.rm)
+
+        self.assertIsInstance(restored, ColorPass)
+        self.assertEqual(restored.pass_name, "MyColorPass")
+        self.assertEqual(restored.enabled, False)
+        self.assertEqual(restored.input_res, "skybox")
+        self.assertEqual(restored.output_res, "color")
+        self.assertEqual(restored.shadow_res, "shadows")
+        self.assertEqual(restored.phase_mark, "opaque")
+
+    def test_shadow_pass_serialization(self):
+        """Тест сериализации ShadowPass."""
+        from termin.visualization.render.framegraph.passes.shadow import ShadowPass
+
+        shadow_pass = ShadowPass(
+            output_res="my_shadows",
+            pass_name="MyShadows",
+            default_resolution=2048,
+            ortho_size=30.0,
+            near=0.5,
+            far=200.0,
+        )
+
+        data = shadow_pass.serialize()
+
+        self.assertEqual(data["type"], "ShadowPass")
+        self.assertEqual(data["output_res"], "my_shadows")
+        self.assertEqual(data["default_resolution"], 2048)
+        self.assertEqual(data["ortho_size"], 30.0)
+        self.assertEqual(data["near"], 0.5)
+        self.assertEqual(data["far"], 200.0)
+
+        # Десериализация
+        from termin.visualization.render.framegraph.core import FramePass
+        restored = FramePass.deserialize(data, self.rm)
+
+        self.assertIsInstance(restored, ShadowPass)
+        self.assertEqual(restored.output_res, "my_shadows")
+        self.assertEqual(restored.default_resolution, 2048)
+        self.assertEqual(restored.ortho_size, 30.0)
+        self.assertEqual(restored.near, 0.5)
+        self.assertEqual(restored.far, 200.0)
+
+    def test_post_effect_serialization(self):
+        """Тест сериализации PostEffect."""
+        from termin.visualization.render.posteffects.fog import FogEffect
+        from termin.visualization.render.postprocess import PostEffect
+
+        fog = FogEffect(
+            fog_color=(1.0, 0.5, 0.2),
+            fog_start=0.15,
+            fog_end=0.85,
+        )
+
+        data = fog.serialize()
+
+        self.assertEqual(data["type"], "FogEffect")
+        self.assertEqual(data["name"], "fog")
+        self.assertEqual(data["fog_color"], [1.0, 0.5, 0.2])
+        self.assertEqual(data["fog_start"], 0.15)
+        self.assertEqual(data["fog_end"], 0.85)
+
+        # Десериализация
+        restored = PostEffect.deserialize(data, self.rm)
+
+        self.assertIsInstance(restored, FogEffect)
+        self.assertEqual(restored._fog_color, (1.0, 0.5, 0.2))
+        self.assertEqual(restored._fog_start, 0.15)
+        self.assertEqual(restored._fog_end, 0.85)
+
+    def test_post_process_pass_with_effects_serialization(self):
+        """Тест сериализации PostProcessPass с эффектами."""
+        from termin.visualization.render.postprocess import PostProcessPass, PostEffect
+        from termin.visualization.render.posteffects.fog import FogEffect
+        from termin.visualization.render.posteffects.gray import GrayscaleEffect
+        from termin.visualization.render.framegraph.core import FramePass
+
+        pp = PostProcessPass(
+            effects=[
+                FogEffect(fog_color=(0.8, 0.8, 0.9), fog_start=0.3, fog_end=1.0),
+                GrayscaleEffect(),
+            ],
+            input_res="color",
+            output_res="color_pp",
+            pass_name="MyPostProcess",
+        )
+
+        data = pp.serialize()
+
+        self.assertEqual(data["type"], "PostProcessPass")
+        self.assertEqual(data["input_res"], "color")
+        self.assertEqual(data["output_res"], "color_pp")
+        self.assertEqual(len(data["effects"]), 2)
+        self.assertEqual(data["effects"][0]["type"], "FogEffect")
+        self.assertEqual(data["effects"][1]["type"], "GrayscaleEffect")
+
+        # Десериализация
+        restored = FramePass.deserialize(data, self.rm)
+
+        self.assertIsInstance(restored, PostProcessPass)
+        self.assertEqual(restored.input_res, "color")
+        self.assertEqual(restored.output_res, "color_pp")
+        self.assertEqual(len(restored.effects), 2)
+        self.assertIsInstance(restored.effects[0], FogEffect)
+        self.assertIsInstance(restored.effects[1], GrayscaleEffect)
+
+    def test_resource_spec_serialization(self):
+        """Тест сериализации ResourceSpec."""
+        spec = ResourceSpec(
+            resource="my_fbo",
+            resource_type="fbo",
+            size=(1024, 1024),
+            clear_color=(0.1, 0.2, 0.3, 1.0),
+            clear_depth=0.5,
+            format="RGBA16F",
+        )
+
+        data = spec.serialize()
+
+        self.assertEqual(data["resource"], "my_fbo")
+        self.assertEqual(data["resource_type"], "fbo")
+        self.assertEqual(data["size"], [1024, 1024])
+        self.assertEqual(data["clear_color"], [0.1, 0.2, 0.3, 1.0])
+        self.assertEqual(data["clear_depth"], 0.5)
+        self.assertEqual(data["format"], "RGBA16F")
+
+        # Десериализация
+        restored = ResourceSpec.deserialize(data)
+
+        self.assertEqual(restored.resource, "my_fbo")
+        self.assertEqual(restored.resource_type, "fbo")
+        self.assertEqual(restored.size, (1024, 1024))
+        self.assertEqual(restored.clear_color, (0.1, 0.2, 0.3, 1.0))
+        self.assertEqual(restored.clear_depth, 0.5)
+        self.assertEqual(restored.format, "RGBA16F")
+
+    def test_full_pipeline_serialization(self):
+        """Тест сериализации полного RenderPipeline."""
+        from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
+        from termin.visualization.render.framegraph.passes.shadow import ShadowPass
+        from termin.visualization.render.framegraph.passes.canvas import CanvasPass
+        from termin.visualization.render.postprocess import PostProcessPass
+        from termin.visualization.render.posteffects.highlight import HighlightEffect
+
+        # Создаём сложный пайплайн
+        pipeline = RenderPipeline(
+            passes=[
+                ShadowPass(
+                    output_res="shadows",
+                    default_resolution=1024,
+                ),
+                SkyBoxPass(
+                    input_res="empty",
+                    output_res="skybox",
+                ),
+                ColorPass(
+                    input_res="skybox",
+                    output_res="color",
+                    shadow_res="shadows",
+                    phase_mark="main",
+                ),
+                PostProcessPass(
+                    effects=[HighlightEffect(color=(1.0, 1.0, 0.0, 1.0))],
+                    input_res="color",
+                    output_res="color_pp",
+                ),
+                CanvasPass(
+                    src="color_pp",
+                    dst="color_ui",
+                ),
+                PresentToScreenPass(
+                    input_res="color_ui",
+                ),
+            ],
+            pipeline_specs=[
+                ResourceSpec(
+                    resource="empty",
+                    clear_color=(0.1, 0.1, 0.1, 1.0),
+                    clear_depth=1.0,
+                ),
+            ],
+        )
+
+        # Сериализуем
+        data = pipeline.serialize()
+
+        self.assertEqual(len(data["passes"]), 6)
+        self.assertEqual(data["passes"][0]["type"], "ShadowPass")
+        self.assertEqual(data["passes"][1]["type"], "SkyBoxPass")
+        self.assertEqual(data["passes"][2]["type"], "ColorPass")
+        self.assertEqual(data["passes"][3]["type"], "PostProcessPass")
+        self.assertEqual(data["passes"][4]["type"], "CanvasPass")
+        self.assertEqual(data["passes"][5]["type"], "PresentToScreenPass")
+
+        self.assertEqual(len(data["pipeline_specs"]), 1)
+        self.assertEqual(data["pipeline_specs"][0]["resource"], "empty")
+
+        # Десериализуем
+        restored = RenderPipeline.deserialize(data, self.rm)
+
+        self.assertEqual(len(restored.passes), 6)
+        self.assertIsInstance(restored.passes[0], ShadowPass)
+        self.assertIsInstance(restored.passes[1], SkyBoxPass)
+        self.assertIsInstance(restored.passes[2], ColorPass)
+        self.assertIsInstance(restored.passes[3], PostProcessPass)
+        self.assertIsInstance(restored.passes[4], CanvasPass)
+        self.assertIsInstance(restored.passes[5], PresentToScreenPass)
+
+        # Проверяем параметры восстановленных пассов
+        self.assertEqual(restored.passes[0].default_resolution, 1024)
+        self.assertEqual(restored.passes[2].phase_mark, "main")
+        self.assertEqual(restored.passes[2].shadow_res, "shadows")
+
+        # Проверяем эффекты в PostProcessPass
+        pp = restored.passes[3]
+        self.assertEqual(len(pp.effects), 1)
+        self.assertIsInstance(pp.effects[0], HighlightEffect)
+        self.assertEqual(pp.effects[0]._color, (1.0, 1.0, 0.0, 1.0))
+
+        # Проверяем specs
+        self.assertEqual(len(restored.pipeline_specs), 1)
+        self.assertEqual(restored.pipeline_specs[0].resource, "empty")
+        self.assertEqual(restored.pipeline_specs[0].clear_color, (0.1, 0.1, 0.1, 1.0))
+
+    def test_pipeline_json_roundtrip(self):
+        """Тест сериализации в JSON и обратно."""
+        import json
+        from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
+
+        pipeline = RenderPipeline(
+            passes=[
+                SkyBoxPass(input_res="empty", output_res="skybox"),
+                ColorPass(input_res="skybox", output_res="color", phase_mark="main"),
+                PresentToScreenPass(input_res="color"),
+            ],
+        )
+
+        # Сериализуем в JSON
+        data = pipeline.serialize()
+        json_str = json.dumps(data, indent=2)
+
+        # Десериализуем из JSON
+        loaded_data = json.loads(json_str)
+        restored = RenderPipeline.deserialize(loaded_data, self.rm)
+
+        self.assertEqual(len(restored.passes), 3)
+        self.assertEqual(restored.passes[0].input_res, "empty")
+        self.assertEqual(restored.passes[1].phase_mark, "main")
+
+
 if __name__ == "__main__":
     unittest.main()
