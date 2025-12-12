@@ -366,6 +366,9 @@ class GizmoMoveController(InputComponent):
         # обработчик undo-команд редактора
         self._undo_handler: Optional[Callable[[UndoCommand, bool], None]] = None
 
+        # колбэк, вызываемый при изменении трансформа во время перетаскивания
+        self._on_transform_dragging: Optional[Callable[[], None]] = None
+
         # состояние для фиксации трансформа в undo-стек
         self._drag_transform = None
         self._start_pose: Pose3 | None = None
@@ -402,6 +405,14 @@ class GizmoMoveController(InputComponent):
         Регистрирует обработчик undo-команд (обычно EditorWindow.push_undo_command).
         """
         self._undo_handler = handler
+
+    def set_on_transform_dragging(self, callback: Optional[Callable[[], None]]):
+        """
+        Регистрирует колбэк, вызываемый при изменении трансформа во время drag.
+
+        Используется для обновления инспектора в реальном времени.
+        """
+        self._on_transform_dragging = callback
 
     # ---------- утилита: пересечение луча с плоскостью ----------
 
@@ -637,6 +648,10 @@ class GizmoMoveController(InputComponent):
             self.target.transform.global_pose()
         )
 
+        # Уведомляем инспектор об изменении трансформа
+        if self._on_transform_dragging is not None:
+            self._on_transform_dragging()
+
     def _get_axis_vector(self, axis: str) -> np.ndarray:
         t = self.gizmo.transform
 
@@ -773,6 +788,12 @@ class GizmoMoveController(InputComponent):
         self.gizmo.transform.relocate_global(
             self.target.transform.global_pose()
         )
+
+        # Уведомляем инспектор об изменении трансформа
+        if self._on_transform_dragging is not None:
+            self._on_transform_dragging()
+
+
 class GizmoController:
     """
     Обёртка над GizmoEntity и GizmoMoveController:
@@ -824,6 +845,19 @@ class GizmoController:
         if gizmo_ctrl is None:
             return
         gizmo_ctrl.set_target(target_entity)
+
+    def set_on_transform_dragging(self, callback: Optional[Callable[[], None]]) -> None:
+        """
+        Устанавливает колбэк для уведомления об изменении трансформа во время drag.
+
+        Используется для обновления инспектора в реальном времени.
+        """
+        if self.gizmo is None:
+            return
+        gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
+        if gizmo_ctrl is None:
+            return
+        gizmo_ctrl.set_on_transform_dragging(callback)
 
     def set_visible(self, visible: bool) -> None:
         """Показывает или скрывает гизмо."""

@@ -206,6 +206,9 @@ class EditorWindow(QMainWindow):
             editor_entities=self._camera_manager.editor_entities,
             undo_handler=self.push_undo_command,
         )
+        self.gizmo_controller.set_on_transform_dragging(
+            self._on_gizmo_transform_dragging
+        )
 
         # --- дерево сцены ---
         self.scene_tree_controller = SceneTreeController(
@@ -479,6 +482,11 @@ class EditorWindow(QMainWindow):
 
     def _on_inspector_component_changed(self):
         self._request_viewport_update()
+
+    def _on_gizmo_transform_dragging(self):
+        """Обновляет инспектор при перетаскивании объекта гизмо."""
+        if self.entity_inspector is not None:
+            self.entity_inspector.refresh_transform()
 
     def _on_material_inspector_changed(self):
         """Обработчик изменения материала в инспекторе."""
@@ -910,6 +918,9 @@ class EditorWindow(QMainWindow):
         # Recreate gizmo in new scene
         if self.gizmo_controller is not None:
             self.gizmo_controller.recreate_gizmo(new_scene, self._camera_manager.editor_entities)
+            self.gizmo_controller.set_on_transform_dragging(
+                self._on_gizmo_transform_dragging
+            )
 
         # Update viewport
         if self.viewport_controller is not None:

@@ -673,3 +673,11 @@ class EntityInspector(QWidget):
             return
         comp = self._entity.components[row]
         self._component_inspector.set_component(comp)
+
+    def refresh_transform(self) -> None:
+        """
+        Обновляет значения в TransformInspector из текущего трансформа.
+
+        Вызывается при изменении трансформа извне (например, при drag гизмо).
+        """
+        self._transform_inspector._update_from_transform()
