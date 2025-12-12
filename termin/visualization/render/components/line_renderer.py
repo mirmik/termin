@@ -2,6 +2,12 @@
 LineRenderer — компонент для рендеринга линий.
 
 Реализует Drawable протокол для интеграции с ColorPass и другими пассами.
+
+Два режима работы:
+- raw_lines=False (по умолчанию): генерирует ленту из треугольников на CPU,
+  width гарантированно работает с любым шейдером
+- raw_lines=True: использует GL_LINES, width игнорируется,
+  пользователь может использовать geometry shader для толщины
 """
 
 from __future__ import annotations
@@ -10,10 +16,11 @@ from typing import Iterable, List, Set, TYPE_CHECKING
 
 import numpy as np
 
-from termin.mesh.mesh import Mesh2
+from termin.mesh.mesh import Mesh2, Mesh3
 from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh import Mesh2Drawable
+from termin.visualization.core.mesh import Mesh2Drawable, MeshDrawable
+from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.render.renderpass import RenderPass, RenderState
 from termin.editor.inspect_field import InspectField
@@ -22,49 +29,107 @@ if TYPE_CHECKING:
     from termin.visualization.core.material import MaterialPhase
 
 
-# =============================
-#   Vertex Shader
-# =============================
-_VERT_SHADER = """
-#version 330 core
-
-layout(location = 0) in vec3 a_position;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-out vec3 v_pos_world;
-
-void main() {
-    vec4 world = u_model * vec4(a_position, 1.0);
-    v_pos_world = world.xyz;
-
-    gl_Position = u_projection * u_view * world;
-}
-"""
-
-
-# =============================
-#   Fragment Shader
-# =============================
-_FRAG_SHADER = """
-#version 330 core
-
-in vec3 v_pos_world;
-
-uniform vec4 u_color;
-
-out vec4 FragColor;
-
-void main() {
-    FragColor = u_color;
-}
-"""
-
-
-# Стандартные phase marks для линий (без теней — линии обычно не отбрасывают тень)
+# Стандартные phase marks для линий (без теней)
 DEFAULT_LINE_PHASE_MARKS: Set[str] = {"opaque"}
+
+
+def _build_line_ribbon(
+    points: List[tuple[float, float, float]],
+    width: float,
+    up_hint: np.ndarray = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Строит ленту из треугольников для линии.
+
+    Для каждого сегмента создаёт quad (2 треугольника).
+    Ширина откладывается перпендикулярно направлению линии.
+
+    Параметры:
+        points: Список точек линии [(x, y, z), ...]
+        width: Толщина линии в мировых координатах
+        up_hint: Подсказка для направления "вверх" (по умолчанию Y)
+
+    Возвращает:
+        (vertices, triangles) — массивы для Mesh3
+    """
+    if len(points) < 2:
+        return np.zeros((0, 3), dtype=np.float32), np.zeros((0, 3), dtype=np.int32)
+
+    if up_hint is None:
+        up_hint = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+
+    pts = np.array(points, dtype=np.float32)
+    n_points = len(pts)
+    n_segments = n_points - 1
+
+    # Для каждой точки вычисляем направление и перпендикуляр
+    # На стыках усредняем направления соседних сегментов
+    directions = np.zeros((n_points, 3), dtype=np.float32)
+
+    for i in range(n_segments):
+        seg_dir = pts[i + 1] - pts[i]
+        seg_len = np.linalg.norm(seg_dir)
+        if seg_len > 1e-8:
+            seg_dir /= seg_len
+        directions[i] += seg_dir
+        directions[i + 1] += seg_dir
+
+    # Нормализуем направления
+    for i in range(n_points):
+        d_len = np.linalg.norm(directions[i])
+        if d_len > 1e-8:
+            directions[i] /= d_len
+
+    # Вычисляем перпендикуляры
+    half_width = width * 0.5
+    vertices = []
+
+    for i in range(n_points):
+        p = pts[i]
+        d = directions[i]
+
+        # Перпендикуляр = cross(direction, up_hint)
+        perp = np.cross(d, up_hint)
+        perp_len = np.linalg.norm(perp)
+
+        if perp_len < 1e-8:
+            # Линия параллельна up_hint, используем другую ось
+            alt_up = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+            perp = np.cross(d, alt_up)
+            perp_len = np.linalg.norm(perp)
+            if perp_len < 1e-8:
+                alt_up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+                perp = np.cross(d, alt_up)
+                perp_len = np.linalg.norm(perp)
+
+        if perp_len > 1e-8:
+            perp /= perp_len
+
+        # Две вершины: слева и справа от центра
+        v_left = p - perp * half_width
+        v_right = p + perp * half_width
+        vertices.append(v_left)
+        vertices.append(v_right)
+
+    vertices = np.array(vertices, dtype=np.float32)
+
+    # Строим треугольники
+    # Для каждого сегмента: 2 треугольника из 4 вершин
+    triangles = []
+    for i in range(n_segments):
+        # Индексы вершин для сегмента i
+        bl = i * 2      # bottom-left
+        br = i * 2 + 1  # bottom-right
+        tl = (i + 1) * 2      # top-left
+        tr = (i + 1) * 2 + 1  # top-right
+
+        # Два треугольника
+        triangles.append([bl, tl, br])
+        triangles.append([br, tl, tr])
+
+    triangles = np.array(triangles, dtype=np.int32) if triangles else np.zeros((0, 3), dtype=np.int32)
+
+    return vertices, triangles
 
 
 class LineRenderer(Component):
@@ -75,8 +140,9 @@ class LineRenderer(Component):
 
     Атрибуты:
         points: Список точек линии [(x, y, z), ...].
-        color: Цвет линии (r, g, b, a).
-        width: Толщина линии (пока не используется).
+        width: Толщина линии (в мировых координатах).
+        raw_lines: Если True, использует GL_LINES без генерации квадов.
+        material: Материал для рендеринга.
         phase_marks: Множество фаз, в которых участвует renderer.
     """
 
@@ -87,45 +153,57 @@ class LineRenderer(Component):
             kind="vec3_list",
             setter=lambda obj, value: obj.set_points(value),
         ),
-        "color": InspectField(
-            path="color",
-            label="Color",
-            kind="color",
-            setter=lambda obj, value: obj.set_color(value),
-        ),
         "width": InspectField(
             path="width",
             label="Width",
             kind="float",
-            min=0.1,
+            min=0.001,
             max=10.0,
-            step=0.1,
+            step=0.01,
+            setter=lambda obj, value: obj.set_width(value),
+        ),
+        "raw_lines": InspectField(
+            path="raw_lines",
+            label="Raw Lines (GL_LINES)",
+            kind="bool",
+            setter=lambda obj, value: obj.set_raw_lines(value),
+        ),
+        "material": InspectField(
+            path="material",
+            label="Material",
+            kind="material",
+            setter=lambda obj, value: obj.set_material(value),
         ),
     }
 
     def __init__(
         self,
         points: Iterable[tuple[float, float, float]] | None = None,
-        color: tuple[float, float, float, float] | None = None,
-        width: float = 1.0,
+        width: float = 0.1,
+        raw_lines: bool = False,
         material: Material | None = None,
         phase_marks: Set[str] | None = None,
     ):
         super().__init__(enabled=True)
 
         self._points: List[tuple[float, float, float]] = list(points) if points else []
-        self._color: tuple[float, float, float, float] = color if color else (1.0, 1.0, 1.0, 1.0)
-        self.width = width
+        self._width: float = width
+        self._raw_lines: bool = raw_lines
         self.phase_marks: Set[str] = phase_marks if phase_marks is not None else set(DEFAULT_LINE_PHASE_MARKS)
 
-        # Шейдер и материал — ленивая инициализация
-        self._shader: ShaderProgram | None = None
-        self._material: Material | None = material
-        self._drawable: Mesh2Drawable | None = None
-        self._mesh: Mesh2 | None = None
+        # Материал
+        self._material_handle: MaterialHandle = MaterialHandle()
+        if material is not None:
+            self._material_handle = MaterialHandle.from_material(material)
 
-        # Флаг необходимости перестроения меша
+        # Drawables для двух режимов
+        self._ribbon_drawable: MeshDrawable | None = None  # для quad режима
+        self._lines_drawable: Mesh2Drawable | None = None   # для raw_lines режима
+
+        # Флаг необходимости перестроения
         self._dirty = True
+
+    # --- Properties ---
 
     @property
     def points(self) -> List[tuple[float, float, float]]:
@@ -134,64 +212,109 @@ class LineRenderer(Component):
 
     @points.setter
     def points(self, value: Iterable[tuple[float, float, float]]):
-        """Устанавливает точки и помечает меш как грязный."""
         self._points = list(value)
         self._dirty = True
 
     @property
-    def color(self) -> tuple[float, float, float, float]:
-        """Цвет линии."""
-        return self._color
+    def width(self) -> float:
+        """Толщина линии."""
+        return self._width
 
-    @color.setter
-    def color(self, value: tuple[float, float, float, float]):
-        """Устанавливает цвет линии."""
-        self._color = value
-        if self._material is not None:
-            self._material.color = np.array(value, dtype=np.float32)
+    @width.setter
+    def width(self, value: float):
+        self._width = value
+        self._dirty = True
 
-    def set_color(self, value: tuple[float, float, float, float]):
-        """Устанавливает цвет линии (для инспектора)."""
-        self.color = value
+    @property
+    def raw_lines(self) -> bool:
+        """Режим GL_LINES."""
+        return self._raw_lines
+
+    @raw_lines.setter
+    def raw_lines(self, value: bool):
+        self._raw_lines = value
+        self._dirty = True
+
+    @property
+    def material(self) -> Material | None:
+        """Текущий материал."""
+        return self._material_handle.get()
+
+    @material.setter
+    def material(self, value: Material | None):
+        if value is None:
+            self._material_handle = MaterialHandle()
+        else:
+            self._material_handle = MaterialHandle.from_material(value)
+
+    # --- Setters for inspector ---
 
     def set_points(self, points: Iterable[tuple[float, float, float]]):
         """Устанавливает точки линии."""
         self.points = points
 
-    def _ensure_shader(self) -> ShaderProgram:
-        """Ленивая инициализация шейдера."""
-        if self._shader is None:
-            self._shader = ShaderProgram(
-                vertex_source=_VERT_SHADER,
-                fragment_source=_FRAG_SHADER,
-            )
-        return self._shader
+    def set_width(self, value: float):
+        """Устанавливает толщину линии."""
+        self.width = value
+
+    def set_raw_lines(self, value: bool):
+        """Устанавливает режим GL_LINES."""
+        self.raw_lines = value
+
+    def set_material(self, value: Material | None):
+        """Устанавливает материал."""
+        self.material = value
+
+    def set_material_by_name(self, name: str):
+        """Устанавливает материал по имени из ResourceManager."""
+        self._material_handle = MaterialHandle.from_name(name)
+
+    # --- Geometry building ---
+
+    def _rebuild_geometry(self):
+        """Перестраивает геометрию в зависимости от режима."""
+        self._ribbon_drawable = None
+        self._lines_drawable = None
+
+        if len(self._points) < 2:
+            self._dirty = False
+            return
+
+        if self._raw_lines:
+            # GL_LINES режим
+            edges = [[i, i + 1] for i in range(len(self._points) - 1)]
+            mesh2 = Mesh2.from_lists(self._points, edges)
+            self._lines_drawable = Mesh2Drawable(mesh2)
+        else:
+            # Ribbon режим (квады)
+            vertices, triangles = _build_line_ribbon(self._points, self._width)
+            if len(triangles) > 0:
+                mesh3 = Mesh3(vertices=vertices, triangles=triangles)
+                self._ribbon_drawable = MeshDrawable(mesh3)
+
+        self._dirty = False
+
+    def _ensure_geometry(self):
+        """Ленивое построение геометрии."""
+        if self._dirty:
+            self._rebuild_geometry()
+
+    def _get_drawable(self):
+        """Возвращает текущий drawable."""
+        self._ensure_geometry()
+        if self._raw_lines:
+            return self._lines_drawable
+        return self._ribbon_drawable
 
     def _ensure_material(self) -> Material:
         """Ленивая инициализация материала."""
-        if self._material is None:
-            shader = self._ensure_shader()
-            self._material = Material(shader=shader, color=self._color)
-        return self._material
-
-    def _rebuild_mesh(self):
-        """Перестраивает меш из текущих точек."""
-        if len(self._points) < 2:
-            self._mesh = None
-            self._drawable = None
-            return
-
-        # Создаём линейные сегменты
-        edges = [[i, i + 1] for i in range(len(self._points) - 1)]
-        self._mesh = Mesh2.from_lists(self._points, edges)
-        self._drawable = Mesh2Drawable(self._mesh)
-        self._dirty = False
-
-    def _ensure_drawable(self) -> Mesh2Drawable | None:
-        """Ленивая инициализация/обновление drawable."""
-        if self._dirty:
-            self._rebuild_mesh()
-        return self._drawable
+        mat = self._material_handle.get()
+        if mat is None:
+            # Создаём дефолтный материал
+            from termin.visualization.core.material import Material
+            mat = Material(color=(1.0, 1.0, 1.0, 1.0))
+            self._material_handle = MaterialHandle.from_material(mat)
+        return mat
 
     # --- Drawable protocol ---
 
@@ -202,7 +325,7 @@ class LineRenderer(Component):
         Параметры:
             context: Контекст рендеринга.
         """
-        drawable = self._ensure_drawable()
+        drawable = self._get_drawable()
         if drawable is None:
             return
         drawable.draw(context)
@@ -223,22 +346,22 @@ class LineRenderer(Component):
             return list(material.phases)
         return material.get_phases_for_mark(phase_mark)
 
-    # --- Legacy draw (для обратной совместимости) ---
+    # --- Legacy draw ---
 
     def required_shaders(self):
         """Возвращает шейдеры, требуемые для рендеринга."""
-        yield self._ensure_shader()
+        mat = self._material_handle.get()
+        if mat is not None and mat.shader is not None:
+            yield mat.shader
 
     def draw(self, context: RenderContext):
         """
-        Legacy метод отрисовки (для обратной совместимости).
-
-        Использует собственный материал и вызывает отрисовку.
+        Legacy метод отрисовки.
         """
         if self.entity is None:
             return
 
-        drawable = self._ensure_drawable()
+        drawable = self._get_drawable()
         if drawable is None:
             return
 
@@ -256,20 +379,43 @@ class LineRenderer(Component):
 
     def serialize_data(self) -> dict:
         """Сериализует LineRenderer."""
-        return {
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
+
+        data = {
             "enabled": self.enabled,
-            "points": self._points,
-            "color": list(self._color),
-            "width": self.width,
+            "points": [list(p) for p in self._points],
+            "width": self._width,
+            "raw_lines": self._raw_lines,
         }
+
+        # Материал (только если явно задан, не дефолтный)
+        mat = self._material_handle.get()
+        if mat is not None:
+            mat_name = rm.find_material_name(mat)
+            if mat_name and mat_name != "__ErrorMaterial__":
+                data["material"] = mat_name
+            elif mat.name and mat.name != "__ErrorMaterial__":
+                data["material"] = mat.name
+
+        return data
 
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "LineRenderer":
         """Восстанавливает LineRenderer из сериализованных данных."""
-        points = [tuple(p) for p in data.get("points", [])]
-        color = tuple(data.get("color", [1.0, 1.0, 1.0, 1.0]))
-        width = data.get("width", 1.0)
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
 
-        renderer = cls(points=points, color=color, width=width)
+        points = [tuple(p) for p in data.get("points", [])]
+        width = data.get("width", 0.1)
+        raw_lines = data.get("raw_lines", False)
+
+        renderer = cls(points=points, width=width, raw_lines=raw_lines)
         renderer.enabled = data.get("enabled", True)
+
+        # Материал
+        mat_name = data.get("material")
+        if mat_name:
+            renderer.set_material_by_name(mat_name)
+
         return renderer
