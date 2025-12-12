@@ -33,6 +33,36 @@ if TYPE_CHECKING:
 DEFAULT_LINE_PHASE_MARKS: Set[str] = {"opaque"}
 
 
+# Дефолтный шейдер для линий
+_DEFAULT_LINE_VERT = """
+#version 330 core
+
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_uv;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+"""
+
+_DEFAULT_LINE_FRAG = """
+#version 330 core
+
+uniform vec4 u_color;
+
+out vec4 FragColor;
+
+void main() {
+    FragColor = u_color;
+}
+"""
+
+
 def _build_line_ribbon(
     points: List[tuple[float, float, float]],
     width: float,
@@ -308,11 +338,30 @@ class LineRenderer(Component):
 
     def _ensure_material(self) -> Material:
         """Ленивая инициализация материала."""
-        mat = self._material_handle.get()
+        mat = self._material_handle.get_or_none()
         if mat is None:
-            # Создаём дефолтный материал
+            # Создаём дефолтный материал для линий
             from termin.visualization.core.material import Material
-            mat = Material(color=(1.0, 1.0, 1.0, 1.0))
+            from termin.visualization.render.shader import ShaderProgram
+            from termin.visualization.render.renderpass import RenderState
+
+            # Простой шейдер для линий
+            shader = ShaderProgram(
+                vertex_source=_DEFAULT_LINE_VERT,
+                fragment_source=_DEFAULT_LINE_FRAG,
+            )
+
+            # RenderState с отключённым culling для двустороннего рендеринга
+            render_state = RenderState(cull=False)
+
+            # Создаём материал с phase_mark="opaque"
+            mat = Material(
+                shader=shader,
+                color=(1.0, 1.0, 1.0, 1.0),
+                phase_mark="opaque",
+                render_state=render_state,
+            )
+
             self._material_handle = MaterialHandle.from_material(mat)
         return mat
 
