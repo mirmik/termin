@@ -111,6 +111,7 @@ class RenderingController:
         self._inspector.viewport_inspector.display_changed.connect(self._on_viewport_display_changed)
         self._inspector.viewport_inspector.camera_changed.connect(self._on_viewport_camera_changed)
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
+        self._inspector.viewport_inspector.pipeline_changed.connect(self._on_viewport_pipeline_changed)
 
         # Connect center tabs signal for tab switching
         if self._center_tabs is not None:
@@ -400,6 +401,54 @@ class RenderingController:
             return
 
         self._selected_viewport.depth = new_depth
+        self._request_update()
+
+    def _on_viewport_pipeline_changed(self, pipeline: "RenderPipeline") -> None:
+        """Handle viewport pipeline change from inspector."""
+        if self._selected_viewport is None:
+            return
+
+        self.set_viewport_pipeline(self._selected_viewport, pipeline)
+
+    def set_viewport_pipeline(self, viewport: "Viewport", pipeline: "RenderPipeline | None") -> None:
+        """
+        Set pipeline for a specific viewport.
+
+        Args:
+            viewport: Viewport to set pipeline for.
+            pipeline: Pipeline to use, or None to use default.
+        """
+        display = viewport.display
+        if display is None:
+            return
+
+        display_id = id(display)
+        viewport_id = id(viewport)
+
+        # Get or create viewport state
+        if display_id not in self._display_render_states:
+            self._display_render_states[display_id] = {}
+
+        viewport_states = self._display_render_states[display_id]
+
+        if viewport_id not in viewport_states:
+            from termin.visualization.render import ViewportRenderState
+            from termin.visualization.core.viewport import make_default_pipeline
+
+            default_pipeline = pipeline if pipeline is not None else make_default_pipeline()
+            viewport_states[viewport_id] = ViewportRenderState(pipeline=default_pipeline)
+        else:
+            state = viewport_states[viewport_id]
+            if pipeline is not None:
+                state.pipeline = pipeline
+                # Clear FBO pool when pipeline changes
+                state.fbos.clear()
+            else:
+                # Reset to default
+                from termin.visualization.core.viewport import make_default_pipeline
+                state.pipeline = make_default_pipeline()
+                state.fbos.clear()
+
         self._request_update()
 
     # --- Center tabs management ---

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.viewport import Viewport
+    from termin.visualization.render.framegraph import RenderPipeline
 
 
 class ViewportInspector(QWidget):
@@ -51,6 +52,7 @@ class ViewportInspector(QWidget):
     camera_changed = pyqtSignal(object)  # new CameraComponent
     rect_changed = pyqtSignal(tuple)  # new rect (x, y, w, h)
     depth_changed = pyqtSignal(int)  # new depth value
+    pipeline_changed = pyqtSignal(object)  # new RenderPipeline
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -60,6 +62,8 @@ class ViewportInspector(QWidget):
         self._display_names: dict[int, str] = {}
         self._cameras: List[Tuple["CameraComponent", str]] = []  # (camera, name)
         self._scene: Optional["Scene"] = None
+        self._pipelines: List[Tuple[str, "RenderPipeline"]] = []  # (name, pipeline)
+        self._current_pipeline_name: Optional[str] = None
 
         self._updating = False  # Prevent recursive updates
 
@@ -135,6 +139,12 @@ class ViewportInspector(QWidget):
         self._depth_spin.setToolTip("Render priority: lower values render first")
         self._depth_spin.valueChanged.connect(self._on_depth_changed)
         form.addRow("Depth:", self._depth_spin)
+
+        # Pipeline selection
+        self._pipeline_combo = QComboBox()
+        self._pipeline_combo.setToolTip("Render pipeline for this viewport")
+        self._pipeline_combo.currentIndexChanged.connect(self._on_pipeline_changed)
+        form.addRow("Pipeline:", self._pipeline_combo)
 
         layout.addLayout(form)
         layout.addStretch()
@@ -215,6 +225,9 @@ class ViewportInspector(QWidget):
 
             # Update depth
             self._depth_spin.setValue(viewport.depth)
+
+            # Update pipeline list
+            self.update_pipeline_list()
         finally:
             self._updating = False
 
@@ -229,6 +242,8 @@ class ViewportInspector(QWidget):
             self._w_spin.setValue(1.0)
             self._h_spin.setValue(1.0)
             self._depth_spin.setValue(0)
+            self._pipeline_combo.setCurrentIndex(0)
+            self._current_pipeline_name = None
         finally:
             self._updating = False
 
@@ -326,6 +341,64 @@ class ViewportInspector(QWidget):
 
         self.depth_changed.emit(value)
         self.viewport_changed.emit()
+
+    def _on_pipeline_changed(self, index: int) -> None:
+        """Handle pipeline selection change."""
+        if self._updating or self._viewport is None:
+            return
+
+        if 0 <= index < len(self._pipelines):
+            name, pipeline = self._pipelines[index]
+            self._current_pipeline_name = name
+            self.pipeline_changed.emit(pipeline)
+            self.viewport_changed.emit()
+
+    def update_pipeline_list(self) -> None:
+        """Update pipeline list from ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        pipeline_names = rm.list_pipeline_names()
+
+        self._updating = True
+        try:
+            self._pipelines.clear()
+            self._pipeline_combo.clear()
+
+            # Add "Default" option
+            self._pipeline_combo.addItem("(Default)")
+            self._pipelines.append(("(Default)", None))
+
+            for name in pipeline_names:
+                pipeline = rm.get_pipeline(name)
+                if pipeline is not None:
+                    self._pipelines.append((name, pipeline))
+                    self._pipeline_combo.addItem(name)
+
+            # Restore selection
+            if self._current_pipeline_name is not None:
+                for i, (name, _) in enumerate(self._pipelines):
+                    if name == self._current_pipeline_name:
+                        self._pipeline_combo.setCurrentIndex(i)
+                        break
+        finally:
+            self._updating = False
+
+    def set_current_pipeline(self, pipeline: Optional["RenderPipeline"], name: Optional[str] = None) -> None:
+        """Set the current pipeline selection."""
+        self._current_pipeline_name = name
+
+        self._updating = True
+        try:
+            if name is None or pipeline is None:
+                self._pipeline_combo.setCurrentIndex(0)  # Default
+            else:
+                for i, (n, _) in enumerate(self._pipelines):
+                    if n == name:
+                        self._pipeline_combo.setCurrentIndex(i)
+                        break
+        finally:
+            self._updating = False
 
     def refresh(self) -> None:
         """Refresh all data from current viewport."""

@@ -459,6 +459,23 @@ class ViewportController:
 
     # ---------- pipeline ----------
 
+    def set_pipeline(self, pipeline: RenderPipeline) -> None:
+        """
+        Устанавливает пайплайн для основного viewport'а.
+
+        При смене пайплайна FBO пул сбрасывается, так как новый пайплайн
+        может использовать другие ресурсы.
+        """
+        state = self._get_primary_state()
+        state.pipeline = pipeline
+        # Сбрасываем FBO пул — новый пайплайн может требовать другие ресурсы
+        state.fbos.clear()
+        self.request_update()
+
+    def get_pipeline(self) -> RenderPipeline | None:
+        """Возвращает текущий пайплайн основного viewport'а."""
+        return self._get_primary_state().pipeline
+
     def _make_pipeline(self) -> RenderPipeline:
         from termin.visualization.render.framegraph import (
             ColorPass,

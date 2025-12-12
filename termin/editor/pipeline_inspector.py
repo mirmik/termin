@@ -47,6 +47,7 @@ class PipelineInspector(QWidget):
     """
 
     pipeline_changed = pyqtSignal()
+    apply_to_viewport = pyqtSignal(object)  # emits RenderPipeline
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
