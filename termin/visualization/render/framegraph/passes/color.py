@@ -135,6 +135,10 @@ class ColorPass(RenderFramePass):
             if not (entity.active and entity.visible):
                 continue
 
+            # Пропускаем editor_only сущности — они рендерятся в EditorOverlayPass
+            if entity.editor_only:
+                continue
+
             mr = entity.get_component(MeshRenderer)
             if mr is None or not mr.enabled:
                 continue
@@ -333,6 +337,10 @@ class ColorPass(RenderFramePass):
         else:
             # Legacy режим — вызываем entity.draw()
             for entity in scene.entities:
+                # Пропускаем editor_only сущности
+                if entity.editor_only:
+                    continue
+
                 self._entity_names.append(entity.name)
 
                 entity.draw(render_context)

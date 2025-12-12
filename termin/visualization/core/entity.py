@@ -32,7 +32,8 @@ class Entity:
             pickable: bool = True,
             selectable: bool = True,
             serializable: bool = True,
-            cast_shadow: bool = True):
+            cast_shadow: bool = True,
+            editor_only: bool = False):
 
         if scale is None:
             scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
@@ -51,6 +52,7 @@ class Entity:
         self.selectable = selectable
         self.serializable = serializable  # False для редакторных сущностей (гизмо и т.д.)
         self.cast_shadow = cast_shadow  # False = не отбрасывает тень
+        self.editor_only = editor_only  # True = рендерится только в EditorOverlayPass
         self._pick_id: int | None = None
 
     @property
