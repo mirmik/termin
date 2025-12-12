@@ -112,7 +112,7 @@ class Mesh3(Mesh):
         return np.hstack([pos, normals, uvs])
 
     def interleaved_buffer(self):
-        if self._inter == None:
+        if self._inter is None:
             self._inter = self.build_interleaved_buffer()
         return self._inter
 
