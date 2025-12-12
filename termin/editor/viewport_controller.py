@@ -145,6 +145,11 @@ class ViewportController:
         # Qt may have switched to its own context
         self._backend_window.make_current()
 
+        # DEBUG: Clear to red to see if GL commands work at all
+        from OpenGL import GL
+        GL.glClearColor(1.0, 0.0, 0.0, 1.0)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+
         # Проверяем resize
         self._backend_window.check_resize()
 
