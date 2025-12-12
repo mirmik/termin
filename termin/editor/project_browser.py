@@ -100,6 +100,42 @@ def _create_shader_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+def _create_pipeline_icon() -> QIcon:
+    """Создаёт иконку пайплайна — стрелки/блоки процесса."""
+    size = 32
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    # Три блока (пассы) соединённые стрелками
+    block_color = QColor(80, 160, 120)
+    arrow_color = QColor(200, 200, 200)
+
+    painter.setPen(Qt.PenStyle.NoPen)
+
+    # Блок 1 (верх)
+    painter.setBrush(QBrush(block_color))
+    painter.drawRoundedRect(4, 4, 10, 8, 2, 2)
+
+    # Блок 2 (середина)
+    painter.setBrush(QBrush(block_color.lighter(110)))
+    painter.drawRoundedRect(11, 12, 10, 8, 2, 2)
+
+    # Блок 3 (низ)
+    painter.setBrush(QBrush(block_color.lighter(120)))
+    painter.drawRoundedRect(18, 20, 10, 8, 2, 2)
+
+    # Стрелки между блоками
+    painter.setPen(QPen(arrow_color, 1.5))
+    painter.drawLine(14, 10, 16, 14)  # блок1 -> блок2
+    painter.drawLine(21, 18, 23, 22)  # блок2 -> блок3
+
+    painter.end()
+    return QIcon(pixmap)
+
+
 def _create_scene_icon() -> QIcon:
     """Создаёт иконку сцены — кубик в перспективе."""
     size = 32
@@ -159,6 +195,7 @@ class AssetIconProvider(QFileIconProvider):
         self._material_icon = _create_material_icon()
         self._shader_icon = _create_shader_icon()
         self._scene_icon = _create_scene_icon()
+        self._pipeline_icon = _create_pipeline_icon()
 
     def icon(self, info_or_type):
         # info_or_type может быть QFileInfo или IconType
@@ -170,6 +207,8 @@ class AssetIconProvider(QFileIconProvider):
                 return self._shader_icon
             elif suffix == "scene":
                 return self._scene_icon
+            elif suffix == "pipeline":
+                return self._pipeline_icon
 
         return super().icon(info_or_type)
 
@@ -193,6 +232,7 @@ class ProjectBrowser:
         ".scene",     # Сцены
         ".shader",    # Шейдеры
         ".material",  # Материалы
+        ".pipeline",  # Рендер-пайплайны
         ".json",      # Конфиги
         ".png", ".jpg", ".jpeg", ".tga", ".bmp",  # Текстуры
         ".obj", ".fbx", ".gltf", ".glb",  # Модели
@@ -457,6 +497,10 @@ class ProjectBrowser:
         create_component_action = QAction("Component...", self._file_list)
         create_component_action.triggered.connect(self._create_component)
         create_menu.addAction(create_component_action)
+
+        create_pipeline_action = QAction("Render Pipeline...", self._file_list)
+        create_pipeline_action.triggered.connect(self._create_pipeline)
+        create_menu.addAction(create_pipeline_action)
 
         menu.addSeparator()
 
@@ -777,4 +821,99 @@ class {name}(Component):
                 self._file_list,
                 "Error",
                 f"Failed to create component: {e}",
+            )
+
+    def _create_pipeline(self) -> None:
+        """Создать новый файл рендер-пайплайна."""
+        import json
+
+        current_dir = self.current_directory
+        if current_dir is None:
+            return
+
+        name, ok = QInputDialog.getText(
+            self._file_list,
+            "Create Render Pipeline",
+            "Pipeline name:",
+            text="NewPipeline",
+        )
+
+        if not ok or not name:
+            return
+
+        # Убираем расширение если пользователь его ввёл
+        if name.endswith(".pipeline"):
+            name = name[:-9]
+
+        file_path = current_dir / f"{name}.pipeline"
+
+        if file_path.exists():
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"File '{file_path.name}' already exists.",
+            )
+            return
+
+        # Болванка пайплайна — базовый набор пассов
+        template = {
+            "passes": [
+                {
+                    "type": "SkyBoxPass",
+                    "pass_name": "Skybox",
+                    "enabled": True,
+                    "input_res": "empty",
+                    "output_res": "skybox",
+                },
+                {
+                    "type": "ColorPass",
+                    "pass_name": "Color",
+                    "enabled": True,
+                    "input_res": "skybox",
+                    "output_res": "color",
+                    "shadow_res": None,
+                    "phase_mark": "main",
+                },
+                {
+                    "type": "PostProcessPass",
+                    "pass_name": "PostFX",
+                    "enabled": True,
+                    "input_res": "color",
+                    "output_res": "color_pp",
+                    "effects": [],
+                },
+                {
+                    "type": "CanvasPass",
+                    "pass_name": "Canvas",
+                    "enabled": True,
+                    "src": "color_pp",
+                    "dst": "color_ui",
+                },
+                {
+                    "type": "PresentToScreenPass",
+                    "pass_name": "Present",
+                    "enabled": True,
+                    "input_res": "color_ui",
+                    "output_res": "DISPLAY",
+                },
+            ],
+            "pipeline_specs": [
+                {
+                    "resource": "empty",
+                    "resource_type": "fbo",
+                    "clear_color": [0.1, 0.1, 0.1, 1.0],
+                    "clear_depth": 1.0,
+                }
+            ],
+        }
+
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(template, f, indent=2, ensure_ascii=False)
+            self._refresh()
+        except OSError as e:
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"Failed to create pipeline: {e}",
             )

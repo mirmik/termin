@@ -29,6 +29,7 @@ from termin.editor.file_processors import (
     ShaderFileProcessor,
     TextureFileProcessor,
     ComponentFileProcessor,
+    PipelineFileProcessor,
 )
 
 from termin.visualization.core.camera import OrbitCameraController
@@ -126,6 +127,12 @@ class EditorWindow(QMainWindow):
         )
         self._project_file_watcher.register_processor(
             ComponentFileProcessor(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            PipelineFileProcessor(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
@@ -553,6 +560,9 @@ class EditorWindow(QMainWindow):
         if path.suffix == ".material":
             # Материал — открываем в инспекторе материалов
             self.show_material_inspector_for_file(str(path))
+        elif path.suffix == ".pipeline":
+            # Пайплайн — открываем в инспекторе пайплайнов
+            self._inspector_controller.show_pipeline_inspector_for_file(str(path))
 
     def _on_project_file_double_clicked(self, file_path) -> None:
         """Обработчик двойного клика на файл в Project Browser."""
@@ -564,8 +574,8 @@ class EditorWindow(QMainWindow):
             # Это файл сцены — загружаем
             self._load_scene_from_file(str(path))
 
-        elif path.suffix in (".material", ".shader", ".py"):
-            # Материалы, шейдеры и скрипты — открываем во внешнем текстовом редакторе
+        elif path.suffix in (".material", ".shader", ".py", ".pipeline"):
+            # Материалы, шейдеры, скрипты, пайплайны — открываем во внешнем текстовом редакторе
             self._open_in_text_editor(str(path))
 
         else:

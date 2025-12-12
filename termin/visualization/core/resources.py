@@ -77,6 +77,7 @@ class ResourceManager:
         self.components: Dict[str, type["Component"]] = {}
         self.frame_passes: Dict[str, type] = {}  # FramePass classes by name
         self.post_effects: Dict[str, type] = {}  # PostEffect classes by name
+        self.pipelines: Dict[str, "RenderPipeline"] = {}  # RenderPipeline instances by name
 
         # MaterialKeeper'ы — владельцы материалов по имени
         self._material_keepers: Dict[str, "MaterialKeeper"] = {}
@@ -602,6 +603,19 @@ class ResourceManager:
                 print(f"Warning: Failed to register post effect {class_name} from {module_name}: {e}")
 
         return registered
+
+    # --------- Pipelines ---------
+    def register_pipeline(self, name: str, pipeline: "RenderPipeline"):
+        """Регистрирует RenderPipeline по имени."""
+        self.pipelines[name] = pipeline
+
+    def get_pipeline(self, name: str) -> Optional["RenderPipeline"]:
+        """Получить RenderPipeline по имени."""
+        return self.pipelines.get(name)
+
+    def list_pipeline_names(self) -> list[str]:
+        """Список имён всех зарегистрированных пайплайнов."""
+        return sorted(self.pipelines.keys())
 
     # --------- Сериализация ---------
 

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from termin.editor.material_inspector import MaterialInspector
     from termin.editor.display_inspector import DisplayInspector
     from termin.editor.viewport_inspector import ViewportInspector
+    from termin.editor.pipeline_inspector import PipelineInspector
 
 
 class InspectorController:
@@ -40,6 +41,7 @@ class InspectorController:
     MATERIAL_INSPECTOR_INDEX = 1
     DISPLAY_INSPECTOR_INDEX = 2
     VIEWPORT_INSPECTOR_INDEX = 3
+    PIPELINE_INSPECTOR_INDEX = 4
 
     def __init__(
         self,
@@ -51,11 +53,13 @@ class InspectorController:
         on_material_changed: Callable,
         on_display_changed: Optional[Callable] = None,
         on_viewport_changed: Optional[Callable] = None,
+        on_pipeline_changed: Optional[Callable] = None,
     ):
         self._resource_manager = resource_manager
         self._push_undo_command = push_undo_command
         self._on_display_changed = on_display_changed
         self._on_viewport_changed = on_viewport_changed
+        self._on_pipeline_changed = on_pipeline_changed
 
         # Create stack widget
         self._stack = QStackedWidget()
@@ -92,6 +96,14 @@ class InspectorController:
             self._viewport_inspector.viewport_changed.connect(on_viewport_changed)
         self._stack.addWidget(self._viewport_inspector)
 
+        # Create PipelineInspector
+        from termin.editor.pipeline_inspector import PipelineInspector
+
+        self._pipeline_inspector = PipelineInspector()
+        if on_pipeline_changed is not None:
+            self._pipeline_inspector.pipeline_changed.connect(on_pipeline_changed)
+        self._stack.addWidget(self._pipeline_inspector)
+
         # Add to container
         self._init_in_container(container)
 
@@ -123,6 +135,11 @@ class InspectorController:
     def viewport_inspector(self) -> "ViewportInspector":
         """Access to ViewportInspector widget."""
         return self._viewport_inspector
+
+    @property
+    def pipeline_inspector(self) -> "PipelineInspector":
+        """Access to PipelineInspector widget."""
+        return self._pipeline_inspector
 
     @property
     def stack(self) -> QStackedWidget:
@@ -183,6 +200,11 @@ class InspectorController:
         if scene is not None:
             self._viewport_inspector.set_scene(scene)
         self._viewport_inspector.set_viewport(viewport)
+
+    def show_pipeline_inspector_for_file(self, file_path: str) -> None:
+        """Show PipelineInspector and load pipeline from file."""
+        self._stack.setCurrentIndex(self.PIPELINE_INSPECTOR_INDEX)
+        self._pipeline_inspector.load_pipeline_file(file_path)
 
     def set_entity_target(self, target) -> None:
         """Set target for EntityInspector (can be Entity or other object)."""
