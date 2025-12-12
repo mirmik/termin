@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.shader import ShaderProgram
+from termin.editor.inspect_field import InspectField
 
 
 def _get_texture_from_resource(resource, shadow_map_index: int = 0):
@@ -214,6 +215,11 @@ class PresentToScreenPass(RenderFramePass):
     Берёт текстуру из ресурса input_res и выводит её на экран
     фуллскрин-квадом.
     """
+
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
 
     _shader: ShaderProgram | None = None
 

@@ -29,6 +29,7 @@ from termin.visualization.render.shadow.shadow_camera import (
     build_shadow_projection_matrix,
 )
 from termin.visualization.core.lighting.light import Light, LightType
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
@@ -37,17 +38,31 @@ if TYPE_CHECKING:
 class ShadowPass(RenderFramePass):
     """
     Проход рендеринга shadow maps для всех источников света с тенями.
-    
+
     Атрибуты:
         output_res: имя выходного ресурса (ShadowMapArray)
         default_resolution: разрешение shadow map по умолчанию
         ortho_size: размер ортографического бокса для directional lights
         near: ближняя плоскость
         far: дальняя плоскость
-    
+
     Выходные данные:
         ShadowMapArray с текстурами и матрицами для всех источников.
     """
+
+    inspect_fields = {
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+        "default_resolution": InspectField(
+            path="default_resolution", label="Resolution", kind="int",
+            min=128, max=4096, step=128,
+        ),
+        "ortho_size": InspectField(
+            path="ortho_size", label="Ortho Size", kind="float",
+            min=1.0, max=200.0, step=1.0,
+        ),
+        "near": InspectField(path="near", label="Near", kind="float", min=0.01, step=0.1),
+        "far": InspectField(path="far", label="Far", kind="float", min=1.0, step=1.0),
+    }
 
     def __init__(
         self,

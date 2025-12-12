@@ -9,9 +9,17 @@ from termin.visualization.core.picking import id_to_rgb
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.renderpass import RenderState
 from termin.visualization.render.framegraph.passes.present import blit_fbo_to_fbo
+from termin.editor.inspect_field import InspectField
 
 
 class IdPass(RenderFramePass):
+    """Проход для ID-карты (picking)."""
+
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
+
     def __init__(
         self,
         input_res: str = "empty",

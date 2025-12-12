@@ -9,6 +9,7 @@ from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.components import MeshRenderer
+from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
@@ -58,6 +59,13 @@ class ColorPass(RenderFramePass):
         phase_mark: Метка фазы для фильтрации ("opaque", "transparent" и т.д.).
                     Если None, рендерит все фазы (legacy режим).
     """
+
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+        "shadow_res": InspectField(path="shadow_res", label="Shadow Resource", kind="string"),
+        "phase_mark": InspectField(path="phase_mark", label="Phase Mark", kind="string"),
+    }
 
     def __init__(
         self,

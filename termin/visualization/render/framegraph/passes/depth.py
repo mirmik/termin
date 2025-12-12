@@ -9,6 +9,7 @@ from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.renderpass import RenderState
 from termin.visualization.render.framegraph.passes.present import blit_fbo_to_fbo
 from termin.visualization.render.materials.depth_material import DepthMaterial
+from termin.editor.inspect_field import InspectField
 
 
 class DepthPass(RenderFramePass):
@@ -19,6 +20,11 @@ class DepthPass(RenderFramePass):
     По структуре очень похож на IdPass: сам создаёт FBO,
     обходит сущности с MeshRenderer и рисует их с материалом DepthMaterial.
     """
+
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
 
     def __init__(
         self,

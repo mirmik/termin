@@ -30,6 +30,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
+from termin.editor.inspect_field_panel import InspectFieldPanel
+
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.pipeline import RenderPipeline
 
@@ -141,9 +143,16 @@ class PipelineInspector(QWidget):
         self._details_layout.setContentsMargins(0, 0, 0, 0)
         self._details_layout.setSpacing(4)
 
+        # Basic info label
         self._details_info = QLabel("Select a pass to view details")
         self._details_info.setStyleSheet("color: #888;")
         self._details_layout.addWidget(self._details_info)
+
+        # Editable fields panel
+        self._pass_inspector = InspectFieldPanel(parent=self._details_widget)
+        self._pass_inspector.field_changed.connect(self._on_pass_field_changed)
+        self._details_layout.addWidget(self._pass_inspector)
+
         self._details_layout.addStretch()
 
         scroll.setWidget(self._details_widget)
@@ -230,6 +239,7 @@ class PipelineInspector(QWidget):
     def _rebuild_ui(self) -> None:
         """Rebuild UI for current pipeline."""
         self._pass_list.clear()
+        self._pass_inspector.set_target(None)
 
         if self._pipeline is None:
             self._name_label.setText("")
@@ -268,28 +278,26 @@ class PipelineInspector(QWidget):
 
         if self._pipeline is None or row < 0 or row >= len(self._pipeline.passes):
             self._details_info.setText("Select a pass to view details")
+            self._pass_inspector.set_target(None)
             return
 
         p = self._pipeline.passes[row]
 
-        # Show pass info
+        # Show basic pass info
         info_lines = [
             f"Type: {p.__class__.__name__}",
             f"Name: {p.pass_name}",
-            f"Enabled: {p.enabled}",
             f"Reads: {', '.join(p.reads) or 'none'}",
             f"Writes: {', '.join(p.writes) or 'none'}",
         ]
-
-        # Add pass-specific params
-        params = p._serialize_params()
-        if params:
-            info_lines.append("")
-            info_lines.append("Parameters:")
-            for k, v in params.items():
-                info_lines.append(f"  {k}: {v}")
-
         self._details_info.setText("\n".join(info_lines))
+
+        # Set target for editable fields
+        self._pass_inspector.set_target(p)
+
+    def _on_pass_field_changed(self, key: str, old_value, new_value) -> None:
+        """Handle pass field change from inspector."""
+        self.pipeline_changed.emit()
 
     def _on_save_clicked(self) -> None:
         """Handle save button click."""

@@ -7,6 +7,7 @@ import numpy as np
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.core.entity import RenderContext
+from termin.editor.inspect_field import InspectField
 
 
 class SkyBoxPass(RenderFramePass):
@@ -20,6 +21,11 @@ class SkyBoxPass(RenderFramePass):
     Проход выполняется с отключённой записью в depth-буфер, чтобы
     не мешать последующей геометрии.
     """
+
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
 
     def __init__(
         self,
