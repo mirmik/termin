@@ -400,6 +400,7 @@ class LineRenderer(Component):
 
         # Проверяем, что запрошенная фаза есть в наших phase_marks
         if phase_mark is not None and phase_mark not in self.phase_marks:
+            print(f"[LineRenderer.get_phases] phase_mark={phase_mark} not in {self.phase_marks}, returning []")
             return []
 
         # Возвращаем все фазы материала (игнорируем phase_mark материала)
@@ -408,8 +409,10 @@ class LineRenderer(Component):
         # Для ribbon режима отключаем culling
         if not self._raw_lines:
             for phase in phases:
+                print(f"[LineRenderer.get_phases] Setting cull=False for phase {phase.phase_mark}, was {phase.render_state.cull}")
                 phase.render_state.cull = False
 
+        print(f"[LineRenderer.get_phases] Returning {len(phases)} phases")
         return phases
 
     # --- Legacy draw ---
