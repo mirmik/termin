@@ -152,18 +152,35 @@ class PerspectiveCameraComponent(CameraComponent):
         self.aspect = aspect
 
     def get_projection_matrix(self) -> np.ndarray:
+        """
+        Projection matrix for Y-forward convention.
+
+        Camera looks along +Y axis:
+        - View X → Screen X (right)
+        - View Z → Screen Y (up)
+        - View Y → Depth (forward)
+        """
         f = 1.0 / math.tan(self.fov_y * 0.5)
         near, far = self.near, self.far
         proj = np.zeros((4, 4), dtype=np.float32)
-        proj[0, 0] = f / max(1e-6, self.aspect)
-        proj[1, 1] = f
-        proj[2, 2] = (far + near) / (near - far)
-        proj[2, 3] = (2 * far * near) / (near - far)
-        proj[3, 2] = -1.0
+        proj[0, 0] = f / max(1e-6, self.aspect)  # X → screen X
+        proj[1, 2] = f                            # Z → screen Y (up)
+        proj[2, 1] = (far + near) / (far - near)  # Y → depth
+        proj[2, 3] = (-2 * far * near) / (far - near)
+        proj[3, 1] = 1.0                          # w = y
         return proj
 
 
 class OrthographicCameraComponent(CameraComponent):
+    """
+    Orthographic camera for Y-forward convention.
+
+    Camera looks along +Y axis:
+    - View X → Screen X (controlled by left/right)
+    - View Z → Screen Y (controlled by bottom/top, representing up)
+    - View Y → Depth (controlled by near/far)
+    """
+
     def __init__(self, left: float = -1.0, right: float = 1.0, bottom: float = -1.0, top: float = 1.0, near: float = 0.1, far: float = 100.0):
         super().__init__(near=near, far=far)
         self.left = left
@@ -175,13 +192,14 @@ class OrthographicCameraComponent(CameraComponent):
         lr = self.right - self.left
         tb = self.top - self.bottom
         fn = self.far - self.near
-        proj = np.identity(4, dtype=np.float32)
-        proj[0, 0] = 2.0 / lr
-        proj[1, 1] = 2.0 / tb
-        proj[2, 2] = -2.0 / fn
+        proj = np.zeros((4, 4), dtype=np.float32)
+        proj[0, 0] = 2.0 / lr                       # X → screen X
+        proj[1, 2] = 2.0 / tb                       # Z → screen Y (up)
+        proj[2, 1] = 2.0 / fn                       # Y → depth
         proj[0, 3] = -(self.right + self.left) / lr
         proj[1, 3] = -(self.top + self.bottom) / tb
         proj[2, 3] = -(self.far + self.near) / fn
+        proj[3, 3] = 1.0
         return proj
 
 
@@ -260,6 +278,13 @@ class OrbitCameraController(CameraController):
         self._prevent_moving = True
 
     def _update_pose(self):
+        """
+        Update camera pose for Y-forward convention.
+
+        At azimuth=0, elevation=0: camera is behind target (-Y), looking at +Y.
+        Azimuth rotates around Z axis (up).
+        Elevation raises/lowers the camera.
+        """
         entity = self.entity
         if entity is None:
             return
@@ -267,9 +292,9 @@ class OrbitCameraController(CameraController):
         cos_elev = math.cos(self.elevation)
         eye = np.array(
             [
-                self.target[0] + r * math.cos(self.azimuth) * cos_elev,
-                self.target[1] + r * math.sin(self.azimuth) * cos_elev,
-                self.target[2] + r * math.sin(self.elevation),
+                self.target[0] + r * math.sin(self.azimuth) * cos_elev,  # X - side
+                self.target[1] - r * math.cos(self.azimuth) * cos_elev,  # Y - behind target
+                self.target[2] + r * math.sin(self.elevation),           # Z - height
             ],
             dtype=np.float32,
         )

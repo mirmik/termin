@@ -278,6 +278,12 @@ class Pose3:
     @staticmethod
     def looking_at(eye: numpy.ndarray, target: numpy.ndarray, up: numpy.ndarray = numpy.array([0.0, 0.0, 1.0])):
         """Create a pose at 'eye' position looking towards 'target'.
+
+        Uses Y-forward convention:
+        - Local +X = right
+        - Local +Y = forward (direction to target)
+        - Local +Z = up
+
         Args:
             eye: Position of the pose
             target: Point to look at
@@ -285,14 +291,14 @@ class Pose3:
         """
         forward = target - eye
         forward = forward / numpy.linalg.norm(forward)
-        
+
         right = numpy.cross(forward, up)
         right = right / numpy.linalg.norm(right)
-        
+
         up_corrected = numpy.cross(right, forward)
-        
-        # Build rotation matrix
-        rot_mat = numpy.column_stack([right, up_corrected, -forward])
+
+        # Build rotation matrix: local X=right, local Y=forward, local Z=up
+        rot_mat = numpy.column_stack([right, forward, up_corrected])
         
         # Convert rotation matrix to quaternion
         trace = numpy.trace(rot_mat)
