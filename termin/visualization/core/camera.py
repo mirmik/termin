@@ -314,8 +314,8 @@ class OrbitCameraController(CameraController):
         if entity is None:
             return
         rot = entity.transform.global_pose().rotation_matrix()
-        right = rot[:, 0]
-        up = rot[:, 1]
+        right = rot[:, 0]  # local X
+        up = rot[:, 2]     # local Z (up in Y-forward convention)
         self.target = self.target + right * dx + up * dy
         self._update_pose()
 
