@@ -124,6 +124,8 @@ class Display:
         """
         Находит viewport под указанными координатами.
 
+        При перекрытии возвращает viewport с наибольшим depth (рендерится последним, сверху).
+
         Параметры:
             x, y: Нормализованные координаты [0..1], origin сверху-слева.
 
@@ -133,11 +135,18 @@ class Display:
         # Преобразуем y: экранные координаты (сверху-вниз) → OpenGL (снизу-вверх)
         ny = 1.0 - y
 
+        # Собираем все viewport'ы под курсором
+        hits = []
         for viewport in self._viewports:
             vx, vy, vw, vh = viewport.rect
             if vx <= x <= vx + vw and vy <= ny <= vy + vh:
-                return viewport
-        return None
+                hits.append(viewport)
+
+        if not hits:
+            return None
+
+        # Возвращаем viewport с наибольшим depth (он рендерится последним, значит сверху)
+        return max(hits, key=lambda v: v.depth)
 
     def viewport_at_pixels(self, px: float, py: float) -> Optional["Viewport"]:
         """
