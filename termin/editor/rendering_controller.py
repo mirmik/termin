@@ -453,6 +453,20 @@ class RenderingController:
         if self._on_request_update is not None:
             self._on_request_update()
 
+        # Also request update for all additional displays
+        for display_id in self._display_tabs:
+            _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
+            if backend_window is not None:
+                backend_window.request_update()
+
+    def any_additional_display_needs_render(self) -> bool:
+        """Check if any additional display needs rendering."""
+        for display_id in self._display_tabs:
+            _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
+            if backend_window is not None and backend_window.needs_render():
+                return True
+        return False
+
     def render_additional_displays(self) -> None:
         """Render all additional displays (called from main render loop)."""
         if self._get_render_engine is None or self._get_graphics is None:
@@ -516,4 +530,11 @@ class RenderingController:
                     views=views_and_states,
                     present=False,
                 )
-                backend_window.swap_buffers()
+            else:
+                # No viewports - just clear the screen
+                from OpenGL import GL as gl
+                gl.glClearColor(0.1, 0.1, 0.1, 1.0)
+                gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+
+            backend_window.swap_buffers()
+            backend_window.clear_render_flag()
