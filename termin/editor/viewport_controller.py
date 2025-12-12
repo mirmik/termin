@@ -88,58 +88,20 @@ class ViewportController:
         # Получаем graphics от world
         self._graphics: "GraphicsBackend" = self._world.graphics
 
-        # Создаём placeholder виджет для SDL окна
+        # Placeholder виджет (пустой, для layout)
         self._gl_widget = QWidget()
-        self._gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._gl_widget.setMinimumSize(50, 50)
-        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
-        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
-        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         layout.addWidget(self._gl_widget)
 
-        # Force widget to create native window
-        self._gl_widget.winId()
-
-        # Создаём SDL окно с OpenGL контекстом
+        # Создаём отдельное SDL окно (НЕ встраиваем) для теста
         self._backend_window: "SDLEmbeddedWindowHandle" = sdl_backend.create_embedded_window(
-            width=self._gl_widget.width() or 800,
-            height=self._gl_widget.height() or 600,
-            title="SDL Viewport",
+            width=800,
+            height=600,
+            title="SDL Viewport (standalone test)",
         )
 
-        # Встраиваем SDL окно как дочернее через Win32 SetParent
-        import sys
-        if sys.platform == "win32":
-            import ctypes
-            user32 = ctypes.windll.user32
-
-            sdl_hwnd = self._backend_window.native_handle
-            qt_hwnd = int(self._gl_widget.winId())
-
-            # Set SDL window as child of Qt widget
-            GWL_STYLE = -16
-            WS_CHILD = 0x40000000
-            WS_VISIBLE = 0x10000000
-
-            # Change window style to child
-            old_style = user32.GetWindowLongW(sdl_hwnd, GWL_STYLE)
-            new_style = (old_style | WS_CHILD | WS_VISIBLE) & ~0x00C00000  # Remove WS_CAPTION
-            user32.SetWindowLongW(sdl_hwnd, GWL_STYLE, new_style)
-
-            # Set parent
-            user32.SetParent(sdl_hwnd, qt_hwnd)
-
-            # Position at 0,0 within parent
-            user32.SetWindowPos(sdl_hwnd, 0, 0, 0,
-                               self._gl_widget.width() or 800,
-                               self._gl_widget.height() or 600,
-                               0x0040)  # SWP_SHOWWINDOW
-
-        # Показываем SDL окно
+        # Показываем SDL окно как отдельное окно
         self._backend_window.show()
-
-        # Connect resize event
-        self._gl_widget.resizeEvent = self._on_widget_resize
 
         # Создаём WindowRenderSurface
         self._render_surface = WindowRenderSurface(self._backend_window)
@@ -172,19 +134,6 @@ class ViewportController:
             on_mouse_move_event=self._on_mouse_move,
         )
         self._input_manager.set_world_mode("editor")
-
-    def _on_widget_resize(self, event) -> None:
-        """Handle Qt widget resize - resize SDL window to match."""
-        import sys
-        if sys.platform == "win32":
-            import ctypes
-            user32 = ctypes.windll.user32
-            sdl_hwnd = self._backend_window.native_handle
-            user32.SetWindowPos(sdl_hwnd, 0, 0, 0,
-                               event.size().width(),
-                               event.size().height(),
-                               0x0040)  # SWP_SHOWWINDOW
-        self._backend_window.check_resize()
 
     def render(self) -> None:
         """
