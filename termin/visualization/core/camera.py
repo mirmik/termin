@@ -77,11 +77,8 @@ class CameraComponent(Component):
 
     def add_viewport(self, viewport: "Viewport") -> None:
         """Add viewport to camera's viewport list."""
-        print(f"[CameraComponent.add_viewport] self={id(self)}, viewport={id(viewport)}")
-        print(f"  viewport not in self._viewports: {viewport not in self._viewports}")
         if viewport not in self._viewports:
             self._viewports.append(viewport)
-            print(f"  ADDED! _viewports now: {[id(v) for v in self._viewports]}")
 
     def remove_viewport(self, viewport: "Viewport") -> None:
         """Remove viewport from camera's viewport list."""
@@ -304,10 +301,7 @@ class OrbitCameraController(CameraController):
         return self._states[key]
 
     def on_mouse_button(self, viewport, button: int, action: int, mods: int):
-        has_vp = self.camera_component.has_viewport(viewport)
-        print(f"[OrbitCameraController.on_mouse_button] viewport={id(viewport)}, has_viewport={has_vp}")
-        print(f"  camera._viewports ids: {[id(v) for v in self.camera_component._viewports]}")
-        if not has_vp:
+        if not self.camera_component.has_viewport(viewport):
             return
 
         state = self._state(viewport)

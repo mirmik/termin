@@ -116,12 +116,7 @@ class Display:
             rect=rect,
             canvas=canvas,
         )
-        print(f"[Display.create_viewport] viewport={id(viewport)}, camera={id(camera)}")
-        print(f"  camera class: {type(camera).__name__}")
-        print(f"  camera._viewports BEFORE: {[id(v) for v in camera._viewports]}")
         camera.add_viewport(viewport)
-        print(f"  camera._viewports AFTER: {[id(v) for v in camera._viewports]}")
-        print(f"  viewport in camera._viewports: {viewport in camera._viewports}")
         self._viewports.append(viewport)
         return viewport
 
@@ -140,27 +135,18 @@ class Display:
         # Преобразуем y: экранные координаты (сверху-вниз) → OpenGL (снизу-вверх)
         ny = 1.0 - y
 
-        # DEBUG
-        print(f"[viewport_at] x={x:.3f}, y={y:.3f}, ny={ny:.3f}")
-
         # Собираем все viewport'ы под курсором
         hits = []
-        for i, viewport in enumerate(self._viewports):
+        for viewport in self._viewports:
             vx, vy, vw, vh = viewport.rect
-            in_x = vx <= x <= vx + vw
-            in_y = vy <= ny <= vy + vh
-            print(f"  viewport[{i}] rect=({vx},{vy},{vw},{vh}) in_x={in_x} in_y={in_y}")
-            if in_x and in_y:
+            if vx <= x <= vx + vw and vy <= ny <= vy + vh:
                 hits.append(viewport)
 
         if not hits:
-            print(f"  -> None")
             return None
 
-        result = max(hits, key=lambda v: v.depth)
-        print(f"  -> viewport with depth={result.depth}")
         # Возвращаем viewport с наибольшим depth (он рендерится последним, значит сверху)
-        return result
+        return max(hits, key=lambda v: v.depth)
 
     def viewport_at_pixels(self, px: float, py: float) -> Optional["Viewport"]:
         """
