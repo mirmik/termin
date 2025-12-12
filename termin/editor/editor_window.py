@@ -1072,9 +1072,9 @@ class EditorWindow(QMainWindow):
         """
         Main tick function called from render loop.
 
-        Handles rendering if needed.
+        Handles rendering.
         Note: Game mode updates are handled by GameModeController's QTimer.
         """
-        # Render viewport if needed
-        if self.viewport_controller is not None and self.viewport_controller.needs_render():
+        # Always render - SDL window needs continuous updates
+        if self.viewport_controller is not None:
             self.viewport_controller.render()

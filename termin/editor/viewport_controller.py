@@ -151,9 +151,6 @@ class ViewportController:
         # Проверяем resize
         self._backend_window.check_resize()
 
-        # Очищаем флаг необходимости рендера
-        self._backend_window.clear_render_flag()
-
         self._graphics.ensure_ready()
         self._render_surface.make_current()
 
