@@ -12,6 +12,10 @@ class MaterialFileProcessor(FileTypeProcessor):
     """Handles .material files."""
 
     @property
+    def priority(self) -> int:
+        return 20  # Materials depend on shaders and textures
+
+    @property
     def extensions(self) -> Set[str]:
         return {".material"}
 

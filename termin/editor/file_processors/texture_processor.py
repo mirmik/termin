@@ -12,6 +12,10 @@ class TextureFileProcessor(FileTypeProcessor):
     """Handles texture files (.png, .jpg, .jpeg)."""
 
     @property
+    def priority(self) -> int:
+        return 10  # Textures have no dependencies
+
+    @property
     def extensions(self) -> Set[str]:
         return {".png", ".jpg", ".jpeg"}
 

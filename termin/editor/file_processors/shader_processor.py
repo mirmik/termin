@@ -12,6 +12,10 @@ class ShaderFileProcessor(FileTypeProcessor):
     """Handles .shader files."""
 
     @property
+    def priority(self) -> int:
+        return 0  # Shaders have no dependencies, load first
+
+    @property
     def extensions(self) -> Set[str]:
         return {".shader"}
 

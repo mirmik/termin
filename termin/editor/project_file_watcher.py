@@ -35,6 +35,19 @@ class FileTypeProcessor(ABC):
         self._file_to_resources: Dict[str, Set[str]] = {}
 
     @property
+    def priority(self) -> int:
+        """
+        Loading priority. Lower values are loaded first.
+
+        Default priorities:
+        - 0: shaders (no dependencies)
+        - 10: textures (no dependencies)
+        - 20: materials (depend on shaders, textures)
+        - 30: other assets
+        """
+        return 30
+
+    @property
     @abstractmethod
     def extensions(self) -> Set[str]:
         """
@@ -162,6 +175,9 @@ class ProjectFileWatcher:
     def watch_directory(self, path: str) -> None:
         """
         Recursively watch a directory for resource files.
+
+        Files are collected first, then processed in priority order
+        (lower priority values first) to handle dependencies correctly.
         """
         if self._file_watcher is None:
             return
@@ -170,6 +186,10 @@ class ProjectFileWatcher:
 
         if not os.path.exists(path):
             return
+
+        # Collect all files first (before processing)
+        # List of (priority, file_path, ext)
+        pending_files: list[tuple[int, str, str]] = []
 
         # Walk directory tree
         for root, dirs, files in os.walk(path):
@@ -181,7 +201,7 @@ class ProjectFileWatcher:
                 self._file_watcher.addPath(root)
                 self._watched_dirs.add(root)
 
-            # Process all files
+            # Collect all files
             for filename in files:
                 # Skip hidden files
                 if filename.startswith("."):
@@ -196,9 +216,17 @@ class ProjectFileWatcher:
                         self._all_files_by_ext[ext] = set()
                     self._all_files_by_ext[ext].add(file_path)
 
-                # Watch and process resource files with registered processors
+                # Queue resource files for processing
                 if ext in self._processors:
-                    self._add_file(file_path)
+                    priority = self._processors[ext].priority
+                    pending_files.append((priority, file_path, ext))
+
+        # Sort by priority (lower first), then by path for deterministic order
+        pending_files.sort(key=lambda x: (x[0], x[1]))
+
+        # Process files in priority order
+        for _priority, file_path, _ext in pending_files:
+            self._add_file(file_path)
 
     def _add_file(self, path: str) -> None:
         """Add a file to watching and notify processor."""
