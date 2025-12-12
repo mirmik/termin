@@ -436,7 +436,7 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         # Bind default framebuffer (window)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
-        w, h = self._sdl_window.get_framebuffer_size()
+        w, h = self._sdl_window.framebuffer_size()
 
         gl.glViewport(0, 0, w, h)
         gl.glDisable(gl.GL_SCISSOR_TEST)
