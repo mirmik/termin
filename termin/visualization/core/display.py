@@ -135,18 +135,27 @@ class Display:
         # Преобразуем y: экранные координаты (сверху-вниз) → OpenGL (снизу-вверх)
         ny = 1.0 - y
 
+        # DEBUG
+        print(f"[viewport_at] x={x:.3f}, y={y:.3f}, ny={ny:.3f}")
+
         # Собираем все viewport'ы под курсором
         hits = []
-        for viewport in self._viewports:
+        for i, viewport in enumerate(self._viewports):
             vx, vy, vw, vh = viewport.rect
-            if vx <= x <= vx + vw and vy <= ny <= vy + vh:
+            in_x = vx <= x <= vx + vw
+            in_y = vy <= ny <= vy + vh
+            print(f"  viewport[{i}] rect=({vx},{vy},{vw},{vh}) in_x={in_x} in_y={in_y}")
+            if in_x and in_y:
                 hits.append(viewport)
 
         if not hits:
+            print(f"  -> None")
             return None
 
+        result = max(hits, key=lambda v: v.depth)
+        print(f"  -> viewport with depth={result.depth}")
         # Возвращаем viewport с наибольшим depth (он рендерится последним, значит сверху)
-        return max(hits, key=lambda v: v.depth)
+        return result
 
     def viewport_at_pixels(self, px: float, py: float) -> Optional["Viewport"]:
         """
