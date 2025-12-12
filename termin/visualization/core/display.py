@@ -117,9 +117,11 @@ class Display:
             canvas=canvas,
         )
         print(f"[Display.create_viewport] viewport={id(viewport)}, camera={id(camera)}")
+        print(f"  camera class: {type(camera).__name__}")
         print(f"  camera._viewports BEFORE: {[id(v) for v in camera._viewports]}")
         camera.add_viewport(viewport)
         print(f"  camera._viewports AFTER: {[id(v) for v in camera._viewports]}")
+        print(f"  viewport in camera._viewports: {viewport in camera._viewports}")
         self._viewports.append(viewport)
         return viewport
 

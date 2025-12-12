@@ -77,8 +77,11 @@ class CameraComponent(Component):
 
     def add_viewport(self, viewport: "Viewport") -> None:
         """Add viewport to camera's viewport list."""
+        print(f"[CameraComponent.add_viewport] self={id(self)}, viewport={id(viewport)}")
+        print(f"  viewport not in self._viewports: {viewport not in self._viewports}")
         if viewport not in self._viewports:
             self._viewports.append(viewport)
+            print(f"  ADDED! _viewports now: {[id(v) for v in self._viewports]}")
 
     def remove_viewport(self, viewport: "Viewport") -> None:
         """Remove viewport from camera's viewport list."""
