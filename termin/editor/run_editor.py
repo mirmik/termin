@@ -1,4 +1,5 @@
 import sys
+import time
 
 import numpy as np
 from PyQt6.QtGui import QPalette, QColor
@@ -16,10 +17,9 @@ from termin.visualization.core.scene import Scene
 from termin.visualization.core.world import VisualizationWorld
 from termin.visualization.platform.backends import (
     OpenGLGraphicsBackend,
-    QtWindowBackend,
     set_default_graphics_backend,
-    set_default_window_backend,
 )
+from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.components.light_component import LightComponent
 from termin.visualization.core.lighting.light import LightType, LightShadowParams
@@ -34,7 +34,7 @@ def build_scene(world):
     red_material = Material(color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
     blue_material = Material(color=np.array([0.3, 0.3, 0.8, 1.0], dtype=np.float32))
     green_material = Material(color=np.array([0.3, 0.8, 0.3, 1.0], dtype=np.float32))
-   
+
     scene = Scene()
 
 
@@ -113,19 +113,55 @@ def apply_dark_palette(app: QApplication):
 
 
 def run_editor():
-    QApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
+    # Create Qt application
     app = QApplication(sys.argv)
-    
-    set_default_graphics_backend(OpenGLGraphicsBackend())
-    set_default_window_backend(QtWindowBackend())
 
+    # Setup graphics backend
+    set_default_graphics_backend(OpenGLGraphicsBackend())
+
+    # Create SDL embedded backend for viewport rendering
+    sdl_backend = SDLEmbeddedWindowBackend()
+
+    # Create world and scene
     world = VisualizationWorld()
     scene = build_scene(world)
 
+    # Apply dark theme
     apply_dark_palette(app)
-    win = EditorWindow(world, scene)
+
+    # Create editor window with SDL backend
+    win = EditorWindow(world, scene, sdl_backend)
     win.show()
-    app.exec()
+
+    # Request initial render
+    win.viewport_controller.request_update()
+
+    # Main render loop
+    target_fps = 60
+    target_frame_time = 1.0 / target_fps
+    last_time = time.perf_counter()
+
+    while not win.should_close():
+        current_time = time.perf_counter()
+        dt = current_time - last_time
+        last_time = current_time
+
+        # Process Qt events (UI, menus, dialogs, etc.)
+        app.processEvents()
+
+        # Process SDL events (viewport input)
+        sdl_backend.poll_events()
+
+        # Tick editor (game mode update + render if needed)
+        win.tick(dt)
+
+        # Frame limiting - sleep if we're ahead of schedule
+        elapsed = time.perf_counter() - current_time
+        if elapsed < target_frame_time:
+            time.sleep(target_frame_time - elapsed)
+
+    # Cleanup
+    sdl_backend.terminate()
 
 
 if __name__ == "__main__":

@@ -40,20 +40,23 @@ from termin.kinematic.transform import Transform3
 from termin.editor.project_browser import ProjectBrowser
 from termin.editor.settings import EditorSettings
 from termin.visualization.core.resources import ResourceManager
+from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 
 
 class EditorWindow(QMainWindow):
     undo_stack_changed = pyqtSignal()
 
-    def __init__(self, world, initial_scene):
+    def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend):
         super().__init__()
         self.undo_stack = UndoStack()
         self._menu_bar_controller: MenuBarController | None = None
         self._status_bar_label: QLabel | None = None
         self._fps_smooth: float | None = None
         self._fps_alpha: float = 0.1  # экспоненциальное сглаживание: f_new = f_prev*(1-α) + f_curr*α
+        self._should_close = False
 
         self.world = world
+        self._sdl_backend = sdl_backend
 
         # --- ресурс-менеджер редактора ---
         self.resource_manager = ResourceManager.instance()
@@ -224,6 +227,7 @@ class EditorWindow(QMainWindow):
             gizmo_controller=self.gizmo_controller,
             on_entity_picked=self._on_entity_picked_from_viewport,
             on_hover_entity=self._on_hover_entity_from_viewport,
+            sdl_backend=self._sdl_backend,
         )
 
         self.viewport = self.viewport_controller.viewport
@@ -812,7 +816,7 @@ class EditorWindow(QMainWindow):
         """
         if (
             self.viewport_controller is not None
-            and obj is self.viewport_controller.handle.widget
+            and obj is self.viewport_controller.gl_widget
             and event.type() == QEvent.Type.KeyPress
             and event.key() == Qt.Key.Key_Delete
         ):
@@ -1052,3 +1056,25 @@ class EditorWindow(QMainWindow):
             return
 
         self._status_bar_label.setText(f"FPS: {self._fps_smooth:.1f}")
+
+    # ----------- SDL render loop support -----------
+
+    def should_close(self) -> bool:
+        """Check if window should close."""
+        return self._should_close
+
+    def closeEvent(self, event) -> None:
+        """Handle window close event."""
+        self._should_close = True
+        super().closeEvent(event)
+
+    def tick(self, dt: float) -> None:
+        """
+        Main tick function called from render loop.
+
+        Handles rendering if needed.
+        Note: Game mode updates are handled by GameModeController's QTimer.
+        """
+        # Render viewport if needed
+        if self.viewport_controller is not None and self.viewport_controller.needs_render():
+            self.viewport_controller.render()

@@ -24,19 +24,24 @@ from termin.editor.editor_display_input_manager import EditorDisplayInputManager
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import BackendWindow, GraphicsBackend
+    from termin.visualization.platform.backends.sdl_embedded import (
+        SDLEmbeddedWindowBackend,
+        SDLEmbeddedWindowHandle,
+    )
 
 
 class ViewportController:
     """
     Управляет рендерингом в окне редактора.
 
+    Использует SDL для рендеринга, встроенный в Qt виджет.
+    Pull-model: рендеринг вызывается явно из главного цикла.
+
     Владеет:
     - Display (viewports + surface)
     - EditorDisplayInputManager (обработка ввода)
     - RenderEngine (выполняет рендеринг)
     - ViewportRenderState (pipeline + FBO пул)
-
-    Использует новую архитектуру Display вместо Window.
     """
 
     def __init__(
@@ -48,6 +53,7 @@ class ViewportController:
         gizmo_controller: GizmoController,
         on_entity_picked: Callable[[Entity | None], None],
         on_hover_entity: Callable[[Entity | None], None],
+        sdl_backend: "SDLEmbeddedWindowBackend",
     ) -> None:
         self._container = container
         self._world = world
@@ -56,6 +62,7 @@ class ViewportController:
         self._gizmo_controller = gizmo_controller
         self._on_entity_picked = on_entity_picked
         self._on_hover_entity = on_hover_entity
+        self._sdl_backend = sdl_backend
         self._framegraph_debugger = None
         self._debug_source_res: str = "color_pp"
         self._debug_paused: bool = False
@@ -78,16 +85,27 @@ class ViewportController:
             layout = QVBoxLayout(self._container)
             self._container.setLayout(layout)
 
-        # Получаем graphics и window_backend от world
+        # Получаем graphics от world
         self._graphics: "GraphicsBackend" = self._world.graphics
-        window_backend = self._world.window_backend
 
-        # Создаём BackendWindow через window_backend (Qt виджет)
-        self._backend_window: "BackendWindow" = window_backend.create_window(
-            width=900,
-            height=800,
-            title="viewport",
-            parent=self._container,
+        # Создаём placeholder QWidget для SDL окна
+        self._gl_widget = QWidget()
+        self._gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._gl_widget.setMinimumSize(50, 50)
+        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
+        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_PaintOnScreen, True)
+        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        layout.addWidget(self._gl_widget)
+
+        # Нужно показать виджет, чтобы получить native handle
+        self._gl_widget.show()
+
+        # Получаем native window handle от Qt виджета
+        native_handle = int(self._gl_widget.winId())
+
+        # Создаём SDL окно из native handle
+        self._backend_window: "SDLEmbeddedWindowHandle" = sdl_backend.create_window_from_handle(
+            native_handle
         )
 
         # Создаём WindowRenderSurface
@@ -122,35 +140,18 @@ class ViewportController:
         )
         self._input_manager.set_world_mode("editor")
 
-        # Qt виджет
-        gl_widget = self._backend_window.widget
-        gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        gl_widget.setMinimumSize(50, 50)
-        layout.addWidget(gl_widget)
-
-        self._gl_widget = gl_widget
-
-        # Подключаем рендер к Qt виджету
-        self._setup_qt_render()
-
-    def _setup_qt_render(self) -> None:
-        """
-        Настраивает рендеринг для Qt виджета.
-
-        Qt OpenGL виджет вызывает paintGL при необходимости перерисовки.
-        Нам нужно перехватить это и вызвать наш RenderEngine.
-        """
-        def custom_paint():
-            self._do_render()
-
-        self._gl_widget.paintGL = custom_paint
-
-    def _do_render(self) -> None:
+    def render(self) -> None:
         """
         Выполняет рендеринг через RenderEngine.
 
-        Рендерит все viewport'ы из display'а.
+        Вызывается явно из главного цикла редактора.
         """
+        # Проверяем resize
+        self._backend_window.check_resize()
+
+        # Очищаем флаг необходимости рендера
+        self._backend_window.clear_render_flag()
+
         self._graphics.ensure_ready()
         self._render_surface.make_current()
 
@@ -174,11 +175,18 @@ class ViewportController:
         self._render_engine.render_views(
             surface=self._render_surface,
             views=views_and_states,
-            present=False,  # Qt сам делает swap buffers
+            present=True,  # SDL: мы сами делаем swap buffers
         )
+
+        # Swap buffers
+        self._backend_window.swap_buffers()
 
         # Обрабатываем отложенные события после рендера
         self._after_render()
+
+    def needs_render(self) -> bool:
+        """Проверяет, нужен ли рендеринг."""
+        return self._backend_window.needs_render()
 
     def _get_or_create_state(self, viewport: Viewport) -> ViewportRenderState:
         """Получает или создаёт ViewportRenderState для viewport'а."""
@@ -484,7 +492,7 @@ class ViewportController:
         )
 
         depth_pass = DepthPass(input_res="empty_depth", output_res="depth", pass_name="Depth")
-        
+
         # ColorPass читает shadow_maps для shadow mapping
         color_pass = ColorPass(
             input_res="skybox",
