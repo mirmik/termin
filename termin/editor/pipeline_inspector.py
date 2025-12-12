@@ -25,6 +25,8 @@ from PyQt6.QtWidgets import (
     QFrame,
     QCheckBox,
     QMessageBox,
+    QComboBox,
+    QInputDialog,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -81,12 +83,49 @@ class PipelineInspector(QWidget):
         passes_label.setStyleSheet("font-weight: bold;")
         main_layout.addWidget(passes_label)
 
-        # Pass list
+        # Pass list with buttons
+        list_layout = QHBoxLayout()
+
         self._pass_list = QListWidget()
         self._pass_list.setMaximumHeight(200)
         self._pass_list.itemChanged.connect(self._on_pass_toggled)
         self._pass_list.currentRowChanged.connect(self._on_pass_selected)
-        main_layout.addWidget(self._pass_list)
+        list_layout.addWidget(self._pass_list)
+
+        # Buttons for pass management
+        btn_layout = QVBoxLayout()
+        btn_layout.setSpacing(4)
+
+        self._add_btn = QPushButton("+")
+        self._add_btn.setFixedSize(28, 28)
+        self._add_btn.setToolTip("Add pass")
+        self._add_btn.clicked.connect(self._on_add_pass)
+        btn_layout.addWidget(self._add_btn)
+
+        self._remove_btn = QPushButton("−")
+        self._remove_btn.setFixedSize(28, 28)
+        self._remove_btn.setToolTip("Remove selected pass")
+        self._remove_btn.clicked.connect(self._on_remove_pass)
+        btn_layout.addWidget(self._remove_btn)
+
+        btn_layout.addSpacing(8)
+
+        self._up_btn = QPushButton("▲")
+        self._up_btn.setFixedSize(28, 28)
+        self._up_btn.setToolTip("Move pass up")
+        self._up_btn.clicked.connect(self._on_move_up)
+        btn_layout.addWidget(self._up_btn)
+
+        self._down_btn = QPushButton("▼")
+        self._down_btn.setFixedSize(28, 28)
+        self._down_btn.setToolTip("Move pass down")
+        self._down_btn.clicked.connect(self._on_move_down)
+        btn_layout.addWidget(self._down_btn)
+
+        btn_layout.addStretch()
+        list_layout.addLayout(btn_layout)
+
+        main_layout.addLayout(list_layout)
 
         # Pass details area
         details_label = QLabel("Pass Details:")
@@ -195,6 +234,7 @@ class PipelineInspector(QWidget):
         if self._pipeline is None:
             self._name_label.setText("")
             self._details_info.setText("No pipeline loaded")
+            self._update_buttons_state()
             return
 
         self._name_label.setText(self._pipeline_name)
@@ -209,6 +249,7 @@ class PipelineInspector(QWidget):
             self._pass_list.addItem(item)
 
         self._details_info.setText("Select a pass to view details")
+        self._update_buttons_state()
 
     def _on_pass_toggled(self, item: QListWidgetItem) -> None:
         """Handle pass enable/disable toggle."""
@@ -223,6 +264,8 @@ class PipelineInspector(QWidget):
 
     def _on_pass_selected(self, row: int) -> None:
         """Handle pass selection - show details."""
+        self._update_buttons_state()
+
         if self._pipeline is None or row < 0 or row >= len(self._pipeline.passes):
             self._details_info.setText("Select a pass to view details")
             return
@@ -252,6 +295,150 @@ class PipelineInspector(QWidget):
         """Handle save button click."""
         if self.save_pipeline_file():
             pass  # Could show success notification
+
+    def _on_add_pass(self) -> None:
+        """Add a new pass to the pipeline."""
+        if self._pipeline is None:
+            return
+
+        from termin.visualization.core.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        pass_names = rm.list_frame_pass_names()
+
+        if not pass_names:
+            QMessageBox.warning(
+                self,
+                "No Passes Available",
+                "No FramePass types registered.",
+            )
+            return
+
+        # Show selection dialog
+        pass_type, ok = QInputDialog.getItem(
+            self,
+            "Add Pass",
+            "Select pass type:",
+            pass_names,
+            0,
+            False,
+        )
+
+        if not ok or not pass_type:
+            return
+
+        # Get pass class and create instance
+        pass_cls = rm.get_frame_pass(pass_type)
+        if pass_cls is None:
+            return
+
+        # Ask for pass name
+        pass_name, ok = QInputDialog.getText(
+            self,
+            "Pass Name",
+            "Enter pass name:",
+            text=pass_type,
+        )
+
+        if not ok or not pass_name:
+            return
+
+        try:
+            # Create pass with default parameters
+            new_pass = pass_cls(pass_name=pass_name)
+
+            # Insert after current selection or at end
+            row = self._pass_list.currentRow()
+            if row < 0:
+                self._pipeline.passes.append(new_pass)
+            else:
+                self._pipeline.passes.insert(row + 1, new_pass)
+
+            self._rebuild_ui()
+            self.pipeline_changed.emit()
+
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error Creating Pass",
+                f"Failed to create pass:\n{e}",
+            )
+
+    def _on_remove_pass(self) -> None:
+        """Remove the selected pass from the pipeline."""
+        if self._pipeline is None:
+            return
+
+        row = self._pass_list.currentRow()
+        if row < 0 or row >= len(self._pipeline.passes):
+            return
+
+        pass_obj = self._pipeline.passes[row]
+
+        reply = QMessageBox.question(
+            self,
+            "Remove Pass",
+            f"Remove pass '{pass_obj.pass_name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        del self._pipeline.passes[row]
+        self._rebuild_ui()
+        self.pipeline_changed.emit()
+
+    def _on_move_up(self) -> None:
+        """Move the selected pass up in the list."""
+        if self._pipeline is None:
+            return
+
+        row = self._pass_list.currentRow()
+        if row <= 0 or row >= len(self._pipeline.passes):
+            return
+
+        # Swap passes
+        passes = self._pipeline.passes
+        passes[row], passes[row - 1] = passes[row - 1], passes[row]
+
+        self._rebuild_ui()
+        self._pass_list.setCurrentRow(row - 1)
+        self.pipeline_changed.emit()
+
+    def _on_move_down(self) -> None:
+        """Move the selected pass down in the list."""
+        if self._pipeline is None:
+            return
+
+        row = self._pass_list.currentRow()
+        if row < 0 or row >= len(self._pipeline.passes) - 1:
+            return
+
+        # Swap passes
+        passes = self._pipeline.passes
+        passes[row], passes[row + 1] = passes[row + 1], passes[row]
+
+        self._rebuild_ui()
+        self._pass_list.setCurrentRow(row + 1)
+        self.pipeline_changed.emit()
+
+    def _update_buttons_state(self) -> None:
+        """Update enabled state of buttons based on selection."""
+        has_pipeline = self._pipeline is not None
+        row = self._pass_list.currentRow()
+        has_selection = row >= 0
+
+        self._add_btn.setEnabled(has_pipeline)
+        self._remove_btn.setEnabled(has_pipeline and has_selection)
+
+        if has_pipeline and has_selection:
+            self._up_btn.setEnabled(row > 0)
+            self._down_btn.setEnabled(row < len(self._pipeline.passes) - 1)
+        else:
+            self._up_btn.setEnabled(False)
+            self._down_btn.setEnabled(False)
 
     @property
     def pipeline(self) -> Optional["RenderPipeline"]:
