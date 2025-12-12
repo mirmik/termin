@@ -1,9 +1,10 @@
 # ===== termin/editor/editor_tree.py =====
-from PyQt6.QtCore import Qt, QAbstractItemModel, QModelIndex
+from PyQt6.QtCore import Qt, QAbstractItemModel, QModelIndex, pyqtSignal
 
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
+from termin.editor.drag_drop import EditorMimeTypes, create_entity_mime_data, parse_entity_mime_data
 
 
 class NodeWrapper:
@@ -28,6 +29,10 @@ class SceneTreeModel(QAbstractItemModel):
     Дерево: иерархия Entity, повторяющая иерархию Transform3.
     Transform-узлы в дереве НЕ показываем.
     """
+
+    # Signal emitted when entity should be reparented via drag-drop
+    # Args: (entity_to_move: Entity, new_parent_entity: Entity | None)
+    entity_reparent_requested = pyqtSignal(Entity, object)
 
     def __init__(self, scene: Scene):
         super().__init__()
@@ -151,3 +156,144 @@ class SceneTreeModel(QAbstractItemModel):
             parent_node = n
 
         return parent_index
+
+    # ==============================================================
+    # Drag-drop support
+    # ==============================================================
+
+    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
+        """Return item flags including drag-drop capability."""
+        default_flags = super().flags(index)
+
+        if not index.isValid():
+            # Root can accept drops (to move to top level)
+            return default_flags | Qt.ItemFlag.ItemIsDropEnabled
+
+        node: NodeWrapper = index.internalPointer()
+        if isinstance(node.obj, Entity):
+            # Entities can be dragged and can accept drops
+            return (
+                default_flags
+                | Qt.ItemFlag.ItemIsDragEnabled
+                | Qt.ItemFlag.ItemIsDropEnabled
+            )
+
+        return default_flags
+
+    def supportedDropActions(self) -> Qt.DropAction:
+        """Support move action for reparenting."""
+        return Qt.DropAction.MoveAction
+
+    def mimeTypes(self) -> list[str]:
+        """Return supported MIME types for drag-drop."""
+        return [EditorMimeTypes.ENTITY]
+
+    def mimeData(self, indexes: list[QModelIndex]):
+        """Create MIME data for dragged entities."""
+        from PyQt6.QtCore import QMimeData
+
+        if not indexes:
+            return None
+
+        # Take the first valid entity
+        for index in indexes:
+            if not index.isValid():
+                continue
+            node: NodeWrapper = index.internalPointer()
+            if isinstance(node.obj, Entity):
+                return create_entity_mime_data(node.obj)
+
+        return None
+
+    def canDropMimeData(
+        self,
+        data,
+        action: Qt.DropAction,
+        row: int,
+        column: int,
+        parent: QModelIndex,
+    ) -> bool:
+        """Check if drop is allowed at this location."""
+        if action != Qt.DropAction.MoveAction:
+            return False
+
+        if not data.hasFormat(EditorMimeTypes.ENTITY):
+            return False
+
+        # Parse the dragged entity data
+        entity_data = parse_entity_mime_data(data)
+        if entity_data is None:
+            return False
+
+        entity_name = entity_data.get("entity_name")
+        if entity_name is None:
+            return False
+
+        # Find the dragged entity
+        dragged_entity = None
+        for ent in self.scene.entities:
+            if ent.name == entity_name:
+                dragged_entity = ent
+                break
+
+        if dragged_entity is None:
+            return False
+
+        # Get target entity (parent of drop location)
+        target_entity = None
+        if parent.isValid():
+            node: NodeWrapper = parent.internalPointer()
+            target_entity = node.obj if isinstance(node.obj, Entity) else None
+
+        # Can't drop on self
+        if target_entity is dragged_entity:
+            return False
+
+        # Can't drop on a descendant
+        if target_entity is not None:
+            check = target_entity.transform.parent
+            while check is not None:
+                if check.entity is dragged_entity:
+                    return False
+                check = check.parent
+
+        return True
+
+    def dropMimeData(
+        self,
+        data,
+        action: Qt.DropAction,
+        row: int,
+        column: int,
+        parent: QModelIndex,
+    ) -> bool:
+        """Handle drop - emit signal for controller to handle reparenting."""
+        if not self.canDropMimeData(data, action, row, column, parent):
+            return False
+
+        entity_data = parse_entity_mime_data(data)
+        if entity_data is None:
+            return False
+
+        entity_name = entity_data.get("entity_name")
+
+        # Find the dragged entity
+        dragged_entity = None
+        for ent in self.scene.entities:
+            if ent.name == entity_name:
+                dragged_entity = ent
+                break
+
+        if dragged_entity is None:
+            return False
+
+        # Get target entity
+        target_entity = None
+        if parent.isValid():
+            node: NodeWrapper = parent.internalPointer()
+            target_entity = node.obj if isinstance(node.obj, Entity) else None
+
+        # Emit signal for controller to handle with undo support
+        self.entity_reparent_requested.emit(dragged_entity, target_entity)
+
+        return True

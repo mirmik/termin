@@ -11,6 +11,7 @@ from termin.editor.editor_commands import (
     AddEntityCommand,
     DeleteEntityCommand,
     RenameEntityCommand,
+    ReparentEntityCommand,
 )
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
@@ -52,6 +53,15 @@ class SceneTreeController:
         self._tree.expandAll()
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._on_tree_context_menu)
+
+        # Enable drag-drop
+        self._tree.setDragEnabled(True)
+        self._tree.setAcceptDrops(True)
+        self._tree.setDropIndicatorShown(True)
+        self._tree.setDragDropMode(QTreeView.DragDropMode.InternalMove)
+
+        # Connect model signal for reparenting
+        self._model.entity_reparent_requested.connect(self._on_entity_reparent_requested)
 
         sel_model = self._tree.selectionModel()
         if sel_model is not None:
@@ -177,6 +187,29 @@ class SceneTreeController:
         self._undo_handler(cmd, merge=False)
 
         self.rebuild(select_obj=ent)
+
+        if self._request_viewport_update is not None:
+            self._request_viewport_update()
+
+    # ---------- drag-drop reparenting ----------
+
+    def _on_entity_reparent_requested(
+        self,
+        entity: Entity,
+        new_parent_entity: Entity | None,
+    ) -> None:
+        """Handle entity reparenting from drag-drop."""
+        old_parent = entity.transform.parent
+        new_parent = new_parent_entity.transform if new_parent_entity else None
+
+        # Don't do anything if parent isn't changing
+        if old_parent is new_parent:
+            return
+
+        cmd = ReparentEntityCommand(entity, old_parent, new_parent)
+        self._undo_handler(cmd, merge=False)
+
+        self.rebuild(select_obj=entity)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()

@@ -267,6 +267,41 @@ class DeleteEntityCommand(UndoCommand):
         self._scene.add(self._entity)
 
 
+class ReparentEntityCommand(UndoCommand):
+    """
+    Перемещение сущности к другому родителю (drag-drop в SceneTree).
+
+    В do() сущность перемещается к новому родителю,
+    в undo() — возвращается к старому.
+    """
+
+    def __init__(
+        self,
+        entity: Entity,
+        old_parent: Transform3 | None,
+        new_parent: Transform3 | None,
+        text: str | None = None,
+    ) -> None:
+        if text is None:
+            old_name = old_parent.entity.name if old_parent and old_parent.entity else "root"
+            new_name = new_parent.entity.name if new_parent and new_parent.entity else "root"
+            text = f"Reparent '{entity.name}' from '{old_name}' to '{new_name}'"
+        super().__init__(text)
+        self._entity = entity
+        self._old_parent = old_parent
+        self._new_parent = new_parent
+
+    @property
+    def entity(self) -> Entity:
+        return self._entity
+
+    def do(self) -> None:
+        self._entity.transform.set_parent(self._new_parent)
+
+    def undo(self) -> None:
+        self._entity.transform.set_parent(self._old_parent)
+
+
 __all__ = [
     "TransformEditCommand",
     "ComponentFieldEditCommand",
@@ -274,6 +309,7 @@ __all__ = [
     "RemoveComponentCommand",
     "AddEntityCommand",
     "DeleteEntityCommand",
+    "ReparentEntityCommand",
 ]
 
 
