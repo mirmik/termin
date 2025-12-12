@@ -329,8 +329,11 @@ class ColorPass(RenderFramePass):
                 # Применяем материал (фазу)
                 dc.phase.apply(model, view, projection, graphics, context_key=key)
 
-                # Загружаем свет и тени
+                # Загружаем камеру, свет и тени
                 shader = dc.phase.shader_programm
+                if camera.entity is not None:
+                    cam_pos = camera.entity.transform.global_pose().lin
+                    shader.set_uniform_vec3("u_camera_position", cam_pos)
                 upload_lights_to_shader(shader, scene.lights)
                 upload_ambient_to_shader(shader, scene.ambient_color, scene.ambient_intensity)
                 if shadow_array is not None:

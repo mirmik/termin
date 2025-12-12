@@ -38,6 +38,9 @@ const int LIGHT_TYPE_SPOT        = 2;
 
 const int MAX_LIGHTS = 8;
 
+// ============== Camera ==============
+uniform vec3 u_camera_position;
+
 // ============== Ambient lighting (scene-level) ==============
 uniform vec3  u_ambient_color;
 uniform float u_ambient_intensity;
@@ -186,7 +189,7 @@ void main() {
         float ndotl = max(dot(N, L), 0.0);
         vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)
 
-        vec3 V = normalize(-v_world_pos); // камера в (0,0,0) для простоты
+        vec3 V = normalize(u_camera_position - v_world_pos);
         vec3 H = normalize(L + V);
         float ndoth = max(dot(N, H), 0.0);
         float shininess = 16.0;
