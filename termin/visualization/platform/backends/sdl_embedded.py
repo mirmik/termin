@@ -1,12 +1,13 @@
 """SDL2 backend for embedding into Qt widgets.
 
-Uses SDL_CreateWindowFrom to create an SDL window from an existing
-Qt widget's native handle, allowing SDL+OpenGL rendering inside Qt UI.
+Creates a standalone SDL+OpenGL window and embeds it into Qt layout
+using QWindow.fromWinId() + QWidget.createWindowContainer().
 """
 
 from __future__ import annotations
 
 import ctypes
+import sys
 from typing import Any, Callable, Optional, Tuple
 
 import sdl2
@@ -49,16 +50,28 @@ def _translate_key(scancode: int) -> Key:
     return Key.UNKNOWN
 
 
+def _get_native_window_handle(sdl_window) -> int:
+    """Get native window handle from SDL window (HWND on Windows, Window on X11)."""
+    wm_info = sdl2.SDL_SysWMinfo()
+    sdl2.SDL_VERSION(wm_info.version)
+
+    if not sdl2.SDL_GetWindowWMInfo(sdl_window, ctypes.byref(wm_info)):
+        raise RuntimeError(f"Failed to get window info: {sdl2.SDL_GetError()}")
+
+    if sys.platform == "win32":
+        return wm_info.info.win.window
+    elif sys.platform == "darwin":
+        # macOS - NSWindow pointer
+        return wm_info.info.cocoa.window
+    else:
+        # Linux/X11
+        return wm_info.info.x11.window
+
+
 class SDLEmbeddedWindowHandle(BackendWindow):
-    """SDL2 window embedded into an existing native window (Qt widget)."""
+    """SDL2 window with OpenGL context, embeddable into Qt."""
 
-    def __init__(self, native_handle: int):
-        """
-        Create SDL window from existing native window handle.
-
-        Args:
-            native_handle: Native window ID (from QWidget.winId())
-        """
+    def __init__(self, width: int = 800, height: int = 600, title: str = "SDL Viewport"):
         _ensure_sdl()
 
         # OpenGL attributes
@@ -71,10 +84,26 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
         video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
 
-        # Create SDL window from existing native window
-        self._window = video.SDL_CreateWindowFrom(ctypes.c_void_p(native_handle))
+        # Create SDL window with OpenGL support
+        # SDL_WINDOW_HIDDEN - will be shown when embedded
+        # SDL_WINDOW_BORDERLESS - no decorations needed when embedded
+        flags = (
+            video.SDL_WINDOW_OPENGL
+            | video.SDL_WINDOW_RESIZABLE
+            | video.SDL_WINDOW_HIDDEN
+        )
+
+        self._window = video.SDL_CreateWindow(
+            title.encode("utf-8"),
+            video.SDL_WINDOWPOS_UNDEFINED,
+            video.SDL_WINDOWPOS_UNDEFINED,
+            width,
+            height,
+            flags,
+        )
+
         if not self._window:
-            raise RuntimeError(f"Failed to create SDL window from native handle: {sdl2.SDL_GetError()}")
+            raise RuntimeError(f"Failed to create SDL window: {sdl2.SDL_GetError()}")
 
         self._gl_context = video.SDL_GL_CreateContext(self._window)
         if not self._gl_context:
@@ -85,6 +114,9 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
         # Enable VSync
         video.SDL_GL_SetSwapInterval(1)
+
+        # Get native handle for Qt embedding
+        self._native_handle = _get_native_window_handle(self._window)
 
         # Callbacks
         self._framebuffer_size_callback: Optional[Callable] = None
@@ -101,9 +133,18 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         self._window_fb_handle: Optional[Any] = None
 
         # Last known size for resize detection
-        w, h = self.framebuffer_size()
-        self._last_width = w
-        self._last_height = h
+        self._last_width = width
+        self._last_height = height
+
+    @property
+    def native_handle(self) -> int:
+        """Native window handle for Qt embedding."""
+        return self._native_handle
+
+    def show(self) -> None:
+        """Show the SDL window."""
+        if self._window is not None:
+            video.SDL_ShowWindow(self._window)
 
     def close(self) -> None:
         if self._gl_context:
@@ -265,23 +306,21 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
 
 class SDLEmbeddedWindowBackend(WindowBackend):
-    """SDL2 backend for creating windows embedded in Qt widgets."""
+    """SDL2 backend for creating windows embeddable in Qt."""
 
     def __init__(self):
         _ensure_sdl()
         self._windows: dict[int, SDLEmbeddedWindowHandle] = {}
 
-    def create_window_from_handle(self, native_handle: int) -> SDLEmbeddedWindowHandle:
+    def create_embedded_window(
+        self, width: int = 800, height: int = 600, title: str = "SDL Viewport"
+    ) -> SDLEmbeddedWindowHandle:
         """
-        Create SDL window from native window handle.
+        Create SDL window with OpenGL context.
 
-        Args:
-            native_handle: Native window ID (from QWidget.winId())
-
-        Returns:
-            SDLEmbeddedWindowHandle
+        Returns window that can be embedded into Qt via its native_handle property.
         """
-        window = SDLEmbeddedWindowHandle(native_handle)
+        window = SDLEmbeddedWindowHandle(width, height, title)
         self._windows[window.get_window_id()] = window
         return window
 
@@ -292,11 +331,8 @@ class SDLEmbeddedWindowBackend(WindowBackend):
         title: str,
         share: Optional[BackendWindow] = None,
     ) -> SDLEmbeddedWindowHandle:
-        """Not supported for embedded backend. Use create_window_from_handle()."""
-        raise NotImplementedError(
-            "SDLEmbeddedWindowBackend does not support create_window(). "
-            "Use create_window_from_handle() instead."
-        )
+        """Create window (for WindowBackend interface compatibility)."""
+        return self.create_embedded_window(width, height, title)
 
     def poll_events(self) -> None:
         event = sdl2.SDL_Event()

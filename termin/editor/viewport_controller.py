@@ -4,6 +4,7 @@ from typing import Callable, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QWindow
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 
 from termin.visualization.core.display import Display
@@ -88,25 +89,26 @@ class ViewportController:
         # Получаем graphics от world
         self._graphics: "GraphicsBackend" = self._world.graphics
 
-        # Создаём placeholder QWidget для SDL окна
-        self._gl_widget = QWidget()
+        # Создаём SDL окно с OpenGL контекстом
+        self._backend_window: "SDLEmbeddedWindowHandle" = sdl_backend.create_embedded_window(
+            width=800,
+            height=600,
+            title="SDL Viewport",
+        )
+
+        # Встраиваем SDL окно в Qt через QWindow.fromWinId()
+        native_handle = self._backend_window.native_handle
+        qwindow = QWindow.fromWinId(native_handle)
+        self._qwindow = qwindow  # Сохраняем ссылку, чтобы не был удалён GC
+
+        # Создаём контейнер для встраивания QWindow в QWidget
+        self._gl_widget = QWidget.createWindowContainer(qwindow, self._container)
         self._gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._gl_widget.setMinimumSize(50, 50)
-        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
-        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_PaintOnScreen, True)
-        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         layout.addWidget(self._gl_widget)
 
-        # Нужно показать виджет, чтобы получить native handle
-        self._gl_widget.show()
-
-        # Получаем native window handle от Qt виджета
-        native_handle = int(self._gl_widget.winId())
-
-        # Создаём SDL окно из native handle
-        self._backend_window: "SDLEmbeddedWindowHandle" = sdl_backend.create_window_from_handle(
-            native_handle
-        )
+        # Показываем SDL окно
+        self._backend_window.show()
 
         # Создаём WindowRenderSurface
         self._render_surface = WindowRenderSurface(self._backend_window)
