@@ -526,6 +526,15 @@ class ViewportController:
             phase_mark="opaque",
         )
 
+        # Отдельный ColorPass для editor объектов (gizmo и т.д.)
+        editor_color_pass = ColorPass(
+            input_res="color",
+            output_res="color",
+            shadow_res=None,
+            pass_name="EditorColor",
+            phase_mark="editor",
+        )
+
         skybox_pass = SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox")
 
         # Shadow pass — генерирует shadow maps для всех directional lights с тенями
@@ -542,6 +551,7 @@ class ViewportController:
             shadow_pass,
             skybox_pass,
             color_pass,
+            editor_color_pass,
             depth_pass,
             IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
             GizmoPass(

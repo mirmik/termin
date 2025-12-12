@@ -106,7 +106,7 @@ def make_default_pipeline() -> "RenderPipeline":
             output_res="color",
             shadow_res=None,
             pass_name="Color",
-            phase_mark="main",  # Use phase mode for proper lighting
+            phase_mark="opaque",
         ),
         PostProcessPass(
             effects=[],

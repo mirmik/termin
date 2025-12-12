@@ -1044,7 +1044,7 @@ class {name}(Component):
                     "input_res": "skybox",
                     "output_res": "color",
                     "shadow_res": None,
-                    "phase_mark": "main",
+                    "phase_mark": "opaque",
                 },
                 {
                     "type": "PostProcessPass",
