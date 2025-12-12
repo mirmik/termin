@@ -430,6 +430,12 @@ class EditorWindow(QMainWindow):
             return self.world.window_backend
         return None
 
+    def _get_render_engine(self):
+        """Get RenderEngine from viewport controller."""
+        if self.viewport_controller is not None:
+            return self.viewport_controller._render_engine
+        return None
+
     def _log_to_console(self, message: str) -> None:
         """Log message to console output."""
         if self.consoleOutput is not None:
@@ -496,6 +502,7 @@ class EditorWindow(QMainWindow):
             get_scene=lambda: self.scene,
             get_graphics=self._get_graphics,
             get_window_backend=self._get_window_backend,
+            get_render_engine=self._get_render_engine,
             on_request_update=self._request_viewport_update,
         )
 
