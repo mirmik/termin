@@ -383,6 +383,12 @@ class LineRenderer(Component):
         """
         Возвращает MaterialPhases для указанной метки фазы.
 
+        LineRenderer игнорирует phase_mark материала и всегда возвращает
+        все фазы, если запрошенная метка есть в phase_marks компонента.
+        Это позволяет использовать любой материал с LineRenderer.
+
+        Также устанавливает cull=False для двустороннего рендеринга ленты.
+
         Параметры:
             phase_mark: Метка фазы ("opaque", etc.)
                         Если None, возвращает все фазы.
@@ -391,9 +397,20 @@ class LineRenderer(Component):
             Список MaterialPhase.
         """
         material = self._ensure_material()
-        if phase_mark is None:
-            return list(material.phases)
-        return material.get_phases_for_mark(phase_mark)
+
+        # Проверяем, что запрошенная фаза есть в наших phase_marks
+        if phase_mark is not None and phase_mark not in self.phase_marks:
+            return []
+
+        # Возвращаем все фазы материала (игнорируем phase_mark материала)
+        phases = list(material.phases)
+
+        # Для ribbon режима отключаем culling
+        if not self._raw_lines:
+            for phase in phases:
+                phase.render_state.cull = False
+
+        return phases
 
     # --- Legacy draw ---
 
