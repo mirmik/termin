@@ -29,8 +29,8 @@
           "rotation": [
             0.0,
             0.0,
-            0.0,
-            1.0
+            -0.12737781882430751,
+            0.9918542691704069
           ]
         },
         "components": [
@@ -38,11 +38,7 @@
             "data": {
               "enabled": true,
               "mesh": "mesh_2",
-              "passes": [
-                {
-                  "material": "cylinder_mat"
-                }
-              ]
+              "material": "cylinder_mat"
             },
             "type": "MeshRenderer"
           }
@@ -79,11 +75,7 @@
             "data": {
               "enabled": true,
               "mesh": "mesh_1",
-              "passes": [
-                {
-                  "material": "cube1_mat"
-                }
-              ]
+              "material": "cube1_mat"
             },
             "type": "MeshRenderer"
           }
@@ -120,11 +112,7 @@
             "data": {
               "enabled": true,
               "mesh": "mesh_1",
-              "passes": [
-                {
-                  "material": "cube2_mat"
-                }
-              ]
+              "material": "cube2_mat"
             },
             "type": "MeshRenderer"
           }
@@ -161,11 +149,7 @@
             "data": {
               "enabled": true,
               "mesh": "mesh_1",
-              "passes": [
-                {
-                  "material": "cube2_mat"
-                }
-              ]
+              "material": "cube2_mat"
             },
             "type": "MeshRenderer"
           }
@@ -191,10 +175,10 @@
             0.0
           ],
           "rotation": [
+            0.05935197184454288,
             0.0,
             0.0,
-            0.0,
-            1.0
+            0.9982371178423315
           ]
         },
         "components": [
@@ -266,9 +250,9 @@
         "selectable": true,
         "pose": {
           "position": [
-            8.038133978843689,
-            2.3451662063598633,
-            0.08105379063636065
+            8.108770728111267,
+            2.356247901916504,
+            0.08176607359200716
           ],
           "rotation": [
             0.0,
@@ -304,10 +288,47 @@
                 ]
               ],
               "width": 0.1,
-              "raw_lines": false,
-              "material": "cylinder_mat"
+              "raw_lines": true,
+              "material": "LineMaterial"
             },
             "type": "LineRenderer"
+          }
+        ],
+        "children": []
+      },
+      {
+        "name": "TransparentCube",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            -1.8909255862236023,
+            -3.264790177345276,
+            -1.0276350677013397
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": "mesh_1",
+              "material": "TransparentMaterial"
+            },
+            "type": "MeshRenderer"
           }
         ],
         "children": []
@@ -349,14 +370,15 @@
   "editor": {
     "camera": {
       "target": [
-        6.226976837066053,
-        -1.8326720284989098,
-        -2.091100283698485
+        -1.8226916105851156,
+        -2.2535769013876235,
+        -1.364500779065255
       ],
-      "radius": 11.0,
-      "azimuth": 8.75457152800357,
-      "elevation": 0.502654824574367
+      "radius": 4.5,
+      "azimuth": 17.739526517270246,
+      "elevation": 0.49916416607037695
     },
+    "selected_entity": "TransparentCube",
     "displays": [
       {
         "name": "Editor",
@@ -501,6 +523,16 @@
             }
           }
         ]
+      },
+      "LineMaterial": {
+        "type": "material_file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Shaders\\LineMaterial.material",
+        "name": "LineMaterial"
+      },
+      "TransparentMaterial": {
+        "type": "material_file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Shaders\\TransparentMaterial.material",
+        "name": "TransparentMaterial"
       }
     },
     "meshes": {

@@ -1,0 +1,14 @@
+{
+  "shader": "LineShader3",
+  "uniforms": {
+    "u_width": 0.05,
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_ambient": 0.1,
+    "u_shininess": 32.0
+  }
+}
