@@ -805,6 +805,9 @@ class EditorWindow(QMainWindow):
         # Вставляем контейнер в splitter на место centerTabWidget
         self.topSplitter.insertWidget(splitter_index, center_container)
 
+        # Переустанавливаем размеры сплиттера после перемещения виджетов
+        self.topSplitter.setSizes([300, 1000, 300])
+
     # ----------- связи с контроллерами -----------
 
     def _request_viewport_update(self) -> None:
