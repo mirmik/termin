@@ -9,7 +9,7 @@ from termin.visualization.core.entity import Entity, InputComponent
 from termin.visualization.render.components import MeshRenderer
 from termin.geombase.pose3 import Pose3
 from termin.util import qmul   # <-- вот это добавляем
-from termin.visualization.render.renderpass import RenderPass, RenderState
+from termin.visualization.render.renderpass import RenderState
 
 
 # ---------- ВСПОМОГАТЕЛЬНАЯ МАТЕМАТИКА ----------
@@ -170,7 +170,7 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
         )
-        pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, passes=[], phase_marks={"editor"}))
+        pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, phase_marks={"editor"}))
         self.pick_shaft_ent = pick_shaft_ent
         self.transform.add_child(pick_shaft_ent.transform)
 
@@ -182,7 +182,7 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
         )
-        pick_head_ent.add_component(MeshRenderer(pick_head_mesh, passes=[], phase_marks={"editor"}))
+        pick_head_ent.add_component(MeshRenderer(pick_head_mesh, phase_marks={"editor"}))
         self.pick_head_ent = pick_head_ent
         self.transform.add_child(pick_head_ent.transform)
 
@@ -238,7 +238,8 @@ class GizmoRing(Entity):
     ):
         """Создаёт видимое кольцо гизмо."""
         ring_mesh = RingMesh(radius=radius, thickness=thickness, segments=48)
-        mat = Material(color=color)
+        # cull=False для двустороннего рендеринга кольца
+        mat = Material(color=color, render_state=RenderState(cull=False))
 
         ring_ent = Entity(
             Pose3.identity(),
@@ -246,9 +247,7 @@ class GizmoRing(Entity):
             pickable=False,
             selectable=False,
         )
-        pass_without_culling = RenderPass.from_material(mat, state=RenderState(cull=False))
-        mr = MeshRenderer(ring_mesh, passes=[pass_without_culling], phase_marks={"editor"})
-        #print(mr.passes)
+        mr = MeshRenderer(ring_mesh, material=mat, phase_marks={"editor"})
         ring_ent.add_component(mr)
         self.ring_ent = ring_ent
         self.transform.add_child(ring_ent.transform)
@@ -275,7 +274,7 @@ class GizmoRing(Entity):
             pickable=False,
             selectable=False,
         )
-        pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, passes=[], phase_marks={"editor"}))
+        pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, phase_marks={"editor"}))
         self.pick_ring_ent = pick_ring_ent
         self.transform.add_child(pick_ring_ent.transform)
 

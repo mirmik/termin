@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, List, Optional, Set, TYPE_CHECKING
+from typing import List, Set, TYPE_CHECKING
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component, RenderContext
@@ -10,7 +10,7 @@ from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.render.lighting.upload import upload_lights_to_shader, upload_ambient_to_shader
 from termin.visualization.render.lighting.shadow_upload import upload_shadow_maps_to_shader
-from termin.visualization.render.renderpass import RenderState, RenderPass
+from termin.visualization.render.renderpass import RenderState
 
 if TYPE_CHECKING:
     from termin.visualization.core.material import MaterialPhase
@@ -28,7 +28,7 @@ class MeshRenderer(Component):
 
     Атрибуты:
         mesh: Геометрия для отрисовки.
-        passes: Список RenderPass с материалами.
+        material: Материал для рендеринга (через MaterialHandle).
         phase_marks: Множество фаз, в которых участвует этот renderer.
                      По умолчанию {"opaque", "shadow"}.
                      Для редакторских объектов: {"editor"}.
@@ -46,7 +46,7 @@ class MeshRenderer(Component):
             path="material",
             label="Material",
             kind="material",
-            setter=lambda obj, value: obj.set_material_by_name(value.name) if value else obj.update_material(None),
+            setter=lambda obj, value: obj.set_material_by_name(value.name) if value else obj.set_material(None),
         ),
     }
 
@@ -54,7 +54,6 @@ class MeshRenderer(Component):
         self,
         mesh: MeshDrawable | None = None,
         material: Material | None = None,
-        passes: list[RenderPass] | None = None,
         phase_marks: Set[str] | None = None,
     ):
         super().__init__(enabled=True)
@@ -62,112 +61,57 @@ class MeshRenderer(Component):
         if isinstance(mesh, Mesh3):
             mesh = MeshDrawable(mesh)
 
-        if material is None and passes is None:
-            material = Material()
-
         self.mesh = mesh
-        self.passes: list[RenderPass] = []
         self.phase_marks: Set[str] = phase_marks if phase_marks is not None else set(DEFAULT_PHASE_MARKS)
 
-        if passes is not None:
-            # нормализация списка переданных проходов
-            for p in passes:
-                if isinstance(p, RenderPass):
-                    self.passes.append(p)
-                elif isinstance(p, Material):
-                    self.passes.append(RenderPass.from_material(p))
-                else:
-                    raise TypeError("passes must contain Material or RenderPass")
-        elif material is not None:
-            # если материал задан в конструкторе — как раньше: один проход
-            self.passes.append(RenderPass.from_material(material))
+        # Материал через handle для hot-reload
+        self._material_handle: MaterialHandle = MaterialHandle()
+        if material is not None:
+            self._material_handle = MaterialHandle.from_material(material)
 
     @property
     def material(self) -> Material | None:
-        """Возвращает материал первого прохода (для обратной совместимости)."""
-        if self.passes:
-            return self.passes[0].material
-        return None
+        """Возвращает текущий материал."""
+        return self._material_handle.get_or_none()
 
     @material.setter
     def material(self, value: Material | None):
-        """Устанавливает материал первого прохода."""
-        if self.passes:
-            self.passes[0].material = value
+        """Устанавливает материал."""
+        if value is None:
+            self._material_handle = MaterialHandle()
+        else:
+            self._material_handle = MaterialHandle.from_material(value)
 
     def update_mesh(self, mesh: MeshDrawable | None):
+        """Устанавливает меш."""
         self.mesh = mesh
 
-    def update_material(self, material: Material | None):
-        """
-        Устанавливает материал напрямую (direct handle).
-        Используется когда материал создан в коде.
-        """
-        if material is not None and not self.passes:
-            # Новый компонент, до этого не было проходов — создаём дефолтный
-            self.passes.append(RenderPass.from_material(material))
-        else:
-            # setter обновит первый pass
-            self.material = material
+    def set_material(self, material: Material | None):
+        """Устанавливает материал напрямую."""
+        self.material = material
 
     def set_material_by_name(self, name: str):
         """
-        Устанавливает материал по имени из ResourceManager (named handle).
+        Устанавливает материал по имени из ResourceManager.
         Материал будет автоматически обновляться при hot-reload.
         """
-        if not self.passes:
-            self.passes.append(RenderPass.from_material_name(name))
-        else:
-            self.passes[0].material_handle = MaterialHandle.from_name(name)
+        self._material_handle = MaterialHandle.from_name(name)
 
     # --- рендеринг ---
 
-    def required_shaders(self):
-        for p in self.passes:
-            yield p.material.shader
-
-    def draw(self, context: RenderContext):
-        if self.entity is None:
-            return
-
-        if self.mesh is None:
-            return
-
-        model = self.entity.model_matrix()
-        view = context.view
-        proj = context.projection
-        gfx = context.graphics
-        key = context.context_key
-
-        for p in self.passes:
-            gfx.apply_render_state(p.state)
-
-            mat = p.material
-            mat.apply(model, view, proj, graphics=gfx, context_key=key)
-
-            shader = mat.shader
-
-            upload_lights_to_shader(shader, context.scene.lights)
-            upload_ambient_to_shader(
-                shader,
-                context.scene.ambient_color,
-                context.scene.ambient_intensity,
-            )
-
-            # Загружаем shadow map uniform'ы (если есть shadow_data в контексте)
-            if context.shadow_data is not None:
-                upload_shadow_maps_to_shader(shader, context.shadow_data)
-
-            self.mesh.draw(context)
-
-        gfx.apply_render_state(RenderState())
+    def _ensure_material(self) -> Material:
+        """Ленивая инициализация материала."""
+        mat = self._material_handle.get_or_none()
+        if mat is None:
+            mat = Material()
+            self._material_handle = MaterialHandle.from_material(mat)
+        return mat
 
     def draw_geometry(self, context: RenderContext) -> None:
         """
         Рисует только геометрию (шейдер уже привязан пассом).
 
-        Это метод из Drawable протокола. Шейдер и uniforms должны быть
-        установлены пассом перед вызовом.
+        Это метод из Drawable протокола.
 
         Параметры:
             context: Контекст рендеринга.
@@ -199,123 +143,72 @@ class MeshRenderer(Component):
         if phase_mark is not None and phase_mark not in self.phase_marks:
             return []
 
-        # Возвращаем все фазы из всех материалов (игнорируем phase_mark материала)
-        result: List["MaterialPhase"] = []
-        for render_pass in self.passes:
-            mat = render_pass.material
-            if mat is None:
-                continue
-            result.extend(mat.phases)
+        mat = self._ensure_material()
 
-        result.sort(key=lambda p: p.priority)
-        return result
-
-    def get_phases_for_mark(self, phase_mark: str | None) -> List["MaterialPhase"]:
-        """
-        Возвращает все фазы материалов с указанной меткой, отсортированные по priority.
-
-        Собирает фазы из всех RenderPass в self.passes. Для каждого pass.material
-        получает фазы с помощью material.get_phases_for_mark().
-
-        Параметры:
-            phase_mark: Метка фазы ("opaque", "transparent", "shadow" и т.д.).
-                        Если None, возвращает все фазы из всех материалов.
-
-        Возвращает:
-            Список MaterialPhase отсортированный по priority (меньше = раньше).
-        """
-        result: List["MaterialPhase"] = []
-
-        for render_pass in self.passes:
-            mat = render_pass.material
-            if mat is None:
-                continue
-
-            if phase_mark is None:
-                # Возвращаем все фазы
-                result.extend(mat.phases)
-            else:
-                # Фильтруем по phase_mark
-                result.extend(mat.get_phases_for_mark(phase_mark))
-
-        # Сортируем по priority
+        # Возвращаем все фазы материала (игнорируем phase_mark материала)
+        result = list(mat.phases)
         result.sort(key=lambda p: p.priority)
         return result
 
     # --- сериализация ---
 
     def serialize_data(self) -> dict:
-        """
-        Сериализует MeshRenderer, используя ссылки на ресурсы по имени.
-
-        Mesh и материалы сохраняются как имена в ResourceManager.
-        """
+        """Сериализует MeshRenderer."""
         rm = ResourceManager.instance()
 
         data = {
             "enabled": self.enabled,
         }
 
-        # Mesh - сохраняем имя из ResourceManager
+        # Mesh
         if self.mesh is not None:
             mesh_name = rm.find_mesh_name(self.mesh)
             if mesh_name:
                 data["mesh"] = mesh_name
-            else:
-                # Меш не зарегистрирован - используем name если есть
+            elif self.mesh.name:
                 data["mesh"] = self.mesh.name
 
-        # Passes/Materials - сохраняем имена материалов
-        passes_data = []
-        for render_pass in self.passes:
-            pass_data = {}
-            if render_pass.material is not None:
-                mat_name = rm.find_material_name(render_pass.material)
-                if mat_name:
-                    pass_data["material"] = mat_name
-                elif render_pass.material.name:
-                    pass_data["material"] = render_pass.material.name
-            passes_data.append(pass_data)
-        data["passes"] = passes_data
+        # Material
+        mat = self._material_handle.get_or_none()
+        if mat is not None:
+            mat_name = rm.find_material_name(mat)
+            if mat_name:
+                data["material"] = mat_name
+            elif mat.name:
+                data["material"] = mat.name
 
         return data
 
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "MeshRenderer":
-        """
-        Восстанавливает MeshRenderer из сериализованных данных.
-
-        Параметры:
-            data: Сериализованные данные (секция 'data' из Component.serialize)
-            context: Опциональный контекст (не используется, ресурсы берутся из ResourceManager)
-
-        Возвращает:
-            MeshRenderer с восстановленными ссылками на ресурсы
-        """
+        """Восстанавливает MeshRenderer из сериализованных данных."""
         rm = ResourceManager.instance()
 
-        # Получаем mesh
+        # Mesh
         mesh = None
         mesh_name = data.get("mesh")
         if mesh_name:
             mesh = rm.get_mesh(mesh_name)
 
-        # Получаем passes/materials — используем MaterialHandle по имени
-        passes = []
-        for pass_data in data.get("passes", []):
-            mat_name = pass_data.get("material")
-            if mat_name:
-                # Создаём RenderPass с MaterialHandle по имени
-                # Материал будет получен из keeper'а при рендере
-                passes.append(RenderPass.from_material_name(mat_name))
+        # Material
+        material = None
+        mat_name = data.get("material")
+        if mat_name:
+            material = rm.get_material(mat_name)
 
-        # Создаём MeshRenderer
-        if passes:
-            renderer = cls(mesh=mesh, passes=passes)
-        elif mesh is not None:
-            renderer = cls(mesh=mesh)
-        else:
-            renderer = cls()
+        # Legacy: поддержка старого формата с passes
+        if material is None and "passes" in data:
+            passes_data = data.get("passes", [])
+            if passes_data:
+                mat_name = passes_data[0].get("material")
+                if mat_name:
+                    material = rm.get_material(mat_name)
 
+        renderer = cls(mesh=mesh, material=material)
         renderer.enabled = data.get("enabled", True)
+
+        # Устанавливаем материал по имени для hot-reload
+        if mat_name:
+            renderer.set_material_by_name(mat_name)
+
         return renderer

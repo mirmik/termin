@@ -22,7 +22,7 @@ from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import Mesh2Drawable, MeshDrawable
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.renderpass import RenderPass, RenderState
+from termin.visualization.render.renderpass import RenderState
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
