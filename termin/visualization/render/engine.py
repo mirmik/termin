@@ -58,11 +58,16 @@ class RenderEngine:
     def __init__(self, graphics: "GraphicsBackend"):
         """
         Инициализирует движок рендеринга.
-        
+
         Параметры:
             graphics: Графический бэкенд (OpenGL, Vulkan, etc.)
         """
         self.graphics = graphics
+        self._logged_errors: set[str] = set()  # Кэш уже залогированных ошибок
+
+    def clear_error_cache(self) -> None:
+        """Сбрасывает кэш ошибок (вызывать при смене пайплайна)."""
+        self._logged_errors.clear()
 
     def render_views(
         self,
@@ -92,13 +97,21 @@ class RenderEngine:
         context_key = surface.context_key()
 
         for view, state in views:
-            self._render_single_view(
-                view=view,
-                state=state,
-                framebuffer_size=(width, height),
-                display_fbo=display_fbo,
-                context_key=context_key,
-            )
+            try:
+                self._render_single_view(
+                    view=view,
+                    state=state,
+                    framebuffer_size=(width, height),
+                    display_fbo=display_fbo,
+                    context_key=context_key,
+                )
+            except Exception as e:
+                error_msg = str(e)
+                if error_msg not in self._logged_errors:
+                    self._logged_errors.add(error_msg)
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Pipeline error: {e}")
 
         if present:
             surface.present()
