@@ -182,14 +182,33 @@ class MeshRenderer(Component):
 
         Это метод из Drawable протокола. Используется ColorPass.
 
+        Логика:
+        - Если phase_mark задан и НЕ входит в self.phase_marks, возвращает []
+        - Если phase_mark входит в self.phase_marks, возвращает все фазы материала
+          (игнорирует phase_mark материала — это позволяет использовать любой
+          материал с любым renderer'ом)
+
         Параметры:
-            phase_mark: Метка фазы ("opaque", "transparent", etc.)
+            phase_mark: Метка фазы ("opaque", "editor", etc.)
                         Если None, возвращает все фазы.
 
         Возвращает:
             Список MaterialPhase отсортированный по priority.
         """
-        return self.get_phases_for_mark(phase_mark)
+        # Проверяем, что запрошенная фаза есть в наших phase_marks
+        if phase_mark is not None and phase_mark not in self.phase_marks:
+            return []
+
+        # Возвращаем все фазы из всех материалов (игнорируем phase_mark материала)
+        result: List["MaterialPhase"] = []
+        for render_pass in self.passes:
+            mat = render_pass.material
+            if mat is None:
+                continue
+            result.extend(mat.phases)
+
+        result.sort(key=lambda p: p.priority)
+        return result
 
     def get_phases_for_mark(self, phase_mark: str | None) -> List["MaterialPhase"]:
         """
