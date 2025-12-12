@@ -520,7 +520,7 @@ class ViewportController:
         # ColorPass читает shadow_maps для shadow mapping
         color_pass = ColorPass(
             input_res="skybox",
-            output_res="color",
+            output_res="color_scene",
             shadow_res="shadow_maps",
             pass_name="Color",
             phase_mark="opaque",
@@ -528,7 +528,7 @@ class ViewportController:
 
         # Отдельный ColorPass для editor объектов (gizmo и т.д.)
         editor_color_pass = ColorPass(
-            input_res="color",
+            input_res="color_scene",
             output_res="color",
             shadow_res=None,
             pass_name="EditorColor",
