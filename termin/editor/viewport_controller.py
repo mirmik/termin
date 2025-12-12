@@ -4,7 +4,6 @@ from typing import Callable, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QWindow
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 
 from termin.visualization.core.display import Display
@@ -89,29 +88,58 @@ class ViewportController:
         # Получаем graphics от world
         self._graphics: "GraphicsBackend" = self._world.graphics
 
-        # Создаём SDL окно с OpenGL контекстом
-        self._backend_window: "SDLEmbeddedWindowHandle" = sdl_backend.create_embedded_window(
-            width=800,
-            height=600,
-            title="SDL Viewport",
-        )
-
-        # Встраиваем SDL окно в Qt через QWindow.fromWinId()
-        native_handle = self._backend_window.native_handle
-        qwindow = QWindow.fromWinId(native_handle)
-        self._qwindow = qwindow  # Сохраняем ссылку, чтобы не был удалён GC
-
-        # Создаём контейнер для встраивания QWindow в QWidget
-        self._gl_widget = QWidget.createWindowContainer(qwindow, self._container)
+        # Создаём placeholder виджет для SDL окна
+        self._gl_widget = QWidget()
         self._gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._gl_widget.setMinimumSize(50, 50)
-        # Prevent Qt from drawing over SDL window
+        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
         self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         layout.addWidget(self._gl_widget)
 
+        # Force widget to create native window
+        self._gl_widget.winId()
+
+        # Создаём SDL окно с OpenGL контекстом
+        self._backend_window: "SDLEmbeddedWindowHandle" = sdl_backend.create_embedded_window(
+            width=self._gl_widget.width() or 800,
+            height=self._gl_widget.height() or 600,
+            title="SDL Viewport",
+        )
+
+        # Встраиваем SDL окно как дочернее через Win32 SetParent
+        import sys
+        if sys.platform == "win32":
+            import ctypes
+            user32 = ctypes.windll.user32
+
+            sdl_hwnd = self._backend_window.native_handle
+            qt_hwnd = int(self._gl_widget.winId())
+
+            # Set SDL window as child of Qt widget
+            GWL_STYLE = -16
+            WS_CHILD = 0x40000000
+            WS_VISIBLE = 0x10000000
+
+            # Change window style to child
+            old_style = user32.GetWindowLongW(sdl_hwnd, GWL_STYLE)
+            new_style = (old_style | WS_CHILD | WS_VISIBLE) & ~0x00C00000  # Remove WS_CAPTION
+            user32.SetWindowLongW(sdl_hwnd, GWL_STYLE, new_style)
+
+            # Set parent
+            user32.SetParent(sdl_hwnd, qt_hwnd)
+
+            # Position at 0,0 within parent
+            user32.SetWindowPos(sdl_hwnd, 0, 0, 0,
+                               self._gl_widget.width() or 800,
+                               self._gl_widget.height() or 600,
+                               0x0040)  # SWP_SHOWWINDOW
+
         # Показываем SDL окно
         self._backend_window.show()
+
+        # Connect resize event
+        self._gl_widget.resizeEvent = self._on_widget_resize
 
         # Создаём WindowRenderSurface
         self._render_surface = WindowRenderSurface(self._backend_window)
@@ -144,6 +172,19 @@ class ViewportController:
             on_mouse_move_event=self._on_mouse_move,
         )
         self._input_manager.set_world_mode("editor")
+
+    def _on_widget_resize(self, event) -> None:
+        """Handle Qt widget resize - resize SDL window to match."""
+        import sys
+        if sys.platform == "win32":
+            import ctypes
+            user32 = ctypes.windll.user32
+            sdl_hwnd = self._backend_window.native_handle
+            user32.SetWindowPos(sdl_hwnd, 0, 0, 0,
+                               event.size().width(),
+                               event.size().height(),
+                               0x0040)  # SWP_SHOWWINDOW
+        self._backend_window.check_resize()
 
     def render(self) -> None:
         """
@@ -182,14 +223,10 @@ class ViewportController:
 
         # Ensure all GL commands are finished before swap
         from OpenGL import GL
-        GL.glFlush()
         GL.glFinish()  # Wait for all GL commands to complete
 
         # Swap buffers
         self._backend_window.swap_buffers()
-
-        # Force Qt to not overdraw
-        self._gl_widget.update()
 
         # Обрабатываем отложенные события после рендера
         self._after_render()
