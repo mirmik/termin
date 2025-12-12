@@ -166,13 +166,14 @@ class ViewportController:
             views_and_states.append((view, state))
 
         # Рендерим все viewport'ы
+        # present=False - мы сами вызываем swap_buffers ниже
         self._render_engine.render_views(
             surface=self._render_surface,
             views=views_and_states,
-            present=True,
+            present=False,
         )
 
-        # Swap buffers
+        # Swap buffers (единственный раз за кадр)
         self._backend_window.swap_buffers()
 
         # Обрабатываем отложенные события после рендера
