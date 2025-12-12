@@ -774,7 +774,7 @@ void main() {{
             )
             return
 
-        # Шаблон billboard line shader
+        # Шаблон billboard line shader с круглыми стыками
         template = f'''@program {name}
 
 @phase opaque
@@ -800,12 +800,15 @@ void main() {{
 
 // ============================================================
 // Geometry Shader — разворачивает GL_LINES в billboard quads
+// с круглыми заглушками на концах для сглаживания стыков
 // ============================================================
 @stage geometry
 #version 330 core
 
 layout(lines) in;
-layout(triangle_strip, max_vertices = 4) out;
+// 4 вершины для quad + 2 * (CAP_SEGMENTS + 1) для полукругов на концах
+// CAP_SEGMENTS = 4 -> max_vertices = 4 + 2*5*3 = 34 (triangle fan как strip)
+layout(triangle_strip, max_vertices = 34) out;
 
 in vec3 v_world_pos[];
 
@@ -813,11 +816,40 @@ uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform float u_width;
 
+const int CAP_SEGMENTS = 4;  // Сегментов в полукруге
+const float PI = 3.14159265359;
+
 // Позиция камеры (извлекаем из view matrix)
 vec3 get_camera_pos(mat4 view) {{
     mat3 rot = mat3(view);
     vec3 d = vec3(view[3]);
     return -d * rot;
+}}
+
+void emit_cap(vec3 center, vec3 perp, vec3 line_dir, vec3 to_cam, float radius, mat4 vp, bool is_start) {{
+    // Полукруг на конце линии
+    // perp — перпендикуляр в плоскости billboard
+    // line_dir — направление линии (для ориентации полукруга)
+
+    float start_angle = is_start ? PI * 0.5 : -PI * 0.5;
+    float end_angle = is_start ? PI * 1.5 : PI * 0.5;
+
+    for (int i = 0; i <= CAP_SEGMENTS; i++) {{
+        float t = float(i) / float(CAP_SEGMENTS);
+        float angle = mix(start_angle, end_angle, t);
+
+        // Вектор в плоскости billboard
+        vec3 offset = perp * cos(angle) + line_dir * sin(angle);
+        vec3 p = center + offset * radius;
+
+        // Каждый сегмент — треугольник от центра
+        gl_Position = vp * vec4(center, 1.0);
+        EmitVertex();
+
+        gl_Position = vp * vec4(p, 1.0);
+        EmitVertex();
+    }}
+    EndPrimitive();
 }}
 
 void main() {{
@@ -838,27 +870,27 @@ void main() {{
 
     float half_width = u_width * 0.5;
 
-    // 4 вершины quad'а
+    mat4 vp = u_projection * u_view;
+
+    // Основной quad линии
     vec3 v0 = p0 - perp * half_width;
     vec3 v1 = p0 + perp * half_width;
     vec3 v2 = p1 - perp * half_width;
     vec3 v3 = p1 + perp * half_width;
 
-    mat4 vp = u_projection * u_view;
-
     gl_Position = vp * vec4(v0, 1.0);
     EmitVertex();
-
     gl_Position = vp * vec4(v1, 1.0);
     EmitVertex();
-
     gl_Position = vp * vec4(v2, 1.0);
     EmitVertex();
-
     gl_Position = vp * vec4(v3, 1.0);
     EmitVertex();
-
     EndPrimitive();
+
+    // Круглые заглушки на концах
+    emit_cap(p0, perp, line_dir, to_camera, half_width, vp, true);
+    emit_cap(p1, perp, line_dir, to_camera, half_width, vp, false);
 }}
 
 // ============================================================
