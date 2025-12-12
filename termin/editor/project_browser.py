@@ -806,9 +806,8 @@ void main() {{
 #version 330 core
 
 layout(lines) in;
-// 4 вершины для quad + 2 * (CAP_SEGMENTS + 1) для полукругов на концах
-// CAP_SEGMENTS = 4 -> max_vertices = 4 + 2*5*3 = 34 (triangle fan как strip)
-layout(triangle_strip, max_vertices = 34) out;
+// 4 для quad + 2 круга * 6 сегментов * 3 вершины = 4 + 36 = 40
+layout(triangle_strip, max_vertices = 48) out;
 
 in vec3 v_world_pos[];
 
@@ -816,7 +815,7 @@ uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform float u_width;
 
-const int CAP_SEGMENTS = 4;  // Сегментов в полукруге
+const int CIRCLE_SEGMENTS = 6;
 const float PI = 3.14159265359;
 
 // Позиция камеры (извлекаем из view matrix)
@@ -826,30 +825,24 @@ vec3 get_camera_pos(mat4 view) {{
     return -d * rot;
 }}
 
-void emit_cap(vec3 center, vec3 perp, vec3 line_dir, vec3 to_cam, float radius, mat4 vp, bool is_start) {{
-    // Полукруг на конце линии
-    // perp — перпендикуляр в плоскости billboard
-    // line_dir — направление линии (для ориентации полукруга)
+// Рисует полный круг в точке стыка (отдельными треугольниками)
+void emit_circle(vec3 center, vec3 perp, vec3 tangent, float radius, mat4 vp) {{
+    for (int i = 0; i < CIRCLE_SEGMENTS; i++) {{
+        float a0 = float(i) / float(CIRCLE_SEGMENTS) * 2.0 * PI;
+        float a1 = float(i + 1) / float(CIRCLE_SEGMENTS) * 2.0 * PI;
 
-    float start_angle = is_start ? PI * 0.5 : -PI * 0.5;
-    float end_angle = is_start ? PI * 1.5 : PI * 0.5;
+        vec3 p0 = center + (perp * cos(a0) + tangent * sin(a0)) * radius;
+        vec3 p1 = center + (perp * cos(a1) + tangent * sin(a1)) * radius;
 
-    for (int i = 0; i <= CAP_SEGMENTS; i++) {{
-        float t = float(i) / float(CAP_SEGMENTS);
-        float angle = mix(start_angle, end_angle, t);
-
-        // Вектор в плоскости billboard
-        vec3 offset = perp * cos(angle) + line_dir * sin(angle);
-        vec3 p = center + offset * radius;
-
-        // Каждый сегмент — треугольник от центра
+        // Треугольник: center -> p0 -> p1
         gl_Position = vp * vec4(center, 1.0);
         EmitVertex();
-
-        gl_Position = vp * vec4(p, 1.0);
+        gl_Position = vp * vec4(p0, 1.0);
         EmitVertex();
+        gl_Position = vp * vec4(p1, 1.0);
+        EmitVertex();
+        EndPrimitive();
     }}
-    EndPrimitive();
 }}
 
 void main() {{
@@ -888,9 +881,10 @@ void main() {{
     EmitVertex();
     EndPrimitive();
 
-    // Круглые заглушки на концах
-    emit_cap(p0, perp, line_dir, to_camera, half_width, vp, true);
-    emit_cap(p1, perp, line_dir, to_camera, half_width, vp, false);
+    // Круглые заглушки на обоих концах сегмента
+    // tangent = line_dir для ориентации круга в плоскости billboard
+    emit_circle(p0, perp, line_dir, half_width, vp);
+    emit_circle(p1, perp, line_dir, half_width, vp);
 }}
 
 // ============================================================
