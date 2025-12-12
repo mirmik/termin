@@ -71,7 +71,13 @@ def _get_native_window_handle(sdl_window) -> int:
 class SDLEmbeddedWindowHandle(BackendWindow):
     """SDL2 window with OpenGL context, embeddable into Qt."""
 
-    def __init__(self, width: int = 800, height: int = 600, title: str = "SDL Viewport"):
+    def __init__(
+        self,
+        width: int = 800,
+        height: int = 600,
+        title: str = "SDL Viewport",
+        share_context: Optional[Any] = None,
+    ):
         _ensure_sdl()
 
         # OpenGL attributes
@@ -83,6 +89,12 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         )
         video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
         video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
+
+        # Enable context sharing if a context is provided
+        if share_context is not None:
+            video.SDL_GL_SetAttribute(video.SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1)
+            # Make the share context current before creating new context
+            # (SDL requires this for context sharing)
 
         # Create SDL window with OpenGL support
         flags = (
@@ -107,6 +119,10 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         if not self._gl_context:
             video.SDL_DestroyWindow(self._window)
             raise RuntimeError(f"Failed to create GL context: {sdl2.SDL_GetError()}")
+
+        # Disable context sharing attribute for future windows that don't need it
+        if share_context is not None:
+            video.SDL_GL_SetAttribute(video.SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0)
 
         result = video.SDL_GL_MakeCurrent(self._window, self._gl_context)
         print(f"SDL: Window created, GL context: {self._gl_context}, make_current result: {result}")
@@ -317,6 +333,7 @@ class SDLEmbeddedWindowBackend(WindowBackend):
     def __init__(self):
         _ensure_sdl()
         self._windows: dict[int, SDLEmbeddedWindowHandle] = {}
+        self._primary_window: Optional[SDLEmbeddedWindowHandle] = None
 
     def create_embedded_window(
         self, width: int = 800, height: int = 600, title: str = "SDL Viewport"
@@ -325,9 +342,22 @@ class SDLEmbeddedWindowBackend(WindowBackend):
         Create SDL window with OpenGL context.
 
         Returns window that can be embedded into Qt via its native_handle property.
+        First window becomes the primary; subsequent windows share its GL context.
         """
-        window = SDLEmbeddedWindowHandle(width, height, title)
+        # Share context with primary window if it exists
+        share_context = None
+        if self._primary_window is not None:
+            share_context = self._primary_window._gl_context
+            # Make primary context current before creating shared context
+            self._primary_window.make_current()
+
+        window = SDLEmbeddedWindowHandle(width, height, title, share_context=share_context)
         self._windows[window.get_window_id()] = window
+
+        # First window becomes the primary
+        if self._primary_window is None:
+            self._primary_window = window
+
         return window
 
     def create_window(
