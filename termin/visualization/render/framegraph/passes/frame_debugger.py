@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.passes.present import blit_fbo_to_fbo
+from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
+
+if TYPE_CHECKING:
+    from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
 
 
 @dataclass
@@ -79,6 +84,26 @@ class FrameDebuggerPass(RenderFramePass):
         height, width = depth.shape
         self.depth_buffer_storage = DepthBufferStorage(width=width, height=height, data=depth)
 
+    def _extract_fbo(self, resource) -> "FramebufferHandle | None":
+        """
+        Извлекает FramebufferHandle из ресурса.
+
+        Поддерживает:
+        - FramebufferHandle напрямую
+        - ShadowMapArrayResource (берёт первый shadow map)
+        """
+        if resource is None:
+            return None
+
+        # ShadowMapArrayResource — берём первый shadow map
+        if isinstance(resource, ShadowMapArrayResource):
+            if len(resource) > 0:
+                return resource[0].fbo
+            return None
+
+        # Обычный FramebufferHandle
+        return resource
+
     def execute(
         self,
         graphics: "GraphicsBackend",
@@ -103,7 +128,8 @@ class FrameDebuggerPass(RenderFramePass):
             self.depth_buffer_storage = None
             return
 
-        fb_in = reads_fbos.get(src_name)
+        resource_in = reads_fbos.get(src_name)
+        fb_in = self._extract_fbo(resource_in)
         if fb_in is None:
             self.depth_buffer_storage = None
             return
@@ -112,6 +138,6 @@ class FrameDebuggerPass(RenderFramePass):
         if fb_out is None:
             self.depth_buffer_storage = None
             return
-        
+
         blit_fbo_to_fbo(graphics, fb_in, fb_out, (pw, ph), key)
         self._capture_depth_buffer(graphics, fb_in)
