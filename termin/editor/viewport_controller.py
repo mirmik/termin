@@ -500,7 +500,7 @@ class ViewportController:
 
         postprocess = PostProcessPass(
             effects=[],
-            input_res="color",
+            input_res="color_with_gizmos",
             output_res="color_pp",
             pass_name="PostFX",
         )
@@ -541,7 +541,7 @@ class ViewportController:
         # EditorOverlayPass рендерит только editor_only сущности (гизмо и т.д.)
         editor_overlay_pass = EditorOverlayPass(
             input_res="color",
-            output_res="color",
+            output_res="color_with_gizmos",
             pass_name="EditorOverlay",
         )
 
