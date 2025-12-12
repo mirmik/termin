@@ -77,9 +77,31 @@ class ShadowPass(RenderFramePass):
         
         # Текущий ShadowMapArrayResource (обновляется в execute)
         self._shadow_map_array: ShadowMapArrayResource | None = None
-        
+
         # Список имён сущностей для debug
         self._entity_names: List[str] = []
+
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры ShadowPass."""
+        return {
+            "output_res": self.output_res,
+            "default_resolution": self.default_resolution,
+            "ortho_size": self.ortho_size,
+            "near": self.near,
+            "far": self.far,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ShadowPass":
+        """Создаёт ShadowPass из сериализованных данных."""
+        return cls(
+            output_res=data.get("output_res", "shadow_maps"),
+            pass_name=data.get("pass_name", "Shadow"),
+            default_resolution=data.get("default_resolution", 1024),
+            ortho_size=data.get("ortho_size", 20.0),
+            near=data.get("near", 0.1),
+            far=data.get("far", 100.0),
+        )
 
     def _get_material(self) -> ShadowMaterial:
         """Ленивая инициализация материала."""

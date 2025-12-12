@@ -35,6 +35,22 @@ class SkyBoxPass(RenderFramePass):
         self.input_res = input_res
         self.output_res = output_res
 
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры SkyBoxPass."""
+        return {
+            "input_res": self.input_res,
+            "output_res": self.output_res,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "SkyBoxPass":
+        """Создаёт SkyBoxPass из сериализованных данных."""
+        return cls(
+            input_res=data.get("input_res", "empty"),
+            output_res=data.get("output_res", "color"),
+            pass_name=data.get("pass_name", "Skybox"),
+        )
+
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """SkyBoxPass читает input_res и пишет output_res inplace."""
         return [(self.input_res, self.output_res)]

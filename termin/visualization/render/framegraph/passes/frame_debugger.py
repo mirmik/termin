@@ -35,6 +35,21 @@ class FrameDebuggerPass(RenderFramePass):
         self._current_src_name: str | None = None
         self.depth_buffer_storage: DepthBufferStorage | None = None
 
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры FrameDebuggerPass."""
+        return {
+            "output_res": self.output_res,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "FrameDebuggerPass":
+        """Создаёт FrameDebuggerPass из сериализованных данных."""
+        return cls(
+            get_source_res=None,  # Runtime callback, не сериализуется
+            output_res=data.get("output_res", "debug"),
+            pass_name=data.get("pass_name", "FrameDebuggerBlit"),
+        )
+
     def required_resources(self) -> set[str]:
         resources = set(self.writes)
         if self._get_source_res is None:

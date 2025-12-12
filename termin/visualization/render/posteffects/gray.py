@@ -36,6 +36,15 @@ class GrayscaleEffect(PostEffect):
     def __init__(self):
         self._shader: ShaderProgram | None = None
 
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры GrayscaleEffect."""
+        return {}
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "GrayscaleEffect":
+        """Создаёт GrayscaleEffect из сериализованных данных."""
+        return cls()
+
     def required_resources(self) -> set[str]:
         # Ему не нужны доп. ресурсы, только входной color_tex
         return set()

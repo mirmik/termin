@@ -46,6 +46,23 @@ class GizmoPass(RenderFramePass):
         self.output_res = output_res
         self._shader: ShaderProgram | None = None
 
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры GizmoPass."""
+        return {
+            "input_res": self.input_res,
+            "output_res": self.output_res,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "GizmoPass":
+        """Создаёт GizmoPass из сериализованных данных."""
+        return cls(
+            input_res=data.get("input_res", "id"),
+            output_res=data.get("output_res", "id"),
+            pass_name=data.get("pass_name", "GizmoPass"),
+            gizmo_entities=None,  # Runtime, не сериализуется
+        )
+
     def _get_gizmo_entities(self) -> List["Entity"]:
         """Возвращает актуальный список gizmo entities."""
         if self._gizmo_entities_source is None:

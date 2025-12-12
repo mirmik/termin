@@ -97,11 +97,14 @@ class BlitPass(RenderFramePass):
     динамически переключать из редактора/дебагера.
 
     Для отключения пасса используйте enabled=False.
+
+    Note: get_source_res — runtime callback, не сериализуется.
+    При десериализации нужно задать его отдельно.
     """
 
     def __init__(
         self,
-        get_source_res,
+        get_source_res=None,
         output_res: str = "debug",
         pass_name: str = "Blit",
     ):
@@ -113,6 +116,21 @@ class BlitPass(RenderFramePass):
         self._get_source_res = get_source_res
         self.output_res = output_res
         self._current_src_name: str | None = None
+
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры BlitPass."""
+        return {
+            "output_res": self.output_res,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "BlitPass":
+        """Создаёт BlitPass из сериализованных данных."""
+        return cls(
+            get_source_res=None,  # Runtime callback, не сериализуется
+            output_res=data.get("output_res", "debug"),
+            pass_name=data.get("pass_name", "Blit"),
+        )
 
     def required_resources(self) -> set[str]:
         resources = set(self.writes)
@@ -206,6 +224,23 @@ class PresentToScreenPass(RenderFramePass):
             writes={output_res},
         )
         self.input_res = input_res
+        self.output_res = output_res
+
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры PresentToScreenPass."""
+        return {
+            "input_res": self.input_res,
+            "output_res": self.output_res,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "PresentToScreenPass":
+        """Создаёт PresentToScreenPass из сериализованных данных."""
+        return cls(
+            input_res=data.get("input_res", "color"),
+            output_res=data.get("output_res", "DISPLAY"),
+            pass_name=data.get("pass_name", "PresentToScreen"),
+        )
 
     @classmethod
     def _get_shader(cls) -> ShaderProgram:

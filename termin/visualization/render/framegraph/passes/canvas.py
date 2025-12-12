@@ -20,6 +20,22 @@ class CanvasPass(RenderFramePass):
         self.src = src
         self.dst = dst
 
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры CanvasPass."""
+        return {
+            "src": self.src,
+            "dst": self.dst,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "CanvasPass":
+        """Создаёт CanvasPass из сериализованных данных."""
+        return cls(
+            src=data.get("src", "screen"),
+            dst=data.get("dst", "screen+ui"),
+            pass_name=data.get("pass_name", "Canvas"),
+        )
+
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """CanvasPass читает src и пишет dst inplace."""
         return [(self.src, self.dst)]

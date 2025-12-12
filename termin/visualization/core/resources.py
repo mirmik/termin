@@ -32,6 +32,35 @@ _BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.colliders.collider_component", "ColliderComponent"),
 ]
 
+# Список встроенных FramePass'ов для предрегистрации.
+# Формат: (имя_модуля, имя_класса)
+_BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
+    # Основные пассы
+    ("termin.visualization.render.framegraph.passes.color", "ColorPass"),
+    ("termin.visualization.render.framegraph.passes.skybox", "SkyBoxPass"),
+    ("termin.visualization.render.framegraph.passes.depth", "DepthPass"),
+    ("termin.visualization.render.framegraph.passes.shadow", "ShadowPass"),
+    ("termin.visualization.render.framegraph.passes.canvas", "CanvasPass"),
+    ("termin.visualization.render.framegraph.passes.present", "PresentToScreenPass"),
+    ("termin.visualization.render.framegraph.passes.present", "BlitPass"),
+    # ID/Picking
+    ("termin.visualization.render.framegraph.passes.id_pass", "IdPass"),
+    ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
+    # Post-processing
+    ("termin.visualization.render.postprocess", "PostProcessPass"),
+    # Debug
+    ("termin.visualization.render.framegraph.passes.frame_debugger", "FrameDebuggerPass"),
+]
+
+# Список встроенных PostEffect'ов для предрегистрации.
+# Формат: (имя_модуля, имя_класса)
+_BUILTIN_POST_EFFECTS: List[Tuple[str, str]] = [
+    ("termin.visualization.render.posteffects.blur", "GaussianBlurPass"),
+    ("termin.visualization.render.posteffects.highlight", "HighlightEffect"),
+    ("termin.visualization.render.posteffects.fog", "FogEffect"),
+    ("termin.visualization.render.posteffects.gray", "GrayscaleEffect"),
+]
+
 
 class ResourceManager:
     """
@@ -46,6 +75,8 @@ class ResourceManager:
         self.meshes: Dict[str, "MeshDrawable"] = {}
         self.textures: Dict[str, "Texture"] = {}
         self.components: Dict[str, type["Component"]] = {}
+        self.frame_passes: Dict[str, type] = {}  # FramePass classes by name
+        self.post_effects: Dict[str, type] = {}  # PostEffect classes by name
 
         # MaterialKeeper'ы — владельцы материалов по имени
         self._material_keepers: Dict[str, "MaterialKeeper"] = {}
@@ -355,6 +386,222 @@ class ResourceManager:
         loaded = list(after - before)
 
         return loaded
+
+    # --------- FramePass'ы ---------
+    def register_frame_pass(self, name: str, cls: type):
+        """Регистрирует класс FramePass по имени."""
+        self.frame_passes[name] = cls
+
+    def get_frame_pass(self, name: str) -> Optional[type]:
+        """Получить класс FramePass по имени."""
+        return self.frame_passes.get(name)
+
+    def list_frame_pass_names(self) -> list[str]:
+        """Список имён всех зарегистрированных FramePass'ов."""
+        return sorted(self.frame_passes.keys())
+
+    def register_builtin_frame_passes(self) -> List[str]:
+        """
+        Регистрирует все встроенные FramePass'ы из _BUILTIN_FRAME_PASSES.
+
+        Returns:
+            Список имён успешно зарегистрированных FramePass'ов.
+        """
+        import importlib
+
+        registered = []
+
+        for module_name, class_name in _BUILTIN_FRAME_PASSES:
+            if class_name in self.frame_passes:
+                registered.append(class_name)
+                continue
+
+            try:
+                module = importlib.import_module(module_name)
+                cls = getattr(module, class_name, None)
+                if cls is not None:
+                    self.frame_passes[class_name] = cls
+                    registered.append(class_name)
+            except Exception as e:
+                print(f"Warning: Failed to register frame pass {class_name} from {module_name}: {e}")
+
+        return registered
+
+    def scan_frame_passes(self, paths: list[str]) -> list[str]:
+        """
+        Сканирует директории/модули/файлы и загружает все FramePass подклассы.
+
+        Args:
+            paths: Список путей к директориям, .py файлам или имён модулей.
+
+        Returns:
+            Список имён загруженных FramePass'ов.
+        """
+        import importlib
+        import importlib.util
+        import os
+        import sys
+
+        loaded = []
+
+        for path in paths:
+            if os.path.isfile(path) and path.endswith(".py"):
+                loaded.extend(self._scan_file_for_frame_passes(path))
+            elif os.path.isdir(path):
+                loaded.extend(self._scan_directory_for_frame_passes(path))
+            else:
+                loaded.extend(self._scan_module_for_frame_passes(path))
+
+        return loaded
+
+    def _scan_file_for_frame_passes(self, filepath: str) -> list[str]:
+        """Загружает FramePass'ы из одного .py файла."""
+        import importlib.util
+        import os
+        import sys
+
+        before = set(self.frame_passes.keys())
+
+        filename = os.path.basename(filepath)
+        module_name = f"_dynamic_frame_passes_.{os.path.splitext(filename)[0]}_{id(filepath)}"
+
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, filepath)
+            if spec is None or spec.loader is None:
+                return []
+
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+
+            # Ищем классы, наследующиеся от FramePass
+            from termin.visualization.render.framegraph.core import FramePass
+
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if (
+                    isinstance(attr, type)
+                    and issubclass(attr, FramePass)
+                    and attr is not FramePass
+                    and attr_name not in self.frame_passes
+                ):
+                    self.frame_passes[attr_name] = attr
+
+        except Exception as e:
+            print(f"Warning: Failed to load frame passes from {filepath}: {e}")
+            return []
+
+        after = set(self.frame_passes.keys())
+        return list(after - before)
+
+    def _scan_directory_for_frame_passes(self, directory: str) -> list[str]:
+        """Сканирует директорию и загружает все FramePass'ы."""
+        import os
+
+        loaded = []
+
+        for root, dirs, files in os.walk(directory):
+            dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
+
+            for filename in files:
+                if not filename.endswith(".py") or filename.startswith("_"):
+                    continue
+
+                filepath = os.path.join(root, filename)
+                loaded.extend(self._scan_file_for_frame_passes(filepath))
+
+        return loaded
+
+    def _scan_module_for_frame_passes(self, module_name: str) -> list[str]:
+        """Загружает FramePass'ы из модуля."""
+        import importlib
+        import pkgutil
+
+        loaded = []
+        before = set(self.frame_passes.keys())
+
+        try:
+            module = importlib.import_module(module_name)
+
+            from termin.visualization.render.framegraph.core import FramePass
+
+            # Ищем классы в самом модуле
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if (
+                    isinstance(attr, type)
+                    and issubclass(attr, FramePass)
+                    and attr is not FramePass
+                    and attr_name not in self.frame_passes
+                ):
+                    self.frame_passes[attr_name] = attr
+
+            # Если это пакет, сканируем подмодули
+            if hasattr(module, "__path__"):
+                for importer, name, is_pkg in pkgutil.walk_packages(
+                    module.__path__, prefix=module_name + "."
+                ):
+                    try:
+                        submodule = importlib.import_module(name)
+                        for attr_name in dir(submodule):
+                            attr = getattr(submodule, attr_name)
+                            if (
+                                isinstance(attr, type)
+                                and issubclass(attr, FramePass)
+                                and attr is not FramePass
+                                and attr_name not in self.frame_passes
+                            ):
+                                self.frame_passes[attr_name] = attr
+                    except Exception as e:
+                        print(f"Warning: Failed to import {name}: {e}")
+
+            after = set(self.frame_passes.keys())
+            loaded = list(after - before)
+
+        except Exception as e:
+            print(f"Warning: Failed to import module {module_name}: {e}")
+
+        return loaded
+
+    # --------- PostEffect'ы ---------
+    def register_post_effect(self, name: str, cls: type):
+        """Регистрирует класс PostEffect по имени."""
+        self.post_effects[name] = cls
+
+    def get_post_effect(self, name: str) -> Optional[type]:
+        """Получить класс PostEffect по имени."""
+        return self.post_effects.get(name)
+
+    def list_post_effect_names(self) -> list[str]:
+        """Список имён всех зарегистрированных PostEffect'ов."""
+        return sorted(self.post_effects.keys())
+
+    def register_builtin_post_effects(self) -> List[str]:
+        """
+        Регистрирует все встроенные PostEffect'ы из _BUILTIN_POST_EFFECTS.
+
+        Returns:
+            Список имён успешно зарегистрированных PostEffect'ов.
+        """
+        import importlib
+
+        registered = []
+
+        for module_name, class_name in _BUILTIN_POST_EFFECTS:
+            if class_name in self.post_effects:
+                registered.append(class_name)
+                continue
+
+            try:
+                module = importlib.import_module(module_name)
+                cls = getattr(module, class_name, None)
+                if cls is not None:
+                    self.post_effects[class_name] = cls
+                    registered.append(class_name)
+            except Exception as e:
+                print(f"Warning: Failed to register post effect {class_name} from {module_name}: {e}")
+
+        return registered
 
     # --------- Сериализация ---------
 

@@ -35,3 +35,39 @@ class ResourceSpec:
     clear_color: Tuple[float, float, float, float] | None = None
     clear_depth: float | None = None
     format: str | None = None
+
+    def serialize(self) -> dict:
+        """Сериализует ResourceSpec в словарь."""
+        data = {
+            "resource": self.resource,
+            "resource_type": self.resource_type,
+        }
+        if self.size is not None:
+            data["size"] = list(self.size)
+        if self.clear_color is not None:
+            data["clear_color"] = list(self.clear_color)
+        if self.clear_depth is not None:
+            data["clear_depth"] = self.clear_depth
+        if self.format is not None:
+            data["format"] = self.format
+        return data
+
+    @classmethod
+    def deserialize(cls, data: dict) -> "ResourceSpec":
+        """Десериализует ResourceSpec из словаря."""
+        size = None
+        if "size" in data:
+            size = tuple(data["size"])
+
+        clear_color = None
+        if "clear_color" in data:
+            clear_color = tuple(data["clear_color"])
+
+        return cls(
+            resource=data.get("resource", ""),
+            resource_type=data.get("resource_type", "fbo"),
+            size=size,
+            clear_color=clear_color,
+            clear_depth=data.get("clear_depth"),
+            format=data.get("format"),
+        )

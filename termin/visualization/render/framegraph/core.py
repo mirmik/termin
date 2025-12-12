@@ -112,6 +112,88 @@ class FramePass:
         """
         return self.debug_internal_symbol, self.debug_internal_output
 
+    # ---- Сериализация ---------------------------------------------
+
+    def serialize(self) -> dict:
+        """
+        Сериализует FramePass в словарь.
+
+        Базовая реализация сохраняет:
+        - type: имя класса для десериализации
+        - pass_name: имя прохода
+        - enabled: включён ли проход
+
+        Подклассы должны переопределить _serialize_params() для
+        добавления своих параметров.
+        """
+        data = {
+            "type": self.__class__.__name__,
+            "pass_name": self.pass_name,
+            "enabled": self.enabled,
+        }
+        data.update(self._serialize_params())
+        return data
+
+    def _serialize_params(self) -> dict:
+        """
+        Возвращает словарь с параметрами для сериализации.
+
+        Подклассы должны переопределить этот метод для добавления
+        своих специфических параметров.
+        """
+        return {}
+
+    @classmethod
+    def deserialize(cls, data: dict, resource_manager=None) -> "FramePass":
+        """
+        Десериализует FramePass из словаря.
+
+        Использует ResourceManager для поиска зарегистрированного
+        класса по имени типа.
+
+        Args:
+            data: Словарь с сериализованными данными
+            resource_manager: ResourceManager для поиска класса
+
+        Returns:
+            Экземпляр FramePass
+
+        Raises:
+            ValueError: если тип не найден или данные некорректны
+        """
+        pass_type = data.get("type")
+        if pass_type is None:
+            raise ValueError("Missing 'type' in FramePass data")
+
+        # Получаем класс из ResourceManager
+        if resource_manager is None:
+            from termin.visualization.core.resources import ResourceManager
+            resource_manager = ResourceManager.instance()
+
+        pass_cls = resource_manager.get_frame_pass(pass_type)
+        if pass_cls is None:
+            raise ValueError(f"Unknown FramePass type: {pass_type}")
+
+        # Создаём экземпляр через _deserialize_instance
+        instance = pass_cls._deserialize_instance(data, resource_manager)
+
+        # Восстанавливаем базовые поля
+        instance.enabled = data.get("enabled", True)
+
+        return instance
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "FramePass":
+        """
+        Создаёт экземпляр из сериализованных данных.
+
+        Подклассы должны переопределить этот метод для правильной
+        инициализации с их специфическими параметрами.
+
+        Базовая реализация создаёт экземпляр с pass_name.
+        """
+        return cls(pass_name=data.get("pass_name", "unnamed"))
+
 
 class FrameGraphError(Exception):
     """Базовая ошибка графа кадра."""

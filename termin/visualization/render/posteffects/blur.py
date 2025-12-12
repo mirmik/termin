@@ -49,9 +49,23 @@ void main() {
 class GaussianBlurPass(PostEffect):
     """Один проход: горизонтальный или вертикальный."""
 
-    def __init__(self, direction):
+    name = "gaussian_blur"
+
+    def __init__(self, direction=(1.0, 0.0)):
         self.shader = ShaderProgram(GAUSS_VERT, GAUSS_FRAG)
         self.direction = np.array(direction, dtype=np.float32)
+
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры GaussianBlurPass."""
+        return {
+            "direction": self.direction.tolist(),
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "GaussianBlurPass":
+        """Создаёт GaussianBlurPass из сериализованных данных."""
+        direction = tuple(data.get("direction", (1.0, 0.0)))
+        return cls(direction=direction)
 
     def draw(self, gfx, key, color_tex, extra_textures, size):
         w, h = size

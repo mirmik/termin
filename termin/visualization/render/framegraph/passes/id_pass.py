@@ -29,6 +29,22 @@ class IdPass(RenderFramePass):
         # Кэш имён отрисовываемых pickable-энтити.
         self._entity_names: List[str] = []
 
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры IdPass."""
+        return {
+            "input_res": self.input_res,
+            "output_res": self.output_res,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "IdPass":
+        """Создаёт IdPass из сериализованных данных."""
+        return cls(
+            input_res=data.get("input_res", "empty"),
+            output_res=data.get("output_res", "id"),
+            pass_name=data.get("pass_name", "IdPass"),
+        )
+
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """IdPass читает input_res и пишет output_res inplace."""
         return [(self.input_res, self.output_res)]

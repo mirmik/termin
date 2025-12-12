@@ -84,6 +84,26 @@ class ColorPass(RenderFramePass):
         # Кэш имён сущностей с MeshRenderer
         self._entity_names: List[str] = []
 
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры ColorPass."""
+        return {
+            "input_res": self.input_res,
+            "output_res": self.output_res,
+            "shadow_res": self.shadow_res,
+            "phase_mark": self.phase_mark,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":
+        """Создаёт ColorPass из сериализованных данных."""
+        return cls(
+            input_res=data.get("input_res", "empty"),
+            output_res=data.get("output_res", "color"),
+            shadow_res=data.get("shadow_res", "shadow_maps"),
+            pass_name=data.get("pass_name", "Color"),
+            phase_mark=data.get("phase_mark"),
+        )
+
     def _collect_draw_calls(self, scene, phase_mark: str | None) -> List[PhaseDrawCall]:
         """
         Собирает все draw calls для указанной метки фазы.

@@ -26,6 +26,78 @@ class PostEffect:
 
     name: str = "unnamed_post_effect"
 
+    # ---- Сериализация ---------------------------------------------
+
+    def serialize(self) -> dict:
+        """
+        Сериализует PostEffect в словарь.
+
+        Базовая реализация сохраняет:
+        - type: имя класса для десериализации
+        - name: имя эффекта
+
+        Подклассы должны переопределить _serialize_params() для
+        добавления своих параметров.
+        """
+        data = {
+            "type": self.__class__.__name__,
+            "name": self.name,
+        }
+        data.update(self._serialize_params())
+        return data
+
+    def _serialize_params(self) -> dict:
+        """
+        Возвращает словарь с параметрами для сериализации.
+
+        Подклассы должны переопределить этот метод.
+        """
+        return {}
+
+    @classmethod
+    def deserialize(cls, data: dict, resource_manager=None) -> "PostEffect":
+        """
+        Десериализует PostEffect из словаря.
+
+        Args:
+            data: Словарь с сериализованными данными
+            resource_manager: ResourceManager для поиска класса
+
+        Returns:
+            Экземпляр PostEffect
+
+        Raises:
+            ValueError: если тип не найден
+        """
+        effect_type = data.get("type")
+        if effect_type is None:
+            raise ValueError("Missing 'type' in PostEffect data")
+
+        # Получаем класс из ResourceManager
+        if resource_manager is None:
+            from termin.visualization.core.resources import ResourceManager
+            resource_manager = ResourceManager.instance()
+
+        effect_cls = resource_manager.get_post_effect(effect_type)
+        if effect_cls is None:
+            raise ValueError(f"Unknown PostEffect type: {effect_type}")
+
+        return effect_cls._deserialize_instance(data, resource_manager)
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "PostEffect":
+        """
+        Создаёт экземпляр из сериализованных данных.
+
+        Подклассы должны переопределить этот метод.
+        """
+        instance = cls()
+        if "name" in data:
+            instance.name = data["name"]
+        return instance
+
+    # ---- API эффекта ---------------------------------------------
+
     def required_resources(self) -> set[str]:
         """
         Какие ресурсы (по именам FrameGraph) нужны этому эффекту,
@@ -89,6 +161,34 @@ class PostProcessPass(RenderFramePass):
         )
 
         self._temp_fbos: list["FramebufferHandle"] = []
+
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры PostProcessPass."""
+        return {
+            "input_res": self.input_res,
+            "output_res": self.output_res,
+            "effects": [eff.serialize() for eff in self.effects],
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "PostProcessPass":
+        """Создаёт PostProcessPass из сериализованных данных."""
+        effects_data = data.get("effects", [])
+        effects = []
+
+        for eff_data in effects_data:
+            try:
+                eff = PostEffect.deserialize(eff_data, resource_manager)
+                effects.append(eff)
+            except ValueError as e:
+                print(f"Warning: Failed to deserialize PostEffect: {e}")
+
+        return cls(
+            effects=effects,
+            input_res=data.get("input_res", "color"),
+            output_res=data.get("output_res", "color_pp"),
+            pass_name=data.get("pass_name", "PostProcess"),
+        )
 
     def _effect_symbol(self, index: int, effect: "PostEffect") -> str:
         """

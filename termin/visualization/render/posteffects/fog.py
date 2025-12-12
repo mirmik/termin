@@ -79,6 +79,23 @@ class FogEffect(PostEffect):
         self._fog_end = float(fog_end)
         self._shader: ShaderProgram | None = None
 
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры FogEffect."""
+        return {
+            "fog_color": list(self._fog_color),
+            "fog_start": self._fog_start,
+            "fog_end": self._fog_end,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "FogEffect":
+        """Создаёт FogEffect из сериализованных данных."""
+        return cls(
+            fog_color=tuple(data.get("fog_color", (0.6, 0.7, 0.8))),
+            fog_start=data.get("fog_start", 0.2),
+            fog_end=data.get("fog_end", 1.0),
+        )
+
     def required_resources(self) -> set[str]:
         # Нужен ресурс "depth", который заполняет DepthPass
         return {"depth"}

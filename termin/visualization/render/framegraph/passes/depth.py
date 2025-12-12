@@ -39,6 +39,22 @@ class DepthPass(RenderFramePass):
 
         self._material: DepthMaterial | None = None
 
+    def _serialize_params(self) -> dict:
+        """Сериализует параметры DepthPass."""
+        return {
+            "input_res": self.input_res,
+            "output_res": self.output_res,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "DepthPass":
+        """Создаёт DepthPass из сериализованных данных."""
+        return cls(
+            input_res=data.get("input_res", "empty_depth"),
+            output_res=data.get("output_res", "depth"),
+            pass_name=data.get("pass_name", "Depth"),
+        )
+
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         """DepthPass читает input_res и пишет output_res inplace."""
         return [(self.input_res, self.output_res)]

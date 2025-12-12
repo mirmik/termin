@@ -55,6 +55,8 @@ class EditorWindow(QMainWindow):
         # --- ресурс-менеджер редактора ---
         self.resource_manager = ResourceManager.instance()
         self.resource_manager.register_builtin_components()
+        self.resource_manager.register_builtin_frame_passes()
+        self.resource_manager.register_builtin_post_effects()
 
         # --- WorldPersistence - ЕДИНСТВЕННЫЙ владелец сцены ---
         # Создаётся ПЕРВЫМ, до всех контроллеров

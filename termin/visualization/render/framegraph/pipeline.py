@@ -35,3 +35,52 @@ class RenderPipeline:
     passes: List["FramePass"] = field(default_factory=list)
     debug_blit_pass: "BlitPass | None" = None
     pipeline_specs: List[ResourceSpec] = field(default_factory=list)
+
+    def serialize(self) -> dict:
+        """
+        Сериализует RenderPipeline в словарь.
+
+        Note: debug_blit_pass не сериализуется, т.к. это runtime ссылка.
+        """
+        from termin.visualization.render.framegraph.core import FramePass
+
+        return {
+            "passes": [p.serialize() for p in self.passes],
+            "pipeline_specs": [spec.serialize() for spec in self.pipeline_specs],
+        }
+
+    @classmethod
+    def deserialize(cls, data: dict, resource_manager=None) -> "RenderPipeline":
+        """
+        Десериализует RenderPipeline из словаря.
+
+        Args:
+            data: Словарь с сериализованными данными
+            resource_manager: ResourceManager для поиска классов
+
+        Returns:
+            RenderPipeline
+        """
+        from termin.visualization.render.framegraph.core import FramePass
+
+        passes_data = data.get("passes", [])
+        passes = []
+
+        for pass_data in passes_data:
+            try:
+                p = FramePass.deserialize(pass_data, resource_manager)
+                passes.append(p)
+            except ValueError as e:
+                print(f"Warning: Failed to deserialize FramePass: {e}")
+
+        specs_data = data.get("pipeline_specs", [])
+        specs = []
+        for spec_data in specs_data:
+            spec = ResourceSpec.deserialize(spec_data)
+            specs.append(spec)
+
+        return cls(
+            passes=passes,
+            debug_blit_pass=None,  # Runtime ссылка, не сериализуется
+            pipeline_specs=specs,
+        )
