@@ -79,7 +79,6 @@ class EditorWindow(QMainWindow):
         self._play_button: QPushButton | None = None
         self._viewport_list_widget: ViewportListWidget | None = None
         self._rendering_controller: RenderingController | None = None
-        self._center_tab_widget: QTabWidget | None = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -138,7 +137,10 @@ class EditorWindow(QMainWindow):
         self.leftTabWidget: QTabWidget = self.findChild(QTabWidget, "leftTabWidget")
         self.renderingTab: QWidget = self.findChild(QWidget, "renderingTab")
 
-        self.viewportContainer: QWidget = self.findChild(QWidget, "viewportContainer")
+        # Center tab widget (Editor + additional displays)
+        self._center_tab_widget: QTabWidget = self.findChild(QTabWidget, "centerTabWidget")
+        self.editorViewportTab: QWidget = self.findChild(QWidget, "editorViewportTab")
+
         self.inspectorContainer: QWidget = self.findChild(QWidget, "inspectorContainer")
 
         from PyQt6.QtWidgets import QSplitter
@@ -203,7 +205,7 @@ class EditorWindow(QMainWindow):
         # --- viewport ---
         self.viewport = None
         self.viewport_controller = ViewportController(
-            container=self.viewportContainer,
+            container=self.editorViewportTab,
             world=self.world,
             scene=self.scene,
             camera=self.camera,
@@ -422,6 +424,12 @@ class EditorWindow(QMainWindow):
             return self.viewport_controller.graphics
         return None
 
+    def _get_window_backend(self):
+        """Get WindowBackend from world."""
+        if self.world is not None:
+            return self.world.window_backend
+        return None
+
     def _log_to_console(self, message: str) -> None:
         """Log message to console output."""
         if self.consoleOutput is not None:
@@ -487,6 +495,7 @@ class EditorWindow(QMainWindow):
             center_tab_widget=self._center_tab_widget,
             get_scene=lambda: self.scene,
             get_graphics=self._get_graphics,
+            get_window_backend=self._get_window_backend,
             on_request_update=self._request_viewport_update,
         )
 
@@ -672,8 +681,8 @@ class EditorWindow(QMainWindow):
         # Правый спейсер для центрирования кнопки
         layout.addStretch(1)
 
-        # Вставляем toolbar в viewportLayout (первым элементом, перед viewport)
-        viewport_layout = self.viewportContainer.layout()
+        # Вставляем toolbar в editorViewportLayout (первым элементом, перед viewport)
+        viewport_layout = self.editorViewportTab.layout()
         viewport_layout.insertWidget(0, toolbar)
 
     # ----------- связи с контроллерами -----------

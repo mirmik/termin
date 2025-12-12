@@ -121,31 +121,42 @@
 
        </widget>
 
-       <!-- Center viewport container -->
-       <widget class="QWidget" name="viewportContainer">
+       <!-- Center viewport tabs -->
+       <widget class="QTabWidget" name="centerTabWidget">
         <property name="minimumSize">
          <size>
           <width>300</width>
           <height>200</height>
          </size>
         </property>
-        <layout class="QVBoxLayout" name="viewportLayout">
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <property name="leftMargin">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="rightMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-        </layout>
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
+
+        <!-- Editor viewport tab -->
+        <widget class="QWidget" name="editorViewportTab">
+         <attribute name="title">
+          <string>Editor</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="editorViewportLayout">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+         </layout>
+        </widget>
+
        </widget>
 
        <!-- Right panel (Inspector container) -->

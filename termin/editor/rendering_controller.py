@@ -5,21 +5,22 @@ Handles:
 - Display list management (add, remove, rename)
 - Viewport management (add, remove, configure)
 - Connecting ViewportListWidget with InspectorController
-- Central viewport tab management
+- Central viewport tab management with OpenGL widgets
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, List, Optional
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 
-from PyQt6.QtWidgets import QTabWidget, QWidget
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
-    from termin.visualization.platform.backends.base import GraphicsBackend
+    from termin.visualization.platform.backends.base import BackendWindow, GraphicsBackend, WindowBackend
     from termin.editor.viewport_list_widget import ViewportListWidget
     from termin.editor.inspector_controller import InspectorController
 
@@ -42,6 +43,7 @@ class RenderingController:
         center_tab_widget: Optional[QTabWidget] = None,
         get_scene: Optional[Callable[[], "Scene"]] = None,
         get_graphics: Optional[Callable[[], "GraphicsBackend"]] = None,
+        get_window_backend: Optional[Callable[[], "WindowBackend"]] = None,
         on_display_selected: Optional[Callable[["Display"], None]] = None,
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
@@ -52,9 +54,10 @@ class RenderingController:
         Args:
             viewport_list_widget: Widget showing display/viewport tree.
             inspector_controller: Controller for inspector panels.
-            center_tab_widget: Optional tab widget for display switching.
+            center_tab_widget: Tab widget for display switching.
             get_scene: Callback to get current scene.
             get_graphics: Callback to get GraphicsBackend for creating surfaces.
+            get_window_backend: Callback to get WindowBackend for creating GL widgets.
             on_display_selected: Callback when display is selected.
             on_viewport_selected: Callback when viewport is selected.
             on_request_update: Callback to request viewport redraw.
@@ -64,6 +67,7 @@ class RenderingController:
         self._center_tabs = center_tab_widget
         self._get_scene = get_scene
         self._get_graphics = get_graphics
+        self._get_window_backend = get_window_backend
         self._on_display_selected = on_display_selected
         self._on_viewport_selected = on_viewport_selected
         self._on_request_update = on_request_update
@@ -72,6 +76,10 @@ class RenderingController:
         self._display_names: dict[int, str] = {}
         self._selected_display: Optional["Display"] = None
         self._selected_viewport: Optional["Viewport"] = None
+
+        # Map display id -> (tab container widget, BackendWindow, tab index)
+        # Editor display (index 0) is managed externally, not stored here
+        self._display_tabs: dict[int, Tuple[QWidget, "BackendWindow"]] = {}
 
         self._connect_signals()
 
@@ -137,9 +145,18 @@ class RenderingController:
         if display not in self._displays:
             return
 
+        display_id = id(display)
+
         self._displays.remove(display)
-        self._display_names.pop(id(display), None)
+        self._display_names.pop(display_id, None)
         self._viewport_list.remove_display(display)
+
+        # Clean up tab resources
+        if display_id in self._display_tabs:
+            tab_container, backend_window = self._display_tabs.pop(display_id)
+            # Close backend window
+            if backend_window is not None:
+                backend_window.close()
 
         if self._selected_display is display:
             self._selected_display = None
@@ -202,19 +219,15 @@ class RenderingController:
 
     def _on_add_display_requested(self) -> None:
         """Handle request to add new display."""
-        if self._get_graphics is None:
+        if self._get_graphics is None or self._get_window_backend is None:
+            return
+        if self._center_tabs is None:
             return
 
         graphics = self._get_graphics()
-        if graphics is None:
+        window_backend = self._get_window_backend()
+        if graphics is None or window_backend is None:
             return
-
-        # Create offscreen surface for new display
-        from termin.visualization.render.surface import OffscreenRenderSurface
-        from termin.visualization.core.display import Display
-
-        surface = OffscreenRenderSurface(graphics, width=800, height=600)
-        display = Display(surface)
 
         # Generate unique name
         existing_names = set(self._display_names.values())
@@ -225,6 +238,37 @@ class RenderingController:
                 break
             idx += 1
 
+        # Create tab container widget
+        tab_container = QWidget()
+        tab_layout = QVBoxLayout(tab_container)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        tab_layout.setSpacing(0)
+
+        # Create BackendWindow (OpenGL widget) inside the tab
+        backend_window = window_backend.create_window(
+            width=800,
+            height=600,
+            title=name,
+            parent=tab_container,
+        )
+
+        # Create WindowRenderSurface and Display
+        from termin.visualization.render.surface import WindowRenderSurface
+        from termin.visualization.core.display import Display
+
+        surface = WindowRenderSurface(backend_window)
+        display = Display(surface)
+
+        # Add GL widget to tab layout
+        gl_widget = backend_window.widget
+        gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        gl_widget.setMinimumSize(50, 50)
+        tab_layout.addWidget(gl_widget)
+
+        # Store mapping
+        self._display_tabs[id(display)] = (tab_container, backend_window)
+
+        # Add display (this will call _update_center_tabs)
         self.add_display(display, name)
         self._request_update()
 
@@ -343,13 +387,16 @@ class RenderingController:
         while self._center_tabs.count() > 1:
             self._center_tabs.removeTab(1)
 
-        # Add tabs for each display
+        # Add tabs for additional displays (not Editor)
         for display in self._displays:
-            name = self._display_names.get(id(display), "Display")
-            # For now, add placeholder widgets
-            # Later, these will be actual render previews
-            placeholder = QWidget()
-            self._center_tabs.addTab(placeholder, name)
+            display_id = id(display)
+            # Skip Editor display (it's already the first tab)
+            if display_id not in self._display_tabs:
+                continue
+
+            name = self._display_names.get(display_id, "Display")
+            tab_container, _backend_window = self._display_tabs[display_id]
+            self._center_tabs.addTab(tab_container, name)
 
     def _request_update(self) -> None:
         """Request viewport update."""
