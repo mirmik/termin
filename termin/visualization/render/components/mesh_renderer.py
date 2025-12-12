@@ -99,14 +99,6 @@ class MeshRenderer(Component):
 
     # --- рендеринг ---
 
-    def _ensure_material(self) -> Material:
-        """Ленивая инициализация материала."""
-        mat = self._material_handle.get_or_none()
-        if mat is None:
-            mat = Material()
-            self._material_handle = MaterialHandle.from_material(mat)
-        return mat
-
     def draw_geometry(self, context: RenderContext) -> None:
         """
         Рисует только геометрию (шейдер уже привязан пассом).
@@ -127,6 +119,7 @@ class MeshRenderer(Component):
         Это метод из Drawable протокола. Используется ColorPass.
 
         Логика:
+        - Если материал не задан, возвращает [] (не рендерится в color passes)
         - Если phase_mark задан и НЕ входит в self.phase_marks, возвращает []
         - Если phase_mark входит в self.phase_marks, возвращает все фазы материала
           (игнорирует phase_mark материала — это позволяет использовать любой
@@ -139,11 +132,14 @@ class MeshRenderer(Component):
         Возвращает:
             Список MaterialPhase отсортированный по priority.
         """
+        # Если материал не задан — не рендерим (аналог старого passes=[])
+        mat = self._material_handle.get_or_none()
+        if mat is None:
+            return []
+
         # Проверяем, что запрошенная фаза есть в наших phase_marks
         if phase_mark is not None and phase_mark not in self.phase_marks:
             return []
-
-        mat = self._ensure_material()
 
         # Возвращаем все фазы материала (игнорируем phase_mark материала)
         result = list(mat.phases)
