@@ -110,13 +110,15 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             video.SDL_DestroyWindow(self._window)
             raise RuntimeError(f"Failed to create GL context: {sdl2.SDL_GetError()}")
 
-        video.SDL_GL_MakeCurrent(self._window, self._gl_context)
+        result = video.SDL_GL_MakeCurrent(self._window, self._gl_context)
+        print(f"SDL: Window created, GL context: {self._gl_context}, make_current result: {result}")
 
         # Disable VSync - we control frame rate ourselves
         video.SDL_GL_SetSwapInterval(0)
 
         # Get native handle for Qt embedding
         self._native_handle = _get_native_window_handle(self._window)
+        print(f"SDL: Native handle: {self._native_handle}")
 
         # Callbacks
         self._framebuffer_size_callback: Optional[Callable] = None
@@ -159,10 +161,16 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
     def make_current(self) -> None:
         if self._window is not None and self._gl_context is not None:
-            video.SDL_GL_MakeCurrent(self._window, self._gl_context)
+            result = video.SDL_GL_MakeCurrent(self._window, self._gl_context)
+            if result != 0:
+                print(f"SDL_GL_MakeCurrent failed: {sdl2.SDL_GetError()}")
 
     def swap_buffers(self) -> None:
         if self._window is not None:
+            # Check current context before swap
+            current_ctx = video.SDL_GL_GetCurrentContext()
+            if current_ctx != self._gl_context:
+                print(f"WARNING: Wrong context before swap! Expected {self._gl_context}, got {current_ctx}")
             video.SDL_GL_SwapWindow(self._window)
 
     def framebuffer_size(self) -> Tuple[int, int]:
