@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from termin.visualization.ui.canvas import Canvas
 
 
-@dataclass
+@dataclass(eq=False)
 class Viewport:
     """
     Viewport — "что рендерим и куда" в рамках дисплея.
