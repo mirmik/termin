@@ -740,7 +740,7 @@ class EditorWindow(QMainWindow):
 
     def _init_viewport_toolbar(self) -> None:
         """
-        Создаёт панель инструментов над viewport с кнопкой Play в центре.
+        Создаёт панель инструментов над centerTabWidget с кнопкой Play в центре.
         """
         toolbar = QWidget()
         toolbar.setFixedHeight(32)
@@ -783,9 +783,27 @@ class EditorWindow(QMainWindow):
         # Правый спейсер для центрирования кнопки
         layout.addStretch(1)
 
-        # Вставляем toolbar в editorViewportLayout (первым элементом, перед viewport)
-        viewport_layout = self.editorViewportTab.layout()
-        viewport_layout.insertWidget(0, toolbar)
+        # Создаём контейнер для toolbar + centerTabWidget
+        center_container = QWidget()
+        container_layout = QVBoxLayout(center_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+
+        # Добавляем toolbar в контейнер
+        container_layout.addWidget(toolbar)
+
+        # Перемещаем centerTabWidget в контейнер
+        # Сначала получаем индекс centerTabWidget в topSplitter
+        splitter_index = self.topSplitter.indexOf(self._center_tab_widget)
+
+        # Убираем centerTabWidget из splitter (setParent(None))
+        self._center_tab_widget.setParent(None)
+
+        # Добавляем centerTabWidget в контейнер
+        container_layout.addWidget(self._center_tab_widget)
+
+        # Вставляем контейнер в splitter на место centerTabWidget
+        self.topSplitter.insertWidget(splitter_index, center_container)
 
     # ----------- связи с контроллерами -----------
 
