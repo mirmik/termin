@@ -219,6 +219,7 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._vao: Optional[int] = None
         self._vbo: Optional[int] = None
         self._initialized = False
+        self._channel_mode: int = 0  # 0=RGB, 1=R, 2=G, 3=B, 4=A
 
         # Реестр обработчиков ресурсов
         self._handlers: dict[str, ResourceHandler] = {
@@ -279,10 +280,22 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
             #version 330 core
             in vec2 v_uv;
             uniform sampler2D u_tex;
+            uniform int u_channel;  // 0=RGB, 1=R, 2=G, 3=B, 4=A
             out vec4 FragColor;
             void main()
             {
-                FragColor = texture(u_tex, v_uv);
+                vec4 c = texture(u_tex, v_uv);
+                if (u_channel == 1) {
+                    FragColor = vec4(c.r, c.r, c.r, 1.0);
+                } else if (u_channel == 2) {
+                    FragColor = vec4(c.g, c.g, c.g, 1.0);
+                } else if (u_channel == 3) {
+                    FragColor = vec4(c.b, c.b, c.b, 1.0);
+                } else if (u_channel == 4) {
+                    FragColor = vec4(c.a, c.a, c.a, 1.0);
+                } else {
+                    FragColor = vec4(c.rgb, 1.0);
+                }
             }
             """
             self._shader = ShaderProgram(vert_src, frag_src)
@@ -369,6 +382,16 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._handler_context['shadow_map_index'] = max(0, index)
         self.render()
 
+    def set_channel_mode(self, mode: int) -> None:
+        """
+        Устанавливает режим отображения каналов.
+
+        Args:
+            mode: 0=RGB, 1=R, 2=G, 3=B, 4=A
+        """
+        self._channel_mode = mode
+        self.render()
+
     def get_resource_type(self) -> str | None:
         """
         Возвращает тип текущего ресурса.
@@ -452,6 +475,7 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         shader = self._get_shader()
         shader.use()
         shader.set_uniform_int("u_tex", 0)
+        shader.set_uniform_int("u_channel", self._channel_mode)
 
         tex.bind(0)
 
@@ -621,10 +645,23 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._current_handler_ui: QtWidgets.QWidget | None = None
         self._current_handler: ResourceHandler | None = None
 
-        # ============ Пауза ============
+        # ============ Пауза и выбор канала ============
+        controls_row = QtWidgets.QHBoxLayout()
+
         self._pause_check = QtWidgets.QCheckBox("Пауза")
         self._pause_check.toggled.connect(self._on_pause_toggled)
-        layout.addWidget(self._pause_check)
+        controls_row.addWidget(self._pause_check)
+
+        controls_row.addStretch()
+
+        channel_label = QtWidgets.QLabel("Канал:")
+        self._channel_combo = QtWidgets.QComboBox()
+        self._channel_combo.addItems(["RGB", "R", "G", "B", "A"])
+        self._channel_combo.currentIndexChanged.connect(self._on_channel_changed)
+        controls_row.addWidget(channel_label)
+        controls_row.addWidget(self._channel_combo)
+
+        layout.addLayout(controls_row)
 
         # ============ Просмотр ============
         self._gl_widget = FramegraphTextureWidget(
@@ -636,17 +673,27 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             parent=self,
         )
 
-        self._depth_label = QtWidgets.QLabel("Depth")
+        # Depth buffer с подписью
+        depth_container = QtWidgets.QWidget()
+        depth_layout = QtWidgets.QVBoxLayout(depth_container)
+        depth_layout.setContentsMargins(0, 0, 0, 0)
+
+        depth_title = QtWidgets.QLabel("Depth Buffer")
+        depth_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        depth_layout.addWidget(depth_title)
+
+        self._depth_label = QtWidgets.QLabel()
         self._depth_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._depth_label.setMinimumSize(100, 100)
         self._depth_label.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
+        depth_layout.addWidget(self._depth_label, 1)
 
         viewer_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         viewer_splitter.addWidget(self._gl_widget)
-        viewer_splitter.addWidget(self._depth_label)
+        viewer_splitter.addWidget(depth_container)
         viewer_splitter.setStretchFactor(0, 3)
         viewer_splitter.setStretchFactor(1, 2)
 
@@ -739,6 +786,10 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         """Обработчик переключения паузы."""
         if self._set_paused is not None:
             self._set_paused(bool(checked))
+
+    def _on_channel_changed(self, index: int) -> None:
+        """Обработчик выбора канала для отображения."""
+        self._gl_widget.set_channel_mode(index)
 
     def _clear_internal_symbol(self) -> None:
         """Сбрасывает внутренний символ при переключении режима."""
