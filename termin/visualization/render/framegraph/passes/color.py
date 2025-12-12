@@ -321,7 +321,6 @@ class ColorPass(RenderFramePass):
                 render_context.model = model
 
                 # Применяем render state фазы
-                print(f"[ColorPass] Entity={dc.entity.name}, Drawable={type(dc.drawable).__name__}, cull={dc.phase.render_state.cull}")
                 graphics.apply_render_state(dc.phase.render_state)
 
                 # Применяем материал (фазу)

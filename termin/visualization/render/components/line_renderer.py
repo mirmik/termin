@@ -375,18 +375,8 @@ class LineRenderer(Component):
             context: Контекст рендеринга.
         """
         drawable = self._get_drawable()
-        if drawable is None:
-            print(f"[LineRenderer.draw_geometry] No drawable!", flush=True)
-            return
-
-        # Debug: кто вызывает?
-        import traceback
-        stack = traceback.extract_stack()
-        caller = stack[-2] if len(stack) >= 2 else None
-        caller_info = f"{caller.filename}:{caller.lineno} in {caller.name}" if caller else "unknown"
-        print(f"[LineRenderer.draw_geometry] Called from: {caller_info}", flush=True)
-
-        drawable.draw(context)
+        if drawable is not None:
+            drawable.draw(context)
 
     def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
         """
@@ -409,7 +399,6 @@ class LineRenderer(Component):
 
         # Проверяем, что запрошенная фаза есть в наших phase_marks
         if phase_mark is not None and phase_mark not in self.phase_marks:
-            print(f"[LineRenderer.get_phases] phase_mark={phase_mark} not in {self.phase_marks}, returning []", flush=True)
             return []
 
         # Возвращаем все фазы материала (игнорируем phase_mark материала)
@@ -418,49 +407,9 @@ class LineRenderer(Component):
         # Для ribbon режима отключаем culling
         if not self._raw_lines:
             for phase in phases:
-                print(f"[LineRenderer.get_phases] Setting cull=False for phase {phase.phase_mark}, was {phase.render_state.cull}", flush=True)
                 phase.render_state.cull = False
 
-        print(f"[LineRenderer.get_phases] Returning {len(phases)} phases", flush=True)
         return phases
-
-    # --- Legacy draw ---
-
-    def required_shaders(self):
-        """Возвращает шейдеры, требуемые для рендеринга."""
-        mat = self._material_handle.get()
-        if mat is not None and mat.shader is not None:
-            yield mat.shader
-
-    def draw(self, context: RenderContext):
-        """
-        Legacy метод отрисовки.
-        """
-        if self.entity is None:
-            return
-
-        drawable = self._get_drawable()
-        if drawable is None:
-            return
-
-        model = self.entity.model_matrix()
-        view = context.view
-        proj = context.projection
-        gfx = context.graphics
-        key = context.context_key
-
-        material = self._ensure_material()
-
-        # Для ribbon режима отключаем culling
-        if not self._raw_lines:
-            gfx.set_cull_face(False)
-
-        material.apply(model, view, proj, graphics=gfx, context_key=key)
-        drawable.draw(context)
-
-        # Восстанавливаем culling
-        if not self._raw_lines:
-            gfx.set_cull_face(True)
 
     # --- Сериализация ---
 
