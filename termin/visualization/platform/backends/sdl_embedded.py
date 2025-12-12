@@ -112,8 +112,8 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
         video.SDL_GL_MakeCurrent(self._window, self._gl_context)
 
-        # Enable VSync
-        video.SDL_GL_SetSwapInterval(1)
+        # Disable VSync - we control frame rate ourselves
+        video.SDL_GL_SetSwapInterval(0)
 
         # Get native handle for Qt embedding
         self._native_handle = _get_native_window_handle(self._window)

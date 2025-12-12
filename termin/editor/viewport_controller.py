@@ -105,6 +105,9 @@ class ViewportController:
         self._gl_widget = QWidget.createWindowContainer(qwindow, self._container)
         self._gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._gl_widget.setMinimumSize(50, 50)
+        # Prevent Qt from drawing over SDL window
+        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self._gl_widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         layout.addWidget(self._gl_widget)
 
         # Показываем SDL окно
@@ -177,8 +180,16 @@ class ViewportController:
             present=True,  # SDL: мы сами делаем swap buffers
         )
 
+        # Ensure all GL commands are finished before swap
+        from OpenGL import GL
+        GL.glFlush()
+        GL.glFinish()  # Wait for all GL commands to complete
+
         # Swap buffers
         self._backend_window.swap_buffers()
+
+        # Force Qt to not overdraw
+        self._gl_widget.update()
 
         # Обрабатываем отложенные события после рендера
         self._after_render()
