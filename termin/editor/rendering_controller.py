@@ -111,6 +111,10 @@ class RenderingController:
         self._inspector.viewport_inspector.display_changed.connect(self._on_viewport_display_changed)
         self._inspector.viewport_inspector.camera_changed.connect(self._on_viewport_camera_changed)
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
+
+        # Connect center tabs signal for tab switching
+        if self._center_tabs is not None:
+            self._center_tabs.currentChanged.connect(self._on_center_tab_changed)
         self._inspector.viewport_inspector.depth_changed.connect(self._on_viewport_depth_changed)
 
     @property
@@ -399,6 +403,11 @@ class RenderingController:
         self._request_update()
 
     # --- Center tabs management ---
+
+    def _on_center_tab_changed(self, index: int) -> None:
+        """Handle center tab widget tab change."""
+        # Request redraw when switching tabs
+        self._request_update()
 
     def _get_or_create_viewport_state(self, display_id: int, viewport: "Viewport"):
         """Get or create ViewportRenderState for a viewport."""
