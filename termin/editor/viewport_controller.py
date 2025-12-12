@@ -141,6 +141,10 @@ class ViewportController:
 
         Вызывается явно из главного цикла редактора.
         """
+        # CRITICAL: Ensure SDL GL context is current before ANY GL operations
+        # Qt may have switched to its own context
+        self._backend_window.make_current()
+
         # Проверяем resize
         self._backend_window.check_resize()
 
@@ -169,10 +173,6 @@ class ViewportController:
             views=views_and_states,
             present=True,  # SDL: мы сами делаем swap buffers
         )
-
-        # Ensure all GL commands are finished before swap
-        from OpenGL import GL
-        GL.glFinish()  # Wait for all GL commands to complete
 
         # Swap buffers
         self._backend_window.swap_buffers()
