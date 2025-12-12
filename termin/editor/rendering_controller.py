@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.platform.backends.base import BackendWindow, GraphicsBackend, WindowBackend
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-    from termin.visualization.render import RenderEngine
+    from termin.visualization.render import RenderEngine, ViewportRenderState
     from termin.editor.viewport_list_widget import ViewportListWidget
     from termin.editor.inspector_controller import InspectorController
 
@@ -466,6 +466,127 @@ class RenderingController:
             if backend_window is not None and backend_window.needs_render():
                 return True
         return False
+
+    # --- Serialization ---
+
+    def serialize_displays(self) -> list:
+        """
+        Сериализует конфигурацию всех дисплеев.
+
+        Возвращает список дисплеев с их viewport'ами.
+        Editor display (первый) тоже сериализуется.
+        """
+        result = []
+        for display in self._displays:
+            display_id = id(display)
+            name = self._display_names.get(display_id, "Display")
+
+            # Сериализуем все viewport'ы дисплея
+            viewports_data = []
+            for viewport in display.viewports:
+                viewports_data.append(viewport.serialize())
+
+            # Помечаем, является ли это Editor дисплеем (не имеет записи в _display_tabs)
+            is_editor = display_id not in self._display_tabs
+
+            result.append({
+                "name": name,
+                "is_editor": is_editor,
+                "viewports": viewports_data,
+            })
+
+        return result
+
+    def restore_displays(self, data: list, scene: "Scene") -> None:
+        """
+        Восстанавливает конфигурацию дисплеев из сериализованных данных.
+
+        Args:
+            data: Сериализованные данные дисплеев
+            scene: Текущая сцена для поиска камер
+        """
+        from termin.visualization.core.camera import CameraComponent
+
+        # Удаляем все дополнительные дисплеи (кроме Editor)
+        additional_displays = [
+            d for d in self._displays
+            if id(d) in self._display_tabs
+        ]
+        for display in additional_displays:
+            self.remove_display(display)
+
+        # Находим Editor display
+        editor_display = None
+        for display in self._displays:
+            if id(display) not in self._display_tabs:
+                editor_display = display
+                break
+
+        for display_data in data:
+            is_editor = display_data.get("is_editor", False)
+            name = display_data.get("name", "Display")
+            viewports_data = display_data.get("viewports", [])
+
+            if is_editor:
+                # Восстанавливаем viewport'ы для Editor дисплея
+                if editor_display is not None:
+                    # Обновляем имя
+                    self.set_display_name(editor_display, name)
+
+                    # Очищаем существующие viewport'ы (кроме первого, он управляется ViewportController)
+                    while len(editor_display.viewports) > 1:
+                        vp = editor_display.viewports[-1]
+                        editor_display.remove_viewport(vp)
+
+                    # Восстанавливаем свойства первого viewport'а если есть данные
+                    if viewports_data and editor_display.viewports:
+                        vp_data = viewports_data[0]
+                        main_vp = editor_display.viewports[0]
+                        main_vp.rect = tuple(vp_data.get("rect", [0.0, 0.0, 1.0, 1.0]))
+                        main_vp.depth = vp_data.get("depth", 0)
+                        # Камеру Editor viewport'а не меняем - она управляется EditorCameraManager
+            else:
+                # Запоминаем количество дисплеев до создания
+                count_before = len(self._displays)
+
+                # Создаём дополнительный дисплей
+                self._on_add_display_requested()
+
+                # Проверяем, что дисплей был создан
+                if len(self._displays) <= count_before:
+                    continue
+
+                # Берём последний добавленный дисплей
+                new_display = self._displays[-1]
+                self.set_display_name(new_display, name)
+
+                # Создаём viewport'ы
+                for vp_data in viewports_data:
+                    camera_entity_name = vp_data.get("camera_entity")
+                    rect = tuple(vp_data.get("rect", [0.0, 0.0, 1.0, 1.0]))
+                    depth = vp_data.get("depth", 0)
+
+                    # Ищем камеру по имени сущности
+                    camera = None
+                    for entity in scene.entities:
+                        if entity.name == camera_entity_name:
+                            cam = entity.get_component(CameraComponent)
+                            if cam is not None:
+                                camera = cam
+                                break
+
+                    if camera is not None:
+                        viewport = new_display.create_viewport(
+                            scene=scene,
+                            camera=camera,
+                            rect=rect,
+                        )
+                        viewport.depth = depth
+
+        # Обновляем UI
+        self._viewport_list.refresh()
+        self._update_center_tabs()
+        self._request_update()
 
     def render_additional_displays(self) -> None:
         """Render all additional displays (called from main render loop)."""

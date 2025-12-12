@@ -74,6 +74,8 @@ class EditorWindow(QMainWindow):
             set_editor_camera_data=self._set_editor_camera_data,
             get_selected_entity_name=self._get_selected_entity_name,
             select_entity_by_name=self._select_entity_by_name,
+            get_displays_data=self._get_displays_data,
+            set_displays_data=self._set_displays_data,
         )
 
         # контроллеры создадим чуть позже
@@ -428,6 +430,18 @@ class EditorWindow(QMainWindow):
         # Обновляем инспектор
         if self.inspector is not None:
             self.inspector.set_target(entity)
+
+    def _get_displays_data(self) -> list | None:
+        """Get displays/viewports data for serialization."""
+        if self._rendering_controller is None:
+            return None
+        return self._rendering_controller.serialize_displays()
+
+    def _set_displays_data(self, data: list) -> None:
+        """Restore displays/viewports from serialized data."""
+        if self._rendering_controller is None:
+            return
+        self._rendering_controller.restore_displays(data, self.scene)
 
     def _get_project_path(self) -> str | None:
         """Get current project path from project browser."""

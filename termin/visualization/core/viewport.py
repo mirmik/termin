@@ -67,6 +67,22 @@ class Viewport:
         ph = max(1, int(vh * height))
         return (px, py, pw, ph)
 
+    def serialize(self) -> dict:
+        """
+        Сериализует viewport в словарь.
+
+        Возвращает имя сущности камеры для последующего поиска при загрузке.
+        """
+        camera_entity_name = None
+        if self.camera is not None and self.camera.entity is not None:
+            camera_entity_name = self.camera.entity.name
+
+        return {
+            "camera_entity": camera_entity_name,
+            "rect": list(self.rect),
+            "depth": self.depth,
+        }
+
 
 def make_default_pipeline() -> "RenderPipeline":
     """

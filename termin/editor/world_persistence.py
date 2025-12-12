@@ -54,6 +54,8 @@ class WorldPersistence:
         set_editor_camera_data: Optional[Callable[[dict], None]] = None,
         get_selected_entity_name: Optional[Callable[[], str | None]] = None,
         select_entity_by_name: Optional[Callable[[str], None]] = None,
+        get_displays_data: Optional[Callable[[], list]] = None,
+        set_displays_data: Optional[Callable[[list], None]] = None,
     ):
         """
         Args:
@@ -67,6 +69,8 @@ class WorldPersistence:
             set_editor_camera_data: Колбэк для установки данных камеры редактора.
             get_selected_entity_name: Колбэк для получения имени выделенной сущности.
             select_entity_by_name: Колбэк для выделения сущности по имени.
+            get_displays_data: Колбэк для получения данных дисплеев/вьюпортов.
+            set_displays_data: Колбэк для восстановления дисплеев/вьюпортов.
         """
         self._scene = scene
         self._resource_manager = resource_manager
@@ -76,6 +80,8 @@ class WorldPersistence:
         self._set_editor_camera_data = set_editor_camera_data
         self._get_selected_entity_name = get_selected_entity_name
         self._select_entity_by_name = select_entity_by_name
+        self._get_displays_data = get_displays_data
+        self._set_displays_data = set_displays_data
         self._current_scene_path: str | None = None
 
     @property
@@ -139,12 +145,19 @@ class WorldPersistence:
         if self._get_selected_entity_name is not None:
             selected_entity_name = self._get_selected_entity_name()
 
+        # Получаем данные дисплеев
+        displays_data = None
+        if self._get_displays_data is not None:
+            displays_data = self._get_displays_data()
+
         # Формируем данные редактора
         editor_data = {}
         if editor_camera_data is not None:
             editor_data["camera"] = editor_camera_data
         if selected_entity_name is not None:
             editor_data["selected_entity"] = selected_entity_name
+        if displays_data is not None:
+            editor_data["displays"] = displays_data
 
         data = {
             "version": "1.0",
@@ -234,12 +247,19 @@ class WorldPersistence:
         if self._get_selected_entity_name is not None:
             selected_entity_name = self._get_selected_entity_name()
 
+        # Получаем данные дисплеев
+        displays_data = None
+        if self._get_displays_data is not None:
+            displays_data = self._get_displays_data()
+
         # Формируем данные редактора
         editor_data = {}
         if editor_camera_data is not None:
             editor_data["camera"] = editor_camera_data
         if selected_entity_name is not None:
             editor_data["selected_entity"] = selected_entity_name
+        if displays_data is not None:
+            editor_data["displays"] = displays_data
 
         data = {
             "resources": self._resource_manager.serialize(),
@@ -328,6 +348,11 @@ class WorldPersistence:
             selected_name = editor_state.get("selected_entity_name")
         if selected_name and self._select_entity_by_name is not None:
             self._select_entity_by_name(selected_name)
+
+        # Дисплеи и вьюпорты
+        displays_data = editor_data.get("displays")
+        if displays_data is not None and self._set_displays_data is not None:
+            self._set_displays_data(displays_data)
 
         return {
             "loaded_entities": loaded_count,
