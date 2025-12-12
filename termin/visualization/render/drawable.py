@@ -1,0 +1,87 @@
+"""
+Drawable protocol — унифицированный интерфейс для рендеринга.
+
+Позволяет ColorPass, ShadowPass, IdPass и другим пассам единообразно
+работать с разными типами рендереров (MeshRenderer, LineRenderer, IconRenderer и т.д.).
+
+Разделение ответственности:
+- FramePass отвечает за привязку шейдера/материала
+- Drawable отвечает за отрисовку геометрии
+
+Использование:
+    # ColorPass спрашивает фазы у Drawable, применяет их и рисует
+    for drawable in drawables:
+        for phase in drawable.get_phases(phase_mark):
+            graphics.apply_render_state(phase.render_state)
+            phase.apply(model, view, projection, graphics, context_key)
+            drawable.draw_geometry(context)
+
+    # ShadowPass использует свой шейдер
+    for drawable in drawables:
+        if "shadow" in drawable.phase_marks:
+            shadow_shader.use()
+            # ... setup uniforms ...
+            drawable.draw_geometry(context)
+
+    # IdPass использует свой шейдер с pick_id
+    for drawable in drawables:
+        id_shader.use()
+        id_shader.set_uniform("u_pick_color", encode_pick_id(entity.pick_id))
+        drawable.draw_geometry(context)
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, List, Protocol, Set, runtime_checkable
+
+if TYPE_CHECKING:
+    from termin.visualization.core.material import MaterialPhase
+    from termin.visualization.render.render_context import RenderContext
+
+
+@runtime_checkable
+class Drawable(Protocol):
+    """
+    Протокол для компонентов, которые умеют рисовать геометрию.
+
+    Атрибуты:
+        phase_marks: Множество фаз, в которых участвует этот drawable.
+                     Например: {"opaque", "shadow"}, {"editor"}, {"transparent"}
+                     "shadow" означает, что объект отбрасывает тень.
+                     Используется пассами для фильтрации.
+
+    Методы:
+        draw_geometry: Рисует геометрию (шейдер уже привязан пассом).
+        get_phases: Возвращает MaterialPhases для ColorPass.
+    """
+
+    phase_marks: Set[str]
+
+    def draw_geometry(self, context: "RenderContext") -> None:
+        """
+        Рисует геометрию.
+
+        Шейдер и материал уже привязаны пассом перед вызовом.
+        Drawable должен просто отрисовать свою геометрию (mesh, lines, etc.)
+
+        Параметры:
+            context: Контекст рендеринга.
+                     context.model содержит матрицу модели (для VAO binding).
+        """
+        ...
+
+    def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
+        """
+        Возвращает MaterialPhases для этого drawable.
+
+        Используется ColorPass для получения материалов.
+        ShadowPass и IdPass игнорируют этот метод и используют свои шейдеры.
+
+        Параметры:
+            phase_mark: Фильтр по метке фазы ("opaque", "transparent", "editor", etc.)
+                        Если None, возвращает все фазы.
+
+        Возвращает:
+            Список MaterialPhase, отсортированный по priority.
+        """
+        ...

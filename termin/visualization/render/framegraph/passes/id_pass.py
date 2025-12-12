@@ -4,11 +4,11 @@ from typing import List, Tuple
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
-from termin.visualization.render.components import MeshRenderer
 from termin.visualization.core.picking import id_to_rgb
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.renderpass import RenderState
 from termin.visualization.render.framegraph.passes.present import blit_fbo_to_fbo
+from termin.visualization.render.drawable import Drawable
 from termin.editor.inspect_field import InspectField
 
 
@@ -112,18 +112,6 @@ class IdPass(RenderFramePass):
         graphics.set_viewport(0, 0, pw, ph)
         graphics.clear_color_depth((0.0, 0.0, 0.0, 0.0))
 
-        # Карта сущность -> числовой id (цвет кодируем через id_to_rgb)
-        pick_ids: dict = {}
-        for ent in scene.entities:
-            if not ent.is_pickable():
-                continue
-            mr = ent.get_component(MeshRenderer)
-            if mr is None:
-                continue
-            pid = ent.pick_id
-            pick_ids[ent] = pid
-            self._entity_names.append(ent.name)
-
         # Матрицы камеры для фазовой формулы p_clip = P · V · M · p_local
         view = camera.view_matrix()
         proj = camera.projection_matrix()
@@ -149,19 +137,31 @@ class IdPass(RenderFramePass):
             cull=True,
         ))
 
-        # Рисуем каждую pickable-сущность по очереди, после чего
-        # при необходимости блитим промежуточное состояние в debug FBO.
+        # Рисуем каждую pickable-сущность по очереди
         for ent in scene.entities:
-            mr = ent.get_component(MeshRenderer)
-            if mr is None:
+            if not (ent.active and ent.visible):
                 continue
 
-            pid = pick_ids.get(ent)
-            if pid is None:
+            if not ent.is_pickable():
                 continue
 
+            # Собираем все Drawable компоненты
+            drawables = []
+            for component in ent.components:
+                if not component.enabled:
+                    continue
+                if isinstance(component, Drawable):
+                    drawables.append(component)
+
+            if not drawables:
+                continue
+
+            self._entity_names.append(ent.name)
+
+            pid = ent.pick_id
             color = id_to_rgb(pid)
             model = ent.model_matrix()
+            render_ctx.model = model
 
             pick_material.apply_for_pick(
                 model=model,
@@ -172,8 +172,9 @@ class IdPass(RenderFramePass):
                 context_key=key,
             )
 
-            if mr.mesh is not None:
-                mr.mesh.draw(render_ctx)
+            # Рисуем все Drawable компоненты с одним pick_id
+            for drawable in drawables:
+                drawable.draw_geometry(render_ctx)
 
             if debug_fb is not None and ent.name == debug_symbol:
                 self._blit_to_debug(graphics, fb, debug_fb, (pw, ph), key)

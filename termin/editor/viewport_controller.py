@@ -491,7 +491,6 @@ class ViewportController:
         from termin.visualization.render.framegraph.passes.depth import DepthPass
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
-        from termin.visualization.render.framegraph.passes.editor_overlay import EditorOverlayPass
 
         # Передаём lambda, чтобы gizmo entities обновлялись динамически
         # (важно после recreate_gizmo при выходе из game mode)
@@ -500,7 +499,7 @@ class ViewportController:
 
         postprocess = PostProcessPass(
             effects=[],
-            input_res="color_with_gizmos",
+            input_res="color",
             output_res="color_pp",
             pass_name="PostFX",
         )
@@ -538,18 +537,10 @@ class ViewportController:
             far=100.0,
         )
 
-        # EditorOverlayPass рендерит только editor_only сущности (гизмо и т.д.)
-        editor_overlay_pass = EditorOverlayPass(
-            input_res="color",
-            output_res="color_with_gizmos",
-            pass_name="EditorOverlay",
-        )
-
         passes: list = [
             shadow_pass,
             skybox_pass,
             color_pass,
-            editor_overlay_pass,  # Рендерит гизмо и прочие editor_only после основной сцены
             depth_pass,
             IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
             GizmoPass(

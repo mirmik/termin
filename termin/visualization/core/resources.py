@@ -45,8 +45,6 @@ _BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
     ("termin.visualization.render.framegraph.passes.present", "BlitPass"),
     # ID/Picking
     ("termin.visualization.render.framegraph.passes.id_pass", "IdPass"),
-    # Editor overlay (рендерит только editor_only сущности)
-    ("termin.visualization.render.framegraph.passes.editor_overlay", "EditorOverlayPass"),
     ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
     # Post-processing
     ("termin.visualization.render.postprocess", "PostProcessPass"),

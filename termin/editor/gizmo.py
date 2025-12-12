@@ -92,8 +92,6 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
             serializable=False,
-            cast_shadow=False,
-            editor_only=True,
         )
         self.axis = axis
         self.length = float(length)
@@ -136,10 +134,8 @@ class GizmoArrow(Entity):
             name=f"{axis}_shaft",
             pickable=False,
             selectable=False,
-            cast_shadow=False,
-            editor_only=True,
         )
-        shaft_ent.add_component(MeshRenderer(shaft_mesh, mat))
+        shaft_ent.add_component(MeshRenderer(shaft_mesh, mat, phase_marks={"editor"}))
         self.shaft_ent = shaft_ent
         self.transform.add_child(shaft_ent.transform)
 
@@ -149,10 +145,8 @@ class GizmoArrow(Entity):
             name=f"{axis}_head",
             pickable=False,
             selectable=False,
-            cast_shadow=False,
-            editor_only=True,
         )
-        head_ent.add_component(MeshRenderer(head_mesh, mat))
+        head_ent.add_component(MeshRenderer(head_mesh, mat, phase_marks={"editor"}))
         self.head_ent = head_ent
         self.transform.add_child(head_ent.transform)
 
@@ -175,10 +169,8 @@ class GizmoArrow(Entity):
             name=f"{axis}_pick_shaft",
             pickable=False,
             selectable=False,
-            cast_shadow=False,
-            editor_only=True,
         )
-        pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, passes=[]))
+        pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, passes=[], phase_marks={"editor"}))
         self.pick_shaft_ent = pick_shaft_ent
         self.transform.add_child(pick_shaft_ent.transform)
 
@@ -189,10 +181,8 @@ class GizmoArrow(Entity):
             name=f"{axis}_pick_head",
             pickable=False,
             selectable=False,
-            cast_shadow=False,
-            editor_only=True,
         )
-        pick_head_ent.add_component(MeshRenderer(pick_head_mesh, passes=[]))
+        pick_head_ent.add_component(MeshRenderer(pick_head_mesh, passes=[], phase_marks={"editor"}))
         self.pick_head_ent = pick_head_ent
         self.transform.add_child(pick_head_ent.transform)
 
@@ -218,8 +208,6 @@ class GizmoRing(Entity):
             pickable=False,
             selectable=False,
             serializable=False,
-            cast_shadow=False,
-            editor_only=True,
         )
 
         self.axis = axis
@@ -257,13 +245,9 @@ class GizmoRing(Entity):
             name=f"{axis}_ring",
             pickable=False,
             selectable=False,
-            cast_shadow=False,
-            editor_only=True,
         )
         pass_without_culling = RenderPass.from_material(mat, state=RenderState(cull=False))
-        #ring_ent.add_component(MeshRenderer(ring_mesh, passes=[pass_without_culling]))
-        #mr = MeshRenderer(ring_mesh, material=mat)
-        mr = MeshRenderer(ring_mesh, passes=[pass_without_culling])
+        mr = MeshRenderer(ring_mesh, passes=[pass_without_culling], phase_marks={"editor"})
         #print(mr.passes)
         ring_ent.add_component(mr)
         self.ring_ent = ring_ent
@@ -290,10 +274,8 @@ class GizmoRing(Entity):
             name=f"{axis}_pick_ring",
             pickable=False,
             selectable=False,
-            cast_shadow=False,
-            editor_only=True,
         )
-        pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, passes=[]))
+        pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, passes=[], phase_marks={"editor"}))
         self.pick_ring_ent = pick_ring_ent
         self.transform.add_child(pick_ring_ent.transform)
 
@@ -313,8 +295,6 @@ class GizmoEntity(Entity):
             pickable=False,
             selectable=False,
             serializable=False,
-            cast_shadow=False,
-            editor_only=True,
         )
 
         # стрелки перемещения

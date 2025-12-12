@@ -18,8 +18,8 @@ import numpy as np
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
-from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.core.entity import RenderContext
+from termin.visualization.render.drawable import Drawable
 from termin.visualization.render.renderpass import RenderState
 from termin.visualization.render.materials.shadow_material import ShadowMaterial
 from termin.visualization.render.shadow.shadow_camera import (
@@ -271,33 +271,40 @@ class ShadowPass(RenderFramePass):
                 phase="shadow",
             )
             
-            # Рендерим все видимые объекты с мешами
+            # Рендерим все объекты с Drawable, у которых "shadow" в phase_marks
             for entity in scene.entities:
-                mr = entity.get_component(MeshRenderer)
-                if mr is None or mr.mesh is None:
+                if not (entity.active and entity.visible):
                     continue
 
-                if not entity.visible:
-                    continue
+                for component in entity.components:
+                    if not component.enabled:
+                        continue
 
-                # Пропускаем объекты, не отбрасывающие тень
-                if not entity.cast_shadow:
-                    continue
-                
-                # Добавляем в debug-список только для первого источника
-                if array_index == 0:
-                    self._entity_names.append(entity.name)
-                
-                model = entity.model_matrix()
-                shadow_material.apply(
-                    model,
-                    view_matrix,
-                    proj_matrix,
-                    graphics=graphics,
-                    context_key=context_key,
-                )
-                
-                mr.mesh.draw(render_ctx)
+                    if not isinstance(component, Drawable):
+                        continue
+
+                    drawable = component
+
+                    # Пропускаем объекты без метки "shadow"
+                    if "shadow" not in drawable.phase_marks:
+                        continue
+
+                    # Добавляем в debug-список только для первого источника
+                    if array_index == 0:
+                        self._entity_names.append(entity.name)
+
+                    model = entity.model_matrix()
+                    render_ctx.model = model
+
+                    shadow_material.apply(
+                        model,
+                        view_matrix,
+                        proj_matrix,
+                        graphics=graphics,
+                        context_key=context_key,
+                    )
+
+                    drawable.draw_geometry(render_ctx)
             
             # Добавляем в массив
             shadow_array.add_entry(

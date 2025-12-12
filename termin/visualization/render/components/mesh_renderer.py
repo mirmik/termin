@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, List, Optional, TYPE_CHECKING
+from typing import Iterable, List, Optional, Set, TYPE_CHECKING
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component, RenderContext
@@ -15,16 +15,31 @@ from termin.visualization.render.renderpass import RenderState, RenderPass
 if TYPE_CHECKING:
     from termin.visualization.core.material import MaterialPhase
 
+
+# Стандартные phase marks для обычных объектов
+DEFAULT_PHASE_MARKS: Set[str] = {"opaque", "shadow"}
+
+
 class MeshRenderer(Component):
-    """Renderer component that draws MeshDrawable with one or multiple passes."""
+    """
+    Renderer component that draws MeshDrawable.
+
+    Implements the Drawable protocol for use with ColorPass, ShadowPass, IdPass.
+
+    Атрибуты:
+        mesh: Геометрия для отрисовки.
+        passes: Список RenderPass с материалами.
+        phase_marks: Множество фаз, в которых участвует этот renderer.
+                     По умолчанию {"opaque", "shadow"}.
+                     Для редакторских объектов: {"editor"}.
+                     "shadow" означает, что объект отбрасывает тень.
+    """
 
     inspect_fields = {
-        # mesh-инспект мы уже добавляли раньше
         "mesh": InspectField(
             path="mesh",
             label="Mesh",
             kind="mesh",
-            # можно прямое присваивание, можно отдельный метод
             setter=lambda obj, value: obj.update_mesh(value),
         ),
         "material": InspectField(
@@ -40,6 +55,7 @@ class MeshRenderer(Component):
         mesh: MeshDrawable | None = None,
         material: Material | None = None,
         passes: list[RenderPass] | None = None,
+        phase_marks: Set[str] | None = None,
     ):
         super().__init__(enabled=True)
 
@@ -51,6 +67,7 @@ class MeshRenderer(Component):
 
         self.mesh = mesh
         self.passes: list[RenderPass] = []
+        self.phase_marks: Set[str] = phase_marks if phase_marks is not None else set(DEFAULT_PHASE_MARKS)
 
         if passes is not None:
             # нормализация списка переданных проходов
@@ -144,6 +161,35 @@ class MeshRenderer(Component):
             self.mesh.draw(context)
 
         gfx.apply_render_state(RenderState())
+
+    def draw_geometry(self, context: RenderContext) -> None:
+        """
+        Рисует только геометрию (шейдер уже привязан пассом).
+
+        Это метод из Drawable протокола. Шейдер и uniforms должны быть
+        установлены пассом перед вызовом.
+
+        Параметры:
+            context: Контекст рендеринга.
+        """
+        if self.mesh is None:
+            return
+        self.mesh.draw(context)
+
+    def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
+        """
+        Возвращает MaterialPhases для указанной метки фазы.
+
+        Это метод из Drawable протокола. Используется ColorPass.
+
+        Параметры:
+            phase_mark: Метка фазы ("opaque", "transparent", etc.)
+                        Если None, возвращает все фазы.
+
+        Возвращает:
+            Список MaterialPhase отсортированный по priority.
+        """
+        return self.get_phases_for_mark(phase_mark)
 
     def get_phases_for_mark(self, phase_mark: str | None) -> List["MaterialPhase"]:
         """

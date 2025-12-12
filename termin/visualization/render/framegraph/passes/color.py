@@ -8,7 +8,7 @@ import numpy as np
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.core.entity import RenderContext
-from termin.visualization.render.components import MeshRenderer
+from termin.visualization.render.drawable import Drawable
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -32,12 +32,12 @@ class PhaseDrawCall:
 
     Атрибуты:
         entity: Сущность, которой принадлежит фаза
-        mesh_renderer: MeshRenderer компонент
+        drawable: Drawable компонент (MeshRenderer, LineRenderer, etc.)
         phase: Фаза материала для отрисовки
         priority: Приоритет отрисовки (меньше = раньше)
     """
     entity: "Entity"
-    mesh_renderer: MeshRenderer
+    drawable: Drawable
     phase: "MaterialPhase"
     priority: int
 
@@ -118,9 +118,10 @@ class ColorPass(RenderFramePass):
 
         Алгоритм:
         1. Обходит все entities сцены
-        2. Для каждой entity с MeshRenderer получает фазы материала
-        3. Фильтрует фазы по phase_mark (если задан)
-        4. Возвращает список PhaseDrawCall отсортированный по priority
+        2. Для каждой entity находит компоненты, реализующие Drawable
+        3. Фильтрует drawable по phase_marks
+        4. Получает фазы из drawable.get_phases(phase_mark)
+        5. Возвращает список PhaseDrawCall отсортированный по priority
 
         Параметры:
             scene: Сцена с entities
@@ -135,23 +136,30 @@ class ColorPass(RenderFramePass):
             if not (entity.active and entity.visible):
                 continue
 
-            # Пропускаем editor_only сущности — они рендерятся в EditorOverlayPass
-            if entity.editor_only:
-                continue
+            # Ищем все компоненты, реализующие Drawable протокол
+            for component in entity.components:
+                if not component.enabled:
+                    continue
 
-            mr = entity.get_component(MeshRenderer)
-            if mr is None or not mr.enabled:
-                continue
+                if not isinstance(component, Drawable):
+                    continue
 
-            # Получаем фазы из MeshRenderer
-            phases = mr.get_phases_for_mark(phase_mark)
-            for phase in phases:
-                draw_calls.append(PhaseDrawCall(
-                    entity=entity,
-                    mesh_renderer=mr,
-                    phase=phase,
-                    priority=phase.priority,
-                ))
+                drawable = component
+
+                # Фильтруем по phase_marks:
+                # Если phase_mark задан, drawable должен участвовать в этой фазе
+                if phase_mark is not None and phase_mark not in drawable.phase_marks:
+                    continue
+
+                # Получаем фазы из Drawable
+                phases = drawable.get_phases(phase_mark)
+                for phase in phases:
+                    draw_calls.append(PhaseDrawCall(
+                        entity=entity,
+                        drawable=drawable,
+                        phase=phase,
+                        priority=phase.priority,
+                    ))
 
         # Сортируем по priority (меньше = раньше)
         draw_calls.sort(key=lambda dc: dc.priority)
@@ -310,6 +318,7 @@ class ColorPass(RenderFramePass):
 
                 # Получаем матрицу модели
                 model = dc.entity.model_matrix()
+                render_context.model = model
 
                 # Применяем render state фазы
                 graphics.apply_render_state(dc.phase.render_state)
@@ -324,9 +333,8 @@ class ColorPass(RenderFramePass):
                 if shadow_array is not None:
                     upload_shadow_maps_to_shader(shader, shadow_array)
 
-                # Рисуем меш
-                if dc.mesh_renderer.mesh is not None:
-                    dc.mesh_renderer.mesh.draw(render_context)
+                # Рисуем геометрию через Drawable
+                dc.drawable.draw_geometry(render_context)
 
                 if debug_fb is not None and dc.entity.name == debug_symbol:
                     self._blit_to_debug(graphics, fb, debug_fb, (pw, ph), key)
@@ -337,10 +345,6 @@ class ColorPass(RenderFramePass):
         else:
             # Legacy режим — вызываем entity.draw()
             for entity in scene.entities:
-                # Пропускаем editor_only сущности
-                if entity.editor_only:
-                    continue
-
                 self._entity_names.append(entity.name)
 
                 entity.draw(render_context)

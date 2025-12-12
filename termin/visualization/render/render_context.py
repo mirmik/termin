@@ -25,5 +25,8 @@ class RenderContext:
     graphics: "GraphicsBackend"
     phase: str = "main"
 
+    # Model матрица — устанавливается пассом перед вызовом Drawable.draw()
+    model: np.ndarray | None = None
+
     # Shadow mapping данные (опционально, заполняется ColorPass)
     shadow_data: "ShadowMapArray | None" = None
