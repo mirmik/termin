@@ -85,7 +85,13 @@ def make_default_pipeline() -> "RenderPipeline":
 
     passes: List = [
         SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox"),
-        ColorPass(input_res="skybox", output_res="color", shadow_res=None, pass_name="Color"),
+        ColorPass(
+            input_res="skybox",
+            output_res="color",
+            shadow_res=None,
+            pass_name="Color",
+            phase_mark="main",  # Use phase mode for proper lighting
+        ),
         PostProcessPass(
             effects=[],
             input_res="color",
