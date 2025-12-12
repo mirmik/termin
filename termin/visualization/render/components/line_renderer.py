@@ -265,6 +265,11 @@ class LineRenderer(Component):
         self._raw_lines = value
         self._dirty = True
 
+        # Проверяем совместимость с текущим материалом
+        mat = self._material_handle.get_or_none()
+        if mat is not None:
+            self._warn_if_incompatible(mat)
+
     @property
     def material(self) -> Material | None:
         """Текущий материал."""
@@ -276,6 +281,24 @@ class LineRenderer(Component):
             self._material_handle = MaterialHandle()
         else:
             self._material_handle = MaterialHandle.from_material(value)
+            self._warn_if_incompatible(value)
+
+    def _warn_if_incompatible(self, material: Material) -> None:
+        """Проверяет совместимость материала с режимом отрисовки."""
+        has_geometry_shader = any(
+            phase.shader_programm.geometry_source is not None
+            for phase in material.phases
+        )
+
+        if has_geometry_shader and not self._raw_lines:
+            import warnings
+            warnings.warn(
+                f"LineRenderer: материал '{material.name}' содержит geometry shader, "
+                f"но raw_lines=False. Geometry shader для линий ожидает GL_LINES на входе. "
+                f"Установите raw_lines=True или используйте материал без geometry shader.",
+                RuntimeWarning,
+                stacklevel=4,
+            )
 
     # --- Setters for inspector ---
 
