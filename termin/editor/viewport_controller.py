@@ -4,6 +4,7 @@ from typing import Callable, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QWindow
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 
 from termin.visualization.core.display import Display
@@ -88,17 +89,20 @@ class ViewportController:
         # Получаем graphics от world
         self._graphics: "GraphicsBackend" = self._world.graphics
 
-        # Placeholder виджет (пустой, для layout)
-        self._gl_widget = QWidget()
-        self._gl_widget.setMinimumSize(50, 50)
-        layout.addWidget(self._gl_widget)
-
-        # Создаём отдельное SDL окно (НЕ встраиваем) для теста
+        # Создаём SDL окно
         self._backend_window: "SDLEmbeddedWindowHandle" = sdl_backend.create_embedded_window(
             width=800,
             height=600,
-            title="SDL Viewport (standalone test)",
+            title="SDL Viewport",
         )
+
+        # Встраиваем SDL окно в Qt через QWindow.fromWinId
+        native_handle = self._backend_window.native_handle
+        self._qwindow = QWindow.fromWinId(native_handle)
+        self._gl_widget = QWidget.createWindowContainer(self._qwindow, self._container)
+        self._gl_widget.setMinimumSize(50, 50)
+        self._gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        layout.addWidget(self._gl_widget)
 
         # Создаём WindowRenderSurface
         self._render_surface = WindowRenderSurface(self._backend_window)
