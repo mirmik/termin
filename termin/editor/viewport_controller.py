@@ -180,6 +180,9 @@ class ViewportController:
         # Swap buffers (единственный раз за кадр)
         self._backend_window.swap_buffers()
 
+        # Сбрасываем флаг необходимости рендеринга
+        self._backend_window.clear_render_flag()
+
         # Обрабатываем отложенные события после рендера
         self._after_render()
 

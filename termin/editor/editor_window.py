@@ -1076,10 +1076,19 @@ class EditorWindow(QMainWindow):
         Handles rendering.
         Note: Game mode updates are handled by GameModeController's QTimer.
         """
-        # Render main editor viewport
-        if self.viewport_controller is not None:
-            self.viewport_controller.render()
+        # In game mode - always render at target FPS
+        # In editor mode - render only when needed (on-demand)
+        is_playing = self.game_mode_controller.is_playing if self.game_mode_controller else False
 
-        # Render additional displays
-        if self._rendering_controller is not None:
-            self._rendering_controller.render_additional_displays()
+        needs_render = is_playing
+        if not needs_render and self.viewport_controller is not None:
+            needs_render = self.viewport_controller.needs_render()
+
+        if needs_render:
+            # Render main editor viewport
+            if self.viewport_controller is not None:
+                self.viewport_controller.render()
+
+            # Render additional displays
+            if self._rendering_controller is not None:
+                self._rendering_controller.render_additional_displays()
