@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QWindow
 from PyQt6.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 if TYPE_CHECKING:
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.platform.backends.base import BackendWindow, GraphicsBackend, WindowBackend
+    from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
     from termin.visualization.render import RenderEngine
     from termin.editor.viewport_list_widget import ViewportListWidget
     from termin.editor.inspector_controller import InspectorController
@@ -46,6 +48,7 @@ class RenderingController:
         get_scene: Optional[Callable[[], "Scene"]] = None,
         get_graphics: Optional[Callable[[], "GraphicsBackend"]] = None,
         get_window_backend: Optional[Callable[[], "WindowBackend"]] = None,
+        get_sdl_backend: Optional[Callable[[], "SDLEmbeddedWindowBackend"]] = None,
         get_render_engine: Optional[Callable[[], "RenderEngine"]] = None,
         on_display_selected: Optional[Callable[["Display"], None]] = None,
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
@@ -61,6 +64,7 @@ class RenderingController:
             get_scene: Callback to get current scene.
             get_graphics: Callback to get GraphicsBackend for creating surfaces.
             get_window_backend: Callback to get WindowBackend for creating GL widgets.
+            get_sdl_backend: Callback to get SDLEmbeddedWindowBackend for creating SDL windows.
             get_render_engine: Callback to get RenderEngine for rendering.
             on_display_selected: Callback when display is selected.
             on_viewport_selected: Callback when viewport is selected.
@@ -72,6 +76,7 @@ class RenderingController:
         self._get_scene = get_scene
         self._get_graphics = get_graphics
         self._get_window_backend = get_window_backend
+        self._get_sdl_backend = get_sdl_backend
         self._get_render_engine = get_render_engine
         self._on_display_selected = on_display_selected
         self._on_viewport_selected = on_viewport_selected
@@ -82,9 +87,10 @@ class RenderingController:
         self._selected_display: Optional["Display"] = None
         self._selected_viewport: Optional["Viewport"] = None
 
-        # Map display id -> (tab container widget, BackendWindow)
+        # Map display id -> (tab container widget, BackendWindow, QWindow)
         # Editor display (index 0) is managed externally, not stored here
-        self._display_tabs: dict[int, Tuple[QWidget, "BackendWindow"]] = {}
+        # QWindow is stored to prevent garbage collection
+        self._display_tabs: dict[int, Tuple[QWidget, "BackendWindow", QWindow]] = {}
 
         # Map display id -> dict of viewport id -> ViewportRenderState
         self._display_render_states: dict[int, dict[int, "ViewportRenderState"]] = {}
@@ -161,7 +167,7 @@ class RenderingController:
 
         # Clean up tab resources
         if display_id in self._display_tabs:
-            tab_container, backend_window = self._display_tabs.pop(display_id)
+            tab_container, backend_window, _qwindow = self._display_tabs.pop(display_id)
             # Close backend window
             if backend_window is not None:
                 backend_window.close()
@@ -230,14 +236,14 @@ class RenderingController:
 
     def _on_add_display_requested(self) -> None:
         """Handle request to add new display."""
-        if self._get_graphics is None or self._get_window_backend is None:
+        if self._get_graphics is None or self._get_sdl_backend is None:
             return
         if self._center_tabs is None:
             return
 
         graphics = self._get_graphics()
-        window_backend = self._get_window_backend()
-        if graphics is None or window_backend is None:
+        sdl_backend = self._get_sdl_backend()
+        if graphics is None or sdl_backend is None:
             return
 
         # Generate unique name
@@ -255,13 +261,20 @@ class RenderingController:
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(0)
 
-        # Create BackendWindow (OpenGL widget) inside the tab
-        backend_window = window_backend.create_window(
+        # Create SDL window with OpenGL context
+        backend_window = sdl_backend.create_embedded_window(
             width=800,
             height=600,
             title=name,
-            parent=tab_container,
         )
+
+        # Embed SDL window into Qt via QWindow.fromWinId
+        native_handle = backend_window.native_handle
+        qwindow = QWindow.fromWinId(native_handle)
+        gl_widget = QWidget.createWindowContainer(qwindow, tab_container)
+        gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        gl_widget.setMinimumSize(50, 50)
+        tab_layout.addWidget(gl_widget)
 
         # Create WindowRenderSurface and Display
         from termin.visualization.render.surface import WindowRenderSurface
@@ -270,21 +283,12 @@ class RenderingController:
         surface = WindowRenderSurface(backend_window)
         display = Display(surface)
 
-        # Add GL widget to tab layout
-        gl_widget = backend_window.widget
-        gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        gl_widget.setMinimumSize(50, 50)
-        tab_layout.addWidget(gl_widget)
-
-        # Store mapping
+        # Store mapping (include qwindow to prevent GC)
         display_id = id(display)
-        self._display_tabs[display_id] = (tab_container, backend_window)
+        self._display_tabs[display_id] = (tab_container, backend_window, qwindow)
 
         # Initialize render states dict for this display
         self._display_render_states[display_id] = {}
-
-        # Connect paintGL for rendering
-        self._setup_display_rendering(display, gl_widget, surface)
 
         # Add display (this will call _update_center_tabs)
         self.add_display(display, name)
@@ -396,58 +400,6 @@ class RenderingController:
 
     # --- Center tabs management ---
 
-    # --- Rendering for additional displays ---
-
-    def _setup_display_rendering(self, display: "Display", gl_widget, surface) -> None:
-        """Setup paintGL callback for additional display rendering."""
-        display_id = id(display)
-
-        def do_render():
-            self._render_display(display, surface)
-
-        # Override paintGL on the GL widget
-        gl_widget.paintGL = do_render
-
-    def _render_display(self, display: "Display", surface) -> None:
-        """Render all viewports of a display."""
-        if self._get_render_engine is None or self._get_graphics is None:
-            return
-
-        render_engine = self._get_render_engine()
-        graphics = self._get_graphics()
-        if render_engine is None or graphics is None:
-            return
-
-        display_id = id(display)
-        if display_id not in self._display_render_states:
-            return
-
-        graphics.ensure_ready()
-        surface.make_current()
-
-        from termin.visualization.render import RenderView
-
-        # Collect views and states for all viewports
-        views_and_states = []
-        sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
-
-        for viewport in sorted_viewports:
-            state = self._get_or_create_viewport_state(display_id, viewport)
-            view = RenderView(
-                scene=viewport.scene,
-                camera=viewport.camera,
-                rect=viewport.rect,
-                canvas=viewport.canvas,
-            )
-            views_and_states.append((view, state))
-
-        # Render all viewports
-        render_engine.render_views(
-            surface=surface,
-            views=views_and_states,
-            present=False,  # Qt handles swap buffers
-        )
-
     def _get_or_create_viewport_state(self, display_id: int, viewport: "Viewport"):
         """Get or create ViewportRenderState for a viewport."""
         from termin.visualization.render import ViewportRenderState
@@ -484,10 +436,75 @@ class RenderingController:
                 continue
 
             name = self._display_names.get(display_id, "Display")
-            tab_container, _backend_window = self._display_tabs[display_id]
+            tab_container, _backend_window, _qwindow = self._display_tabs[display_id]
             self._center_tabs.addTab(tab_container, name)
 
     def _request_update(self) -> None:
         """Request viewport update."""
         if self._on_request_update is not None:
             self._on_request_update()
+
+    def render_additional_displays(self) -> None:
+        """Render all additional displays (called from main render loop)."""
+        if self._get_render_engine is None or self._get_graphics is None:
+            return
+
+        render_engine = self._get_render_engine()
+        graphics = self._get_graphics()
+        if render_engine is None or graphics is None:
+            return
+
+        from termin.visualization.render import RenderView
+
+        for display in self._displays:
+            display_id = id(display)
+
+            # Skip Editor display (rendered separately)
+            if display_id not in self._display_tabs:
+                continue
+
+            # Get the backend window for this display
+            _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
+            if backend_window is None:
+                continue
+
+            # Make SDL context current
+            backend_window.make_current()
+
+            # Check resize
+            backend_window.check_resize()
+
+            graphics.ensure_ready()
+
+            # Get surface from display
+            surface = display.surface
+            if surface is None:
+                continue
+
+            # Collect views and states
+            if display_id not in self._display_render_states:
+                continue
+
+            views_and_states = []
+            sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
+
+            for viewport in sorted_viewports:
+                state = self._get_or_create_viewport_state(display_id, viewport)
+                if state is None:
+                    continue
+                view = RenderView(
+                    scene=viewport.scene,
+                    camera=viewport.camera,
+                    rect=viewport.rect,
+                    canvas=viewport.canvas,
+                )
+                views_and_states.append((view, state))
+
+            # Render
+            if views_and_states:
+                render_engine.render_views(
+                    surface=surface,
+                    views=views_and_states,
+                    present=False,
+                )
+                backend_window.swap_buffers()

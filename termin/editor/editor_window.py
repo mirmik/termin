@@ -519,6 +519,7 @@ class EditorWindow(QMainWindow):
             get_scene=lambda: self.scene,
             get_graphics=self._get_graphics,
             get_window_backend=self._get_window_backend,
+            get_sdl_backend=lambda: self._sdl_backend,
             get_render_engine=self._get_render_engine,
             on_request_update=self._request_viewport_update,
         )
@@ -1075,6 +1076,10 @@ class EditorWindow(QMainWindow):
         Handles rendering.
         Note: Game mode updates are handled by GameModeController's QTimer.
         """
-        # Always render - SDL window needs continuous updates
+        # Render main editor viewport
         if self.viewport_controller is not None:
             self.viewport_controller.render()
+
+        # Render additional displays
+        if self._rendering_controller is not None:
+            self._rendering_controller.render_additional_displays()
