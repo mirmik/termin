@@ -63,12 +63,14 @@ class TransformEditCommand(UndoCommand):
     def do(self) -> None:
         if self._entity is not None:
             self._entity.scale = self._new_scale
-        self._transform.relocate(self._new_pose)
+        # Use relocate_global since gizmo works in world coordinates
+        self._transform.relocate_global(self._new_pose)
 
     def undo(self) -> None:
         if self._entity is not None:
             self._entity.scale = self._old_scale
-        self._transform.relocate(self._old_pose)
+        # Use relocate_global since gizmo works in world coordinates
+        self._transform.relocate_global(self._old_pose)
 
     def merge_with(self, other: UndoCommand) -> bool:
         """
