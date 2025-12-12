@@ -81,6 +81,12 @@ class LineRenderer(Component):
     """
 
     inspect_fields = {
+        "points": InspectField(
+            path="points",
+            label="Points",
+            kind="vec3_list",
+            setter=lambda obj, value: obj.set_points(value),
+        ),
         "color": InspectField(
             path="color",
             label="Color",

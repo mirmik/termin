@@ -37,6 +37,7 @@ from termin.editor.editor_commands import (
     RemoveComponentCommand,
 )
 from termin.editor.transform_inspector import TransformInspector
+from termin.editor.widgets.vec3_list_widget import Vec3ListWidget
 
 logger = logging.getLogger(__name__)
 
@@ -381,6 +382,9 @@ class ComponentInspectorPanel(QWidget):
             btn._set_color = set_btn_color
             return btn
 
+        if kind == "vec3_list":
+            return Vec3ListWidget()
+
         le = QLineEdit()
         le.setReadOnly(True)
         return le
@@ -474,6 +478,11 @@ class ComponentInspectorPanel(QWidget):
                 w._set_color(qcol)
             return
 
+        if isinstance(w, Vec3ListWidget) and field.kind == "vec3_list":
+            points = list(value) if value else []
+            w.set_value(points)
+            return
+
     def _connect_widget(self, w: QWidget, key: str, field: InspectField):
         def commit(merge: bool):
             if self._updating_from_model or self._component is None:
@@ -533,6 +542,8 @@ class ComponentInspectorPanel(QWidget):
                 commit(False)
 
             w.clicked.connect(on_click)
+        elif isinstance(w, Vec3ListWidget) and field.kind == "vec3_list":
+            w.value_changed.connect(lambda: commit(False))
 
     def _read_widget_value(self, w: QWidget, field: InspectField):
         if isinstance(w, QDoubleSpinBox):
@@ -571,6 +582,9 @@ class ComponentInspectorPanel(QWidget):
             if color_tuple is None:
                 return None
             return color_tuple
+
+        if isinstance(w, Vec3ListWidget) and field.kind == "vec3_list":
+            return w.get_value()
 
         return None
 
