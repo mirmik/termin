@@ -523,6 +523,7 @@ class ViewportController:
             output_res="color",
             shadow_res="shadow_maps",
             pass_name="Color",
+            phase_mark=set(["opaque"]),
         )
 
         skybox_pass = SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox")

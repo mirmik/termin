@@ -75,6 +75,9 @@ class ColorPass(RenderFramePass):
         pass_name: str = "Color",
         phase_mark: str | None = None,
     ):
+        if phase_mark is None:
+            phase_mark = set(["opaque"])
+
         reads = {input_res}
         if shadow_res is not None:
             reads.add(shadow_res)

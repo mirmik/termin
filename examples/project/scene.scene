@@ -7,38 +7,6 @@
       0.07999999821186066,
       1.0
     ],
-    "light_direction": [
-      -0.5,
-      -1.0,
-      -0.30000001192092896
-    ],
-    "light_color": [
-      1.0,
-      1.0,
-      1.0
-    ],
-    "ambient_color": [
-      1.0,
-      1.0,
-      1.0
-    ],
-    "ambient_intensity": 0.1,
-    "skybox_type": "gradient",
-    "skybox_color": [
-      0.30000001192092896,
-      0.5,
-      0.800000011920929
-    ],
-    "skybox_top_color": [
-      0.05000000074505806,
-      0.10000000149011612,
-      0.25
-    ],
-    "skybox_bottom_color": [
-      0.30000001192092896,
-      0.30000001192092896,
-      0.3499999940395355
-    ],
     "entities": [
       {
         "name": "cylinder",
@@ -55,7 +23,7 @@
         "pose": {
           "position": [
             -2.0,
-            0.0,
+            2.298583149909973,
             0.0
           ],
           "rotation": [
@@ -136,9 +104,9 @@
         "selectable": true,
         "pose": {
           "position": [
-            3.0,
+            3.2641043663024902,
             0.0,
-            0.0
+            1.361357569694519
           ],
           "rotation": [
             0.0,
@@ -246,21 +214,178 @@
           }
         ],
         "children": []
+      },
+      {
+        "name": "GameCamera",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            1.0332441329956055,
+            -3.823877990245819,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "fov_deg": 59.99999999999999,
+              "near": 0.1,
+              "far": 100.0
+            },
+            "type": "PerspectiveCameraComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "name": "lines",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            8.038133978843689,
+            2.3451662063598633,
+            0.08105379063636065
+          ],
+          "rotation": [
+            0.0,
+            -0.005041636113061407,
+            0.0,
+            0.9999872908718908
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "points": [
+                [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  2.0,
+                  0.0,
+                  10.0
+                ]
+              ],
+              "width": 1.0,
+              "raw_lines": true,
+              "material": "cylinder_mat"
+            },
+            "type": "LineRenderer"
+          }
+        ],
+        "children": []
       }
+    ],
+    "light_direction": [
+      -0.5,
+      -1.0,
+      -0.30000001192092896
+    ],
+    "light_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_intensity": 0.1,
+    "skybox_type": "gradient",
+    "skybox_color": [
+      0.30000001192092896,
+      0.5,
+      0.800000011920929
+    ],
+    "skybox_top_color": [
+      0.05000000074505806,
+      0.10000000149011612,
+      0.25
+    ],
+    "skybox_bottom_color": [
+      0.30000001192092896,
+      0.30000001192092896,
+      0.3499999940395355
     ]
   },
   "editor": {
     "camera": {
       "target": [
-        0.0,
-        0.0,
-        0.0
+        5.1970431094305045,
+        -1.6136937849235755,
+        -1.3730790517510905
       ],
-      "radius": 5.5,
-      "azimuth": 1.0925761117484503,
-      "elevation": 0.5201081170943102
+      "radius": 7.0,
+      "azimuth": 8.747590210995572,
+      "elevation": 0.3420845333908885
     },
-    "selected_entity": "cylinder"
+    "displays": [
+      {
+        "name": "Editor",
+        "is_editor": true,
+        "viewports": [
+          {
+            "camera_entity": "camera",
+            "rect": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "depth": 0
+          }
+        ]
+      },
+      {
+        "name": "Display 0",
+        "is_editor": false,
+        "viewports": [
+          {
+            "camera_entity": "GameCamera",
+            "rect": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "depth": 0
+          }
+        ]
+      }
+    ]
   },
   "resources": {
     "materials": {
