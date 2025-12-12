@@ -58,18 +58,19 @@ class EditorSettings:
 
     # --- Удобные методы для частых настроек ---
 
-    def get_last_project_path(self) -> Path | None:
-        """Получить путь последнего открытого проекта."""
+    def get_last_project_file(self) -> Path | None:
+        """Получить путь к файлу последнего открытого проекта (.terminproj)."""
         path_str = self.get(self.KEY_LAST_PROJECT_PATH)
         if path_str:
             path = Path(path_str)
-            if path.exists() and path.is_dir():
+            if path.exists() and path.is_file() and path.suffix == ".terminproj":
                 return path
         return None
 
-    def set_last_project_path(self, path: Path | str) -> None:
-        """Сохранить путь проекта."""
+    def set_last_project_file(self, path: Path | str) -> None:
+        """Сохранить путь к файлу проекта."""
         self.set(self.KEY_LAST_PROJECT_PATH, str(path))
+
 
     def get_last_scene_path(self) -> Path | None:
         """Получить путь последней открытой сцены."""

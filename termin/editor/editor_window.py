@@ -1,5 +1,7 @@
 # ===== termin/editor/editor_window.py =====
 import os
+from pathlib import Path
+
 from PyQt6 import uic
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit
 from PyQt6.QtWidgets import QStatusBar, QToolBar, QPushButton, QSizePolicy
@@ -79,6 +81,7 @@ class EditorWindow(QMainWindow):
         self.game_mode_controller: GameModeController | None = None
         self.project_browser = None
         self._project_name: str | None = None
+        self._current_project_file: Path | None = None
         self._play_button: QPushButton | None = None
         self._viewport_list_widget: ViewportListWidget | None = None
         self._rendering_controller: RenderingController | None = None
@@ -279,6 +282,7 @@ class EditorWindow(QMainWindow):
         """Create editor menu bar via MenuBarController."""
         self._menu_bar_controller = MenuBarController(
             menu_bar=self.menuBar(),
+            on_new_project=self._new_project,
             on_open_project=self._open_project,
             on_new_scene=self._new_scene,
             on_save_scene=self._save_scene,
@@ -534,11 +538,14 @@ class EditorWindow(QMainWindow):
         if self.projectDirTree is None or self.projectFileList is None:
             return
 
-        # Загружаем последний открытый проект или используем cwd
+        # Загружаем последний открытый проект (если есть валидный .terminproj)
         settings = EditorSettings.instance()
-        project_root = settings.get_last_project_path()
-        if project_root is None:
-            project_root = Path.cwd()
+        project_file = settings.get_last_project_file()
+
+        project_root: Path | None = None
+        if project_file is not None:
+            project_root = project_file.parent
+            self._current_project_file = project_file
 
         self.project_browser = ProjectBrowser(
             dir_tree=self.projectDirTree,
@@ -549,7 +556,10 @@ class EditorWindow(QMainWindow):
         )
 
         # Обновляем имя проекта и заголовок окна
-        self._project_name = project_root.name
+        if project_root is not None:
+            self._project_name = project_root.name
+        else:
+            self._project_name = None
         self._update_window_title()
 
     def _on_project_file_selected(self, file_path) -> None:
@@ -583,33 +593,79 @@ class EditorWindow(QMainWindow):
             if self.consoleOutput is not None:
                 self.consoleOutput.appendPlainText(f"Opened: {file_path}")
 
-    def _open_project(self) -> None:
-        """Открыть директорию проекта."""
-        from pathlib import Path
+    def _new_project(self) -> None:
+        """Создать новый проект (.terminproj файл)."""
+        current_dir = str(Path.cwd())
+        if self._current_project_file is not None:
+            current_dir = str(self._current_project_file.parent)
 
-        current_root = None
-        if self.project_browser is not None and self.project_browser.root_path:
-            current_root = str(self.project_browser.root_path)
-
-        dir_path = QFileDialog.getExistingDirectory(
+        file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Open Project Directory",
-            current_root or str(Path.cwd()),
+            "Create New Project",
+            current_dir,
+            "Termin Project (*.terminproj)",
         )
 
-        if dir_path:
-            self.project_browser.set_root_path(dir_path)
-            self._project_name = Path(dir_path).name
-            self._update_window_title()
+        if not file_path:
+            return
 
-            # Сохраняем путь для следующего запуска
-            EditorSettings.instance().set_last_project_path(dir_path)
+        # Добавляем расширение если не указано
+        if not file_path.endswith(".terminproj"):
+            file_path += ".terminproj"
 
-            if self.consoleOutput is not None:
-                self.consoleOutput.appendPlainText(f"Opened project: {dir_path}")
+        project_file = Path(file_path)
 
-            # Сканируем ресурсы нового проекта
-            self._scan_project_resources()
+        # Создаём пустой файл проекта (пока просто пустой JSON)
+        import json
+        project_data = {
+            "version": 1,
+            "name": project_file.stem,
+        }
+        project_file.write_text(json.dumps(project_data, indent=2), encoding="utf-8")
+
+        self._load_project_file(project_file)
+
+    def _open_project(self) -> None:
+        """Открыть существующий проект (.terminproj файл)."""
+        current_dir = str(Path.cwd())
+        if self._current_project_file is not None:
+            current_dir = str(self._current_project_file.parent)
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open Project",
+            current_dir,
+            "Termin Project (*.terminproj)",
+        )
+
+        if not file_path:
+            return
+
+        project_file = Path(file_path)
+        if not project_file.exists() or project_file.suffix != ".terminproj":
+            return
+
+        self._load_project_file(project_file)
+
+    def _load_project_file(self, project_file: Path) -> None:
+        """Загрузить проект из файла .terminproj."""
+        project_root = project_file.parent
+
+        self._current_project_file = project_file
+        self._project_name = project_root.name
+
+        if self.project_browser is not None:
+            self.project_browser.set_root_path(str(project_root))
+
+        self._update_window_title()
+
+        # Сохраняем путь для следующего запуска
+        EditorSettings.instance().set_last_project_file(project_file)
+
+        self._log_to_console(f"Opened project: {project_file}")
+
+        # Сканируем ресурсы нового проекта
+        self._scan_project_resources()
 
     def _show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""

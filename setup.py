@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
 
-# Debug: кто импортирует этот файл?
-import traceback
-print("=" * 60)
-print("setup.py imported! Stack trace:")
-traceback.print_stack()
-print("=" * 60)
-
 from wheel.bdist_wheel import bdist_wheel as bdist_wheel_
 from setuptools import setup, Extension, Command
 from distutils.util import get_platform

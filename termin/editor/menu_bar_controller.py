@@ -28,6 +28,7 @@ class MenuBarController:
         self,
         menu_bar: "QMenuBar",
         # Action callbacks
+        on_new_project: Callable,
         on_open_project: Callable,
         on_new_scene: Callable,
         on_save_scene: Callable,
@@ -57,6 +58,7 @@ class MenuBarController:
 
         self._setup_menu_bar(
             menu_bar,
+            on_new_project=on_new_project,
             on_open_project=on_open_project,
             on_new_scene=on_new_scene,
             on_save_scene=on_save_scene,
@@ -78,6 +80,7 @@ class MenuBarController:
     def _setup_menu_bar(
         self,
         menu_bar: "QMenuBar",
+        on_new_project: Callable,
         on_open_project: Callable,
         on_new_scene: Callable,
         on_save_scene: Callable,
@@ -102,7 +105,10 @@ class MenuBarController:
         game_menu = menu_bar.addMenu("Game")
         debug_menu = menu_bar.addMenu("Debug")
 
-        # File menu
+        # File menu - Project
+        new_project_action = file_menu.addAction("New Project...")
+        new_project_action.triggered.connect(on_new_project)
+
         open_project_action = file_menu.addAction("Open Project...")
         open_project_action.triggered.connect(on_open_project)
 

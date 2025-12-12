@@ -298,7 +298,6 @@ class ResourceManager:
         import sys
 
         before = set(self.components.keys())
-
         filename = os.path.basename(filepath)
         module_name = f"_dynamic_components_.{os.path.splitext(filename)[0]}_{id(filepath)}"
 
