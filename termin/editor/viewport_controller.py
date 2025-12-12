@@ -142,25 +142,12 @@ class ViewportController:
         # Qt may have switched to its own context
         self._backend_window.make_current()
 
-        # DEBUG: Clear to red to see if GL commands work at all
-        from OpenGL import GL
-        GL.glClearColor(1.0, 0.0, 0.0, 1.0)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
-
-        # Check for GL errors
-        err = GL.glGetError()
-        if err != GL.GL_NO_ERROR:
-            print(f"GL error after clear: {err}")
-
-        # MINIMAL TEST: Just swap the red buffer
-        self._backend_window.swap_buffers()
-        return
-
         # Проверяем resize
         self._backend_window.check_resize()
 
         self._graphics.ensure_ready()
-        self._render_surface.make_current()
+        # Don't call make_current again - we already did it above
+        # self._render_surface.make_current()
 
         # Собираем пары (RenderView, ViewportRenderState) для всех viewport'ов
         # Сортируем по depth (меньше = раньше)
@@ -182,7 +169,7 @@ class ViewportController:
         self._render_engine.render_views(
             surface=self._render_surface,
             views=views_and_states,
-            present=True,  # SDL: мы сами делаем swap buffers
+            present=True,
         )
 
         # Swap buffers
