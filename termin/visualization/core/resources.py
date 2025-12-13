@@ -94,7 +94,6 @@ class ResourceManager:
             cls._creating_singleton = True
             try:
                 cls._instance = cls()
-                print(f"[ResourceManager] Created singleton instance (id={id(cls._instance)})")
             finally:
                 cls._creating_singleton = False
         return cls._instance
@@ -213,17 +212,13 @@ class ResourceManager:
 
     # --------- Меши ---------
     def register_mesh(self, name: str, mesh: "MeshDrawable"):
-        print(f"[ResourceManager] register_mesh: {name} (id={id(self)})")
         self.meshes[name] = mesh
-        print(f"[ResourceManager] meshes now: {list(self.meshes.keys())}")
 
     def get_mesh(self, name: str) -> Optional["MeshDrawable"]:
         return self.meshes.get(name)
 
     def list_mesh_names(self) -> list[str]:
-        names = sorted(self.meshes.keys())
-        print(f"[ResourceManager] list_mesh_names: {names} (id={id(self)})")
-        return names
+        return sorted(self.meshes.keys())
 
     def find_mesh_name(self, mesh: "MeshDrawable") -> Optional[str]:
         for n, m in self.meshes.items():

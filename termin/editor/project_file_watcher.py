@@ -172,6 +172,28 @@ class ProjectFileWatcher:
         self._watched_files.clear()
         self._all_files_by_ext.clear()
 
+    def rescan(self) -> None:
+        """
+        Rescan project directory for resources.
+
+        Clears tracked files and re-processes all resource files.
+        Used when resources need to be reloaded (e.g., after scene load).
+        """
+        project_path = self._project_path
+        if project_path is None:
+            return
+
+        # Clear processor file tracking
+        for processor in self.get_all_processors():
+            processor._file_to_resources.clear()
+
+        # Clear watched files (but keep directories)
+        self._watched_files.clear()
+        self._all_files_by_ext.clear()
+
+        # Re-scan
+        self.watch_directory(project_path)
+
     def watch_directory(self, path: str) -> None:
         """
         Recursively watch a directory for resource files.

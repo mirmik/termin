@@ -79,6 +79,7 @@ class EditorWindow(QMainWindow):
             select_entity_by_name=self._select_entity_by_name,
             get_displays_data=self._get_displays_data,
             set_displays_data=self._set_displays_data,
+            rescan_file_resources=self._rescan_file_resources,
         )
 
         # контроллеры создадим чуть позже
@@ -338,10 +339,8 @@ class EditorWindow(QMainWindow):
         # --- Инициализация настроек (поиск VS Code и т.п.) ---
         EditorSettings.instance().init_text_editor_if_empty()
 
-        # --- Сканируем ресурсы проекта и включаем отслеживание ---
-        self._scan_project_resources()
-
         # --- Загружаем последнюю открытую сцену ---
+        # Загрузка сцены автоматически триггерит _rescan_file_resources через WorldPersistence
         self._scene_file_controller.load_last_scene()
 
     @property
@@ -771,8 +770,8 @@ class EditorWindow(QMainWindow):
 
         self._log_to_console(f"Opened project: {project_file}")
 
-        # Сканируем ресурсы нового проекта
-        self._scan_project_resources()
+        # Сбрасываем сцену и пересканируем ресурсы
+        self.world_persistence.reset()
 
     def _show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""
@@ -806,6 +805,21 @@ class EditorWindow(QMainWindow):
                 f"Scanned project: {stats.get('material', 0)} materials, "
                 f"{stats.get('shader', 0)} shaders, {stats.get('texture', 0)} textures"
             )
+
+    def _rescan_file_resources(self) -> None:
+        """Rescan file resources. Called by WorldPersistence on scene load/reset."""
+        project_path = self._get_project_path()
+        if project_path is None:
+            return
+
+        # Register built-in DefaultShader
+        self.resource_manager.register_default_shader()
+
+        # If watcher not enabled yet, enable it. Otherwise rescan.
+        if not self._project_file_watcher.is_enabled:
+            self._project_file_watcher.enable(project_path)
+        else:
+            self._project_file_watcher.rescan()
 
     def _init_status_bar(self) -> None:
         """

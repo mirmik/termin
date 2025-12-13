@@ -56,6 +56,7 @@ class WorldPersistence:
         select_entity_by_name: Optional[Callable[[str], None]] = None,
         get_displays_data: Optional[Callable[[], list]] = None,
         set_displays_data: Optional[Callable[[list], None]] = None,
+        rescan_file_resources: Optional[Callable[[], None]] = None,
     ):
         """
         Args:
@@ -71,6 +72,7 @@ class WorldPersistence:
             select_entity_by_name: Колбэк для выделения сущности по имени.
             get_displays_data: Колбэк для получения данных дисплеев/вьюпортов.
             set_displays_data: Колбэк для восстановления дисплеев/вьюпортов.
+            rescan_file_resources: Колбэк для пересканирования файловых ресурсов проекта.
         """
         self._scene = scene
         self._resource_manager = resource_manager
@@ -82,6 +84,7 @@ class WorldPersistence:
         self._select_entity_by_name = select_entity_by_name
         self._get_displays_data = get_displays_data
         self._set_displays_data = set_displays_data
+        self._rescan_file_resources = rescan_file_resources
         self._current_scene_path: str | None = None
 
     @property
@@ -230,12 +233,16 @@ class WorldPersistence:
     def reset(self) -> None:
         """
         Полная очистка мира.
-        Создаёт НОВУЮ пустую сцену и очищает ресурсы.
+        Создаёт НОВУЮ пустую сцену и перезагружает файловые ресурсы.
         """
         # Очищаем ресурсы
         self._resource_manager.materials.clear()
         self._resource_manager.meshes.clear()
         self._resource_manager.textures.clear()
+
+        # Пересканируем файловые ресурсы проекта
+        if self._rescan_file_resources is not None:
+            self._rescan_file_resources()
 
         # Сбрасываем путь к сцене
         self._current_scene_path = None
@@ -312,17 +319,19 @@ class WorldPersistence:
         """
         from termin.visualization.core.resources import ResourceManager
 
-        # Очищаем и восстанавливаем ресурсы
+        # Очищаем все ресурсы
         self._resource_manager.materials.clear()
         self._resource_manager.meshes.clear()
         self._resource_manager.textures.clear()
 
+        # Пересканируем файловые ресурсы проекта
+        if self._rescan_file_resources is not None:
+            self._rescan_file_resources()
+
+        # Десериализуем ресурсы из сцены (поверх файловых)
         resources_data = data.get("resources", {})
         if resources_data:
-            restored_rm = ResourceManager.deserialize(resources_data)
-            self._resource_manager.materials.update(restored_rm.materials)
-            self._resource_manager.meshes.update(restored_rm.meshes)
-            self._resource_manager.textures.update(restored_rm.textures)
+            ResourceManager.deserialize(resources_data)
 
         # Создаём новую сцену
         new_scene = self._create_new_scene()
