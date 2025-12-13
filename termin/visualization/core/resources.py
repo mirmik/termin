@@ -210,6 +210,25 @@ class ResourceManager:
         program = ShaderMultyPhaseProgramm(program="DefaultShader", phases=[phase])
         self.shaders["DefaultShader"] = program
 
+    def register_builtin_materials(self) -> None:
+        """Регистрирует встроенные материалы."""
+        if "DefaultMaterial" in self.materials:
+            return
+
+        from termin.visualization.core.material import Material
+
+        # Убедимся что DefaultShader зарегистрирован
+        self.register_default_shader()
+
+        shader = self.shaders.get("DefaultShader")
+        if shader is None:
+            return
+
+        # Создаём DefaultMaterial
+        mat = Material.from_parsed(shader)
+        mat.name = "DefaultMaterial"
+        self.materials["DefaultMaterial"] = mat
+
     # --------- Меши ---------
     def register_mesh(self, name: str, mesh: "MeshDrawable"):
         self.meshes[name] = mesh

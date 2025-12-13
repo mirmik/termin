@@ -117,7 +117,6 @@ class EditorWindow(QMainWindow):
         )
 
         self._resource_loader.scan_builtin_components()
-        self._resource_loader.init_resources_from_scene()
 
         # --- ProjectFileWatcher ---
         self._project_file_watcher = ProjectFileWatcher(
@@ -812,8 +811,9 @@ class EditorWindow(QMainWindow):
         if project_path is None:
             return
 
-        # Register built-in DefaultShader
+        # Register built-in resources
         self.resource_manager.register_default_shader()
+        self.resource_manager.register_builtin_materials()
 
         # If watcher not enabled yet, enable it. Otherwise rescan.
         if not self._project_file_watcher.is_enabled:
