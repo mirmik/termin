@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Optional
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFormLayout,
     QLabel,
     QLineEdit,
@@ -39,12 +40,22 @@ class DisplayInspector(QWidget):
 
     name_changed = pyqtSignal(str)
     display_changed = pyqtSignal()
+    input_mode_changed = pyqtSignal(str)  # "none", "simple", "editor"
+
+    # Available input modes
+    INPUT_MODES = [
+        ("none", "None"),
+        ("simple", "Simple (Game)"),
+        ("editor", "Editor"),
+    ]
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
 
         self._display: Optional["Display"] = None
         self._display_name: str = ""
+        self._current_input_mode: str = "none"
+        self._updating: bool = False
 
         self._init_ui()
 
@@ -89,6 +100,19 @@ class DisplayInspector(QWidget):
         )
         self._editor_only_checkbox.stateChanged.connect(self._on_editor_only_changed)
         form.addRow("Editor Only:", self._editor_only_checkbox)
+
+        # Input mode combo
+        self._input_mode_combo = QComboBox()
+        self._input_mode_combo.setToolTip(
+            "Input handling mode for this display:\n"
+            "- None: No input handling\n"
+            "- Simple (Game): Routes input to scene (OrbitCamera, etc.)\n"
+            "- Editor: Full editor input (picking, gizmo, etc.)"
+        )
+        for mode_id, mode_label in self.INPUT_MODES:
+            self._input_mode_combo.addItem(mode_label, mode_id)
+        self._input_mode_combo.currentIndexChanged.connect(self._on_input_mode_changed)
+        form.addRow("Input:", self._input_mode_combo)
 
         layout.addLayout(form)
         layout.addStretch()
@@ -137,6 +161,10 @@ class DisplayInspector(QWidget):
         self._editor_only_checkbox.blockSignals(True)
         self._editor_only_checkbox.setChecked(False)
         self._editor_only_checkbox.blockSignals(False)
+        self._updating = True
+        self._input_mode_combo.setCurrentIndex(0)
+        self._current_input_mode = "none"
+        self._updating = False
 
     def _on_name_changed(self) -> None:
         """Handle name edit finished."""
@@ -151,6 +179,29 @@ class DisplayInspector(QWidget):
         if self._display is not None:
             self._display.editor_only = bool(state)
             self.display_changed.emit()
+
+    def _on_input_mode_changed(self, index: int) -> None:
+        """Handle input mode combo changed."""
+        if self._updating or self._display is None:
+            return
+
+        mode_id = self._input_mode_combo.itemData(index)
+        if mode_id and mode_id != self._current_input_mode:
+            self._current_input_mode = mode_id
+            self.input_mode_changed.emit(mode_id)
+            self.display_changed.emit()
+
+    def set_input_mode(self, mode: str) -> None:
+        """Set the current input mode selection."""
+        self._current_input_mode = mode
+        self._updating = True
+        try:
+            for i in range(self._input_mode_combo.count()):
+                if self._input_mode_combo.itemData(i) == mode:
+                    self._input_mode_combo.setCurrentIndex(i)
+                    break
+        finally:
+            self._updating = False
 
     def refresh(self) -> None:
         """Refresh display info."""

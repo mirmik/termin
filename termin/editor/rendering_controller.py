@@ -93,6 +93,12 @@ class RenderingController:
         # Map display id -> dict of viewport id -> ViewportRenderState
         self._display_render_states: dict[int, dict[int, "ViewportRenderState"]] = {}
 
+        # Map display id -> input manager (to prevent GC)
+        self._display_input_managers: dict[int, object] = {}
+
+        # Map display id -> input mode string ("none", "simple", "editor")
+        self._display_input_modes: dict[int, str] = {}
+
         # Editor display ID (not serialized, created before scene)
         self._editor_display_id: Optional[int] = None
 
@@ -112,6 +118,7 @@ class RenderingController:
 
         # Connect inspector signals
         self._inspector.display_inspector.name_changed.connect(self._on_display_name_changed)
+        self._inspector.display_inspector.input_mode_changed.connect(self._on_display_input_mode_changed)
         self._inspector.viewport_inspector.display_changed.connect(self._on_viewport_display_changed)
         self._inspector.viewport_inspector.camera_changed.connect(self._on_viewport_camera_changed)
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
@@ -272,6 +279,9 @@ class RenderingController:
         self._display_render_states[display_id] = {}
         self._editor_display_id = display_id
 
+        # Editor display uses EditorDisplayInputManager (managed by EditorViewportFeatures)
+        self._display_input_modes[display_id] = "editor"
+
         # Add to displays list
         self.add_display(display, "Editor")
 
@@ -336,6 +346,11 @@ class RenderingController:
         if display is not None:
             name = self._display_names.get(id(display), "")
             self._inspector.show_display_inspector(display, name)
+
+            # Set current input mode in inspector
+            display_id = id(display)
+            input_mode = self._display_input_modes.get(display_id, "none")
+            self._inspector.display_inspector.set_input_mode(input_mode)
 
             if self._on_display_selected is not None:
                 self._on_display_selected(display)
@@ -417,6 +432,20 @@ class RenderingController:
         # Initialize render states dict for this display
         self._display_render_states[display_id] = {}
 
+        # Create input manager for this display (default: simple mode)
+        from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+
+        input_manager = SimpleDisplayInputManager(
+            backend_window=backend_window,
+            display=display,
+            on_request_update=self._request_update,
+        )
+        # Store input manager to prevent GC
+        self._display_input_managers[display_id] = input_manager
+
+        # Store input mode
+        self._display_input_modes[display_id] = "simple"
+
         # Add display (this will call _update_center_tabs)
         self.add_display(display, name)
         self._request_update()
@@ -472,6 +501,57 @@ class RenderingController:
         """Handle display name change from inspector."""
         if self._selected_display is not None:
             self.set_display_name(self._selected_display, new_name)
+
+    def _on_display_input_mode_changed(self, mode: str) -> None:
+        """Handle display input mode change from inspector."""
+        if self._selected_display is None:
+            return
+
+        display = self._selected_display
+        display_id = id(display)
+
+        # Get backend_window for this display
+        tab_info = self._display_tabs.get(display_id)
+        if tab_info is None:
+            return
+
+        _tab_container, backend_window, _qwindow = tab_info
+
+        # Remove old input manager
+        if display_id in self._display_input_managers:
+            del self._display_input_managers[display_id]
+
+        # Create new input manager based on mode
+        if mode == "none":
+            # No input handling
+            backend_window.set_cursor_pos_callback(None)
+            backend_window.set_scroll_callback(None)
+            backend_window.set_mouse_button_callback(None)
+            backend_window.set_key_callback(None)
+        elif mode == "simple":
+            from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+
+            input_manager = SimpleDisplayInputManager(
+                backend_window=backend_window,
+                display=display,
+                on_request_update=self._request_update,
+            )
+            self._display_input_managers[display_id] = input_manager
+        elif mode == "editor":
+            # Editor mode requires additional setup (picking, gizmo, etc.)
+            # For now, use SimpleDisplayInputManager as base
+            from termin.visualization.platform.input_manager import SimpleDisplayInputManager
+
+            input_manager = SimpleDisplayInputManager(
+                backend_window=backend_window,
+                display=display,
+                on_request_update=self._request_update,
+            )
+            self._display_input_managers[display_id] = input_manager
+
+        # Store mode
+        self._display_input_modes[display_id] = mode
+        self._request_update()
 
     def _on_viewport_display_changed(self, new_display: "Display") -> None:
         """Handle viewport display change from inspector."""
