@@ -590,37 +590,6 @@ class RenderingController:
 
         return viewport_states[viewport_id]
 
-    def set_viewport_pipeline(
-        self,
-        viewport: "Viewport",
-        pipeline: "RenderPipeline",
-    ) -> None:
-        """
-        Set custom pipeline for a viewport.
-
-        Args:
-            viewport: Viewport to configure.
-            pipeline: RenderPipeline to use.
-        """
-        from termin.visualization.render import ViewportRenderState
-        from termin.visualization.render.framegraph import RenderPipeline
-
-        # Find display for this viewport
-        display = viewport.display
-        if display is None:
-            return
-
-        display_id = id(display)
-        if display_id not in self._display_render_states:
-            self._display_render_states[display_id] = {}
-
-        viewport_id = id(viewport)
-        viewport_states = self._display_render_states[display_id]
-
-        if viewport_id in viewport_states:
-            viewport_states[viewport_id].pipeline = pipeline
-        else:
-            viewport_states[viewport_id] = ViewportRenderState(pipeline=pipeline)
 
     def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
         """Get ViewportRenderState for a viewport."""
