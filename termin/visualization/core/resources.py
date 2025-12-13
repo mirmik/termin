@@ -34,6 +34,7 @@ _BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.colliders.collider_component", "ColliderComponent"),
     # Воксели
     ("termin.voxels.voxelizer_component", "VoxelizerComponent"),
+    ("termin.voxels.display_component", "VoxelDisplayComponent"),
 ]
 
 # Список встроенных FramePass'ов для предрегистрации.
