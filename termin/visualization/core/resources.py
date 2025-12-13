@@ -68,8 +68,14 @@ class ResourceManager:
     """
 
     _instance: "ResourceManager | None" = None
+    _creating_singleton: bool = False
 
     def __init__(self):
+        if not ResourceManager._creating_singleton:
+            raise RuntimeError(
+                "ResourceManager is a singleton. Use ResourceManager.instance() instead of ResourceManager()."
+            )
+
         self.materials: Dict[str, "Material"] = {}
         self.shaders: Dict[str, "ShaderMultyPhaseProgramm"] = {}
         self.meshes: Dict[str, "MeshDrawable"] = {}
@@ -85,8 +91,12 @@ class ResourceManager:
     @classmethod
     def instance(cls) -> "ResourceManager":
         if cls._instance is None:
-            cls._instance = cls()
-            print(f"[ResourceManager] Created singleton instance (id={id(cls._instance)})")
+            cls._creating_singleton = True
+            try:
+                cls._instance = cls()
+                print(f"[ResourceManager] Created singleton instance (id={id(cls._instance)})")
+            finally:
+                cls._creating_singleton = False
         return cls._instance
 
     # --------- MaterialKeeper'ы ---------
