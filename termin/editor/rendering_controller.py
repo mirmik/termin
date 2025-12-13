@@ -52,6 +52,7 @@ class RenderingController:
         on_display_selected: Optional[Callable[["Display"], None]] = None,
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
+        get_editor_pipeline: Optional[Callable[[], "RenderPipeline"]] = None,
     ):
         """
         Initialize RenderingController.
@@ -78,6 +79,7 @@ class RenderingController:
         self._on_display_selected = on_display_selected
         self._on_viewport_selected = on_viewport_selected
         self._on_request_update = on_request_update
+        self._get_editor_pipeline = get_editor_pipeline
 
         self._displays: List["Display"] = []
         self._display_names: dict[int, str] = {}
@@ -115,6 +117,10 @@ class RenderingController:
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
         self._inspector.viewport_inspector.pipeline_changed.connect(self._on_viewport_pipeline_changed)
         self._inspector.pipeline_inspector.pipeline_changed.connect(self._on_pipeline_inspector_changed)
+
+        # Set editor pipeline getter for ViewportInspector
+        if self._get_editor_pipeline is not None:
+            self._inspector.viewport_inspector.set_editor_pipeline_getter(self._get_editor_pipeline)
 
         # Connect center tabs signal for tab switching
         if self._center_tabs is not None:

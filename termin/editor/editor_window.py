@@ -265,6 +265,11 @@ class EditorWindow(QMainWindow):
         editor_pipeline = self.editor_viewport.make_editor_pipeline()
         self._rendering_controller.set_viewport_pipeline(self.viewport, editor_pipeline)
 
+        # Set editor pipeline getter for ViewportInspector
+        self._inspector_controller.viewport_inspector.set_editor_pipeline_getter(
+            self.editor_viewport.make_editor_pipeline
+        )
+
         # For backwards compatibility
         self.viewport_controller = self.editor_viewport
 

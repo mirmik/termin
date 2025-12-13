@@ -62,8 +62,9 @@ class ViewportInspector(QWidget):
         self._display_names: dict[int, str] = {}
         self._cameras: List[Tuple["CameraComponent", str]] = []  # (camera, name)
         self._scene: Optional["Scene"] = None
-        self._pipelines: List[Tuple[str, "RenderPipeline"]] = []  # (name, pipeline)
+        self._pipelines: List[Tuple[str, Optional["RenderPipeline"]]] = []  # (name, pipeline or None)
         self._current_pipeline_name: Optional[str] = None
+        self._get_editor_pipeline: Optional[Callable[[], "RenderPipeline"]] = None
 
         self._updating = False  # Prevent recursive updates
 
@@ -350,8 +351,17 @@ class ViewportInspector(QWidget):
         if 0 <= index < len(self._pipelines):
             name, pipeline = self._pipelines[index]
             self._current_pipeline_name = name
+
+            # Handle special "(Editor)" option
+            if name == "(Editor)" and self._get_editor_pipeline is not None:
+                pipeline = self._get_editor_pipeline()
+
             self.pipeline_changed.emit(pipeline)
             self.viewport_changed.emit()
+
+    def set_editor_pipeline_getter(self, getter: Optional[Callable[[], "RenderPipeline"]]) -> None:
+        """Set callback to get the editor pipeline."""
+        self._get_editor_pipeline = getter
 
     def update_pipeline_list(self) -> None:
         """Update pipeline list from ResourceManager."""
@@ -368,6 +378,11 @@ class ViewportInspector(QWidget):
             # Add "Default" option
             self._pipeline_combo.addItem("(Default)")
             self._pipelines.append(("(Default)", None))
+
+            # Add "Editor" option if getter is available
+            if self._get_editor_pipeline is not None:
+                self._pipeline_combo.addItem("(Editor)")
+                self._pipelines.append(("(Editor)", None))  # Pipeline created on demand
 
             for name in pipeline_names:
                 pipeline = rm.get_pipeline(name)
