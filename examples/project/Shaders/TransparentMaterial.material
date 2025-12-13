@@ -1,13 +1,11 @@
 {
-  "shader": "DefaultShader",
+  "shader": "TransparentShader",
   "uniforms": {
     "u_color": [
       0.774654746055603,
       0.2547188401222229,
       0.2547188401222229,
-      0.16099999845027924
-    ],
-    "u_ambient": 0.1,
-    "u_shininess": 32.0
+      0.5
+    ]
   }
 }
