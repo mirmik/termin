@@ -294,6 +294,31 @@ class RenderingController:
         _container, backend_window, _qwindow = self._display_tabs[self._editor_display_id]
         return backend_window
 
+    @property
+    def editor_gl_widget(self) -> Optional[QWidget]:
+        """Get the Qt widget containing the editor GL surface."""
+        if self._editor_display_id is None:
+            return None
+        if self._editor_display_id not in self._display_tabs:
+            return None
+        container, _backend_window, _qwindow = self._display_tabs[self._editor_display_id]
+        # The gl_widget is the first child of the container layout
+        layout = container.layout()
+        if layout is not None and layout.count() > 0:
+            return layout.itemAt(0).widget()
+        return None
+
+    def get_editor_fbo_pool(self) -> dict:
+        """Get FBO pool for the editor viewport (for picking)."""
+        editor_display = self.editor_display
+        if editor_display is None or not editor_display.viewports:
+            return {}
+        viewport = editor_display.viewports[0]
+        state = self.get_viewport_state(viewport)
+        if state is None:
+            return {}
+        return state.fbos
+
     # --- Selection handling ---
 
     def _on_display_selected_from_list(self, display: Optional["Display"]) -> None:
@@ -734,7 +759,7 @@ class RenderingController:
                 self.set_display_name(editor_display, name)
                 editor_display.editor_only = editor_only
 
-                # Очищаем существующие viewport'ы (кроме первого, он управляется ViewportController)
+                # Очищаем существующие viewport'ы (кроме первого, он управляется EditorViewportFeatures)
                 while len(editor_display.viewports) > 1:
                     vp = editor_display.viewports[-1]
                     editor_display.remove_viewport(vp)

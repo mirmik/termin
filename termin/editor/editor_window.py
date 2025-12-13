@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt, QEvent, pyqtSignal
 from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
-from termin.editor.viewport_controller import ViewportController
+from termin.editor.editor_viewport_features import EditorViewportFeatures
 from termin.editor.gizmo import GizmoController
 from termin.editor.game_mode_controller import GameModeController
 from termin.editor.world_persistence import WorldPersistence
@@ -80,7 +80,7 @@ class EditorWindow(QMainWindow):
 
         # контроллеры создадим чуть позже
         self.scene_tree_controller: SceneTreeController | None = None
-        self.viewport_controller: ViewportController | None = None
+        self.editor_viewport: EditorViewportFeatures | None = None
         self.gizmo_controller: GizmoController | None = None
         self.selection_manager: SelectionManager | None = None
         self.game_mode_controller: GameModeController | None = None
@@ -222,26 +222,51 @@ class EditorWindow(QMainWindow):
         # --- viewport toolbar ---
         self._init_viewport_toolbar()
 
-        # --- viewport ---
-        self.viewport = None
-        self.viewport_controller = ViewportController(
+        # --- ViewportListWidget and RenderingController ---
+        # Must be created BEFORE EditorViewportFeatures
+        self._init_viewport_list_widget()
+
+        # --- Create editor display through RenderingController ---
+        editor_display, backend_window = self._rendering_controller.create_editor_display(
             container=self.editorViewportTab,
-            world=self.world,
+            sdl_backend=self._sdl_backend,
+            width=800,
+            height=600,
+        )
+
+        # Create viewport in editor display
+        self.viewport = editor_display.create_viewport(
             scene=self.scene,
             camera=self.camera,
+        )
+        self.camera.add_viewport(self.viewport)
+
+        # Set editor pipeline
+        editor_pipeline = None  # Will be set after EditorViewportFeatures creation
+
+        # Install event filter on GL widget
+        gl_widget = self._rendering_controller.editor_gl_widget
+        if gl_widget is not None:
+            gl_widget.installEventFilter(self)
+
+        # --- EditorViewportFeatures (editor UX layer) ---
+        self.editor_viewport = EditorViewportFeatures(
+            display=editor_display,
+            backend_window=backend_window,
+            graphics=self.world.graphics,
             gizmo_controller=self.gizmo_controller,
             on_entity_picked=self._on_entity_picked_from_viewport,
             on_hover_entity=self._on_hover_entity_from_viewport,
-            sdl_backend=self._sdl_backend,
+            get_fbo_pool=self._rendering_controller.get_editor_fbo_pool,
+            request_update=self._request_viewport_update,
         )
 
-        self.viewport = self.viewport_controller.viewport
+        # Set editor pipeline through RenderingController
+        editor_pipeline = self.editor_viewport.make_editor_pipeline()
+        self._rendering_controller.set_viewport_pipeline(self.viewport, editor_pipeline)
 
-        gl_widget = self.viewport_controller.gl_widget
-        gl_widget.installEventFilter(self)
-
-        # --- ViewportListWidget (in Rendering tab) ---
-        self._init_viewport_list_widget()
+        # For backwards compatibility
+        self.viewport_controller = self.editor_viewport
 
         # --- SelectionManager ---
         self.selection_manager = SelectionManager(
@@ -376,12 +401,12 @@ class EditorWindow(QMainWindow):
 
     def _show_framegraph_debugger(self) -> None:
         """Opens framegraph texture viewer dialog."""
-        if self.viewport_controller is None or self.viewport is None:
+        if self.editor_viewport is None or self.viewport is None:
             return
         self._dialog_manager.show_framegraph_debugger(
-            window_backend=self.viewport_controller.sdl_backend,
-            graphics=self.viewport_controller.graphics,
-            viewport_controller=self.viewport_controller,
+            window_backend=self._sdl_backend,
+            graphics=self.world.graphics,
+            viewport_controller=self.editor_viewport,
         )
 
     def _show_resource_manager_viewer(self) -> None:
@@ -454,9 +479,9 @@ class EditorWindow(QMainWindow):
         return str(self.project_browser.root_path)
 
     def _get_graphics(self):
-        """Get GraphicsBackend from viewport controller."""
-        if self.viewport_controller is not None:
-            return self.viewport_controller.graphics
+        """Get GraphicsBackend from world."""
+        if self.world is not None:
+            return self.world.graphics
         return None
 
     def _get_window_backend(self):
@@ -466,9 +491,9 @@ class EditorWindow(QMainWindow):
         return None
 
     def _get_render_engine(self):
-        """Get RenderEngine from viewport controller."""
-        if self.viewport_controller is not None:
-            return self.viewport_controller._render_engine
+        """Get RenderEngine from RenderingController."""
+        if self._rendering_controller is not None:
+            return self._rendering_controller._render_engine
         return None
 
     def _log_to_console(self, message: str) -> None:
@@ -535,6 +560,7 @@ class EditorWindow(QMainWindow):
             rendering_layout.addWidget(self._viewport_list_widget)
 
         # Create RenderingController
+        # Editor display will be created later via create_editor_display()
         self._rendering_controller = RenderingController(
             viewport_list_widget=self._viewport_list_widget,
             inspector_controller=self._inspector_controller,
@@ -546,12 +572,6 @@ class EditorWindow(QMainWindow):
             get_render_engine=self._get_render_engine,
             on_request_update=self._request_viewport_update,
         )
-
-        # Add the editor display (main viewport)
-        if self.viewport_controller is not None:
-            editor_display = self.viewport_controller.display
-            if editor_display is not None:
-                self._rendering_controller.add_display(editor_display, "Editor")
 
     def _init_project_browser(self):
         """Инициализация файлового браузера проекта."""
@@ -812,8 +832,10 @@ class EditorWindow(QMainWindow):
     # ----------- связи с контроллерами -----------
 
     def _request_viewport_update(self) -> None:
-        if self.viewport_controller is not None:
-            self.viewport_controller.request_update()
+        if self._rendering_controller is not None:
+            backend = self._rendering_controller.editor_backend_window
+            if backend is not None:
+                backend.request_update()
 
     def _on_tree_object_selected(self, obj: object | None) -> None:
         """
@@ -835,7 +857,7 @@ class EditorWindow(QMainWindow):
 
     def _on_entity_picked_from_viewport(self, ent: Entity | None) -> None:
         """
-        Колбэк от ViewportController при выборе сущности кликом в вьюпорте.
+        Колбэк от EditorViewportFeatures при выборе сущности кликом в вьюпорте.
         Синхронизируем выделение в дереве и инспекторе.
         """
         if self.selection_manager is not None:
@@ -848,7 +870,7 @@ class EditorWindow(QMainWindow):
 
     def _on_hover_entity_from_viewport(self, ent: Entity | None) -> None:
         """
-        Колбэк от ViewportController при изменении подсвеченной (hover) сущности.
+        Колбэк от EditorViewportFeatures при изменении подсвеченной (hover) сущности.
         """
         if self.selection_manager is not None:
             self.selection_manager.hover(ent)
@@ -859,9 +881,13 @@ class EditorWindow(QMainWindow):
         """
         Перехватываем нажатие Delete в виджете вьюпорта и удаляем выделенную сущность.
         """
+        editor_gl_widget = None
+        if self._rendering_controller is not None:
+            editor_gl_widget = self._rendering_controller.editor_gl_widget
+
         if (
-            self.viewport_controller is not None
-            and obj is self.viewport_controller.gl_widget
+            editor_gl_widget is not None
+            and obj is editor_gl_widget
             and event.type() == QEvent.Type.KeyPress
             and event.key() == Qt.Key.Key_Delete
         ):
@@ -881,16 +907,16 @@ class EditorWindow(QMainWindow):
     # ----------- SelectionManager колбэки -----------
 
     def _get_pick_id_for_entity(self, entity: Entity | None) -> int:
-        """Получает pick ID для сущности через viewport_controller."""
-        if self.viewport_controller is not None:
-            return self.viewport_controller.get_pick_id_for_entity(entity)
+        """Получает pick ID для сущности через editor_viewport."""
+        if self.editor_viewport is not None:
+            return self.editor_viewport.get_pick_id_for_entity(entity)
         return 0
 
     def _on_selection_changed_internal(self, entity: Entity | None) -> None:
         """Колбэк от SelectionManager при изменении выделения."""
         # Обновляем viewport
-        if self.viewport_controller is not None and self.selection_manager is not None:
-            self.viewport_controller.selected_entity_id = self.selection_manager.selected_entity_id
+        if self.editor_viewport is not None and self.selection_manager is not None:
+            self.editor_viewport.selected_entity_id = self.selection_manager.selected_entity_id
 
         # Обновляем гизмо
         if self.gizmo_controller is not None:
@@ -900,8 +926,8 @@ class EditorWindow(QMainWindow):
 
     def _on_hover_changed_internal(self, entity: Entity | None) -> None:
         """Колбэк от SelectionManager при изменении hover."""
-        if self.viewport_controller is not None and self.selection_manager is not None:
-            self.viewport_controller.hover_entity_id = self.selection_manager.hover_entity_id
+        if self.editor_viewport is not None and self.selection_manager is not None:
+            self.editor_viewport.hover_entity_id = self.selection_manager.hover_entity_id
 
         self._request_viewport_update()
 
@@ -945,11 +971,11 @@ class EditorWindow(QMainWindow):
             )
 
         # Update viewport
-        if self.viewport_controller is not None:
-            self.viewport_controller.set_scene(new_scene)
-            self.viewport_controller.set_camera(self._camera_manager.camera)
-            self.viewport_controller.selected_entity_id = 0
-            self.viewport_controller.hover_entity_id = 0
+        if self.editor_viewport is not None:
+            self.editor_viewport.set_scene(new_scene)
+            self.editor_viewport.set_camera(self._camera_manager.camera)
+            self.editor_viewport.selected_entity_id = 0
+            self.editor_viewport.hover_entity_id = 0
 
         # Update scene tree
         if self.scene_tree_controller is not None:
@@ -1001,8 +1027,8 @@ class EditorWindow(QMainWindow):
         """Колбэк от GameModeController при изменении режима."""
         if is_playing:
             # Входим в игровой режим
-            if self.viewport_controller is not None:
-                self.viewport_controller.set_world_mode("game")
+            if self.editor_viewport is not None:
+                self.editor_viewport.set_world_mode("game")
 
             # Скрываем гизмо
             if self.gizmo_controller is not None:
@@ -1015,8 +1041,8 @@ class EditorWindow(QMainWindow):
                 self.inspector.set_target(None)
         else:
             # Выходим из игрового режима
-            if self.viewport_controller is not None:
-                self.viewport_controller.set_world_mode("editor")
+            if self.editor_viewport is not None:
+                self.editor_viewport.set_world_mode("editor")
 
             # Показываем гизмо
             if self.gizmo_controller is not None:
@@ -1120,28 +1146,22 @@ class EditorWindow(QMainWindow):
         """
         Main tick function called from render loop.
 
-        Handles rendering.
+        Handles rendering through unified RenderingController.
         Note: Game mode updates are handled by GameModeController's QTimer.
         """
         # In game mode - always render at target FPS
         # In editor mode - render only when needed (on-demand)
         is_playing = self.game_mode_controller.is_playing if self.game_mode_controller else False
 
-        # Check if main viewport needs render
-        main_needs_render = is_playing
-        if not main_needs_render and self.viewport_controller is not None:
-            main_needs_render = self.viewport_controller.needs_render()
+        # Check if any display needs render (unified check)
+        needs_render = is_playing
+        if not needs_render and self._rendering_controller is not None:
+            needs_render = self._rendering_controller.any_display_needs_render()
 
-        # Check if any additional display needs render
-        # In game mode - always render additional displays too
-        additional_needs_render = is_playing
-        if not additional_needs_render and self._rendering_controller is not None:
-            additional_needs_render = self._rendering_controller.any_additional_display_needs_render()
+        # Render all displays through RenderingController (unified render path)
+        if needs_render and self._rendering_controller is not None:
+            self._rendering_controller.render_all_displays()
 
-        # Render main editor viewport if needed
-        if main_needs_render and self.viewport_controller is not None:
-            self.viewport_controller.render()
-
-        # Render additional displays if needed
-        if additional_needs_render and self._rendering_controller is not None:
-            self._rendering_controller.render_additional_displays()
+            # Editor-specific post-render (picking, hover, etc.)
+            if self.editor_viewport is not None:
+                self.editor_viewport.after_render()
