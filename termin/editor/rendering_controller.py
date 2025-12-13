@@ -624,7 +624,12 @@ class RenderingController:
         # Add tabs for additional displays (not Editor)
         for display in self._displays:
             display_id = id(display)
-            # Skip Editor display (it's already the first tab)
+
+            # Skip Editor display (it's already the first tab, managed externally)
+            if display_id == self._editor_display_id:
+                continue
+
+            # Skip displays not in _display_tabs (legacy external displays)
             if display_id not in self._display_tabs:
                 continue
 
