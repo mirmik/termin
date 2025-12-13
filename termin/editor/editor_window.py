@@ -1119,9 +1119,12 @@ class EditorWindow(QMainWindow):
 
         # Fallback: позиция перед камерой
         fallback_pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-        if self.camera is not None:
-            cam_pos = self.camera.position
-            cam_forward = self.camera.forward
+        if self.camera is not None and self.camera.entity is not None:
+            cam_pose = self.camera.entity.transform.global_pose()
+            cam_pos = cam_pose.lin
+            # Forward = +Y в нашей системе координат
+            rot = cam_pose.rotation_matrix()
+            cam_forward = rot[:, 1]  # Y колонка = forward
             fallback_pos = cam_pos + cam_forward * 5.0
 
         if self.editor_viewport is None or self.viewport is None:
@@ -1156,12 +1159,11 @@ class EditorWindow(QMainWindow):
         clip_pos = np.array([nx, ny, z_ndc, 1.0], dtype=np.float32)
 
         # Матрицы камеры
-        cam_comp = self.camera.cam
-        if cam_comp is None:
+        if self.camera is None:
             return fallback_pos
 
-        proj = cam_comp.get_projection_matrix()
-        view = cam_comp.get_view_matrix()
+        proj = self.camera.get_projection_matrix()
+        view = self.camera.get_view_matrix()
         pv = proj @ view
 
         # Inverse projection-view matrix
