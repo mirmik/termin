@@ -1075,7 +1075,7 @@ class EditorWindow(QMainWindow):
             prefab_path: Путь к .prefab файлу
             drop_pos: Позиция drop в координатах виджета
         """
-        from termin.kinematic.pose import Pose3
+        from termin.geombase.pose3 import Pose3
         import numpy as np
 
         # Загружаем prefab
