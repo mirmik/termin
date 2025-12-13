@@ -114,6 +114,7 @@ class RenderingController:
         self._inspector.viewport_inspector.camera_changed.connect(self._on_viewport_camera_changed)
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
         self._inspector.viewport_inspector.pipeline_changed.connect(self._on_viewport_pipeline_changed)
+        self._inspector.pipeline_inspector.pipeline_changed.connect(self._on_pipeline_inspector_changed)
 
         # Connect center tabs signal for tab switching
         if self._center_tabs is not None:
