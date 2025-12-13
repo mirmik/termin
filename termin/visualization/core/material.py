@@ -410,13 +410,17 @@ class Material:
         {
             "shader": "ShaderName",  # имя шейдера из ResourceManager
             "uniforms": {...},
-            "textures": {...}
+            "textures": {...}  # имена текстур из ResourceManager
         }
         """
+        from termin.visualization.core.resources import ResourceManager
+
         def serialize_value(val):
             if isinstance(val, np.ndarray):
                 return val.tolist()
             return val
+
+        rm = ResourceManager.instance()
 
         # Собираем uniforms из всех фаз (они должны быть одинаковые)
         uniforms = {}
@@ -427,8 +431,12 @@ class Material:
                 if name not in uniforms:
                     uniforms[name] = serialize_value(value)
             for name, tex in phase.textures.items():
-                if name not in textures and hasattr(tex, 'source_path'):
-                    textures[name] = tex.source_path
+                if name not in textures:
+                    # Ищем имя текстуры в ResourceManager
+                    tex_name = rm.find_texture_name(tex)
+                    # Не сохраняем белую текстуру — она дефолтная
+                    if tex_name and tex_name != "__white_1x1__":
+                        textures[name] = tex_name
 
         result = {"shader": self.shader_name}
         if uniforms:
@@ -537,16 +545,23 @@ class Material:
             else:
                 uniforms[name] = value
 
+        # Загружаем текстуры по именам из ResourceManager
+        textures_data = data.get("textures", {})
+        textures = {}
+        for uniform_name, tex_name in textures_data.items():
+            tex = rm.get_texture(tex_name)
+            if tex is not None:
+                textures[uniform_name] = tex
+
         # Создаём материал
         mat = cls.from_parsed(
             program,
             uniforms=uniforms,
+            textures=textures if textures else None,
             name=material_path.stem,
             source_path=str(material_path),
         )
         mat.shader_name = shader_name
-
-        # TODO: загрузка текстур из data.get("textures", {})
 
         return mat
 

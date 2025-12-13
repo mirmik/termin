@@ -368,6 +368,9 @@ class TextureSelector(QWidget):
             QImage.Format.Format_RGBA8888,
         )
 
+        # Текстура флипнута для OpenGL — флипаем обратно для отображения
+        qimage = qimage.mirrored(horizontally=False, vertically=True)
+
         # Масштабируем до размера превью
         pixmap = QPixmap.fromImage(qimage).scaled(
             self.PREVIEW_SIZE,
