@@ -245,6 +245,69 @@ def _create_prefab_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+def _create_voxels_icon() -> QIcon:
+    """Создаёт иконку воксельной сетки — 3D сетка из кубиков."""
+    size = 32
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    from PyQt6.QtGui import QPolygon
+    from PyQt6.QtCore import QPoint
+
+    # Рисуем несколько маленьких кубиков в изометрии
+    def draw_voxel(cx, cy, s, color_top, color_left, color_right):
+        # Верхняя грань
+        top = QPolygon([
+            QPoint(cx, cy - s),
+            QPoint(cx + s, cy - s // 2),
+            QPoint(cx, cy),
+            QPoint(cx - s, cy - s // 2),
+        ])
+        painter.setPen(QPen(QColor(40, 40, 40), 1))
+        painter.setBrush(QBrush(color_top))
+        painter.drawPolygon(top)
+
+        # Левая грань
+        left = QPolygon([
+            QPoint(cx - s, cy - s // 2),
+            QPoint(cx, cy),
+            QPoint(cx, cy + s),
+            QPoint(cx - s, cy + s // 2),
+        ])
+        painter.setBrush(QBrush(color_left))
+        painter.drawPolygon(left)
+
+        # Правая грань
+        right = QPolygon([
+            QPoint(cx, cy),
+            QPoint(cx + s, cy - s // 2),
+            QPoint(cx + s, cy + s // 2),
+            QPoint(cx, cy + s),
+        ])
+        painter.setBrush(QBrush(color_right))
+        painter.drawPolygon(right)
+
+    # Сетка из кубиков (синие оттенки)
+    s = 5  # размер грани кубика
+
+    # Нижний ряд
+    draw_voxel(10, 22, s, QColor(100, 160, 220), QColor(60, 120, 180), QColor(40, 100, 160))
+    draw_voxel(18, 26, s, QColor(100, 160, 220), QColor(60, 120, 180), QColor(40, 100, 160))
+
+    # Средний ряд
+    draw_voxel(18, 18, s, QColor(120, 180, 240), QColor(80, 140, 200), QColor(60, 120, 180))
+    draw_voxel(26, 22, s, QColor(120, 180, 240), QColor(80, 140, 200), QColor(60, 120, 180))
+
+    # Верхний кубик
+    draw_voxel(18, 10, s, QColor(140, 200, 255), QColor(100, 160, 220), QColor(80, 140, 200))
+
+    painter.end()
+    return QIcon(pixmap)
+
+
 class AssetIconProvider(QFileIconProvider):
     """Провайдер иконок для ассетов проекта."""
 
@@ -255,6 +318,7 @@ class AssetIconProvider(QFileIconProvider):
         self._scene_icon = _create_scene_icon()
         self._pipeline_icon = _create_pipeline_icon()
         self._prefab_icon = _create_prefab_icon()
+        self._voxels_icon = _create_voxels_icon()
 
     def icon(self, info_or_type):
         # info_or_type может быть QFileInfo или IconType
@@ -270,6 +334,8 @@ class AssetIconProvider(QFileIconProvider):
                 return self._pipeline_icon
             elif suffix == "prefab":
                 return self._prefab_icon
+            elif suffix == "voxels":
+                return self._voxels_icon
 
         return super().icon(info_or_type)
 
@@ -363,6 +429,7 @@ class ProjectBrowser:
         ".shader",    # Шейдеры
         ".material",  # Материалы
         ".pipeline",  # Рендер-пайплайны
+        ".voxels",    # Воксельные сетки
         ".json",      # Конфиги
         ".png", ".jpg", ".jpeg", ".tga", ".bmp",  # Текстуры
         ".stl", ".obj", ".fbx", ".gltf", ".glb",  # Модели

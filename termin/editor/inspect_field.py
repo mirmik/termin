@@ -13,12 +13,13 @@ class InspectField:
 
     path      – путь к полю ("enabled", "material.color" и т.п.)
     label     – подпись в UI
-    kind      – тип виджета: 'float', 'int', 'bool', 'vec3', 'color', 'string', 'enum', ...
+    kind      – тип виджета: 'float', 'int', 'bool', 'vec3', 'color', 'string', 'enum', 'button', ...
     min, max  – ограничения
     step      – шаг (для спинбоксов)
     choices   – для enum: список (value, label)
     getter, setter – если нужно обращаться к полю вручную.
     non_serializable – при True поле не попадает в сохранённые данные
+    action    – для kind='button': callable, вызывается при нажатии (принимает объект)
     """
     path: str | None = None
     label: str | None = None
@@ -30,6 +31,7 @@ class InspectField:
     getter: Optional[Callable[[Any], Any]] = None
     setter: Optional[Callable[[Any, Any], None]] = None
     non_serializable: bool = False
+    action: Optional[Callable[[Any], None]] = None
 
     def get_value(self, obj):
         if self.getter:
@@ -97,6 +99,7 @@ class InspectAttr:
         getter: Optional[Callable[[Any], Any]] = None,
         setter: Optional[Callable[[Any, Any], None]] = None,
         non_serializable: bool = False,
+        action: Optional[Callable[[Any], None]] = None,
     ):
         self.default = default
         self._field = InspectField(
@@ -110,6 +113,7 @@ class InspectAttr:
             getter=getter,
             setter=setter,
             non_serializable=non_serializable,
+            action=action,
         )
         self._name: str | None = None
 

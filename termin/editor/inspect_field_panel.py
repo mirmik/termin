@@ -158,10 +158,16 @@ class InspectFieldPanel(QWidget):
                 label = field.label or key
                 widget = self._create_widget_for_field(field)
                 self._widgets[key] = widget
-                self._layout.addRow(QLabel(label), widget)
 
-                value = field.get_value(target)
-                self._set_widget_value(widget, value, field)
+                # Buttons span the full row, no separate label
+                if field.kind == "button":
+                    self._layout.addRow(widget)
+                else:
+                    self._layout.addRow(QLabel(label), widget)
+
+                    value = field.get_value(target)
+                    self._set_widget_value(widget, value, field)
+
                 self._connect_widget(widget, key, field)
         finally:
             self._updating_from_model = False
@@ -270,6 +276,12 @@ class InspectFieldPanel(QWidget):
                 )
 
             btn._set_color = set_btn_color
+            return btn
+
+        if kind == "button":
+            btn = QPushButton(field.label or "Action")
+            btn._action = field.action
+            btn._field = field
             return btn
 
         # Fallback: read-only line edit
@@ -412,6 +424,15 @@ class InspectFieldPanel(QWidget):
                 commit()
 
             w.clicked.connect(on_click)
+        elif isinstance(w, QPushButton) and field.kind == "button":
+            def on_button_click():
+                if self._target is None:
+                    return
+                action = getattr(w, "_action", None)
+                if action is not None:
+                    action(self._target)
+
+            w.clicked.connect(on_button_click)
 
     def _read_widget_value(self, w: QWidget, field: InspectField) -> Any:
         if isinstance(w, QDoubleSpinBox):
