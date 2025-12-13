@@ -11,7 +11,6 @@ import numpy as np
 
 from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import TextureHandle
@@ -204,7 +203,6 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         graphics: GraphicsBackend,
         get_fbos: Callable[[], dict],
         resource_name: str = "debug",
-        get_debug_pass: Optional[Callable[[], object]] = None,
         parent: Optional[QtWidgets.QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -213,7 +211,6 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._graphics = graphics
         self._get_fbos = get_fbos
         self._resource_name = resource_name
-        self._get_debug_pass = get_debug_pass
 
         self._shader: Optional[ShaderProgram] = None
         self._vao: Optional[int] = None
@@ -410,28 +407,18 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
             return resource.resource_type
         return None
 
-    def _get_debugger_pass(self) -> FrameDebuggerPass | None:
-        if self._get_debug_pass is None:
-            return None
-        candidate = self._get_debug_pass()
-        if isinstance(candidate, FrameDebuggerPass):
-            return candidate
-        return None
-
     def _update_depth_image(self) -> None:
-        debug_pass = self._get_debugger_pass()
-        if debug_pass is None:
+        """Read depth buffer from current FBO and emit as QImage."""
+        resource = self._current_resource()
+        if resource is None:
             return
-        storage = debug_pass.depth_buffer_storage
-        if storage is None:
-            return
-        depth = storage.data
-        width = int(storage.width)
-        height = int(storage.height)
+
+        # Read depth directly from FBO
+        depth = self._graphics.read_depth_buffer(resource)
         if depth is None:
             return
-        if depth.shape != (height, width):
-            return
+
+        height, width = depth.shape
         depth = np.nan_to_num(depth, nan=1.0, posinf=1.0, neginf=0.0)
         d_min = float(depth.min())
         d_max = float(depth.max())
@@ -664,7 +651,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             graphics=self._graphics,
             get_fbos=self._get_fbos,
             resource_name=self._resource_name,
-            get_debug_pass=self._get_debug_blit_pass,
             parent=self,
         )
 
@@ -777,13 +763,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         if state is None:
             return None
         return state.pipeline
-
-    def _get_debug_blit_pass(self):
-        """Get debug blit pass from current pipeline."""
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            return None
-        return pipeline.debug_blit_pass
 
     def _on_depth_image_updated(self, image: QtGui.QImage) -> None:
         if image is None or image.isNull():
@@ -906,9 +885,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         else:
             names = list(self._get_fbos().keys())
 
-        # Фильтруем служебные ресурсы
-        names = [n for n in names if not n.startswith("empty")]
-        
         current = self._resource_combo.currentText()
         self._resource_combo.blockSignals(True)
         self._resource_combo.clear()
