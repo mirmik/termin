@@ -88,12 +88,14 @@ class RenderingController:
         self._selected_viewport: Optional["Viewport"] = None
 
         # Map display id -> (tab container widget, BackendWindow, QWindow)
-        # Editor display (index 0) is managed externally, not stored here
         # QWindow is stored to prevent garbage collection
         self._display_tabs: dict[int, Tuple[QWidget, "BackendWindow", QWindow]] = {}
 
         # Map display id -> dict of viewport id -> ViewportRenderState
         self._display_render_states: dict[int, dict[int, "ViewportRenderState"]] = {}
+
+        # Editor display ID (not serialized, created before scene)
+        self._editor_display_id: Optional[int] = None
 
         self._connect_signals()
 
@@ -203,6 +205,94 @@ class RenderingController:
             name = self._display_names.get(id(display), "")
             self._viewport_list.set_display_name(display, name)
         self._update_center_tabs()
+
+    # --- Editor display ---
+
+    def create_editor_display(
+        self,
+        container: QWidget,
+        sdl_backend: "SDLEmbeddedWindowBackend",
+        width: int = 800,
+        height: int = 600,
+    ) -> Tuple["Display", "BackendWindow"]:
+        """
+        Create the main editor display.
+
+        This display is not serialized and is created before scene loading.
+        Should be called once at editor startup.
+
+        Args:
+            container: Qt container widget for embedding SDL window.
+            sdl_backend: SDL backend for creating embedded window.
+            width: Initial window width.
+            height: Initial window height.
+
+        Returns:
+            Tuple of (Display, BackendWindow) for editor use.
+        """
+        from termin.visualization.render.surface import WindowRenderSurface
+        from termin.visualization.core.display import Display
+
+        # Create SDL window
+        backend_window = sdl_backend.create_embedded_window(
+            width=width,
+            height=height,
+            title="Editor Viewport",
+        )
+
+        # Embed SDL window into Qt
+        native_handle = backend_window.native_handle
+        qwindow = QWindow.fromWinId(native_handle)
+        gl_widget = QWidget.createWindowContainer(qwindow, container)
+        gl_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        gl_widget.setMinimumSize(50, 50)
+
+        # Add to container layout
+        layout = container.layout()
+        if layout is None:
+            layout = QVBoxLayout(container)
+            layout.setContentsMargins(0, 0, 0, 0)
+            container.setLayout(layout)
+        layout.addWidget(gl_widget)
+
+        # Create surface and display
+        surface = WindowRenderSurface(backend_window)
+        display = Display(surface)
+
+        # Store mapping
+        display_id = id(display)
+        self._display_tabs[display_id] = (container, backend_window, qwindow)
+        self._display_render_states[display_id] = {}
+        self._editor_display_id = display_id
+
+        # Add to displays list
+        self.add_display(display, "Editor")
+
+        return display, backend_window
+
+    def is_editor_display(self, display: "Display") -> bool:
+        """Check if display is the editor display (not serialized)."""
+        return id(display) == self._editor_display_id
+
+    @property
+    def editor_display(self) -> Optional["Display"]:
+        """Get the editor display."""
+        if self._editor_display_id is None:
+            return None
+        for display in self._displays:
+            if id(display) == self._editor_display_id:
+                return display
+        return None
+
+    @property
+    def editor_backend_window(self) -> Optional["BackendWindow"]:
+        """Get the editor backend window."""
+        if self._editor_display_id is None:
+            return None
+        if self._editor_display_id not in self._display_tabs:
+            return None
+        _container, backend_window, _qwindow = self._display_tabs[self._editor_display_id]
+        return backend_window
 
     # --- Selection handling ---
 
@@ -475,6 +565,51 @@ class RenderingController:
 
         return viewport_states[viewport_id]
 
+    def set_viewport_pipeline(
+        self,
+        viewport: "Viewport",
+        pipeline: "RenderPipeline",
+    ) -> None:
+        """
+        Set custom pipeline for a viewport.
+
+        Args:
+            viewport: Viewport to configure.
+            pipeline: RenderPipeline to use.
+        """
+        from termin.visualization.render import ViewportRenderState
+        from termin.visualization.render.framegraph import RenderPipeline
+
+        # Find display for this viewport
+        display = viewport.display
+        if display is None:
+            return
+
+        display_id = id(display)
+        if display_id not in self._display_render_states:
+            self._display_render_states[display_id] = {}
+
+        viewport_id = id(viewport)
+        viewport_states = self._display_render_states[display_id]
+
+        if viewport_id in viewport_states:
+            viewport_states[viewport_id].pipeline = pipeline
+        else:
+            viewport_states[viewport_id] = ViewportRenderState(pipeline=pipeline)
+
+    def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
+        """Get ViewportRenderState for a viewport."""
+        display = viewport.display
+        if display is None:
+            return None
+
+        display_id = id(display)
+        if display_id not in self._display_render_states:
+            return None
+
+        viewport_id = id(viewport)
+        return self._display_render_states[display_id].get(viewport_id)
+
     # --- Center tabs management ---
 
     def _update_center_tabs(self) -> None:
@@ -509,7 +644,17 @@ class RenderingController:
                 backend_window.request_update()
 
     def any_additional_display_needs_render(self) -> bool:
-        """Check if any additional display needs rendering."""
+        """Check if any additional display needs rendering (excluding editor)."""
+        for display_id in self._display_tabs:
+            if display_id == self._editor_display_id:
+                continue
+            _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
+            if backend_window is not None and backend_window.needs_render():
+                return True
+        return False
+
+    def any_display_needs_render(self) -> bool:
+        """Check if any display needs rendering (including editor)."""
         for display_id in self._display_tabs:
             _tab_container, backend_window, _qwindow = self._display_tabs[display_id]
             if backend_window is not None and backend_window.needs_render():
@@ -523,10 +668,14 @@ class RenderingController:
         Сериализует конфигурацию всех дисплеев.
 
         Возвращает список дисплеев с их viewport'ами.
-        Editor display (первый) тоже сериализуется.
+        Editor display НЕ сериализуется (создаётся при запуске).
         """
         result = []
         for display in self._displays:
+            # Пропускаем editor display — он не сериализуется
+            if self.is_editor_display(display):
+                continue
+
             display_id = id(display)
             name = self._display_names.get(display_id, "Display")
 
@@ -535,12 +684,8 @@ class RenderingController:
             for viewport in display.viewports:
                 viewports_data.append(viewport.serialize())
 
-            # Помечаем, является ли это Editor дисплеем (не имеет записи в _display_tabs)
-            is_editor = display_id not in self._display_tabs
-
             result.append({
                 "name": name,
-                "is_editor": is_editor,
                 "viewports": viewports_data,
             })
 
@@ -638,7 +783,20 @@ class RenderingController:
         self._request_update()
 
     def render_additional_displays(self) -> None:
-        """Render all additional displays (called from main render loop)."""
+        """Render all additional displays excluding editor (legacy method)."""
+        self._render_displays(skip_editor=True)
+
+    def render_all_displays(self) -> None:
+        """Render all displays including editor (unified render loop)."""
+        self._render_displays(skip_editor=False)
+
+    def _render_displays(self, skip_editor: bool = False) -> None:
+        """
+        Internal method to render displays.
+
+        Args:
+            skip_editor: If True, skip editor display (legacy mode).
+        """
         if self._get_render_engine is None or self._get_graphics is None:
             return
 
@@ -652,7 +810,11 @@ class RenderingController:
         for display in self._displays:
             display_id = id(display)
 
-            # Skip Editor display (rendered separately)
+            # Skip editor display if requested (legacy mode)
+            if skip_editor and display_id == self._editor_display_id:
+                continue
+
+            # All displays must be in _display_tabs now
             if display_id not in self._display_tabs:
                 continue
 
