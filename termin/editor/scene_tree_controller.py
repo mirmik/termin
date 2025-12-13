@@ -19,7 +19,7 @@ from termin.kinematic.transform import Transform3
 from termin.geombase.pose3 import Pose3
 from termin.editor.editor_tree import SceneTreeModel
 from termin.editor.prefab_persistence import PrefabPersistence
-from termin.resource_manager import ResourceManager
+from termin.visualization.core.resources import ResourceManager
 
 
 class SceneTreeController:
