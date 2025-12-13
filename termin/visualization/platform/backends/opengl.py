@@ -363,6 +363,31 @@ class OpenGLGraphicsBackend(GraphicsBackend):
         depth = np.flipud(depth)
         return depth
 
+    def read_depth_pixel(self, framebuffer, x: int, y: int) -> float | None:
+        """Читает глубину в указанной точке FBO."""
+        if framebuffer is None:
+            return None
+        if not isinstance(framebuffer, OpenGLFramebufferHandle):
+            return None
+        if framebuffer._fbo is None:
+            return None
+
+        self.bind_framebuffer(framebuffer)
+
+        data = gl.glReadPixels(x, y, 1, 1, gl.GL_DEPTH_COMPONENT, gl.GL_FLOAT)
+        if data is None:
+            return None
+
+        if isinstance(data, (bytes, bytearray)):
+            depth = np.frombuffer(data, dtype=np.float32)
+        else:
+            depth = np.array(data, dtype=np.float32)
+
+        if depth.size == 0:
+            return None
+
+        return float(depth[0])
+
     def set_viewport(self, x: int, y: int, w: int, h: int):
         gl.glViewport(x, y, w, h)
 

@@ -220,6 +220,10 @@ class EditorViewportFeatures:
         """Pick color from FBO buffer."""
         return self._input_manager.pick_color_at(x, y, viewport, buffer_name)
 
+    def pick_depth_at(self, x: float, y: float, viewport: Viewport, buffer_name: str = "id") -> float | None:
+        """Pick depth from FBO buffer."""
+        return self._input_manager.pick_depth_at(x, y, viewport, buffer_name)
+
     # ---------- Input event handlers ----------
 
     def _on_mouse_button_event(self, button_type, action, x, y, viewport) -> None:

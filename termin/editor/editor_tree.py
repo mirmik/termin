@@ -4,7 +4,12 @@ from PyQt6.QtCore import Qt, QAbstractItemModel, QModelIndex, pyqtSignal
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
-from termin.editor.drag_drop import EditorMimeTypes, create_entity_mime_data, parse_entity_mime_data
+from termin.editor.drag_drop import (
+    EditorMimeTypes,
+    create_entity_mime_data,
+    parse_entity_mime_data,
+    parse_asset_path_mime_data,
+)
 
 
 class NodeWrapper:
@@ -33,6 +38,10 @@ class SceneTreeModel(QAbstractItemModel):
     # Signal emitted when entity should be reparented via drag-drop
     # Args: (entity_to_move: Entity, new_parent_entity: Entity | None)
     entity_reparent_requested = pyqtSignal(Entity, object)
+
+    # Signal emitted when prefab should be instantiated via drag-drop
+    # Args: (prefab_path: str, parent_entity: Entity | None)
+    prefab_drop_requested = pyqtSignal(str, object)
 
     def __init__(self, scene: Scene):
         super().__init__()
@@ -181,12 +190,12 @@ class SceneTreeModel(QAbstractItemModel):
         return default_flags
 
     def supportedDropActions(self) -> Qt.DropAction:
-        """Support move action for reparenting."""
-        return Qt.DropAction.MoveAction
+        """Support move action for reparenting and copy for prefab instantiation."""
+        return Qt.DropAction.MoveAction | Qt.DropAction.CopyAction
 
     def mimeTypes(self) -> list[str]:
         """Return supported MIME types for drag-drop."""
-        return [EditorMimeTypes.ENTITY]
+        return [EditorMimeTypes.ENTITY, EditorMimeTypes.ASSET_PATH]
 
     def mimeData(self, indexes: list[QModelIndex]):
         """Create MIME data for dragged entities."""
@@ -214,6 +223,14 @@ class SceneTreeModel(QAbstractItemModel):
         parent: QModelIndex,
     ) -> bool:
         """Check if drop is allowed at this location."""
+        # Handle prefab asset drop (CopyAction)
+        if data.hasFormat(EditorMimeTypes.ASSET_PATH):
+            path = parse_asset_path_mime_data(data)
+            if path and path.lower().endswith(".prefab"):
+                return True
+            return False
+
+        # Handle entity reparent (MoveAction)
         if action != Qt.DropAction.MoveAction:
             return False
 
@@ -267,10 +284,25 @@ class SceneTreeModel(QAbstractItemModel):
         column: int,
         parent: QModelIndex,
     ) -> bool:
-        """Handle drop - emit signal for controller to handle reparenting."""
+        """Handle drop - emit signal for controller to handle reparenting or prefab instantiation."""
         if not self.canDropMimeData(data, action, row, column, parent):
             return False
 
+        # Get target entity (common for both cases)
+        target_entity = None
+        if parent.isValid():
+            node: NodeWrapper = parent.internalPointer()
+            target_entity = node.obj if isinstance(node.obj, Entity) else None
+
+        # Handle prefab asset drop
+        if data.hasFormat(EditorMimeTypes.ASSET_PATH):
+            path = parse_asset_path_mime_data(data)
+            if path and path.lower().endswith(".prefab"):
+                self.prefab_drop_requested.emit(path, target_entity)
+                return True
+            return False
+
+        # Handle entity reparent
         entity_data = parse_entity_mime_data(data)
         if entity_data is None:
             return False
@@ -286,12 +318,6 @@ class SceneTreeModel(QAbstractItemModel):
 
         if dragged_entity is None:
             return False
-
-        # Get target entity
-        target_entity = None
-        if parent.isValid():
-            node: NodeWrapper = parent.internalPointer()
-            target_entity = node.obj if isinstance(node.obj, Entity) else None
 
         # Emit signal for controller to handle with undo support
         self.entity_reparent_requested.emit(dragged_entity, target_entity)

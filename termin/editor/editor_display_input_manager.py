@@ -208,6 +208,71 @@ class EditorDisplayInputManager:
             return None
         return Entity.lookup_by_pick_id(pid)
 
+    def pick_depth_at(
+        self,
+        x: float,
+        y: float,
+        viewport: Optional["Viewport"] = None,
+        buffer_name: str = "id",
+    ) -> Optional[float]:
+        """
+        Читает глубину под пикселем из указанного буфера.
+
+        Параметры:
+            x, y: координаты в пикселях окна.
+            viewport: viewport для которого читаем.
+            buffer_name: имя буфера в FBO pool (по умолчанию 'id').
+
+        Возвращает:
+            Глубину в диапазоне [0, 1] или None.
+        """
+        if self._display is None:
+            return None
+
+        fbo_pool = self._display.fbo_pool
+        if fbo_pool is None:
+            return None
+
+        if viewport is None:
+            viewport = self._viewport_under_cursor(x, y)
+            if viewport is None:
+                return None
+
+        win_w, win_h = self._backend_window.window_size()
+        fb_w, fb_h = self._backend_window.framebuffer_size()
+
+        if win_w <= 0 or win_h <= 0 or fb_w <= 0 or fb_h <= 0:
+            return None
+
+        px, py, pw, ph = self._viewport_rect_to_pixels(viewport)
+
+        # Переводим координаты мыши из логических в физические
+        sx = fb_w / float(win_w)
+        sy = fb_h / float(win_h)
+        x_phys = x * sx
+        y_phys = y * sy
+
+        # Локальные координаты внутри viewport'а
+        vx = x_phys - px
+        vy = y_phys - py
+
+        if vx < 0 or vy < 0 or vx >= pw or vy >= ph:
+            return None
+
+        # Перевод в координаты FBO (origin снизу-слева)
+        read_x = int(vx)
+        read_y = int(ph - vy - 1)
+
+        fb = fbo_pool.get(buffer_name)
+        if fb is None:
+            return None
+
+        depth = self._graphics.read_depth_pixel(fb, read_x, read_y)
+        # Возвращаем framebuffer обратно на окно
+        window_fb = self._backend_window.get_window_framebuffer()
+        self._graphics.bind_framebuffer(window_fb)
+        return depth
+
     # ----------------------------------------------------------------
     # Event handlers
     # ----------------------------------------------------------------

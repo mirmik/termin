@@ -42,6 +42,8 @@ from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.editor.project_browser import ProjectBrowser
 from termin.editor.settings import EditorSettings
+from termin.editor.prefab_persistence import PrefabPersistence
+from termin.editor.drag_drop import EditorMimeTypes, parse_asset_path_mime_data
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 
@@ -267,6 +269,10 @@ class EditorWindow(QMainWindow):
         gl_widget = self._rendering_controller.editor_gl_widget
         if gl_widget is not None:
             gl_widget.installEventFilter(self)
+
+        # Enable drag-drop on viewport container
+        self.editorViewportTab.setAcceptDrops(True)
+        self.editorViewportTab.installEventFilter(self)
 
         # --- EditorViewportFeatures (editor UX layer) ---
         self.editor_viewport = EditorViewportFeatures(
@@ -1012,12 +1018,15 @@ class EditorWindow(QMainWindow):
 
     def eventFilter(self, obj, event):
         """
-        Перехватываем нажатие Delete в виджете вьюпорта и удаляем выделенную сущность.
+        Перехватываем:
+        - Delete в виджете вьюпорта для удаления выделенной сущности
+        - Drag-drop prefab на viewport
         """
         editor_gl_widget = None
         if self._rendering_controller is not None:
             editor_gl_widget = self._rendering_controller.editor_gl_widget
 
+        # Delete key in viewport
         if (
             editor_gl_widget is not None
             and obj is editor_gl_widget
@@ -1031,7 +1040,140 @@ class EditorWindow(QMainWindow):
                 self.push_undo_command(cmd, merge=False)
             return True
 
+        # Drag-drop on viewport container
+        if obj is self.editorViewportTab:
+            if event.type() == QEvent.Type.DragEnter:
+                mime = event.mimeData()
+                if mime.hasFormat(EditorMimeTypes.ASSET_PATH):
+                    path = parse_asset_path_mime_data(mime)
+                    if path and path.lower().endswith(".prefab"):
+                        event.acceptProposedAction()
+                        return True
+            elif event.type() == QEvent.Type.DragMove:
+                event.acceptProposedAction()
+                return True
+            elif event.type() == QEvent.Type.Drop:
+                mime = event.mimeData()
+                path = parse_asset_path_mime_data(mime)
+                if path and path.lower().endswith(".prefab"):
+                    # Получаем позицию drop в координатах виджета
+                    drop_pos = event.position().toPoint()
+                    self._on_prefab_dropped_to_viewport(path, drop_pos)
+                    event.acceptProposedAction()
+                    return True
+
         return super().eventFilter(obj, event)
+
+    def _on_prefab_dropped_to_viewport(self, prefab_path: str, drop_pos) -> None:
+        """
+        Обработчик drop prefab на viewport.
+
+        Args:
+            prefab_path: Путь к .prefab файлу
+            drop_pos: Позиция drop в координатах виджета
+        """
+        from termin.kinematic.pose import Pose3
+        import numpy as np
+
+        # Загружаем prefab
+        rm = ResourceManager.instance()
+        persistence = PrefabPersistence(rm)
+
+        try:
+            entity = persistence.load(Path(prefab_path))
+        except Exception as e:
+            print(f"Failed to load prefab: {e}")
+            return
+
+        # Определяем позицию в мире через unproject
+        world_pos = self._unproject_drop_position(drop_pos)
+
+        # Устанавливаем позицию
+        entity.transform.local_pose = Pose3(lin=world_pos)
+
+        # Добавляем entity в сцену через команду (с поддержкой undo)
+        cmd = AddEntityCommand(self.scene, entity)
+        self.push_undo_command(cmd, merge=False)
+
+        # Обновляем SceneTree и выделяем новый entity
+        self.scene_tree_controller.rebuild(select_obj=entity)
+
+        # Выделяем entity
+        if self.selection_manager is not None:
+            self.selection_manager.select(entity)
+
+    def _unproject_drop_position(self, drop_pos) -> "np.ndarray":
+        """
+        Преобразует позицию drop в мировые координаты через depth buffer.
+
+        Args:
+            drop_pos: QPoint с координатами в виджете
+
+        Returns:
+            np.ndarray с мировыми координатами (x, y, z)
+        """
+        import numpy as np
+
+        # Fallback: позиция перед камерой
+        fallback_pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+        if self.camera is not None:
+            cam_pos = self.camera.position
+            cam_forward = self.camera.forward
+            fallback_pos = cam_pos + cam_forward * 5.0
+
+        if self.editor_viewport is None or self.viewport is None:
+            return fallback_pos
+
+        # Координаты drop в пикселях виджета
+        x = float(drop_pos.x())
+        y = float(drop_pos.y())
+
+        # Читаем глубину из ID buffer
+        depth = self.editor_viewport.pick_depth_at(x, y, self.viewport, buffer_name="id")
+        if depth is None or depth >= 1.0:
+            # Нет геометрии под курсором — используем fallback
+            return fallback_pos
+
+        # Получаем размеры viewport
+        viewport_rect = self.viewport.rect  # (x, y, w, h) в нормализованных координатах
+        widget = self.editorViewportTab
+        w = widget.width()
+        h = widget.height()
+
+        # Нормализованные координаты в пределах viewport (0..1)
+        # viewport_rect — нормализованные координаты, но drop_pos — в пикселях виджета
+        # Для простоты считаем, что viewport занимает весь виджет
+        nx = (x / w) * 2.0 - 1.0
+        ny = (y / h) * -2.0 + 1.0  # Y инвертирован
+
+        # Глубина в NDC (OpenGL: 0..1 -> -1..1)
+        z_ndc = depth * 2.0 - 1.0
+
+        # Точка в clip space
+        clip_pos = np.array([nx, ny, z_ndc, 1.0], dtype=np.float32)
+
+        # Матрицы камеры
+        cam_comp = self.camera.cam
+        if cam_comp is None:
+            return fallback_pos
+
+        proj = cam_comp.get_projection_matrix()
+        view = cam_comp.get_view_matrix()
+        pv = proj @ view
+
+        # Inverse projection-view matrix
+        try:
+            inv_pv = np.linalg.inv(pv)
+        except np.linalg.LinAlgError:
+            return fallback_pos
+
+        # Unproject
+        world_h = inv_pv @ clip_pos
+        if abs(world_h[3]) < 1e-6:
+            return fallback_pos
+
+        world_pos = world_h[:3] / world_h[3]
+        return world_pos.astype(np.float32)
 
     def _resync_inspector_from_selection(self):
         """Resync inspector based on current tree selection."""

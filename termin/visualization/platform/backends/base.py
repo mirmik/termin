@@ -231,6 +231,15 @@ class GraphicsBackend(ABC):
         ...
 
     @abstractmethod
+    def read_depth_pixel(self, framebuffer, x: int, y: int) -> float | None:
+        """
+        Вернуть значение глубины в указанной точке FBO.
+        Координаты x, y в пикселях FBO (origin снизу-слева).
+        Возвращает depth в [0, 1] или None при ошибке.
+        """
+        ...
+
+    @abstractmethod
     def create_framebuffer(self, size: Tuple[int, int]) -> "FramebufferHandle":
         ...
 

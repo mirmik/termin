@@ -24,6 +24,7 @@ from PyQt6.QtCore import Qt, QModelIndex, QDir, QFileInfo
 from PyQt6.QtWidgets import QFileIconProvider
 
 from termin.editor.settings import EditorSettings
+from termin.editor.drag_drop import EditorMimeTypes, create_asset_path_mime_data
 
 
 def _create_material_icon() -> QIcon:
@@ -272,6 +273,43 @@ class AssetIconProvider(QFileIconProvider):
         return super().icon(info_or_type)
 
 
+class DraggableFileSystemModel(QFileSystemModel):
+    """
+    QFileSystemModel с поддержкой drag для .prefab файлов.
+
+    При начале drag создаёт ASSET_PATH mime data с путём к файлу.
+    """
+
+    # Расширения, которые можно перетаскивать
+    DRAGGABLE_EXTENSIONS = {".prefab"}
+
+    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
+        """Добавляет флаг ItemIsDragEnabled для перетаскиваемых файлов."""
+        default_flags = super().flags(index)
+        if not index.isValid():
+            return default_flags
+
+        file_path = self.filePath(index)
+        if any(file_path.lower().endswith(ext) for ext in self.DRAGGABLE_EXTENSIONS):
+            return default_flags | Qt.ItemFlag.ItemIsDragEnabled
+
+        return default_flags
+
+    def mimeTypes(self) -> list[str]:
+        """Возвращает список поддерживаемых MIME типов."""
+        return [EditorMimeTypes.ASSET_PATH]
+
+    def mimeData(self, indexes: list[QModelIndex]) -> QMimeData | None:
+        """Создаёт ASSET_PATH mime data для перетаскивания."""
+        for index in indexes:
+            if not index.isValid():
+                continue
+            file_path = self.filePath(index)
+            if any(file_path.lower().endswith(ext) for ext in self.DRAGGABLE_EXTENSIONS):
+                return create_asset_path_mime_data(file_path)
+        return None
+
+
 class ProjectBrowser:
     """
     Контроллер файлового браузера проекта.
@@ -317,7 +355,7 @@ class ProjectBrowser:
 
         # Модели файловой системы
         self._dir_model = QFileSystemModel()
-        self._file_model = QFileSystemModel()
+        self._file_model = DraggableFileSystemModel()
 
         # Устанавливаем провайдер иконок
         self._file_model.setIconProvider(self._icon_provider)
@@ -346,6 +384,10 @@ class ProjectBrowser:
         self._file_list.setViewMode(QListView.ViewMode.ListMode)
         self._file_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._file_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+
+        # Включаем drag для prefab файлов
+        self._file_list.setDragEnabled(True)
+        self._file_list.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
 
         # Подключаем сигналы
         self._dir_tree.selectionModel().currentChanged.connect(self._on_dir_selected)

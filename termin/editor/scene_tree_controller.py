@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt, QPoint
@@ -17,6 +18,8 @@ from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.geombase.pose3 import Pose3
 from termin.editor.editor_tree import SceneTreeModel
+from termin.editor.prefab_persistence import PrefabPersistence
+from termin.resource_manager import ResourceManager
 
 
 class SceneTreeController:
@@ -60,8 +63,9 @@ class SceneTreeController:
         self._tree.setDropIndicatorShown(True)
         self._tree.setDragDropMode(QTreeView.DragDropMode.InternalMove)
 
-        # Connect model signal for reparenting
+        # Connect model signals for reparenting and prefab drops
         self._model.entity_reparent_requested.connect(self._on_entity_reparent_requested)
+        self._model.prefab_drop_requested.connect(self._on_prefab_drop_requested)
 
         sel_model = self._tree.selectionModel()
         if sel_model is not None:
@@ -207,6 +211,32 @@ class SceneTreeController:
             return
 
         cmd = ReparentEntityCommand(entity, old_parent, new_parent)
+        self._undo_handler(cmd, merge=False)
+
+        self.rebuild(select_obj=entity)
+
+        if self._request_viewport_update is not None:
+            self._request_viewport_update()
+
+    # ---------- prefab drop ----------
+
+    def _on_prefab_drop_requested(
+        self,
+        prefab_path: str,
+        parent_entity: Entity | None,
+    ) -> None:
+        """Handle prefab drop from Project Browser."""
+        rm = ResourceManager.instance()
+        persistence = PrefabPersistence(rm)
+
+        try:
+            entity = persistence.load(Path(prefab_path))
+        except Exception as e:
+            print(f"Failed to load prefab: {e}")
+            return
+
+        parent_transform = parent_entity.transform if parent_entity else None
+        cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
         self._undo_handler(cmd, merge=False)
 
         self.rebuild(select_obj=entity)
