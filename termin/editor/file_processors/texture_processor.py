@@ -9,7 +9,10 @@ from termin.editor.project_file_watcher import FileTypeProcessor
 
 
 class TextureFileProcessor(FileTypeProcessor):
-    """Handles texture files (.png, .jpg, .jpeg, .tga, .bmp)."""
+    """Handles texture files (.png, .jpg, .jpeg, .tga, .bmp) and their .spec files."""
+
+    # Supported image extensions
+    IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tga", ".bmp"}
 
     @property
     def priority(self) -> int:
@@ -17,14 +20,28 @@ class TextureFileProcessor(FileTypeProcessor):
 
     @property
     def extensions(self) -> Set[str]:
-        return {".png", ".jpg", ".jpeg", ".tga", ".bmp"}
+        return self.IMAGE_EXTENSIONS | {".spec"}
 
     @property
     def resource_type(self) -> str:
         return "texture"
 
+    def _is_texture_spec(self, path: str) -> bool:
+        """Check if path is a texture spec file (e.g., image.png.spec)."""
+        if not path.endswith(".spec"):
+            return False
+        # Check if base file is a texture
+        base_path = path[:-5]  # Remove ".spec"
+        ext = os.path.splitext(base_path)[1].lower()
+        return ext in self.IMAGE_EXTENSIONS
+
     def on_file_added(self, path: str) -> None:
         """Load new texture file."""
+        # .spec file - reload corresponding texture
+        if self._is_texture_spec(path):
+            self._handle_spec_change(path)
+            return
+
         name = os.path.splitext(os.path.basename(path))[0]
 
         if name in self._resource_manager.textures:
@@ -48,6 +65,11 @@ class TextureFileProcessor(FileTypeProcessor):
 
     def on_file_changed(self, path: str) -> None:
         """Reload modified texture via keeper invalidation."""
+        # .spec file - reload corresponding texture
+        if self._is_texture_spec(path):
+            self._handle_spec_change(path)
+            return
+
         name = os.path.splitext(os.path.basename(path))[0]
 
         # Find keeper by source_path or name
@@ -74,11 +96,46 @@ class TextureFileProcessor(FileTypeProcessor):
 
     def on_file_removed(self, path: str) -> None:
         """Handle texture file deletion."""
+        # Ignore .spec file removal
+        if self._is_texture_spec(path):
+            return
+
         if path in self._file_to_resources:
             for name in self._file_to_resources[path]:
                 self._resource_manager.unregister_texture(name)
                 print(f"[TextureProcessor] Removed: {name}")
             del self._file_to_resources[path]
+
+    def _handle_spec_change(self, spec_path: str) -> None:
+        """Handle .spec file change - reload corresponding texture."""
+        texture_path = spec_path[:-5]  # Remove ".spec"
+
+        if not os.path.exists(texture_path):
+            return
+
+        name = os.path.splitext(os.path.basename(texture_path))[0]
+
+        # Find keeper by source_path or name
+        keeper = None
+        for tex_name, k in self._resource_manager._texture_keepers.items():
+            if k.source_path == texture_path:
+                keeper = k
+                name = tex_name
+                break
+
+        if keeper is None:
+            keeper = self._resource_manager.get_texture_keeper(name)
+
+        if keeper is None:
+            return
+
+        try:
+            # Invalidate via keeper - texture will reload with new spec
+            keeper.invalidate()
+            print(f"[TextureProcessor] Reloaded (spec changed): {name}")
+            self._notify_reloaded(name)
+        except Exception as e:
+            print(f"[TextureProcessor] Failed to reload {name}: {e}")
 
     def _notify_reloaded(self, name: str) -> None:
         """Notify listeners about resource reload."""

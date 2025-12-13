@@ -2,6 +2,7 @@
 TextureInspector — inspector panel for texture files.
 
 Displays texture information: resolution, format, file size, etc.
+Allows editing import settings (flip_y) via .spec files.
 """
 
 from __future__ import annotations
@@ -9,9 +10,10 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFormLayout,
     QLabel,
     QVBoxLayout,
@@ -31,8 +33,12 @@ class TextureInspector(QWidget):
     - Resolution (width x height)
     - Channels
     - File size
+    - Import settings (flip_y)
     - Preview thumbnail
     """
+
+    # Emitted when texture settings change and texture needs reload
+    texture_settings_changed = pyqtSignal(str)  # file_path
 
     PREVIEW_MAX_SIZE = 200
 
@@ -42,6 +48,7 @@ class TextureInspector(QWidget):
         self._texture: Optional["Texture"] = None
         self._texture_name: str = ""
         self._file_path: str = ""
+        self._updating: bool = False
 
         self._init_ui()
 
@@ -89,50 +96,72 @@ class TextureInspector(QWidget):
         self._path_label.setStyleSheet("color: #888;")
         form.addRow("Path:", self._path_label)
 
+        # --- Import Settings ---
+        settings_header = QLabel("Import Settings")
+        settings_header.setStyleSheet("font-weight: bold; margin-top: 8px;")
+        form.addRow(settings_header)
+
+        # Flip Y checkbox
+        self._flip_y_checkbox = QCheckBox()
+        self._flip_y_checkbox.setToolTip(
+            "Flip texture vertically for OpenGL.\n"
+            "Enable for most textures (OpenGL origin is bottom-left).\n"
+            "Disable for textures already in OpenGL orientation."
+        )
+        self._flip_y_checkbox.stateChanged.connect(self._on_flip_y_changed)
+        form.addRow("Flip Y:", self._flip_y_checkbox)
+
         layout.addLayout(form)
         layout.addStretch()
 
     def set_texture(self, texture: Optional["Texture"], name: str = "") -> None:
         """Set texture to inspect."""
-        self._texture = texture
-        self._texture_name = name
+        self._updating = True
+        try:
+            self._texture = texture
+            self._texture_name = name
 
-        if texture is None:
-            self._clear()
-            return
+            if texture is None:
+                self._clear()
+                return
 
-        self._name_label.setText(name or "-")
+            self._name_label.setText(name or "-")
 
-        # Resolution
-        if texture._size is not None:
-            width, height = texture._size
-            self._resolution_label.setText(f"{width} x {height}")
-        else:
-            self._resolution_label.setText("-")
-
-        # Channels
-        if texture._image_data is not None:
-            if len(texture._image_data.shape) == 3:
-                channels = texture._image_data.shape[2]
+            # Resolution
+            if texture._size is not None:
+                width, height = texture._size
+                self._resolution_label.setText(f"{width} x {height}")
             else:
-                channels = 1
-            self._channels_label.setText(str(channels))
-        else:
-            self._channels_label.setText("-")
+                self._resolution_label.setText("-")
 
-        # File size
-        if texture.source_path and os.path.exists(texture.source_path):
-            size = os.path.getsize(texture.source_path)
-            self._file_size_label.setText(self._format_size(size))
-            self._path_label.setText(texture.source_path)
-            self._file_path = texture.source_path
-        else:
-            self._file_size_label.setText("-")
-            self._path_label.setText("-")
-            self._file_path = ""
+            # Channels
+            if texture._image_data is not None:
+                if len(texture._image_data.shape) == 3:
+                    channels = texture._image_data.shape[2]
+                else:
+                    channels = 1
+                self._channels_label.setText(str(channels))
+            else:
+                self._channels_label.setText("-")
 
-        # Preview
-        self._update_preview(texture)
+            # File size
+            if texture.source_path and os.path.exists(texture.source_path):
+                size = os.path.getsize(texture.source_path)
+                self._file_size_label.setText(self._format_size(size))
+                self._path_label.setText(texture.source_path)
+                self._file_path = texture.source_path
+            else:
+                self._file_size_label.setText("-")
+                self._path_label.setText("-")
+                self._file_path = ""
+
+            # Flip Y setting
+            self._flip_y_checkbox.setChecked(texture.flip_y)
+
+            # Preview
+            self._update_preview(texture)
+        finally:
+            self._updating = False
 
     def set_texture_by_path(self, file_path: str) -> None:
         """Load and inspect texture from file path."""
@@ -150,38 +179,26 @@ class TextureInspector(QWidget):
 
     def _update_preview(self, texture: "Texture") -> None:
         """Update preview thumbnail."""
-        if texture._image_data is None or texture._size is None:
-            self._preview_label.clear()
-            return
-
-        width, height = texture._size
-        data = texture._image_data
-
-        # Create QImage from numpy data (RGBA, flipped back)
-        if len(data.shape) == 3 and data.shape[2] == 4:
-            # Flip vertically (texture was flipped for OpenGL)
-            data_flipped = data[::-1, :, :].copy()
-            qimage = QImage(
-                data_flipped.data,
-                width,
-                height,
-                width * 4,
-                QImage.Format.Format_RGBA8888,
-            )
+        pixmap = texture.get_preview_pixmap(self.PREVIEW_MAX_SIZE)
+        if pixmap is not None:
+            self._preview_label.setPixmap(pixmap)
         else:
             self._preview_label.clear()
+
+    def _on_flip_y_changed(self, state: int) -> None:
+        """Handle flip_y checkbox change."""
+        if self._updating or not self._file_path:
             return
 
-        pixmap = QPixmap.fromImage(qimage)
+        from termin.loaders.texture_spec import TextureSpec
 
-        # Scale to fit preview area
-        scaled = pixmap.scaled(
-            self.PREVIEW_MAX_SIZE,
-            self.PREVIEW_MAX_SIZE,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self._preview_label.setPixmap(scaled)
+        # Save spec
+        flip_y = self._flip_y_checkbox.isChecked()
+        spec = TextureSpec(flip_y=flip_y)
+        spec.save_for_texture(self._file_path)
+
+        # Emit signal to trigger texture reload
+        self.texture_settings_changed.emit(self._file_path)
 
     def _clear(self) -> None:
         """Clear all fields."""
@@ -193,6 +210,7 @@ class TextureInspector(QWidget):
         self._channels_label.setText("-")
         self._file_size_label.setText("-")
         self._path_label.setText("-")
+        self._flip_y_checkbox.setChecked(True)
         self._preview_label.clear()
 
     def _format_size(self, size: int) -> str:

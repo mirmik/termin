@@ -351,33 +351,15 @@ class TextureSelector(QWidget):
         rm = ResourceManager.instance()
         texture = rm.get_texture(self._current_texture_name)
 
-        if texture is None or texture._image_data is None:
+        if texture is None:
             self._update_placeholder()
             return
 
-        # Конвертируем numpy array в QImage
-        img_data = texture._image_data
-        h, w = img_data.shape[:2]
-
-        # Создаём QImage из RGBA данных
-        qimage = QImage(
-            img_data.data,
-            w,
-            h,
-            w * 4,
-            QImage.Format.Format_RGBA8888,
-        )
-
-        # Текстура флипнута для OpenGL — флипаем обратно для отображения
-        qimage = qimage.mirrored(horizontally=False, vertically=True)
-
-        # Масштабируем до размера превью
-        pixmap = QPixmap.fromImage(qimage).scaled(
-            self.PREVIEW_SIZE,
-            self.PREVIEW_SIZE,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
+        # Используем кэшированное превью из текстуры
+        pixmap = texture.get_preview_pixmap(self.PREVIEW_SIZE)
+        if pixmap is None:
+            self._update_placeholder()
+            return
 
         self._preview.setPixmap(pixmap)
 
