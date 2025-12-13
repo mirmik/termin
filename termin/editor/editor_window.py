@@ -1088,7 +1088,8 @@ class EditorWindow(QMainWindow):
             print(f"Failed to load prefab: {e}")
             return
 
-        print(f"[DEBUG] After prefab load, entity.transform.local_pose()={entity.transform.local_pose()}")
+        print(f"[DEBUG] After prefab load, entity name={entity.name}, local_pose={entity.transform.local_pose()}")
+        print(f"[DEBUG] Entity has {len(entity.transform.children)} children")
 
         # Определяем позицию в мире через unproject
         world_pos = self._unproject_drop_position(drop_pos)
@@ -1110,6 +1111,7 @@ class EditorWindow(QMainWindow):
         # Выделяем entity
         if self.selection_manager is not None:
             self.selection_manager.select(entity)
+            print(f"[DEBUG] After select, entity.transform.local_pose()={entity.transform.local_pose()}")
 
     def _unproject_drop_position(self, drop_pos) -> "np.ndarray":
         """
