@@ -35,7 +35,7 @@ def _attenuation_vector(light: Light) -> np.ndarray:
     )
 
 
-_DEBUG_LIGHTS = False  # TODO: убрать после отладки
+_DEBUG_LIGHTS = True  # TODO: убрать после отладки
 _debug_frame_counter = 0
 
 
@@ -53,10 +53,13 @@ def upload_lights_to_shader(shader: ShaderProgram, lights: Sequence[Light]) -> N
 
     prefix = "u_light_"
 
-    # Debug: выводим раз в 60 кадров
-    should_debug = _DEBUG_LIGHTS and (_debug_frame_counter % 60 == 0)
+    # Debug: выводим первые 10 вызовов
+    should_debug = _DEBUG_LIGHTS and (_debug_frame_counter <= 10)
     if should_debug:
-        print(f"\n=== upload_lights_to_shader ===")
+        print(f"\n=== upload_lights_to_shader (call #{_debug_frame_counter}) ===")
+        print(f"  shader: {shader}")
+        print(f"  shader._compiled: {shader._compiled}")
+        print(f"  shader._handle: {shader._handle}")
         print(f"  light_count: {count}")
 
     for index in range(count):
