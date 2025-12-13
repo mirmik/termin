@@ -706,9 +706,17 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._current_viewport = None
             return
         self._current_viewport = self._viewports_list[index][0]
+
         # Update lists for new viewport
         self._update_resource_list()
         self._update_passes_list()
+
+        # Request render update for new viewport
+        if self._on_request_update is not None:
+            self._on_request_update()
+
+        # Update GL widget
+        self._gl_widget.update()
 
     def _update_viewport_list(self) -> None:
         """Update viewport ComboBox from RenderingController."""
