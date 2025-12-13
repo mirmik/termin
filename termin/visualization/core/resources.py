@@ -241,6 +241,49 @@ class ResourceManager:
         mat.color = (0.3, 0.85, 0.9, 1.0)  # Умеренно-яркий циан
         self.register_material("DefaultMaterial", mat)
 
+    def register_builtin_meshes(self) -> List[str]:
+        """
+        Регистрирует встроенные примитивные меши.
+
+        Returns:
+            Список имён зарегистрированных мешей.
+        """
+        from termin.visualization.core.mesh import MeshDrawable
+        from termin.mesh.mesh import (
+            TexturedCubeMesh,
+            UVSphereMesh,
+            PlaneMesh,
+            CylinderMesh,
+        )
+
+        registered = []
+
+        # Куб с корректными UV (текстура на каждой грани)
+        if "Cube" not in self.meshes:
+            cube = MeshDrawable(TexturedCubeMesh(size=1.0))
+            self.register_mesh("Cube", cube)
+            registered.append("Cube")
+
+        # Сфера
+        if "Sphere" not in self.meshes:
+            sphere = MeshDrawable(UVSphereMesh(radius=0.5, n_meridians=32, n_parallels=16))
+            self.register_mesh("Sphere", sphere)
+            registered.append("Sphere")
+
+        # Плоскость
+        if "Plane" not in self.meshes:
+            plane = MeshDrawable(PlaneMesh(width=1.0, depth=1.0))
+            self.register_mesh("Plane", plane)
+            registered.append("Plane")
+
+        # Цилиндр
+        if "Cylinder" not in self.meshes:
+            cylinder = MeshDrawable(CylinderMesh(radius=0.5, height=1.0))
+            self.register_mesh("Cylinder", cylinder)
+            registered.append("Cylinder")
+
+        return registered
+
     # --------- MeshKeeper'ы ---------
     def get_or_create_mesh_keeper(self, name: str) -> "MeshKeeper":
         """

@@ -814,6 +814,7 @@ class EditorWindow(QMainWindow):
         # Register built-in resources
         self.resource_manager.register_default_shader()
         self.resource_manager.register_builtin_materials()
+        self.resource_manager.register_builtin_meshes()
 
         # If watcher not enabled yet, enable it. Otherwise rescan.
         if not self._project_file_watcher.is_enabled:
