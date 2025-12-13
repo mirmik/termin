@@ -65,6 +65,7 @@ class ColorPass(RenderFramePass):
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
         "shadow_res": InspectField(path="shadow_res", label="Shadow Resource", kind="string"),
         "phase_mark": InspectField(path="phase_mark", label="Phase Mark", kind="string"),
+        "sort_by_distance": InspectField(path="sort_by_distance", label="Sort by Distance", kind="bool"),
     }
 
     def __init__(
@@ -74,6 +75,7 @@ class ColorPass(RenderFramePass):
         shadow_res: str | None = "shadow_maps",
         pass_name: str = "Color",
         phase_mark: str | None = None,
+        sort_by_distance: bool = False,
     ):
         if phase_mark is None:
             phase_mark = "opaque"
@@ -91,6 +93,7 @@ class ColorPass(RenderFramePass):
         self.output_res = output_res
         self.shadow_res = shadow_res
         self.phase_mark = phase_mark
+        self.sort_by_distance = sort_by_distance
 
         # Кэш имён сущностей с MeshRenderer
         self._entity_names: List[str] = []
@@ -102,6 +105,7 @@ class ColorPass(RenderFramePass):
             "output_res": self.output_res,
             "shadow_res": self.shadow_res,
             "phase_mark": self.phase_mark,
+            "sort_by_distance": self.sort_by_distance,
         }
 
     @classmethod
@@ -113,9 +117,10 @@ class ColorPass(RenderFramePass):
             shadow_res=data.get("shadow_res", "shadow_maps"),
             pass_name=data.get("pass_name", "Color"),
             phase_mark=data.get("phase_mark"),
+            sort_by_distance=data.get("sort_by_distance", False),
         )
 
-    _DEBUG_COLLECT = True  # DEBUG: отладка сбора draw calls
+    _DEBUG_COLLECT = False  # DEBUG: отладка сбора draw calls
 
     def _collect_draw_calls(self, scene, phase_mark: str | None) -> List[PhaseDrawCall]:
         """
@@ -325,6 +330,16 @@ class ColorPass(RenderFramePass):
         # Режим с phase_mark — собираем и сортируем draw calls
         if self.phase_mark is not None:
             draw_calls = self._collect_draw_calls(scene, self.phase_mark)
+
+            # Сортировка по дальности (back-to-front для прозрачных объектов)
+            if self.sort_by_distance and camera.entity is not None:
+                cam_pos = camera.entity.transform.global_pose().lin
+
+                def distance_key(dc: PhaseDrawCall) -> float:
+                    entity_pos = dc.entity.transform.global_pose().lin
+                    return -np.linalg.norm(entity_pos - cam_pos)  # минус для back-to-front
+
+                draw_calls.sort(key=distance_key)
 
             for dc in draw_calls:
                 self._entity_names.append(dc.entity.name)

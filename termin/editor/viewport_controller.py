@@ -526,6 +526,16 @@ class ViewportController:
             phase_mark="opaque",
         )
 
+        # Transparent pass — рендерит прозрачные объекты с сортировкой back-to-front
+        transparent_pass = ColorPass(
+            input_res="color_scene",
+            output_res="color_scene",
+            shadow_res=None,
+            pass_name="Transparent",
+            phase_mark="transparent",
+            sort_by_distance=True,
+        )
+
         # Отдельный ColorPass для editor объектов (gizmo и т.д.)
         editor_color_pass = ColorPass(
             input_res="color_scene",
@@ -551,6 +561,7 @@ class ViewportController:
             shadow_pass,
             skybox_pass,
             color_pass,
+            transparent_pass,
             editor_color_pass,
             depth_pass,
             IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
