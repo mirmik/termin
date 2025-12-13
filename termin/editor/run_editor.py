@@ -136,6 +136,13 @@ def run_editor():
     # Request initial render
     win.viewport_controller.request_update()
 
+    # WORKAROUND: Force double render on first frame to fix lighting initialization
+    # This ensures OpenGL state is fully initialized before user sees the result
+    app.processEvents()
+    sdl_backend.poll_events()
+    win.tick(0.0)
+    win.viewport_controller.request_update()
+
     # Main render loop
     target_fps = 60
     target_frame_time = 1.0 / target_fps
