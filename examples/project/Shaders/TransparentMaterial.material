@@ -1,5 +1,5 @@
 {
-  "shader": "DefaultShader",
+  "shader": "TransparentShader",
   "uniforms": {
     "u_color": [
       0.774654746055603,

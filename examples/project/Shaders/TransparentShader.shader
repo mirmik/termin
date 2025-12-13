@@ -33,3 +33,4 @@
   void main() {
       frag_color = u_color;
   }
+  
