@@ -79,13 +79,13 @@ class Mesh3(Mesh):
     def __init__(self, vertices: np.ndarray, triangles: np.ndarray, uvs: np.ndarray | None = None):
         super().__init__(vertices, triangles)
 
-        self.uv = np.asarray(uvs, dtype=float) if uvs is not None else None
+        self.uvs = np.asarray(uvs, dtype=float) if uvs is not None else None
         self._validate_mesh()
         self.vertex_normals = None
         self.face_normals = None
 
     def copy(self) -> "Mesh3":
-        uvs_copy = self.uv.copy() if self.uv is not None else None
+        uvs_copy = self.uvs.copy() if self.uvs is not None else None
         mesh_copy = Mesh3(self.vertices.copy(), self.triangles.copy(), uvs_copy)
         if self.vertex_normals is not None:
             mesh_copy.vertex_normals = self.vertex_normals.copy()
@@ -104,10 +104,10 @@ class Mesh3(Mesh):
             normals = self.vertex_normals.astype(np.float32)
 
         # uv — если нет, ставим (0,0)
-        if self.uv is None:
+        if self.uvs is None:
             uvs = np.zeros((self.vertices.shape[0], 2), dtype=np.float32)
         else:
-            uvs = self.uv.astype(np.float32)
+            uvs = self.uvs.astype(np.float32)
 
         return np.hstack([pos, normals, uvs])
 
