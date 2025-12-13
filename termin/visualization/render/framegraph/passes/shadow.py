@@ -50,7 +50,7 @@ class ShadowPass(RenderFramePass):
         ShadowMapArray с текстурами и матрицами для всех источников.
     """
 
-    _DEBUG_FIRST_FRAMES = True  # Debug: track first frames
+    _DEBUG_FIRST_FRAMES = False  # Debug: track first frames
     _debug_frame_count = 0
 
     inspect_fields = {

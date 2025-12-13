@@ -35,7 +35,7 @@ def _attenuation_vector(light: Light) -> np.ndarray:
     )
 
 
-_DEBUG_LIGHTS = True  # TODO: убрать после отладки
+_DEBUG_LIGHTS = False  # TODO: убрать после отладки
 _debug_frame_counter = 0
 
 
