@@ -1126,6 +1126,7 @@ class EditorWindow(QMainWindow):
             rot = cam_pose.rotation_matrix()
             cam_forward = rot[:, 1]  # Y колонка = forward
             fallback_pos = cam_pos + cam_forward * 5.0
+            print(f"[DEBUG] cam_pos={cam_pos}, forward={cam_forward}, fallback={fallback_pos}")
 
         if self.editor_viewport is None or self.viewport is None:
             return fallback_pos
@@ -1136,8 +1137,10 @@ class EditorWindow(QMainWindow):
 
         # Читаем глубину из ID buffer
         depth = self.editor_viewport.pick_depth_at(x, y, self.viewport, buffer_name="id")
+        print(f"[DEBUG] drop at ({x}, {y}), depth={depth}")
         if depth is None or depth >= 1.0:
             # Нет геометрии под курсором — используем fallback
+            print(f"[DEBUG] using fallback_pos={fallback_pos}")
             return fallback_pos
 
         # Получаем размеры viewport
