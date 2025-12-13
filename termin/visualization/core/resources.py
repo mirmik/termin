@@ -227,7 +227,7 @@ class ResourceManager:
         # Создаём DefaultMaterial
         mat = Material.from_parsed(shader)
         mat.name = "DefaultMaterial"
-        self.materials["DefaultMaterial"] = mat
+        self.register_material("DefaultMaterial", mat)
 
     # --------- Меши ---------
     def register_mesh(self, name: str, mesh: "MeshDrawable"):
