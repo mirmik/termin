@@ -111,6 +111,7 @@ class FrameDebuggerPass(RenderFramePass):
             PresentToScreenPass,
             _get_texture_from_resource,
         )
+        from sdl2 import video as sdl_video
 
         # Читаем depth buffer до переключения контекста
         if self._depth_callback is not None:
@@ -122,6 +123,10 @@ class FrameDebuggerPass(RenderFramePass):
         tex = _get_texture_from_resource(src_fb)
         if tex is None:
             return
+
+        # Запоминаем текущий контекст и окно
+        saved_context = sdl_video.SDL_GL_GetCurrentContext()
+        saved_window = sdl_video.SDL_GL_GetCurrentWindow()
 
         # Переключаемся на контекст окна дебаггера
         self._debugger_window.make_current()
@@ -149,3 +154,7 @@ class FrameDebuggerPass(RenderFramePass):
 
         # Показываем результат
         self._debugger_window.swap_buffers()
+
+        # Восстанавливаем исходный контекст
+        if saved_window and saved_context:
+            sdl_video.SDL_GL_MakeCurrent(saved_window, saved_context)

@@ -489,7 +489,14 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
 
     def render(self) -> None:
         """Рендерит текстуру в SDL окно."""
+        from sdl2 import video as sdl_video
+
         self._ensure_initialized()
+
+        # Запоминаем текущий контекст
+        saved_context = sdl_video.SDL_GL_GetCurrentContext()
+        saved_window = sdl_video.SDL_GL_GetCurrentWindow()
+
         self._sdl_window.make_current()
 
         # Bind default framebuffer (window)
@@ -506,6 +513,9 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         tex = self._get_texture()
         if tex is None:
             self._sdl_window.swap_buffers()
+            # Восстанавливаем контекст
+            if saved_window and saved_context:
+                sdl_video.SDL_GL_MakeCurrent(saved_window, saved_context)
             return
 
         shader = self._get_shader()
@@ -528,6 +538,10 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
 
         self._sdl_window.swap_buffers()
         self._update_depth_image()
+
+        # Восстанавливаем контекст
+        if saved_window and saved_context:
+            sdl_video.SDL_GL_MakeCurrent(saved_window, saved_context)
 
     def update(self) -> None:
         """Переопределяем update() для вызова render()."""
@@ -1150,6 +1164,10 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         Вызывается редактором при обновлении основного viewport.
         Обновляет списки и перерисовывает GL-виджет.
         """
+        # Если диалог скрыт, не делаем ничего (особенно с GL контекстом!)
+        if not self.isVisible():
+            return
+
         self._update_resource_list()
         if self._mode == "inside":
             self._update_passes_list()

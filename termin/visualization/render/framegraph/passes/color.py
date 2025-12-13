@@ -420,6 +420,7 @@ class ColorPass(RenderFramePass):
             PresentToScreenPass,
             _get_texture_from_resource,
         )
+        from sdl2 import video as sdl_video
 
         # Захватываем depth buffer до переключения контекста
         if self._depth_capture_callback is not None:
@@ -431,6 +432,10 @@ class ColorPass(RenderFramePass):
         tex = _get_texture_from_resource(src_fb)
         if tex is None:
             return
+
+        # Запоминаем текущий контекст и окно
+        saved_context = sdl_video.SDL_GL_GetCurrentContext()
+        saved_window = sdl_video.SDL_GL_GetCurrentWindow()
 
         # Переключаемся на контекст окна дебаггера
         debugger_window.make_current()
@@ -458,3 +463,7 @@ class ColorPass(RenderFramePass):
 
         # Показываем результат
         debugger_window.swap_buffers()
+
+        # Восстанавливаем исходный контекст
+        if saved_window and saved_context:
+            sdl_video.SDL_GL_MakeCurrent(saved_window, saved_context)
