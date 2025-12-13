@@ -53,6 +53,7 @@ class RenderingController:
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
         get_editor_pipeline: Optional[Callable[[], "RenderPipeline"]] = None,
+        on_display_input_mode_changed: Optional[Callable[["Display", str], None]] = None,
     ):
         """
         Initialize RenderingController.
@@ -80,6 +81,7 @@ class RenderingController:
         self._on_viewport_selected = on_viewport_selected
         self._on_request_update = on_request_update
         self._get_editor_pipeline = get_editor_pipeline
+        self._on_display_input_mode_changed_callback = on_display_input_mode_changed
 
         self._displays: List["Display"] = []
         self._display_names: dict[int, str] = {}
@@ -327,14 +329,26 @@ class RenderingController:
 
     def get_editor_fbo_pool(self) -> dict:
         """Get FBO pool for the editor viewport (for picking)."""
-        editor_display = self.editor_display
-        if editor_display is None or not editor_display.viewports:
+        return self.get_display_fbo_pool(self.editor_display)
+
+    def get_display_fbo_pool(self, display: Optional["Display"]) -> dict:
+        """Get FBO pool for a display's primary viewport (for picking)."""
+        if display is None or not display.viewports:
             return {}
-        viewport = editor_display.viewports[0]
+        viewport = display.viewports[0]
         state = self.get_viewport_state(viewport)
         if state is None:
             return {}
         return state.fbos
+
+    def get_display_backend_window(self, display: "Display") -> Optional["BackendWindow"]:
+        """Get backend window for a display."""
+        display_id = id(display)
+        tab_info = self._display_tabs.get(display_id)
+        if tab_info is None:
+            return None
+        _tab_container, backend_window, _qwindow = tab_info
+        return backend_window
 
     # --- Selection handling ---
 
@@ -517,17 +531,20 @@ class RenderingController:
 
         _tab_container, backend_window, _qwindow = tab_info
 
-        # Remove old input manager
+        # Remove old input manager (if managed here, not by EditorViewportFeatures)
         if display_id in self._display_input_managers:
             del self._display_input_managers[display_id]
 
+        # Clear callbacks first
+        backend_window.set_cursor_pos_callback(None)
+        backend_window.set_scroll_callback(None)
+        backend_window.set_mouse_button_callback(None)
+        backend_window.set_key_callback(None)
+
         # Create new input manager based on mode
         if mode == "none":
-            # No input handling
-            backend_window.set_cursor_pos_callback(None)
-            backend_window.set_scroll_callback(None)
-            backend_window.set_mouse_button_callback(None)
-            backend_window.set_key_callback(None)
+            # No input handling - callbacks already cleared
+            pass
         elif mode == "simple":
             from termin.visualization.platform.input_manager import SimpleDisplayInputManager
 
@@ -538,19 +555,17 @@ class RenderingController:
             )
             self._display_input_managers[display_id] = input_manager
         elif mode == "editor":
-            # Editor mode requires additional setup (picking, gizmo, etc.)
-            # For now, use SimpleDisplayInputManager as base
-            from termin.visualization.platform.input_manager import SimpleDisplayInputManager
-
-            input_manager = SimpleDisplayInputManager(
-                backend_window=backend_window,
-                display=display,
-                on_request_update=self._request_update,
-            )
-            self._display_input_managers[display_id] = input_manager
+            # Editor mode is handled by EditorWindow via callback
+            # It will create EditorViewportFeatures which owns EditorDisplayInputManager
+            pass
 
         # Store mode
         self._display_input_modes[display_id] = mode
+
+        # Notify EditorWindow to handle editor mode setup/teardown
+        if self._on_display_input_mode_changed_callback is not None:
+            self._on_display_input_mode_changed_callback(display, mode)
+
         self._request_update()
 
     def _on_viewport_display_changed(self, new_display: "Display") -> None:

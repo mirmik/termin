@@ -226,6 +226,9 @@ class EditorWindow(QMainWindow):
         # Must be created BEFORE EditorViewportFeatures
         self._init_viewport_list_widget()
 
+        # Map display_id -> EditorViewportFeatures for displays in "editor" mode
+        self._editor_features: dict[int, EditorViewportFeatures] = {}
+
         # --- Create editor display through RenderingController ---
         editor_display, backend_window = self._rendering_controller.create_editor_display(
             container=self.editorViewportTab,
@@ -260,6 +263,9 @@ class EditorWindow(QMainWindow):
             get_fbo_pool=self._rendering_controller.get_editor_fbo_pool,
             request_update=self._request_viewport_update,
         )
+
+        # Register in editor features dict
+        self._editor_features[id(editor_display)] = self.editor_viewport
 
         # Set editor pipeline through RenderingController
         editor_pipeline = self.editor_viewport.make_editor_pipeline()
@@ -575,6 +581,7 @@ class EditorWindow(QMainWindow):
             get_window_backend=self._get_window_backend,
             get_sdl_backend=lambda: self._sdl_backend,
             on_request_update=self._request_viewport_update,
+            on_display_input_mode_changed=self._on_display_input_mode_changed,
         )
 
     def _init_project_browser(self):
@@ -918,9 +925,11 @@ class EditorWindow(QMainWindow):
 
     def _on_selection_changed_internal(self, entity: Entity | None) -> None:
         """Колбэк от SelectionManager при изменении выделения."""
-        # Обновляем viewport
-        if self.editor_viewport is not None and self.selection_manager is not None:
-            self.editor_viewport.selected_entity_id = self.selection_manager.selected_entity_id
+        # Обновляем все EditorViewportFeatures
+        if self.selection_manager is not None:
+            selected_id = self.selection_manager.selected_entity_id
+            for editor_features in self._editor_features.values():
+                editor_features.selected_entity_id = selected_id
 
         # Обновляем гизмо
         if self.gizmo_controller is not None:
@@ -930,8 +939,11 @@ class EditorWindow(QMainWindow):
 
     def _on_hover_changed_internal(self, entity: Entity | None) -> None:
         """Колбэк от SelectionManager при изменении hover."""
-        if self.editor_viewport is not None and self.selection_manager is not None:
-            self.editor_viewport.hover_entity_id = self.selection_manager.hover_entity_id
+        # Обновляем все EditorViewportFeatures
+        if self.selection_manager is not None:
+            hover_id = self.selection_manager.hover_entity_id
+            for editor_features in self._editor_features.values():
+                editor_features.hover_entity_id = hover_id
 
         self._request_viewport_update()
 
@@ -974,12 +986,12 @@ class EditorWindow(QMainWindow):
                 self._on_gizmo_transform_dragging
             )
 
-        # Update viewport
-        if self.editor_viewport is not None:
-            self.editor_viewport.set_scene(new_scene)
-            self.editor_viewport.set_camera(self._camera_manager.camera)
-            self.editor_viewport.selected_entity_id = 0
-            self.editor_viewport.hover_entity_id = 0
+        # Update all EditorViewportFeatures
+        for editor_features in self._editor_features.values():
+            editor_features.set_scene(new_scene)
+            editor_features.set_camera(self._camera_manager.camera)
+            editor_features.selected_entity_id = 0
+            editor_features.hover_entity_id = 0
 
         # Update scene tree
         if self.scene_tree_controller is not None:
@@ -1031,8 +1043,9 @@ class EditorWindow(QMainWindow):
         """Колбэк от GameModeController при изменении режима."""
         if is_playing:
             # Входим в игровой режим
-            if self.editor_viewport is not None:
-                self.editor_viewport.set_world_mode("game")
+            # Переключаем все EditorViewportFeatures в режим game
+            for editor_features in self._editor_features.values():
+                editor_features.set_world_mode("game")
 
             # Скрываем гизмо
             if self.gizmo_controller is not None:
@@ -1045,8 +1058,9 @@ class EditorWindow(QMainWindow):
                 self.inspector.set_target(None)
         else:
             # Выходим из игрового режима
-            if self.editor_viewport is not None:
-                self.editor_viewport.set_world_mode("editor")
+            # Переключаем все EditorViewportFeatures в режим editor
+            for editor_features in self._editor_features.values():
+                editor_features.set_world_mode("editor")
 
             # Показываем гизмо
             if self.gizmo_controller is not None:
@@ -1135,6 +1149,75 @@ class EditorWindow(QMainWindow):
 
         self._status_bar_label.setText(f"FPS: {self._fps_smooth:.1f}")
 
+    # ----------- display input mode -----------
+
+    def _on_display_input_mode_changed(self, display, mode: str) -> None:
+        """
+        Handle display input mode change from RenderingController.
+
+        When a display switches to "editor" mode, creates EditorViewportFeatures
+        for that display. When switching away, destroys it.
+
+        Multiple displays can be in "editor" mode simultaneously.
+
+        Args:
+            display: Display that changed mode.
+            mode: New input mode ("none", "simple", "editor").
+        """
+        if self._rendering_controller is None:
+            return
+
+        display_id = id(display)
+
+        if mode == "editor":
+            # Create EditorViewportFeatures for this display (if not exists)
+            if display_id in self._editor_features:
+                # Already has editor features
+                return
+
+            backend_window = self._rendering_controller.get_display_backend_window(display)
+            if backend_window is None:
+                return
+
+            def get_fbo_pool(d=display):
+                return self._rendering_controller.get_display_fbo_pool(d)
+
+            # Create new EditorViewportFeatures
+            editor_features = EditorViewportFeatures(
+                display=display,
+                backend_window=backend_window,
+                graphics=self.world.graphics,
+                gizmo_controller=self.gizmo_controller,
+                on_entity_picked=self._on_entity_picked_from_viewport,
+                on_hover_entity=self._on_hover_entity_from_viewport,
+                get_fbo_pool=get_fbo_pool,
+                request_update=self._request_viewport_update,
+            )
+
+            # Sync current selection state
+            if self.selection_manager is not None:
+                editor_features.selected_entity_id = self.selection_manager.selected_entity_id
+                editor_features.hover_entity_id = self.selection_manager.hover_entity_id
+
+            # Register
+            self._editor_features[display_id] = editor_features
+
+            # Set editor pipeline for the viewport (if it has viewports)
+            if display.viewports:
+                editor_pipeline = editor_features.make_editor_pipeline()
+                self._rendering_controller.set_viewport_pipeline(
+                    display.viewports[0],
+                    editor_pipeline,
+                )
+        else:
+            # Destroy EditorViewportFeatures for this display (if exists)
+            if display_id in self._editor_features:
+                editor_features = self._editor_features.pop(display_id)
+                # Clean up callbacks
+                editor_features.detach_from_display()
+
+        self._request_viewport_update()
+
     # ----------- SDL render loop support -----------
 
     def should_close(self) -> bool:
@@ -1166,6 +1249,6 @@ class EditorWindow(QMainWindow):
         if needs_render and self._rendering_controller is not None:
             self._rendering_controller.render_all_displays()
 
-            # Editor-specific post-render (picking, hover, etc.)
-            if self.editor_viewport is not None:
-                self.editor_viewport.after_render()
+            # Editor-specific post-render (picking, hover, etc.) for ALL displays
+            for editor_features in self._editor_features.values():
+                editor_features.after_render()

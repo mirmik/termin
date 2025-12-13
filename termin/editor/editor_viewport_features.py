@@ -102,6 +102,69 @@ class EditorViewportFeatures:
         )
         self._input_manager.set_world_mode("editor")
 
+    # ---------- Target display switching ----------
+
+    def set_target_display(
+        self,
+        display: "Display",
+        backend_window: "BackendWindow",
+        get_fbo_pool: Callable[[], dict],
+    ) -> None:
+        """
+        Switch to a new target display.
+
+        This allows a single EditorViewportFeatures instance to handle
+        editor input for any display that switches to "editor" mode.
+
+        Args:
+            display: New display to handle.
+            backend_window: Backend window for the new display.
+            get_fbo_pool: Callback to get FBO pool for the new display.
+        """
+        # Update references
+        self._display = display
+        self._backend_window = backend_window
+        self._get_fbo_pool = get_fbo_pool
+
+        # Clear pending events from old display
+        self._pending_pick_press = None
+        self._pending_pick_release = None
+        self._pending_hover = None
+        self._press_position = None
+        self._gizmo_handled_press = False
+
+        # Recreate EditorDisplayInputManager for the new display
+        self._input_manager = EditorDisplayInputManager(
+            backend_window=self._backend_window,
+            display=self._display,
+            graphics=self._graphics,
+            get_fbo_pool=self._get_fbo_pool,
+            on_request_update=self._request_update,
+            on_mouse_button_event=self._on_mouse_button_event,
+            on_mouse_move_event=self._on_mouse_move,
+        )
+        self._input_manager.set_world_mode("editor")
+
+    def detach_from_display(self) -> None:
+        """
+        Detach from current display (clear input callbacks).
+
+        Called when the display switches away from "editor" mode.
+        """
+        # Clear backend window callbacks
+        if self._backend_window is not None:
+            self._backend_window.set_cursor_pos_callback(None)
+            self._backend_window.set_scroll_callback(None)
+            self._backend_window.set_mouse_button_callback(None)
+            self._backend_window.set_key_callback(None)
+
+        # Clear pending events
+        self._pending_pick_press = None
+        self._pending_pick_release = None
+        self._pending_hover = None
+        self._press_position = None
+        self._gizmo_handled_press = False
+
     # ---------- Properties ----------
 
     @property
