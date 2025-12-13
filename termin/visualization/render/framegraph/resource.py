@@ -156,3 +156,13 @@ class ShadowMapArrayResource(FrameGraphResource):
             if entry.light_index == light_index:
                 return entry
         return None
+
+    def resize(self, size: Tuple[int, int]) -> None:
+        """
+        No-op для совместимости с интерфейсом FBO.
+
+        Shadow maps имеют собственное разрешение (self.resolution),
+        которое не зависит от размера viewport'а.
+        Изменение размера отдельных FBO происходит в ShadowPass.
+        """
+        pass
