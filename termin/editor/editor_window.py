@@ -174,7 +174,6 @@ class EditorWindow(QMainWindow):
             on_transform_changed=self._on_inspector_transform_changed,
             on_component_changed=self._on_inspector_component_changed,
             on_material_changed=self._on_material_inspector_changed,
-            on_pipeline_changed=self._on_pipeline_changed,
         )
 
         # Для обратной совместимости
@@ -517,10 +516,6 @@ class EditorWindow(QMainWindow):
 
     def _on_material_inspector_changed(self):
         """Обработчик изменения материала в инспекторе."""
-        self._request_viewport_update()
-
-    def _on_pipeline_changed(self, pipeline):
-        """Обработчик изменения пайплайна в инспекторе."""
         self._request_viewport_update()
 
     def show_entity_inspector(self, entity: Entity | None = None):

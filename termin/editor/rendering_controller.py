@@ -520,11 +520,16 @@ class RenderingController:
         self._request_update()
 
     def _on_viewport_pipeline_changed(self, pipeline: "RenderPipeline") -> None:
-        """Handle viewport pipeline change from inspector."""
+        """Handle viewport pipeline change from ViewportInspector."""
         if self._selected_viewport is None:
             return
 
         self.set_viewport_pipeline(self._selected_viewport, pipeline)
+
+    def _on_pipeline_inspector_changed(self, pipeline: "RenderPipeline") -> None:
+        """Handle pipeline change from PipelineInspector (file editor)."""
+        # Pipeline is edited in-place, just trigger redraw for all displays
+        self._request_update()
 
     def set_viewport_pipeline(self, viewport: "Viewport", pipeline: "RenderPipeline | None") -> None:
         """
