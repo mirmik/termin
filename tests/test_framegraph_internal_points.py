@@ -49,20 +49,36 @@ def test_debug_internal_point_configuration_is_mutable():
     p = FramePass(pass_name="p", reads={"in"}, writes={"out"})
     # по умолчанию точки дебага не заданы
     assert p.debug_internal_symbol is None
-    assert p.debug_internal_output is None
-    assert p.get_debug_internal_point() == (None, None)
+    assert p.get_debug_internal_point() is None
 
     # можно задать и прочитать конфигурацию
-    p.set_debug_internal_point("foo", "debug_out")
+    p.set_debug_internal_point("foo")
     assert p.debug_internal_symbol == "foo"
-    assert p.debug_internal_output == "debug_out"
-    assert p.get_debug_internal_point() == ("foo", "debug_out")
+    assert p.get_debug_internal_point() == "foo"
 
     # и сбросить её обратно
-    p.set_debug_internal_point(None, None)
+    p.set_debug_internal_point(None)
     assert p.debug_internal_symbol is None
-    assert p.debug_internal_output is None
-    assert p.get_debug_internal_point() == (None, None)
+    assert p.get_debug_internal_point() is None
+
+
+def test_debugger_window_configuration():
+    """Тест для set_debugger_window / get_debugger_window."""
+    p = FramePass(pass_name="p")
+
+    # По умолчанию окно не задано
+    assert p.get_debugger_window() is None
+
+    # Можно задать окно и callback
+    mock_window = object()
+    mock_callback = lambda x: None
+    p.set_debugger_window(mock_window, mock_callback)
+    assert p.get_debugger_window() is mock_window
+    assert p._depth_capture_callback is mock_callback
+
+    # Можно сбросить
+    p.set_debugger_window(None)
+    assert p.get_debugger_window() is None
 
 
 def test_framegraph_builds_with_and_without_debug_internal_point():
@@ -70,11 +86,7 @@ def test_framegraph_builds_with_and_without_debug_internal_point():
     Граф должен:
     * корректно строиться, когда у пассов есть внутренние символы,
       но точка дебага не выбрана;
-    * так же корректно строиться, когда точка дебага выбрана
-      (в том числе с указанием отдельного ресурса вывода).
-
-    Когда debug_internal_output установлен, он попадает в effective_writes
-    и учитывается при построении графа зависимостей и создании FBO.
+    * так же корректно строиться, когда точка дебага выбрана.
     """
     p1 = FramePass(pass_name="A", reads=set(), writes={"a"})
     p2 = DummyPass(name="B", reads={"a"}, writes={"b"})
@@ -88,11 +100,9 @@ def test_framegraph_builds_with_and_without_debug_internal_point():
     # оба ресурса независимы и имеют свои канонические имена
     assert groups1["a"] == {"a"}
     assert groups1["b"] == {"b"}
-    # debug-ресурс не фигурирует, так как мы его не задавали
-    assert "debug_b" not in groups1
 
     # 2) С установленной точкой дебага на втором пассе
-    p2.set_debug_internal_point("b", "debug_b")
+    p2.set_debug_internal_point("b")
 
     graph2 = FrameGraph([p1, p2])
     schedule2 = [p.pass_name for p in graph2.build_schedule()]
@@ -103,34 +113,25 @@ def test_framegraph_builds_with_and_without_debug_internal_point():
     # основные alias-группы сохраняются
     assert groups2["a"] == {"a"}
     assert groups2["b"] == {"b"}
-    # debug-ресурс теперь учитывается в effective_writes и появляется в группах
-    # (это позволяет framegraph создать для него FBO)
-    assert "debug_b" in groups2
-    assert groups2["debug_b"] == {"debug_b"}
-    # canonical_resource для debug-ресурса возвращает его имя
-    assert graph2.canonical_resource("debug_b") == "debug_b"
 
 
-def test_inplace_pass_with_debug_internal_output():
+def test_inplace_pass_with_debug_internal_point():
     """
-    Inplace-пасс с установленным debug_internal_output должен:
-    * корректно строиться (валидация не должна упасть)
-    * иметь debug-ресурс в writes после set_debug_internal_point
-    * создавать отдельную группу FBO для debug-ресурса
+    Inplace-пасс с установленным debug_internal_point должен
+    корректно строиться (валидация не должна упасть).
     """
-    # Inplace пасс: 1 read, 1 write + debug output
+    # Inplace пасс: 1 read, 1 write
     p_inplace = DummyPass(
         name="InplaceWithDebug",
         reads={"input"},
         writes={"output"},
         inplace=True,
     )
-    p_inplace.set_debug_internal_point("some_symbol", "debug_output")
+    p_inplace.set_debug_internal_point("some_symbol")
 
-    # Проверяем, что writes включает и output, и debug_output
+    # Проверяем, что writes остаётся как есть (debug больше не добавляется в writes)
     assert "output" in p_inplace.writes
-    assert "debug_output" in p_inplace.writes
-    assert len(p_inplace.writes) == 2
+    assert len(p_inplace.writes) == 1
 
     # Граф должен корректно строиться
     p_source = FramePass(pass_name="Source", writes={"input"})
@@ -138,19 +139,10 @@ def test_inplace_pass_with_debug_internal_output():
     schedule = [p.pass_name for p in graph.build_schedule()]
     assert schedule == ["Source", "InplaceWithDebug"]
 
-    # Alias группы должны содержать debug_output отдельно
+    # Alias группы
     groups = graph.fbo_alias_groups()
     # input и output — синонимы (inplace)
     assert "input" in groups
-    # debug_output — отдельная группа
-    assert "debug_output" in groups
-    assert groups["debug_output"] == {"debug_output"}
-
-    # При сбросе debug_internal_point, debug_output должен удалиться из writes
-    p_inplace.set_debug_internal_point(None, None)
-    assert "output" in p_inplace.writes
-    assert "debug_output" not in p_inplace.writes
-    assert len(p_inplace.writes) == 1
 
 
 # ---- Тесты для enabled флага ----
