@@ -218,6 +218,9 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._initialized = False
         self._channel_mode: int = 0  # 0=RGB, 1=R, 2=G, 3=B, 4=A
 
+        # Captured depth для режима "внутри пасса" (передаётся через callback)
+        self._captured_depth: Optional[np.ndarray] = None
+
         # Реестр обработчиков ресурсов
         self._handlers: dict[str, ResourceHandler] = {
             "fbo": SingleFBOHandler(),
@@ -335,6 +338,48 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
     def set_resource_name(self, name: str) -> None:
         """Set resource name to display."""
         self._resource_name = name
+
+    def get_sdl_window(self):
+        """Возвращает SDL окно для блита из пасса."""
+        return self._sdl_window
+
+    def on_depth_captured(self, depth_array: np.ndarray) -> None:
+        """
+        Callback для получения depth buffer из пасса.
+
+        Вызывается из ColorPass._blit_to_debugger при захвате
+        промежуточного состояния.
+        """
+        self._captured_depth = depth_array
+        self._emit_depth_image(depth_array)
+
+    def _emit_depth_image(self, depth: np.ndarray) -> None:
+        """Конвертирует depth array в QImage и эмитит сигнал."""
+        if depth is None:
+            return
+        height, width = depth.shape
+        depth = np.nan_to_num(depth, nan=1.0, posinf=1.0, neginf=0.0)
+        d_min = float(depth.min())
+        d_max = float(depth.max())
+        if d_max > d_min:
+            norm = (depth - d_min) / (d_max - d_min)
+        else:
+            norm = depth
+        norm = 1.0 - norm
+        img = (norm * 255.0).clip(0.0, 255.0).astype(np.uint8)
+        height_i, width_i = img.shape
+        bytes_per_line = width_i
+        buffer = img.tobytes()
+
+        qimage = QtGui.QImage(
+            buffer,
+            width_i,
+            height_i,
+            bytes_per_line,
+            QtGui.QImage.Format.Format_Grayscale8,
+        )
+        qimage = qimage.copy()
+        self.depthImageUpdated.emit(qimage)
 
     def _current_resource(self):
         """Возвращает текущий ресурс из словаря fbos."""
@@ -549,6 +594,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # Paused state
         self._debug_paused: bool = False
 
+        # FrameDebuggerPass для режима "между пассами" (создаётся динамически)
+        self._frame_debugger_pass = None
+
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -692,6 +740,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _on_viewport_selected(self, index: int) -> None:
         """Handle viewport selection change."""
+        # Отключаем от старого viewport
+        self._detach_frame_debugger_pass()
+
         if index < 0 or index >= len(self._viewports_list):
             self._current_viewport = None
             return
@@ -703,6 +754,10 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         # Update GL widget resource based on pipeline capabilities
         self._update_gl_widget_resource()
+
+        # Подключаем к новому viewport если режим "между пассами"
+        if self._mode == "between":
+            self._attach_frame_debugger_pass()
 
         # Request render update for new viewport
         if self._on_request_update is not None:
@@ -787,15 +842,65 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._inside_panel.hide()
             # Сбрасываем внутренний символ
             self._clear_internal_symbol()
+            # Подключаем FrameDebuggerPass к пайплайну
+            self._attach_frame_debugger_pass()
             # Обновляем UI для типа ресурса (может показать UI обработчика)
             self._update_ui_for_resource_type()
         else:
             self._mode = "inside"
             self._between_panel.hide()
             self._inside_panel.show()
+            # Отключаем FrameDebuggerPass от пайплайна
+            self._detach_frame_debugger_pass()
             # В режиме "Внутри пасса" скрываем UI обработчиков ресурсов
             self._resource_ui_container.hide()
             self._update_passes_list()
+
+    def _attach_frame_debugger_pass(self) -> None:
+        """Создаёт и добавляет FrameDebuggerPass в пайплайн текущего viewport."""
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
+            return
+
+        # Если уже есть — сначала удаляем
+        self._detach_frame_debugger_pass()
+
+        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
+
+        def get_source():
+            if self._debug_paused:
+                return None
+            return self._debug_source_res
+
+        self._frame_debugger_pass = FrameDebuggerPass(
+            get_source_res=get_source,
+            pass_name="FrameDebugger",
+        )
+
+        # Передаём SDL окно и depth callback
+        sdl_window = self._gl_widget.get_sdl_window()
+        depth_callback = self._gl_widget.on_depth_captured
+        self._frame_debugger_pass.set_debugger_window(sdl_window, depth_callback)
+
+        # Добавляем в конец пайплайна (после всех пассов)
+        pipeline.passes.append(self._frame_debugger_pass)
+
+        if self._on_request_update is not None:
+            self._on_request_update()
+
+    def _detach_frame_debugger_pass(self) -> None:
+        """Удаляет FrameDebuggerPass из пайплайна."""
+        if self._frame_debugger_pass is None:
+            return
+
+        pipeline = self._get_current_pipeline()
+        if pipeline is not None and self._frame_debugger_pass in pipeline.passes:
+            pipeline.passes.remove(self._frame_debugger_pass)
+
+        self._frame_debugger_pass = None
+
+        if self._on_request_update is not None:
+            self._on_request_update()
 
     def _on_resource_selected(self, name: str) -> None:
         """Обработчик выбора ресурса (режим «Между пассами»)."""
@@ -856,17 +961,20 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         pipeline = self._get_current_pipeline()
         if pipeline is None:
             return
-        blit_pass = pipeline.debug_blit_pass
+
         for p in pipeline.passes:
             if p.pass_name == pass_name:
                 if symbol is None or symbol == "":
-                    p.set_debug_internal_point(None, None)
-                    if blit_pass is not None:
-                        blit_pass.enabled = True
+                    # Отключаем внутреннюю точку дебага
+                    p.set_debug_internal_point(None)
+                    p.set_debugger_window(None, None)
                 else:
-                    p.set_debug_internal_point(symbol, "debug")
-                    if blit_pass is not None:
-                        blit_pass.enabled = False
+                    # Устанавливаем символ и передаём SDL окно для блита
+                    p.set_debug_internal_point(symbol)
+                    sdl_window = self._gl_widget.get_sdl_window()
+                    depth_callback = self._gl_widget.on_depth_captured
+                    p.set_debugger_window(sdl_window, depth_callback)
+
                 if self._on_request_update is not None:
                     self._on_request_update()
                 return
@@ -1047,4 +1155,20 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._update_passes_list()
         self._sync_pause_state()
         self._update_ui_for_resource_type()
-        self._gl_widget.update()
+        # В режиме "между пассами" не вызываем _gl_widget.update(),
+        # т.к. FrameDebuggerPass уже отрендерил в окно
+        if self._mode == "inside":
+            self._gl_widget.update()
+
+    def showEvent(self, event) -> None:
+        """При показе диалога подключаем FrameDebuggerPass если нужно."""
+        super().showEvent(event)
+        if self._mode == "between":
+            self._attach_frame_debugger_pass()
+
+    def hideEvent(self, event) -> None:
+        """При скрытии диалога отключаем FrameDebuggerPass."""
+        self._detach_frame_debugger_pass()
+        # Также сбрасываем внутренний символ для режима "внутри пасса"
+        self._clear_internal_symbol()
+        super().hideEvent(event)

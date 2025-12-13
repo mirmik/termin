@@ -351,7 +351,6 @@ class EditorViewportFeatures:
         )
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.highlight import HighlightEffect
-        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
         from termin.visualization.render.framegraph.passes.depth import DepthPass
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
@@ -364,17 +363,6 @@ class EditorViewportFeatures:
             input_res="color",
             output_res="color_pp",
             pass_name="PostFX",
-        )
-
-        def _get_debug_source():
-            if self._debug_paused:
-                return None
-            return self._debug_source_res
-
-        blit_pass = FrameDebuggerPass(
-            get_source_res=_get_debug_source,
-            output_res="debug",
-            pass_name="DebugBlit",
         )
 
         depth_pass = DepthPass(input_res="empty_depth", output_res="depth", pass_name="Depth")
@@ -430,7 +418,6 @@ class EditorViewportFeatures:
                 gizmo_entities=get_gizmo_entities,
             ),
             postprocess,
-            blit_pass,
             CanvasPass(
                 src="color_pp",
                 dst="color+ui",
@@ -457,6 +444,5 @@ class EditorViewportFeatures:
 
         return RenderPipeline(
             passes=passes,
-            debug_blit_pass=blit_pass,
             pipeline_specs=[],
         )

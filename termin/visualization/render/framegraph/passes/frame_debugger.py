@@ -1,108 +1,84 @@
+"""
+FrameDebuggerPass — пасс для захвата промежуточного состояния framegraph.
+
+Блитит выбранный ресурс прямо в окно дебаггера и читает depth buffer.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
-import numpy as np
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
-from termin.visualization.render.framegraph.passes.present import blit_fbo_to_fbo
-from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
 
 
-@dataclass
-class DepthBufferStorage:
-    width: int
-    height: int
-    data: np.ndarray
-
-
 class FrameDebuggerPass(RenderFramePass):
     """
-    Аналог BlitPass, но дополнительно выгружает depth-буфер источника в CPU память.
+    Пасс для режима "между пассами" в framegraph debugger.
+
+    Блитит выбранный ресурс прямо в SDL окно дебаггера
+    и читает depth buffer через callback.
     """
 
     def __init__(
         self,
-        get_source_res,
-        output_res: str = "debug",
-        pass_name: str = "FrameDebuggerBlit",
+        get_source_res: Callable[[], str | None] | None = None,
+        pass_name: str = "FrameDebugger",
     ):
         super().__init__(
             pass_name=pass_name,
             reads=set(),
-            writes={output_res},
+            writes=set(),
         )
         self._get_source_res = get_source_res
-        self.output_res = output_res
         self._current_src_name: str | None = None
-        self.depth_buffer_storage: DepthBufferStorage | None = None
 
-    def _serialize_params(self) -> dict:
-        """Сериализует параметры FrameDebuggerPass."""
-        return {
-            "output_res": self.output_res,
-        }
+        # SDL окно дебаггера и callback для depth
+        self._debugger_window: Any = None
+        self._depth_callback: Callable[[Any], None] | None = None
 
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "FrameDebuggerPass":
-        """Создаёт FrameDebuggerPass из сериализованных данных."""
-        return cls(
-            get_source_res=None,  # Runtime callback, не сериализуется
-            output_res=data.get("output_res", "debug"),
-            pass_name=data.get("pass_name", "FrameDebuggerBlit"),
-        )
+    def set_debugger_window(
+        self,
+        window,
+        depth_callback: Callable[[Any], None] | None = None,
+    ) -> None:
+        """
+        Устанавливает SDL окно дебаггера для блита.
+
+        Args:
+            window: SDL окно дебаггера. None — отключить.
+            depth_callback: Callback для передачи depth buffer (numpy array).
+        """
+        self._debugger_window = window
+        self._depth_callback = depth_callback
 
     def required_resources(self) -> set[str]:
-        resources = set(self.writes)
+        """Динамически определяет читаемые ресурсы."""
         if self._get_source_res is None:
             self._current_src_name = None
             self.reads = set()
-            return resources
+            return set()
 
         src_name = self._get_source_res()
         if src_name:
             self._current_src_name = src_name
             self.reads = {src_name}
-            resources.add(src_name)
+            return {src_name}
         else:
             self.reads = set()
             self._current_src_name = None
+            return set()
 
-        return resources
+    def _serialize_params(self) -> dict:
+        return {}
 
-    def _capture_depth_buffer(self, graphics: "GraphicsBackend", framebuffer) -> None:
-        """Читает depth attachment через бэкенд и сохраняет в depth_buffer_storage."""
-        self.depth_buffer_storage = None
-
-        depth = graphics.read_depth_buffer(framebuffer)
-        if depth is None:
-            return
-
-        height, width = depth.shape
-        self.depth_buffer_storage = DepthBufferStorage(width=width, height=height, data=depth)
-
-    def _extract_fbo(self, resource) -> "FramebufferHandle | None":
-        """
-        Извлекает FramebufferHandle из ресурса.
-
-        Поддерживает:
-        - FramebufferHandle напрямую
-        - ShadowMapArrayResource (берёт первый shadow map)
-        """
-        if resource is None:
-            return None
-
-        # ShadowMapArrayResource — берём первый shadow map
-        if isinstance(resource, ShadowMapArrayResource):
-            if len(resource) > 0:
-                return resource[0].fbo
-            return None
-
-        # Обычный FramebufferHandle
-        return resource
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "FrameDebuggerPass":
+        return cls(
+            get_source_res=None,
+            pass_name=data.get("pass_name", "FrameDebugger"),
+        )
 
     def execute(
         self,
@@ -116,28 +92,60 @@ class FrameDebuggerPass(RenderFramePass):
         lights=None,
         canvas=None,
     ):
-        px, py, pw, ph = rect
-        key = context_key
+        # Если нет окна дебаггера — ничего не делаем
+        if self._debugger_window is None:
+            return
 
         if self._get_source_res is None:
-            self.depth_buffer_storage = None
             return
 
         src_name = self._get_source_res()
         if not src_name:
-            self.depth_buffer_storage = None
             return
 
-        resource_in = reads_fbos.get(src_name)
-        fb_in = self._extract_fbo(resource_in)
-        if fb_in is None:
-            self.depth_buffer_storage = None
+        src_fb = reads_fbos.get(src_name)
+        if src_fb is None:
             return
 
-        fb_out = writes_fbos.get(self.output_res)
-        if fb_out is None:
-            self.depth_buffer_storage = None
+        from termin.visualization.render.framegraph.passes.present import (
+            PresentToScreenPass,
+            _get_texture_from_resource,
+        )
+
+        # Читаем depth buffer до переключения контекста
+        if self._depth_callback is not None:
+            depth = graphics.read_depth_buffer(src_fb)
+            if depth is not None:
+                self._depth_callback(depth)
+
+        # Извлекаем текстуру
+        tex = _get_texture_from_resource(src_fb)
+        if tex is None:
             return
 
-        blit_fbo_to_fbo(graphics, fb_in, fb_out, (pw, ph), key)
-        self._capture_depth_buffer(graphics, fb_in)
+        # Переключаемся на контекст окна дебаггера
+        self._debugger_window.make_current()
+
+        # Получаем размер окна
+        dst_w, dst_h = self._debugger_window.framebuffer_size()
+
+        # Биндим framebuffer 0 (окно)
+        graphics.bind_framebuffer(None)
+        graphics.set_viewport(0, 0, dst_w, dst_h)
+
+        graphics.set_depth_test(False)
+        graphics.set_depth_mask(False)
+
+        # Рендерим fullscreen quad
+        shader = PresentToScreenPass._get_shader()
+        shader.ensure_ready(graphics)
+        shader.use()
+        shader.set_uniform_int("u_tex", 0)
+        tex.bind(0)
+        graphics.draw_ui_textured_quad(0)
+
+        graphics.set_depth_test(True)
+        graphics.set_depth_mask(True)
+
+        # Показываем результат
+        self._debugger_window.swap_buffers()

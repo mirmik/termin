@@ -342,12 +342,8 @@ class ColorPass(RenderFramePass):
         )
 
         # Получаем конфигурацию внутренней точки дебага
-        debug_symbol, debug_output = self.get_debug_internal_point()
-
-        # Подготавливаем debug FBO если нужно
-        debug_fb = None
-        if debug_symbol is not None and debug_output is not None:
-            debug_fb = writes_fbos.get(debug_output)
+        debug_symbol = self.get_debug_internal_point()
+        debugger_window = self.get_debugger_window()
 
         # Обновляем кэш имён сущностей
         self._entity_names = []
@@ -392,8 +388,8 @@ class ColorPass(RenderFramePass):
                 # Рисуем геометрию через Drawable
                 dc.drawable.draw_geometry(render_context)
 
-                if debug_fb is not None and dc.entity.name == debug_symbol:
-                    self._blit_to_debug(graphics, fb, debug_fb, (pw, ph), key)
+                if debugger_window is not None and dc.entity.name == debug_symbol:
+                    self._blit_to_debugger(graphics, fb, debugger_window, (pw, ph))
 
             # Сбрасываем render state
             graphics.apply_render_state(RenderState())
@@ -405,23 +401,60 @@ class ColorPass(RenderFramePass):
 
                 entity.draw(render_context)
 
-                if debug_fb is not None and entity.name == debug_symbol:
-                    self._blit_to_debug(graphics, fb, debug_fb, (pw, ph), key)
+                if debugger_window is not None and entity.name == debug_symbol:
+                    self._blit_to_debugger(graphics, fb, debugger_window, (pw, ph))
 
-    def _blit_to_debug(
+    def _blit_to_debugger(
         self,
         gfx: "GraphicsBackend",
         src_fb,
-        dst_fb,
+        debugger_window,
         size: tuple[int, int],
-        context_key: int,
     ) -> None:
         """
-        Копирует текущее состояние color FBO в debug FBO.
+        Копирует текущее состояние color FBO в окно дебаггера (framebuffer 0).
+
+        Также вызывает depth callback если он установлен.
         """
-        from termin.visualization.render.framegraph.passes.present import blit_fbo_to_fbo
+        from termin.visualization.render.framegraph.passes.present import (
+            PresentToScreenPass,
+            _get_texture_from_resource,
+        )
 
-        blit_fbo_to_fbo(gfx, src_fb, dst_fb, size, context_key)
+        # Захватываем depth buffer до переключения контекста
+        if self._depth_capture_callback is not None:
+            depth = gfx.read_depth_buffer(src_fb)
+            if depth is not None:
+                self._depth_capture_callback(depth)
 
-        gfx.bind_framebuffer(src_fb)
-        gfx.set_viewport(0, 0, size[0], size[1])
+        # Извлекаем текстуру из ресурса
+        tex = _get_texture_from_resource(src_fb)
+        if tex is None:
+            return
+
+        # Переключаемся на контекст окна дебаггера
+        debugger_window.make_current()
+
+        # Получаем размер окна дебаггера
+        dst_w, dst_h = debugger_window.framebuffer_size()
+
+        # Биндим framebuffer 0 (окно)
+        gfx.bind_framebuffer(None)
+        gfx.set_viewport(0, 0, dst_w, dst_h)
+
+        gfx.set_depth_test(False)
+        gfx.set_depth_mask(False)
+
+        # Рендерим fullscreen quad с текстурой
+        shader = PresentToScreenPass._get_shader()
+        shader.ensure_ready(gfx)
+        shader.use()
+        shader.set_uniform_int("u_tex", 0)
+        tex.bind(0)
+        gfx.draw_ui_textured_quad(0)
+
+        gfx.set_depth_test(True)
+        gfx.set_depth_mask(True)
+
+        # Показываем результат
+        debugger_window.swap_buffers()

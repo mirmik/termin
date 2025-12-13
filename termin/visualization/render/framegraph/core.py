@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Set, Tuple, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, TYPE_CHECKING
 from collections import deque
+
+if TYPE_CHECKING:
+    from termin.visualization.platform.backends.base import FramebufferHandle
 
 
 @dataclass
@@ -29,9 +32,12 @@ class FramePass:
     writes: Set[str] = field(default_factory=set)
     enabled: bool = True
 
-    # Конфигурация внутренней точки дебага (символ и целевой ресурс).
+    # Конфигурация внутренней точки дебага.
     debug_internal_symbol: str | None = None
-    debug_internal_output: str | None = None
+    # SDL окно дебаггера для блита промежуточного состояния.
+    _debugger_window: Any = field(default=None, repr=False)
+    # Callback для передачи depth buffer дебаггеру: (numpy_array) -> None
+    _depth_capture_callback: "Callable[[Any], None] | None" = field(default=None, repr=False)
 
     def __repr__(self) -> str:
         return f"FramePass({self.pass_name!r})"
@@ -75,42 +81,41 @@ class FramePass:
         """
         return []
 
-    def set_debug_internal_point(
-        self,
-        symbol: str | None,
-        output_res: str | None = None,
-    ) -> None:
+    def set_debug_internal_point(self, symbol: str | None) -> None:
         """
         Устанавливает (или сбрасывает) активную внутреннюю точку дебага.
 
         symbol:
             Имя внутреннего символа, на который следует «подписаться».
             None — сброс настройки.
-        output_res:
-            Имя ресурса (FBO), в который пасс при необходимости
-            должен выводить состояние для выбранного символа.
 
-        При установке output_res он добавляется в writes пасса,
-        при сбросе — удаляется. Это позволяет framegraph корректно
-        учитывать debug-ресурс при построении графа зависимостей.
+        Когда установлен символ и _capture_fbo, пасс при отрисовке
+        этого символа будет блитить текущее состояние в capture FBO.
         """
-        # Удаляем старый debug_internal_output из writes, если он был
-        if self.debug_internal_output is not None:
-            self.writes.discard(self.debug_internal_output)
-
         self.debug_internal_symbol = symbol
-        self.debug_internal_output = output_res
 
-        # Добавляем новый debug_internal_output в writes
-        if output_res is not None:
-            self.writes.add(output_res)
+    def get_debug_internal_point(self) -> str | None:
+        """Возвращает текущий символ внутренней точки дебага."""
+        return self.debug_internal_symbol
 
-    def get_debug_internal_point(self) -> tuple[str | None, str | None]:
+    def set_debugger_window(
+        self,
+        window,
+        depth_callback: Callable[[Any], None] | None = None,
+    ) -> None:
         """
-        Текущая конфигурация внутренней точки дебага:
-        (symbol, output_res).
+        Устанавливает SDL окно дебаггера для блита промежуточного состояния.
+
+        Args:
+            window: SDL окно дебаггера. None — отключить.
+            depth_callback: Callback для передачи depth buffer (numpy array).
         """
-        return self.debug_internal_symbol, self.debug_internal_output
+        self._debugger_window = window
+        self._depth_capture_callback = depth_callback
+
+    def get_debugger_window(self):
+        """Возвращает SDL окно дебаггера или None."""
+        return self._debugger_window
 
     # ---- Сериализация ---------------------------------------------
 
