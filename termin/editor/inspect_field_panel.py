@@ -313,7 +313,19 @@ class InspectFieldPanel(QWidget):
             return
 
         if isinstance(w, QComboBox) and field.kind == "mesh":
-            if value is None or self._resources is None:
+            if self._resources is None:
+                w.setCurrentIndex(-1)
+                return
+
+            # Refresh mesh list if changed
+            existing = [w.itemText(i) for i in range(w.count())]
+            all_names = self._resources.list_mesh_names()
+            if existing != all_names:
+                w.clear()
+                for n in all_names:
+                    w.addItem(n)
+
+            if value is None:
                 w.setCurrentIndex(-1)
                 return
             name = self._resources.find_mesh_name(value)
