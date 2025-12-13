@@ -1136,28 +1136,21 @@ class EditorWindow(QMainWindow):
 
         # Читаем глубину из ID buffer
         depth = self.editor_viewport.pick_depth_at(x, y, self.viewport, buffer_name="id")
-        print(f"[DEBUG] drop at ({x}, {y}), depth={depth}")
         if depth is None or depth >= 1.0:
             # Нет геометрии под курсором — используем fallback
-            print(f"[DEBUG] using fallback_pos={fallback_pos}")
             return fallback_pos
 
         # Получаем размеры viewport
-        viewport_rect = self.viewport.rect  # (x, y, w, h) в нормализованных координатах
         widget = self.editorViewportTab
         w = widget.width()
         h = widget.height()
-        print(f"[DEBUG] widget size: {w}x{h}")
 
-        # Нормализованные координаты в пределах viewport (0..1)
-        # viewport_rect — нормализованные координаты, но drop_pos — в пикселях виджета
-        # Для простоты считаем, что viewport занимает весь виджет
+        # Нормализованные координаты в пределах viewport
         nx = (x / w) * 2.0 - 1.0
         ny = (y / h) * -2.0 + 1.0  # Y инвертирован
 
         # Глубина в NDC (OpenGL: 0..1 -> -1..1)
         z_ndc = depth * 2.0 - 1.0
-        print(f"[DEBUG] NDC: nx={nx:.3f}, ny={ny:.3f}, z_ndc={z_ndc:.3f}")
 
         # Точка в clip space
         clip_pos = np.array([nx, ny, z_ndc, 1.0], dtype=np.float32)
@@ -1174,18 +1167,14 @@ class EditorWindow(QMainWindow):
         try:
             inv_pv = np.linalg.inv(pv)
         except np.linalg.LinAlgError:
-            print("[DEBUG] Failed to invert PV matrix")
             return fallback_pos
 
         # Unproject
         world_h = inv_pv @ clip_pos
-        print(f"[DEBUG] world_h={world_h}")
         if abs(world_h[3]) < 1e-6:
-            print("[DEBUG] world_h[3] too small")
             return fallback_pos
 
         world_pos = world_h[:3] / world_h[3]
-        print(f"[DEBUG] unproject result: {world_pos}")
         return world_pos.astype(np.float32)
 
     def _resync_inspector_from_selection(self):
