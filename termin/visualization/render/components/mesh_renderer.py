@@ -8,31 +8,23 @@ from termin.visualization.core.material import Material
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.resources import ResourceManager
-from termin.visualization.render.lighting.upload import upload_lights_to_shader, upload_ambient_to_shader
-from termin.visualization.render.lighting.shadow_upload import upload_shadow_maps_to_shader
-from termin.visualization.render.renderpass import RenderState
 
 if TYPE_CHECKING:
     from termin.visualization.core.material import MaterialPhase
-
-
-# Стандартные phase marks для обычных объектов
-DEFAULT_PHASE_MARKS: Set[str] = {"opaque", "shadow"}
 
 
 class MeshRenderer(Component):
     """
     Renderer component that draws MeshDrawable.
 
-    Implements the Drawable protocol for use with ColorPass, ShadowPass, IdPass.
-
     Атрибуты:
         mesh: Геометрия для отрисовки.
-        material: Материал для рендеринга (через MaterialHandle).
-        phase_marks: Множество фаз, в которых участвует этот renderer.
-                     По умолчанию {"opaque", "shadow"}.
-                     Для редакторских объектов: {"editor"}.
-                     "shadow" означает, что объект отбрасывает тень.
+        material: Материал для рендеринга.
+        cast_shadow: Отбрасывает ли объект тень (добавляет "shadow" в phase_marks).
+
+    Фильтрация по фазам:
+        phase_marks = фазы из материала + {"shadow"} если cast_shadow.
+        get_phases(phase_mark) возвращает MaterialPhase с совпадающим phase_mark.
     """
 
     inspect_fields = {
@@ -48,13 +40,18 @@ class MeshRenderer(Component):
             kind="material",
             setter=lambda obj, value: obj.set_material_by_name(value.name) if value else obj.set_material(None),
         ),
+        "cast_shadow": InspectField(
+            path="cast_shadow",
+            label="Cast Shadow",
+            kind="bool",
+        ),
     }
 
     def __init__(
         self,
         mesh: MeshDrawable | None = None,
         material: Material | None = None,
-        phase_marks: Set[str] | None = None,
+        cast_shadow: bool = True,
     ):
         super().__init__(enabled=True)
 
@@ -62,12 +59,32 @@ class MeshRenderer(Component):
             mesh = MeshDrawable(mesh)
 
         self.mesh = mesh
-        self.phase_marks: Set[str] = phase_marks if phase_marks is not None else set(DEFAULT_PHASE_MARKS)
+        self.cast_shadow = cast_shadow
 
-        # Материал через handle для hot-reload
         self._material_handle: MaterialHandle = MaterialHandle()
         if material is not None:
             self._material_handle = MaterialHandle.from_material(material)
+
+    @property
+    def phase_marks(self) -> Set[str]:
+        """
+        Возвращает множество phase_marks для этого renderer'а.
+
+        Собирается из:
+        - phase_mark каждой фазы материала
+        - "shadow" если cast_shadow=True
+        """
+        marks: Set[str] = set()
+
+        mat = self._material_handle.get_or_none()
+        if mat:
+            for phase in mat.phases:
+                marks.add(phase.phase_mark)
+
+        if self.cast_shadow:
+            marks.add("shadow")
+
+        return marks
 
     @property
     def material(self) -> Material | None:
@@ -100,14 +117,7 @@ class MeshRenderer(Component):
     # --- рендеринг ---
 
     def draw_geometry(self, context: RenderContext) -> None:
-        """
-        Рисует только геометрию (шейдер уже привязан пассом).
-
-        Это метод из Drawable протокола.
-
-        Параметры:
-            context: Контекст рендеринга.
-        """
+        """Рисует геометрию (шейдер уже привязан пассом)."""
         if self.mesh is None:
             return
         self.mesh.draw(context)
@@ -116,33 +126,22 @@ class MeshRenderer(Component):
         """
         Возвращает MaterialPhases для указанной метки фазы.
 
-        Это метод из Drawable протокола. Используется ColorPass.
-
-        Логика:
-        - Если материал не задан, возвращает [] (не рендерится в color passes)
-        - Если phase_mark задан и НЕ входит в self.phase_marks, возвращает []
-        - Если phase_mark входит в self.phase_marks, возвращает все фазы материала
-          (игнорирует phase_mark материала — это позволяет использовать любой
-          материал с любым renderer'ом)
-
         Параметры:
-            phase_mark: Метка фазы ("opaque", "editor", etc.)
+            phase_mark: Фильтр по метке ("opaque", "transparent", "editor", etc.)
                         Если None, возвращает все фазы.
 
         Возвращает:
-            Список MaterialPhase отсортированный по priority.
+            Список MaterialPhase с совпадающим phase_mark, отсортированный по priority.
         """
-        # Если материал не задан — не рендерим (аналог старого passes=[])
         mat = self._material_handle.get_or_none()
         if mat is None:
             return []
 
-        # Проверяем, что запрошенная фаза есть в наших phase_marks
-        if phase_mark is not None and phase_mark not in self.phase_marks:
-            return []
+        if phase_mark is None:
+            result = list(mat.phases)
+        else:
+            result = [p for p in mat.phases if p.phase_mark == phase_mark]
 
-        # Возвращаем все фазы материала (игнорируем phase_mark материала)
-        result = list(mat.phases)
         result.sort(key=lambda p: p.priority)
         return result
 
@@ -154,9 +153,9 @@ class MeshRenderer(Component):
 
         data = {
             "enabled": self.enabled,
+            "cast_shadow": self.cast_shadow,
         }
 
-        # Mesh
         if self.mesh is not None:
             mesh_name = rm.find_mesh_name(self.mesh)
             if mesh_name:
@@ -164,7 +163,6 @@ class MeshRenderer(Component):
             elif self.mesh.name:
                 data["mesh"] = self.mesh.name
 
-        # Material
         mat = self._material_handle.get_or_none()
         if mat is not None:
             mat_name = rm.find_material_name(mat)
@@ -180,30 +178,23 @@ class MeshRenderer(Component):
         """Восстанавливает MeshRenderer из сериализованных данных."""
         rm = ResourceManager.instance()
 
-        # Mesh
         mesh = None
         mesh_name = data.get("mesh")
         if mesh_name:
             mesh = rm.get_mesh(mesh_name)
 
-        # Material
         material = None
         mat_name = data.get("material")
         if mat_name:
             material = rm.get_material(mat_name)
 
-        # Legacy: поддержка старого формата с passes
-        if material is None and "passes" in data:
-            passes_data = data.get("passes", [])
-            if passes_data:
-                mat_name = passes_data[0].get("material")
-                if mat_name:
-                    material = rm.get_material(mat_name)
-
-        renderer = cls(mesh=mesh, material=material)
+        renderer = cls(
+            mesh=mesh,
+            material=material,
+            cast_shadow=data.get("cast_shadow", True),
+        )
         renderer.enabled = data.get("enabled", True)
 
-        # Устанавливаем материал по имени для hot-reload
         if mat_name:
             renderer.set_material_by_name(mat_name)
 

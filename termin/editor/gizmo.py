@@ -126,7 +126,7 @@ class GizmoArrow(Entity):
         shaft_mesh = CylinderMesh(radius=0.03, height=shaft_len, segments=24)
         head_mesh = ConeMesh(radius=0.06, height=head_len, segments=24)
 
-        mat = Material(color=color)
+        mat = Material(color=color, phase_mark="editor")
 
         # цилиндр (ствол)
         shaft_ent = Entity(
@@ -135,7 +135,7 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
         )
-        shaft_ent.add_component(MeshRenderer(shaft_mesh, mat, phase_marks={"editor"}))
+        shaft_ent.add_component(MeshRenderer(shaft_mesh, mat, cast_shadow=False))
         self.shaft_ent = shaft_ent
         self.transform.add_child(shaft_ent.transform)
 
@@ -146,7 +146,7 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
         )
-        head_ent.add_component(MeshRenderer(head_mesh, mat, phase_marks={"editor"}))
+        head_ent.add_component(MeshRenderer(head_mesh, mat, cast_shadow=False))
         self.head_ent = head_ent
         self.transform.add_child(head_ent.transform)
 
@@ -157,10 +157,8 @@ class GizmoArrow(Entity):
         head_len: float,
     ):
         """
-        Создаёт утолщённую невидимую геометрию для удобного пиккинга:
-        отдельные сущности с материалом = None (не рисуются в color pass).
-        Имена:
-            x_pick_shaft, x_pick_head
+        Создаёт утолщённую невидимую геометрию для удобного пиккинга.
+        Без материала — не рендерится в ColorPass, только в GizmoPass.
         """
         # утолщённый ствол
         pick_shaft_mesh = CylinderMesh(radius=0.08, height=shaft_len, segments=16)
@@ -170,7 +168,7 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
         )
-        pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, phase_marks={"editor"}))
+        pick_shaft_ent.add_component(MeshRenderer(pick_shaft_mesh, cast_shadow=False))
         self.pick_shaft_ent = pick_shaft_ent
         self.transform.add_child(pick_shaft_ent.transform)
 
@@ -182,7 +180,7 @@ class GizmoArrow(Entity):
             pickable=False,
             selectable=False,
         )
-        pick_head_ent.add_component(MeshRenderer(pick_head_mesh, phase_marks={"editor"}))
+        pick_head_ent.add_component(MeshRenderer(pick_head_mesh, cast_shadow=False))
         self.pick_head_ent = pick_head_ent
         self.transform.add_child(pick_head_ent.transform)
 
@@ -238,8 +236,8 @@ class GizmoRing(Entity):
     ):
         """Создаёт видимое кольцо гизмо."""
         ring_mesh = RingMesh(radius=radius, thickness=thickness, segments=48)
-        # cull=False для двустороннего рендеринга кольца
-        mat = Material(color=color, render_state=RenderState(cull=False))
+        # cull=False для двустороннего рендеринга, phase_mark="editor"
+        mat = Material(color=color, render_state=RenderState(cull=False), phase_mark="editor")
 
         ring_ent = Entity(
             Pose3.identity(),
@@ -247,8 +245,7 @@ class GizmoRing(Entity):
             pickable=False,
             selectable=False,
         )
-        mr = MeshRenderer(ring_mesh, material=mat, phase_marks={"editor"})
-        ring_ent.add_component(mr)
+        ring_ent.add_component(MeshRenderer(ring_mesh, material=mat, cast_shadow=False))
         self.ring_ent = ring_ent
         self.transform.add_child(ring_ent.transform)
 
@@ -260,9 +257,8 @@ class GizmoRing(Entity):
     ):
         """
         Создаёт утолщённое невидимое кольцо для удобного пиккинга.
-        Имя: x_pick_ring.
+        Без материала — не рендерится в ColorPass, только в GizmoPass.
         """
-        # делаем кольцо заметно толще для попадания мышью
         pick_ring_mesh = RingMesh(
             radius=radius,
             thickness=thickness * 2.0,
@@ -274,7 +270,7 @@ class GizmoRing(Entity):
             pickable=False,
             selectable=False,
         )
-        pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, phase_marks={"editor"}))
+        pick_ring_ent.add_component(MeshRenderer(pick_ring_mesh, cast_shadow=False))
         self.pick_ring_ent = pick_ring_ent
         self.transform.add_child(pick_ring_ent.transform)
 

@@ -29,10 +29,6 @@ if TYPE_CHECKING:
     from termin.visualization.core.material import MaterialPhase
 
 
-# Стандартные phase marks для линий (без теней)
-DEFAULT_LINE_PHASE_MARKS: Set[str] = {"opaque"}
-
-
 # Дефолтный шейдер для линий
 _DEFAULT_LINE_VERT = """
 #version 330 core
@@ -172,8 +168,11 @@ class LineRenderer(Component):
         points: Список точек линии [(x, y, z), ...].
         width: Толщина линии (в мировых координатах).
         raw_lines: Если True, использует GL_LINES без генерации квадов.
-        material: Материал для рендеринга.
-        phase_marks: Множество фаз, в которых участвует renderer.
+        material: Материал для рендеринга (если None — создаётся дефолтный).
+
+    Фильтрация по фазам:
+        phase_marks = фазы из материала.
+        get_phases(phase_mark) возвращает MaterialPhase с совпадающим phase_mark.
     """
 
     inspect_fields = {
@@ -212,14 +211,12 @@ class LineRenderer(Component):
         width: float = 0.1,
         raw_lines: bool = False,
         material: Material | None = None,
-        phase_marks: Set[str] | None = None,
     ):
         super().__init__(enabled=True)
 
         self._points: List[tuple[float, float, float]] = list(points) if points else []
         self._width: float = width
         self._raw_lines: bool = raw_lines
-        self.phase_marks: Set[str] = phase_marks if phase_marks is not None else set(DEFAULT_LINE_PHASE_MARKS)
 
         # Материал
         self._material_handle: MaterialHandle = MaterialHandle()
@@ -232,6 +229,18 @@ class LineRenderer(Component):
 
         # Флаг необходимости перестроения
         self._dirty = True
+
+    @property
+    def phase_marks(self) -> Set[str]:
+        """
+        Возвращает множество phase_marks для этого renderer'а.
+        Собирается из phase_mark каждой фазы материала.
+        """
+        marks: Set[str] = set()
+        mat = self._get_material_or_default()
+        for phase in mat.phases:
+            marks.add(phase.phase_mark)
+        return marks
 
     # --- Properties ---
 
@@ -359,8 +368,8 @@ class LineRenderer(Component):
             return self._lines_drawable
         return self._ribbon_drawable
 
-    def _ensure_material(self) -> Material:
-        """Ленивая инициализация материала."""
+    def _get_material_or_default(self) -> Material:
+        """Возвращает материал или создаёт дефолтный."""
         mat = self._material_handle.get_or_none()
         if mat is None:
             # Создаём дефолтный материал для линий
@@ -405,34 +414,27 @@ class LineRenderer(Component):
         """
         Возвращает MaterialPhases для указанной метки фазы.
 
-        LineRenderer игнорирует phase_mark материала и всегда возвращает
-        все фазы, если запрошенная метка есть в phase_marks компонента.
-        Это позволяет использовать любой материал с LineRenderer.
-
-        Также устанавливает cull=False для двустороннего рендеринга ленты.
-
         Параметры:
-            phase_mark: Метка фазы ("opaque", etc.)
+            phase_mark: Фильтр по метке ("opaque", "transparent", "editor", etc.)
                         Если None, возвращает все фазы.
 
         Возвращает:
-            Список MaterialPhase.
+            Список MaterialPhase с совпадающим phase_mark, отсортированный по priority.
         """
-        material = self._ensure_material()
+        mat = self._get_material_or_default()
 
-        # Проверяем, что запрошенная фаза есть в наших phase_marks
-        if phase_mark is not None and phase_mark not in self.phase_marks:
-            return []
-
-        # Возвращаем все фазы материала (игнорируем phase_mark материала)
-        phases = list(material.phases)
+        if phase_mark is None:
+            result = list(mat.phases)
+        else:
+            result = [p for p in mat.phases if p.phase_mark == phase_mark]
 
         # Для ribbon режима отключаем culling
         if not self._raw_lines:
-            for phase in phases:
+            for phase in result:
                 phase.render_state.cull = False
 
-        return phases
+        result.sort(key=lambda p: p.priority)
+        return result
 
     # --- Сериализация ---
 
