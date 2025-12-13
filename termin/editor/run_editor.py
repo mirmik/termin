@@ -131,7 +131,7 @@ def run_editor():
 
     # Create editor window with SDL backend
     win = EditorWindow(world, scene, sdl_backend)
-    win.show()
+    win.showMaximized()
 
     # Request initial render
     win.viewport_controller.request_update()

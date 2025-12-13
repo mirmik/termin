@@ -101,6 +101,9 @@ class RenderingController:
         # Map display id -> input mode string ("none", "simple", "editor")
         self._display_input_modes: dict[int, str] = {}
 
+        # Map display id -> block input when running in editor
+        self._display_block_input_in_editor: dict[int, bool] = {}
+
         # Editor display ID (not serialized, created before scene)
         self._editor_display_id: Optional[int] = None
 
@@ -121,6 +124,7 @@ class RenderingController:
         # Connect inspector signals
         self._inspector.display_inspector.name_changed.connect(self._on_display_name_changed)
         self._inspector.display_inspector.input_mode_changed.connect(self._on_display_input_mode_changed)
+        self._inspector.display_inspector.block_input_in_editor_changed.connect(self._on_display_block_input_in_editor_changed)
         self._inspector.viewport_inspector.display_changed.connect(self._on_viewport_display_changed)
         self._inspector.viewport_inspector.camera_changed.connect(self._on_viewport_camera_changed)
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
@@ -361,10 +365,12 @@ class RenderingController:
             name = self._display_names.get(id(display), "")
             self._inspector.show_display_inspector(display, name)
 
-            # Set current input mode in inspector
+            # Set current input mode and block state in inspector
             display_id = id(display)
             input_mode = self._display_input_modes.get(display_id, "none")
             self._inspector.display_inspector.set_input_mode(input_mode)
+            block_in_editor = self._display_block_input_in_editor.get(display_id, False)
+            self._inspector.display_inspector.set_block_input_in_editor(block_in_editor)
 
             if self._on_display_selected is not None:
                 self._on_display_selected(display)
@@ -541,8 +547,9 @@ class RenderingController:
         backend_window.set_mouse_button_callback(None)
         backend_window.set_key_callback(None)
 
-        # Create new input manager based on mode
-        if mode == "none":
+        # Create new input manager based on mode (unless blocked in editor)
+        is_blocked = self._display_block_input_in_editor.get(display_id, False)
+        if mode == "none" or is_blocked:
             # No input handling - callbacks already cleared
             pass
         elif mode == "simple":
@@ -567,6 +574,21 @@ class RenderingController:
             self._on_display_input_mode_changed_callback(display, mode)
 
         self._request_update()
+
+    def _on_display_block_input_in_editor_changed(self, blocked: bool) -> None:
+        """Handle 'block input in editor' checkbox change from inspector."""
+        if self._selected_display is None:
+            return
+
+        display = self._selected_display
+        display_id = id(display)
+
+        # Store blocked state
+        self._display_block_input_in_editor[display_id] = blocked
+
+        # Reapply current mode (which will check blocked flag)
+        mode = self._display_input_modes.get(display_id, "simple")
+        self._on_display_input_mode_changed(mode)
 
     def _on_viewport_display_changed(self, new_display: "Display") -> None:
         """Handle viewport display change from inspector."""

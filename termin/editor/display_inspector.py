@@ -41,6 +41,7 @@ class DisplayInspector(QWidget):
     name_changed = pyqtSignal(str)
     display_changed = pyqtSignal()
     input_mode_changed = pyqtSignal(str)  # "none", "simple", "editor"
+    block_input_in_editor_changed = pyqtSignal(bool)
 
     # Available input modes
     INPUT_MODES = [
@@ -114,6 +115,15 @@ class DisplayInspector(QWidget):
         self._input_mode_combo.currentIndexChanged.connect(self._on_input_mode_changed)
         form.addRow("Input:", self._input_mode_combo)
 
+        # Block input in editor checkbox
+        self._block_input_in_editor_checkbox = QCheckBox()
+        self._block_input_in_editor_checkbox.setToolTip(
+            "Block input for this display when running in editor mode.\n"
+            "Prevents accidental camera movement while editing."
+        )
+        self._block_input_in_editor_checkbox.stateChanged.connect(self._on_block_input_in_editor_changed)
+        form.addRow("Block in Editor:", self._block_input_in_editor_checkbox)
+
         layout.addLayout(form)
         layout.addStretch()
 
@@ -161,6 +171,9 @@ class DisplayInspector(QWidget):
         self._editor_only_checkbox.blockSignals(True)
         self._editor_only_checkbox.setChecked(False)
         self._editor_only_checkbox.blockSignals(False)
+        self._block_input_in_editor_checkbox.blockSignals(True)
+        self._block_input_in_editor_checkbox.setChecked(False)
+        self._block_input_in_editor_checkbox.blockSignals(False)
         self._updating = True
         self._input_mode_combo.setCurrentIndex(0)
         self._current_input_mode = "none"
@@ -191,6 +204,13 @@ class DisplayInspector(QWidget):
             self.input_mode_changed.emit(mode_id)
             self.display_changed.emit()
 
+    def _on_block_input_in_editor_changed(self, state: int) -> None:
+        """Handle block input in editor checkbox changed."""
+        if self._updating or self._display is None:
+            return
+        self.block_input_in_editor_changed.emit(bool(state))
+        self.display_changed.emit()
+
     def set_input_mode(self, mode: str) -> None:
         """Set the current input mode selection."""
         self._current_input_mode = mode
@@ -202,6 +222,12 @@ class DisplayInspector(QWidget):
                     break
         finally:
             self._updating = False
+
+    def set_block_input_in_editor(self, blocked: bool) -> None:
+        """Set the block input in editor checkbox state."""
+        self._updating = True
+        self._block_input_in_editor_checkbox.setChecked(blocked)
+        self._updating = False
 
     def refresh(self) -> None:
         """Refresh display info."""
