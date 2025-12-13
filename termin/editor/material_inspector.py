@@ -45,9 +45,10 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QMessageBox,
     QDialog,
+    QSizePolicy,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import Qt, pyqtSignal, QSize
+from PyQt6.QtGui import QColor, QImage, QPixmap
 
 from termin.editor.color_dialog import ColorDialog
 from termin.visualization.core.material import Material
@@ -237,6 +238,154 @@ class Vec4Editor(QWidget):
 
     def _on_editing_finished(self) -> None:
         self.editing_finished.emit()
+
+
+class TextureSelector(QWidget):
+    """
+    Виджет выбора текстуры с превью.
+
+    Показывает:
+    - Миниатюру текстуры (или placeholder)
+    - Комбобокс со списком текстур из ResourceManager
+    """
+
+    texture_changed = pyqtSignal(str)  # Имя текстуры или пустая строка для None
+    editing_finished = pyqtSignal()
+
+    PREVIEW_SIZE = 48
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._current_texture_name: str = ""
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        # Превью текстуры
+        self._preview = QLabel()
+        self._preview.setFixedSize(self.PREVIEW_SIZE, self.PREVIEW_SIZE)
+        self._preview.setStyleSheet(
+            "background-color: #333; border: 1px solid #555; border-radius: 2px;"
+        )
+        self._preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._preview.setScaledContents(True)
+        layout.addWidget(self._preview)
+
+        # Комбобокс для выбора текстуры
+        self._combo = QComboBox()
+        self._combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._combo.currentTextChanged.connect(self._on_combo_changed)
+        layout.addWidget(self._combo, 1)
+
+        self._update_placeholder()
+
+    def refresh_texture_list(self) -> None:
+        """Обновить список текстур из ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        names = rm.list_texture_names()
+
+        self._combo.blockSignals(True)
+        current = self._combo.currentText()
+        self._combo.clear()
+        self._combo.addItem("(None)")
+        for name in names:
+            # Пропускаем служебную белую текстуру
+            if name == "__white_1x1__":
+                continue
+            self._combo.addItem(name)
+
+        # Восстанавливаем выбор
+        if current:
+            idx = self._combo.findText(current)
+            if idx >= 0:
+                self._combo.setCurrentIndex(idx)
+            else:
+                self._combo.setCurrentIndex(0)
+        self._combo.blockSignals(False)
+
+    def set_texture_name(self, name: str | None) -> None:
+        """Установить текущую текстуру по имени."""
+        self._current_texture_name = name or ""
+
+        self._combo.blockSignals(True)
+        if not name:
+            self._combo.setCurrentIndex(0)  # (None)
+        else:
+            idx = self._combo.findText(name)
+            if idx >= 0:
+                self._combo.setCurrentIndex(idx)
+            else:
+                # Текстура не найдена в списке — добавим её
+                self._combo.addItem(name)
+                self._combo.setCurrentText(name)
+        self._combo.blockSignals(False)
+
+        self._update_preview()
+
+    def get_texture_name(self) -> str:
+        """Получить имя текущей текстуры или пустую строку."""
+        return self._current_texture_name
+
+    def _on_combo_changed(self, text: str) -> None:
+        """Обработчик изменения выбора в комбобоксе."""
+        if text == "(None)":
+            self._current_texture_name = ""
+        else:
+            self._current_texture_name = text
+
+        self._update_preview()
+        self.texture_changed.emit(self._current_texture_name)
+        self.editing_finished.emit()
+
+    def _update_preview(self) -> None:
+        """Обновить превью текстуры."""
+        if not self._current_texture_name:
+            self._update_placeholder()
+            return
+
+        from termin.visualization.core.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        texture = rm.get_texture(self._current_texture_name)
+
+        if texture is None or texture._image_data is None:
+            self._update_placeholder()
+            return
+
+        # Конвертируем numpy array в QImage
+        img_data = texture._image_data
+        h, w = img_data.shape[:2]
+
+        # Создаём QImage из RGBA данных
+        qimage = QImage(
+            img_data.data,
+            w,
+            h,
+            w * 4,
+            QImage.Format.Format_RGBA8888,
+        )
+
+        # Масштабируем до размера превью
+        pixmap = QPixmap.fromImage(qimage).scaled(
+            self.PREVIEW_SIZE,
+            self.PREVIEW_SIZE,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+
+        self._preview.setPixmap(pixmap)
+
+    def _update_placeholder(self) -> None:
+        """Показать placeholder вместо текстуры."""
+        self._preview.clear()
+        self._preview.setText("No\nTex")
+        self._preview.setStyleSheet(
+            "background-color: #333; border: 1px solid #555; "
+            "border-radius: 2px; color: #666; font-size: 10px;"
+        )
 
 
 class MaterialInspector(QWidget):
@@ -575,24 +724,31 @@ class MaterialInspector(QWidget):
         editor.editing_finished.connect(self._on_editing_finished)
         return editor
 
-    def _create_texture_editor(self, prop: MaterialProperty, value: Any) -> QWidget:
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+    def _create_texture_editor(self, prop: MaterialProperty, value: Any) -> TextureSelector:
+        from termin.visualization.core.resources import ResourceManager
+        from termin.visualization.render.texture import Texture
 
-        path_label = QLabel(str(value) if value else "None")
-        path_label.setStyleSheet("color: #888;")
-        layout.addWidget(path_label, 1)
+        editor = TextureSelector()
+        editor.refresh_texture_list()
 
-        browse_btn = QPushButton("...")
-        browse_btn.setFixedWidth(30)
-        browse_btn.clicked.connect(
-            lambda _, name=prop.name, lbl=path_label: self._on_browse_texture(name, lbl)
+        # Определяем текущее имя текстуры
+        texture_name = ""
+        if self._material is not None:
+            texture = self._material.textures.get(prop.name)
+            if texture is not None:
+                rm = ResourceManager.instance()
+                texture_name = rm.find_texture_name(texture) or ""
+                # Пропускаем белую текстуру - показываем как None
+                if texture_name == "__white_1x1__":
+                    texture_name = ""
+
+        editor.set_texture_name(texture_name)
+        editor.texture_changed.connect(
+            lambda name, uniform_name=prop.name: self._on_texture_changed(uniform_name, name)
         )
-        layout.addWidget(browse_btn)
+        editor.editing_finished.connect(self._on_editing_finished)
 
-        return widget
+        return editor
 
     def _on_uniform_changed(self, name: str, value: Any) -> None:
         """Обработчик изменения uniform-значения."""
@@ -635,19 +791,30 @@ class MaterialInspector(QWidget):
         self.material_changed.emit()
         self.save_material_file()
 
-    def _on_browse_texture(self, uniform_name: str, label: QLabel) -> None:
-        """Обработчик выбора текстуры."""
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Texture",
-            "",
-            "Image Files (*.png *.jpg *.jpeg *.tga *.bmp);;All Files (*)",
-        )
-        if path:
-            label.setText(Path(path).name)
-            # TODO: Загрузить текстуру и установить в материал
-            self.material_changed.emit()
-            self.save_material_file()
+    def _on_texture_changed(self, uniform_name: str, texture_name: str) -> None:
+        """Обработчик изменения текстуры."""
+        if self._material is None:
+            return
+
+        from termin.visualization.core.resources import ResourceManager
+        from termin.visualization.render.texture import get_white_texture
+
+        rm = ResourceManager.instance()
+
+        if texture_name:
+            # Получаем текстуру по имени
+            texture = rm.get_texture(texture_name)
+        else:
+            # None - используем белую текстуру
+            texture = get_white_texture()
+
+        if texture is not None:
+            # Обновляем текстуру во всех фазах материала
+            for phase in self._material.phases:
+                phase.textures[uniform_name] = texture
+
+        self.material_changed.emit()
+        self.save_material_file()
 
     def _on_editing_finished(self) -> None:
         """Обработчик окончания редактирования — автосохранение."""
