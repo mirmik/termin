@@ -1133,8 +1133,9 @@ class EditorWindow(QMainWindow):
             main_needs_render = self.viewport_controller.needs_render()
 
         # Check if any additional display needs render
-        additional_needs_render = False
-        if self._rendering_controller is not None:
+        # In game mode - always render additional displays too
+        additional_needs_render = is_playing
+        if not additional_needs_render and self._rendering_controller is not None:
             additional_needs_render = self._rendering_controller.any_additional_display_needs_render()
 
         # Render main editor viewport if needed
