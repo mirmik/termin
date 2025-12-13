@@ -88,7 +88,7 @@ def make_default_pipeline() -> "RenderPipeline":
     """
     Собирает дефолтный конвейер рендера.
 
-    Вынесено из класса Viewport как свободная функция.
+    Включает: ShadowPass, SkyBoxPass, ColorPass (opaque + transparent), PostFX, Canvas, Present.
     """
     from termin.visualization.render.framegraph import (
         CanvasPass,
@@ -97,17 +97,43 @@ def make_default_pipeline() -> "RenderPipeline":
         RenderPipeline
     )
     from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
+    from termin.visualization.render.framegraph.passes.shadow import ShadowPass
     from termin.visualization.render.postprocess import PostProcessPass
 
+    # Shadow pass — генерирует shadow maps
+    shadow_pass = ShadowPass(
+        output_res="shadow_maps",
+        pass_name="Shadow",
+        default_resolution=1024,
+        ortho_size=20.0,
+        near=0.1,
+        far=100.0,
+    )
+
+    # Opaque pass — читает shadow maps
+    color_pass = ColorPass(
+        input_res="skybox",
+        output_res="color_opaque",
+        shadow_res="shadow_maps",
+        pass_name="Color",
+        phase_mark="opaque",
+    )
+
+    # Transparent pass — прозрачные объекты с сортировкой
+    transparent_pass = ColorPass(
+        input_res="color_opaque",
+        output_res="color",
+        shadow_res=None,
+        pass_name="Transparent",
+        phase_mark="transparent",
+        sort_by_distance=True,
+    )
+
     passes: List = [
+        shadow_pass,
         SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox"),
-        ColorPass(
-            input_res="skybox",
-            output_res="color",
-            shadow_res=None,
-            pass_name="Color",
-            phase_mark="opaque",
-        ),
+        color_pass,
+        transparent_pass,
         PostProcessPass(
             effects=[],
             input_res="color",
