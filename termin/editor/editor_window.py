@@ -1088,30 +1088,22 @@ class EditorWindow(QMainWindow):
             print(f"Failed to load prefab: {e}")
             return
 
-        print(f"[DEBUG] After prefab load, entity name={entity.name}, local_pose={entity.transform.local_pose()}")
-        print(f"[DEBUG] Entity has {len(entity.transform.children)} children")
-
         # Определяем позицию в мире через unproject
         world_pos = self._unproject_drop_position(drop_pos)
-        print(f"[DEBUG] Setting entity position to: {world_pos}")
 
         # Устанавливаем позицию через relocate
         entity.transform.relocate(Pose3(lin=world_pos))
-        print(f"[DEBUG] Entity local_pose after relocate: {entity.transform.local_pose()}")
 
         # Добавляем entity в сцену через команду (с поддержкой undo)
         cmd = AddEntityCommand(self.scene, entity)
         self.push_undo_command(cmd, merge=False)
-        print(f"[DEBUG] After AddEntityCommand, entity.transform.local_pose()={entity.transform.local_pose()}")
 
         # Обновляем SceneTree и выделяем новый entity
         self.scene_tree_controller.rebuild(select_obj=entity)
-        print(f"[DEBUG] After rebuild, entity.transform.local_pose()={entity.transform.local_pose()}")
 
         # Выделяем entity
         if self.selection_manager is not None:
             self.selection_manager.select(entity)
-            print(f"[DEBUG] After select, entity.transform.local_pose()={entity.transform.local_pose()}")
 
     def _unproject_drop_position(self, drop_pos) -> "np.ndarray":
         """
@@ -1134,7 +1126,6 @@ class EditorWindow(QMainWindow):
             rot = cam_pose.rotation_matrix()
             cam_forward = rot[:, 1]  # Y колонка = forward
             fallback_pos = cam_pos + cam_forward * 5.0
-            print(f"[DEBUG] cam_pos={cam_pos}, forward={cam_forward}, fallback={fallback_pos}")
 
         if self.editor_viewport is None or self.viewport is None:
             return fallback_pos
