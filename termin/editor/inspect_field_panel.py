@@ -31,6 +31,33 @@ if TYPE_CHECKING:
     from termin.visualization.core.resources import ResourceManager
 
 
+def _values_equal(a, b) -> bool:
+    """
+    Safe comparison that handles numpy arrays and sequences.
+
+    Returns True if values are equal, False otherwise.
+    """
+    try:
+        # Handle numpy arrays
+        if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+            a_arr = np.asarray(a)
+            b_arr = np.asarray(b)
+            if a_arr.shape != b_arr.shape:
+                return False
+            return bool(np.allclose(a_arr, b_arr))
+
+        # Handle tuples/lists - compare element by element
+        if isinstance(a, (tuple, list)) and isinstance(b, (tuple, list)):
+            if len(a) != len(b):
+                return False
+            return all(_values_equal(x, y) for x, y in zip(a, b))
+
+        # Standard comparison
+        return a == b
+    except Exception:
+        return False
+
+
 def _to_qcolor(value) -> QColor:
     """
     Converts color value to QColor.
@@ -300,7 +327,9 @@ class InspectFieldPanel(QWidget):
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:
                 for i in range(w.count()):
-                    if w.itemData(i) == value:
+                    item_data = w.itemData(i)
+                    # Safe comparison for numpy arrays and other sequences
+                    if _values_equal(item_data, value):
                         w.setCurrentIndex(i)
                         return
                 w.setCurrentIndex(-1)
