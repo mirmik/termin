@@ -78,6 +78,7 @@ _CUBE_NORMALS = np.array([
 
 VERTS_PER_CUBE = 24
 TRIS_PER_CUBE = 12
+CUBE_SCALE = 0.85  # Размер кубика относительно ячейки (для видимости сетки)
 
 
 class VoxelVisualizer:
@@ -138,7 +139,7 @@ class VoxelVisualizer:
             # Смещаем и масштабируем вершины куба
             v_start = idx * VERTS_PER_CUBE
             v_end = v_start + VERTS_PER_CUBE
-            vertices[v_start:v_end] = _CUBE_VERTICES * cell_size + center
+            vertices[v_start:v_end] = _CUBE_VERTICES * (cell_size * CUBE_SCALE) + center
             normals[v_start:v_end] = _CUBE_NORMALS
 
             # Смещаем индексы треугольников
