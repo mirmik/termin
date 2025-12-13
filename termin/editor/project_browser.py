@@ -295,7 +295,7 @@ class ProjectBrowser:
         ".pipeline",  # Рендер-пайплайны
         ".json",      # Конфиги
         ".png", ".jpg", ".jpeg", ".tga", ".bmp",  # Текстуры
-        ".obj", ".fbx", ".gltf", ".glb",  # Модели
+        ".stl", ".obj", ".fbx", ".gltf", ".glb",  # Модели
         ".py",        # Скрипты
     }
 

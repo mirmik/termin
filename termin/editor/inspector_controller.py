@@ -24,6 +24,8 @@ if TYPE_CHECKING:
     from termin.editor.display_inspector import DisplayInspector
     from termin.editor.viewport_inspector import ViewportInspector
     from termin.editor.pipeline_inspector import PipelineInspector
+    from termin.editor.texture_inspector import TextureInspector
+    from termin.editor.mesh_inspector import MeshInspector
 
 
 class InspectorController:
@@ -42,6 +44,8 @@ class InspectorController:
     DISPLAY_INSPECTOR_INDEX = 2
     VIEWPORT_INSPECTOR_INDEX = 3
     PIPELINE_INSPECTOR_INDEX = 4
+    TEXTURE_INSPECTOR_INDEX = 5
+    MESH_INSPECTOR_INDEX = 6
 
     def __init__(
         self,
@@ -104,6 +108,18 @@ class InspectorController:
             self._pipeline_inspector.pipeline_changed.connect(on_pipeline_changed)
         self._stack.addWidget(self._pipeline_inspector)
 
+        # Create TextureInspector
+        from termin.editor.texture_inspector import TextureInspector
+
+        self._texture_inspector = TextureInspector()
+        self._stack.addWidget(self._texture_inspector)
+
+        # Create MeshInspector
+        from termin.editor.mesh_inspector import MeshInspector
+
+        self._mesh_inspector = MeshInspector()
+        self._stack.addWidget(self._mesh_inspector)
+
         # Add to container
         self._init_in_container(container)
 
@@ -140,6 +156,16 @@ class InspectorController:
     def pipeline_inspector(self) -> "PipelineInspector":
         """Access to PipelineInspector widget."""
         return self._pipeline_inspector
+
+    @property
+    def texture_inspector(self) -> "TextureInspector":
+        """Access to TextureInspector widget."""
+        return self._texture_inspector
+
+    @property
+    def mesh_inspector(self) -> "MeshInspector":
+        """Access to MeshInspector widget."""
+        return self._mesh_inspector
 
     @property
     def stack(self) -> QStackedWidget:
@@ -205,6 +231,32 @@ class InspectorController:
         """Show PipelineInspector and load pipeline from file."""
         self._stack.setCurrentIndex(self.PIPELINE_INSPECTOR_INDEX)
         self._pipeline_inspector.load_pipeline_file(file_path)
+
+    def show_texture_inspector(self, texture_name: str | None = None) -> None:
+        """Show TextureInspector and load texture by name."""
+        self._stack.setCurrentIndex(self.TEXTURE_INSPECTOR_INDEX)
+        if texture_name is not None:
+            texture = self._resource_manager.get_texture(texture_name)
+            if texture is not None:
+                self._texture_inspector.set_texture(texture, texture_name)
+
+    def show_texture_inspector_for_file(self, file_path: str) -> None:
+        """Show TextureInspector and load texture from file."""
+        self._stack.setCurrentIndex(self.TEXTURE_INSPECTOR_INDEX)
+        self._texture_inspector.set_texture_by_path(file_path)
+
+    def show_mesh_inspector(self, mesh_name: str | None = None) -> None:
+        """Show MeshInspector and load mesh by name."""
+        self._stack.setCurrentIndex(self.MESH_INSPECTOR_INDEX)
+        if mesh_name is not None:
+            mesh = self._resource_manager.get_mesh(mesh_name)
+            if mesh is not None:
+                self._mesh_inspector.set_mesh(mesh, mesh_name)
+
+    def show_mesh_inspector_for_file(self, file_path: str) -> None:
+        """Show MeshInspector and load mesh from file."""
+        self._stack.setCurrentIndex(self.MESH_INSPECTOR_INDEX)
+        self._mesh_inspector.set_mesh_by_path(file_path)
 
     def set_entity_target(self, target) -> None:
         """Set target for EntityInspector (can be Entity or other object)."""

@@ -1,0 +1,226 @@
+"""
+MeshInspector — inspector panel for mesh files.
+
+Displays mesh information: vertex count, triangle count, bounds, etc.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import TYPE_CHECKING, Optional
+
+from PyQt6.QtWidgets import (
+    QFormLayout,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+)
+
+if TYPE_CHECKING:
+    from termin.visualization.core.mesh import MeshDrawable
+
+
+class MeshInspector(QWidget):
+    """
+    Inspector panel for mesh files.
+
+    Shows:
+    - File name
+    - Vertex count
+    - Triangle count
+    - Has normals
+    - Has UVs
+    - Bounding box
+    - File size
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+
+        self._mesh: Optional["MeshDrawable"] = None
+        self._mesh_name: str = ""
+        self._file_path: str = ""
+
+        self._init_ui()
+
+    def _init_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        # Header
+        header = QLabel("Mesh")
+        header.setStyleSheet("font-weight: bold; font-size: 14px;")
+        layout.addWidget(header)
+
+        # Form
+        form = QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(4)
+
+        # Name
+        self._name_label = QLabel("-")
+        form.addRow("Name:", self._name_label)
+
+        # Vertex count
+        self._vertex_count_label = QLabel("-")
+        form.addRow("Vertices:", self._vertex_count_label)
+
+        # Triangle count
+        self._triangle_count_label = QLabel("-")
+        form.addRow("Triangles:", self._triangle_count_label)
+
+        # Has normals
+        self._has_normals_label = QLabel("-")
+        form.addRow("Normals:", self._has_normals_label)
+
+        # Has UVs
+        self._has_uvs_label = QLabel("-")
+        form.addRow("UVs:", self._has_uvs_label)
+
+        # Bounds
+        self._bounds_label = QLabel("-")
+        self._bounds_label.setWordWrap(True)
+        form.addRow("Bounds:", self._bounds_label)
+
+        # File size
+        self._file_size_label = QLabel("-")
+        form.addRow("File Size:", self._file_size_label)
+
+        # Path
+        self._path_label = QLabel("-")
+        self._path_label.setWordWrap(True)
+        self._path_label.setStyleSheet("color: #888;")
+        form.addRow("Path:", self._path_label)
+
+        layout.addLayout(form)
+        layout.addStretch()
+
+    def set_mesh(self, mesh: Optional["MeshDrawable"], name: str = "") -> None:
+        """Set mesh to inspect."""
+        self._mesh = mesh
+        self._mesh_name = name
+
+        if mesh is None:
+            self._clear()
+            return
+
+        self._name_label.setText(name or mesh.name or "-")
+
+        mesh3 = mesh.mesh
+
+        # Vertex count
+        vertex_count = mesh3.get_vertex_count()
+        self._vertex_count_label.setText(f"{vertex_count:,}")
+
+        # Triangle count
+        triangle_count = mesh3.get_face_count()
+        self._triangle_count_label.setText(f"{triangle_count:,}")
+
+        # Has normals
+        has_normals = mesh3.vertex_normals is not None
+        self._has_normals_label.setText("Yes" if has_normals else "No")
+
+        # Has UVs
+        has_uvs = mesh3.uvs is not None
+        self._has_uvs_label.setText("Yes" if has_uvs else "No")
+
+        # Bounds
+        self._update_bounds(mesh3)
+
+        # File size and path
+        source_path = mesh.resource_id
+        if source_path and os.path.exists(source_path):
+            size = os.path.getsize(source_path)
+            self._file_size_label.setText(self._format_size(size))
+            self._path_label.setText(source_path)
+            self._file_path = source_path
+        else:
+            self._file_size_label.setText("-")
+            self._path_label.setText("-")
+            self._file_path = ""
+
+    def set_mesh_by_path(self, file_path: str) -> None:
+        """Load and inspect mesh from file path."""
+        from termin.mesh.mesh import Mesh3
+        from termin.visualization.core.mesh import MeshDrawable
+
+        name = os.path.splitext(os.path.basename(file_path))[0]
+        ext = os.path.splitext(file_path)[1].lower()
+
+        try:
+            if ext == ".stl":
+                from termin.loaders.stl_loader import load_stl_file
+                scene_data = load_stl_file(file_path)
+            elif ext == ".obj":
+                from termin.loaders.obj_loader import load_obj_file
+                scene_data = load_obj_file(file_path)
+            else:
+                self._clear()
+                self._name_label.setText(name)
+                self._path_label.setText(f"Unsupported format: {ext}")
+                return
+
+            if not scene_data.meshes:
+                self._clear()
+                self._name_label.setText(name)
+                self._path_label.setText("No meshes found")
+                return
+
+            mesh_data = scene_data.meshes[0]
+            mesh3 = Mesh3(
+                vertices=mesh_data.vertices,
+                triangles=mesh_data.indices.reshape(-1, 3),
+            )
+            if mesh_data.normals is not None:
+                mesh3.vertex_normals = mesh_data.normals
+
+            drawable = MeshDrawable(mesh3, source_id=file_path, name=name)
+            self.set_mesh(drawable, name)
+
+        except Exception as e:
+            self._clear()
+            self._name_label.setText(name)
+            self._path_label.setText(f"Error: {e}")
+
+    def _update_bounds(self, mesh3) -> None:
+        """Calculate and display bounding box."""
+        import numpy as np
+
+        vertices = mesh3.vertices
+        if vertices is None or len(vertices) == 0:
+            self._bounds_label.setText("-")
+            return
+
+        min_bound = np.min(vertices, axis=0)
+        max_bound = np.max(vertices, axis=0)
+        size = max_bound - min_bound
+
+        self._bounds_label.setText(
+            f"Min: ({min_bound[0]:.2f}, {min_bound[1]:.2f}, {min_bound[2]:.2f})\n"
+            f"Max: ({max_bound[0]:.2f}, {max_bound[1]:.2f}, {max_bound[2]:.2f})\n"
+            f"Size: ({size[0]:.2f}, {size[1]:.2f}, {size[2]:.2f})"
+        )
+
+    def _clear(self) -> None:
+        """Clear all fields."""
+        self._mesh = None
+        self._mesh_name = ""
+        self._file_path = ""
+        self._name_label.setText("-")
+        self._vertex_count_label.setText("-")
+        self._triangle_count_label.setText("-")
+        self._has_normals_label.setText("-")
+        self._has_uvs_label.setText("-")
+        self._bounds_label.setText("-")
+        self._file_size_label.setText("-")
+        self._path_label.setText("-")
+
+    def _format_size(self, size: int) -> str:
+        """Format file size in human-readable format."""
+        if size < 1024:
+            return f"{size} B"
+        elif size < 1024 * 1024:
+            return f"{size / 1024:.1f} KB"
+        else:
+            return f"{size / (1024 * 1024):.2f} MB"

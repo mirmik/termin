@@ -216,6 +216,28 @@ class ResourceManager:
                 return n
         return None
 
+    # --------- Текстуры ---------
+    def register_texture(self, name: str, texture: "Texture", source_path: str | None = None):
+        """Register a texture by name."""
+        self.textures[name] = texture
+        if source_path and texture.source_path is None:
+            texture.source_path = source_path
+
+    def get_texture(self, name: str) -> Optional["Texture"]:
+        """Get texture by name."""
+        return self.textures.get(name)
+
+    def list_texture_names(self) -> list[str]:
+        """List all registered texture names."""
+        return sorted(self.textures.keys())
+
+    def find_texture_name(self, texture: "Texture") -> Optional[str]:
+        """Find name of a registered texture."""
+        for n, t in self.textures.items():
+            if t is texture:
+                return n
+        return None
+
     # --------- Компоненты ---------
     def register_component(self, name: str, cls: type["Component"]):
         self.components[name] = cls

@@ -9,7 +9,7 @@ from termin.editor.project_file_watcher import FileTypeProcessor
 
 
 class TextureFileProcessor(FileTypeProcessor):
-    """Handles texture files (.png, .jpg, .jpeg)."""
+    """Handles texture files (.png, .jpg, .jpeg, .tga, .bmp)."""
 
     @property
     def priority(self) -> int:
@@ -17,41 +17,70 @@ class TextureFileProcessor(FileTypeProcessor):
 
     @property
     def extensions(self) -> Set[str]:
-        return {".png", ".jpg", ".jpeg"}
+        return {".png", ".jpg", ".jpeg", ".tga", ".bmp"}
 
     @property
     def resource_type(self) -> str:
         return "texture"
 
     def on_file_added(self, path: str) -> None:
-        """
-        Track new texture file.
+        """Load new texture file."""
+        name = os.path.splitext(os.path.basename(path))[0]
 
-        Note: Textures are lazily loaded when needed by materials,
-        so we just track the file here.
-        """
-        if path not in self._file_to_resources:
-            self._file_to_resources[path] = set()
-        # Texture name would be added when actually loaded
+        if name in self._resource_manager.textures:
+            return
+
+        try:
+            from termin.visualization.render.texture import Texture
+
+            texture = Texture.from_file(path)
+            self._resource_manager.register_texture(name, texture, source_path=path)
+
+            if path not in self._file_to_resources:
+                self._file_to_resources[path] = set()
+            self._file_to_resources[path].add(name)
+
+            print(f"[TextureProcessor] Loaded: {name}")
+            self._notify_reloaded(name)
+
+        except Exception as e:
+            print(f"[TextureProcessor] Failed to load {path}: {e}")
 
     def on_file_changed(self, path: str) -> None:
-        """
-        Invalidate textures loaded from this file.
+        """Reload modified texture."""
+        name = os.path.splitext(os.path.basename(path))[0]
 
-        Looks up textures in ResourceManager that were loaded from this path
-        and invalidates them for reload.
-        """
-        # Find textures using this path
-        for name, tex in self._resource_manager.textures.items():
+        # Find texture by source_path or name
+        texture = None
+        for tex_name, tex in self._resource_manager.textures.items():
             if tex.source_path == path:
-                try:
-                    tex.invalidate()
-                    print(f"[TextureProcessor] Invalidated: {name}")
-                    self._notify_reloaded(name)
-                except Exception as e:
-                    print(f"[TextureProcessor] Failed to invalidate {name}: {e}")
+                texture = tex
+                name = tex_name
+                break
+
+        if texture is None:
+            texture = self._resource_manager.textures.get(name)
+
+        if texture is None:
+            return
+
+        try:
+            texture.invalidate()
+            print(f"[TextureProcessor] Reloaded: {name}")
+            self._notify_reloaded(name)
+        except Exception as e:
+            print(f"[TextureProcessor] Failed to reload {name}: {e}")
 
     def on_file_removed(self, path: str) -> None:
         """Handle texture file deletion."""
         if path in self._file_to_resources:
+            for name in self._file_to_resources[path]:
+                if name in self._resource_manager.textures:
+                    del self._resource_manager.textures[name]
+                    print(f"[TextureProcessor] Removed: {name}")
             del self._file_to_resources[path]
+
+    def _notify_reloaded(self, name: str) -> None:
+        """Notify listeners about resource reload."""
+        if self._on_resource_reloaded is not None:
+            self._on_resource_reloaded(self.resource_type, name)
