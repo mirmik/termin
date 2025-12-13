@@ -404,7 +404,9 @@ class InspectFieldPanel(QWidget):
         elif isinstance(w, QCheckBox):
             w.stateChanged.connect(lambda _s: commit())
         elif isinstance(w, QLineEdit) and field.kind == "string":
-            w.editingFinished.connect(commit)
+            # Не подключаем commit для read-only полей
+            if not (field.getter is not None and field.setter is None and field.path is None):
+                w.editingFinished.connect(commit)
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:
                 sb.valueChanged.connect(lambda _v: commit())
