@@ -220,6 +220,20 @@ class MaterialPhase:
                 else:
                     uniforms[prop.name] = prop.default
 
+        # 3.5. Собираем текстуры: для Texture properties без заданной текстуры — белая 1x1
+        from termin.visualization.render.texture import get_white_texture
+
+        final_textures: Dict[str, Texture] = {}
+        for prop in shader_phase.uniforms:
+            if prop.property_type == "Texture":
+                # Если текстура не задана явно — используем белую
+                if textures is None or prop.name not in textures:
+                    final_textures[prop.name] = get_white_texture()
+
+        # Добавляем явно заданные текстуры (перезаписывают белые)
+        if textures is not None:
+            final_textures.update(textures)
+
         # 4. Применяем extra_uniforms
         if extra_uniforms:
             uniforms.update(extra_uniforms)
@@ -239,7 +253,7 @@ class MaterialPhase:
             phase_mark=shader_phase.phase_mark,
             priority=shader_phase.priority,
             color=final_color,
-            textures=textures,
+            textures=final_textures,
             uniforms=uniforms,
         )
 
