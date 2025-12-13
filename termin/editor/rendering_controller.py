@@ -730,17 +730,13 @@ class RenderingController:
         # Удаляем все дополнительные дисплеи (кроме Editor)
         additional_displays = [
             d for d in self._displays
-            if id(d) in self._display_tabs
+            if id(d) != self._editor_display_id
         ]
         for display in additional_displays:
             self.remove_display(display)
 
-        # Находим Editor display (первый дисплей, не в дополнительных табах)
-        editor_display = None
-        for display in self._displays:
-            if id(display) not in self._display_tabs:
-                editor_display = display
-                break
+        # Находим Editor display по _editor_display_id
+        editor_display = self.editor_display
 
         # Индекс для сопоставления данных с первым дисплеем
         first_display_restored = False
