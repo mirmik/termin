@@ -48,7 +48,7 @@ class PipelineInspector(QWidget):
     - Selected pass parameters
     """
 
-    pipeline_changed = pyqtSignal()
+    pipeline_changed = pyqtSignal(object)  # emits RenderPipeline or None
     apply_to_viewport = pyqtSignal(object)  # emits RenderPipeline
 
     def __init__(self, parent: QWidget | None = None):
@@ -252,7 +252,7 @@ class PipelineInspector(QWidget):
                 return
 
         self.set_pipeline(pipeline, pipeline_name, str(path))
-        self.pipeline_changed.emit()
+        self.pipeline_changed.emit(self._pipeline)
 
     def save_pipeline_file(self, path: str | Path | None = None) -> bool:
         """Save pipeline to .pipeline file."""
@@ -321,7 +321,7 @@ class PipelineInspector(QWidget):
         if 0 <= row < len(self._pipeline.passes):
             enabled = item.checkState() == Qt.CheckState.Checked
             self._pipeline.passes[row].enabled = enabled
-            self.pipeline_changed.emit()
+            self.pipeline_changed.emit(self._pipeline)
 
     def _on_pass_selected(self, row: int) -> None:
         """Handle pass selection - show details."""
@@ -362,7 +362,7 @@ class PipelineInspector(QWidget):
 
     def _on_pass_field_changed(self, key: str, old_value, new_value) -> None:
         """Handle pass field change from inspector."""
-        self.pipeline_changed.emit()
+        self.pipeline_changed.emit(self._pipeline)
 
     # ---------- PostEffect handling ----------
 
@@ -436,7 +436,7 @@ class PipelineInspector(QWidget):
             self._selected_postprocess.effects.append(new_effect)
             self._selected_postprocess.rebuild_reads()
             self._rebuild_effects_list()
-            self.pipeline_changed.emit()
+            self.pipeline_changed.emit(self._pipeline)
         except Exception as e:
             QMessageBox.warning(
                 self,
@@ -471,11 +471,11 @@ class PipelineInspector(QWidget):
         self._selected_postprocess.rebuild_reads()
         self._rebuild_effects_list()
         self._effect_inspector.set_target(None)
-        self.pipeline_changed.emit()
+        self.pipeline_changed.emit(self._pipeline)
 
     def _on_effect_field_changed(self, key: str, old_value, new_value) -> None:
         """Handle effect field change from inspector."""
-        self.pipeline_changed.emit()
+        self.pipeline_changed.emit(self._pipeline)
 
     def _update_effect_buttons_state(self) -> None:
         """Update enabled state of effect buttons."""
@@ -550,7 +550,7 @@ class PipelineInspector(QWidget):
                 self._pipeline.passes.insert(row + 1, new_pass)
 
             self._rebuild_ui()
-            self.pipeline_changed.emit()
+            self.pipeline_changed.emit(self._pipeline)
 
         except Exception as e:
             QMessageBox.warning(
@@ -583,7 +583,7 @@ class PipelineInspector(QWidget):
 
         del self._pipeline.passes[row]
         self._rebuild_ui()
-        self.pipeline_changed.emit()
+        self.pipeline_changed.emit(self._pipeline)
 
     def _on_move_up(self) -> None:
         """Move the selected pass up in the list."""
@@ -600,7 +600,7 @@ class PipelineInspector(QWidget):
 
         self._rebuild_ui()
         self._pass_list.setCurrentRow(row - 1)
-        self.pipeline_changed.emit()
+        self.pipeline_changed.emit(self._pipeline)
 
     def _on_move_down(self) -> None:
         """Move the selected pass down in the list."""
@@ -617,7 +617,7 @@ class PipelineInspector(QWidget):
 
         self._rebuild_ui()
         self._pass_list.setCurrentRow(row + 1)
-        self.pipeline_changed.emit()
+        self.pipeline_changed.emit(self._pipeline)
 
     def _update_buttons_state(self) -> None:
         """Update enabled state of buttons based on selection."""
