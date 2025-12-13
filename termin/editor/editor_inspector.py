@@ -525,7 +525,9 @@ class ComponentInspectorPanel(QWidget):
         elif isinstance(w, QCheckBox):
             w.stateChanged.connect(lambda _s: commit(False))
         elif isinstance(w, QLineEdit) and field.kind != "material":
-            w.editingFinished.connect(lambda: commit(False))
+            # Не подключаем commit для read-only полей
+            if not (field.getter is not None and field.setter is None and field.path is None):
+                w.editingFinished.connect(lambda: commit(False))
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:
                 sb.valueChanged.connect(lambda _v: commit(True))
