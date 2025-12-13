@@ -130,8 +130,14 @@ class PrefabEditController:
         if not self._editing:
             return False
 
-        if self._prefab_path is None or self._root_entity is None:
-            self._log("No prefab to save")
+        if self._prefab_path is None:
+            self._log("No prefab path set")
+            return False
+
+        # Find root entity from current scene (not the cached one)
+        root_entity = self._find_prefab_root()
+        if root_entity is None:
+            self._log("No root entity found in scene")
             return False
 
         # Save prefab
@@ -139,7 +145,7 @@ class PrefabEditController:
             from termin.editor.prefab_persistence import PrefabPersistence
 
             persistence = PrefabPersistence(self._resource_manager)
-            stats = persistence.save(self._root_entity, self._prefab_path)
+            stats = persistence.save(root_entity, self._prefab_path)
             self._log(
                 f"Saved prefab '{self.prefab_name}': "
                 f"{stats['entities']} entities, {stats['materials']} materials"
@@ -147,7 +153,39 @@ class PrefabEditController:
             return True
         except Exception as e:
             self._log(f"Failed to save prefab: {e}")
+            import traceback
+            traceback.print_exc()
             return False
+
+    def _find_prefab_root(self) -> "Entity | None":
+        """
+        Find the prefab root entity in current scene.
+
+        Looks for entity named "[Root]" first, then falls back to
+        first serializable root entity (without parent).
+        """
+        from termin.editor.prefab_persistence import PrefabPersistence
+
+        scene = self._world_persistence.scene
+        fallback = None
+
+        for entity in scene.entities:
+            # Skip non-serializable entities (editor entities like camera, gizmo)
+            if not entity.serializable:
+                continue
+            # Root entity has no parent
+            if entity.transform.parent is not None:
+                continue
+
+            # Prefer entity with special root name
+            if entity.name == PrefabPersistence.ROOT_ENTITY_NAME:
+                return entity
+
+            # Remember first root as fallback
+            if fallback is None:
+                fallback = entity
+
+        return fallback
 
     def exit(self) -> None:
         """

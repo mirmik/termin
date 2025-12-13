@@ -52,6 +52,7 @@ class PrefabPersistence:
     """
 
     VERSION = "1.0"
+    ROOT_ENTITY_NAME = "[Root]"
 
     def __init__(self, resource_manager: "ResourceManager"):
         self._resource_manager = resource_manager
@@ -139,14 +140,14 @@ class PrefabPersistence:
 
         Args:
             file_path: Path to .prefab file.
-            name: Name for the root entity.
+            name: Ignored, root is always named "[Root]".
         """
         file_path = Path(file_path)
 
         data = {
             "version": self.VERSION,
             "root": {
-                "name": name,
+                "name": self.ROOT_ENTITY_NAME,
                 "priority": 0,
                 "scale": [1.0, 1.0, 1.0],
                 "visible": True,
