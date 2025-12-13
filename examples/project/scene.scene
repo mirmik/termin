@@ -37,6 +37,7 @@
           {
             "data": {
               "enabled": true,
+              "cast_shadow": true,
               "mesh": "mesh_2",
               "material": "cylinder_mat"
             },
@@ -74,6 +75,7 @@
           {
             "data": {
               "enabled": true,
+              "cast_shadow": true,
               "mesh": "mesh_1",
               "material": "cube1_mat"
             },
@@ -111,6 +113,7 @@
           {
             "data": {
               "enabled": true,
+              "cast_shadow": true,
               "mesh": "mesh_1",
               "material": "cube2_mat"
             },
@@ -148,6 +151,7 @@
           {
             "data": {
               "enabled": true,
+              "cast_shadow": true,
               "mesh": "mesh_1",
               "material": "cube2_mat"
             },
@@ -325,6 +329,7 @@
           {
             "data": {
               "enabled": true,
+              "cast_shadow": true,
               "mesh": "mesh_1",
               "material": "TransparentMaterial"
             },
@@ -370,9 +375,9 @@
   "editor": {
     "camera": {
       "target": [
-        -1.8226916105851156,
-        -2.2535769013876235,
-        -1.364500779065255
+        -1.822691559791565,
+        -2.2535769939422607,
+        -1.3645007610321045
       ],
       "radius": 4.5,
       "azimuth": 17.739526517270246,
