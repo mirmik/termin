@@ -596,7 +596,6 @@ class RenderingController:
 
         return viewport_states[viewport_id]
 
-
     def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
         """Get ViewportRenderState for a viewport."""
         display = viewport.display
@@ -609,8 +608,6 @@ class RenderingController:
 
         viewport_id = id(viewport)
         return self._display_render_states[display_id].get(viewport_id)
-
-    # --- Center tabs management ---
 
     def _update_center_tabs(self) -> None:
         """Update center tab widget with current displays."""
