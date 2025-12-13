@@ -34,15 +34,26 @@ class Display:
         engine.render_views(display.surface, views)
     """
 
-    def __init__(self, surface: "RenderSurface"):
+    def __init__(self, surface: "RenderSurface", editor_only: bool = False):
         """
         Создаёт Display с указанной поверхностью.
 
         Параметры:
             surface: Поверхность рендеринга (WindowRenderSurface или OffscreenRenderSurface).
+            editor_only: Если True, дисплей создаётся и рендерится только в редакторе.
         """
         self._surface = surface
         self._viewports: List["Viewport"] = []
+        self._editor_only = editor_only
+
+    @property
+    def editor_only(self) -> bool:
+        """Если True, дисплей создаётся и рендерится только в редакторе."""
+        return self._editor_only
+
+    @editor_only.setter
+    def editor_only(self, value: bool) -> None:
+        self._editor_only = value
 
     @property
     def surface(self) -> "RenderSurface":

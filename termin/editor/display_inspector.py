@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFormLayout,
     QLabel,
     QLineEdit,
@@ -80,6 +81,15 @@ class DisplayInspector(QWidget):
         self._viewport_count_label = QLabel("-")
         form.addRow("Viewports:", self._viewport_count_label)
 
+        # Editor only checkbox
+        self._editor_only_checkbox = QCheckBox()
+        self._editor_only_checkbox.setToolTip(
+            "If checked, this display is only created and rendered in the editor.\n"
+            "It will be skipped when running the game outside the editor."
+        )
+        self._editor_only_checkbox.stateChanged.connect(self._on_editor_only_changed)
+        form.addRow("Editor Only:", self._editor_only_checkbox)
+
         layout.addLayout(form)
         layout.addStretch()
 
@@ -113,12 +123,20 @@ class DisplayInspector(QWidget):
         viewport_count = len(display.viewports)
         self._viewport_count_label.setText(str(viewport_count))
 
+        # Editor only
+        self._editor_only_checkbox.blockSignals(True)
+        self._editor_only_checkbox.setChecked(display.editor_only)
+        self._editor_only_checkbox.blockSignals(False)
+
     def _clear(self) -> None:
         """Clear all fields."""
         self._name_edit.setText("")
         self._surface_type_label.setText("-")
         self._size_label.setText("-")
         self._viewport_count_label.setText("-")
+        self._editor_only_checkbox.blockSignals(True)
+        self._editor_only_checkbox.setChecked(False)
+        self._editor_only_checkbox.blockSignals(False)
 
     def _on_name_changed(self) -> None:
         """Handle name edit finished."""
@@ -126,6 +144,12 @@ class DisplayInspector(QWidget):
         if new_name and new_name != self._display_name:
             self._display_name = new_name
             self.name_changed.emit(new_name)
+            self.display_changed.emit()
+
+    def _on_editor_only_changed(self, state: int) -> None:
+        """Handle editor only checkbox changed."""
+        if self._display is not None:
+            self._display.editor_only = bool(state)
             self.display_changed.emit()
 
     def refresh(self) -> None:

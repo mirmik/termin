@@ -255,9 +255,9 @@ class RenderingController:
             container.setLayout(layout)
         layout.addWidget(gl_widget)
 
-        # Create surface and display
+        # Create surface and display (editor_only=True by default)
         surface = WindowRenderSurface(backend_window)
-        display = Display(surface)
+        display = Display(surface, editor_only=True)
 
         # Store mapping
         display_id = id(display)
@@ -673,14 +673,9 @@ class RenderingController:
         Сериализует конфигурацию всех дисплеев.
 
         Возвращает список дисплеев с их viewport'ами.
-        Editor display НЕ сериализуется (создаётся при запуске).
         """
         result = []
         for display in self._displays:
-            # Пропускаем editor display — он не сериализуется
-            if self.is_editor_display(display):
-                continue
-
             display_id = id(display)
             name = self._display_names.get(display_id, "Display")
 
@@ -691,6 +686,7 @@ class RenderingController:
 
             result.append({
                 "name": name,
+                "editor_only": display.editor_only,
                 "viewports": viewports_data,
             })
 
@@ -714,36 +710,42 @@ class RenderingController:
         for display in additional_displays:
             self.remove_display(display)
 
-        # Находим Editor display
+        # Находим Editor display (первый дисплей, не в дополнительных табах)
         editor_display = None
         for display in self._displays:
             if id(display) not in self._display_tabs:
                 editor_display = display
                 break
 
+        # Индекс для сопоставления данных с первым дисплеем
+        first_display_restored = False
+
         for display_data in data:
-            is_editor = display_data.get("is_editor", False)
+            # Обратная совместимость: is_editor → editor_only
+            editor_only = display_data.get("editor_only", display_data.get("is_editor", False))
             name = display_data.get("name", "Display")
             viewports_data = display_data.get("viewports", [])
 
-            if is_editor:
-                # Восстанавливаем viewport'ы для Editor дисплея
-                if editor_display is not None:
-                    # Обновляем имя
-                    self.set_display_name(editor_display, name)
+            # Первый дисплей из данных восстанавливаем в editor_display
+            if not first_display_restored and editor_display is not None:
+                first_display_restored = True
 
-                    # Очищаем существующие viewport'ы (кроме первого, он управляется ViewportController)
-                    while len(editor_display.viewports) > 1:
-                        vp = editor_display.viewports[-1]
-                        editor_display.remove_viewport(vp)
+                # Обновляем имя и editor_only флаг
+                self.set_display_name(editor_display, name)
+                editor_display.editor_only = editor_only
 
-                    # Восстанавливаем свойства первого viewport'а если есть данные
-                    if viewports_data and editor_display.viewports:
-                        vp_data = viewports_data[0]
-                        main_vp = editor_display.viewports[0]
-                        main_vp.rect = tuple(vp_data.get("rect", [0.0, 0.0, 1.0, 1.0]))
-                        main_vp.depth = vp_data.get("depth", 0)
-                        # Камеру Editor viewport'а не меняем - она управляется EditorCameraManager
+                # Очищаем существующие viewport'ы (кроме первого, он управляется ViewportController)
+                while len(editor_display.viewports) > 1:
+                    vp = editor_display.viewports[-1]
+                    editor_display.remove_viewport(vp)
+
+                # Восстанавливаем свойства первого viewport'а если есть данные
+                if viewports_data and editor_display.viewports:
+                    vp_data = viewports_data[0]
+                    main_vp = editor_display.viewports[0]
+                    main_vp.rect = tuple(vp_data.get("rect", [0.0, 0.0, 1.0, 1.0]))
+                    main_vp.depth = vp_data.get("depth", 0)
+                    # Камеру Editor viewport'а не меняем - она управляется EditorCameraManager
             else:
                 # Запоминаем количество дисплеев до создания
                 count_before = len(self._displays)
@@ -758,6 +760,7 @@ class RenderingController:
                 # Берём последний добавленный дисплей
                 new_display = self._displays[-1]
                 self.set_display_name(new_display, name)
+                new_display.editor_only = editor_only
 
                 # Создаём viewport'ы
                 for vp_data in viewports_data:
