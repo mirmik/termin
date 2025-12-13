@@ -120,8 +120,13 @@ class VoxelizerComponent(Component):
 
         # Сохраняем
         try:
-            VoxelPersistence.save(grid, output)
-            print(f"VoxelizerComponent: saved {grid.voxel_count} voxels to {output}")
+            output_path = Path(output)
+            # Создаём директорию если не существует
+            if output_path.parent and not output_path.parent.exists():
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            VoxelPersistence.save(grid, output_path)
+            print(f"VoxelizerComponent: saved {grid.voxel_count} voxels to {output_path.absolute()}")
             return True
         except Exception as e:
             print(f"VoxelizerComponent: failed to save: {e}")
