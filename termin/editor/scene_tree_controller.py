@@ -57,11 +57,12 @@ class SceneTreeController:
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._on_tree_context_menu)
 
-        # Enable drag-drop
+        # Enable drag-drop (DragDrop mode allows both internal moves and external drops)
         self._tree.setDragEnabled(True)
         self._tree.setAcceptDrops(True)
         self._tree.setDropIndicatorShown(True)
-        self._tree.setDragDropMode(QTreeView.DragDropMode.InternalMove)
+        self._tree.setDragDropMode(QTreeView.DragDropMode.DragDrop)
+        self._tree.setDefaultDropAction(Qt.DropAction.MoveAction)
 
         # Connect model signals for reparenting and prefab drops
         self._model.entity_reparent_requested.connect(self._on_entity_reparent_requested)

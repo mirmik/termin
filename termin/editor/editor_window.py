@@ -269,6 +269,7 @@ class EditorWindow(QMainWindow):
         gl_widget = self._rendering_controller.editor_gl_widget
         if gl_widget is not None:
             gl_widget.installEventFilter(self)
+            gl_widget.setAcceptDrops(True)
 
         # Enable drag-drop on viewport container
         self.editorViewportTab.setAcceptDrops(True)
@@ -1040,8 +1041,11 @@ class EditorWindow(QMainWindow):
                 self.push_undo_command(cmd, merge=False)
             return True
 
-        # Drag-drop on viewport container
-        if obj is self.editorViewportTab:
+        # Drag-drop on viewport container (or GL widget inside it)
+        gl_widget = self._rendering_controller.editor_gl_widget
+        is_viewport_target = (obj is self.editorViewportTab) or (gl_widget is not None and obj is gl_widget)
+
+        if is_viewport_target:
             if event.type() == QEvent.Type.DragEnter:
                 mime = event.mimeData()
                 if mime.hasFormat(EditorMimeTypes.ASSET_PATH):
@@ -1056,7 +1060,6 @@ class EditorWindow(QMainWindow):
                 mime = event.mimeData()
                 path = parse_asset_path_mime_data(mime)
                 if path and path.lower().endswith(".prefab"):
-                    # Получаем позицию drop в координатах виджета
                     drop_pos = event.position().toPoint()
                     self._on_prefab_dropped_to_viewport(path, drop_pos)
                     event.acceptProposedAction()
