@@ -311,9 +311,8 @@ class ResourceManager:
             mesh: Меш
             source_path: Путь к файлу-источнику
         """
-        # Устанавливаем имя на меш если не задано
-        if mesh.name is None:
-            mesh.name = name
+        # Устанавливаем имя на меш (чтобы setter в инспекторе мог его использовать)
+        mesh.name = name
 
         keeper = self.get_or_create_mesh_keeper(name)
         keeper.set_mesh(mesh, source_path)
