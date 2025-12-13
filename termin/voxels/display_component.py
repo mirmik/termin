@@ -16,6 +16,13 @@ if TYPE_CHECKING:
     from termin.voxels.visualization import VoxelVisualizer
 
 
+def _get_grid_name(comp: "VoxelDisplayComponent") -> str:
+    """Получить имя загруженной сетки."""
+    if comp._grid is not None:
+        return comp._grid.name or "(unnamed)"
+    return "(not loaded)"
+
+
 class VoxelDisplayComponent(Component):
     """
     Компонент для отображения воксельной сетки из .voxels файла.
@@ -24,6 +31,12 @@ class VoxelDisplayComponent(Component):
     """
 
     inspect_fields = {
+        "grid_name": InspectField(
+            label="Grid Name",
+            kind="string",
+            getter=_get_grid_name,
+            non_serializable=True,
+        ),
         "voxel_file": InspectField(
             path="voxel_file",
             label="Voxel File",

@@ -19,16 +19,18 @@ class VoxelGrid:
         cell_size: Размер одного вокселя в мировых единицах.
     """
 
-    __slots__ = ("_origin", "_cell_size", "_chunks")
+    __slots__ = ("_origin", "_cell_size", "_chunks", "_name")
 
     def __init__(
         self,
         origin: tuple[float, float, float] = (0.0, 0.0, 0.0),
         cell_size: float = 0.25,
+        name: str = "",
     ) -> None:
         self._origin = np.array(origin, dtype=np.float32)
         self._cell_size = cell_size
         self._chunks: dict[tuple[int, int, int], VoxelChunk] = {}
+        self._name = name
 
     @property
     def origin(self) -> np.ndarray:
@@ -47,6 +49,15 @@ class VoxelGrid:
     @cell_size.setter
     def cell_size(self, value: float) -> None:
         self._cell_size = value
+
+    @property
+    def name(self) -> str:
+        """Имя воксельной сетки."""
+        return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        self._name = value
 
     @property
     def chunk_count(self) -> int:

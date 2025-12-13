@@ -320,7 +320,11 @@ class ComponentInspectorPanel(QWidget):
             return QCheckBox()
 
         if kind == "string":
-            return QLineEdit()
+            le = QLineEdit()
+            # Read-only если есть getter, но нет setter и нет path
+            if field.getter is not None and field.setter is None and field.path is None:
+                le.setReadOnly(True)
+            return le
 
         if kind == "vec3":
             row = QWidget()

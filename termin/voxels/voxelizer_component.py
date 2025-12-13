@@ -109,8 +109,12 @@ class VoxelizerComponent(Component):
         if not output.endswith(".voxels"):
             output += ".voxels"
 
+        # Определяем имя сетки
+        entity_name = self.entity.name or "entity"
+        grid_name = entity_name
+
         # Вокселизируем меш в локальных координатах (без трансформа)
-        grid = VoxelGrid(origin=(0, 0, 0), cell_size=self.cell_size)
+        grid = VoxelGrid(origin=(0, 0, 0), cell_size=self.cell_size, name=grid_name)
         voxelizer = MeshVoxelizer(grid)
 
         # Вокселизируем без трансформа — в локальной СК меша

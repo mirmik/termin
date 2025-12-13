@@ -35,6 +35,7 @@ class VoxelPersistence:
 
         data = {
             "version": VOXEL_FORMAT_VERSION,
+            "name": grid.name,
             "cell_size": grid.cell_size,
             "chunks": {},
         }
@@ -72,10 +73,11 @@ class VoxelPersistence:
         if not version.startswith("1."):
             raise ValueError(f"Unsupported voxel format version: {version}")
 
+        name = data.get("name", "")
         cell_size = data.get("cell_size", 0.25)
 
         # Создаём сетку с origin в (0,0,0) — локальные координаты
-        grid = VoxelGrid(origin=(0, 0, 0), cell_size=cell_size)
+        grid = VoxelGrid(origin=(0, 0, 0), cell_size=cell_size, name=name)
 
         from termin.voxels.chunk import VoxelChunk
 
@@ -106,6 +108,7 @@ class VoxelPersistence:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
+        name = data.get("name", "")
         cell_size = data.get("cell_size", 0.25)
         chunks = data.get("chunks", {})
 
@@ -136,6 +139,7 @@ class VoxelPersistence:
                     bounds_max[i] = max(bounds_max[i], chunk_max[i])
 
         return {
+            "name": name,
             "cell_size": cell_size,
             "chunk_count": chunk_count,
             "voxel_count": voxel_count,
