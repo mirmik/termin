@@ -335,6 +335,10 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._vao = vao
         self._vbo = vbo
 
+    def set_resource_name(self, name: str) -> None:
+        """Set resource name to display."""
+        self._resource_name = name
+
     def _current_resource(self):
         """Возвращает текущий ресурс из словаря fbos."""
         fbos = self._get_fbos()
@@ -711,12 +715,28 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._update_resource_list()
         self._update_passes_list()
 
+        # Update GL widget resource based on pipeline capabilities
+        self._update_gl_widget_resource()
+
         # Request render update for new viewport
         if self._on_request_update is not None:
             self._on_request_update()
 
         # Update GL widget
         self._gl_widget.update()
+
+    def _update_gl_widget_resource(self) -> None:
+        """Update GL widget resource name for current viewport."""
+        current_res = self._resource_combo.currentText()
+        if current_res:
+            self._gl_widget.set_resource_name(current_res)
+        else:
+            # Fallback to first available resource
+            fbos = self._get_fbos()
+            if fbos:
+                first_key = next(iter(fbos.keys()), None)
+                if first_key:
+                    self._gl_widget.set_resource_name(first_key)
 
     def _update_viewport_list(self) -> None:
         """Update viewport ComboBox from RenderingController."""
@@ -799,22 +819,18 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._update_passes_list()
 
     def _on_resource_selected(self, name: str) -> None:
-        """Обработчик выбора ресурса (режим «Между пассами»).
-
-        Напрямую обновляет reads у BlitPass, чтобы граф зависимостей
-        корректно выстроил порядок пассов до вызова request_update.
-        """
+        """Обработчик выбора ресурса (режим «Между пассами»)."""
         if not name:
             return
-        # Обновляем reads у BlitPass напрямую
-        blit_pass = self._get_debug_blit_pass()
-        if blit_pass is not None:
-            blit_pass.reads = {name}
-        # Сохраняем выбранный источник
+
+        # Показываем выбранный ресурс напрямую
         self._debug_source_res = name
+        self._gl_widget.set_resource_name(name)
+
         # Запрашиваем обновление
         if self._on_request_update is not None:
             self._on_request_update()
+
         # Обновляем UI для типа ресурса
         self._update_ui_for_resource_type()
 
@@ -890,8 +906,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         else:
             names = list(self._get_fbos().keys())
 
-        # Фильтруем debug — его не показываем как источник
-        names = [n for n in names if n != "debug"]
+        # Фильтруем служебные ресурсы
+        names = [n for n in names if not n.startswith("empty")]
         
         current = self._resource_combo.currentText()
         self._resource_combo.blockSignals(True)
