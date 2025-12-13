@@ -208,7 +208,9 @@ class ResourceManager:
         return self.meshes.get(name)
 
     def list_mesh_names(self) -> list[str]:
-        return sorted(self.meshes.keys())
+        names = sorted(self.meshes.keys())
+        print(f"[ResourceManager] list_mesh_names: {names}")
+        return names
 
     def find_mesh_name(self, mesh: "MeshDrawable") -> Optional[str]:
         for n, m in self.meshes.items():
