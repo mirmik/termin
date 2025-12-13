@@ -4,6 +4,7 @@ import numpy as np
 
 from termin.visualization.render.postprocess import PostEffect
 from termin.visualization.render.shader import ShaderProgram
+from termin.editor.inspect_field import InspectField
 
 FOG_VERT = """
 #version 330 core
@@ -59,6 +60,12 @@ class FogEffect(PostEffect):
     """
 
     name = "fog"
+
+    inspect_fields = {
+        "fog_color": InspectField(path="_fog_color", label="Fog Color", kind="color"),
+        "fog_start": InspectField(path="_fog_start", label="Fog Start", kind="float", min=0.0, max=1.0, step=0.01),
+        "fog_end": InspectField(path="_fog_end", label="Fog End", kind="float", min=0.0, max=1.0, step=0.01),
+    }
 
     def __init__(
         self,

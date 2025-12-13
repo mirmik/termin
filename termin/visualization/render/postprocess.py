@@ -13,6 +13,7 @@ from termin.visualization.platform.backends.base import (
 )
 from termin.visualization.render.framegraph import RenderFramePass, blit_fbo_to_fbo
 from termin.visualization.render.framegraph.passes.present import _get_texture_from_resource
+from termin.editor.inspect_field import InspectField
 
 
 class PostEffect:
@@ -25,6 +26,10 @@ class PostEffect:
     """
 
     name: str = "unnamed_post_effect"
+
+    # Поля для редактирования в инспекторе
+    # Подклассы должны переопределить этот атрибут
+    inspect_fields: dict = {}
 
     # ---- Сериализация ---------------------------------------------
 
@@ -133,6 +138,11 @@ class PostEffect:
 
 
 class PostProcessPass(RenderFramePass):
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+    }
+
     def __init__(
         self,
         effects,

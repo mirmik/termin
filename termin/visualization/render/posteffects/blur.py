@@ -1,6 +1,7 @@
 import numpy as np
 from ..shader import ShaderProgram
 from ..postprocess import PostEffect
+from termin.editor.inspect_field import InspectField
 
 # ================================================================
 #          TWO-PASS GAUSSIAN BLUR (H + V)
@@ -50,6 +51,18 @@ class GaussianBlurPass(PostEffect):
     """Один проход: горизонтальный или вертикальный."""
 
     name = "gaussian_blur"
+
+    inspect_fields = {
+        "direction": InspectField(
+            path="direction",
+            label="Direction",
+            kind="enum",
+            choices=[
+                ((1.0, 0.0), "Horizontal"),
+                ((0.0, 1.0), "Vertical"),
+            ],
+        ),
+    }
 
     def __init__(self, direction=(1.0, 0.0)):
         self.shader = ShaderProgram(GAUSS_VERT, GAUSS_FRAG)

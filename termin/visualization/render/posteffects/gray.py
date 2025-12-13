@@ -1,5 +1,6 @@
 from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.render.postprocess import PostEffect
+from termin.editor.inspect_field import InspectField
 
 
 # ================================================================

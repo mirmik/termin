@@ -7,6 +7,7 @@ import numpy as np
 from termin.visualization.render.postprocess import PostEffect
 from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.core.picking import id_to_rgb
+from termin.editor.inspect_field import InspectField
 
 
 HIGHLIGHT_VERT = """
@@ -84,6 +85,10 @@ void main()
 
 class HighlightEffect(PostEffect):
     name = "highlight"
+
+    inspect_fields = {
+        "color": InspectField(path="_color", label="Outline Color", kind="color"),
+    }
 
     def __init__(self, selected_id_getter=None, color=(0.0, 0.0, 0.0, 1.0)):
         """

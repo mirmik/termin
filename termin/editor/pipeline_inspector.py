@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QComboBox,
     QInputDialog,
+    QGroupBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -34,6 +35,7 @@ from termin.editor.inspect_field_panel import InspectFieldPanel
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.pipeline import RenderPipeline
+    from termin.visualization.render.postprocess import PostProcessPass, PostEffect
 
 
 class PipelineInspector(QWidget):
@@ -54,6 +56,7 @@ class PipelineInspector(QWidget):
         self._pipeline: Optional["RenderPipeline"] = None
         self._pipeline_name: str = ""
         self._source_path: Optional[str] = None
+        self._selected_postprocess: Optional["PostProcessPass"] = None
 
         self._setup_ui()
 
@@ -154,6 +157,49 @@ class PipelineInspector(QWidget):
         self._pass_inspector.field_changed.connect(self._on_pass_field_changed)
         self._details_layout.addWidget(self._pass_inspector)
 
+        # PostEffect section (shown only for PostProcessPass)
+        self._effects_group = QGroupBox("Post Effects")
+        self._effects_group.setVisible(False)
+        effects_layout = QVBoxLayout(self._effects_group)
+        effects_layout.setContentsMargins(4, 4, 4, 4)
+        effects_layout.setSpacing(4)
+
+        # Effects list with buttons
+        effects_list_layout = QHBoxLayout()
+
+        self._effects_list = QListWidget()
+        self._effects_list.setMaximumHeight(120)
+        self._effects_list.currentRowChanged.connect(self._on_effect_selected)
+        effects_list_layout.addWidget(self._effects_list)
+
+        # Buttons for effect management
+        effects_btn_layout = QVBoxLayout()
+        effects_btn_layout.setSpacing(4)
+
+        self._add_effect_btn = QPushButton("+")
+        self._add_effect_btn.setFixedSize(24, 24)
+        self._add_effect_btn.setToolTip("Add effect")
+        self._add_effect_btn.clicked.connect(self._on_add_effect)
+        effects_btn_layout.addWidget(self._add_effect_btn)
+
+        self._remove_effect_btn = QPushButton("−")
+        self._remove_effect_btn.setFixedSize(24, 24)
+        self._remove_effect_btn.setToolTip("Remove effect")
+        self._remove_effect_btn.clicked.connect(self._on_remove_effect)
+        effects_btn_layout.addWidget(self._remove_effect_btn)
+
+        effects_btn_layout.addStretch()
+        effects_list_layout.addLayout(effects_btn_layout)
+
+        effects_layout.addLayout(effects_list_layout)
+
+        # Effect inspector
+        self._effect_inspector = InspectFieldPanel(parent=self._effects_group)
+        self._effect_inspector.field_changed.connect(self._on_effect_field_changed)
+        effects_layout.addWidget(self._effect_inspector)
+
+        self._details_layout.addWidget(self._effects_group)
+
         self._details_layout.addStretch()
 
         scroll.setWidget(self._details_widget)
@@ -241,6 +287,10 @@ class PipelineInspector(QWidget):
         """Rebuild UI for current pipeline."""
         self._pass_list.clear()
         self._pass_inspector.set_target(None)
+        self._selected_postprocess = None
+        self._effects_list.clear()
+        self._effect_inspector.set_target(None)
+        self._effects_group.setVisible(False)
 
         if self._pipeline is None:
             self._name_label.setText("")
@@ -276,10 +326,14 @@ class PipelineInspector(QWidget):
     def _on_pass_selected(self, row: int) -> None:
         """Handle pass selection - show details."""
         self._update_buttons_state()
+        self._selected_postprocess = None
+        self._effects_list.clear()
+        self._effect_inspector.set_target(None)
 
         if self._pipeline is None or row < 0 or row >= len(self._pipeline.passes):
             self._details_info.setText("Select a pass to view details")
             self._pass_inspector.set_target(None)
+            self._effects_group.setVisible(False)
             return
 
         p = self._pipeline.passes[row]
@@ -296,9 +350,141 @@ class PipelineInspector(QWidget):
         # Set target for editable fields
         self._pass_inspector.set_target(p)
 
+        # Check if this is a PostProcessPass
+        from termin.visualization.render.postprocess import PostProcessPass
+
+        if isinstance(p, PostProcessPass):
+            self._selected_postprocess = p
+            self._effects_group.setVisible(True)
+            self._rebuild_effects_list()
+        else:
+            self._effects_group.setVisible(False)
+
     def _on_pass_field_changed(self, key: str, old_value, new_value) -> None:
         """Handle pass field change from inspector."""
         self.pipeline_changed.emit()
+
+    # ---------- PostEffect handling ----------
+
+    def _rebuild_effects_list(self) -> None:
+        """Rebuild the effects list for the selected PostProcessPass."""
+        self._effects_list.clear()
+
+        if self._selected_postprocess is None:
+            return
+
+        for eff in self._selected_postprocess.effects:
+            name = eff.name if hasattr(eff, "name") else eff.__class__.__name__
+            item = QListWidgetItem(f"{name} ({eff.__class__.__name__})")
+            self._effects_list.addItem(item)
+
+        self._update_effect_buttons_state()
+
+    def _on_effect_selected(self, row: int) -> None:
+        """Handle effect selection - show effect inspector."""
+        self._update_effect_buttons_state()
+
+        if self._selected_postprocess is None:
+            self._effect_inspector.set_target(None)
+            return
+
+        if row < 0 or row >= len(self._selected_postprocess.effects):
+            self._effect_inspector.set_target(None)
+            return
+
+        eff = self._selected_postprocess.effects[row]
+        self._effect_inspector.set_target(eff)
+
+    def _on_add_effect(self) -> None:
+        """Add a new effect to the PostProcessPass."""
+        if self._selected_postprocess is None:
+            return
+
+        from termin.visualization.core.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        effect_names = rm.list_post_effect_names()
+
+        if not effect_names:
+            QMessageBox.warning(
+                self,
+                "No Effects Available",
+                "No PostEffect types registered.",
+            )
+            return
+
+        # Show selection dialog
+        effect_type, ok = QInputDialog.getItem(
+            self,
+            "Add Effect",
+            "Select effect type:",
+            effect_names,
+            0,
+            False,
+        )
+
+        if not ok or not effect_type:
+            return
+
+        # Get effect class and create instance
+        effect_cls = rm.get_post_effect(effect_type)
+        if effect_cls is None:
+            return
+
+        try:
+            new_effect = effect_cls()
+            self._selected_postprocess.effects.append(new_effect)
+            self._selected_postprocess.rebuild_reads()
+            self._rebuild_effects_list()
+            self.pipeline_changed.emit()
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error Creating Effect",
+                f"Failed to create effect:\n{e}",
+            )
+
+    def _on_remove_effect(self) -> None:
+        """Remove the selected effect from the PostProcessPass."""
+        if self._selected_postprocess is None:
+            return
+
+        row = self._effects_list.currentRow()
+        if row < 0 or row >= len(self._selected_postprocess.effects):
+            return
+
+        eff = self._selected_postprocess.effects[row]
+        name = eff.name if hasattr(eff, "name") else eff.__class__.__name__
+
+        reply = QMessageBox.question(
+            self,
+            "Remove Effect",
+            f"Remove effect '{name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        del self._selected_postprocess.effects[row]
+        self._selected_postprocess.rebuild_reads()
+        self._rebuild_effects_list()
+        self._effect_inspector.set_target(None)
+        self.pipeline_changed.emit()
+
+    def _on_effect_field_changed(self, key: str, old_value, new_value) -> None:
+        """Handle effect field change from inspector."""
+        self.pipeline_changed.emit()
+
+    def _update_effect_buttons_state(self) -> None:
+        """Update enabled state of effect buttons."""
+        has_postprocess = self._selected_postprocess is not None
+        row = self._effects_list.currentRow()
+        has_selection = row >= 0
+
+        self._add_effect_btn.setEnabled(has_postprocess)
+        self._remove_effect_btn.setEnabled(has_postprocess and has_selection)
 
     def _on_save_clicked(self) -> None:
         """Handle save button click."""
