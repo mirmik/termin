@@ -1,19 +1,91 @@
 """
 VoxelDisplayComponent — компонент для отображения .voxels файла.
+
+Реализует протокол Drawable и рендерит воксели напрямую.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional, Set
+
+import numpy as np
 
 from termin.visualization.core.component import Component
+from termin.visualization.core.material import Material
+from termin.visualization.core.mesh import MeshDrawable
+from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
+    from termin.visualization.core.material import MaterialPhase
+    from termin.visualization.render.render_context import RenderContext
     from termin.voxels.grid import VoxelGrid
-    from termin.voxels.visualization import VoxelVisualizer
+
+
+# Вершины единичного куба (центрирован в origin)
+_CUBE_VERTICES = np.array([
+    # Front face
+    [-0.5, -0.5,  0.5],
+    [ 0.5, -0.5,  0.5],
+    [ 0.5,  0.5,  0.5],
+    [-0.5,  0.5,  0.5],
+    # Back face
+    [-0.5, -0.5, -0.5],
+    [-0.5,  0.5, -0.5],
+    [ 0.5,  0.5, -0.5],
+    [ 0.5, -0.5, -0.5],
+    # Top face
+    [-0.5,  0.5, -0.5],
+    [-0.5,  0.5,  0.5],
+    [ 0.5,  0.5,  0.5],
+    [ 0.5,  0.5, -0.5],
+    # Bottom face
+    [-0.5, -0.5, -0.5],
+    [ 0.5, -0.5, -0.5],
+    [ 0.5, -0.5,  0.5],
+    [-0.5, -0.5,  0.5],
+    # Right face
+    [ 0.5, -0.5, -0.5],
+    [ 0.5,  0.5, -0.5],
+    [ 0.5,  0.5,  0.5],
+    [ 0.5, -0.5,  0.5],
+    # Left face
+    [-0.5, -0.5, -0.5],
+    [-0.5, -0.5,  0.5],
+    [-0.5,  0.5,  0.5],
+    [-0.5,  0.5, -0.5],
+], dtype=np.float32)
+
+_CUBE_TRIANGLES = np.array([
+    [0, 1, 2], [0, 2, 3],       # front
+    [4, 5, 6], [4, 6, 7],       # back
+    [8, 9, 10], [8, 10, 11],    # top
+    [12, 13, 14], [12, 14, 15], # bottom
+    [16, 17, 18], [16, 18, 19], # right
+    [20, 21, 22], [20, 22, 23], # left
+], dtype=np.int32)
+
+_CUBE_NORMALS = np.array([
+    # Front
+    [0, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1],
+    # Back
+    [0, 0, -1], [0, 0, -1], [0, 0, -1], [0, 0, -1],
+    # Top
+    [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0],
+    # Bottom
+    [0, -1, 0], [0, -1, 0], [0, -1, 0], [0, -1, 0],
+    # Right
+    [1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0],
+    # Left
+    [-1, 0, 0], [-1, 0, 0], [-1, 0, 0], [-1, 0, 0],
+], dtype=np.float32)
+
+VERTS_PER_CUBE = 24
+TRIS_PER_CUBE = 12
+CUBE_SCALE = 0.85  # Размер кубика относительно ячейки
+MAX_VOXELS = 100_000
 
 
 def _get_grid_name(comp: "VoxelDisplayComponent") -> str:
@@ -27,7 +99,7 @@ class VoxelDisplayComponent(Component):
     """
     Компонент для отображения воксельной сетки из .voxels файла.
 
-    Загружает файл и визуализирует воксели в локальной системе координат entity.
+    Реализует протокол Drawable — рендерит воксели напрямую без MeshRenderer.
     """
 
     inspect_fields = {
@@ -50,7 +122,11 @@ class VoxelDisplayComponent(Component):
         super().__init__()
         self._voxel_file = voxel_file
         self._grid: Optional["VoxelGrid"] = None
-        self._visualizer: Optional["VoxelVisualizer"] = None
+        self._mesh_drawable: Optional[MeshDrawable] = None
+        self._material = Material(
+            color=(0.2, 0.6, 1.0, 0.7),
+            phase_mark="editor",
+        )
         self._needs_reload = True
 
     @property
@@ -68,6 +144,36 @@ class VoxelDisplayComponent(Component):
     def grid(self) -> Optional["VoxelGrid"]:
         """Загруженная воксельная сетка."""
         return self._grid
+
+    # --- Drawable protocol ---
+
+    @property
+    def phase_marks(self) -> Set[str]:
+        """Фазы рендеринга."""
+        if self._material is None:
+            return set()
+        return {p.phase_mark for p in self._material.phases}
+
+    def draw_geometry(self, context: "RenderContext") -> None:
+        """Рисует геометрию вокселей."""
+        if self._mesh_drawable is None:
+            return
+        self._mesh_drawable.draw(context)
+
+    def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
+        """Возвращает MaterialPhases для рендеринга."""
+        if self._material is None:
+            return []
+
+        if phase_mark is None:
+            result = list(self._material.phases)
+        else:
+            result = [p for p in self._material.phases if p.phase_mark == phase_mark]
+
+        result.sort(key=lambda p: p.priority)
+        return result
+
+    # --- Логика загрузки и построения меша ---
 
     def _resolve_path(self, path_str: str) -> Path:
         """Разрешить путь относительно директории проекта."""
@@ -104,39 +210,86 @@ class VoxelDisplayComponent(Component):
             self._grid = None
             return False
 
-    def _rebuild_visualization(self) -> None:
-        """Перестроить визуализацию."""
-        from termin.voxels.visualization import VoxelVisualizer
+    def _rebuild_mesh(self) -> None:
+        """Перестроить меш из воксельной сетки."""
+        # Очищаем старый меш
+        if self._mesh_drawable is not None:
+            self._mesh_drawable.delete()
+            self._mesh_drawable = None
 
-        # Очищаем старую визуализацию
-        if self._visualizer is not None:
-            self._visualizer.cleanup()
-            self._visualizer = None
-
-        if self._grid is None or self.entity is None:
+        if self._grid is None:
             return
 
-        self._visualizer = VoxelVisualizer(self._grid, self.entity)
-        self._visualizer.rebuild()
+        voxel_count = self._grid.voxel_count
+        if voxel_count == 0:
+            return
+
+        # Ограничение для производительности
+        if voxel_count > MAX_VOXELS:
+            print(f"VoxelDisplayComponent: too many voxels ({voxel_count}), showing first {MAX_VOXELS}")
+            voxel_count = MAX_VOXELS
+
+        # Выделяем массивы
+        vertices = np.zeros((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
+        triangles = np.zeros((voxel_count * TRIS_PER_CUBE, 3), dtype=np.int32)
+        normals = np.zeros((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
+
+        cell_size = self._grid.cell_size
+        idx = 0
+
+        for vx, vy, vz, vtype in self._grid.iter_non_empty():
+            if idx >= MAX_VOXELS:
+                break
+
+            # Позиция центра вокселя
+            center = self._grid.voxel_to_world(vx, vy, vz)
+
+            # Смещаем и масштабируем вершины куба
+            v_start = idx * VERTS_PER_CUBE
+            v_end = v_start + VERTS_PER_CUBE
+            vertices[v_start:v_end] = _CUBE_VERTICES * (cell_size * CUBE_SCALE) + center
+            normals[v_start:v_end] = _CUBE_NORMALS
+
+            # Смещаем индексы треугольников
+            t_start = idx * TRIS_PER_CUBE
+            t_end = t_start + TRIS_PER_CUBE
+            triangles[t_start:t_end] = _CUBE_TRIANGLES + v_start
+
+            idx += 1
+
+        # Обрезаем если меньше max_voxels
+        if idx < MAX_VOXELS:
+            vertices = vertices[:idx * VERTS_PER_CUBE]
+            triangles = triangles[:idx * TRIS_PER_CUBE]
+            normals = normals[:idx * VERTS_PER_CUBE]
+
+        mesh = Mesh3(
+            vertices=vertices,
+            triangles=triangles,
+        )
+        mesh.vertex_normals = normals
+        self._mesh_drawable = MeshDrawable(mesh, name="voxel_display")
+
+    # --- Lifecycle ---
 
     def on_added(self, scene: "Scene") -> None:
-        """При добавлении в сцену загрузить файл и создать визуализацию."""
+        """При добавлении в сцену загрузить файл и построить меш."""
         if self._needs_reload:
             self._load_file()
-            self._rebuild_visualization()
+            self._rebuild_mesh()
             self._needs_reload = False
 
     def on_removed(self) -> None:
-        """Очистить визуализацию при удалении."""
-        if self._visualizer is not None:
-            self._visualizer.cleanup()
-            self._visualizer = None
+        """Очистить меш при удалении."""
+        if self._mesh_drawable is not None:
+            self._mesh_drawable.delete()
+            self._mesh_drawable = None
 
     def update(self, dt: float) -> None:
-        """Обновить визуализацию если нужно."""
+        """Обновить меш если нужно."""
         if self._needs_reload:
             self._load_file()
-            self._rebuild_visualization()
+            self._rebuild_mesh()
             self._needs_reload = False
 
     def reload(self) -> None:
