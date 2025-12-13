@@ -224,9 +224,10 @@ class ResourceManager:
         if shader is None:
             return
 
-        # Создаём DefaultMaterial
+        # Создаём DefaultMaterial с циановым цветом
         mat = Material.from_parsed(shader)
         mat.name = "DefaultMaterial"
+        mat.color = (0.3, 0.85, 0.9, 1.0)  # Умеренно-яркий циан
         self.register_material("DefaultMaterial", mat)
 
     # --------- Меши ---------
