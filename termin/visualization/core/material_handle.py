@@ -1,107 +1,87 @@
 """
-MaterialHandle и MaterialKeeper — система управления ссылками на материалы.
+MaterialKeeper и MaterialHandle — управление ссылками на материалы.
 
-MaterialHandle — легковесная ссылка на материал для MeshRenderer.
-MaterialKeeper — владелец материала по имени, управляет жизненным циклом.
+Наследуются от ResourceKeeper/ResourceHandle.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
+
+from termin.visualization.core.resource_handle import ResourceHandle, ResourceKeeper
 
 if TYPE_CHECKING:
     from termin.visualization.core.material import Material
 
 
-class MaterialKeeper:
+class MaterialKeeper(ResourceKeeper["Material"]):
     """
     Владелец материала по имени.
 
-    Создаётся ResourceManager'ом при первом обращении к имени.
-    Хранит материал, знает источник (файл), контролирует конфликты.
+    Особенности:
+    - Не требует GPU cleanup
+    - update_resource использует update_from() для сохранения identity
+    - Проверяет конфликты source_path при set_resource
     """
 
-    def __init__(self, name: str):
-        self.name = name
-        self._material: Material | None = None
-        self._source_path: str | None = None
+    def _on_cleanup(self, resource: "Material") -> None:
+        """Материалы не требуют GPU cleanup."""
+        pass
 
     @property
-    def material(self) -> Material | None:
-        """Текущий материал или None если не загружен."""
-        return self._material
-
-    @property
-    def source_path(self) -> str | None:
-        """Путь к файлу-источнику материала."""
-        return self._source_path
+    def material(self) -> "Material | None":
+        """Алиас для resource."""
+        return self._resource
 
     @property
     def has_material(self) -> bool:
-        """Есть ли материал."""
-        return self._material is not None
+        """Алиас для has_resource."""
+        return self.has_resource
 
-    def set_material(self, material: Material, source_path: str | None = None) -> None:
+    def set_material(self, material: "Material", source_path: str | None = None) -> None:
         """
         Установить материал.
-
-        Args:
-            material: Материал
-            source_path: Путь к файлу-источнику (для контроля конфликтов)
 
         Raises:
             ValueError: Если материал уже установлен из другого источника
         """
-        if self._material is not None and self._source_path is not None:
+        if self._resource is not None and self._source_path is not None:
             if source_path is not None and source_path != self._source_path:
                 raise ValueError(
                     f"Material name conflict: '{self.name}' already loaded from "
                     f"'{self._source_path}', cannot load from '{source_path}'"
                 )
 
-        self._material = material
+        self._resource = material
         if source_path is not None:
             self._source_path = source_path
 
-    def update_material(self, material: Material) -> None:
+    def update_material(self, material: "Material") -> None:
         """
         Обновить материал (hot-reload).
 
-        Обновляет данные существующего материала, сохраняя идентичность объекта.
-        Если материала ещё нет — просто устанавливает.
+        Использует update_from() для сохранения identity объекта.
         """
-        if self._material is None:
-            self._material = material
+        if self._resource is None:
+            self._resource = material
         else:
-            self._material.update_from(material)
-
-    def clear(self) -> None:
-        """Удалить материал из keeper'а."""
-        self._material = None
-        self._source_path = None
+            self._resource.update_from(material)
 
 
-class MaterialHandle:
+class MaterialHandle(ResourceHandle["Material"]):
     """
     Умная ссылка на материал.
 
-    Два режима работы:
-    1. Direct — хранит прямую ссылку на Material (создан из кода)
-    2. Named — хранит ссылку на MaterialKeeper (по имени из ResourceManager)
-
-    MeshRenderer хранит MaterialHandle, а не Material напрямую.
+    Использование:
+        handle = MaterialHandle.from_material(mat)  # прямая ссылка
+        handle = MaterialHandle.from_name("Metal")  # по имени (hot-reload)
     """
 
-    def __init__(self):
-        self._direct_material: Material | None = None
-        self._keeper: MaterialKeeper | None = None
-        self._name: str | None = None
-
     @classmethod
-    def from_material(cls, material: Material) -> "MaterialHandle":
+    def from_material(cls, material: "Material") -> "MaterialHandle":
         """Создать handle с прямой ссылкой на материал."""
         handle = cls()
-        handle._direct_material = material
+        handle._init_direct(material)
         return handle
 
     @classmethod
@@ -110,66 +90,45 @@ class MaterialHandle:
         from termin.visualization.core.resources import ResourceManager
 
         handle = cls()
-        handle._name = name
-        handle._keeper = ResourceManager.instance().get_or_create_keeper(name)
+        keeper = ResourceManager.instance().get_or_create_keeper(name)
+        handle._init_named(name, keeper)
         return handle
 
-    @property
-    def is_direct(self) -> bool:
-        """True если это прямая ссылка на материал."""
-        return self._direct_material is not None
-
-    @property
-    def is_named(self) -> bool:
-        """True если это ссылка по имени."""
-        return self._keeper is not None
-
-    @property
-    def name(self) -> str | None:
-        """Имя материала (для named) или None (для direct)."""
-        if self._direct_material is not None:
-            return self._direct_material.name
-        return self._name
-
-    def get(self) -> Material:
+    def get(self) -> "Material":
         """
         Получить материал.
 
         Returns:
             Material или ErrorMaterial если материал недоступен
         """
-        # Direct mode
-        if self._direct_material is not None:
-            return self._direct_material
+        if self._direct is not None:
+            return self._direct
 
-        # Named mode
-        if self._keeper is not None and self._keeper.has_material:
-            return self._keeper.material  # type: ignore
+        if self._keeper is not None and self._keeper.has_resource:
+            return self._keeper.resource  # type: ignore
 
-        # Fallback to ErrorMaterial
         from termin.visualization.core.material import get_error_material
+
         return get_error_material()
 
-    def get_or_none(self) -> Material | None:
+    def get_or_none(self) -> "Material | None":
         """Получить материал или None если недоступен."""
-        if self._direct_material is not None:
-            return self._direct_material
+        if self._direct is not None:
+            return self._direct
 
         if self._keeper is not None:
-            return self._keeper.material
+            return self._keeper.resource
 
         return None
 
     def serialize(self) -> dict:
-        """Сериализация для сохранения сцены."""
-        if self._direct_material is not None:
-            # Direct material — сериализуем сам материал
+        """Сериализация."""
+        if self._direct is not None:
             return {
                 "type": "direct",
-                "material": self._direct_material.serialize(),
+                "material": self._direct.serialize(),
             }
         elif self._name is not None:
-            # Named — сохраняем только имя
             return {
                 "type": "named",
                 "name": self._name,
@@ -188,10 +147,10 @@ class MaterialHandle:
                 return cls.from_name(name)
         elif handle_type == "direct":
             from termin.visualization.core.material import Material
+
             mat_data = data.get("material")
             if mat_data:
                 material = Material.deserialize(mat_data)
                 return cls.from_material(material)
 
-        # Fallback — пустой handle
         return cls()

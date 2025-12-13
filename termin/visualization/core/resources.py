@@ -7,6 +7,8 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.core.material import Material
     from termin.visualization.core.material_handle import MaterialKeeper
     from termin.visualization.core.mesh import MeshDrawable
+    from termin.visualization.core.mesh_handle import MeshKeeper
+    from termin.visualization.core.texture_handle import TextureKeeper
     from termin.visualization.render.texture import Texture
     from termin.visualization.core.entity import Component
     from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm
@@ -90,6 +92,9 @@ class ResourceManager:
 
         # MeshKeeper'ы — владельцы мешей по имени
         self._mesh_keepers: Dict[str, "MeshKeeper"] = {}
+
+        # TextureKeeper'ы — владельцы текстур по имени
+        self._texture_keepers: Dict[str, "TextureKeeper"] = {}
 
     @classmethod
     def instance(cls) -> "ResourceManager":
@@ -291,27 +296,72 @@ class ResourceManager:
         if name in self.meshes:
             del self.meshes[name]
 
+    # --------- TextureKeeper'ы ---------
+    def get_or_create_texture_keeper(self, name: str) -> "TextureKeeper":
+        """
+        Получить или создать TextureKeeper по имени.
+
+        Используется TextureHandle для получения keeper'а.
+        """
+        from termin.visualization.core.texture_handle import TextureKeeper
+
+        if name not in self._texture_keepers:
+            self._texture_keepers[name] = TextureKeeper(name)
+        return self._texture_keepers[name]
+
+    def get_texture_keeper(self, name: str) -> Optional["TextureKeeper"]:
+        """Получить TextureKeeper по имени или None."""
+        return self._texture_keepers.get(name)
+
     # --------- Текстуры ---------
     def register_texture(self, name: str, texture: "Texture", source_path: str | None = None):
-        """Register a texture by name."""
-        self.textures[name] = texture
+        """
+        Регистрирует текстуру через keeper.
+
+        Args:
+            name: Имя текстуры
+            texture: Текстура
+            source_path: Путь к файлу-источнику
+        """
         if source_path and texture.source_path is None:
             texture.source_path = source_path
 
+        keeper = self.get_or_create_texture_keeper(name)
+        keeper.set_texture(texture, source_path)
+
+        # Для обратной совместимости сохраняем и в старый dict
+        self.textures[name] = texture
+
     def get_texture(self, name: str) -> Optional["Texture"]:
-        """Get texture by name."""
+        """Получить текстуру по имени."""
+        keeper = self._texture_keepers.get(name)
+        if keeper is not None:
+            return keeper.texture
         return self.textures.get(name)
 
     def list_texture_names(self) -> list[str]:
-        """List all registered texture names."""
-        return sorted(self.textures.keys())
+        """Список имён всех текстур."""
+        names = set(self._texture_keepers.keys()) | set(self.textures.keys())
+        return sorted(names)
 
     def find_texture_name(self, texture: "Texture") -> Optional[str]:
-        """Find name of a registered texture."""
+        """Найти имя зарегистрированной текстуры."""
+        for name, keeper in self._texture_keepers.items():
+            if keeper.texture is texture:
+                return name
         for n, t in self.textures.items():
             if t is texture:
                 return n
         return None
+
+    def unregister_texture(self, name: str) -> None:
+        """Удаляет текстуру и очищает keeper."""
+        keeper = self._texture_keepers.get(name)
+        if keeper is not None:
+            keeper.clear()
+            del self._texture_keepers[name]
+        if name in self.textures:
+            del self.textures[name]
 
     # --------- Компоненты ---------
     def register_component(self, name: str, cls: type["Component"]):

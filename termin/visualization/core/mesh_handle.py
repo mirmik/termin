@@ -1,101 +1,59 @@
 """
-MeshHandle и MeshKeeper — система управления ссылками на меши.
+MeshKeeper и MeshHandle — управление ссылками на меши.
 
-MeshHandle — легковесная ссылка на меш для MeshRenderer.
-MeshKeeper — владелец меша по имени, управляет жизненным циклом.
+Наследуются от ResourceKeeper/ResourceHandle.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
+
+from termin.visualization.core.resource_handle import ResourceHandle, ResourceKeeper
 
 if TYPE_CHECKING:
     from termin.visualization.core.mesh import MeshDrawable
 
 
-class MeshKeeper:
+class MeshKeeper(ResourceKeeper["MeshDrawable"]):
     """
     Владелец меша по имени.
 
-    Создаётся ResourceManager'ом при первом обращении к имени.
-    Хранит меш, знает источник (файл), контролирует конфликты.
+    Меш требует GPU cleanup через delete().
     """
 
-    def __init__(self, name: str):
-        self.name = name
-        self._mesh: MeshDrawable | None = None
-        self._source_path: str | None = None
-
     @property
-    def mesh(self) -> MeshDrawable | None:
-        """Текущий меш или None если не загружен."""
-        return self._mesh
-
-    @property
-    def source_path(self) -> str | None:
-        """Путь к файлу-источнику меша."""
-        return self._source_path
+    def mesh(self) -> "MeshDrawable | None":
+        """Алиас для resource."""
+        return self._resource
 
     @property
     def has_mesh(self) -> bool:
-        """Есть ли меш."""
-        return self._mesh is not None
+        """Алиас для has_resource."""
+        return self.has_resource
 
-    def set_mesh(self, mesh: MeshDrawable, source_path: str | None = None) -> None:
-        """
-        Установить меш.
+    def set_mesh(self, mesh: "MeshDrawable", source_path: str | None = None) -> None:
+        """Алиас для set_resource."""
+        self.set_resource(mesh, source_path)
 
-        Args:
-            mesh: Меш
-            source_path: Путь к файлу-источнику (для контроля конфликтов)
-        """
-        # Удаляем старый меш из GPU если был
-        if self._mesh is not None:
-            self._mesh.delete()
-
-        self._mesh = mesh
-        if source_path is not None:
-            self._source_path = source_path
-
-    def update_mesh(self, mesh: MeshDrawable) -> None:
-        """
-        Обновить меш (hot-reload).
-
-        Заменяет меш, удаляя старый из GPU.
-        """
-        if self._mesh is not None:
-            self._mesh.delete()
-        self._mesh = mesh
-
-    def clear(self) -> None:
-        """Удалить меш из keeper'а."""
-        if self._mesh is not None:
-            self._mesh.delete()
-        self._mesh = None
-        self._source_path = None
+    def update_mesh(self, mesh: "MeshDrawable") -> None:
+        """Алиас для update_resource."""
+        self.update_resource(mesh)
 
 
-class MeshHandle:
+class MeshHandle(ResourceHandle["MeshDrawable"]):
     """
     Умная ссылка на меш.
 
-    Два режима работы:
-    1. Direct — хранит прямую ссылку на MeshDrawable (создан из кода)
-    2. Named — хранит ссылку на MeshKeeper (по имени из ResourceManager)
-
-    MeshRenderer хранит MeshHandle, а не MeshDrawable напрямую.
+    Использование:
+        handle = MeshHandle.from_mesh(drawable)  # прямая ссылка
+        handle = MeshHandle.from_name("cube")    # по имени (hot-reload)
     """
 
-    def __init__(self):
-        self._direct_mesh: MeshDrawable | None = None
-        self._keeper: MeshKeeper | None = None
-        self._name: str | None = None
-
     @classmethod
-    def from_mesh(cls, mesh: MeshDrawable) -> "MeshHandle":
+    def from_mesh(cls, mesh: "MeshDrawable") -> "MeshHandle":
         """Создать handle с прямой ссылкой на меш."""
         handle = cls()
-        handle._direct_mesh = mesh
+        handle._init_direct(mesh)
         return handle
 
     @classmethod
@@ -104,58 +62,18 @@ class MeshHandle:
         from termin.visualization.core.resources import ResourceManager
 
         handle = cls()
-        handle._name = name
-        handle._keeper = ResourceManager.instance().get_or_create_mesh_keeper(name)
+        keeper = ResourceManager.instance().get_or_create_mesh_keeper(name)
+        handle._init_named(name, keeper)
         return handle
 
-    @property
-    def is_direct(self) -> bool:
-        """True если это прямая ссылка на меш."""
-        return self._direct_mesh is not None
-
-    @property
-    def is_named(self) -> bool:
-        """True если это ссылка по имени."""
-        return self._keeper is not None
-
-    @property
-    def name(self) -> str | None:
-        """Имя меша (для named) или None (для direct)."""
-        if self._direct_mesh is not None:
-            return self._direct_mesh.name
-        return self._name
-
-    def get(self) -> MeshDrawable | None:
-        """
-        Получить меш.
-
-        Returns:
-            MeshDrawable или None если меш недоступен
-        """
-        # Direct mode
-        if self._direct_mesh is not None:
-            return self._direct_mesh
-
-        # Named mode
-        if self._keeper is not None and self._keeper.has_mesh:
-            return self._keeper.mesh
-
-        return None
-
-    def get_or_none(self) -> MeshDrawable | None:
-        """Получить меш или None если недоступен."""
-        return self.get()
-
     def serialize(self) -> dict:
-        """Сериализация для сохранения сцены."""
-        if self._direct_mesh is not None:
-            # Direct mesh — сериализуем сам меш
+        """Сериализация."""
+        if self._direct is not None:
             return {
                 "type": "direct",
-                "mesh": self._direct_mesh.serialize(),
+                "mesh": self._direct.serialize(),
             }
         elif self._name is not None:
-            # Named — сохраняем только имя
             return {
                 "type": "named",
                 "name": self._name,
@@ -174,11 +92,11 @@ class MeshHandle:
                 return cls.from_name(name)
         elif handle_type == "direct":
             from termin.visualization.core.mesh import MeshDrawable
+
             mesh_data = data.get("mesh")
             if mesh_data:
                 mesh = MeshDrawable.deserialize(mesh_data, context)
                 if mesh is not None:
                     return cls.from_mesh(mesh)
 
-        # Fallback — пустой handle
         return cls()
