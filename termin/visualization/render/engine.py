@@ -262,6 +262,16 @@ class RenderEngine:
         scene = view.scene
         lights = scene.build_lights()
 
+        # Debug: log first frames (controlled by pass-level flag)
+        from termin.visualization.render.framegraph.passes.color import ColorPass
+        if ColorPass._DEBUG_FIRST_FRAMES and ColorPass._debug_frame_count < 5:
+            print(f"\n=== RenderEngine.build_lights ===")
+            print(f"  light_components count: {len(scene.light_components)}")
+            print(f"  built lights count: {len(lights)}")
+            for i, lt in enumerate(lights):
+                print(f"  Light[{i}]: type={lt.type}, dir={lt.direction}, pos={lt.position}")
+            print(f"=== end ===\n")
+
         for render_pass in schedule:
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}

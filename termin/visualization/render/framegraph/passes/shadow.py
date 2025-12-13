@@ -50,6 +50,9 @@ class ShadowPass(RenderFramePass):
         ShadowMapArray с текстурами и матрицами для всех источников.
     """
 
+    _DEBUG_FIRST_FRAMES = True  # Debug: track first frames
+    _debug_frame_count = 0
+
     inspect_fields = {
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
         "default_resolution": InspectField(
@@ -211,17 +214,27 @@ class ShadowPass(RenderFramePass):
         """
         if lights is None:
             lights = []
-        
+
         # Находим источники с тенями (пока только directional)
         shadow_lights: List[tuple[int, Light]] = []
         for i, light in enumerate(lights):
             if light.type == LightType.DIRECTIONAL and light.shadows.enabled:
                 shadow_lights.append((i, light))
-        
+
+        # Debug: log first frames
+        ShadowPass._debug_frame_count += 1
+        if ShadowPass._DEBUG_FIRST_FRAMES and ShadowPass._debug_frame_count <= 5:
+            print(f"\n=== ShadowPass frame {ShadowPass._debug_frame_count} ===")
+            print(f"  lights count: {len(lights)}")
+            print(f"  shadow_lights count: {len(shadow_lights)}")
+            for i, lt in enumerate(lights):
+                print(f"  Light[{i}]: type={lt.type}, shadows.enabled={lt.shadows.enabled}, dir={lt.direction}")
+            print(f"=== end ===\n")
+
         # Создаём ShadowMapArrayResource
         shadow_array = ShadowMapArrayResource(resolution=self.default_resolution)
         self._shadow_map_array = shadow_array
-        
+
         if not shadow_lights:
             # Нет источников с тенями — возвращаем пустой массив
             writes_fbos[self.output_res] = shadow_array

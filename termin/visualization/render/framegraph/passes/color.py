@@ -60,6 +60,9 @@ class ColorPass(RenderFramePass):
                     Если None, рендерит все фазы (legacy режим).
     """
 
+    _DEBUG_FIRST_FRAMES = True  # Debug: track first frames
+    _debug_frame_count = 0
+
     inspect_fields = {
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
@@ -273,6 +276,28 @@ class ColorPass(RenderFramePass):
         from termin.visualization.render.lighting.upload import upload_lights_to_shader, upload_ambient_to_shader
         from termin.visualization.render.lighting.shadow_upload import upload_shadow_maps_to_shader
         from termin.visualization.render.renderpass import RenderState
+
+        # Debug: log first frames
+        ColorPass._debug_frame_count += 1
+        if ColorPass._DEBUG_FIRST_FRAMES and ColorPass._debug_frame_count <= 5:
+            light_count = len(lights) if lights else 0
+            shadow_res_value = reads_fbos.get(self.shadow_res) if self.shadow_res else None
+            shadow_count = len(shadow_res_value) if shadow_res_value else 0
+            light_info = []
+            if lights:
+                for i, lt in enumerate(lights):
+                    light_info.append(f"  Light[{i}]: dir={lt.direction}, shadows={lt.shadows.enabled}")
+            print(f"\n=== ColorPass frame {ColorPass._debug_frame_count} ===")
+            print(f"  lights count: {light_count}")
+            print(f"  shadow_res ({self.shadow_res}): {type(shadow_res_value).__name__ if shadow_res_value else 'None'}, entries: {shadow_count}")
+            print(f"  rect: {rect}")
+            print(f"  camera: {camera}")
+            if camera and camera.entity:
+                pose = camera.entity.transform.global_pose()
+                print(f"  camera position: {pose.lin}")
+            for info in light_info:
+                print(info)
+            print(f"=== end ===\n")
 
         if lights is not None:
             scene.lights = lights
