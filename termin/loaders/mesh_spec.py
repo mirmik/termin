@@ -1,0 +1,139 @@
+# termin/loaders/mesh_spec.py
+"""Mesh import specification - settings for loading mesh files."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Tuple
+
+import numpy as np
+
+
+@dataclass
+class MeshSpec:
+    """
+    Import settings for mesh files.
+
+    Stored as .spec file next to the mesh (e.g., model.stl.spec).
+    """
+
+    # Scale factor applied to all vertices
+    scale: float = 1.0
+
+    # Axis mapping: which source axis maps to X, Y, Z
+    # Values: "x", "y", "z", "-x", "-y", "-z"
+    axis_x: str = "x"
+    axis_y: str = "y"
+    axis_z: str = "z"
+
+    @classmethod
+    def load(cls, spec_path: str | Path) -> "MeshSpec":
+        """Load spec from file."""
+        path = Path(spec_path)
+        if not path.exists():
+            return cls()
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return cls(
+                scale=data.get("scale", 1.0),
+                axis_x=data.get("axis_x", "x"),
+                axis_y=data.get("axis_y", "y"),
+                axis_z=data.get("axis_z", "z"),
+            )
+        except Exception:
+            return cls()
+
+    @classmethod
+    def for_mesh_file(cls, mesh_path: str | Path) -> "MeshSpec":
+        """Load spec for a mesh file (looks for mesh_path.spec)."""
+        spec_path = Path(str(mesh_path) + ".spec")
+        return cls.load(spec_path)
+
+    def save(self, spec_path: str | Path) -> None:
+        """Save spec to file."""
+        path = Path(spec_path)
+        data = {
+            "scale": self.scale,
+            "axis_x": self.axis_x,
+            "axis_y": self.axis_y,
+            "axis_z": self.axis_z,
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+    def save_for_mesh(self, mesh_path: str | Path) -> None:
+        """Save spec next to mesh file."""
+        spec_path = Path(str(mesh_path) + ".spec")
+        self.save(spec_path)
+
+    def apply_to_vertices(self, vertices: np.ndarray) -> np.ndarray:
+        """
+        Apply spec transformations to vertices.
+
+        Args:
+            vertices: (N, 3) array of vertices
+
+        Returns:
+            Transformed vertices (N, 3)
+        """
+        if vertices is None or len(vertices) == 0:
+            return vertices
+
+        result = np.zeros_like(vertices)
+
+        # Apply axis mapping
+        axis_map = {"x": 0, "y": 1, "z": 2, "-x": 0, "-y": 1, "-z": 2}
+        sign_map = {"x": 1, "y": 1, "z": 1, "-x": -1, "-y": -1, "-z": -1}
+
+        src_x = axis_map.get(self.axis_x, 0)
+        src_y = axis_map.get(self.axis_y, 1)
+        src_z = axis_map.get(self.axis_z, 2)
+
+        sign_x = sign_map.get(self.axis_x, 1)
+        sign_y = sign_map.get(self.axis_y, 1)
+        sign_z = sign_map.get(self.axis_z, 1)
+
+        result[:, 0] = vertices[:, src_x] * sign_x
+        result[:, 1] = vertices[:, src_y] * sign_y
+        result[:, 2] = vertices[:, src_z] * sign_z
+
+        # Apply scale
+        result *= self.scale
+
+        return result.astype(np.float32)
+
+    def apply_to_normals(self, normals: np.ndarray) -> np.ndarray:
+        """
+        Apply axis reordering to normals (no scale).
+
+        Args:
+            normals: (N, 3) array of normals
+
+        Returns:
+            Transformed normals (N, 3)
+        """
+        if normals is None or len(normals) == 0:
+            return normals
+
+        result = np.zeros_like(normals)
+
+        axis_map = {"x": 0, "y": 1, "z": 2, "-x": 0, "-y": 1, "-z": 2}
+        sign_map = {"x": 1, "y": 1, "z": 1, "-x": -1, "-y": -1, "-z": -1}
+
+        src_x = axis_map.get(self.axis_x, 0)
+        src_y = axis_map.get(self.axis_y, 1)
+        src_z = axis_map.get(self.axis_z, 2)
+
+        sign_x = sign_map.get(self.axis_x, 1)
+        sign_y = sign_map.get(self.axis_y, 1)
+        sign_z = sign_map.get(self.axis_z, 1)
+
+        result[:, 0] = normals[:, src_x] * sign_x
+        result[:, 1] = normals[:, src_y] * sign_y
+        result[:, 2] = normals[:, src_z] * sign_z
+
+        return result.astype(np.float32)

@@ -2,16 +2,21 @@
 MeshInspector — inspector panel for mesh files.
 
 Displays mesh information: vertex count, triangle count, bounds, etc.
+Also allows editing import settings (scale, axis mapping) via .spec files.
 """
 
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from PyQt6.QtWidgets import (
+    QComboBox,
+    QDoubleSpinBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -32,14 +37,20 @@ class MeshInspector(QWidget):
     - Has UVs
     - Bounding box
     - File size
+    - Import settings (scale, axis mapping)
     """
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        on_spec_changed: Optional[Callable[[str], None]] = None,
+    ):
         super().__init__(parent)
 
         self._mesh: Optional["MeshDrawable"] = None
         self._mesh_name: str = ""
         self._file_path: str = ""
+        self._on_spec_changed = on_spec_changed
 
         self._init_ui()
 
@@ -53,7 +64,7 @@ class MeshInspector(QWidget):
         header.setStyleSheet("font-weight: bold; font-size: 14px;")
         layout.addWidget(header)
 
-        # Form
+        # Info Form
         form = QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
         form.setSpacing(4)
@@ -94,6 +105,54 @@ class MeshInspector(QWidget):
         form.addRow("Path:", self._path_label)
 
         layout.addLayout(form)
+
+        # Import Settings section
+        settings_header = QLabel("Import Settings")
+        settings_header.setStyleSheet("font-weight: bold; font-size: 12px; margin-top: 8px;")
+        layout.addWidget(settings_header)
+
+        settings_form = QFormLayout()
+        settings_form.setContentsMargins(0, 0, 0, 0)
+        settings_form.setSpacing(4)
+
+        # Scale
+        self._scale_spin = QDoubleSpinBox()
+        self._scale_spin.setRange(0.0001, 10000.0)
+        self._scale_spin.setDecimals(4)
+        self._scale_spin.setSingleStep(0.1)
+        self._scale_spin.setValue(1.0)
+        settings_form.addRow("Scale:", self._scale_spin)
+
+        # Axis mapping
+        axis_options = ["x", "y", "z", "-x", "-y", "-z"]
+
+        self._axis_x_combo = QComboBox()
+        self._axis_x_combo.addItems(axis_options)
+        self._axis_x_combo.setCurrentText("x")
+        settings_form.addRow("Axis X:", self._axis_x_combo)
+
+        self._axis_y_combo = QComboBox()
+        self._axis_y_combo.addItems(axis_options)
+        self._axis_y_combo.setCurrentText("y")
+        settings_form.addRow("Axis Y:", self._axis_y_combo)
+
+        self._axis_z_combo = QComboBox()
+        self._axis_z_combo.addItems(axis_options)
+        self._axis_z_combo.setCurrentText("z")
+        settings_form.addRow("Axis Z:", self._axis_z_combo)
+
+        layout.addLayout(settings_form)
+
+        # Apply button
+        btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(0, 4, 0, 0)
+
+        self._apply_btn = QPushButton("Apply && Save")
+        self._apply_btn.clicked.connect(self._on_apply_clicked)
+        btn_layout.addWidget(self._apply_btn)
+        btn_layout.addStretch()
+
+        layout.addLayout(btn_layout)
         layout.addStretch()
 
     def set_mesh(self, mesh: Optional["MeshDrawable"], name: str = "") -> None:
@@ -135,26 +194,69 @@ class MeshInspector(QWidget):
             self._file_size_label.setText(self._format_size(size))
             self._path_label.setText(source_path)
             self._file_path = source_path
+            # Load spec settings
+            self._load_spec_from_file(source_path)
         else:
             self._file_size_label.setText("-")
             self._path_label.setText("-")
             self._file_path = ""
+            self._reset_spec_fields()
+
+    def _load_spec_from_file(self, mesh_path: str) -> None:
+        """Load spec settings from .spec file."""
+        from termin.loaders.mesh_spec import MeshSpec
+
+        spec = MeshSpec.for_mesh_file(mesh_path)
+        self._scale_spin.setValue(spec.scale)
+        self._axis_x_combo.setCurrentText(spec.axis_x)
+        self._axis_y_combo.setCurrentText(spec.axis_y)
+        self._axis_z_combo.setCurrentText(spec.axis_z)
+
+    def _reset_spec_fields(self) -> None:
+        """Reset spec fields to defaults."""
+        self._scale_spin.setValue(1.0)
+        self._axis_x_combo.setCurrentText("x")
+        self._axis_y_combo.setCurrentText("y")
+        self._axis_z_combo.setCurrentText("z")
+
+    def _on_apply_clicked(self) -> None:
+        """Save spec and notify for mesh reload."""
+        if not self._file_path:
+            return
+
+        from termin.loaders.mesh_spec import MeshSpec
+
+        spec = MeshSpec(
+            scale=self._scale_spin.value(),
+            axis_x=self._axis_x_combo.currentText(),
+            axis_y=self._axis_y_combo.currentText(),
+            axis_z=self._axis_z_combo.currentText(),
+        )
+        spec.save_for_mesh(self._file_path)
+
+        # Notify that spec changed
+        if self._on_spec_changed is not None:
+            self._on_spec_changed(self._file_path)
 
     def set_mesh_by_path(self, file_path: str) -> None:
         """Load and inspect mesh from file path."""
+        from termin.loaders.mesh_spec import MeshSpec
         from termin.mesh.mesh import Mesh3
         from termin.visualization.core.mesh import MeshDrawable
 
         name = os.path.splitext(os.path.basename(file_path))[0]
         ext = os.path.splitext(file_path)[1].lower()
 
+        # Load spec
+        spec = MeshSpec.for_mesh_file(file_path)
+
         try:
             if ext == ".stl":
                 from termin.loaders.stl_loader import load_stl_file
-                scene_data = load_stl_file(file_path)
+                scene_data = load_stl_file(file_path, spec=spec)
             elif ext == ".obj":
                 from termin.loaders.obj_loader import load_obj_file
-                scene_data = load_obj_file(file_path)
+                scene_data = load_obj_file(file_path, spec=spec)
             else:
                 self._clear()
                 self._name_label.setText(name)

@@ -1,8 +1,15 @@
 # termin/loaders/obj_loader.py
 """Pure Python OBJ loader. No external dependencies."""
 
-import numpy as np
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+if TYPE_CHECKING:
+    from termin.loaders.mesh_spec import MeshSpec
 
 
 class OBJMeshData:
@@ -19,7 +26,7 @@ class OBJSceneData:
         self.meshes = []
 
 
-def load_obj_file(path) -> OBJSceneData:
+def load_obj_file(path, spec: "MeshSpec | None" = None) -> OBJSceneData:
     """Load OBJ file."""
     path = Path(path)
     scene_data = OBJSceneData()
@@ -107,12 +114,19 @@ def load_obj_file(path) -> OBJSceneData:
     uvs_np = np.array(out_uvs, dtype=np.float32) if out_uvs else None
     indices_np = np.arange(len(out_vertices), dtype=np.uint32)
 
-    scene_data.meshes.append(OBJMeshData(
+    mesh = OBJMeshData(
         name=path.stem,
         vertices=vertices_np,
         normals=normals_np,
         uvs=uvs_np,
         indices=indices_np,
-    ))
+    )
 
+    # Apply spec transformations
+    if spec is not None:
+        mesh.vertices = spec.apply_to_vertices(mesh.vertices)
+        if mesh.normals is not None:
+            mesh.normals = spec.apply_to_normals(mesh.normals)
+
+    scene_data.meshes.append(mesh)
     return scene_data

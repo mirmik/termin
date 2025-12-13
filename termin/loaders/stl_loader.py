@@ -1,9 +1,16 @@
 # termin/loaders/stl_loader.py
 """Pure Python STL loader (binary and ASCII). No external dependencies."""
 
+from __future__ import annotations
+
 import struct
-import numpy as np
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+if TYPE_CHECKING:
+    from termin.loaders.mesh_spec import MeshSpec
 
 
 class STLMeshData:
@@ -19,8 +26,8 @@ class STLSceneData:
         self.meshes = []
 
 
-def load_stl_file(path) -> STLSceneData:
-    """Load STL file (binary or ASCII)."""
+def load_stl_file(path, spec: "MeshSpec | None" = None) -> STLSceneData:
+    """Load STL file (binary or ASCII), applying spec if provided."""
     path = Path(path)
     scene_data = STLSceneData()
 
@@ -37,16 +44,20 @@ def load_stl_file(path) -> STLSceneData:
         if is_ascii:
             try:
                 mesh = _load_ascii_stl(f, path.stem)
-                scene_data.meshes.append(mesh)
             except Exception:
                 # Fallback to binary
                 f.seek(0)
                 mesh = _load_binary_stl(f, path.stem)
-                scene_data.meshes.append(mesh)
         else:
             mesh = _load_binary_stl(f, path.stem)
-            scene_data.meshes.append(mesh)
 
+    # Apply spec transformations
+    if spec is not None:
+        mesh.vertices = spec.apply_to_vertices(mesh.vertices)
+        if mesh.normals is not None:
+            mesh.normals = spec.apply_to_normals(mesh.normals)
+
+    scene_data.meshes.append(mesh)
     return scene_data
 
 

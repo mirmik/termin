@@ -17,14 +17,21 @@ class MeshFileProcessor(FileTypeProcessor):
 
     @property
     def extensions(self) -> Set[str]:
-        return {".stl", ".obj"}
+        return {".stl", ".obj", ".spec"}
 
     @property
     def resource_type(self) -> str:
         return "mesh"
 
     def on_file_added(self, path: str) -> None:
-        """Load new mesh file."""
+        """Load new mesh file or handle spec file."""
+        ext = os.path.splitext(path)[1].lower()
+
+        # .spec file - reload corresponding mesh
+        if ext == ".spec":
+            self._handle_spec_change(path)
+            return
+
         name = os.path.splitext(os.path.basename(path))[0]
 
         if name in self._resource_manager.meshes:
@@ -46,7 +53,14 @@ class MeshFileProcessor(FileTypeProcessor):
             print(f"[MeshProcessor] Failed to load {path}: {e}")
 
     def on_file_changed(self, path: str) -> None:
-        """Reload modified mesh."""
+        """Reload modified mesh or handle spec change."""
+        ext = os.path.splitext(path)[1].lower()
+
+        # .spec file - reload corresponding mesh
+        if ext == ".spec":
+            self._handle_spec_change(path)
+            return
+
         name = os.path.splitext(os.path.basename(path))[0]
 
         if name not in self._resource_manager.meshes:
@@ -66,6 +80,33 @@ class MeshFileProcessor(FileTypeProcessor):
         except Exception as e:
             print(f"[MeshProcessor] Failed to reload {name}: {e}")
 
+    def _handle_spec_change(self, spec_path: str) -> None:
+        """Handle .spec file change - reload corresponding mesh."""
+        # spec_path is like "model.stl.spec" - find the mesh file
+        if not spec_path.endswith(".spec"):
+            return
+
+        mesh_path = spec_path[:-5]  # Remove ".spec"
+        if not os.path.exists(mesh_path):
+            return
+
+        name = os.path.splitext(os.path.basename(mesh_path))[0]
+
+        # Reload the mesh with new spec
+        try:
+            old_drawable = self._resource_manager.meshes.get(name)
+            if old_drawable is not None:
+                old_drawable.delete()
+
+            drawable = self._load_mesh_file(mesh_path, name)
+            if drawable is not None:
+                self._resource_manager.register_mesh(name, drawable)
+                print(f"[MeshProcessor] Reloaded with new spec: {name}")
+                self._notify_reloaded(name)
+
+        except Exception as e:
+            print(f"[MeshProcessor] Failed to reload {name} with spec: {e}")
+
     def on_file_removed(self, path: str) -> None:
         """Handle mesh file deletion."""
         if path in self._file_to_resources:
@@ -78,18 +119,22 @@ class MeshFileProcessor(FileTypeProcessor):
             del self._file_to_resources[path]
 
     def _load_mesh_file(self, path: str, name: str):
-        """Load mesh from file (.stl, .obj)."""
+        """Load mesh from file (.stl, .obj), applying spec if present."""
+        from termin.loaders.mesh_spec import MeshSpec
         from termin.mesh.mesh import Mesh3
         from termin.visualization.core.mesh import MeshDrawable
 
         ext = os.path.splitext(path)[1].lower()
 
+        # Load spec if exists
+        spec = MeshSpec.for_mesh_file(path)
+
         if ext == ".stl":
             from termin.loaders.stl_loader import load_stl_file
-            scene_data = load_stl_file(path)
+            scene_data = load_stl_file(path, spec=spec)
         elif ext == ".obj":
             from termin.loaders.obj_loader import load_obj_file
-            scene_data = load_obj_file(path)
+            scene_data = load_obj_file(path, spec=spec)
         else:
             print(f"[MeshProcessor] Unsupported format: {ext}")
             return None
