@@ -737,16 +737,13 @@ class RenderingController:
         Get list of all viewports with display names for UI selection.
 
         Returns:
-            List of (viewport, label) tuples where label is "display_name / viewport_index".
+            List of (viewport, label) tuples where label is "display_name / Viewport N".
         """
         result: list[tuple["Viewport", str]] = []
         for display in self._displays:
             display_name = self.get_display_name(display)
             for i, viewport in enumerate(display.viewports):
-                if len(display.viewports) == 1:
-                    label = display_name
-                else:
-                    label = f"{display_name} / {i}"
+                label = f"{display_name} / Viewport {i}"
                 result.append((viewport, label))
         return result
 
