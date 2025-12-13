@@ -665,29 +665,35 @@ class ResourceManager:
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "ResourceManager":
         """
-        Восстанавливает ResourceManager из сериализованных данных.
+        Восстанавливает ресурсы из сериализованных данных в синглтон.
+
+        Добавляет десериализованные ресурсы к существующему синглтону,
+        не перезаписывая уже загруженные ресурсы (например, из файлов проекта).
         """
         from termin.visualization.core.material import Material
         from termin.visualization.core.mesh import MeshDrawable
 
-        rm = cls()
+        rm = cls.instance()
 
-        # Материалы
+        # Материалы - добавляем только если ещё нет
         for name, mat_data in data.get("materials", {}).items():
-            mat = Material.deserialize(mat_data)
-            mat.name = name
-            rm.register_material(name, mat)
+            if name not in rm.materials:
+                mat = Material.deserialize(mat_data)
+                mat.name = name
+                rm.register_material(name, mat)
 
-        # Меши
+        # Меши - добавляем только если ещё нет
         for name, mesh_data in data.get("meshes", {}).items():
-            drawable = MeshDrawable.deserialize(mesh_data, context)
-            if drawable is not None:
-                rm.register_mesh(name, drawable)
+            if name not in rm.meshes:
+                drawable = MeshDrawable.deserialize(mesh_data, context)
+                if drawable is not None:
+                    rm.register_mesh(name, drawable)
 
         # Текстуры - TODO: добавить Texture.deserialize()
         # for name, tex_data in data.get("textures", {}).items():
-        #     tex = Texture.deserialize(tex_data, context)
-        #     if tex is not None:
-        #         rm.register_texture(name, tex)
+        #     if name not in rm.textures:
+        #         tex = Texture.deserialize(tex_data, context)
+        #         if tex is not None:
+        #             rm.register_texture(name, tex)
 
         return rm
