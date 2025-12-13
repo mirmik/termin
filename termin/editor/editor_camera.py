@@ -59,6 +59,13 @@ class EditorCameraManager:
         self._scene.add(camera_entity)
         self.camera = camera
 
+    @property
+    def orbit_controller(self) -> OrbitCameraController | None:
+        """Get OrbitCameraController for the editor camera."""
+        if self.camera is None or self.camera.entity is None:
+            return None
+        return self.camera.entity.get_component(OrbitCameraController)
+
     def get_camera_data(self) -> dict | None:
         """
         Get camera state for serialization.
@@ -66,10 +73,7 @@ class EditorCameraManager:
         Returns:
             Dict with target, radius, azimuth, elevation or None if camera not available.
         """
-        if self.camera is None or self.camera.entity is None:
-            return None
-
-        orbit_ctrl = self.camera.entity.get_component(OrbitCameraController)
+        orbit_ctrl = self.orbit_controller
         if orbit_ctrl is None:
             return None
 
@@ -87,10 +91,7 @@ class EditorCameraManager:
         Args:
             data: Dict with target, radius, azimuth, elevation.
         """
-        if self.camera is None or self.camera.entity is None:
-            return
-
-        orbit_ctrl = self.camera.entity.get_component(OrbitCameraController)
+        orbit_ctrl = self.orbit_controller
         if orbit_ctrl is None:
             return
 

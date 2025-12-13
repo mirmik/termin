@@ -33,6 +33,7 @@ from termin.editor.file_processors import (
     ComponentFileProcessor,
     PipelineFileProcessor,
 )
+from termin.editor.spacemouse_controller import SpaceMouseController
 
 from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.entity import Entity
@@ -200,6 +201,9 @@ class EditorWindow(QMainWindow):
         self.editor_entities = self._camera_manager.editor_entities
         self.camera = self._camera_manager.camera
 
+        # --- SpaceMouse support (initialized later after console is ready) ---
+        self._spacemouse: SpaceMouseController | None = None
+
         # --- гизмо-контроллер ---
         self.gizmo_controller = GizmoController(
             scene=self.scene,
@@ -306,6 +310,9 @@ class EditorWindow(QMainWindow):
 
         # --- Project Browser ---
         self._init_project_browser()
+
+        # --- SpaceMouse support ---
+        self._init_spacemouse()
 
         # --- Инициализация настроек (поиск VS Code и т.п.) ---
         EditorSettings.instance().init_text_editor_if_empty()
@@ -583,6 +590,15 @@ class EditorWindow(QMainWindow):
             on_request_update=self._request_viewport_update,
             on_display_input_mode_changed=self._on_display_input_mode_changed,
         )
+
+    def _init_spacemouse(self) -> None:
+        """Initialize SpaceMouse controller if device available."""
+        spacemouse = SpaceMouseController()
+        if spacemouse.open():
+            self._spacemouse = spacemouse
+            self._log_to_console("[SpaceMouse] Device connected")
+        else:
+            self._spacemouse = None
 
     def _init_project_browser(self):
         """Инициализация файлового браузера проекта."""
@@ -1239,6 +1255,11 @@ class EditorWindow(QMainWindow):
         # In game mode - always render at target FPS
         # In editor mode - render only when needed (on-demand)
         is_playing = self.game_mode_controller.is_playing if self.game_mode_controller else False
+
+        # Poll SpaceMouse input (only in editor mode)
+        if not is_playing and self._spacemouse is not None:
+            orbit_controller = self._camera_manager.orbit_controller
+            self._spacemouse.update(orbit_controller, self._request_viewport_update)
 
         # Check if any display needs render (unified check)
         needs_render = is_playing
