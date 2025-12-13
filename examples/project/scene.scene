@@ -375,6 +375,41 @@
           }
         ],
         "children": []
+      },
+      {
+        "name": "entity1",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            0.0,
+            2.7283491492271423,
+            -2.429252028465271
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "voxel_file": "Voxels/bulbasaur.voxels"
+            },
+            "type": "VoxelDisplayComponent"
+          }
+        ],
+        "children": []
       }
     ],
     "light_direction": [
@@ -413,15 +448,15 @@
   "editor": {
     "camera": {
       "target": [
-        -1.822691559791565,
-        -2.2535769939422607,
-        -1.3645007610321045
+        -0.9958726236602023,
+        -1.4330905203462971,
+        -2.8220406060486742
       ],
-      "radius": 7.0,
-      "azimuth": 20.727530196684572,
-      "elevation": 0.6702064327658214
+      "radius": 11.0,
+      "azimuth": 20.80432468377232,
+      "elevation": 0.5759586531581274
     },
-    "selected_entity": "Bulba",
+    "selected_entity": "cube2",
     "displays": [
       {
         "name": "Editor",
