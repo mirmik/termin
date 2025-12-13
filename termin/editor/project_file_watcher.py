@@ -88,6 +88,20 @@ class FileTypeProcessor(ABC):
         """
         ...
 
+    def on_spec_changed(self, spec_path: str, resource_path: str) -> None:
+        """
+        Called when a .spec file for a resource changes.
+
+        Default implementation reloads the resource via on_file_changed.
+        Override for custom behavior.
+
+        Args:
+            spec_path: Path to the .spec file
+            resource_path: Path to the resource file (without .spec)
+        """
+        if os.path.exists(resource_path):
+            self.on_file_changed(resource_path)
+
     def get_file_count(self) -> int:
         """Returns number of tracked files."""
         return len(self._file_to_resources)
@@ -242,6 +256,12 @@ class ProjectFileWatcher:
                 if ext in self._processors:
                     priority = self._processors[ext].priority
                     pending_files.append((priority, file_path, ext))
+                # Also queue .spec files for known resource types
+                elif ext == ".spec":
+                    base_ext = self._get_spec_base_ext(file_path)
+                    if base_ext and base_ext in self._processors:
+                        priority = self._processors[base_ext].priority
+                        pending_files.append((priority, file_path, ext))
 
         # Sort by priority (lower first), then by path for deterministic order
         pending_files.sort(key=lambda x: (x[0], x[1]))
@@ -249,6 +269,18 @@ class ProjectFileWatcher:
         # Process files in priority order
         for _priority, file_path, _ext in pending_files:
             self._add_file(file_path)
+
+    def _get_spec_base_ext(self, path: str) -> str | None:
+        """
+        For a .spec file, return the base file's extension.
+
+        Example: "model.stl.spec" -> ".stl", "image.png.spec" -> ".png"
+        Returns None if not a spec file or base extension unknown.
+        """
+        if not path.endswith(".spec"):
+            return None
+        base_path = path[:-5]  # Remove ".spec"
+        return os.path.splitext(base_path)[1].lower() or None
 
     def _add_file(self, path: str) -> None:
         """Add a file to watching and notify processor."""
@@ -260,12 +292,37 @@ class ProjectFileWatcher:
             self._watched_files.add(path)
 
         ext = os.path.splitext(path)[1].lower()
+
+        # Handle .spec files specially
+        if ext == ".spec":
+            base_ext = self._get_spec_base_ext(path)
+            if base_ext:
+                processor = self._processors.get(base_ext)
+                if processor is not None:
+                    resource_path = path[:-5]
+                    try:
+                        processor.on_spec_changed(path, resource_path)
+                    except Exception as e:
+                        print(f"[ProjectFileWatcher] Error processing spec {path}: {e}")
+            return
+
         processor = self._processors.get(ext)
         if processor is not None:
             try:
                 processor.on_file_added(path)
             except Exception as e:
                 print(f"[ProjectFileWatcher] Error processing {path}: {e}")
+
+    def _should_watch_file(self, path: str) -> bool:
+        """Check if file should be watched (resource or spec file)."""
+        ext = os.path.splitext(path)[1].lower()
+        if ext in self._processors:
+            return True
+        # Also watch .spec files for known resource types
+        if ext == ".spec":
+            base_ext = self._get_spec_base_ext(path)
+            return base_ext is not None and base_ext in self._processors
+        return False
 
     def _on_directory_changed(self, path: str) -> None:
         """Handle directory changes (new files)."""
@@ -289,8 +346,7 @@ class ProjectFileWatcher:
                     self._file_watcher.addPath(file_path)
                     self._watched_dirs.add(file_path)
             else:
-                ext = os.path.splitext(filename)[1].lower()
-                if ext in self._processors and file_path not in self._watched_files:
+                if self._should_watch_file(file_path) and file_path not in self._watched_files:
                     self._add_file(file_path)
 
     def _on_file_changed(self, path: str) -> None:
@@ -301,6 +357,20 @@ class ProjectFileWatcher:
                 self._file_watcher.addPath(path)
 
         ext = os.path.splitext(path)[1].lower()
+
+        # Handle .spec files specially
+        if ext == ".spec":
+            base_ext = self._get_spec_base_ext(path)
+            if base_ext:
+                processor = self._processors.get(base_ext)
+                if processor is not None:
+                    resource_path = path[:-5]
+                    try:
+                        processor.on_spec_changed(path, resource_path)
+                    except Exception as e:
+                        print(f"[ProjectFileWatcher] Error processing spec {path}: {e}")
+            return
+
         processor = self._processors.get(ext)
         if processor is not None:
             try:

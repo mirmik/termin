@@ -17,21 +17,14 @@ class MeshFileProcessor(FileTypeProcessor):
 
     @property
     def extensions(self) -> Set[str]:
-        return {".stl", ".obj", ".spec"}
+        return {".stl", ".obj"}
 
     @property
     def resource_type(self) -> str:
         return "mesh"
 
     def on_file_added(self, path: str) -> None:
-        """Load new mesh file or handle spec file."""
-        ext = os.path.splitext(path)[1].lower()
-
-        # .spec file - reload corresponding mesh
-        if ext == ".spec":
-            self._handle_spec_change(path)
-            return
-
+        """Load new mesh file."""
         name = os.path.splitext(os.path.basename(path))[0]
 
         if name in self._resource_manager.meshes:
@@ -54,13 +47,6 @@ class MeshFileProcessor(FileTypeProcessor):
 
     def on_file_changed(self, path: str) -> None:
         """Reload modified mesh or handle spec change."""
-        ext = os.path.splitext(path)[1].lower()
-
-        # .spec file - reload corresponding mesh
-        if ext == ".spec":
-            self._handle_spec_change(path)
-            return
-
         name = os.path.splitext(os.path.basename(path))[0]
 
         # Only reload if mesh is already registered
@@ -77,30 +63,6 @@ class MeshFileProcessor(FileTypeProcessor):
 
         except Exception as e:
             print(f"[MeshProcessor] Failed to reload {name}: {e}")
-
-    def _handle_spec_change(self, spec_path: str) -> None:
-        """Handle .spec file change - reload corresponding mesh."""
-        # spec_path is like "model.stl.spec" - find the mesh file
-        if not spec_path.endswith(".spec"):
-            return
-
-        mesh_path = spec_path[:-5]  # Remove ".spec"
-        if not os.path.exists(mesh_path):
-            return
-
-        name = os.path.splitext(os.path.basename(mesh_path))[0]
-
-        # Reload the mesh with new spec
-        try:
-            drawable = self._load_mesh_file(mesh_path, name)
-            if drawable is not None:
-                # register_mesh handles cleanup via keeper
-                self._resource_manager.register_mesh(name, drawable, source_path=mesh_path)
-                print(f"[MeshProcessor] Reloaded with new spec: {name}")
-                self._notify_reloaded(name)
-
-        except Exception as e:
-            print(f"[MeshProcessor] Failed to reload {name} with spec: {e}")
 
     def on_file_removed(self, path: str) -> None:
         """Handle mesh file deletion."""
