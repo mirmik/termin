@@ -226,10 +226,10 @@ class EditorDisplayInputManager:
         Возвращает:
             Глубину в диапазоне [0, 1] или None.
         """
-        if self._display is None:
+        if self._get_fbo_pool is None:
             return None
 
-        fbo_pool = self._display.fbo_pool
+        fbo_pool = self._get_fbo_pool()
         if fbo_pool is None:
             return None
 
