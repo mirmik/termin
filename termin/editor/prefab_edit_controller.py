@@ -147,8 +147,7 @@ class PrefabEditController:
             persistence = PrefabPersistence(self._resource_manager)
             stats = persistence.save(root_entity, self._prefab_path)
             self._log(
-                f"Saved prefab '{self.prefab_name}': "
-                f"{stats['entities']} entities, {stats['materials']} materials"
+                f"Saved prefab '{self.prefab_name}': {stats['entities']} entities"
             )
             return True
         except Exception as e:

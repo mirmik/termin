@@ -75,13 +75,9 @@ class PrefabPersistence:
         if entity_data is None:
             raise ValueError(f"Entity '{entity.name}' is not serializable")
 
-        # Collect resources used by this entity hierarchy
-        resources_data = self._collect_resources(entity)
-
         data = {
             "version": self.VERSION,
             "root": entity_data,
-            "resources": resources_data,
         }
 
         # Atomic write via temp file
@@ -100,8 +96,6 @@ class PrefabPersistence:
 
         return {
             "entities": self._count_entities(entity),
-            "materials": len(resources_data.get("materials", {})),
-            "meshes": len(resources_data.get("meshes", {})),
         }
 
     def load(self, file_path: str | Path, context=None) -> "Entity":
@@ -121,10 +115,6 @@ class PrefabPersistence:
 
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-
-        # Load resources first
-        resources_data = data.get("resources", {})
-        self._load_resources(resources_data)
 
         # Deserialize entity hierarchy
         root_data = data.get("root")
@@ -161,10 +151,6 @@ class PrefabPersistence:
                 "components": [],
                 "children": [],
             },
-            "resources": {
-                "materials": {},
-                "meshes": {},
-            },
         }
 
         json_str = json.dumps(data, indent=2, ensure_ascii=False)
@@ -179,61 +165,6 @@ class PrefabPersistence:
             temp_path = f.name
 
         os.replace(temp_path, str(file_path))
-
-    def _collect_resources(self, entity: "Entity") -> dict:
-        """
-        Collect all resources (materials, meshes) used by entity hierarchy.
-        """
-        from termin.visualization.render.components.mesh_renderer import MeshRenderer
-
-        materials = {}
-        meshes = {}
-
-        def collect_from_entity(ent: "Entity"):
-            for comp in ent.components:
-                if isinstance(comp, MeshRenderer):
-                    # Collect material
-                    mat_name = comp.material_name
-                    if mat_name and mat_name not in materials:
-                        mat = self._resource_manager.get_material(mat_name)
-                        if mat is not None:
-                            materials[mat_name] = mat.serialize()
-
-                    # Collect mesh
-                    mesh_name = comp.mesh_name
-                    if mesh_name and mesh_name not in meshes:
-                        mesh = self._resource_manager.get_mesh(mesh_name)
-                        if mesh is not None:
-                            meshes[mesh_name] = mesh.serialize()
-
-            # Recurse into children
-            for child_transform in ent.transform.children:
-                child_ent = child_transform.entity
-                if child_ent is not None:
-                    collect_from_entity(child_ent)
-
-        collect_from_entity(entity)
-
-        return {
-            "materials": materials,
-            "meshes": meshes,
-        }
-
-    def _load_resources(self, resources_data: dict) -> None:
-        """
-        Load resources from prefab data into ResourceManager.
-        """
-        # Load materials
-        materials = resources_data.get("materials", {})
-        for name, mat_data in materials.items():
-            if not self._resource_manager.has_material(name):
-                self._resource_manager.deserialize_material(name, mat_data)
-
-        # Load meshes
-        meshes = resources_data.get("meshes", {})
-        for name, mesh_data in meshes.items():
-            if not self._resource_manager.has_mesh(name):
-                self._resource_manager.deserialize_mesh(name, mesh_data)
 
     def _count_entities(self, entity: "Entity") -> int:
         """Count total entities in hierarchy."""
