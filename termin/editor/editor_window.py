@@ -14,6 +14,7 @@ from termin.editor.scene_tree_controller import SceneTreeController
 from termin.editor.editor_viewport_features import EditorViewportFeatures
 from termin.editor.gizmo import GizmoController
 from termin.editor.game_mode_controller import GameModeController
+from termin.editor.prefab_edit_controller import PrefabEditController
 from termin.editor.world_persistence import WorldPersistence
 from termin.editor.selection_manager import SelectionManager
 from termin.editor.dialog_manager import DialogManager
@@ -85,10 +86,14 @@ class EditorWindow(QMainWindow):
         self.gizmo_controller: GizmoController | None = None
         self.selection_manager: SelectionManager | None = None
         self.game_mode_controller: GameModeController | None = None
+        self.prefab_edit_controller: PrefabEditController | None = None
         self.project_browser = None
         self._project_name: str | None = None
         self._current_project_file: Path | None = None
         self._play_button: QPushButton | None = None
+        self._prefab_toolbar: QWidget | None = None
+        self._prefab_toolbar_label: QLabel | None = None
+        self._prefab_menu: QMenu | None = None
         self._viewport_list_widget: ViewportListWidget | None = None
         self._rendering_controller: RenderingController | None = None
 
@@ -296,6 +301,15 @@ class EditorWindow(QMainWindow):
             on_mode_changed=self._on_game_mode_changed,
             on_request_update=self._request_viewport_update,
             on_tick=self._on_game_tick,
+        )
+
+        # --- PrefabEditController - режим изоляции для редактирования префабов ---
+        self.prefab_edit_controller = PrefabEditController(
+            world_persistence=self.world_persistence,
+            resource_manager=self.resource_manager,
+            on_mode_changed=self._on_prefab_mode_changed,
+            on_request_update=self._request_viewport_update,
+            log_message=self._log_to_console,
         )
 
         # --- SceneFileController ---
@@ -659,6 +673,10 @@ class EditorWindow(QMainWindow):
             # Это файл сцены — загружаем
             self._load_scene_from_file(str(path))
 
+        elif path.suffix == ".prefab":
+            # Это файл префаба — открываем в режиме изоляции
+            self._open_prefab(str(path))
+
         elif path.suffix in (".material", ".shader", ".py", ".pipeline"):
             # Материалы, шейдеры, скрипты, пайплайны — открываем во внешнем текстовом редакторе
             self._open_in_text_editor(str(path))
@@ -831,14 +849,71 @@ class EditorWindow(QMainWindow):
         # Правый спейсер для центрирования кнопки
         layout.addStretch(1)
 
-        # Создаём контейнер для toolbar + centerTabWidget
+        # --- Prefab toolbar (скрытый по умолчанию) ---
+        prefab_toolbar = QWidget()
+        prefab_toolbar.setFixedHeight(28)
+        prefab_toolbar.setStyleSheet("background-color: #4a7c59;")  # Зелёный оттенок
+        prefab_toolbar.setVisible(False)
+
+        prefab_layout = QHBoxLayout(prefab_toolbar)
+        prefab_layout.setContentsMargins(8, 2, 8, 2)
+        prefab_layout.setSpacing(8)
+
+        # Иконка и название префаба
+        prefab_label = QLabel("Editing Prefab: ")
+        prefab_label.setStyleSheet("color: white; font-weight: bold;")
+        prefab_layout.addWidget(prefab_label)
+        self._prefab_toolbar_label = prefab_label
+
+        prefab_layout.addStretch(1)
+
+        # Кнопка Save
+        save_btn = QPushButton("Save")
+        save_btn.setFixedSize(70, 22)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #5a9a6a;
+                color: white;
+                border: 1px solid #6aaa7a;
+                border-radius: 3px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #6aaa7a;
+            }
+        """)
+        save_btn.clicked.connect(self._save_prefab_and_close)
+        prefab_layout.addWidget(save_btn)
+
+        # Кнопка Discard
+        discard_btn = QPushButton("Discard")
+        discard_btn.setFixedSize(70, 22)
+        discard_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #7a5a5a;
+                color: white;
+                border: 1px solid #8a6a6a;
+                border-radius: 3px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #8a6a6a;
+            }
+        """)
+        discard_btn.clicked.connect(self._discard_prefab_and_close)
+        prefab_layout.addWidget(discard_btn)
+
+        self._prefab_toolbar = prefab_toolbar
+
+        # Создаём контейнер для toolbar + prefab_toolbar + centerTabWidget
         center_container = QWidget()
         container_layout = QVBoxLayout(center_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
 
-        # Добавляем toolbar в контейнер
+        # Добавляем toolbars в контейнер
         container_layout.addWidget(toolbar)
+        container_layout.addWidget(prefab_toolbar)
 
         # Перемещаем centerTabWidget в контейнер
         # Сначала получаем индекс centerTabWidget в topSplitter
@@ -1123,6 +1198,85 @@ class EditorWindow(QMainWindow):
         self._update_window_title()
         self._update_status_bar()
 
+    # ----------- prefab edit mode -----------
+
+    def _open_prefab(self, prefab_path: str) -> None:
+        """Открывает префаб для редактирования в режиме изоляции."""
+        if self.prefab_edit_controller is not None:
+            self.prefab_edit_controller.open_prefab(prefab_path)
+
+    def _save_prefab_and_close(self) -> None:
+        """Сохраняет префаб и выходит из режима редактирования."""
+        if self.prefab_edit_controller is not None:
+            self.prefab_edit_controller.save_and_close()
+
+    def _discard_prefab_and_close(self) -> None:
+        """Отменяет изменения и выходит из режима редактирования."""
+        if self.prefab_edit_controller is not None:
+            self.prefab_edit_controller.discard_and_close()
+
+    def _on_prefab_mode_changed(self, is_editing: bool, prefab_name: str | None) -> None:
+        """Колбэк от PrefabEditController при изменении режима."""
+        if is_editing:
+            # Входим в режим редактирования префаба
+            # Показываем prefab toolbar
+            if self._prefab_toolbar is not None:
+                self._prefab_toolbar.setVisible(True)
+            if self._prefab_toolbar_label is not None and prefab_name:
+                self._prefab_toolbar_label.setText(f"Editing Prefab: {prefab_name}")
+
+            # Скрываем кнопку Play (нельзя запускать игру при редактировании префаба)
+            if self._play_button is not None:
+                self._play_button.setEnabled(False)
+
+            # Показываем меню Prefab
+            self._show_prefab_menu()
+        else:
+            # Выходим из режима редактирования префаба
+            # Скрываем prefab toolbar
+            if self._prefab_toolbar is not None:
+                self._prefab_toolbar.setVisible(False)
+
+            # Включаем кнопку Play
+            if self._play_button is not None:
+                self._play_button.setEnabled(True)
+
+            # Скрываем меню Prefab
+            self._hide_prefab_menu()
+
+        # Обновляем дерево сцены
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.rebuild()
+
+        self._update_window_title()
+        self._request_viewport_update()
+
+    def _show_prefab_menu(self) -> None:
+        """Показывает меню Prefab в menuBar."""
+        if self._prefab_menu is not None:
+            return  # Уже показано
+
+        menu_bar = self.menuBar()
+        self._prefab_menu = menu_bar.addMenu("Prefab")
+
+        save_action = self._prefab_menu.addAction("Save Prefab")
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self._save_prefab_and_close)
+
+        self._prefab_menu.addSeparator()
+
+        discard_action = self._prefab_menu.addAction("Discard Changes")
+        discard_action.triggered.connect(self._discard_prefab_and_close)
+
+    def _hide_prefab_menu(self) -> None:
+        """Скрывает меню Prefab из menuBar."""
+        if self._prefab_menu is None:
+            return
+
+        menu_bar = self.menuBar()
+        menu_bar.removeAction(self._prefab_menu.menuAction())
+        self._prefab_menu = None
+
     def _update_window_title(self) -> None:
         """Обновляет заголовок окна с учётом проекта, сцены и режима."""
         from pathlib import Path
@@ -1133,8 +1287,13 @@ class EditorWindow(QMainWindow):
         if self._project_name is not None:
             parts.append(f"- {self._project_name}")
 
-        # Добавляем имя сцены
-        if self.world_persistence is not None:
+        # Проверяем режим редактирования префаба
+        is_editing_prefab = self.prefab_edit_controller.is_editing if self.prefab_edit_controller else False
+        if is_editing_prefab:
+            prefab_name = self.prefab_edit_controller.prefab_name
+            parts.append(f"[Prefab: {prefab_name}]")
+        elif self.world_persistence is not None:
+            # Добавляем имя сцены
             scene_path = self.world_persistence.current_scene_path
             if scene_path is not None:
                 scene_name = Path(scene_path).stem

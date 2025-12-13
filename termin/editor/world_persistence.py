@@ -117,6 +117,20 @@ class WorldPersistence:
         if self._on_scene_changed is not None:
             self._on_scene_changed(new_scene)
 
+    def replace_scene(self, new_scene: "Scene", reset_path: bool = True) -> None:
+        """
+        Public method to replace current scene.
+
+        Used by PrefabEditController for isolation mode.
+
+        Args:
+            new_scene: New scene to set as current.
+            reset_path: If True, resets current_scene_path to None.
+        """
+        if reset_path:
+            self._current_scene_path = None
+        self._replace_scene(new_scene)
+
     def save(self, file_path: str) -> dict:
         """
         Сохраняет сцену в JSON файл.

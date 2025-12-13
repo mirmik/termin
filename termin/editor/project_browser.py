@@ -187,6 +187,62 @@ def _create_scene_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+def _create_prefab_icon() -> QIcon:
+    """Создаёт иконку префаба — кубик с символом P."""
+    size = 32
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    from PyQt6.QtGui import QPolygon, QFont
+    from PyQt6.QtCore import QPoint, QRectF
+
+    cx, cy = size // 2, size // 2 + 2
+    s = 10  # размер грани
+
+    # Верхняя грань (светлая, зелёный оттенок)
+    top = QPolygon([
+        QPoint(cx, cy - s),
+        QPoint(cx + s, cy - s // 2),
+        QPoint(cx, cy),
+        QPoint(cx - s, cy - s // 2),
+    ])
+    painter.setPen(QPen(QColor(60, 60, 60), 1))
+    painter.setBrush(QBrush(QColor(120, 200, 140)))
+    painter.drawPolygon(top)
+
+    # Левая грань (средняя)
+    left = QPolygon([
+        QPoint(cx - s, cy - s // 2),
+        QPoint(cx, cy),
+        QPoint(cx, cy + s),
+        QPoint(cx - s, cy + s // 2),
+    ])
+    painter.setBrush(QBrush(QColor(80, 160, 100)))
+    painter.drawPolygon(left)
+
+    # Правая грань (тёмная)
+    right = QPolygon([
+        QPoint(cx, cy),
+        QPoint(cx + s, cy - s // 2),
+        QPoint(cx + s, cy + s // 2),
+        QPoint(cx, cy + s),
+    ])
+    painter.setBrush(QBrush(QColor(50, 120, 70)))
+    painter.drawPolygon(right)
+
+    # Буква "P" в центре
+    painter.setPen(QPen(QColor(255, 255, 255), 1))
+    font = QFont("Arial", 10, QFont.Weight.Bold)
+    painter.setFont(font)
+    painter.drawText(QRectF(0, 0, size, size), Qt.AlignmentFlag.AlignCenter, "P")
+
+    painter.end()
+    return QIcon(pixmap)
+
+
 class AssetIconProvider(QFileIconProvider):
     """Провайдер иконок для ассетов проекта."""
 
@@ -196,6 +252,7 @@ class AssetIconProvider(QFileIconProvider):
         self._shader_icon = _create_shader_icon()
         self._scene_icon = _create_scene_icon()
         self._pipeline_icon = _create_pipeline_icon()
+        self._prefab_icon = _create_prefab_icon()
 
     def icon(self, info_or_type):
         # info_or_type может быть QFileInfo или IconType
@@ -209,6 +266,8 @@ class AssetIconProvider(QFileIconProvider):
                 return self._scene_icon
             elif suffix == "pipeline":
                 return self._pipeline_icon
+            elif suffix == "prefab":
+                return self._prefab_icon
 
         return super().icon(info_or_type)
 
@@ -230,6 +289,7 @@ class ProjectBrowser:
     # Расширения файлов, которые показываем
     SUPPORTED_EXTENSIONS = {
         ".scene",     # Сцены
+        ".prefab",    # Префабы
         ".shader",    # Шейдеры
         ".material",  # Материалы
         ".pipeline",  # Рендер-пайплайны
@@ -505,6 +565,12 @@ class ProjectBrowser:
         create_pipeline_action = QAction("Render Pipeline...", self._file_list)
         create_pipeline_action.triggered.connect(self._create_pipeline)
         create_menu.addAction(create_pipeline_action)
+
+        create_menu.addSeparator()
+
+        create_prefab_action = QAction("Prefab...", self._file_list)
+        create_prefab_action.triggered.connect(self._create_prefab)
+        create_menu.addAction(create_prefab_action)
 
         menu.addSeparator()
 
@@ -1088,4 +1154,49 @@ class {name}(Component):
                 self._file_list,
                 "Error",
                 f"Failed to create pipeline: {e}",
+            )
+
+    def _create_prefab(self) -> None:
+        """Создать новый файл префаба."""
+        current_dir = self.current_directory
+        if current_dir is None:
+            return
+
+        name, ok = QInputDialog.getText(
+            self._file_list,
+            "Create Prefab",
+            "Prefab name:",
+            text="NewPrefab",
+        )
+
+        if not ok or not name:
+            return
+
+        # Убираем расширение если пользователь его ввёл
+        if name.endswith(".prefab"):
+            name = name[:-7]
+
+        file_path = current_dir / f"{name}.prefab"
+
+        if file_path.exists():
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"File '{file_path.name}' already exists.",
+            )
+            return
+
+        # Создаём пустой префаб через PrefabPersistence
+        try:
+            from termin.editor.prefab_persistence import PrefabPersistence
+            from termin.visualization.core.resources import ResourceManager
+
+            persistence = PrefabPersistence(ResourceManager.instance())
+            persistence.create_empty(file_path, name=name)
+            self._refresh()
+        except Exception as e:
+            QMessageBox.warning(
+                self._file_list,
+                "Error",
+                f"Failed to create prefab: {e}",
             )
