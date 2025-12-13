@@ -40,7 +40,7 @@ class MeshFileProcessor(FileTypeProcessor):
         try:
             drawable = self._load_mesh_file(path, name)
             if drawable is not None:
-                self._resource_manager.register_mesh(name, drawable)
+                self._resource_manager.register_mesh(name, drawable, source_path=path)
 
                 if path not in self._file_to_resources:
                     self._file_to_resources[path] = set()
@@ -63,17 +63,15 @@ class MeshFileProcessor(FileTypeProcessor):
 
         name = os.path.splitext(os.path.basename(path))[0]
 
+        # Only reload if mesh is already registered
         if name not in self._resource_manager.meshes:
             return
 
         try:
-            old_drawable = self._resource_manager.meshes.get(name)
-            if old_drawable is not None:
-                old_drawable.delete()
-
             drawable = self._load_mesh_file(path, name)
             if drawable is not None:
-                self._resource_manager.register_mesh(name, drawable)
+                # register_mesh handles cleanup via keeper
+                self._resource_manager.register_mesh(name, drawable, source_path=path)
                 print(f"[MeshProcessor] Reloaded: {name}")
                 self._notify_reloaded(name)
 
@@ -94,13 +92,10 @@ class MeshFileProcessor(FileTypeProcessor):
 
         # Reload the mesh with new spec
         try:
-            old_drawable = self._resource_manager.meshes.get(name)
-            if old_drawable is not None:
-                old_drawable.delete()
-
             drawable = self._load_mesh_file(mesh_path, name)
             if drawable is not None:
-                self._resource_manager.register_mesh(name, drawable)
+                # register_mesh handles cleanup via keeper
+                self._resource_manager.register_mesh(name, drawable, source_path=mesh_path)
                 print(f"[MeshProcessor] Reloaded with new spec: {name}")
                 self._notify_reloaded(name)
 
@@ -111,11 +106,8 @@ class MeshFileProcessor(FileTypeProcessor):
         """Handle mesh file deletion."""
         if path in self._file_to_resources:
             for name in self._file_to_resources[path]:
-                drawable = self._resource_manager.meshes.get(name)
-                if drawable is not None:
-                    drawable.delete()
-                    del self._resource_manager.meshes[name]
-                    print(f"[MeshProcessor] Removed: {name}")
+                self._resource_manager.unregister_mesh(name)
+                print(f"[MeshProcessor] Removed: {name}")
             del self._file_to_resources[path]
 
     def _load_mesh_file(self, path: str, name: str):

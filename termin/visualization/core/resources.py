@@ -88,6 +88,9 @@ class ResourceManager:
         # MaterialKeeper'ы — владельцы материалов по имени
         self._material_keepers: Dict[str, "MaterialKeeper"] = {}
 
+        # MeshKeeper'ы — владельцы мешей по имени
+        self._mesh_keepers: Dict[str, "MeshKeeper"] = {}
+
     @classmethod
     def instance(cls) -> "ResourceManager":
         if cls._instance is None:
@@ -230,11 +233,44 @@ class ResourceManager:
         mat.color = (0.3, 0.85, 0.9, 1.0)  # Умеренно-яркий циан
         self.register_material("DefaultMaterial", mat)
 
+    # --------- MeshKeeper'ы ---------
+    def get_or_create_mesh_keeper(self, name: str) -> "MeshKeeper":
+        """
+        Получить или создать MeshKeeper по имени.
+
+        Используется MeshHandle для получения keeper'а.
+        """
+        from termin.visualization.core.mesh_handle import MeshKeeper
+
+        if name not in self._mesh_keepers:
+            self._mesh_keepers[name] = MeshKeeper(name)
+        return self._mesh_keepers[name]
+
+    def get_mesh_keeper(self, name: str) -> Optional["MeshKeeper"]:
+        """Получить MeshKeeper по имени или None."""
+        return self._mesh_keepers.get(name)
+
     # --------- Меши ---------
-    def register_mesh(self, name: str, mesh: "MeshDrawable"):
+    def register_mesh(self, name: str, mesh: "MeshDrawable", source_path: str | None = None):
+        """
+        Регистрирует меш через keeper.
+
+        Args:
+            name: Имя меша
+            mesh: Меш
+            source_path: Путь к файлу-источнику
+        """
+        keeper = self.get_or_create_mesh_keeper(name)
+        keeper.set_mesh(mesh, source_path)
+
+        # Для обратной совместимости сохраняем и в старый dict
         self.meshes[name] = mesh
 
     def get_mesh(self, name: str) -> Optional["MeshDrawable"]:
+        """Получить меш по имени."""
+        keeper = self._mesh_keepers.get(name)
+        if keeper is not None:
+            return keeper.mesh
         return self.meshes.get(name)
 
     def list_mesh_names(self) -> list[str]:
@@ -245,6 +281,15 @@ class ResourceManager:
             if m is mesh:
                 return n
         return None
+
+    def unregister_mesh(self, name: str) -> None:
+        """Удаляет меш и очищает keeper."""
+        keeper = self._mesh_keepers.get(name)
+        if keeper is not None:
+            keeper.clear()
+            del self._mesh_keepers[name]
+        if name in self.meshes:
+            del self.meshes[name]
 
     # --------- Текстуры ---------
     def register_texture(self, name: str, texture: "Texture", source_path: str | None = None):

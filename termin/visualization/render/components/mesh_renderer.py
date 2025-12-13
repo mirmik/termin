@@ -7,6 +7,7 @@ from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.resources import ResourceManager
 
 if TYPE_CHECKING:
@@ -32,7 +33,7 @@ class MeshRenderer(Component):
             path="mesh",
             label="Mesh",
             kind="mesh",
-            setter=lambda obj, value: obj.update_mesh(value),
+            setter=lambda obj, value: obj.set_mesh_by_name(value.name) if value else obj.set_mesh(None),
         ),
         "material": InspectField(
             path="material",
@@ -55,10 +56,12 @@ class MeshRenderer(Component):
     ):
         super().__init__(enabled=True)
 
-        if isinstance(mesh, Mesh3):
-            mesh = MeshDrawable(mesh)
+        self._mesh_handle: MeshHandle = MeshHandle()
+        if mesh is not None:
+            if isinstance(mesh, Mesh3):
+                mesh = MeshDrawable(mesh)
+            self._mesh_handle = MeshHandle.from_mesh(mesh)
 
-        self.mesh = mesh
         self.cast_shadow = cast_shadow
 
         self._material_handle: MaterialHandle = MaterialHandle()
@@ -99,8 +102,32 @@ class MeshRenderer(Component):
         else:
             self._material_handle = MaterialHandle.from_material(value)
 
-    def update_mesh(self, mesh: MeshDrawable | None):
+    @property
+    def mesh(self) -> MeshDrawable | None:
+        """Возвращает текущий меш."""
+        return self._mesh_handle.get_or_none()
+
+    @mesh.setter
+    def mesh(self, value: MeshDrawable | None):
         """Устанавливает меш."""
+        if value is None:
+            self._mesh_handle = MeshHandle()
+        else:
+            self._mesh_handle = MeshHandle.from_mesh(value)
+
+    def set_mesh(self, mesh: MeshDrawable | None):
+        """Устанавливает меш напрямую."""
+        self.mesh = mesh
+
+    def set_mesh_by_name(self, name: str):
+        """
+        Устанавливает меш по имени из ResourceManager.
+        Меш будет автоматически обновляться при hot-reload.
+        """
+        self._mesh_handle = MeshHandle.from_name(name)
+
+    def update_mesh(self, mesh: MeshDrawable | None):
+        """Устанавливает меш (legacy alias)."""
         self.mesh = mesh
 
     def set_material(self, material: Material | None):
@@ -195,6 +222,9 @@ class MeshRenderer(Component):
         )
         renderer.enabled = data.get("enabled", True)
 
+        # Bind by name for hot-reload support
+        if mesh_name:
+            renderer.set_mesh_by_name(mesh_name)
         if mat_name:
             renderer.set_material_by_name(mat_name)
 
