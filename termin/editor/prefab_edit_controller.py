@@ -120,9 +120,9 @@ class PrefabEditController:
 
         return True
 
-    def save_and_close(self) -> bool:
+    def save(self) -> bool:
         """
-        Save changes to prefab file and exit editing mode.
+        Save changes to prefab file (without exiting).
 
         Returns:
             True if saved successfully.
@@ -144,25 +144,34 @@ class PrefabEditController:
                 f"Saved prefab '{self.prefab_name}': "
                 f"{stats['entities']} entities, {stats['materials']} materials"
             )
+            return True
         except Exception as e:
             self._log(f"Failed to save prefab: {e}")
             return False
 
-        # Restore original scene
-        self._exit_editing_mode()
-        return True
-
-    def discard_and_close(self) -> None:
+    def exit(self) -> None:
         """
-        Discard changes and exit editing mode.
+        Exit editing mode without saving.
 
-        Restores the original scene without saving prefab changes.
+        Simply restores the original scene.
         """
         if not self._editing:
             return
 
-        self._log(f"Discarded changes to prefab: {self.prefab_name}")
+        self._log(f"Exited prefab editing: {self.prefab_name}")
         self._exit_editing_mode()
+
+    def save_and_exit(self) -> bool:
+        """
+        Save changes to prefab file and exit editing mode.
+
+        Returns:
+            True if saved successfully.
+        """
+        if self.save():
+            self._exit_editing_mode()
+            return True
+        return False
 
     def _exit_editing_mode(self) -> None:
         """Exit editing mode and restore original scene."""

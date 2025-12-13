@@ -882,26 +882,26 @@ class EditorWindow(QMainWindow):
                 background-color: #6aaa7a;
             }
         """)
-        save_btn.clicked.connect(self._save_prefab_and_close)
+        save_btn.clicked.connect(self._save_prefab)
         prefab_layout.addWidget(save_btn)
 
-        # Кнопка Discard
-        discard_btn = QPushButton("Discard")
-        discard_btn.setFixedSize(70, 22)
-        discard_btn.setStyleSheet("""
+        # Кнопка Exit
+        exit_btn = QPushButton("Exit")
+        exit_btn.setFixedSize(70, 22)
+        exit_btn.setStyleSheet("""
             QPushButton {
-                background-color: #7a5a5a;
+                background-color: #6a6a6a;
                 color: white;
-                border: 1px solid #8a6a6a;
+                border: 1px solid #7a7a7a;
                 border-radius: 3px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #8a6a6a;
+                background-color: #7a7a7a;
             }
         """)
-        discard_btn.clicked.connect(self._discard_prefab_and_close)
-        prefab_layout.addWidget(discard_btn)
+        exit_btn.clicked.connect(self._exit_prefab_editing)
+        prefab_layout.addWidget(exit_btn)
 
         self._prefab_toolbar = prefab_toolbar
 
@@ -1205,15 +1205,15 @@ class EditorWindow(QMainWindow):
         if self.prefab_edit_controller is not None:
             self.prefab_edit_controller.open_prefab(prefab_path)
 
-    def _save_prefab_and_close(self) -> None:
-        """Сохраняет префаб и выходит из режима редактирования."""
+    def _save_prefab(self) -> None:
+        """Сохраняет префаб (без выхода из режима редактирования)."""
         if self.prefab_edit_controller is not None:
-            self.prefab_edit_controller.save_and_close()
+            self.prefab_edit_controller.save()
 
-    def _discard_prefab_and_close(self) -> None:
-        """Отменяет изменения и выходит из режима редактирования."""
+    def _exit_prefab_editing(self) -> None:
+        """Выходит из режима редактирования префаба (без сохранения)."""
         if self.prefab_edit_controller is not None:
-            self.prefab_edit_controller.discard_and_close()
+            self.prefab_edit_controller.exit()
 
     def _on_prefab_mode_changed(self, is_editing: bool, prefab_name: str | None) -> None:
         """Колбэк от PrefabEditController при изменении режима."""
@@ -1261,12 +1261,12 @@ class EditorWindow(QMainWindow):
 
         save_action = self._prefab_menu.addAction("Save Prefab")
         save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self._save_prefab_and_close)
+        save_action.triggered.connect(self._save_prefab)
 
         self._prefab_menu.addSeparator()
 
-        discard_action = self._prefab_menu.addAction("Discard Changes")
-        discard_action.triggered.connect(self._discard_prefab_and_close)
+        exit_action = self._prefab_menu.addAction("Exit Prefab Editing")
+        exit_action.triggered.connect(self._exit_prefab_editing)
 
     def _hide_prefab_menu(self) -> None:
         """Скрывает меню Prefab из menuBar."""
