@@ -276,11 +276,9 @@ class PostProcessPass(RenderFramePass):
         if fb_in is None:
             return
 
-        # Внутренняя точка дебага (символ и ресурс вывода)
-        debug_symbol, debug_output = self.get_debug_internal_point()
-        debug_fb = None
-        if debug_symbol is not None and debug_output is not None:
-            debug_fb = writes_fbos.get(debug_output)
+        # Внутренняя точка дебага
+        debug_symbol = self.get_debug_internal_point()
+        debugger_window = self.get_debugger_window()
 
         # Извлекаем текстуру с учетом типа ресурса
         color_tex = _get_texture_from_resource(fb_in)
@@ -310,16 +308,10 @@ class PostProcessPass(RenderFramePass):
 
         # --- нет эффектов -> блит и выходим ---
         if not self.effects:
-            if debug_fb is not None and debug_symbol == "input":
-                self._blit_to_debug(graphics, fb_in, debug_fb, size, key)
             blit_fbo_to_fbo(graphics, fb_in, fb_out_final, size, key)
             return
 
         current_tex = color_tex
-
-        # При запросе дебага исходного состояния пробрасываем его в debug FBO.
-        if debug_fb is not None and debug_symbol == "input":
-            self._blit_to_debug(graphics, fb_in, debug_fb, size, key)
 
         # <<< ВАЖНО: постпроцесс — чисто экранная штука, отключаем глубину >>>
         graphics.set_depth_test(False)
@@ -339,10 +331,7 @@ class PostProcessPass(RenderFramePass):
 
                 effect.draw(graphics, key, current_tex, extra_textures, size)
 
-                # Сохранение промежуточного результата в debug FBO при совпадении символа
-                effect_symbol = self._effect_symbol(i, effect)
-                if debug_fb is not None and debug_symbol == effect_symbol:
-                    self._blit_to_debug(graphics, fb_target, debug_fb, size, key)
+                # TODO: реализовать дебаг внутри постпроцесса через debugger_window
 
                 # Извлекаем текстуру с учетом типа ресурса
                 current_tex = _get_texture_from_resource(fb_target)

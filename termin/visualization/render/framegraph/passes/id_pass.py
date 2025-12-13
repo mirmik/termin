@@ -99,11 +99,9 @@ class IdPass(RenderFramePass):
         if fb is None:
             return
 
-        # Внутренняя точка дебага (символ и целевой ресурс)
-        debug_symbol, debug_output = self.get_debug_internal_point()
-        debug_fb = None
-        if debug_symbol is not None and debug_output is not None:
-            debug_fb = writes_fbos.get(debug_output)
+        # Внутренняя точка дебага
+        debug_symbol = self.get_debug_internal_point()
+        debugger_window = self.get_debugger_window()
 
         # Обновляем список имён pickable-сущностей
         self._entity_names = []
@@ -176,8 +174,7 @@ class IdPass(RenderFramePass):
             for drawable in drawables:
                 drawable.draw_geometry(render_ctx)
 
-            if debug_fb is not None and ent.name == debug_symbol:
-                self._blit_to_debug(graphics, fb, debug_fb, (pw, ph), key)
+            # TODO: реализовать дебаг через debugger_window
 
     def _blit_to_debug(
         self,
