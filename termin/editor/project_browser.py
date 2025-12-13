@@ -422,6 +422,9 @@ class ProjectBrowser:
         on_file_double_clicked: Callback при двойном клике на файл
     """
 
+    # Глобальный путь к текущему проекту (устанавливается в set_root_path)
+    current_project_path: Path | None = None
+
     # Расширения файлов, которые показываем
     SUPPORTED_EXTENSIONS = {
         ".scene",     # Сцены
@@ -510,6 +513,7 @@ class ProjectBrowser:
             return
 
         self._root_path = path
+        ProjectBrowser.current_project_path = path
         self._current_file_dir = path  # Текущая директория в правой панели
         path_str = str(path)
 

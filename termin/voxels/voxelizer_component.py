@@ -121,6 +121,14 @@ class VoxelizerComponent(Component):
         # Сохраняем
         try:
             output_path = Path(output)
+
+            # Если путь относительный, разрешаем относительно директории проекта
+            if not output_path.is_absolute():
+                from termin.editor.project_browser import ProjectBrowser
+                project_root = ProjectBrowser.current_project_path
+                if project_root is not None:
+                    output_path = project_root / output_path
+
             # Создаём директорию если не существует
             if output_path.parent and not output_path.parent.exists():
                 output_path.parent.mkdir(parents=True, exist_ok=True)
