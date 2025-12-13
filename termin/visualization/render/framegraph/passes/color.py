@@ -115,6 +115,8 @@ class ColorPass(RenderFramePass):
             phase_mark=data.get("phase_mark"),
         )
 
+    _DEBUG_COLLECT = True  # DEBUG: отладка сбора draw calls
+
     def _collect_draw_calls(self, scene, phase_mark: str | None) -> List[PhaseDrawCall]:
         """
         Собирает все draw calls для указанной метки фазы.
@@ -149,13 +151,21 @@ class ColorPass(RenderFramePass):
 
                 drawable = component
 
+                # DEBUG
+                if self._DEBUG_COLLECT:
+                    print(f"[ColorPass] entity={entity.name!r}, phase_mark={phase_mark!r}, drawable.phase_marks={drawable.phase_marks}")
+
                 # Фильтруем по phase_marks:
                 # Если phase_mark задан, drawable должен участвовать в этой фазе
                 if phase_mark is not None and phase_mark not in drawable.phase_marks:
+                    if self._DEBUG_COLLECT:
+                        print(f"  -> SKIP: {phase_mark!r} not in {drawable.phase_marks}")
                     continue
 
                 # Получаем фазы из Drawable
                 phases = drawable.get_phases(phase_mark)
+                if self._DEBUG_COLLECT:
+                    print(f"  -> get_phases({phase_mark!r}) returned {len(phases)} phases: {[p.phase_mark for p in phases]}")
                 for phase in phases:
                     draw_calls.append(PhaseDrawCall(
                         entity=entity,
