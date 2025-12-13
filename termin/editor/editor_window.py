@@ -1088,20 +1088,24 @@ class EditorWindow(QMainWindow):
             print(f"Failed to load prefab: {e}")
             return
 
+        print(f"[DEBUG] After prefab load, entity.transform.local_pose()={entity.transform.local_pose()}")
+
         # Определяем позицию в мире через unproject
         world_pos = self._unproject_drop_position(drop_pos)
         print(f"[DEBUG] Setting entity position to: {world_pos}")
 
-        # Устанавливаем позицию
-        entity.transform.local_pose = Pose3(lin=world_pos)
-        print(f"[DEBUG] Entity local_pose after set: {entity.transform.local_pose}")
+        # Устанавливаем позицию через relocate
+        entity.transform.relocate(Pose3(lin=world_pos))
+        print(f"[DEBUG] Entity local_pose after relocate: {entity.transform.local_pose()}")
 
         # Добавляем entity в сцену через команду (с поддержкой undo)
         cmd = AddEntityCommand(self.scene, entity)
         self.push_undo_command(cmd, merge=False)
+        print(f"[DEBUG] After AddEntityCommand, entity.transform.local_pose()={entity.transform.local_pose()}")
 
         # Обновляем SceneTree и выделяем новый entity
         self.scene_tree_controller.rebuild(select_obj=entity)
+        print(f"[DEBUG] After rebuild, entity.transform.local_pose()={entity.transform.local_pose()}")
 
         # Выделяем entity
         if self.selection_manager is not None:
