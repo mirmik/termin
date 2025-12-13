@@ -732,6 +732,24 @@ class RenderingController:
         viewport_id = id(viewport)
         return self._display_render_states[display_id].get(viewport_id)
 
+    def get_all_viewports_info(self) -> list[tuple["Viewport", str]]:
+        """
+        Get list of all viewports with display names for UI selection.
+
+        Returns:
+            List of (viewport, label) tuples where label is "display_name / viewport_index".
+        """
+        result: list[tuple["Viewport", str]] = []
+        for display in self._displays:
+            display_name = self.get_display_name(display)
+            for i, viewport in enumerate(display.viewports):
+                if len(display.viewports) == 1:
+                    label = display_name
+                else:
+                    label = f"{display_name} / {i}"
+                result.append((viewport, label))
+        return result
+
     def _update_center_tabs(self) -> None:
         """Update center tab widget with current displays."""
         if self._center_tabs is None:

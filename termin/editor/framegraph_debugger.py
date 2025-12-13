@@ -519,6 +519,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
        рендера после его отрисовки.
 
     UI:
+    - ComboBox для выбора viewport
     - Группа радиокнопок для выбора режима
     - Панель для режима «Между пассами»: ComboBox с ресурсами
     - Панель для режима «Внутри пасса»: ComboBox пассов + ComboBox символов
@@ -530,44 +531,20 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self,
         window_backend: "SDLEmbeddedWindowBackend",
         graphics: GraphicsBackend,
-        get_fbos: Callable[[], dict],
-        resource_name: str = "debug",
+        rendering_controller,
+        on_request_update: Optional[Callable[[], None]] = None,
         parent: Optional[QtWidgets.QWidget] = None,
-        # Колбэки для режима «Между пассами»
-        get_available_resources: Optional[Callable[[], List[str]]] = None,
-        set_source_resource: Optional[Callable[[str], None]] = None,
-        # Общие колбэки
-        get_paused: Optional[Callable[[], bool]] = None,
-        set_paused: Optional[Callable[[bool], None]] = None,
-        # Колбэки для режима «Внутри пасса»
-        # Возвращает список (pass_name, has_internal_symbols)
-        get_passes_info: Optional[Callable[[], List[Tuple[str, bool]]]] = None,
-        # Возвращает список символов для выбранного пасса
-        get_pass_internal_symbols: Optional[Callable[[str], List[str]]] = None,
-        # Устанавливает внутренний символ для пасса (pass_name, symbol)
-        set_pass_internal_symbol: Optional[Callable[[str, str | None], None]] = None,
-        # Геттер для BlitPass (чтобы управлять им напрямую)
-        get_debug_blit_pass: Optional[Callable[[], object]] = None,
     ) -> None:
         super().__init__(parent)
         self._window_backend = window_backend
         self._graphics = graphics
-        self._get_fbos = get_fbos
-        self._resource_name = resource_name
+        self._rendering_controller = rendering_controller
+        self._on_request_update = on_request_update
+        self._resource_name = "debug"
 
-        # Колбэки для режима «Между пассами»
-        self._get_available_resources = get_available_resources
-        self._set_source_resource = set_source_resource
-        self._get_debug_blit_pass = get_debug_blit_pass
-
-        # Общие колбэки
-        self._get_paused = get_paused
-        self._set_paused = set_paused
-
-        # Колбэки для режима «Внутри пасса»
-        self._get_passes_info = get_passes_info
-        self._get_pass_internal_symbols = get_pass_internal_symbols
-        self._set_pass_internal_symbol = set_pass_internal_symbol
+        # Current selected viewport
+        self._current_viewport = None
+        self._viewports_list: List[Tuple[object, str]] = []
 
         # Текущий режим: "between" или "inside"
         self._mode = "between"
@@ -575,6 +552,11 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._selected_pass: str | None = None
         # Текущий выбранный внутренний символ (для режима «Внутри пасса»)
         self._selected_symbol: str | None = None
+
+        # Debug source resource name (for "between passes" mode)
+        self._debug_source_res: str = "color_pp"
+        # Paused state
+        self._debug_paused: bool = False
 
         self._build_ui()
 
@@ -585,6 +567,15 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self.setMinimumSize(450, 400)
 
         layout = QtWidgets.QVBoxLayout(self)
+
+        # ============ Выбор viewport ============
+        viewport_row = QtWidgets.QHBoxLayout()
+        viewport_label = QtWidgets.QLabel("Viewport:")
+        self._viewport_combo = QtWidgets.QComboBox()
+        self._viewport_combo.currentIndexChanged.connect(self._on_viewport_selected)
+        viewport_row.addWidget(viewport_label)
+        viewport_row.addWidget(self._viewport_combo, 1)
+        layout.addLayout(viewport_row)
 
         # ============ Группа выбора режима ============
         mode_group = QtWidgets.QGroupBox("Режим подключения")
@@ -702,9 +693,69 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._gl_widget.depthImageUpdated.connect(self._on_depth_image_updated)
 
         # Инициализация
+        self._update_viewport_list()
         self._update_resource_list()
         self._update_passes_list()
         self._sync_pause_state()
+
+    # ============ Viewport selection ============
+
+    def _on_viewport_selected(self, index: int) -> None:
+        """Handle viewport selection change."""
+        if index < 0 or index >= len(self._viewports_list):
+            self._current_viewport = None
+            return
+        self._current_viewport = self._viewports_list[index][0]
+        # Update lists for new viewport
+        self._update_resource_list()
+        self._update_passes_list()
+
+    def _update_viewport_list(self) -> None:
+        """Update viewport ComboBox from RenderingController."""
+        if self._rendering_controller is None:
+            return
+
+        self._viewports_list = self._rendering_controller.get_all_viewports_info()
+
+        self._viewport_combo.blockSignals(True)
+        self._viewport_combo.clear()
+        for viewport, label in self._viewports_list:
+            self._viewport_combo.addItem(label)
+
+        # Select first viewport by default
+        if self._viewports_list:
+            self._viewport_combo.setCurrentIndex(0)
+            self._current_viewport = self._viewports_list[0][0]
+        self._viewport_combo.blockSignals(False)
+
+    # ============ Data access helpers ============
+
+    def _get_current_render_state(self):
+        """Get ViewportRenderState for current viewport."""
+        if self._current_viewport is None or self._rendering_controller is None:
+            return None
+        return self._rendering_controller.get_viewport_state(self._current_viewport)
+
+    def _get_fbos(self) -> dict:
+        """Get FBOs dict from current viewport's render state."""
+        state = self._get_current_render_state()
+        if state is None:
+            return {}
+        return state.fbos
+
+    def _get_current_pipeline(self):
+        """Get pipeline from current viewport's render state."""
+        state = self._get_current_render_state()
+        if state is None:
+            return None
+        return state.pipeline
+
+    def _get_debug_blit_pass(self):
+        """Get debug blit pass from current pipeline."""
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
+            return None
+        return pipeline.debug_blit_pass
 
     def _on_depth_image_updated(self, image: QtGui.QImage) -> None:
         if image is None or image.isNull():
@@ -748,13 +799,14 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         if not name:
             return
         # Обновляем reads у BlitPass напрямую
-        if self._get_debug_blit_pass is not None:
-            blit_pass = self._get_debug_blit_pass()
-            if blit_pass is not None:
-                blit_pass.reads = {name}
-        # Устанавливаем источник и запрашиваем обновление
-        if self._set_source_resource is not None:
-            self._set_source_resource(name)
+        blit_pass = self._get_debug_blit_pass()
+        if blit_pass is not None:
+            blit_pass.reads = {name}
+        # Сохраняем выбранный источник
+        self._debug_source_res = name
+        # Запрашиваем обновление
+        if self._on_request_update is not None:
+            self._on_request_update()
         # Обновляем UI для типа ресурса
         self._update_ui_for_resource_type()
 
@@ -779,13 +831,13 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             return
         # Запоминаем выбранный внутренний символ для последующих обновлений списка.
         self._selected_symbol = name
-        if self._set_pass_internal_symbol is not None:
-            self._set_pass_internal_symbol(self._selected_pass, name)
+        self._set_pass_internal_symbol(self._selected_pass, name)
 
     def _on_pause_toggled(self, checked: bool) -> None:
         """Обработчик переключения паузы."""
-        if self._set_paused is not None:
-            self._set_paused(bool(checked))
+        self._debug_paused = bool(checked)
+        if self._on_request_update is not None:
+            self._on_request_update()
 
     def _on_channel_changed(self, index: int) -> None:
         """Обработчик выбора канала для отображения."""
@@ -793,13 +845,40 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _clear_internal_symbol(self) -> None:
         """Сбрасывает внутренний символ при переключении режима."""
-        if self._set_pass_internal_symbol is not None and self._selected_pass:
+        if self._selected_pass:
             self._set_pass_internal_symbol(self._selected_pass, None)
+
+    def _set_pass_internal_symbol(self, pass_name: str, symbol: str | None) -> None:
+        """Set internal debug symbol for a pass."""
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
+            return
+        blit_pass = pipeline.debug_blit_pass
+        for p in pipeline.passes:
+            if p.pass_name == pass_name:
+                if symbol is None or symbol == "":
+                    p.set_debug_internal_point(None, None)
+                    if blit_pass is not None:
+                        blit_pass.enabled = True
+                else:
+                    p.set_debug_internal_point(symbol, "debug")
+                    if blit_pass is not None:
+                        blit_pass.enabled = False
+                if self._on_request_update is not None:
+                    self._on_request_update()
+                return
 
     def _update_resource_list(self) -> None:
         """Обновляет список ресурсов для режима «Между пассами»."""
-        if self._get_available_resources is not None:
-            names = self._get_available_resources()
+        # Get resources from pipeline
+        pipeline = self._get_current_pipeline()
+        if pipeline is not None:
+            resources: set[str] = set()
+            for p in pipeline.passes:
+                resources.update(p.reads)
+                resources.update(p.writes)
+            resources.discard("DISPLAY")
+            names = sorted(resources)
         else:
             names = list(self._get_fbos().keys())
 
@@ -826,8 +905,17 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         passes_info: List[Tuple[str, bool]] = []
 
-        if self._get_passes_info is not None:
-            passes_info = self._get_passes_info()
+        # Get passes info from current pipeline
+        pipeline = self._get_current_pipeline()
+        if pipeline is not None:
+            from termin.visualization.render.framegraph.passes.shadow import ShadowPass
+            for p in pipeline.passes:
+                if isinstance(p, ShadowPass):
+                    has_symbols = False
+                else:
+                    symbols = p.get_internal_symbols()
+                    has_symbols = len(symbols) > 0
+                passes_info.append((p.pass_name, has_symbols))
 
         selected_index = -1
 
@@ -873,8 +961,14 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         symbols: List[str] = []
 
-        if self._get_pass_internal_symbols is not None and self._selected_pass:
-            symbols = self._get_pass_internal_symbols(self._selected_pass)
+        # Get symbols from current pipeline
+        if self._selected_pass:
+            pipeline = self._get_current_pipeline()
+            if pipeline is not None:
+                for p in pipeline.passes:
+                    if p.pass_name == self._selected_pass:
+                        symbols = p.get_internal_symbols()
+                        break
 
         selected_index = -1
 
@@ -938,12 +1032,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             handler.update_ui(resource, self._current_handler_ui)
 
     def _sync_pause_state(self) -> None:
-        """Синхронизирует состояние чекбокса Pause с внешним состоянием."""
-        if self._get_paused is None:
-            return
-        value = bool(self._get_paused())
+        """Синхронизирует состояние чекбокса Pause с внутренним состоянием."""
         self._pause_check.blockSignals(True)
-        self._pause_check.setChecked(value)
+        self._pause_check.setChecked(self._debug_paused)
         self._pause_check.blockSignals(False)
 
     def debugger_request_update(self) -> None:

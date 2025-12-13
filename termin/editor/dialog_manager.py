@@ -112,56 +112,30 @@ class DialogManager:
         self,
         window_backend,
         graphics: "GraphicsBackend",
-        viewport_controller,
-    ) -> None:
-        """Opens framegraph texture viewer dialog."""
+        rendering_controller,
+        on_request_update=None,
+    ):
+        """Opens framegraph texture viewer dialog.
+
+        Returns:
+            The FramegraphDebugDialog instance.
+        """
         if self._framegraph_debugger is None:
             from termin.editor.framegraph_debugger import FramegraphDebugDialog
-
-            get_resources = None
-            set_source = None
-            get_paused = None
-            set_paused = None
-            get_passes_info = None
-            get_pass_internal_symbols = None
-            set_pass_internal_symbol = None
-            get_debug_blit_pass = None
-            get_fbos = lambda: {}
-
-            if viewport_controller is not None:
-                get_resources = viewport_controller.get_available_framegraph_resources
-                set_source = viewport_controller.set_debug_source_resource
-                get_paused = viewport_controller.get_debug_paused
-                set_paused = viewport_controller.set_debug_paused
-                get_passes_info = viewport_controller.get_passes_info
-                get_pass_internal_symbols = viewport_controller.get_pass_internal_symbols
-                set_pass_internal_symbol = viewport_controller.set_pass_internal_symbol
-                get_debug_blit_pass = viewport_controller.get_debug_blit_pass
-                get_fbos = lambda: viewport_controller.render_state.fbos
 
             self._framegraph_debugger = FramegraphDebugDialog(
                 window_backend=window_backend,
                 graphics=graphics,
-                get_fbos=get_fbos,
-                resource_name="debug",
+                rendering_controller=rendering_controller,
+                on_request_update=on_request_update,
                 parent=self._parent,
-                get_available_resources=get_resources,
-                set_source_resource=set_source,
-                get_paused=get_paused,
-                set_paused=set_paused,
-                get_passes_info=get_passes_info,
-                get_pass_internal_symbols=get_pass_internal_symbols,
-                set_pass_internal_symbol=set_pass_internal_symbol,
-                get_debug_blit_pass=get_debug_blit_pass,
             )
-
-            if viewport_controller is not None:
-                viewport_controller.set_framegraph_debugger(self._framegraph_debugger)
 
         self._framegraph_debugger.debugger_request_update()
         self._framegraph_debugger.show()
         self._framegraph_debugger.raise_()
         self._framegraph_debugger.activateWindow()
+        return self._framegraph_debugger
 
     def show_resource_manager_viewer(self) -> None:
         """Opens resource manager viewer dialog."""
