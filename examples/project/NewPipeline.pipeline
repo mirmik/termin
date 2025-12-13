@@ -13,7 +13,20 @@
       "enabled": true,
       "input_res": "color",
       "output_res": "color_pp",
-      "effects": []
+      "effects": [
+        {
+          "type": "GaussianBlurPass",
+          "name": "gaussian_blur",
+          "direction": [
+            1.0,
+            0.0
+          ]
+        },
+        {
+          "type": "GrayscaleEffect",
+          "name": "grayscale"
+        }
+      ]
     },
     {
       "type": "CanvasPass",
@@ -36,7 +49,8 @@
       "input_res": "skybox",
       "output_res": "color",
       "shadow_res": "shadow_maps",
-      "phase_mark": null
+      "phase_mark": "opaque",
+      "sort_by_distance": false
     }
   ],
   "pipeline_specs": [
