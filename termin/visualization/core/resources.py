@@ -210,6 +210,7 @@ class ResourceManager:
             stages={"vertex": vertex_stage, "fragment": fragment_stage},
             uniforms=[
                 MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
+                MaterialProperty("u_albedo_texture", "Texture", None),
                 MaterialProperty("u_ambient", "Float", 0.1, 0.0, 1.0),
                 MaterialProperty("u_shininess", "Float", 32.0, 1.0, 128.0),
             ],
@@ -224,6 +225,7 @@ class ResourceManager:
             return
 
         from termin.visualization.core.material import Material
+        from termin.visualization.render.texture import get_white_texture
 
         # Убедимся что DefaultShader зарегистрирован
         self.register_default_shader()
@@ -232,8 +234,9 @@ class ResourceManager:
         if shader is None:
             return
 
-        # Создаём DefaultMaterial с циановым цветом
-        mat = Material.from_parsed(shader)
+        # Создаём DefaultMaterial с циановым цветом и белой текстурой
+        white_tex = get_white_texture()
+        mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
         mat.name = "DefaultMaterial"
         mat.color = (0.3, 0.85, 0.9, 1.0)  # Умеренно-яркий циан
         self.register_material("DefaultMaterial", mat)

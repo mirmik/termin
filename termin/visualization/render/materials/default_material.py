@@ -8,6 +8,7 @@ DEFAULT_VERT = """#version 330 core
 
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_uv;
 
 uniform mat4 u_model;
 uniform mat4 u_view;
@@ -15,11 +16,13 @@ uniform mat4 u_projection;
 
 out vec3 v_world_pos;
 out vec3 v_normal;
+out vec2 v_uv;
 
 void main() {
     vec4 world = u_model * vec4(a_position, 1.0);
     v_world_pos = world.xyz;
     v_normal = mat3(transpose(inverse(u_model))) * a_normal;
+    v_uv = a_uv;
     gl_Position = u_projection * u_view * world;
 }
 """
@@ -28,8 +31,10 @@ DEFAULT_FRAG = """#version 330 core
 
 in vec3 v_world_pos;
 in vec3 v_normal;
+in vec2 v_uv;
 
 uniform vec4 u_color; // RGBA базового материала
+uniform sampler2D u_albedo_texture; // Текстура цвета (белая 1x1 по умолчанию)
 
 // ============== Источники света ==============
 const int LIGHT_TYPE_DIRECTIONAL = 0;
@@ -149,7 +154,8 @@ float compute_shadow(int light_index) {
 
 void main() {
     vec3 N = normalize(v_normal);
-    vec3 base_color = u_color.rgb;
+    vec4 tex_color = texture(u_albedo_texture, v_uv);
+    vec3 base_color = u_color.rgb * tex_color.rgb;
 
     // Scene-level ambient lighting
     vec3 result = base_color * u_ambient_color * u_ambient_intensity;
@@ -218,5 +224,8 @@ class DefaultMaterial(Material):
     """
 
     def __init__(self, color: tuple[float, float, float, float] | None = None):
+        from termin.visualization.render.texture import get_white_texture
+
         shader = default_shader()
-        super().__init__(shader=shader, color=color)
+        white_tex = get_white_texture()
+        super().__init__(shader=shader, color=color, textures={"u_albedo_texture": white_tex})

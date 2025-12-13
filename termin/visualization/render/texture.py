@@ -61,3 +61,51 @@ class Texture:
         tex = cls()
         tex.load(path)
         return tex
+
+    @classmethod
+    def from_data(
+        cls,
+        data: np.ndarray,
+        width: int,
+        height: int,
+        source_path: str | None = None,
+    ) -> "Texture":
+        """
+        Create texture from raw RGBA data.
+
+        Args:
+            data: Numpy array of shape (height, width, 4) with uint8 RGBA values.
+            width: Texture width in pixels.
+            height: Texture height in pixels.
+            source_path: Optional source path for identification.
+
+        Returns:
+            Texture instance with the provided data.
+        """
+        tex = cls()
+        tex._image_data = data
+        tex._size = (width, height)
+        tex.source_path = source_path
+        return tex
+
+
+# --- White 1x1 Texture ---
+
+_white_texture: Texture | None = None
+
+
+def get_white_texture() -> Texture:
+    """
+    Returns a white 1x1 texture.
+
+    Used as default for optional texture slots (like albedo when no texture is set).
+    Singleton — created once.
+    """
+    global _white_texture
+
+    if _white_texture is None:
+        # Create 1x1 white pixel (RGBA = 255, 255, 255, 255)
+        data = np.array([[[255, 255, 255, 255]]], dtype=np.uint8)
+        _white_texture = Texture.from_data(data, width=1, height=1, source_path="__white_1x1__")
+
+    return _white_texture
