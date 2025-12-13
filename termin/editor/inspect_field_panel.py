@@ -27,6 +27,16 @@ from PyQt6.QtGui import QColor
 
 from termin.editor.inspect_field import InspectField
 
+
+def _collect_inspect_fields(cls: type) -> dict[str, InspectField]:
+    """Collect inspect_fields from class hierarchy (base classes first)."""
+    result = {}
+    for klass in reversed(cls.__mro__):
+        fields = getattr(klass, "inspect_fields", None)
+        if fields:
+            result.update(fields)
+    return result
+
 if TYPE_CHECKING:
     from termin.visualization.core.resources import ResourceManager
 
@@ -146,7 +156,7 @@ class InspectFieldPanel(QWidget):
         if target is None:
             return
 
-        fields = getattr(target.__class__, "inspect_fields", None)
+        fields = _collect_inspect_fields(target.__class__)
         if not fields:
             return
 

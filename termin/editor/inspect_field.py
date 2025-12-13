@@ -128,10 +128,12 @@ class InspectAttr:
             self._field.label = name
 
         # регистрируем поле в owner.inspect_fields
-        fields = getattr(owner, "inspect_fields", None)
-        if fields is None:
+        # Важно: проверяем, что dict принадлежит именно этому классу, а не унаследован
+        if "inspect_fields" not in owner.__dict__:
             fields = {}
             setattr(owner, "inspect_fields", fields)
+        else:
+            fields = owner.__dict__["inspect_fields"]
         fields[name] = self._field
 
     def __get__(self, instance, owner=None):

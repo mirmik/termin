@@ -33,9 +33,9 @@ class VoxelizerComponent(Component):
             path="cell_size",
             label="Cell Size",
             kind="float",
-            min=0.01,
+            min=0.001,
             max=10.0,
-            step=0.05,
+            step=0.001,
         ),
         "output_path": InspectField(
             path="output_path",

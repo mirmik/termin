@@ -29,6 +29,7 @@ from termin.visualization.core.entity import Entity, Component
 from termin.geombase.pose3 import Pose3
 from termin.visualization.core.resources import ResourceManager
 from termin.editor.inspect_field import InspectField
+from termin.editor.inspect_field_panel import _collect_inspect_fields
 from termin.editor.undo_stack import UndoCommand
 
 from termin.editor.editor_commands import (
@@ -276,7 +277,7 @@ class ComponentInspectorPanel(QWidget):
         if comp is None:
             return
 
-        fields = getattr(comp.__class__, "inspect_fields", None)
+        fields = _collect_inspect_fields(comp.__class__)
         if not fields:
             return
 

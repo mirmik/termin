@@ -21,7 +21,13 @@ class Component:
 
     # Поля, которые инспектор может редактировать.
     # Заполняется либо руками, либо через дескриптор InspectAttr.
-    inspect_fields: dict[str, InspectField] | None = None
+    inspect_fields: dict[str, InspectField] = {
+        "enabled": InspectField(
+            path="enabled",
+            label="Enabled",
+            kind="bool",
+        ),
+    }
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
