@@ -49,7 +49,6 @@ class RenderingController:
         get_graphics: Optional[Callable[[], "GraphicsBackend"]] = None,
         get_window_backend: Optional[Callable[[], "WindowBackend"]] = None,
         get_sdl_backend: Optional[Callable[[], "SDLEmbeddedWindowBackend"]] = None,
-        get_render_engine: Optional[Callable[[], "RenderEngine"]] = None,
         on_display_selected: Optional[Callable[["Display"], None]] = None,
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
@@ -65,7 +64,6 @@ class RenderingController:
             get_graphics: Callback to get GraphicsBackend for creating surfaces.
             get_window_backend: Callback to get WindowBackend for creating GL widgets.
             get_sdl_backend: Callback to get SDLEmbeddedWindowBackend for creating SDL windows.
-            get_render_engine: Callback to get RenderEngine for rendering.
             on_display_selected: Callback when display is selected.
             on_viewport_selected: Callback when viewport is selected.
             on_request_update: Callback to request viewport redraw.
@@ -77,7 +75,6 @@ class RenderingController:
         self._get_graphics = get_graphics
         self._get_window_backend = get_window_backend
         self._get_sdl_backend = get_sdl_backend
-        self._get_render_engine = get_render_engine
         self._on_display_selected = on_display_selected
         self._on_viewport_selected = on_viewport_selected
         self._on_request_update = on_request_update
@@ -96,6 +93,9 @@ class RenderingController:
 
         # Editor display ID (not serialized, created before scene)
         self._editor_display_id: Optional[int] = None
+
+        # RenderEngine (created lazily when graphics is available)
+        self._render_engine: Optional["RenderEngine"] = None
 
         self._connect_signals()
 
@@ -830,13 +830,19 @@ class RenderingController:
         Args:
             skip_editor: If True, skip editor display (legacy mode).
         """
-        if self._get_render_engine is None or self._get_graphics is None:
+        if self._get_graphics is None:
             return
 
-        render_engine = self._get_render_engine()
         graphics = self._get_graphics()
-        if render_engine is None or graphics is None:
+        if graphics is None:
             return
+
+        # Lazy creation of RenderEngine
+        if self._render_engine is None:
+            from termin.visualization.render import RenderEngine
+            self._render_engine = RenderEngine(graphics)
+
+        render_engine = self._render_engine
 
         from termin.visualization.render import RenderView
 
