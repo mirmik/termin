@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 from PyQt6.QtGui import QFileSystemModel, QAction, QPixmap, QPainter, QColor, QBrush, QPen, QIcon, QShortcut, QKeySequence
-from PyQt6.QtCore import Qt, QModelIndex, QDir, QFileInfo
+from PyQt6.QtCore import Qt, QModelIndex, QDir, QFileInfo, QMimeData
 from PyQt6.QtWidgets import QFileIconProvider
 
 from termin.editor.settings import EditorSettings
@@ -297,7 +297,7 @@ class DraggableFileSystemModel(QFileSystemModel):
 
     def mimeTypes(self) -> list[str]:
         """Возвращает список поддерживаемых MIME типов."""
-        return [EditorMimeTypes.ASSET_PATH]
+        return [EditorMimeTypes.ASSET_PATH] + super().mimeTypes()
 
     def mimeData(self, indexes: list[QModelIndex]) -> QMimeData | None:
         """Создаёт ASSET_PATH mime data для перетаскивания."""
@@ -307,7 +307,8 @@ class DraggableFileSystemModel(QFileSystemModel):
             file_path = self.filePath(index)
             if any(file_path.lower().endswith(ext) for ext in self.DRAGGABLE_EXTENSIONS):
                 return create_asset_path_mime_data(file_path)
-        return None
+        # Fallback to parent implementation to avoid crash
+        return super().mimeData(indexes)
 
 
 class ProjectBrowser:
