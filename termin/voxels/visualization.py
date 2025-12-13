@@ -157,8 +157,8 @@ class VoxelVisualizer:
         mesh = Mesh3(
             vertices=vertices,
             triangles=triangles,
-            vertex_normals=normals,
         )
+        mesh.vertex_normals = normals
         self._mesh_drawable = MeshDrawable(mesh, name="voxel_grid_vis")
         self._renderer = MeshRenderer(
             self._mesh_drawable,
