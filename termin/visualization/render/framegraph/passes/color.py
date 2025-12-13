@@ -467,3 +467,7 @@ class ColorPass(RenderFramePass):
         # Восстанавливаем исходный контекст
         if saved_window and saved_context:
             sdl_video.SDL_GL_MakeCurrent(saved_window, saved_context)
+            # Восстанавливаем FBO и viewport
+            gfx.bind_framebuffer(src_fb)
+            pw, ph = size
+            gfx.set_viewport(0, 0, pw, ph)
