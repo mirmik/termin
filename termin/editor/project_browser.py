@@ -288,47 +288,58 @@ class PrefabDragFilter(QObject):
         self._list_view = list_view
         self._file_model = file_model
         self._drag_start_pos: QPoint | None = None
+        self._drag_start_index: QModelIndex | None = None
+        # События мыши идут во viewport, не в сам QListView
+        self._viewport = list_view.viewport()
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
-        if obj is not self._list_view:
+        if obj is not self._viewport:
             return False
 
         if event.type() == QEvent.Type.MouseButtonPress:
             if event.button() == Qt.MouseButton.LeftButton:
                 self._drag_start_pos = event.position().toPoint()
+                # Запоминаем индекс под курсором
+                self._drag_start_index = self._list_view.indexAt(self._drag_start_pos)
 
         elif event.type() == QEvent.Type.MouseMove:
             if self._drag_start_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
                 # Проверяем, достаточно ли мышь сдвинулась для начала drag
                 from PyQt6.QtWidgets import QApplication
-                if (event.position().toPoint() - self._drag_start_pos).manhattanLength() >= QApplication.startDragDistance():
-                    self._start_prefab_drag()
+                distance = (event.position().toPoint() - self._drag_start_pos).manhattanLength()
+                if distance >= QApplication.startDragDistance():
+                    if self._start_prefab_drag():
+                        self._drag_start_pos = None
+                        self._drag_start_index = None
+                        return True
                     self._drag_start_pos = None
-                    return True
+                    self._drag_start_index = None
 
         elif event.type() == QEvent.Type.MouseButtonRelease:
             self._drag_start_pos = None
+            self._drag_start_index = None
 
         return False
 
-    def _start_prefab_drag(self) -> None:
-        """Начинает drag операцию для prefab файла."""
-        index = self._list_view.currentIndex()
-        if not index.isValid():
-            return
+    def _start_prefab_drag(self) -> bool:
+        """Начинает drag операцию для prefab файла. Возвращает True если drag начат."""
+        index = self._drag_start_index
+        if index is None or not index.isValid():
+            return False
 
         file_path = self._file_model.filePath(index)
         if not file_path:
-            return
+            return False
 
         # Только для prefab файлов
         if not any(file_path.lower().endswith(ext) for ext in self.DRAGGABLE_EXTENSIONS):
-            return
+            return False
 
         drag = QDrag(self._list_view)
         mime_data = create_asset_path_mime_data(file_path)
         drag.setMimeData(mime_data)
         drag.exec(Qt.DropAction.CopyAction)
+        return True
 
 
 class ProjectBrowser:
@@ -381,9 +392,9 @@ class ProjectBrowser:
         # Устанавливаем провайдер иконок
         self._file_model.setIconProvider(self._icon_provider)
 
-        # Фильтр для drag prefab файлов
+        # Фильтр для drag prefab файлов (устанавливается на viewport)
         self._drag_filter = PrefabDragFilter(file_list, self._file_model, parent=file_list)
-        file_list.installEventFilter(self._drag_filter)
+        file_list.viewport().installEventFilter(self._drag_filter)
 
         # Настройка модели директорий (только папки)
         self._dir_model.setFilter(QDir.Filter.Dirs | QDir.Filter.NoDotAndDotDot)
