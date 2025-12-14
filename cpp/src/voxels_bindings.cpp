@@ -36,17 +36,21 @@ std::vector<std::tuple<int, int, int>> numpy_to_triangles(py::array_t<int> arr) 
     return result;
 }
 
-// Helper: surface normals to dict
-py::dict surface_normals_to_dict(const std::unordered_map<VoxelKey, Vec3, ChunkKeyHash>& normals) {
+// Helper: surface normals to dict (list of normals per voxel)
+py::dict surface_normals_to_dict(const std::unordered_map<VoxelKey, std::vector<Vec3>, ChunkKeyHash>& normals) {
     py::dict result;
-    for (const auto& [key, normal] : normals) {
+    for (const auto& [key, normal_list] : normals) {
         py::tuple py_key = py::make_tuple(std::get<0>(key), std::get<1>(key), std::get<2>(key));
-        py::array_t<double> py_normal(3);
-        auto buf = py_normal.mutable_unchecked<1>();
-        buf(0) = normal.x;
-        buf(1) = normal.y;
-        buf(2) = normal.z;
-        result[py_key] = py_normal;
+        py::list py_normals;
+        for (const auto& normal : normal_list) {
+            py::array_t<double> py_normal(3);
+            auto buf = py_normal.mutable_unchecked<1>();
+            buf(0) = normal.x;
+            buf(1) = normal.y;
+            buf(2) = normal.z;
+            py_normals.append(py_normal);
+        }
+        result[py_key] = py_normals;
     }
     return result;
 }

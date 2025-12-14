@@ -32,7 +32,7 @@ class VoxelGrid:
         self._cell_size = cell_size
         self._chunks: dict[tuple[int, int, int], VoxelChunk] = {}
         self._name = name
-        self._surface_normals: dict[tuple[int, int, int], np.ndarray] = {}
+        self._surface_normals: dict[tuple[int, int, int], list[np.ndarray]] = {}
 
     @property
     def origin(self) -> np.ndarray:
@@ -62,17 +62,31 @@ class VoxelGrid:
         self._name = value
 
     @property
-    def surface_normals(self) -> dict[tuple[int, int, int], np.ndarray]:
-        """Нормали поверхностных вокселей: {(vx, vy, vz): normal_vec3}."""
+    def surface_normals(self) -> dict[tuple[int, int, int], list[np.ndarray]]:
+        """Нормали поверхностных вокселей: {(vx, vy, vz): [normal_vec3, ...]}."""
         return self._surface_normals
 
-    def set_surface_normal(self, vx: int, vy: int, vz: int, normal: np.ndarray) -> None:
-        """Установить нормаль для поверхностного вокселя."""
-        self._surface_normals[(vx, vy, vz)] = np.array(normal, dtype=np.float32)
+    def add_surface_normal(self, vx: int, vy: int, vz: int, normal: np.ndarray) -> None:
+        """Добавить нормаль к списку нормалей поверхностного вокселя."""
+        key = (vx, vy, vz)
+        if key not in self._surface_normals:
+            self._surface_normals[key] = []
+        self._surface_normals[key].append(np.array(normal, dtype=np.float32))
+
+    def set_surface_normals(self, vx: int, vy: int, vz: int, normals: list[np.ndarray]) -> None:
+        """Установить список нормалей для поверхностного вокселя."""
+        self._surface_normals[(vx, vy, vz)] = [np.array(n, dtype=np.float32) for n in normals]
+
+    def get_surface_normals(self, vx: int, vy: int, vz: int) -> Optional[list[np.ndarray]]:
+        """Получить список нормалей поверхностного вокселя или None."""
+        return self._surface_normals.get((vx, vy, vz))
 
     def get_surface_normal(self, vx: int, vy: int, vz: int) -> Optional[np.ndarray]:
-        """Получить нормаль поверхностного вокселя или None."""
-        return self._surface_normals.get((vx, vy, vz))
+        """Получить первую нормаль поверхностного вокселя или None (для совместимости)."""
+        normals = self._surface_normals.get((vx, vy, vz))
+        if normals and len(normals) > 0:
+            return normals[0]
+        return None
 
     @property
     def chunk_count(self) -> int:

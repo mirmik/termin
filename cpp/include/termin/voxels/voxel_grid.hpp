@@ -409,8 +409,8 @@ public:
 
         if (surface_voxels.empty()) return 0;
 
-        // Accumulate normals
-        std::unordered_map<VoxelKey, std::vector<Vec3>, ChunkKeyHash> normals_accum;
+        // Track which voxels got normals
+        std::unordered_map<VoxelKey, bool, ChunkKeyHash> voxels_with_normals;
 
         double half = cell_size_ / 2.0;
         Vec3 half_size(half, half, half);
@@ -445,37 +445,40 @@ public:
 
                         Vec3 center = voxel_to_world(vx, vy, vz);
                         if (triangle_aabb_intersect(v0, v1, v2, center, half_size)) {
-                            normals_accum[key].push_back(tri_normal);
+                            // Add triangle normal to the list (no averaging)
+                            surface_normals_[key].push_back(tri_normal);
+                            voxels_with_normals[key] = true;
                         }
                     }
                 }
             }
         }
 
-        // Average and store
-        for (auto& [key, normal_list] : normals_accum) {
-            Vec3 avg = Vec3::zero();
-            for (const auto& n : normal_list) {
-                avg = avg + n;
-            }
-            avg = avg.normalized();
-            surface_normals_[key] = avg;
-        }
-
-        return static_cast<int>(normals_accum.size());
+        return static_cast<int>(voxels_with_normals.size());
     }
 
-    // Surface normals access
-    const std::unordered_map<VoxelKey, Vec3, ChunkKeyHash>& surface_normals() const {
+    // Surface normals access (list of normals per voxel)
+    const std::unordered_map<VoxelKey, std::vector<Vec3>, ChunkKeyHash>& surface_normals() const {
         return surface_normals_;
     }
 
+    // Get first normal for backwards compatibility
     Vec3 get_surface_normal(int vx, int vy, int vz) const {
+        auto it = surface_normals_.find({vx, vy, vz});
+        if (it != surface_normals_.end() && !it->second.empty()) {
+            return it->second[0];
+        }
+        return Vec3::zero();
+    }
+
+    // Get all normals for a voxel
+    const std::vector<Vec3>& get_surface_normals(int vx, int vy, int vz) const {
+        static const std::vector<Vec3> empty;
         auto it = surface_normals_.find({vx, vy, vz});
         if (it != surface_normals_.end()) {
             return it->second;
         }
-        return Vec3::zero();
+        return empty;
     }
 
     bool has_surface_normal(int vx, int vy, int vz) const {
@@ -486,7 +489,7 @@ private:
     double cell_size_;
     Vec3 origin_;
     std::unordered_map<ChunkKey, VoxelChunk, ChunkKeyHash> chunks_;
-    std::unordered_map<VoxelKey, Vec3, ChunkKeyHash> surface_normals_;
+    std::unordered_map<VoxelKey, std::vector<Vec3>, ChunkKeyHash> surface_normals_;
 };
 
 } // namespace voxels

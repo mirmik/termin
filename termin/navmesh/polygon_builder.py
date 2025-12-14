@@ -105,28 +105,30 @@ class PolygonBuilder:
 
     def _collect_surface_voxels(
         self, grid: VoxelGrid
-    ) -> dict[tuple[int, int, int], np.ndarray]:
+    ) -> dict[tuple[int, int, int], list[np.ndarray]]:
         """
         Шаг 1: Собрать поверхностные воксели с нормалями.
 
         Returns:
-            {(vx, vy, vz): normal} для всех поверхностных вокселей.
+            {(vx, vy, vz): [normal, ...]} для всех поверхностных вокселей.
         """
-        result: dict[tuple[int, int, int], np.ndarray] = {}
+        result: dict[tuple[int, int, int], list[np.ndarray]] = {}
 
-        for coord, normal in grid.surface_normals.items():
-            if grid.get(*coord) != 0:
-                result[coord] = normal
+        for coord, normals_list in grid.surface_normals.items():
+            if grid.get(*coord) != 0 and normals_list:
+                result[coord] = normals_list
 
         return result
 
     def _region_growing(
         self,
-        surface_voxels: dict[tuple[int, int, int], np.ndarray],
+        surface_voxels: dict[tuple[int, int, int], list[np.ndarray]],
         grid: VoxelGrid,
     ) -> list[tuple[list[tuple[int, int, int]], np.ndarray]]:
         """
         Шаг 2: Группировка вокселей методом Region Growing.
+
+        Использует первую нормаль из списка для начального роста региона.
 
         Returns:
             Список (список вокселей, усреднённая нормаль).
@@ -137,7 +139,7 @@ class PolygonBuilder:
 
         while remaining:
             seed = next(iter(remaining))
-            seed_normal = surface_voxels[seed]
+            seed_normal = surface_voxels[seed][0]  # Первая нормаль
 
             region: list[tuple[int, int, int]] = []
             normal_sum = np.zeros(3, dtype=np.float64)
@@ -147,7 +149,7 @@ class PolygonBuilder:
 
             while queue:
                 current = queue.popleft()
-                current_normal = surface_voxels[current]
+                current_normal = surface_voxels[current][0]  # Первая нормаль
 
                 dot = np.dot(seed_normal, current_normal)
                 if dot < threshold:
@@ -171,7 +173,55 @@ class PolygonBuilder:
                     avg_normal /= norm
                 regions.append((region, avg_normal.astype(np.float32)))
 
+        # Шаг 2.5: Расширяем регионы — добавляем граничные воксели,
+        # у которых ЛЮБАЯ нормаль близка к нормали региона
+        regions = self._expand_regions(regions, surface_voxels)
+
         return regions
+
+    def _expand_regions(
+        self,
+        regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+        surface_voxels: dict[tuple[int, int, int], list[np.ndarray]],
+    ) -> list[tuple[list[tuple[int, int, int]], np.ndarray]]:
+        """
+        Шаг 2.5: Расширить регионы, добавляя граничные воксели с подходящими нормалями.
+
+        Для каждого региона ищем соседние воксели (не в регионе), у которых
+        хотя бы одна нормаль близка к нормали региона. Такие воксели добавляются
+        в регион. После этого шага регионы могут перекрываться.
+
+        Returns:
+            Расширенные регионы.
+        """
+        threshold = self.config.normal_threshold
+        expanded_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+
+        for region_voxels, region_normal in regions:
+            region_set = set(region_voxels)
+            expanded = list(region_voxels)
+
+            # Собираем границу региона
+            boundary: set[tuple[int, int, int]] = set()
+            for vx, vy, vz in region_voxels:
+                for dx, dy, dz in NEIGHBORS_26:
+                    neighbor = (vx + dx, vy + dy, vz + dz)
+                    if neighbor not in region_set and neighbor in surface_voxels:
+                        boundary.add(neighbor)
+
+            # Проверяем граничные воксели
+            for neighbor in boundary:
+                normals_list = surface_voxels[neighbor]
+                # Проверяем, есть ли хотя бы одна нормаль, близкая к нормали региона
+                for normal in normals_list:
+                    dot = np.dot(region_normal, normal)
+                    if dot >= threshold:
+                        expanded.append(neighbor)
+                        break  # Достаточно одной подходящей нормали
+
+            expanded_regions.append((expanded, region_normal))
+
+        return expanded_regions
 
     def _build_polygon(
         self,

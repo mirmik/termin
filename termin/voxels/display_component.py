@@ -367,11 +367,12 @@ class VoxelDisplayComponent(Component):
             normals[v_start:v_end] = _CUBE_NORMALS
             uvs[v_start:v_end, 0] = float(vtype)  # UV.x = тип вокселя
 
-            # Если есть нормаль для этого вокселя — кодируем в цвет
-            surface_normal = surface_normals.get((vx, vy, vz))
-            if surface_normal is not None:
-                # Кодируем нормаль как RGB: [-1,1] -> [0,1]
-                encoded_color = (surface_normal + 1.0) * 0.5
+            # Если есть нормали для этого вокселя — кодируем первую в цвет
+            normals_list = surface_normals.get((vx, vy, vz))
+            if normals_list and len(normals_list) > 0:
+                # Берём первую нормаль и кодируем как RGB: [-1,1] -> [0,1]
+                first_normal = normals_list[0]
+                encoded_color = (first_normal + 1.0) * 0.5
                 colors[v_start:v_end] = encoded_color
 
             # Смещаем индексы треугольников

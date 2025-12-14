@@ -172,7 +172,7 @@ class MeshVoxelizer:
             vertices = self._transform_vertices(vertices, transform_matrix)
 
         # Накапливаем нормали для каждого surface вокселя
-        normals_accum: dict[tuple[int, int, int], list[np.ndarray]] = {}
+        voxels_with_normals: set[tuple[int, int, int]] = set()
 
         for tri in triangles:
             v0 = vertices[tri[0]]
@@ -204,19 +204,11 @@ class MeshVoxelizer:
                         # Проверяем пересечение
                         center = self._grid.voxel_to_world(vx, vy, vz)
                         if triangle_aabb_intersect(v0, v1, v2, center, self._half_size):
-                            if voxel_key not in normals_accum:
-                                normals_accum[voxel_key] = []
-                            normals_accum[voxel_key].append(tri_normal)
+                            # Добавляем нормаль треугольника к списку (без усреднения)
+                            self._grid.add_surface_normal(vx, vy, vz, tri_normal)
+                            voxels_with_normals.add(voxel_key)
 
-        # Усредняем и нормализуем
-        for voxel_key, normal_list in normals_accum.items():
-            avg_normal = np.sum(normal_list, axis=0)
-            length = np.linalg.norm(avg_normal)
-            if length > 1e-8:
-                avg_normal /= length
-            self._grid.set_surface_normal(*voxel_key, avg_normal)
-
-        return len(normals_accum)
+        return len(voxels_with_normals)
 
 
 class SceneVoxelizer:

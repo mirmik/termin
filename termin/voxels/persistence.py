@@ -12,7 +12,7 @@ from termin.voxels.grid import VoxelGrid
 
 
 VOXEL_FILE_EXTENSION = ".voxels"
-VOXEL_FORMAT_VERSION = "1.1"  # 1.1: added surface_normals
+VOXEL_FORMAT_VERSION = "1.2"  # 1.2: surface_normals as list of normals (not averaged)
 
 
 class VoxelPersistence:
@@ -46,12 +46,13 @@ class VoxelPersistence:
             key = f"{cx},{cy},{cz}"
             data["chunks"][key] = chunk.serialize()
 
-        # Сохраняем нормали поверхностных вокселей
+        # Сохраняем нормали поверхностных вокселей (список нормалей для каждого вокселя)
         if grid.surface_normals:
             normals_data = {}
-            for (vx, vy, vz), normal in grid.surface_normals.items():
+            for (vx, vy, vz), normals_list in grid.surface_normals.items():
                 key = f"{vx},{vy},{vz}"
-                normals_data[key] = normal.tolist()
+                # Сохраняем как список списков [[nx, ny, nz], ...]
+                normals_data[key] = [n.tolist() for n in normals_list]
             data["surface_normals"] = normals_data
 
         with open(path, "w", encoding="utf-8") as f:
@@ -101,12 +102,21 @@ class VoxelPersistence:
                 grid._chunks[(cx, cy, cz)] = chunk
 
         # Загружаем нормали поверхностных вокселей
-        for key, normal_list in data.get("surface_normals", {}).items():
+        for key, normals_data in data.get("surface_normals", {}).items():
             parts = key.split(",")
             if len(parts) != 3:
                 continue
             vx, vy, vz = int(parts[0]), int(parts[1]), int(parts[2])
-            grid.set_surface_normal(vx, vy, vz, np.array(normal_list, dtype=np.float32))
+
+            # Поддержка старого формата (version 1.1): single normal [x, y, z]
+            # Новый формат (version 1.2): list of normals [[x, y, z], ...]
+            if normals_data and isinstance(normals_data[0], list):
+                # Новый формат: список нормалей
+                normals = [np.array(n, dtype=np.float32) for n in normals_data]
+                grid.set_surface_normals(vx, vy, vz, normals)
+            else:
+                # Старый формат: одна нормаль
+                grid.set_surface_normals(vx, vy, vz, [np.array(normals_data, dtype=np.float32)])
 
         return grid
 
