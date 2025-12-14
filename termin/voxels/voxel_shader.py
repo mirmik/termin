@@ -65,21 +65,25 @@ void main() {
         normalized_pos = (pos_on_axis - axis_min) / axis_range;
     }
 
-    // Discard fragments above fill threshold
-    if (normalized_pos > u_fill_percent) {
+    // blend_zone is ABOVE fill_percent
+    // fill 100%: blend 100-105% (doesn't exist), entire object is color_below
+    // fill 90%: discard > 95%, blend 90-95%, below 90% is color_below
+    // fill 50%: discard > 55%, blend 50-55%, below 50% is color_below
+    float blend_zone = 0.05;
+    float cut_threshold = u_fill_percent + blend_zone;
+
+    // Discard fragments above cut threshold
+    if (normalized_pos > cut_threshold) {
         discard;
     }
 
-    // Choose color based on position relative to threshold
-    float blend_zone = 0.05;
-    float blend_start = u_fill_percent - blend_zone;
-
     vec4 base_color;
-    if (normalized_pos < blend_start) {
-        base_color = u_color_below;
-    } else {
-        float t = clamp((normalized_pos - blend_start) / blend_zone, 0.0, 1.0);
+    if (normalized_pos > u_fill_percent) {
+        // In blend zone
+        float t = (normalized_pos - u_fill_percent) / blend_zone;
         base_color = mix(u_color_below, u_color_above, t);
+    } else {
+        base_color = u_color_below;
     }
 
     // Simple Lambert diffuse lighting
