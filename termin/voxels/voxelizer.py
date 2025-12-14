@@ -100,6 +100,11 @@ class MeshVoxelizer:
         # AABB треугольника в мировых координатах
         tri_min, tri_max = triangle_aabb(v0, v1, v2)
 
+        # Небольшое расширение для треугольников на границах вокселей
+        epsilon = self._cell_size * 0.01
+        tri_min = tri_min - epsilon
+        tri_max = tri_max + epsilon
+
         # Преобразуем в индексы вокселей
         voxel_min = self._grid.world_to_voxel(tri_min)
         voxel_max = self._grid.world_to_voxel(tri_max)

@@ -7,6 +7,9 @@ from __future__ import annotations
 import numpy as np
 from typing import Tuple
 
+# Epsilon для численной устойчивости при сравнении с границами
+_EPSILON = 1e-6
+
 
 def triangle_aabb_intersect(
     v0: np.ndarray,
@@ -43,23 +46,24 @@ def triangle_aabb_intersect(
     # --- Тест 1: оси AABB (X, Y, Z) ---
 
     # Проверяем, что проекции треугольника и AABB пересекаются по каждой оси
+    # Добавляем epsilon для численной устойчивости на границах
 
     # Ось X
     min_x = min(v0[0], v1[0], v2[0])
     max_x = max(v0[0], v1[0], v2[0])
-    if min_x > hx or max_x < -hx:
+    if min_x > hx + _EPSILON or max_x < -hx - _EPSILON:
         return False
 
     # Ось Y
     min_y = min(v0[1], v1[1], v2[1])
     max_y = max(v0[1], v1[1], v2[1])
-    if min_y > hy or max_y < -hy:
+    if min_y > hy + _EPSILON or max_y < -hy - _EPSILON:
         return False
 
     # Ось Z
     min_z = min(v0[2], v1[2], v2[2])
     max_z = max(v0[2], v1[2], v2[2])
-    if min_z > hz or max_z < -hz:
+    if min_z > hz + _EPSILON or max_z < -hz - _EPSILON:
         return False
 
     # --- Тест 2: нормаль треугольника ---
@@ -74,7 +78,7 @@ def triangle_aabb_intersect(
         hz * abs(normal[2])
     )
 
-    if d > r or d < -r:
+    if d > r + _EPSILON or d < -r - _EPSILON:
         return False
 
     # --- Тест 3: кросс-произведения рёбер ---
@@ -116,7 +120,7 @@ def _axis_test_x(edge: np.ndarray, va: np.ndarray, vb: np.ndarray, hy: float, hz
     p0 = -edge[2] * va[1] + edge[1] * va[2]
     p1 = -edge[2] * vb[1] + edge[1] * vb[2]
     r = hy * abs(edge[2]) + hz * abs(edge[1])
-    return not (min(p0, p1) > r or max(p0, p1) < -r)
+    return not (min(p0, p1) > r + _EPSILON or max(p0, p1) < -r - _EPSILON)
 
 
 def _axis_test_y(edge: np.ndarray, va: np.ndarray, vb: np.ndarray, hx: float, hz: float) -> bool:
@@ -125,7 +129,7 @@ def _axis_test_y(edge: np.ndarray, va: np.ndarray, vb: np.ndarray, hx: float, hz
     p0 = edge[2] * va[0] - edge[0] * va[2]
     p1 = edge[2] * vb[0] - edge[0] * vb[2]
     r = hx * abs(edge[2]) + hz * abs(edge[0])
-    return not (min(p0, p1) > r or max(p0, p1) < -r)
+    return not (min(p0, p1) > r + _EPSILON or max(p0, p1) < -r - _EPSILON)
 
 
 def _axis_test_z(edge: np.ndarray, va: np.ndarray, vb: np.ndarray, hx: float, hy: float) -> bool:
@@ -134,7 +138,7 @@ def _axis_test_z(edge: np.ndarray, va: np.ndarray, vb: np.ndarray, hx: float, hy
     p0 = -edge[1] * va[0] + edge[0] * va[1]
     p1 = -edge[1] * vb[0] + edge[0] * vb[1]
     r = hx * abs(edge[1]) + hy * abs(edge[0])
-    return not (min(p0, p1) > r or max(p0, p1) < -r)
+    return not (min(p0, p1) > r + _EPSILON or max(p0, p1) < -r - _EPSILON)
 
 
 def triangle_aabb(
