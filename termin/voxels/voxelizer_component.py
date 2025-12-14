@@ -30,10 +30,9 @@ class NavMeshStage(IntEnum):
     REGIONS_BASIC = 0       # Регионы до расширения
     REGIONS_EXPANDED = 1    # Регионы после расширения
     STITCHED = 2            # Сшитые полигоны (plane intersections)
-    DECIMATED = 3           # Упрощённая сетка (edge collapse)
-    WITH_CONTOURS = 4       # + извлечённые контуры
-    SIMPLIFIED = 5          # + упрощённые контуры (Douglas-Peucker)
-    FINAL = 6               # Перетриангулированное (ear clipping)
+    WITH_CONTOURS = 3       # + извлечённые контуры
+    SIMPLIFIED = 4          # + упрощённые контуры (Douglas-Peucker)
+    FINAL = 5               # Перетриангулированное (ear clipping)
 
 
 def _voxelize_action(component: "VoxelizerComponent") -> None:
@@ -115,19 +114,10 @@ class VoxelizerComponent(Component):
                 (NavMeshStage.REGIONS_BASIC, "1. Regions (basic)"),
                 (NavMeshStage.REGIONS_EXPANDED, "2. Regions (expanded)"),
                 (NavMeshStage.STITCHED, "3. Stitched (plane intersections)"),
-                (NavMeshStage.DECIMATED, "4. Decimated (edge collapse)"),
-                (NavMeshStage.WITH_CONTOURS, "5. With Contours"),
-                (NavMeshStage.SIMPLIFIED, "6. Simplified (Douglas-Peucker)"),
-                (NavMeshStage.FINAL, "7. Final (Ear Clipping)"),
+                (NavMeshStage.WITH_CONTOURS, "4. With Contours"),
+                (NavMeshStage.SIMPLIFIED, "5. Simplified (Douglas-Peucker)"),
+                (NavMeshStage.FINAL, "6. Final (Ear Clipping)"),
             ],
-        ),
-        "decimation_ratio": InspectField(
-            path="decimation_ratio",
-            label="Decimation Ratio",
-            kind="float",
-            min=0.1,
-            max=1.0,
-            step=0.05,
         ),
         "contour_epsilon": InspectField(
             path="contour_epsilon",
@@ -145,7 +135,7 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "navmesh_stage", "decimation_ratio", "contour_epsilon"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "navmesh_stage", "contour_epsilon"]
 
     def __init__(
         self,
