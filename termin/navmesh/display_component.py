@@ -174,8 +174,9 @@ class NavMeshDisplayComponent(Component):
         if self._mesh_drawable is not None:
             self._mesh_drawable.draw(context)
 
-        if self.show_contours and self._contour_drawable is not None:
-            self._contour_drawable.draw(context)
+        # TODO: контуры пока не рисуем — нужен правильный шейдер
+        # if self.show_contours and self._contour_drawable is not None:
+        #     self._contour_drawable.draw(context)
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
