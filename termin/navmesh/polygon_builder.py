@@ -481,22 +481,28 @@ class PolygonBuilder:
                     new_tris = self._ear_clipping(contour_coords)
 
                     # Проверяем, что ear clipping дал ожидаемое число треугольников
-                    if len(new_tris) == expected_triangles:
-                        # Конвертируем вершины контура в 3D
-                        new_verts_3d = (
-                            centroid +
-                            contour_coords[:, 0:1] * basis_u +
-                            contour_coords[:, 1:2] * basis_v
-                        ).astype(np.float32)
-
-                        polygon.vertices = new_verts_3d
-                        polygon.triangles = new_tris
-                        # Контуры больше не валидны — индексы изменились
-                        polygon.outer_contour = None
-                        polygon.holes = []
-                    else:
-                        # Ear clipping не справился — оставляем исходные треугольники
+                    if len(new_tris) != expected_triangles:
                         print(f"Ear clipping failed: got {len(new_tris)}, expected {expected_triangles}")
+                    else:
+                        # Проверяем площадь
+                        contour_area = abs(self._polygon_signed_area(contour_coords))
+                        triangles_area = self._triangles_area(contour_coords, new_tris)
+
+                        if contour_area > 1e-6 and abs(triangles_area - contour_area) / contour_area > 0.01:
+                            print(f"Ear clipping area mismatch: contour={contour_area:.4f}, triangles={triangles_area:.4f}")
+                        else:
+                            # Конвертируем вершины контура в 3D
+                            new_verts_3d = (
+                                centroid +
+                                contour_coords[:, 0:1] * basis_u +
+                                contour_coords[:, 1:2] * basis_v
+                            ).astype(np.float32)
+
+                            polygon.vertices = new_verts_3d
+                            polygon.triangles = new_tris
+                            # Контуры больше не валидны — индексы изменились
+                            polygon.outer_contour = None
+                            polygon.holes = []
 
         return polygon
 
@@ -888,6 +894,18 @@ class PolygonBuilder:
             area += vertices[i, 0] * vertices[j, 1]
             area -= vertices[j, 0] * vertices[i, 1]
         return area / 2.0
+
+    def _triangles_area(self, vertices: np.ndarray, triangles: np.ndarray) -> float:
+        """Вычислить суммарную площадь треугольников."""
+        total = 0.0
+        for tri in triangles:
+            a = vertices[tri[0]]
+            b = vertices[tri[1]]
+            c = vertices[tri[2]]
+            # Площадь треугольника через cross product
+            area = abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) / 2.0
+            total += area
+        return total
 
     def _is_ear(
         self,
