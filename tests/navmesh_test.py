@@ -407,6 +407,49 @@ class VoxelFaceMeshTest(unittest.TestCase):
         for v, neighbors in adj.items():
             self.assertEqual(len(neighbors) % 2, 0, f"Vertex {v} has odd degree {len(neighbors)} — hole detected")
 
+    def test_contour_extraction(self):
+        """Извлечение контура из меша граней."""
+        grid = VoxelGrid(cell_size=1.0)
+        # 2x2 площадка вокселей
+        for x in range(2):
+            for y in range(2):
+                grid.set(x, y, 0, 2)
+                grid.add_surface_normal(x, y, 0, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid, extract_contours=True)
+
+        self.assertEqual(navmesh.polygon_count(), 1)
+        polygon = navmesh.polygons[0]
+
+        # Должен быть внешний контур
+        self.assertIsNotNone(polygon.outer_contour)
+        self.assertGreater(len(polygon.outer_contour), 0)
+
+        # Внешний контур 2x2 площадки = 8 вершин (периметр квадрата 2x2)
+        self.assertEqual(len(polygon.outer_contour), 8)
+
+        # Без дыр
+        self.assertEqual(len(polygon.holes), 0)
+
+    def test_contour_extraction_staircase(self):
+        """Извлечение контура из лестницы."""
+        grid = VoxelGrid(cell_size=1.0)
+        # Лестница из 3 ступенек
+        for i in range(3):
+            grid.set(i, 0, i, 2)
+            grid.add_surface_normal(i, 0, i, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid, extract_contours=True)
+
+        self.assertEqual(navmesh.polygon_count(), 1)
+        polygon = navmesh.polygons[0]
+
+        # Должен быть внешний контур
+        self.assertIsNotNone(polygon.outer_contour)
+        self.assertGreater(len(polygon.outer_contour), 0)
+
 
 class EmptyGridTest(unittest.TestCase):
     """Тесты для пустой сетки."""
