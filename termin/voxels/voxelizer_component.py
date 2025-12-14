@@ -131,9 +131,9 @@ class VoxelizerComponent(Component):
             path="voronoi_cell_size",
             label="Voronoi Cell Size",
             kind="float",
-            min=0.1,
+            min=0.001,
             max=10.0,
-            step=0.1,
+            step=0.001,
         ),
         "build_navmesh_btn": InspectField(
             label="Build NavMesh",
