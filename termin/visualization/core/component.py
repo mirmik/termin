@@ -157,7 +157,7 @@ class Component:
                 if field.non_serializable:
                     continue
                 key = field.path if field.path is not None else name
-                if key not in data or key == "enabled":
+                if key not in data:
                     continue
 
                 value = data[key]
