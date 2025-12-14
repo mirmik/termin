@@ -128,12 +128,11 @@ class VoxelDisplayComponent(Component):
             max=100,
             setter=lambda obj, val: obj._set_fill_percent(val),
         ),
-        "slice_axis_name": InspectField(
-            path="slice_axis_name",
+        "slice_axis": InspectField(
+            path="slice_axis",
             label="Slice Axis",
-            kind="enum",
-            choices=[("X", "X"), ("Y", "Y"), ("Z", "Z")],
-            setter=lambda obj, val: obj._set_slice_axis_name(val),
+            kind="vec3",
+            setter=lambda obj, val: obj._set_slice_axis(val),
         ),
     }
 
@@ -142,15 +141,8 @@ class VoxelDisplayComponent(Component):
         "color_below",
         "color_above",
         "fill_percent",
-        "slice_axis_name",
+        "slice_axis",
     ]
-
-    # Mapping from axis name to vector
-    _AXIS_VECTORS = {
-        "X": (1.0, 0.0, 0.0),
-        "Y": (0.0, 1.0, 0.0),
-        "Z": (0.0, 0.0, 1.0),
-    }
 
     def __init__(self, voxel_grid_name: str = "") -> None:
         super().__init__()
@@ -187,18 +179,9 @@ class VoxelDisplayComponent(Component):
         """Установить процент заполнения."""
         self.fill_percent = value
 
-    @property
-    def slice_axis_name(self) -> str:
-        """Имя оси отсечки (X, Y, Z)."""
-        # Определяем имя по текущему вектору
-        for name, vec in self._AXIS_VECTORS.items():
-            if self.slice_axis == vec:
-                return name
-        return "Z"  # Default
-
-    def _set_slice_axis_name(self, name: str) -> None:
-        """Установить ось отсечки по имени."""
-        self.slice_axis = self._AXIS_VECTORS.get(name, (0.0, 0.0, 1.0))
+    def _set_slice_axis(self, value: Tuple[float, float, float]) -> None:
+        """Установить ось отсечки."""
+        self.slice_axis = tuple(value)
 
     def _get_or_create_material(self) -> Material:
         """Получить материал с voxel шейдером."""
@@ -417,7 +400,7 @@ class VoxelDisplayComponent(Component):
             "color_below": list(self.color_below),
             "color_above": list(self.color_above),
             "fill_percent": self.fill_percent,
-            "slice_axis_name": self.slice_axis_name,
+            "slice_axis": list(self.slice_axis),
         }
 
     @classmethod
@@ -433,13 +416,7 @@ class VoxelDisplayComponent(Component):
         if color_above is not None:
             comp.color_above = tuple(color_above)
         comp.fill_percent = data.get("fill_percent", 100.0)
-        # Поддержка slice_axis_name (новый формат) и slice_axis (старый формат)
-        slice_axis_name = data.get("slice_axis_name")
-        if slice_axis_name is not None:
-            comp._set_slice_axis_name(slice_axis_name)
-        else:
-            # Обратная совместимость со старым форматом
-            slice_axis = data.get("slice_axis")
-            if slice_axis is not None:
-                comp.slice_axis = tuple(slice_axis)
+        slice_axis = data.get("slice_axis")
+        if slice_axis is not None:
+            comp.slice_axis = tuple(slice_axis)
         return comp
