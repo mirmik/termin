@@ -551,8 +551,12 @@ class ComponentInspectorPanel(QWidget):
             return
 
         if isinstance(w, QComboBox) and field.kind == "navmesh":
-            # value — это имя navmesh (строка)
-            name = value if isinstance(value, str) else None
+            navmesh = value
+            if navmesh is None:
+                w.setCurrentIndex(-1)
+                return
+
+            name = self._resources.find_navmesh_name(navmesh)
             existing = [w.itemText(i) for i in range(w.count())]
             all_names = self._resources.list_navmesh_names()
             if existing != all_names:
@@ -560,7 +564,7 @@ class ComponentInspectorPanel(QWidget):
                 for n in all_names:
                     w.addItem(n)
 
-            if name is None or name == "":
+            if name is None:
                 w.setCurrentIndex(-1)
                 return
 
