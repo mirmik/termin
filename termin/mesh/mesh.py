@@ -75,19 +75,24 @@ class Mesh2(Mesh):
 class Mesh3(Mesh):
     """Simple triangle mesh storing vertex positions and triangle indices."""
 
-    def __init__(self, vertices: np.ndarray, triangles: np.ndarray, uvs: np.ndarray | None = None):
+    def __init__(
+        self,
+        vertices: np.ndarray,
+        triangles: np.ndarray,
+        uvs: np.ndarray | None = None,
+        normals: np.ndarray | None = None,
+    ):
         super().__init__(vertices, triangles)
 
         self.uvs = np.asarray(uvs, dtype=float) if uvs is not None else None
         self._validate_mesh()
-        self.vertex_normals = None
+        self.vertex_normals = np.asarray(normals, dtype=np.float32) if normals is not None else None
         self.face_normals = None
 
     def copy(self) -> "Mesh3":
         uvs_copy = self.uvs.copy() if self.uvs is not None else None
-        mesh_copy = Mesh3(self.vertices.copy(), self.triangles.copy(), uvs_copy)
-        if self.vertex_normals is not None:
-            mesh_copy.vertex_normals = self.vertex_normals.copy()
+        normals_copy = self.vertex_normals.copy() if self.vertex_normals is not None else None
+        mesh_copy = Mesh3(self.vertices.copy(), self.triangles.copy(), uvs_copy, normals_copy)
         if self.face_normals is not None:
             mesh_copy.face_normals = self.face_normals.copy()
         return mesh_copy

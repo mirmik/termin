@@ -16,6 +16,7 @@ from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.navmesh_handle import NavMeshHandle
+from termin.visualization.core.serialization import serializable
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 
@@ -34,6 +35,7 @@ def _get_navmesh_choices() -> list[tuple[str, str]]:
     return [(name, name) for name in names]
 
 
+@serializable(fields=["navmesh_name", "color", "wireframe", "show_normals"])
 class NavMeshDisplayComponent(Component):
     """
     Компонент для отображения NavMesh из ResourceManager.
@@ -66,13 +68,6 @@ class NavMeshDisplayComponent(Component):
             kind="bool",
         ),
     }
-
-    serializable_fields = [
-        "navmesh_name",
-        "color",
-        "wireframe",
-        "show_normals",
-    ]
 
     def __init__(self, navmesh_name: str = "") -> None:
         super().__init__()
@@ -232,9 +227,7 @@ class NavMeshDisplayComponent(Component):
         triangles = np.vstack(all_triangles).astype(np.int32)
 
         # Создаём Mesh3
-        mesh = Mesh3(vertices=vertices, triangles=triangles)
-        mesh.vertex_normals = normals
-
+        mesh = Mesh3(vertices=vertices, triangles=triangles, normals=normals)
         self._mesh_drawable = MeshDrawable(mesh)
 
         print(f"NavMeshDisplayComponent: built mesh with {len(vertices)} vertices, {len(triangles)} triangles")
