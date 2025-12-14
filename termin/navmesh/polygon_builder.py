@@ -473,26 +473,30 @@ class PolygonBuilder:
             expected_triangles = len(contour_coords) - 2
 
             if len(contour_coords) >= 3:
-                # Ear clipping триангуляция
-                new_tris = self._ear_clipping(contour_coords)
-
-                # Проверяем, что ear clipping дал ожидаемое число треугольников
-                if len(new_tris) == expected_triangles:
-                    # Конвертируем вершины контура в 3D
-                    new_verts_3d = (
-                        centroid +
-                        contour_coords[:, 0:1] * basis_u +
-                        contour_coords[:, 1:2] * basis_v
-                    ).astype(np.float32)
-
-                    polygon.vertices = new_verts_3d
-                    polygon.triangles = new_tris
-                    # Контуры больше не валидны — индексы изменились
-                    polygon.outer_contour = None
-                    polygon.holes = []
+                # Проверяем на самопересечение
+                if self._is_self_intersecting(contour_coords):
+                    print(f"Contour is self-intersecting ({len(contour_coords)} verts), skipping ear clipping")
                 else:
-                    # Ear clipping не справился — оставляем исходные треугольники
-                    print(f"Ear clipping failed: got {len(new_tris)}, expected {expected_triangles}")
+                    # Ear clipping триангуляция
+                    new_tris = self._ear_clipping(contour_coords)
+
+                    # Проверяем, что ear clipping дал ожидаемое число треугольников
+                    if len(new_tris) == expected_triangles:
+                        # Конвертируем вершины контура в 3D
+                        new_verts_3d = (
+                            centroid +
+                            contour_coords[:, 0:1] * basis_u +
+                            contour_coords[:, 1:2] * basis_v
+                        ).astype(np.float32)
+
+                        polygon.vertices = new_verts_3d
+                        polygon.triangles = new_tris
+                        # Контуры больше не валидны — индексы изменились
+                        polygon.outer_contour = None
+                        polygon.holes = []
+                    else:
+                        # Ear clipping не справился — оставляем исходные треугольники
+                        print(f"Ear clipping failed: got {len(new_tris)}, expected {expected_triangles}")
 
         return polygon
 
@@ -943,4 +947,46 @@ class PolygonBuilder:
         has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
 
         return not (has_neg and has_pos)
+
+    def _is_self_intersecting(self, vertices: np.ndarray) -> bool:
+        """
+        Проверить, самопересекается ли контур.
+
+        Проверяем все пары несмежных рёбер на пересечение.
+        """
+        n = len(vertices)
+        if n < 4:
+            return False
+
+        for i in range(n):
+            # Ребро i: vertices[i] -> vertices[(i+1) % n]
+            a1 = vertices[i]
+            a2 = vertices[(i + 1) % n]
+
+            # Проверяем против всех несмежных рёбер
+            for j in range(i + 2, n):
+                # Пропускаем смежные рёбра
+                if j == (i + n - 1) % n or (i == 0 and j == n - 1):
+                    continue
+
+                b1 = vertices[j]
+                b2 = vertices[(j + 1) % n]
+
+                if self._segments_intersect(a1, a2, b1, b2):
+                    return True
+
+        return False
+
+    def _segments_intersect(
+        self,
+        a1: np.ndarray,
+        a2: np.ndarray,
+        b1: np.ndarray,
+        b2: np.ndarray,
+    ) -> bool:
+        """Проверить, пересекаются ли отрезки a1-a2 и b1-b2."""
+        def ccw(A, B, C):
+            return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
+
+        return (ccw(a1, b1, b2) != ccw(a2, b1, b2)) and (ccw(a1, a2, b1) != ccw(a1, a2, b2))
 
