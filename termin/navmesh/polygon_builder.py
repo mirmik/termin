@@ -84,28 +84,32 @@ class PolygonBuilder:
         # Шаг 2: Region Growing — разбиваем на группы
         regions = self._region_growing_basic(surface_voxels, grid)
 
-        # Шаг 2.5: Расширяем регионы (опционально)
-        if expand_regions:
-            regions = self._expand_regions(regions, surface_voxels)
+        # NOTE: Стадии expand_regions и stitch_polygons временно отключены,
+        # т.к. используется новый алгоритм построения меша из граней вокселей.
+        # Флаги expand_regions и stitch_polygons игнорируются.
 
-        # Для сшивки: находим какие воксели в каких регионах
-        voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
-        if stitch_polygons:
-            for region_idx, (region_voxels, _) in enumerate(regions):
-                for voxel in region_voxels:
-                    if voxel not in voxel_to_regions:
-                        voxel_to_regions[voxel] = []
-                    voxel_to_regions[voxel].append(region_idx)
+        # # Шаг 2.5: Расширяем регионы (опционально)
+        # if expand_regions:
+        #     regions = self._expand_regions(regions, surface_voxels)
 
-        # Вычисляем плоскости для каждого региона (нужно для сшивки)
-        region_planes: list[tuple[np.ndarray, np.ndarray]] = []  # (centroid, normal)
-        for region_voxels, region_normal in regions:
-            centers_3d = np.array([
-                grid.origin + (np.array(v) + 0.5) * grid.cell_size
-                for v in region_voxels
-            ], dtype=np.float32)
-            centroid = centers_3d.mean(axis=0)
-            region_planes.append((centroid, region_normal))
+        # # Для сшивки: находим какие воксели в каких регионах
+        # voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
+        # if stitch_polygons:
+        #     for region_idx, (region_voxels, _) in enumerate(regions):
+        #         for voxel in region_voxels:
+        #             if voxel not in voxel_to_regions:
+        #                 voxel_to_regions[voxel] = []
+        #             voxel_to_regions[voxel].append(region_idx)
+
+        # # Вычисляем плоскости для каждого региона (нужно для сшивки)
+        # region_planes: list[tuple[np.ndarray, np.ndarray]] = []  # (centroid, normal)
+        # for region_voxels, region_normal in regions:
+        #     centers_3d = np.array([
+        #         grid.origin + (np.array(v) + 0.5) * grid.cell_size
+        #         for v in region_voxels
+        #     ], dtype=np.float32)
+        #     centroid = centers_3d.mean(axis=0)
+        #     region_planes.append((centroid, region_normal))
 
         # Шаги 3-7: Для каждого региона строим полигон
         polygons: list[NavPolygon] = []
