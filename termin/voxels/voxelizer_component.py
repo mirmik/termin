@@ -225,24 +225,9 @@ class VoxelizerComponent(Component):
     @classmethod
     def deserialize(cls, data: dict, context) -> "VoxelizerComponent":
         """Десериализовать компонент."""
-        # Поддержка старого формата с fill_interior/extract_surface
-        mode_value = data.get("voxelize_mode")
-        if mode_value is None:
-            # Конвертируем старые флаги в новый режим
-            fill_interior = data.get("fill_interior", False)
-            extract_surface = data.get("extract_surface", False)
-            if extract_surface:
-                mode_value = VoxelizeMode.SURFACE_ONLY
-            elif fill_interior:
-                mode_value = VoxelizeMode.FILLED
-            else:
-                mode_value = VoxelizeMode.SHELL
-        else:
-            mode_value = VoxelizeMode(mode_value)
-
         return cls(
             grid_name=data.get("grid_name", ""),
             cell_size=data.get("cell_size", 0.25),
             output_path=data.get("output_path", ""),
-            voxelize_mode=mode_value,
+            voxelize_mode=VoxelizeMode(data.get("voxelize_mode", VoxelizeMode.SHELL)),
         )
