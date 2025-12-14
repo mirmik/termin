@@ -487,6 +487,9 @@ class PolygonBuilder:
 
                 polygon.vertices = new_verts_3d
                 polygon.triangles = new_tris
+                # Контуры больше не валидны — индексы изменились
+                polygon.outer_contour = None
+                polygon.holes = []
 
         return polygon
 
