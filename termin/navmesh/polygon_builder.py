@@ -52,6 +52,8 @@ class PolygonBuilder:
     def build(
         self,
         grid: VoxelGrid,
+        expand_regions: bool = True,
+        stitch_polygons: bool = False,
         extract_contours: bool = False,
         simplify_contours: bool = False,
         retriangulate: bool = False,
@@ -61,6 +63,8 @@ class PolygonBuilder:
 
         Args:
             grid: Воксельная сетка с поверхностными вокселями и нормалями.
+            expand_regions: Расширять регионы (шаг 2.5).
+            stitch_polygons: Сшивать полигоны через plane intersections.
             extract_contours: Извлекать контуры из треугольников (шаги 7-9).
             simplify_contours: Упрощать контуры Douglas-Peucker (шаг 10).
             retriangulate: Перетриангулировать через ear clipping (шаги 11-12).
@@ -78,11 +82,34 @@ class PolygonBuilder:
             )
 
         # Шаг 2: Region Growing — разбиваем на группы
-        regions = self._region_growing(surface_voxels, grid)
+        regions = self._region_growing_basic(surface_voxels, grid)
+
+        # Шаг 2.5: Расширяем регионы (опционально)
+        if expand_regions:
+            regions = self._expand_regions(regions, surface_voxels)
+
+        # Для сшивки: находим какие воксели в каких регионах
+        voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
+        if stitch_polygons:
+            for region_idx, (region_voxels, _) in enumerate(regions):
+                for voxel in region_voxels:
+                    if voxel not in voxel_to_regions:
+                        voxel_to_regions[voxel] = []
+                    voxel_to_regions[voxel].append(region_idx)
+
+        # Вычисляем плоскости для каждого региона (нужно для сшивки)
+        region_planes: list[tuple[np.ndarray, np.ndarray]] = []  # (centroid, normal)
+        for region_voxels, region_normal in regions:
+            centers_3d = np.array([
+                grid.origin + (np.array(v) + 0.5) * grid.cell_size
+                for v in region_voxels
+            ], dtype=np.float32)
+            centroid = centers_3d.mean(axis=0)
+            region_planes.append((centroid, region_normal))
 
         # Шаги 3-7: Для каждого региона строим полигон
         polygons: list[NavPolygon] = []
-        for region_voxels, region_normal in regions:
+        for region_idx, (region_voxels, region_normal) in enumerate(regions):
             if len(region_voxels) < self.config.min_region_voxels:
                 continue
 
@@ -90,6 +117,9 @@ class PolygonBuilder:
                 region_voxels,
                 region_normal,
                 grid,
+                voxel_to_regions=voxel_to_regions if stitch_polygons else None,
+                region_planes=region_planes if stitch_polygons else None,
+                current_region_idx=region_idx,
                 extract_contours=extract_contours,
                 simplify_contours=simplify_contours,
                 retriangulate=retriangulate,
@@ -120,7 +150,7 @@ class PolygonBuilder:
 
         return result
 
-    def _region_growing(
+    def _region_growing_basic(
         self,
         surface_voxels: dict[tuple[int, int, int], list[np.ndarray]],
         grid: VoxelGrid,
@@ -173,10 +203,6 @@ class PolygonBuilder:
                     avg_normal /= norm
                 regions.append((region, avg_normal.astype(np.float32)))
 
-        # Шаг 2.5: Расширяем регионы — добавляем граничные воксели,
-        # у которых ЛЮБАЯ нормаль близка к нормали региона
-        regions = self._expand_regions(regions, surface_voxels)
-
         return regions
 
     def _expand_regions(
@@ -223,11 +249,143 @@ class PolygonBuilder:
 
         return expanded_regions
 
+    def _project_with_stitching(
+        self,
+        voxels: list[tuple[int, int, int]],
+        centers_3d: np.ndarray,
+        centroid: np.ndarray,
+        normal: np.ndarray,
+        voxel_to_regions: dict[tuple[int, int, int], list[int]],
+        region_planes: list[tuple[np.ndarray, np.ndarray]],
+        current_region_idx: int,
+    ) -> np.ndarray:
+        """
+        Проецировать точки с учётом сшивки.
+
+        - 1 регион: обычная проекция на плоскость
+        - 2 региона: проекция на линию пересечения плоскостей
+        - 3+ регионов: проекция в точку пересечения плоскостей
+        """
+        projected = np.zeros_like(centers_3d)
+        current_plane = region_planes[current_region_idx]
+
+        for i, voxel in enumerate(voxels):
+            point = centers_3d[i]
+            region_indices = voxel_to_regions.get(voxel, [current_region_idx])
+
+            if len(region_indices) == 1:
+                # Обычная проекция на плоскость текущего региона
+                plane_point, plane_normal = current_plane
+                dist = np.dot(point - plane_point, plane_normal)
+                projected[i] = point - dist * plane_normal
+
+            elif len(region_indices) == 2:
+                # Проекция на линию пересечения двух плоскостей
+                planes = [region_planes[idx] for idx in region_indices]
+                projected[i] = self._project_to_line_intersection(point, planes)
+
+            else:
+                # 3+ региона: проекция в точку пересечения плоскостей
+                # Берём первые 3 плоскости
+                planes = [region_planes[idx] for idx in region_indices[:3]]
+                intersection_point = self._intersect_three_planes(planes)
+                if intersection_point is not None:
+                    projected[i] = intersection_point
+                else:
+                    # Fallback: обычная проекция
+                    plane_point, plane_normal = current_plane
+                    dist = np.dot(point - plane_point, plane_normal)
+                    projected[i] = point - dist * plane_normal
+
+        return projected
+
+    def _project_to_line_intersection(
+        self,
+        point: np.ndarray,
+        planes: list[tuple[np.ndarray, np.ndarray]],
+    ) -> np.ndarray:
+        """
+        Проецировать точку на линию пересечения двух плоскостей.
+
+        Линия пересечения: направление = n1 × n2
+        Находим точку на линии, ближайшую к исходной точке.
+        """
+        (p1, n1), (p2, n2) = planes
+
+        # Направление линии пересечения
+        direction = np.cross(n1, n2)
+        dir_len = np.linalg.norm(direction)
+
+        if dir_len < 1e-8:
+            # Плоскости параллельны — проецируем на первую
+            dist = np.dot(point - p1, n1)
+            return point - dist * n1
+
+        direction = direction / dir_len
+
+        # Находим точку на линии пересечения
+        # Решаем систему: n1·x = n1·p1, n2·x = n2·p2
+        # Используем метод: находим точку как пересечение с плоскостью, перпендикулярной направлению
+        d1 = np.dot(n1, p1)
+        d2 = np.dot(n2, p2)
+
+        # Матрица для решения (n1, n2, direction) · x = (d1, d2, 0)
+        # Но проще: найдём любую точку на линии, затем проецируем point на линию
+
+        # Находим точку на линии: решаем n1·x = d1, n2·x = d2, берём x с минимальной нормой
+        # Используем псевдообратную матрицу
+        A = np.array([n1, n2])
+        b = np.array([d1, d2])
+
+        # Least squares решение
+        line_point, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+
+        # Проецируем исходную точку на линию
+        to_point = point - line_point
+        proj_len = np.dot(to_point, direction)
+        projected = line_point + proj_len * direction
+
+        return projected.astype(np.float32)
+
+    def _intersect_three_planes(
+        self,
+        planes: list[tuple[np.ndarray, np.ndarray]],
+    ) -> np.ndarray | None:
+        """
+        Найти точку пересечения трёх плоскостей.
+
+        Плоскость i: n_i · x = n_i · p_i = d_i
+        Решаем систему 3x3.
+        """
+        if len(planes) < 3:
+            return None
+
+        (p1, n1), (p2, n2), (p3, n3) = planes[:3]
+
+        # Матрица коэффициентов
+        A = np.array([n1, n2, n3])
+
+        # Вектор правых частей
+        d = np.array([np.dot(n1, p1), np.dot(n2, p2), np.dot(n3, p3)])
+
+        # Проверяем определитель
+        det = np.linalg.det(A)
+        if abs(det) < 1e-8:
+            # Плоскости не пересекаются в одной точке
+            return None
+
+        # Решаем систему
+        x = np.linalg.solve(A, d)
+        return x.astype(np.float32)
+
     def _build_polygon(
         self,
         voxels: list[tuple[int, int, int]],
         normal: np.ndarray,
         grid: VoxelGrid,
+        voxel_to_regions: dict[tuple[int, int, int], list[int]] | None = None,
+        region_planes: list[tuple[np.ndarray, np.ndarray]] | None = None,
+        current_region_idx: int = 0,
         extract_contours: bool = False,
         simplify_contours: bool = False,
         retriangulate: bool = False,
@@ -251,10 +409,17 @@ class PolygonBuilder:
         centroid = centers_3d.mean(axis=0)
 
         # Шаг 4: Проецируем центры на плоскость
-        # projected = point - dot(point - centroid, normal) * normal
-        relative = centers_3d - centroid
-        distances = np.dot(relative, normal)
-        projected_3d = centers_3d - np.outer(distances, normal)
+        # Для сшивки: воксели в нескольких регионах проецируются на пересечение плоскостей
+        if voxel_to_regions is not None and region_planes is not None:
+            projected_3d = self._project_with_stitching(
+                voxels, centers_3d, centroid, normal,
+                voxel_to_regions, region_planes, current_region_idx
+            )
+        else:
+            # Обычная проекция на плоскость
+            relative = centers_3d - centroid
+            distances = np.dot(relative, normal)
+            projected_3d = centers_3d - np.outer(distances, normal)
 
         # Шаг 5: Переводим в 2D
         points_2d, basis_u, basis_v = self._project_to_2d(projected_3d, normal, centroid)

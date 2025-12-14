@@ -27,10 +27,12 @@ class VoxelizeMode(IntEnum):
 
 class NavMeshStage(IntEnum):
     """Стадии алгоритма построения NavMesh."""
-    TRIANGLES = 0       # Только треугольники (Alpha Shape)
-    WITH_CONTOURS = 1   # + извлечённые контуры
-    SIMPLIFIED = 2      # + упрощённые контуры (Douglas-Peucker)
-    FINAL = 3           # Перетриангулированное (ear clipping)
+    REGIONS_BASIC = 0       # Регионы до расширения
+    REGIONS_EXPANDED = 1    # Регионы после расширения
+    STITCHED = 2            # Сшитые полигоны (plane intersections)
+    WITH_CONTOURS = 3       # + извлечённые контуры
+    SIMPLIFIED = 4          # + упрощённые контуры (Douglas-Peucker)
+    FINAL = 5               # Перетриангулированное (ear clipping)
 
 
 def _voxelize_action(component: "VoxelizerComponent") -> None:
@@ -109,10 +111,12 @@ class VoxelizerComponent(Component):
             label="NavMesh Stage",
             kind="enum",
             choices=[
-                (NavMeshStage.TRIANGLES, "1. Triangles (Alpha Shape)"),
-                (NavMeshStage.WITH_CONTOURS, "2. With Contours"),
-                (NavMeshStage.SIMPLIFIED, "3. Simplified (Douglas-Peucker)"),
-                (NavMeshStage.FINAL, "4. Final (Ear Clipping)"),
+                (NavMeshStage.REGIONS_BASIC, "1. Regions (basic)"),
+                (NavMeshStage.REGIONS_EXPANDED, "2. Regions (expanded)"),
+                (NavMeshStage.STITCHED, "3. Stitched (plane intersections)"),
+                (NavMeshStage.WITH_CONTOURS, "4. With Contours"),
+                (NavMeshStage.SIMPLIFIED, "5. Simplified (Douglas-Peucker)"),
+                (NavMeshStage.FINAL, "6. Final (Ear Clipping)"),
             ],
         ),
         "contour_epsilon": InspectField(
@@ -141,7 +145,7 @@ class VoxelizerComponent(Component):
         voxelize_mode: VoxelizeMode = VoxelizeMode.SHELL,
         navmesh_output_path: str = "",
         normal_angle: float = 25.0,
-        navmesh_stage: NavMeshStage = NavMeshStage.TRIANGLES,
+        navmesh_stage: NavMeshStage = NavMeshStage.REGIONS_BASIC,
         contour_epsilon: float = 0.1,
     ) -> None:
         super().__init__()
@@ -321,12 +325,17 @@ class VoxelizerComponent(Component):
 
         # Выбираем стадию алгоритма
         stage = self.navmesh_stage
-        extract_contours = stage >= NavMeshStage.WITH_CONTOURS
-        simplify_contours = stage >= NavMeshStage.SIMPLIFIED
-        retriangulate = stage >= NavMeshStage.FINAL
+        expand_regions = stage >= NavMeshStage.REGIONS_EXPANDED
+        stitch_polygons = stage >= NavMeshStage.STITCHED
+        # Контуры пока отключены
+        extract_contours = False  # stage >= NavMeshStage.WITH_CONTOURS
+        simplify_contours = False  # stage >= NavMeshStage.SIMPLIFIED
+        retriangulate = False  # stage >= NavMeshStage.FINAL
 
         navmesh = builder.build(
             grid,
+            expand_regions=expand_regions,
+            stitch_polygons=stitch_polygons,
             extract_contours=extract_contours,
             simplify_contours=simplify_contours,
             retriangulate=retriangulate,
@@ -381,6 +390,6 @@ class VoxelizerComponent(Component):
             voxelize_mode=VoxelizeMode(data.get("voxelize_mode", VoxelizeMode.SHELL)),
             navmesh_output_path=data.get("navmesh_output_path", ""),
             normal_angle=data.get("normal_angle", 25.0),
-            navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.TRIANGLES)),
+            navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.REGIONS_BASIC)),
             contour_epsilon=data.get("contour_epsilon", 0.1),
         )
