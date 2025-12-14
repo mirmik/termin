@@ -158,8 +158,8 @@
 
 ## TODO
 
-- [ ] Шаг 7-9: Извлечение boundary и построение контуров
-- [ ] Шаг 10: Douglas-Peucker
+- [x] Шаг 7-9: Извлечение boundary и построение контуров
+- [x] Шаг 10: Douglas-Peucker
 - [ ] Шаг 11: Bridge
 - [ ] Шаг 12: Ear Clipping
 - [ ] Перенос Delaunay на C++

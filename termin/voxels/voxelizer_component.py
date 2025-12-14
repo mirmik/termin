@@ -115,6 +115,14 @@ class VoxelizerComponent(Component):
                 (NavMeshStage.FINAL, "4. Final (Ear Clipping)"),
             ],
         ),
+        "contour_epsilon": InspectField(
+            path="contour_epsilon",
+            label="Contour Epsilon",
+            kind="float",
+            min=0.01,
+            max=1.0,
+            step=0.01,
+        ),
         "build_navmesh_btn": InspectField(
             label="Build NavMesh",
             kind="button",
@@ -123,7 +131,7 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_threshold", "navmesh_stage"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_threshold", "navmesh_stage", "contour_epsilon"]
 
     def __init__(
         self,
@@ -134,6 +142,7 @@ class VoxelizerComponent(Component):
         navmesh_output_path: str = "",
         normal_threshold: float = 0.9,
         navmesh_stage: NavMeshStage = NavMeshStage.TRIANGLES,
+        contour_epsilon: float = 0.1,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
@@ -143,6 +152,7 @@ class VoxelizerComponent(Component):
         self.navmesh_output_path = navmesh_output_path
         self.normal_threshold = normal_threshold
         self.navmesh_stage = navmesh_stage
+        self.contour_epsilon = contour_epsilon
         self._last_voxel_count: int = 0
 
     def voxelize(self) -> bool:
@@ -299,7 +309,10 @@ class VoxelizerComponent(Component):
             return False
 
         # Строим NavMesh
-        config = NavMeshConfig(normal_threshold=self.normal_threshold)
+        config = NavMeshConfig(
+            normal_threshold=self.normal_threshold,
+            contour_epsilon=self.contour_epsilon,
+        )
         builder = PolygonBuilder(config)
 
         # Выбираем стадию алгоритма
@@ -365,4 +378,5 @@ class VoxelizerComponent(Component):
             navmesh_output_path=data.get("navmesh_output_path", ""),
             normal_threshold=data.get("normal_threshold", 0.9),
             navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.TRIANGLES)),
+            contour_epsilon=data.get("contour_epsilon", 0.1),
         )

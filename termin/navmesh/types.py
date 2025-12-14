@@ -19,6 +19,9 @@ class NavMeshConfig:
     min_region_voxels: int = 1
     """Минимальное количество вокселей в регионе."""
 
+    contour_epsilon: float = 0.1
+    """Порог для Douglas-Peucker упрощения контуров (в мировых координатах)."""
+
 
 @dataclass
 class NavPolygon:

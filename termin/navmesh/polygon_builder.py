@@ -240,9 +240,16 @@ class PolygonBuilder:
             polygon.outer_contour = outer
             polygon.holes = holes
 
-        # Шаг 10: Упрощение контуров (TODO)
-        if simplify_contours:
-            pass  # TODO: Douglas-Peucker
+        # Шаг 10: Упрощение контуров Douglas-Peucker
+        if simplify_contours and polygon.outer_contour is not None:
+            epsilon = self.config.contour_epsilon
+            polygon.outer_contour = self._simplify_contour(
+                polygon.outer_contour, points_2d, epsilon
+            )
+            polygon.holes = [
+                self._simplify_contour(hole, points_2d, epsilon)
+                for hole in polygon.holes
+            ]
 
         # Шаги 11-12: Перетриангуляция (TODO)
         if retriangulate:
@@ -456,3 +463,118 @@ class PolygonBuilder:
             area += pi[0] * pj[1]
             area -= pj[0] * pi[1]
         return area / 2.0
+
+    # =========== Шаг 10: Douglas-Peucker ===========
+
+    def _simplify_contour(
+        self,
+        contour: list[int],
+        points_2d: np.ndarray,
+        epsilon: float,
+    ) -> list[int]:
+        """
+        Упростить контур алгоритмом Douglas-Peucker.
+
+        Args:
+            contour: Список индексов вершин контура.
+            points_2d: 2D координаты всех вершин.
+            epsilon: Порог расстояния для упрощения.
+
+        Returns:
+            Упрощённый контур (подмножество индексов).
+        """
+        if len(contour) <= 3:
+            return contour
+
+        # Для замкнутого контура: разрываем в точке с макс. расстоянием от начала
+        # чтобы Douglas-Peucker не удалил важные точки на стыке
+        coords = np.array([points_2d[i] for i in contour])
+
+        # Находим точку максимально удалённую от первой
+        distances = np.linalg.norm(coords - coords[0], axis=1)
+        split_idx = int(np.argmax(distances))
+
+        if split_idx == 0:
+            split_idx = len(contour) // 2
+
+        # Разбиваем контур на две части
+        part1 = list(range(0, split_idx + 1))
+        part2 = list(range(split_idx, len(contour))) + [0]
+
+        # Упрощаем каждую часть
+        simplified1 = self._douglas_peucker(part1, coords, epsilon)
+        simplified2 = self._douglas_peucker(part2, coords, epsilon)
+
+        # Объединяем (убираем дублирующиеся точки на стыках)
+        result_indices = simplified1[:-1] + simplified2[:-1]
+
+        # Преобразуем обратно в индексы вершин
+        return [contour[i] for i in result_indices]
+
+    def _douglas_peucker(
+        self,
+        indices: list[int],
+        coords: np.ndarray,
+        epsilon: float,
+    ) -> list[int]:
+        """
+        Рекурсивный алгоритм Douglas-Peucker.
+
+        Args:
+            indices: Индексы в массиве coords.
+            coords: 2D координаты точек.
+            epsilon: Порог расстояния.
+
+        Returns:
+            Упрощённый список индексов.
+        """
+        if len(indices) <= 2:
+            return indices
+
+        # Начальная и конечная точки
+        start = coords[indices[0]]
+        end = coords[indices[-1]]
+
+        # Вектор линии
+        line_vec = end - start
+        line_len = np.linalg.norm(line_vec)
+
+        if line_len < 1e-10:
+            # Все точки совпадают — оставляем только начало и конец
+            return [indices[0], indices[-1]]
+
+        line_unit = line_vec / line_len
+
+        # Находим точку с максимальным расстоянием до линии
+        max_dist = 0.0
+        max_idx = 0
+
+        for i in range(1, len(indices) - 1):
+            point = coords[indices[i]]
+            # Вектор от начала до точки
+            vec = point - start
+            # Проекция на линию
+            proj_len = np.dot(vec, line_unit)
+            # Ближайшая точка на линии
+            if proj_len < 0:
+                closest = start
+            elif proj_len > line_len:
+                closest = end
+            else:
+                closest = start + proj_len * line_unit
+            # Расстояние
+            dist = np.linalg.norm(point - closest)
+
+            if dist > max_dist:
+                max_dist = dist
+                max_idx = i
+
+        if max_dist < epsilon:
+            # Все промежуточные точки близко к линии — удаляем их
+            return [indices[0], indices[-1]]
+        else:
+            # Рекурсивно обрабатываем обе части
+            left = self._douglas_peucker(indices[:max_idx + 1], coords, epsilon)
+            right = self._douglas_peucker(indices[max_idx:], coords, epsilon)
+            # Объединяем (без дублирования средней точки)
+            return left[:-1] + right
