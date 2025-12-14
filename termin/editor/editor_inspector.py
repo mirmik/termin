@@ -630,7 +630,7 @@ class ComponentInspectorPanel(QWidget):
                 sb.valueChanged.connect(lambda _v: commit(True))
         elif hasattr(w, "_slider") and field.kind == "slider":
             w._slider.valueChanged.connect(lambda _v: commit(True))
-        elif isinstance(w, QComboBox) and field.kind in ("material", "mesh", "voxel_grid", "enum"):
+        elif isinstance(w, QComboBox) and field.kind in ("material", "mesh", "voxel_grid", "navmesh", "enum"):
             w.currentIndexChanged.connect(lambda _i: commit(False))
         elif isinstance(w, QPushButton) and field.kind == "color":
             def on_click():
