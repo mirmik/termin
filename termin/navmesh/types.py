@@ -22,9 +22,6 @@ class NavMeshConfig:
     contour_epsilon: float = 0.1
     """Порог для Douglas-Peucker упрощения контуров (в мировых координатах)."""
 
-    voronoi_cell_size: float = 1.0
-    """Размер ячейки Вороного (шаг сетки сидов, в мировых координатах)."""
-
 
 @dataclass
 class NavPolygon:
