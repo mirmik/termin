@@ -709,8 +709,7 @@ class ComponentInspectorPanel(QWidget):
             name = w.currentText()
             if not name:
                 return None
-            # Возвращаем имя, а не объект — компонент сам получит navmesh по имени
-            return name
+            return self._resources.get_navmesh(name)
 
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:
