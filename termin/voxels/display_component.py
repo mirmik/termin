@@ -132,7 +132,7 @@ class VoxelDisplayComponent(Component):
             path="slice_axis_name",
             label="Slice Axis",
             kind="enum",
-            enum_values=["X", "Y", "Z"],
+            choices=[("X", "X"), ("Y", "Y"), ("Z", "Z")],
             setter=lambda obj, val: obj._set_slice_axis_name(val),
         ),
     }
