@@ -54,6 +54,8 @@ class PolygonBuilder:
         grid: VoxelGrid,
         expand_regions: bool = True,
         stitch_polygons: bool = False,
+        decimate: bool = False,
+        decimation_ratio: float = 0.5,
         extract_contours: bool = False,
         simplify_contours: bool = False,
         retriangulate: bool = False,
@@ -65,6 +67,8 @@ class PolygonBuilder:
             grid: Воксельная сетка с поверхностными вокселями и нормалями.
             expand_regions: Расширять регионы (шаг 2.5).
             stitch_polygons: Сшивать полигоны через plane intersections.
+            decimate: Упрощать меш через edge collapse.
+            decimation_ratio: Целевое соотношение треугольников (0.5 = 50%).
             extract_contours: Извлекать контуры из треугольников (шаги 7-9).
             simplify_contours: Упрощать контуры Douglas-Peucker (шаг 10).
             retriangulate: Перетриангулировать через ear clipping (шаги 11-12).
@@ -120,6 +124,8 @@ class PolygonBuilder:
                 voxel_to_regions=voxel_to_regions if stitch_polygons else None,
                 region_planes=region_planes if stitch_polygons else None,
                 current_region_idx=region_idx,
+                decimate=decimate,
+                decimation_ratio=decimation_ratio,
                 extract_contours=extract_contours,
                 simplify_contours=simplify_contours,
                 retriangulate=retriangulate,
@@ -386,6 +392,8 @@ class PolygonBuilder:
         voxel_to_regions: dict[tuple[int, int, int], list[int]] | None = None,
         region_planes: list[tuple[np.ndarray, np.ndarray]] | None = None,
         current_region_idx: int = 0,
+        decimate: bool = False,
+        decimation_ratio: float = 0.5,
         extract_contours: bool = False,
         simplify_contours: bool = False,
         retriangulate: bool = False,
@@ -430,6 +438,15 @@ class PolygonBuilder:
         # Шаг 6: Alpha Shape (Delaunay + фильтрация)
         alpha = cell_size * 1.5  # Немного больше диагонали вокселя
         triangles_2d = self._alpha_shape(points_2d, alpha)
+
+        if len(triangles_2d) == 0:
+            return None
+
+        # Шаг 6.5: Edge Collapse (опционально)
+        if decimate and len(triangles_2d) > 3:
+            points_2d, triangles_2d = self._decimate_mesh(
+                points_2d, triangles_2d, decimation_ratio
+            )
 
         if len(triangles_2d) == 0:
             return None
@@ -793,3 +810,184 @@ class PolygonBuilder:
             right = self._douglas_peucker(indices[max_idx:], coords, epsilon)
             # Объединяем (без дублирования средней точки)
             return left[:-1] + right
+
+    # =========== Edge Collapse (Mesh Decimation) ===========
+
+    def _decimate_mesh(
+        self,
+        vertices: np.ndarray,
+        triangles: np.ndarray,
+        target_ratio: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Упростить меш методом Edge Collapse.
+
+        Args:
+            vertices: Вершины, shape (N, 2) или (N, 3).
+            triangles: Треугольники, shape (M, 3).
+            target_ratio: Целевое соотношение треугольников (0.5 = 50%).
+
+        Returns:
+            (new_vertices, new_triangles)
+        """
+        import heapq
+
+        if len(triangles) < 4:
+            return vertices, triangles
+
+        target_count = max(1, int(len(triangles) * target_ratio))
+        if target_count >= len(triangles):
+            return vertices, triangles
+
+        # Копируем данные для модификации
+        verts = vertices.copy()
+        tris = list(triangles.tolist())  # Список списков для удобства
+
+        # Находим граничные рёбра (встречаются только 1 раз)
+        boundary_edges = self._find_boundary_edges(tris)
+
+        # Строим heap по длине ребра
+        edge_heap: list[tuple[float, int, int]] = []
+        edges_in_heap: set[tuple[int, int]] = set()
+
+        for tri in tris:
+            for i in range(3):
+                v0, v1 = tri[i], tri[(i + 1) % 3]
+                edge = (min(v0, v1), max(v0, v1))
+
+                if edge in edges_in_heap:
+                    continue
+                if edge in boundary_edges:
+                    continue  # Не схлопываем граничные рёбра
+
+                length = np.linalg.norm(verts[v0] - verts[v1])
+                heapq.heappush(edge_heap, (length, v0, v1))
+                edges_in_heap.add(edge)
+
+        # Маппинг: старый индекс → новый индекс (для схлопнутых вершин)
+        vertex_map: dict[int, int] = {}
+
+        def get_mapped(v: int) -> int:
+            """Получить актуальный индекс вершины после схлопываний."""
+            while v in vertex_map:
+                v = vertex_map[v]
+            return v
+
+        while len(tris) > target_count and edge_heap:
+            _, v0_orig, v1_orig = heapq.heappop(edge_heap)
+
+            # Получаем актуальные индексы
+            v0 = get_mapped(v0_orig)
+            v1 = get_mapped(v1_orig)
+
+            if v0 == v1:
+                continue  # Уже схлопнуто
+
+            edge = (min(v0, v1), max(v0, v1))
+            if edge in boundary_edges:
+                continue
+
+            # Новая позиция — середина ребра
+            new_pos = (verts[v0] + verts[v1]) / 2
+
+            # Проверяем flip
+            if self._would_flip(v0, v1, new_pos, verts, tris):
+                continue
+
+            # Схлопываем: v1 → v0
+            verts[v0] = new_pos
+            vertex_map[v1] = v0
+
+            # Обновляем треугольники
+            new_tris = []
+            for tri in tris:
+                # Заменяем v1 на v0
+                new_tri = [get_mapped(v) for v in tri]
+
+                # Проверяем вырожденность (два одинаковых индекса)
+                if len(set(new_tri)) < 3:
+                    continue  # Треугольник вырожден — удаляем
+
+                new_tris.append(new_tri)
+
+            tris = new_tris
+
+            # Обновляем boundary edges
+            boundary_edges = self._find_boundary_edges(tris)
+
+        # Переиндексируем вершины (удаляем неиспользуемые)
+        used_verts: set[int] = set()
+        for tri in tris:
+            used_verts.update(tri)
+
+        old_to_new: dict[int, int] = {}
+        new_verts_list = []
+        for old_idx in sorted(used_verts):
+            old_to_new[old_idx] = len(new_verts_list)
+            new_verts_list.append(verts[old_idx])
+
+        new_tris = [[old_to_new[v] for v in tri] for tri in tris]
+
+        return np.array(new_verts_list, dtype=vertices.dtype), np.array(new_tris, dtype=np.int32)
+
+    def _find_boundary_edges(
+        self,
+        triangles: list[list[int]],
+    ) -> set[tuple[int, int]]:
+        """Найти граничные рёбра (встречаются ровно 1 раз)."""
+        from collections import defaultdict
+
+        edge_count: dict[tuple[int, int], int] = defaultdict(int)
+
+        for tri in triangles:
+            for i in range(3):
+                v0, v1 = tri[i], tri[(i + 1) % 3]
+                edge = (min(v0, v1), max(v0, v1))
+                edge_count[edge] += 1
+
+        return {e for e, count in edge_count.items() if count == 1}
+
+    def _would_flip(
+        self,
+        v0: int,
+        v1: int,
+        new_pos: np.ndarray,
+        vertices: np.ndarray,
+        triangles: list[list[int]],
+    ) -> bool:
+        """
+        Проверить, перевернётся ли какой-нибудь треугольник при схлопывании.
+
+        Returns:
+            True если схлопывание создаст перевёрнутый треугольник.
+        """
+        for tri in triangles:
+            # Пропускаем треугольники, которые исчезнут
+            if v0 in tri and v1 in tri:
+                continue
+
+            # Проверяем треугольники, содержащие v0 или v1
+            if v0 not in tri and v1 not in tri:
+                continue
+
+            # Вычисляем старую и новую ориентацию
+            old_verts = [vertices[v] for v in tri]
+            new_verts = [
+                new_pos if v == v0 or v == v1 else vertices[v]
+                for v in tri
+            ]
+
+            old_sign = self._triangle_sign_2d(old_verts)
+            new_sign = self._triangle_sign_2d(new_verts)
+
+            # Если знак изменился — треугольник перевернётся
+            if old_sign * new_sign < 0:
+                return True
+
+        return False
+
+    def _triangle_sign_2d(self, verts: list[np.ndarray]) -> float:
+        """Вычислить знак площади треугольника (2D)."""
+        # Используем только X и Y координаты
+        p0, p1, p2 = verts[0][:2], verts[1][:2], verts[2][:2]
+        return (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1])

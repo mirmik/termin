@@ -30,9 +30,10 @@ class NavMeshStage(IntEnum):
     REGIONS_BASIC = 0       # Регионы до расширения
     REGIONS_EXPANDED = 1    # Регионы после расширения
     STITCHED = 2            # Сшитые полигоны (plane intersections)
-    WITH_CONTOURS = 3       # + извлечённые контуры
-    SIMPLIFIED = 4          # + упрощённые контуры (Douglas-Peucker)
-    FINAL = 5               # Перетриангулированное (ear clipping)
+    DECIMATED = 3           # Упрощённая сетка (edge collapse)
+    WITH_CONTOURS = 4       # + извлечённые контуры
+    SIMPLIFIED = 5          # + упрощённые контуры (Douglas-Peucker)
+    FINAL = 6               # Перетриангулированное (ear clipping)
 
 
 def _voxelize_action(component: "VoxelizerComponent") -> None:
@@ -114,10 +115,19 @@ class VoxelizerComponent(Component):
                 (NavMeshStage.REGIONS_BASIC, "1. Regions (basic)"),
                 (NavMeshStage.REGIONS_EXPANDED, "2. Regions (expanded)"),
                 (NavMeshStage.STITCHED, "3. Stitched (plane intersections)"),
-                (NavMeshStage.WITH_CONTOURS, "4. With Contours"),
-                (NavMeshStage.SIMPLIFIED, "5. Simplified (Douglas-Peucker)"),
-                (NavMeshStage.FINAL, "6. Final (Ear Clipping)"),
+                (NavMeshStage.DECIMATED, "4. Decimated (edge collapse)"),
+                (NavMeshStage.WITH_CONTOURS, "5. With Contours"),
+                (NavMeshStage.SIMPLIFIED, "6. Simplified (Douglas-Peucker)"),
+                (NavMeshStage.FINAL, "7. Final (Ear Clipping)"),
             ],
+        ),
+        "decimation_ratio": InspectField(
+            path="decimation_ratio",
+            label="Decimation Ratio",
+            kind="float",
+            min=0.1,
+            max=1.0,
+            step=0.05,
         ),
         "contour_epsilon": InspectField(
             path="contour_epsilon",
@@ -135,7 +145,7 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "navmesh_stage", "contour_epsilon"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "navmesh_stage", "decimation_ratio", "contour_epsilon"]
 
     def __init__(
         self,
@@ -146,6 +156,7 @@ class VoxelizerComponent(Component):
         navmesh_output_path: str = "",
         normal_angle: float = 25.0,
         navmesh_stage: NavMeshStage = NavMeshStage.REGIONS_BASIC,
+        decimation_ratio: float = 0.5,
         contour_epsilon: float = 0.1,
     ) -> None:
         super().__init__()
@@ -156,6 +167,7 @@ class VoxelizerComponent(Component):
         self.navmesh_output_path = navmesh_output_path
         self.normal_angle = normal_angle
         self.navmesh_stage = navmesh_stage
+        self.decimation_ratio = decimation_ratio
         self.contour_epsilon = contour_epsilon
         self._last_voxel_count: int = 0
 
@@ -327,6 +339,7 @@ class VoxelizerComponent(Component):
         stage = self.navmesh_stage
         expand_regions = stage >= NavMeshStage.REGIONS_EXPANDED
         stitch_polygons = stage >= NavMeshStage.STITCHED
+        decimate = stage >= NavMeshStage.DECIMATED
         # Контуры пока отключены
         extract_contours = False  # stage >= NavMeshStage.WITH_CONTOURS
         simplify_contours = False  # stage >= NavMeshStage.SIMPLIFIED
@@ -336,6 +349,8 @@ class VoxelizerComponent(Component):
             grid,
             expand_regions=expand_regions,
             stitch_polygons=stitch_polygons,
+            decimate=decimate,
+            decimation_ratio=self.decimation_ratio,
             extract_contours=extract_contours,
             simplify_contours=simplify_contours,
             retriangulate=retriangulate,
@@ -391,5 +406,6 @@ class VoxelizerComponent(Component):
             navmesh_output_path=data.get("navmesh_output_path", ""),
             normal_angle=data.get("normal_angle", 25.0),
             navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.REGIONS_BASIC)),
+            decimation_ratio=data.get("decimation_ratio", 0.5),
             contour_epsilon=data.get("contour_epsilon", 0.1),
         )
