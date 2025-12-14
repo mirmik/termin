@@ -390,6 +390,5 @@ class VoxelizerComponent(Component):
             navmesh_output_path=data.get("navmesh_output_path", ""),
             normal_angle=data.get("normal_angle", 25.0),
             navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.REGIONS_BASIC)),
-            decimation_ratio=data.get("decimation_ratio", 0.5),
             contour_epsilon=data.get("contour_epsilon", 0.1),
         )
