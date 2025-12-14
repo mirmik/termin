@@ -51,7 +51,14 @@ target_compile_options(_physics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
+# Voxels native module (VoxelGrid, voxelization)
+pybind11_add_module(_voxels_native src/voxels_bindings.cpp)
+target_compile_options(_voxels_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
 # Install to python packages
 install(TARGETS _geom_native DESTINATION ${CMAKE_INSTALL_PREFIX}/geombase)
 install(TARGETS _colliders_native DESTINATION ${CMAKE_INSTALL_PREFIX}/colliders)
 install(TARGETS _physics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/physics)
+install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/termin/voxels)
