@@ -549,7 +549,6 @@ class InspectFieldPanel(QWidget):
             w.clicked.connect(on_button_click)
 
     def _read_widget_value(self, w: QWidget, field: InspectField) -> Any:
-        print(f"[_read_widget_value] field.kind='{field.kind}', widget_type={type(w).__name__}")
         if isinstance(w, QDoubleSpinBox):
             val = w.value()
             return int(val) if field.kind == "int" else float(val)
@@ -594,15 +593,11 @@ class InspectFieldPanel(QWidget):
 
         if isinstance(w, QComboBox) and field.kind == "navmesh":
             if self._resources is None:
-                print("[_read_widget_value navmesh] resources is None")
                 return None
             name = w.currentText()
             if not name:
-                print("[_read_widget_value navmesh] name is empty")
                 return None
-            result = self._resources.get_navmesh(name)
-            print(f"[_read_widget_value navmesh] name='{name}', result={result}, type={type(result)}")
-            return result
+            return self._resources.get_navmesh(name)
 
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:
