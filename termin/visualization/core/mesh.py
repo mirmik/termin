@@ -101,7 +101,16 @@ class MeshDrawable:
 
     def delete(self):
         print(f"[MeshDrawable] delete name={self.name} keys={list(self._context_resources.keys())}")
-        for handle in self._context_resources.values():
+        from termin.visualization.platform.backends.opengl import get_context_make_current
+
+        for ctx_key, handle in self._context_resources.items():
+            # Делаем контекст текущим перед удалением VAO
+            make_current = get_context_make_current(ctx_key)
+            if make_current is not None:
+                print(f"[MeshDrawable] switching to context {ctx_key} before delete")
+                make_current()
+            else:
+                print(f"[MeshDrawable] WARNING: no make_current for context {ctx_key}")
             handle.delete()
         self._context_resources.clear()
 
@@ -243,7 +252,16 @@ class Mesh2Drawable:
 
     def delete(self):
         print(f"[Mesh2Drawable] delete name={self.name} keys={list(self._context_resources.keys())}")
-        for handle in self._context_resources.values():
+        from termin.visualization.platform.backends.opengl import get_context_make_current
+
+        for ctx_key, handle in self._context_resources.items():
+            # Делаем контекст текущим перед удалением VAO
+            make_current = get_context_make_current(ctx_key)
+            if make_current is not None:
+                print(f"[Mesh2Drawable] switching to context {ctx_key} before delete")
+                make_current()
+            else:
+                print(f"[Mesh2Drawable] WARNING: no make_current for context {ctx_key}")
             handle.delete()
         self._context_resources.clear()
 

@@ -96,6 +96,10 @@ class RenderEngine:
         display_fbo = surface.get_framebuffer()
         context_key = surface.context_key()
 
+        # Регистрируем контекст для корректного удаления GPU ресурсов
+        from termin.visualization.platform.backends.opengl import register_context
+        register_context(context_key, surface.make_current)
+
         for view, state in views:
             try:
                 self._render_single_view(

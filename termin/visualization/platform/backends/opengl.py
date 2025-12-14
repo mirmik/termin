@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ctypes
-from typing import Dict, Tuple
+from typing import Callable, Dict, Tuple
 
 import numpy as np
 from OpenGL import GL as gl
@@ -21,6 +21,20 @@ from termin.visualization.platform.backends.base import (
 )
 
 _OPENGL_INITED = False
+
+# Глобальный реестр контекстов: context_key -> make_current callable
+# Используется для переключения контекста при удалении GPU ресурсов
+_context_registry: Dict[int, Callable[[], None]] = {}
+
+
+def register_context(context_key: int, make_current: Callable[[], None]) -> None:
+    """Регистрирует контекст для последующего переключения при удалении ресурсов."""
+    _context_registry[context_key] = make_current
+
+
+def get_context_make_current(context_key: int) -> Callable[[], None] | None:
+    """Возвращает функцию make_current для контекста или None."""
+    return _context_registry.get(context_key)
 
 
 def _compile_shader(source: str, shader_type: int) -> int:
