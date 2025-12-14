@@ -168,9 +168,18 @@ class VoxelDisplayComponent(Component):
 
     def draw_geometry(self, context: "RenderContext") -> None:
         """Рисует геометрию вокселей."""
+        # Проверяем hot-reload перед отрисовкой
+        self._check_hot_reload()
+
         if self._mesh_drawable is None:
             return
         self._mesh_drawable.draw(context)
+
+    def _check_hot_reload(self) -> None:
+        """Проверяет, изменился ли grid в keeper (hot-reload)."""
+        current_grid = self._grid_handle.get()
+        if current_grid is not self._last_grid:
+            self._rebuild_mesh()
 
     def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
         """Возвращает MaterialPhases для рендеринга."""
@@ -269,12 +278,7 @@ class VoxelDisplayComponent(Component):
             self._mesh_drawable = None
 
     def update(self, dt: float) -> None:
-        """Обновить меш если нужно или если grid изменился (hot-reload)."""
-        # Проверяем hot-reload: grid в keeper мог измениться
-        current_grid = self._grid_handle.get()
-        if current_grid is not self._last_grid:
-            self._needs_rebuild = True
-
+        """Обновить меш если нужно."""
         if self._needs_rebuild:
             self._rebuild_mesh()
             self._needs_rebuild = False
