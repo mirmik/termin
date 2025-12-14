@@ -340,10 +340,9 @@ class VoxelizerComponent(Component):
         expand_regions = stage >= NavMeshStage.REGIONS_EXPANDED
         stitch_polygons = stage >= NavMeshStage.STITCHED
         decimate = stage >= NavMeshStage.DECIMATED
-        # Контуры пока отключены
-        extract_contours = False  # stage >= NavMeshStage.WITH_CONTOURS
-        simplify_contours = False  # stage >= NavMeshStage.SIMPLIFIED
-        retriangulate = False  # stage >= NavMeshStage.FINAL
+        extract_contours = stage >= NavMeshStage.WITH_CONTOURS
+        simplify_contours = stage >= NavMeshStage.SIMPLIFIED
+        retriangulate = False  # TODO: ear clipping
 
         navmesh = builder.build(
             grid,
