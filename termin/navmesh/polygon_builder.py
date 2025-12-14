@@ -840,27 +840,38 @@ class PolygonBuilder:
         min_xy = contour_points.min(axis=0)
         max_xy = contour_points.max(axis=0)
 
-        # Расставляем сиды на сетке
-        seeds = self._place_seeds_on_grid(contour_points, min_xy, max_xy, cell_size)
+        # Расставляем сиды на сетке внутри контура
+        grid_seeds = self._place_seeds_on_grid(contour_points, min_xy, max_xy, cell_size)
 
-        if len(seeds) < 3:
-            # Слишком мало сидов — возвращаем исходный контур как один полигон
+        # Добавляем вершины контура как сиды — это обеспечит примыкание к границе
+        boundary_seeds = contour_points.copy()
+
+        # Объединяем сиды
+        if len(grid_seeds) > 0:
+            all_interior_seeds = np.vstack([grid_seeds, boundary_seeds])
+        else:
+            all_interior_seeds = boundary_seeds
+
+        if len(all_interior_seeds) < 3:
             return self._triangulate_convex_polygon(contour_points)
 
         # Добавляем далёкие точки для ограничения бесконечных рёбер
-        padding = max(max_xy[0] - min_xy[0], max_xy[1] - min_xy[1]) * 2
+        padding = max(max_xy[0] - min_xy[0], max_xy[1] - min_xy[1]) * 3
         far_points = np.array([
             [min_xy[0] - padding, min_xy[1] - padding],
             [max_xy[0] + padding, min_xy[1] - padding],
             [max_xy[0] + padding, max_xy[1] + padding],
             [min_xy[0] - padding, max_xy[1] + padding],
         ])
-        all_seeds = np.vstack([seeds, far_points])
+
+        num_interior = len(all_interior_seeds)
+        all_seeds = np.vstack([all_interior_seeds, far_points])
 
         # Вычисляем Voronoi
         try:
             vor = Voronoi(all_seeds)
-        except Exception:
+        except Exception as e:
+            print(f"Voronoi failed: {e}")
             return self._triangulate_convex_polygon(contour_points)
 
         # Собираем ячейки и обрезаем по контуру
@@ -868,7 +879,7 @@ class PolygonBuilder:
         all_triangles: list[np.ndarray] = []
         vertex_offset = 0
 
-        for i in range(len(seeds)):  # Только наши сиды, не far_points
+        for i in range(num_interior):  # Только interior сиды, не far_points
             region_idx = vor.point_region[i]
             region = vor.regions[region_idx]
 
