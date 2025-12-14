@@ -339,7 +339,8 @@
             "data": {
               "grid_name": "",
               "cell_size": 0.25,
-              "output_path": "Voxels/cube.voxels"
+              "output_path": "Voxels/cube.voxels",
+              "voxelize_mode": 0
             },
             "type": "VoxelizerComponent"
           }
@@ -384,8 +385,9 @@
           {
             "data": {
               "grid_name": "Bulba",
-              "cell_size": 0.15,
-              "output_path": "Voxels/bulbasaur.voxels"
+              "cell_size": 0.03,
+              "output_path": "Voxels/bulbasaur.voxels",
+              "voxelize_mode": 3
             },
             "type": "VoxelizerComponent"
           }
@@ -420,7 +422,31 @@
         "components": [
           {
             "data": {
-              "voxel_grid_name": "Bulba"
+              "voxel_grid_name": "Bulba",
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3000076413154602,
+                0.20000000298023224,
+                0.46399635076522827
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ],
+              "fill_percent": 62.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ]
             },
             "type": "VoxelDisplayComponent"
           }
@@ -464,14 +490,15 @@
   "editor": {
     "camera": {
       "target": [
-        1.0929803848266602,
-        0.3913204073905945,
-        -1.4761499166488647
+        -0.1019400426797018,
+        -0.9773781904975599,
+        -2.5108037500443454
       ],
-      "radius": 7.5,
-      "azimuth": 26.954864967800237,
-      "elevation": 0.31415926535897787
+      "radius": 2.5,
+      "azimuth": 33.49635900427492,
+      "elevation": 0.8656833089891863
     },
+    "selected_entity": "Bulba",
     "displays": [
       {
         "name": "Editor",
