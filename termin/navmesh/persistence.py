@@ -50,11 +50,11 @@ class NavMeshPersistence:
                 "voxel_coords": polygon.voxel_coords,
                 "neighbors": polygon.neighbors,
             }
-            # Контуры (опционально)
+            # Контуры (опционально) — конвертируем numpy.int32 в int
             if polygon.outer_contour is not None:
-                poly_data["outer_contour"] = polygon.outer_contour
+                poly_data["outer_contour"] = [int(i) for i in polygon.outer_contour]
             if polygon.holes:
-                poly_data["holes"] = polygon.holes
+                poly_data["holes"] = [[int(i) for i in hole] for hole in polygon.holes]
             data["polygons"].append(poly_data)
 
         with open(path, "w", encoding="utf-8") as f:
