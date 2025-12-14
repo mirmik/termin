@@ -109,8 +109,16 @@ class PolygonBuilder:
 
         # Шаги 3-7: Для каждого региона строим полигон
         polygons: list[NavPolygon] = []
+        stats = {
+            "total_regions": len(regions),
+            "skipped_small": 0,
+            "build_failed": 0,
+            "built": 0,
+        }
+
         for region_idx, (region_voxels, region_normal) in enumerate(regions):
             if len(region_voxels) < self.config.min_region_voxels:
+                stats["skipped_small"] += 1
                 continue
 
             polygon = self._build_polygon(
@@ -126,6 +134,11 @@ class PolygonBuilder:
             )
             if polygon is not None:
                 polygons.append(polygon)
+                stats["built"] += 1
+            else:
+                stats["build_failed"] += 1
+
+        print(f"NavMesh build stats: {stats}, final polygons: {len(polygons)}")
 
         return NavMesh(
             polygons=polygons,
@@ -471,6 +484,7 @@ class PolygonBuilder:
             # Получаем координаты упрощённого контура
             contour_coords = points_2d[polygon.outer_contour]
             expected_triangles = len(contour_coords) - 2
+            old_tri_count = len(polygon.triangles)
 
             if len(contour_coords) >= 3:
                 # Проверяем на самопересечение
@@ -503,6 +517,9 @@ class PolygonBuilder:
                             # Контуры больше не валидны — индексы изменились
                             polygon.outer_contour = None
                             polygon.holes = []
+                            print(f"Ear clipping OK: {old_tri_count} -> {len(new_tris)} triangles, {len(contour_coords)} verts")
+        elif retriangulate and polygon.outer_contour is None:
+            print(f"Ear clipping skipped: no outer_contour")
 
         return polygon
 
