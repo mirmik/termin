@@ -21,7 +21,8 @@ class VoxelizeMode(IntEnum):
     FILLED = 1          # Поверхность + заполнение внутри
     MARKED = 2          # Заполнение + пометка поверхности (SOLID + SURFACE)
     SURFACE_ONLY = 3    # Только поверхность (внутренние удалены)
-    FULL_GRID = 4       # Заполнить всю сетку (без вокселизации меша)
+    WITH_NORMALS = 4    # Поверхность + нормали
+    FULL_GRID = 5       # Заполнить всю сетку (без вокселизации меша)
 
 
 def _voxelize_action(component: "VoxelizerComponent") -> None:
@@ -61,6 +62,7 @@ class VoxelizerComponent(Component):
                 (VoxelizeMode.FILLED, "Filled (interior)"),
                 (VoxelizeMode.MARKED, "Marked (surface tagged)"),
                 (VoxelizeMode.SURFACE_ONLY, "Surface Only (interior removed)"),
+                (VoxelizeMode.WITH_NORMALS, "With Normals"),
                 (VoxelizeMode.FULL_GRID, "Full Grid (fill bounds)"),
             ],
         ),
@@ -188,10 +190,22 @@ class VoxelizerComponent(Component):
                 marked = grid.mark_surface(VOXEL_SURFACE)
                 print(f"VoxelizerComponent: marked {marked} surface voxels")
 
-            # Стадия 4: Удаляем внутренние (SURFACE_ONLY)
+            # Стадия 4: Удаляем внутренние (SURFACE_ONLY и выше)
             if mode >= VoxelizeMode.SURFACE_ONLY:
                 cleared = grid.clear_by_type(VOXEL_SOLID)
                 print(f"VoxelizerComponent: cleared {cleared} interior voxels")
+
+            # Стадия 5: Вычисляем нормали для surface вокселей (WITH_NORMALS)
+            if mode >= VoxelizeMode.WITH_NORMALS:
+                surface_voxels: set[tuple[int, int, int]] = set()
+                for vx, vy, vz, vtype in grid.iter_non_empty():
+                    if vtype == VOXEL_SURFACE:
+                        surface_voxels.add((vx, vy, vz))
+
+                normals_count = voxelizer.compute_surface_normals(
+                    mesh, surface_voxels, transform_matrix=None
+                )
+                print(f"VoxelizerComponent: computed {normals_count} surface normals")
 
         self._last_voxel_count = grid.voxel_count
 

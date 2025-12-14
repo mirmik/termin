@@ -22,6 +22,17 @@ VOXEL_SOLID = 1      # Заполненный воксель (после вок�
 VOXEL_SURFACE = 2    # Поверхностный воксель (после mark_surface)
 
 
+def _compute_triangle_normal(v0: np.ndarray, v1: np.ndarray, v2: np.ndarray) -> np.ndarray:
+    """Вычислить нормаль треугольника."""
+    edge1 = v1 - v0
+    edge2 = v2 - v0
+    normal = np.cross(edge1, edge2)
+    length = np.linalg.norm(normal)
+    if length > 1e-8:
+        normal /= length
+    return normal.astype(np.float32)
+
+
 class MeshVoxelizer:
     """
     Вокселизатор одного меша.
@@ -125,6 +136,87 @@ class MeshVoxelizer:
                         count += 1
 
         return count
+
+    def compute_surface_normals(
+        self,
+        mesh: "Mesh3",
+        surface_voxels: set[tuple[int, int, int]],
+        transform_matrix: Optional[np.ndarray] = None,
+    ) -> int:
+        """
+        Вычислить нормали для поверхностных вокселей.
+
+        Второй проход по треугольникам меша. Для каждого треугольника,
+        пересекающего surface воксель, накапливаем его нормаль.
+        Результат — усреднённые нормализованные нормали в grid.surface_normals.
+
+        Args:
+            mesh: Меш для вычисления нормалей.
+            surface_voxels: Множество координат поверхностных вокселей.
+            transform_matrix: Матрица трансформации 4x4 (world space).
+
+        Returns:
+            Количество вокселей с вычисленными нормалями.
+        """
+        vertices = mesh.vertices
+        triangles = mesh.triangles
+
+        if vertices is None or triangles is None:
+            return 0
+
+        if not surface_voxels:
+            return 0
+
+        # Применяем трансформацию если есть
+        if transform_matrix is not None:
+            vertices = self._transform_vertices(vertices, transform_matrix)
+
+        # Накапливаем нормали для каждого surface вокселя
+        normals_accum: dict[tuple[int, int, int], list[np.ndarray]] = {}
+
+        for tri in triangles:
+            v0 = vertices[tri[0]]
+            v1 = vertices[tri[1]]
+            v2 = vertices[tri[2]]
+
+            # Нормаль треугольника
+            tri_normal = _compute_triangle_normal(v0, v1, v2)
+
+            # AABB треугольника
+            tri_min, tri_max = triangle_aabb(v0, v1, v2)
+            epsilon = self._cell_size * 0.01
+            tri_min = tri_min - epsilon
+            tri_max = tri_max + epsilon
+
+            voxel_min = self._grid.world_to_voxel(tri_min)
+            voxel_max = self._grid.world_to_voxel(tri_max)
+
+            # Проверяем воксели в AABB треугольника
+            for vx in range(voxel_min[0], voxel_max[0] + 1):
+                for vy in range(voxel_min[1], voxel_max[1] + 1):
+                    for vz in range(voxel_min[2], voxel_max[2] + 1):
+                        voxel_key = (vx, vy, vz)
+
+                        # Только surface воксели
+                        if voxel_key not in surface_voxels:
+                            continue
+
+                        # Проверяем пересечение
+                        center = self._grid.voxel_to_world(vx, vy, vz)
+                        if triangle_aabb_intersect(v0, v1, v2, center, self._half_size):
+                            if voxel_key not in normals_accum:
+                                normals_accum[voxel_key] = []
+                            normals_accum[voxel_key].append(tri_normal)
+
+        # Усредняем и нормализуем
+        for voxel_key, normal_list in normals_accum.items():
+            avg_normal = np.sum(normal_list, axis=0)
+            length = np.linalg.norm(avg_normal)
+            if length > 1e-8:
+                avg_normal /= length
+            self._grid.set_surface_normal(*voxel_key, avg_normal)
+
+        return len(normals_accum)
 
 
 class SceneVoxelizer:

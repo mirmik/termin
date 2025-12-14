@@ -17,9 +17,10 @@ class VoxelGrid:
     Attributes:
         origin: Мировые координаты угла сетки (минимум по X, Y, Z).
         cell_size: Размер одного вокселя в мировых единицах.
+        surface_normals: Словарь нормалей для поверхностных вокселей.
     """
 
-    __slots__ = ("_origin", "_cell_size", "_chunks", "_name")
+    __slots__ = ("_origin", "_cell_size", "_chunks", "_name", "_surface_normals")
 
     def __init__(
         self,
@@ -31,6 +32,7 @@ class VoxelGrid:
         self._cell_size = cell_size
         self._chunks: dict[tuple[int, int, int], VoxelChunk] = {}
         self._name = name
+        self._surface_normals: dict[tuple[int, int, int], np.ndarray] = {}
 
     @property
     def origin(self) -> np.ndarray:
@@ -58,6 +60,19 @@ class VoxelGrid:
     @name.setter
     def name(self, value: str) -> None:
         self._name = value
+
+    @property
+    def surface_normals(self) -> dict[tuple[int, int, int], np.ndarray]:
+        """Нормали поверхностных вокселей: {(vx, vy, vz): normal_vec3}."""
+        return self._surface_normals
+
+    def set_surface_normal(self, vx: int, vy: int, vz: int, normal: np.ndarray) -> None:
+        """Установить нормаль для поверхностного вокселя."""
+        self._surface_normals[(vx, vy, vz)] = np.array(normal, dtype=np.float32)
+
+    def get_surface_normal(self, vx: int, vy: int, vz: int) -> Optional[np.ndarray]:
+        """Получить нормаль поверхностного вокселя или None."""
+        return self._surface_normals.get((vx, vy, vz))
 
     @property
     def chunk_count(self) -> int:

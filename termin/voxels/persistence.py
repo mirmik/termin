@@ -12,7 +12,7 @@ from termin.voxels.grid import VoxelGrid
 
 
 VOXEL_FILE_EXTENSION = ".voxels"
-VOXEL_FORMAT_VERSION = "1.0"
+VOXEL_FORMAT_VERSION = "1.1"  # 1.1: added surface_normals
 
 
 class VoxelPersistence:
@@ -46,6 +46,14 @@ class VoxelPersistence:
             key = f"{cx},{cy},{cz}"
             data["chunks"][key] = chunk.serialize()
 
+        # Сохраняем нормали поверхностных вокселей
+        if grid.surface_normals:
+            normals_data = {}
+            for (vx, vy, vz), normal in grid.surface_normals.items():
+                key = f"{vx},{vy},{vz}"
+                normals_data[key] = normal.tolist()
+            data["surface_normals"] = normals_data
+
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
@@ -64,6 +72,8 @@ class VoxelPersistence:
             ValueError: Если формат файла неверный.
             FileNotFoundError: Если файл не найден.
         """
+        import numpy as np
+
         path = Path(path)
 
         with open(path, "r", encoding="utf-8") as f:
@@ -89,6 +99,14 @@ class VoxelPersistence:
             chunk = VoxelChunk.deserialize(chunk_data)
             if not chunk.is_empty:
                 grid._chunks[(cx, cy, cz)] = chunk
+
+        # Загружаем нормали поверхностных вокселей
+        for key, normal_list in data.get("surface_normals", {}).items():
+            parts = key.split(",")
+            if len(parts) != 3:
+                continue
+            vx, vy, vz = int(parts[0]), int(parts[1]), int(parts[2])
+            grid.set_surface_normal(vx, vy, vz, np.array(normal_list, dtype=np.float32))
 
         return grid
 
