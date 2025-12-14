@@ -252,7 +252,7 @@ class VoxelDisplayComponent(Component):
         if current_grid is not self._last_grid:
             self._rebuild_mesh()
 
-    _DEBUG_GET_PHASES = False  # Debug: отладка get_phases
+    _DEBUG_GET_PHASES = True  # Debug: отладка get_phases
 
     def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
         """Возвращает MaterialPhases для рендеринга."""
