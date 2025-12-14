@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "name": "TransparentCube",
+  "cell_size": 0.25,
+  "chunks": {
+    "-1,-1,-1": {
+      "data": "H4sIAAAAAAAC/+3PMQEAAAjDsM2/aRwgAJKvZxMAAAC4pt373X8GD3m++QAQAAA=",
+      "count": 7
+    },
+    "-1,0,-1": {
+      "data": "H4sIAAAAAAAC/+3PMREAAAjEMN6/aSRwrJBsHVsFAADAP8muz/1Pfe6/Ad74QxwAEAAA",
+      "count": 10
+    },
+    "0,-1,-1": {
+      "data": "H4sIAAAAAAAC/+3QoQEAAAzCMPj/6fm9QOKQJVnSvp3oX+5fOwAAABh2oM5SkwAQAAA=",
+      "count": 10
+    },
+    "0,0,-1": {
+      "data": "H4sIAAAAAAAC/+3PsQ0AIAwDQWf/pWkjCiRKyF337px0lZx7Hz4z/n/dNQAAAK9YjPs4/wAQAAA=",
+      "count": 14
+    },
+    "-1,-1,0": {
+      "data": "H4sIAAAAAAAC/+3PoREAQAgDQdJ/07x9g2fYdReXKgAAANgvydjX/r/lywaF8QGxABAAAA==",
+      "count": 10
+    },
+    "-1,0,0": {
+      "data": "H4sIAAAAAAAC/+3QsQ0AAAjDMPr/03yAxAr2lrGtAgAA4IMkqz74wNjX9zcVp1t9ABAAAA==",
+      "count": 14
+    },
+    "0,-1,0": {
+      "data": "H4sIAAAAAAAC/+3QIQIAMAwCMfj/p+tn5ttEnoNkt7ZvySX29/MHAADADQMnVWPGABAAAA==",
+      "count": 14
+    },
+    "0,0,0": {
+      "data": "H4sIAAAAAAAC/+3PoREAMAwDsXj/pYsTUtxUYn9Grkp1vZO5b/P3//nv1gAAALzpAP4S43wAEAAA",
+      "count": 19
+    }
+  }
+}

@@ -1,22 +1,23 @@
 {
   "version": "1.0",
-  "cell_size": 0.25,
+  "name": "Bulba",
+  "cell_size": 0.15,
   "chunks": {
     "-1,-1,0": {
-      "data": "H4sIAAAAAAAC/+3HsQ0AAAgDoPr/0/YCdxPYSAAAAIDvpq4vzKVMMAAQAAA=",
-      "count": 8
+      "data": "H4sIAAAAAAAC/+3PMQoAIAwEweT/n7awCEogtTLTHVyzEQAAAPCkPMZ27a9ym96pvw4LUVHTIgAQAAA=",
+      "count": 36
     },
     "0,-1,0": {
-      "data": "H4sIAAAAAAAC/+3QoREAMAgEQb7/pqMiQjqAXQeDOaqGSdr4LtIPtvVneP/3jt39AAAA1wG6PTzDABAAAA==",
-      "count": 27
+      "data": "H4sIAAAAAAAC/+3RMQoAIAxD0eb+lxYEwVaos/G/qckWGvE6STmlYt57Xp2NY3/c98t5f/9/+f0/2v25qNldXfvVeAAAAKAYS6AsOgAQAAA=",
+      "count": 77
     },
     "-1,0,0": {
-      "data": "H4sIAAAAAAAC/+3PIQIAAATAQP7/aVmhc9cWFwEAAMAHmXPf/+/HW19TB5YIWQAQAAA=",
-      "count": 16
+      "data": "H4sIAAAAAAAC/+3QIQIAIAwCwPH/T2vUFbN616BBFQAAwB/y+/6p57XpuZLH9u8XpA0+5dsfGcSOnNoAEAAA",
+      "count": 48
     },
     "0,0,0": {
-      "data": "H4sIAAAAAAAC/+3PIRIAIAzEwOb/nwYUcxV4IKt6UxUKqG3eucn/a8jctf7qp/eftyRJkiTpTgNl7cZEABAAAA==",
-      "count": 36
+      "data": "H4sIAAAAAAAC/+3SMQ7AIAxDUfv+l2ZASCFEMKf9b6hk1MUYS7KtxeFb5klBir14Nnj1d+wf/9d5H+36H/vf8tf2T33qfJ27c30VY24H+bn3bgsAAAD82wDgJDqQABAAAA==",
+      "count": 102
     }
   }
 }

@@ -334,6 +334,14 @@
               "material": "TransparentMaterial"
             },
             "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "grid_name": "",
+              "cell_size": 0.25,
+              "output_path": "Voxels/cube.voxels"
+            },
+            "type": "VoxelizerComponent"
           }
         ],
         "children": []
@@ -372,12 +380,20 @@
               "material": "DefaultMaterial"
             },
             "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "grid_name": "Bulba",
+              "cell_size": 0.15,
+              "output_path": "Voxels/bulbasaur.voxels"
+            },
+            "type": "VoxelizerComponent"
           }
         ],
         "children": []
       },
       {
-        "name": "entity1",
+        "name": "BulbaViz",
         "priority": 0,
         "scale": [
           1.0,
@@ -390,9 +406,9 @@
         "selectable": true,
         "pose": {
           "position": [
-            0.0,
-            2.7283491492271423,
-            -2.429252028465271
+            -1.7535837292671204,
+            0.5198538899421692,
+            -2.627738833427429
           ],
           "rotation": [
             0.0,
@@ -404,7 +420,7 @@
         "components": [
           {
             "data": {
-              "voxel_file": "Voxels/bulbasaur.voxels"
+              "voxel_grid_name": "Bulba"
             },
             "type": "VoxelDisplayComponent"
           }
@@ -448,15 +464,14 @@
   "editor": {
     "camera": {
       "target": [
-        -0.9958726236602023,
-        -1.4330905203462971,
-        -2.8220406060486742
+        1.0929803848266602,
+        0.3913204073905945,
+        -1.4761499166488647
       ],
-      "radius": 11.0,
-      "azimuth": 20.80432468377232,
-      "elevation": 0.5759586531581274
+      "radius": 7.5,
+      "azimuth": 26.954864967800237,
+      "elevation": 0.31415926535897787
     },
-    "selected_entity": "cube2",
     "displays": [
       {
         "name": "Editor",
