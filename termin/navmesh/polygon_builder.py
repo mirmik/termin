@@ -523,22 +523,28 @@ class PolygonBuilder:
 
                 # 4 угла боковой грани
                 voxel_origin = origin + np.array(voxel_coord, dtype=np.float32) * cell_size
+
+                # Генерируем углы в порядке периметра (не Z-порядок!)
+                # Порядок: (d_bottom, e=0) -> (d_top, e=0) -> (d_top, e=1) -> (d_bottom, e=1)
+                corner_params = [
+                    (d_bottom, 0),
+                    (d_top, 0),
+                    (d_top, 1),
+                    (d_bottom, 1),
+                ]
                 side_corners = []
+                for d_val, e_val in corner_params:
+                    corner = [0.0, 0.0, 0.0]
+                    corner[side_axis] = side_pos - voxel_coord[side_axis]
+                    corner[dominant_axis] = d_val - voxel_coord[dominant_axis]
+                    corner[edge_axis] = e_val
+                    pos = voxel_origin + np.array(corner, dtype=np.float32) * cell_size
+                    side_corners.append(get_or_add_vertex(pos))
 
-                for d_val in [d_bottom, d_top]:
-                    for e_val in [0, 1]:
-                        corner = [0.0, 0.0, 0.0]
-                        corner[side_axis] = side_pos - voxel_coord[side_axis]
-                        corner[dominant_axis] = d_val - voxel_coord[dominant_axis]
-                        corner[edge_axis] = e_val
-                        pos = voxel_origin + np.array(corner, dtype=np.float32) * cell_size
-                        side_corners.append(get_or_add_vertex(pos))
-
-                # Нормаль боковой грани — в направлении side_dir по side_axis
+                # Нормаль боковой грани — наружу от меша (в направлении side_dir по side_axis)
                 side_normal = np.zeros(3, dtype=np.float32)
                 side_normal[side_axis] = side_dir
 
-                # Порядок вершин (будет скорректирован при триангуляции)
                 quad_indices = [side_corners[0], side_corners[1], side_corners[2], side_corners[3]]
                 quads.append((quad_indices, side_normal))
 
