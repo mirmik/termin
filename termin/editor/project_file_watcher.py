@@ -12,8 +12,11 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Dict, Set
 
 if TYPE_CHECKING:
-    from PyQt6.QtCore import QFileSystemWatcher
+    from PyQt6.QtCore import QFileSystemWatcher, QTimer
     from termin.visualization.core.resources import ResourceManager
+
+# Debounce delay in milliseconds
+DEBOUNCE_DELAY_MS = 300
 
 
 class FileTypeProcessor(ABC):
@@ -144,6 +147,10 @@ class ProjectFileWatcher:
         # All project files by extension (for statistics)
         self._all_files_by_ext: Dict[str, Set[str]] = {}  # ext -> set of paths
 
+        # Debounce: pending file changes
+        self._pending_changes: Set[str] = set()
+        self._debounce_timer: "QTimer | None" = None
+
     def register_processor(self, processor: FileTypeProcessor) -> None:
         """
         Register a FileTypeProcessor for its extensions.
@@ -165,26 +172,36 @@ class ProjectFileWatcher:
         if self._file_watcher is not None:
             return
 
-        from PyQt6.QtCore import QFileSystemWatcher
+        from PyQt6.QtCore import QFileSystemWatcher, QTimer
 
         self._file_watcher = QFileSystemWatcher()
         self._file_watcher.directoryChanged.connect(self._on_directory_changed)
-        self._file_watcher.fileChanged.connect(self._on_file_changed)
+        self._file_watcher.fileChanged.connect(self._on_file_changed_debounced)
+
+        # Debounce timer
+        self._debounce_timer = QTimer()
+        self._debounce_timer.setSingleShot(True)
+        self._debounce_timer.timeout.connect(self._process_pending_changes)
 
         if project_path:
             self.watch_directory(project_path)
 
     def disable(self) -> None:
         """Disable file watching and clear all state."""
+        if self._debounce_timer is not None:
+            self._debounce_timer.stop()
+            self._debounce_timer = None
+
         if self._file_watcher is not None:
             self._file_watcher.directoryChanged.disconnect(self._on_directory_changed)
-            self._file_watcher.fileChanged.disconnect(self._on_file_changed)
+            self._file_watcher.fileChanged.disconnect(self._on_file_changed_debounced)
             self._file_watcher = None
 
         self._project_path = None
         self._watched_dirs.clear()
         self._watched_files.clear()
         self._all_files_by_ext.clear()
+        self._pending_changes.clear()
 
     def rescan(self) -> None:
         """
@@ -349,13 +366,30 @@ class ProjectFileWatcher:
                 if self._should_watch_file(file_path) and file_path not in self._watched_files:
                     self._add_file(file_path)
 
-    def _on_file_changed(self, path: str) -> None:
-        """Handle file modifications."""
+    def _on_file_changed_debounced(self, path: str) -> None:
+        """Handle file change with debouncing."""
         # QFileSystemWatcher may remove path after change (Linux quirk)
         if self._file_watcher is not None and os.path.exists(path):
             if path not in self._file_watcher.files():
                 self._file_watcher.addPath(path)
 
+        # Add to pending and restart timer
+        self._pending_changes.add(path)
+        if self._debounce_timer is not None:
+            self._debounce_timer.start(DEBOUNCE_DELAY_MS)
+
+    def _process_pending_changes(self) -> None:
+        """Process all pending file changes after debounce delay."""
+        pending = self._pending_changes.copy()
+        self._pending_changes.clear()
+
+        for path in pending:
+            if not os.path.exists(path):
+                continue
+            self._on_file_changed(path)
+
+    def _on_file_changed(self, path: str) -> None:
+        """Handle file modification (actual processing)."""
         ext = os.path.splitext(path)[1].lower()
 
         # Handle .spec files specially
