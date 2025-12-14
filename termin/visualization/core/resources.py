@@ -449,6 +449,7 @@ class ResourceManager:
             navmesh: NavMesh
             source_path: Путь к файлу-источнику
         """
+        navmesh.name = name
         keeper = self.get_or_create_navmesh_keeper(name)
         keeper.set_navmesh(navmesh, source_path)
 

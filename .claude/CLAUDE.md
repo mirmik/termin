@@ -2,6 +2,9 @@
 
 ## Code Style
 
+### No Speculative Code
+No fallbacks, backwards compatibility, or special cases "just in case". Add them only when there is a proven, specific need. If something doesn't work, find the root cause instead of adding workarounds.
+
 ### Attribute Access
 Methods `getattr`, `hasattr`, and `setattr` are only allowed in contexts where the algorithm explicitly requires reflection (e.g., serialization, deserialization, dynamic dispatch).
 
