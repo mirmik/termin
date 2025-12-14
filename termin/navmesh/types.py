@@ -29,7 +29,7 @@ class NavPolygon:
     """
 
     vertices: np.ndarray
-    """Вершины контура полигона в мировых координатах, shape (N, 3)."""
+    """Вершины полигона в мировых координатах, shape (N, 3)."""
 
     triangles: np.ndarray
     """Индексы треугольников, shape (M, 3)."""
@@ -42,6 +42,12 @@ class NavPolygon:
 
     neighbors: list[int] = field(default_factory=list)
     """Индексы соседних полигонов (заполняется позже)."""
+
+    outer_contour: Optional[list[int]] = None
+    """Внешний контур — упорядоченный список индексов вершин (CCW). None если не вычислен."""
+
+    holes: list[list[int]] = field(default_factory=list)
+    """Дыры — список контуров, каждый контур — список индексов вершин (CW)."""
 
 
 @dataclass

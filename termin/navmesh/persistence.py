@@ -50,6 +50,11 @@ class NavMeshPersistence:
                 "voxel_coords": polygon.voxel_coords,
                 "neighbors": polygon.neighbors,
             }
+            # Контуры (опционально)
+            if polygon.outer_contour is not None:
+                poly_data["outer_contour"] = polygon.outer_contour
+            if polygon.holes:
+                poly_data["holes"] = polygon.holes
             data["polygons"].append(poly_data)
 
         with open(path, "w", encoding="utf-8") as f:
@@ -92,6 +97,8 @@ class NavMeshPersistence:
                 normal=np.array(poly_data["normal"], dtype=np.float32),
                 voxel_coords=[tuple(c) for c in poly_data.get("voxel_coords", [])],
                 neighbors=poly_data.get("neighbors", []),
+                outer_contour=poly_data.get("outer_contour"),
+                holes=poly_data.get("holes", []),
             )
             navmesh.polygons.append(polygon)
 

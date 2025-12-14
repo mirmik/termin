@@ -49,12 +49,21 @@ class PolygonBuilder:
     def __init__(self, config: NavMeshConfig | None = None) -> None:
         self.config = config or NavMeshConfig()
 
-    def build(self, grid: VoxelGrid) -> NavMesh:
+    def build(
+        self,
+        grid: VoxelGrid,
+        extract_contours: bool = False,
+        simplify_contours: bool = False,
+        retriangulate: bool = False,
+    ) -> NavMesh:
         """
         Построить NavMesh из воксельной сетки.
 
         Args:
             grid: Воксельная сетка с поверхностными вокселями и нормалями.
+            extract_contours: Извлекать контуры из треугольников (шаги 7-9).
+            simplify_contours: Упрощать контуры Douglas-Peucker (шаг 10).
+            retriangulate: Перетриангулировать через ear clipping (шаги 11-12).
 
         Returns:
             Навигационная сетка.
@@ -77,7 +86,14 @@ class PolygonBuilder:
             if len(region_voxels) < self.config.min_region_voxels:
                 continue
 
-            polygon = self._build_polygon(region_voxels, region_normal, grid)
+            polygon = self._build_polygon(
+                region_voxels,
+                region_normal,
+                grid,
+                extract_contours=extract_contours,
+                simplify_contours=simplify_contours,
+                retriangulate=retriangulate,
+            )
             if polygon is not None:
                 polygons.append(polygon)
 
@@ -162,9 +178,12 @@ class PolygonBuilder:
         voxels: list[tuple[int, int, int]],
         normal: np.ndarray,
         grid: VoxelGrid,
+        extract_contours: bool = False,
+        simplify_contours: bool = False,
+        retriangulate: bool = False,
     ) -> NavPolygon | None:
         """
-        Шаги 3-7: Построить полигон из группы вокселей.
+        Шаги 3-13: Построить полигон из группы вокселей.
         """
         if len(voxels) < 3:
             return None
@@ -201,19 +220,35 @@ class PolygonBuilder:
             return None
 
         # Шаг 7: Обратно в 3D
-        # vertices_3d = centroid + u * basis_u + v * basis_v
         vertices_3d = (
             centroid +
             points_2d[:, 0:1] * basis_u +
             points_2d[:, 1:2] * basis_v
         ).astype(np.float32)
 
-        return NavPolygon(
+        # Создаём базовый полигон
+        polygon = NavPolygon(
             vertices=vertices_3d,
             triangles=triangles_2d,
             normal=normal,
             voxel_coords=voxels,
         )
+
+        # Шаги 7-9: Извлечение контуров
+        if extract_contours:
+            outer, holes = self._extract_contours(triangles_2d, points_2d)
+            polygon.outer_contour = outer
+            polygon.holes = holes
+
+        # Шаг 10: Упрощение контуров (TODO)
+        if simplify_contours:
+            pass  # TODO: Douglas-Peucker
+
+        # Шаги 11-12: Перетриангуляция (TODO)
+        if retriangulate:
+            pass  # TODO: Bridge + Ear Clipping
+
+        return polygon
 
     def _project_to_2d(
         self,
@@ -304,3 +339,120 @@ class PolygonBuilder:
             return np.array([], dtype=np.int32).reshape(0, 3)
 
         return np.array(valid_triangles, dtype=np.int32)
+
+    def _extract_contours(
+        self,
+        triangles: np.ndarray,
+        points_2d: np.ndarray,
+    ) -> tuple[list[int], list[list[int]]]:
+        """
+        Шаги 7-9: Извлечь контуры из треугольников.
+
+        Returns:
+            (outer_contour, holes) — внешний контур (CCW) и список дыр (CW).
+        """
+        from collections import defaultdict
+
+        # Шаг 7: Извлекаем boundary edges
+        edge_count: dict[tuple[int, int], int] = defaultdict(int)
+        for tri in triangles:
+            for i in range(3):
+                v0, v1 = tri[i], tri[(i + 1) % 3]
+                edge = (min(v0, v1), max(v0, v1))
+                edge_count[edge] += 1
+
+        # Boundary = рёбра, встречающиеся ровно 1 раз
+        boundary_edges = {e for e, count in edge_count.items() if count == 1}
+
+        if not boundary_edges:
+            return [], []
+
+        # Шаг 8: Строим граф смежности и собираем контуры
+        adjacency: dict[int, list[int]] = defaultdict(list)
+        for v0, v1 in boundary_edges:
+            adjacency[v0].append(v1)
+            adjacency[v1].append(v0)
+
+        # Обходим граф, собирая замкнутые контуры
+        visited_edges: set[tuple[int, int]] = set()
+        contours: list[list[int]] = []
+
+        for start_edge in boundary_edges:
+            if start_edge in visited_edges:
+                continue
+
+            # Начинаем новый контур
+            v0, v1 = start_edge
+            contour = [v0]
+            current = v0
+            prev = -1
+
+            while True:
+                # Находим следующую вершину
+                neighbors = adjacency[current]
+                next_v = -1
+                for n in neighbors:
+                    if n != prev:
+                        edge = (min(current, n), max(current, n))
+                        if edge not in visited_edges:
+                            next_v = n
+                            break
+
+                if next_v == -1:
+                    break
+
+                edge = (min(current, next_v), max(current, next_v))
+                visited_edges.add(edge)
+
+                if next_v == contour[0]:
+                    # Замкнули контур
+                    break
+
+                contour.append(next_v)
+                prev = current
+                current = next_v
+
+            if len(contour) >= 3:
+                contours.append(contour)
+
+        if not contours:
+            return [], []
+
+        # Шаг 9: Определяем внешний контур и дыры
+        # Находим точку с минимальным X
+        min_x = float('inf')
+        outer_idx = 0
+
+        for idx, contour in enumerate(contours):
+            for v in contour:
+                x = points_2d[v, 0]
+                if x < min_x:
+                    min_x = x
+                    outer_idx = idx
+
+        outer_contour = contours[outer_idx]
+        holes = [c for i, c in enumerate(contours) if i != outer_idx]
+
+        # Нормализуем ориентацию: внешний → CCW, дыры → CW
+        if self._signed_area(outer_contour, points_2d) < 0:
+            outer_contour = outer_contour[::-1]
+
+        normalized_holes = []
+        for hole in holes:
+            if self._signed_area(hole, points_2d) > 0:
+                hole = hole[::-1]
+            normalized_holes.append(hole)
+
+        return outer_contour, normalized_holes
+
+    def _signed_area(self, contour: list[int], points_2d: np.ndarray) -> float:
+        """Вычислить signed area контура. Положительная = CCW."""
+        area = 0.0
+        n = len(contour)
+        for i in range(n):
+            j = (i + 1) % n
+            pi = points_2d[contour[i]]
+            pj = points_2d[contour[j]]
+            area += pi[0] * pj[1]
+            area -= pj[0] * pi[1]
+        return area / 2.0

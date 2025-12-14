@@ -16,6 +16,7 @@ from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.navmesh_handle import NavMeshHandle
+from termin.visualization.core.polyline import Polyline, PolylineDrawable
 from termin.visualization.core.serialization import serializable
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
@@ -35,7 +36,7 @@ def _get_navmesh_choices() -> list[tuple[str, str]]:
     return [(name, name) for name in names]
 
 
-@serializable(fields=["navmesh_name", "color", "wireframe", "show_normals"])
+@serializable(fields=["navmesh_name", "color", "wireframe", "show_normals", "show_contours"])
 class NavMeshDisplayComponent(Component):
     """
     Компонент для отображения NavMesh из ResourceManager.
@@ -68,6 +69,12 @@ class NavMeshDisplayComponent(Component):
             label="Show Normals",
             kind="bool",
         ),
+        "show_contours": InspectField(
+            path="show_contours",
+            label="Show Contours",
+            kind="bool",
+            setter=lambda obj, val: obj._set_show_contours(val),
+        ),
     }
 
     def __init__(self, navmesh_name: str = "") -> None:
@@ -76,6 +83,7 @@ class NavMeshDisplayComponent(Component):
         self._navmesh_handle: NavMeshHandle = NavMeshHandle()
         self._last_navmesh: Optional["NavMesh"] = None
         self._mesh_drawable: Optional[MeshDrawable] = None
+        self._contour_drawable: Optional[PolylineDrawable] = None
         self._material: Optional[Material] = None
         self._needs_rebuild = True
 
@@ -85,6 +93,7 @@ class NavMeshDisplayComponent(Component):
         # Режим отображения
         self.wireframe: bool = False
         self.show_normals: bool = False
+        self.show_contours: bool = False
 
         # Инициализируем handle если имя задано
         if navmesh_name:
@@ -117,6 +126,11 @@ class NavMeshDisplayComponent(Component):
         self.wireframe = value
         # Пересоздаём материал с новым render_state
         self._material = None
+
+    def _set_show_contours(self, value: bool) -> None:
+        """Установить режим отображения контуров."""
+        self.show_contours = value
+        self._needs_rebuild = True
 
     def _get_or_create_material(self) -> Material:
         """Получить или создать материал."""
@@ -157,10 +171,11 @@ class NavMeshDisplayComponent(Component):
         """Рисует геометрию NavMesh."""
         self._check_hot_reload()
 
-        if self._mesh_drawable is None:
-            return
+        if self._mesh_drawable is not None:
+            self._mesh_drawable.draw(context)
 
-        self._mesh_drawable.draw(context)
+        if self.show_contours and self._contour_drawable is not None:
+            self._contour_drawable.draw(context)
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
@@ -193,6 +208,10 @@ class NavMeshDisplayComponent(Component):
         if self._mesh_drawable is not None:
             self._mesh_drawable.delete()
             self._mesh_drawable = None
+
+        if self._contour_drawable is not None:
+            self._contour_drawable.delete()
+            self._contour_drawable = None
 
         navmesh = self._navmesh_handle.get()
         self._last_navmesh = navmesh
@@ -239,7 +258,45 @@ class NavMeshDisplayComponent(Component):
         mesh = Mesh3(vertices=vertices, triangles=triangles, normals=normals)
         self._mesh_drawable = MeshDrawable(mesh)
 
+        # Создаём контуры если есть
+        self._build_contour_drawable(navmesh)
+
         print(f"NavMeshDisplayComponent: built mesh with {len(vertices)} vertices, {len(triangles)} triangles")
+
+    def _build_contour_drawable(self, navmesh: "NavMesh") -> None:
+        """Построить drawable для контуров."""
+        # Собираем все контуры из полигонов
+        contour_segments: list[np.ndarray] = []
+
+        for polygon in navmesh.polygons:
+            if polygon.outer_contour is None:
+                continue
+
+            verts = polygon.vertices
+
+            # Внешний контур
+            outer = polygon.outer_contour
+            if len(outer) >= 2:
+                for i in range(len(outer)):
+                    j = (i + 1) % len(outer)
+                    contour_segments.append(verts[outer[i]])
+                    contour_segments.append(verts[outer[j]])
+
+            # Дыры
+            for hole in polygon.holes:
+                if len(hole) >= 2:
+                    for i in range(len(hole)):
+                        j = (i + 1) % len(hole)
+                        contour_segments.append(verts[hole[i]])
+                        contour_segments.append(verts[hole[j]])
+
+        if not contour_segments:
+            return
+
+        # Создаём polyline из сегментов (GL_LINES режим)
+        line_vertices = np.array(contour_segments, dtype=np.float32)
+        polyline = Polyline(line_vertices, is_strip=False)
+        self._contour_drawable = PolylineDrawable(polyline)
 
     # --- Сериализация ---
 
@@ -250,4 +307,5 @@ class NavMeshDisplayComponent(Component):
         comp.color = tuple(data.get("color", (0.2, 0.8, 0.3, 0.7)))
         comp.wireframe = data.get("wireframe", False)
         comp.show_normals = data.get("show_normals", False)
+        comp.show_contours = data.get("show_contours", False)
         return comp

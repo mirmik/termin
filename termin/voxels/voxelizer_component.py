@@ -25,6 +25,14 @@ class VoxelizeMode(IntEnum):
     FULL_GRID = 5       # Заполнить всю сетку (без вокселизации меша)
 
 
+class NavMeshStage(IntEnum):
+    """Стадии алгоритма построения NavMesh."""
+    TRIANGLES = 0       # Только треугольники (Alpha Shape)
+    WITH_CONTOURS = 1   # + извлечённые контуры
+    SIMPLIFIED = 2      # + упрощённые контуры (Douglas-Peucker)
+    FINAL = 3           # Перетриангулированное (ear clipping)
+
+
 def _voxelize_action(component: "VoxelizerComponent") -> None:
     """Действие кнопки вокселизации."""
     component.voxelize()
@@ -96,6 +104,17 @@ class VoxelizerComponent(Component):
             max=1.0,
             step=0.01,
         ),
+        "navmesh_stage": InspectField(
+            path="navmesh_stage",
+            label="NavMesh Stage",
+            kind="enum",
+            choices=[
+                (NavMeshStage.TRIANGLES, "1. Triangles (Alpha Shape)"),
+                (NavMeshStage.WITH_CONTOURS, "2. With Contours"),
+                (NavMeshStage.SIMPLIFIED, "3. Simplified (Douglas-Peucker)"),
+                (NavMeshStage.FINAL, "4. Final (Ear Clipping)"),
+            ],
+        ),
         "build_navmesh_btn": InspectField(
             label="Build NavMesh",
             kind="button",
@@ -104,7 +123,7 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_threshold"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_threshold", "navmesh_stage"]
 
     def __init__(
         self,
@@ -114,6 +133,7 @@ class VoxelizerComponent(Component):
         voxelize_mode: VoxelizeMode = VoxelizeMode.SHELL,
         navmesh_output_path: str = "",
         normal_threshold: float = 0.9,
+        navmesh_stage: NavMeshStage = NavMeshStage.TRIANGLES,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
@@ -122,6 +142,7 @@ class VoxelizerComponent(Component):
         self.voxelize_mode = voxelize_mode
         self.navmesh_output_path = navmesh_output_path
         self.normal_threshold = normal_threshold
+        self.navmesh_stage = navmesh_stage
         self._last_voxel_count: int = 0
 
     def voxelize(self) -> bool:
@@ -280,9 +301,21 @@ class VoxelizerComponent(Component):
         # Строим NavMesh
         config = NavMeshConfig(normal_threshold=self.normal_threshold)
         builder = PolygonBuilder(config)
-        navmesh = builder.build(grid)
 
-        print(f"VoxelizerComponent: built NavMesh with {navmesh.polygon_count()} polygons, {navmesh.triangle_count()} triangles")
+        # Выбираем стадию алгоритма
+        stage = self.navmesh_stage
+        extract_contours = stage >= NavMeshStage.WITH_CONTOURS
+        simplify_contours = stage >= NavMeshStage.SIMPLIFIED
+        retriangulate = stage >= NavMeshStage.FINAL
+
+        navmesh = builder.build(
+            grid,
+            extract_contours=extract_contours,
+            simplify_contours=simplify_contours,
+            retriangulate=retriangulate,
+        )
+
+        print(f"VoxelizerComponent: built NavMesh (stage {stage.name}) with {navmesh.polygon_count()} polygons, {navmesh.triangle_count()} triangles")
 
         # Определяем путь для сохранения
         output = self.navmesh_output_path.strip()
@@ -331,4 +364,5 @@ class VoxelizerComponent(Component):
             voxelize_mode=VoxelizeMode(data.get("voxelize_mode", VoxelizeMode.SHELL)),
             navmesh_output_path=data.get("navmesh_output_path", ""),
             normal_threshold=data.get("normal_threshold", 0.9),
+            navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.TRIANGLES)),
         )
