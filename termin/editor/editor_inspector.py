@@ -19,6 +19,8 @@ from PyQt6.QtWidgets import (
     QMenu,
     QComboBox,
     QPushButton,
+    QSlider,
+    QSpinBox,
 )
 from PyQt6.QtGui import QColor, QAction
 from termin.editor.color_dialog import ColorDialog
@@ -346,6 +348,35 @@ class ComponentInspectorPanel(QWidget):
             row._boxes = boxes  # небольшой хак
             return row
 
+        if kind == "slider":
+            # Слайдер + спинбокс в одном ряду
+            row = QWidget()
+            hl = QHBoxLayout(row)
+            hl.setContentsMargins(0, 0, 0, 0)
+            hl.setSpacing(4)
+
+            min_val = int(field.min) if field.min is not None else 0
+            max_val = int(field.max) if field.max is not None else 100
+
+            slider = QSlider(Qt.Orientation.Horizontal)
+            slider.setRange(min_val, max_val)
+            slider.setTickPosition(QSlider.TickPosition.NoTicks)
+
+            spinbox = QSpinBox()
+            spinbox.setRange(min_val, max_val)
+            spinbox.setFixedWidth(50)
+
+            # Синхронизация слайдера и спинбокса
+            slider.valueChanged.connect(spinbox.setValue)
+            spinbox.valueChanged.connect(slider.setValue)
+
+            hl.addWidget(slider, stretch=1)
+            hl.addWidget(spinbox)
+
+            row._slider = slider
+            row._spinbox = spinbox
+            return row
+
         if kind == "material":
             combo = QComboBox()
             names = self._resources.list_material_names()
@@ -429,6 +460,11 @@ class ComponentInspectorPanel(QWidget):
             arr = np.asarray(value).reshape(-1)
             for sb, v in zip(w._boxes, arr):
                 sb.setValue(float(v))
+            return
+
+        if hasattr(w, "_slider") and field.kind == "slider":
+            int_val = int(value) if value is not None else 0
+            w._slider.setValue(int_val)
             return
 
         if isinstance(w, QComboBox) and field.kind == "material":
@@ -563,6 +599,8 @@ class ComponentInspectorPanel(QWidget):
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:
                 sb.valueChanged.connect(lambda _v: commit(True))
+        elif hasattr(w, "_slider") and field.kind == "slider":
+            w._slider.valueChanged.connect(lambda _v: commit(True))
         elif isinstance(w, QComboBox) and field.kind in ("material", "mesh", "voxel_grid", "enum"):
             w.currentIndexChanged.connect(lambda _i: commit(False))
         elif isinstance(w, QPushButton) and field.kind == "color":
@@ -616,6 +654,9 @@ class ComponentInspectorPanel(QWidget):
 
         if hasattr(w, "_boxes"):
             return np.array([sb.value() for sb in w._boxes], dtype=float)
+
+        if hasattr(w, "_slider") and field.kind == "slider":
+            return float(w._slider.value())
 
         if isinstance(w, QComboBox) and field.kind == "material":
             name = w.currentText()

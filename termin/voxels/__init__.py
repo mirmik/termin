@@ -21,6 +21,7 @@ from termin.voxels.persistence import (
 )
 from termin.voxels.voxelizer_component import VoxelizerComponent
 from termin.voxels.display_component import VoxelDisplayComponent
+from termin.voxels.voxel_shader import voxel_display_shader
 
 __all__ = [
     "VoxelChunk",
@@ -37,4 +38,5 @@ __all__ = [
     "VOXEL_EMPTY",
     "VOXEL_SURFACE",
     "VOXEL_FILE_EXTENSION",
+    "voxel_display_shader",
 ]
