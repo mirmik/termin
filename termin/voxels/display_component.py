@@ -187,6 +187,19 @@ class VoxelDisplayComponent(Component):
         """Установить процент заполнения."""
         self.fill_percent = value
 
+    @property
+    def slice_axis_name(self) -> str:
+        """Имя оси отсечки (X, Y, Z)."""
+        # Определяем имя по текущему вектору
+        for name, vec in self._AXIS_VECTORS.items():
+            if self.slice_axis == vec:
+                return name
+        return "Z"  # Default
+
+    def _set_slice_axis_name(self, name: str) -> None:
+        """Установить ось отсечки по имени."""
+        self.slice_axis = self._AXIS_VECTORS.get(name, (0.0, 0.0, 1.0))
+
     def _get_or_create_material(self) -> Material:
         """Получить материал с voxel шейдером."""
         if self._material is None:
@@ -266,7 +279,7 @@ class VoxelDisplayComponent(Component):
         if current_grid is not self._last_grid:
             self._rebuild_mesh()
 
-    _DEBUG_GET_PHASES = True  # Debug: отладка get_phases
+    _DEBUG_GET_PHASES = False  # Debug: отладка get_phases
 
     def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
         """Возвращает MaterialPhases для рендеринга."""
@@ -404,7 +417,7 @@ class VoxelDisplayComponent(Component):
             "color_below": list(self.color_below),
             "color_above": list(self.color_above),
             "fill_percent": self.fill_percent,
-            "slice_axis": list(self.slice_axis),
+            "slice_axis_name": self.slice_axis_name,
         }
 
     @classmethod
@@ -420,7 +433,13 @@ class VoxelDisplayComponent(Component):
         if color_above is not None:
             comp.color_above = tuple(color_above)
         comp.fill_percent = data.get("fill_percent", 100.0)
-        slice_axis = data.get("slice_axis")
-        if slice_axis is not None:
-            comp.slice_axis = tuple(slice_axis)
+        # Поддержка slice_axis_name (новый формат) и slice_axis (старый формат)
+        slice_axis_name = data.get("slice_axis_name")
+        if slice_axis_name is not None:
+            comp._set_slice_axis_name(slice_axis_name)
+        else:
+            # Обратная совместимость со старым форматом
+            slice_axis = data.get("slice_axis")
+            if slice_axis is not None:
+                comp.slice_axis = tuple(slice_axis)
         return comp

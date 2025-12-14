@@ -63,7 +63,7 @@ class MaterialPhase:
         self.color = rgba_array
         self.uniforms["u_color"] = rgba_array
 
-    _DEBUG_APPLY = True  # Debug: log uniform uploads
+    _DEBUG_APPLY = False  # Debug: log uniform uploads
 
     def apply(
         self,

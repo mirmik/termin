@@ -45,15 +45,18 @@ uniform float u_ambient_intensity;
 out vec4 FragColor;
 
 void main() {
-    // Use Z axis directly for slicing (slice_axis default is 0,0,1)
-    float z_min = u_bounds_min.z;
-    float z_max = u_bounds_max.z;
-    float z_range = z_max - z_min;
+    // Project bounds onto slice axis to get min/max along that axis
+    float axis_min = dot(u_bounds_min, u_slice_axis);
+    float axis_max = dot(u_bounds_max, u_slice_axis);
+    float axis_range = axis_max - axis_min;
 
-    // Normalize current Z position to 0-1 range
+    // Project current position onto slice axis
+    float pos_on_axis = dot(v_world_pos, u_slice_axis);
+
+    // Normalize position to 0-1 range along axis
     float normalized_pos = 0.5;
-    if (z_range > 0.0001) {
-        normalized_pos = (v_world_pos.z - z_min) / z_range;
+    if (axis_range > 0.0001) {
+        normalized_pos = (pos_on_axis - axis_min) / axis_range;
     }
 
     // Discard fragments above fill threshold
