@@ -302,7 +302,7 @@ class GizmoEntity(Entity):
 
         # кольца вращения (слегка больше по радиусу)
         ring_radius = size * 1.25
-        ring_thickness = size * 0.05
+        ring_thickness = size * 0.02
 
         self.rx = GizmoRing("x", radius=ring_radius, thickness=ring_thickness, color=(1, 0.3, 0.3, 1))
         self.ry = GizmoRing("y", radius=ring_radius, thickness=ring_thickness, color=(0.3, 1, 0.3, 1))
