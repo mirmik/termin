@@ -246,17 +246,19 @@ class VoxelDisplayComponent(Component):
 
         mat = self._get_or_create_material()
 
-        # Обновляем uniforms шейдера
+        # Загружаем uniforms напрямую в активный шейдер
+        # (phase.apply() уже вызван в ColorPass, шейдер активен)
         for phase in mat.phases:
-            phase.uniforms["u_color_below"] = np.array(self.color_below, dtype=np.float32)
-            phase.uniforms["u_color_above"] = np.array(self.color_above, dtype=np.float32)
-            phase.uniforms["u_slice_axis"] = np.array(self.slice_axis, dtype=np.float32)
-            phase.uniforms["u_fill_percent"] = self.fill_percent / 100.0
-            phase.uniforms["u_bounds_min"] = self._bounds_min
-            phase.uniforms["u_bounds_max"] = self._bounds_max
+            shader = phase.shader_programm
+            shader.set_uniform_vec4("u_color_below", np.array(self.color_below, dtype=np.float32))
+            shader.set_uniform_vec4("u_color_above", np.array(self.color_above, dtype=np.float32))
+            shader.set_uniform_vec3("u_slice_axis", np.array(self.slice_axis, dtype=np.float32))
+            shader.set_uniform_float("u_fill_percent", self.fill_percent / 100.0)
+            shader.set_uniform_vec3("u_bounds_min", self._bounds_min)
+            shader.set_uniform_vec3("u_bounds_max", self._bounds_max)
             # Ambient lighting
-            phase.uniforms["u_ambient_color"] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-            phase.uniforms["u_ambient_intensity"] = 0.4
+            shader.set_uniform_vec3("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
+            shader.set_uniform_float("u_ambient_intensity", 0.4)
 
         self._mesh_drawable.draw(context)
 
