@@ -143,15 +143,19 @@ class NavMeshDisplayComponent(Component):
     def phase_marks(self) -> Set[str]:
         """Фазы рендеринга."""
         mat = self._get_or_create_material()
-        return {p.phase_mark for p in mat.phases}
+        marks = {p.phase_mark for p in mat.phases}
+        print(f"[NavMeshDisplayComponent] phase_marks accessed: {marks}")
+        return marks
 
     def draw_geometry(self, context: "RenderContext") -> None:
         """Рисует геометрию NavMesh."""
         self._check_hot_reload()
 
         if self._mesh_drawable is None:
+            print(f"[NavMeshDisplayComponent] draw_geometry: no mesh_drawable, navmesh={self._navmesh_handle.get()}")
             return
 
+        print(f"[NavMeshDisplayComponent] draw_geometry: drawing mesh")
         self._mesh_drawable.draw(context)
 
     def _check_hot_reload(self) -> None:
