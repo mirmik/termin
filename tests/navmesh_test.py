@@ -321,6 +321,61 @@ class VoxelFaceMeshTest(unittest.TestCase):
         # Только 3 лицевые грани = 6 треугольников (без боковых)
         self.assertEqual(len(polygon.triangles), 6)
 
+    def test_staircase_mesh_integrity(self):
+        """Лестница: проверка целостности меша (нет дыр)."""
+        grid = VoxelGrid(cell_size=1.0)
+        # Три ступеньки
+        for i in range(3):
+            grid.set(i, 0, i, 2)
+            grid.add_surface_normal(i, 0, i, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid)
+        polygon = navmesh.polygons[0]
+
+        # Проверяем целостность: каждое ребро 1 или 2 раза
+        edge_count = {}
+        for tri_idx, tri in enumerate(polygon.triangles):
+            for i in range(3):
+                v0, v1 = int(tri[i]), int(tri[(i + 1) % 3])
+                edge = (min(v0, v1), max(v0, v1))
+                if edge not in edge_count:
+                    edge_count[edge] = []
+                edge_count[edge].append(tri_idx)
+
+        # Выводим проблемные рёбра
+        bad_edges = [(e, tris) for e, tris in edge_count.items() if len(tris) > 2]
+        if bad_edges:
+            print(f"\nEdges with >2 triangles:")
+            for edge, tris in bad_edges:
+                v0_pos = polygon.vertices[edge[0]]
+                v1_pos = polygon.vertices[edge[1]]
+                print(f"  Edge {edge}: {v0_pos} -> {v1_pos}")
+                for t in tris:
+                    tri = polygon.triangles[t]
+                    print(f"    Triangle {t}: {tri}")
+
+        # Проверяем boundary рёбра образуют замкнутый контур
+        boundary_edges = [e for e, tris in edge_count.items() if len(tris) == 1]
+        if boundary_edges:
+            from collections import defaultdict
+            adj = defaultdict(list)
+            for v0, v1 in boundary_edges:
+                adj[v0].append(v1)
+                adj[v1].append(v0)
+
+            # Каждая вершина должна иметь чётную степень
+            odd_vertices = [(v, len(neighbors)) for v, neighbors in adj.items() if len(neighbors) % 2 != 0]
+            if odd_vertices:
+                print(f"\nVertices with odd degree (holes):")
+                for v, deg in odd_vertices:
+                    print(f"  Vertex {v}: {polygon.vertices[v]}, degree={deg}")
+
+            self.assertEqual(len(odd_vertices), 0, f"Found {len(odd_vertices)} vertices with odd degree")
+
+        for edge, tris in edge_count.items():
+            self.assertIn(len(tris), [1, 2], f"Edge {edge} has {len(tris)} triangles")
+
     def test_no_holes_in_mesh(self):
         """Меш не должен иметь дыр — все boundary рёбра образуют замкнутый контур."""
         grid = VoxelGrid(cell_size=1.0)

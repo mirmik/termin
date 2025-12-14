@@ -560,10 +560,29 @@ class PolygonBuilder:
             if np.dot(quad_normal, desired_normal) < 0:
                 # Инвертируем порядок
                 quad_indices = [quad_indices[0], quad_indices[3], quad_indices[2], quad_indices[1]]
+                v0, v1, v2, v3 = [vertices_arr[i] for i in quad_indices]
 
-            # Каждый квад -> 2 треугольника
-            triangles.append([quad_indices[0], quad_indices[1], quad_indices[2]])
-            triangles.append([quad_indices[0], quad_indices[2], quad_indices[3]])
+            # Выбираем диагональ согласованно по позиции (не по индексам)
+            # Используем диагональ между вершинами с мин и макс суммой координат
+            sums = [v0.sum(), v1.sum(), v2.sum(), v3.sum()]
+            min_idx = int(np.argmin(sums))
+            max_idx = int(np.argmax(sums))
+
+            # Диагональ должна быть между противоположными вершинами (0-2 или 1-3)
+            if (min_idx + max_idx) % 2 == 0:
+                # Противоположные (0-2 или подобные) — используем эту диагональ
+                if min_idx in [0, 2]:
+                    # Диагональ 0-2
+                    triangles.append([quad_indices[0], quad_indices[1], quad_indices[2]])
+                    triangles.append([quad_indices[0], quad_indices[2], quad_indices[3]])
+                else:
+                    # Диагональ 1-3
+                    triangles.append([quad_indices[0], quad_indices[1], quad_indices[3]])
+                    triangles.append([quad_indices[1], quad_indices[2], quad_indices[3]])
+            else:
+                # min и max не противоположные — используем стандартную диагональ 0-2
+                triangles.append([quad_indices[0], quad_indices[1], quad_indices[2]])
+                triangles.append([quad_indices[0], quad_indices[2], quad_indices[3]])
 
         vertices_3d = np.array(vertices, dtype=np.float32)
         triangles_arr = np.array(triangles, dtype=np.int32)
