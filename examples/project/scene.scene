@@ -340,7 +340,9 @@
               "grid_name": "",
               "cell_size": 0.25,
               "output_path": "Voxels/cube.voxels",
-              "voxelize_mode": 0
+              "voxelize_mode": 0,
+              "navmesh_output_path": "",
+              "normal_threshold": 0.9
             },
             "type": "VoxelizerComponent"
           }
@@ -351,9 +353,9 @@
         "name": "Bulba",
         "priority": 0,
         "scale": [
-          5.0,
-          5.0,
-          5.0
+          7.0,
+          7.0,
+          7.0
         ],
         "visible": true,
         "active": true,
@@ -361,9 +363,9 @@
         "selectable": true,
         "pose": {
           "position": [
-            0.421,
+            3.389,
             -6.906,
-            -2.976
+            -1.3676974067687988
           ],
           "rotation": [
             0.0,
@@ -375,7 +377,7 @@
         "components": [
           {
             "data": {
-              "enabled": true,
+              "enabled": false,
               "cast_shadow": true,
               "mesh": "bulbasaur",
               "material": "DefaultMaterial"
@@ -385,11 +387,54 @@
           {
             "data": {
               "grid_name": "Bulba",
-              "cell_size": 0.03,
+              "cell_size": 0.04,
               "output_path": "Voxels/bulbasaur.voxels",
-              "voxelize_mode": 3
+              "voxelize_mode": 4,
+              "navmesh_output_path": "",
+              "normal_threshold": 0.9
             },
             "type": "VoxelizerComponent"
+          },
+          {
+            "data": {
+              "voxel_grid_name": "Bulba",
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ],
+              "fill_percent": 100.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "type": "VoxelDisplayComponent"
+          },
+          {
+            "navmesh_name": "Voxels/bulbasaur.navmesh",
+            "color": [
+              0.2,
+              0.8,
+              0.3,
+              0.7
+            ],
+            "wireframe": false,
+            "show_normals": false
           }
         ],
         "children": []
@@ -398,9 +443,9 @@
         "name": "BulbaViz",
         "priority": 0,
         "scale": [
-          5.0,
-          5.0,
-          5.0
+          7.0,
+          7.0,
+          7.0
         ],
         "visible": true,
         "active": true,
@@ -408,9 +453,9 @@
         "selectable": true,
         "pose": {
           "position": [
-            -4.652,
-            -7.24,
-            -2.628
+            -5.164,
+            -13.6,
+            -2.299
           ],
           "rotation": [
             0.0,
@@ -441,7 +486,7 @@
                 0.3,
                 0.9
               ],
-              "fill_percent": 62.0,
+              "fill_percent": 100.0,
               "slice_axis": [
                 0.0,
                 0.0,
@@ -490,15 +535,15 @@
   "editor": {
     "camera": {
       "target": [
-        0.46928401748226856,
-        -1.9471621238233543,
-        -1.5254662710531306
+        4.46684455871582,
+        -5.1645708084106445,
+        -0.7770068049430847
       ],
-      "radius": 13.0,
-      "azimuth": 31.771973703304404,
-      "elevation": 0.6422811647339114
+      "radius": 12.5,
+      "azimuth": 32.396801575517905,
+      "elevation": 0.5096361415823445
     },
-    "selected_entity": "BulbaViz",
+    "selected_entity": "Bulba",
     "displays": [
       {
         "name": "Editor",
