@@ -157,7 +157,8 @@ class NavMeshDisplayComponent(Component):
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
         current = self._navmesh_handle.get()
-        if current is not self._last_navmesh:
+        if self._needs_rebuild or current is not self._last_navmesh:
+            self._needs_rebuild = False
             self._rebuild_mesh()
 
     def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:

@@ -8,6 +8,8 @@
 - [ ] SceneTree: после добавления entity и по умолчанию все иерархии раскрываются полностью
 - [ ] При создании файла ProjectBrowser сваливается в корень
 - [ ] После drag-drop prefab в сцену материал гизмо становится чёрным (связано с обработкой текстур/контекста)
+- [ ] VoxelDislayComponent не сериализует кнопочку Enabled. 
+- [ ] VoxelizerComponent не сериализует NavMesh Path
 
 ## Major
 
