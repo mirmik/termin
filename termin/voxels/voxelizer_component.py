@@ -96,13 +96,13 @@ class VoxelizerComponent(Component):
             label="NavMesh Path",
             kind="string",
         ),
-        "normal_threshold": InspectField(
-            path="normal_threshold",
-            label="Normal Threshold",
+        "normal_angle": InspectField(
+            path="normal_angle",
+            label="Region Merge Angle (°)",
             kind="float",
             min=0.0,
-            max=1.0,
-            step=0.01,
+            max=90.0,
+            step=1.0,
         ),
         "navmesh_stage": InspectField(
             path="navmesh_stage",
@@ -131,7 +131,7 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_threshold", "navmesh_stage", "contour_epsilon"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "navmesh_stage", "contour_epsilon"]
 
     def __init__(
         self,
@@ -140,7 +140,7 @@ class VoxelizerComponent(Component):
         output_path: str = "",
         voxelize_mode: VoxelizeMode = VoxelizeMode.SHELL,
         navmesh_output_path: str = "",
-        normal_threshold: float = 0.9,
+        normal_angle: float = 25.0,
         navmesh_stage: NavMeshStage = NavMeshStage.TRIANGLES,
         contour_epsilon: float = 0.1,
     ) -> None:
@@ -150,7 +150,7 @@ class VoxelizerComponent(Component):
         self.output_path = output_path
         self.voxelize_mode = voxelize_mode
         self.navmesh_output_path = navmesh_output_path
-        self.normal_threshold = normal_threshold
+        self.normal_angle = normal_angle
         self.navmesh_stage = navmesh_stage
         self.contour_epsilon = contour_epsilon
         self._last_voxel_count: int = 0
@@ -309,8 +309,12 @@ class VoxelizerComponent(Component):
             return False
 
         # Строим NavMesh
+        # Конвертируем угол в косинус для threshold
+        import math
+        normal_threshold = math.cos(math.radians(self.normal_angle))
+
         config = NavMeshConfig(
-            normal_threshold=self.normal_threshold,
+            normal_threshold=normal_threshold,
             contour_epsilon=self.contour_epsilon,
         )
         builder = PolygonBuilder(config)
@@ -376,7 +380,7 @@ class VoxelizerComponent(Component):
             output_path=data.get("output_path", ""),
             voxelize_mode=VoxelizeMode(data.get("voxelize_mode", VoxelizeMode.SHELL)),
             navmesh_output_path=data.get("navmesh_output_path", ""),
-            normal_threshold=data.get("normal_threshold", 0.9),
+            normal_angle=data.get("normal_angle", 25.0),
             navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.TRIANGLES)),
             contour_epsilon=data.get("contour_epsilon", 0.1),
         )
