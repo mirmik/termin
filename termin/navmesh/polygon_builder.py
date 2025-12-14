@@ -407,6 +407,7 @@ class PolygonBuilder:
         Шаги 3-13: Построить полигон из группы вокселей.
         """
         if len(voxels) < 3:
+            print(f"Region {current_region_idx}: too few voxels ({len(voxels)})")
             return None
 
         cell_size = grid.cell_size
@@ -438,6 +439,7 @@ class PolygonBuilder:
         points_2d, basis_u, basis_v = self._project_to_2d(projected_3d, normal, centroid)
 
         if len(points_2d) < 3:
+            print(f"Region {current_region_idx}: too few points_2d ({len(points_2d)})")
             return None
 
         # Шаг 6: Alpha Shape (Delaunay + фильтрация)
@@ -445,6 +447,7 @@ class PolygonBuilder:
         triangles_2d = self._alpha_shape(points_2d, alpha)
 
         if len(triangles_2d) == 0:
+            print(f"Region {current_region_idx}: alpha shape returned 0 triangles ({len(points_2d)} points)")
             return None
 
         # Шаг 7: Обратно в 3D
