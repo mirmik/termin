@@ -360,6 +360,13 @@ class ComponentInspectorPanel(QWidget):
                 combo.addItem(n)
             return combo
 
+        if kind == "voxel_grid":
+            combo = QComboBox()
+            names = self._resources.list_voxel_grid_names()
+            for n in names:
+                combo.addItem(n)
+            return combo
+
         if kind == "enum":
             combo = QComboBox()
             if field.choices:
@@ -475,6 +482,31 @@ class ComponentInspectorPanel(QWidget):
                 w.setCurrentIndex(-1)
             return
 
+        if isinstance(w, QComboBox) and field.kind == "voxel_grid":
+            grid = value
+            if grid is None:
+                w.setCurrentIndex(-1)
+                return
+
+            name = self._resources.find_voxel_grid_name(grid)
+            existing = [w.itemText(i) for i in range(w.count())]
+            all_names = self._resources.list_voxel_grid_names()
+            if existing != all_names:
+                w.clear()
+                for n in all_names:
+                    w.addItem(n)
+
+            if name is None:
+                w.setCurrentIndex(-1)
+                return
+
+            idx = w.findText(name)
+            if idx >= 0:
+                w.setCurrentIndex(idx)
+            else:
+                w.setCurrentIndex(-1)
+            return
+
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:
                 for i in range(w.count()):
@@ -531,7 +563,7 @@ class ComponentInspectorPanel(QWidget):
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:
                 sb.valueChanged.connect(lambda _v: commit(True))
-        elif isinstance(w, QComboBox) and field.kind in ("material", "mesh", "enum"):
+        elif isinstance(w, QComboBox) and field.kind in ("material", "mesh", "voxel_grid", "enum"):
             w.currentIndexChanged.connect(lambda _i: commit(False))
         elif isinstance(w, QPushButton) and field.kind == "color":
             def on_click():
@@ -596,6 +628,12 @@ class ComponentInspectorPanel(QWidget):
             if not name:
                 return None
             return self._resources.get_mesh(name)
+
+        if isinstance(w, QComboBox) and field.kind == "voxel_grid":
+            name = w.currentText()
+            if not name:
+                return None
+            return self._resources.get_voxel_grid(name)
 
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:

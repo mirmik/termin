@@ -12,6 +12,7 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.render.texture import Texture
     from termin.visualization.core.entity import Component
     from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm
+    from termin.voxels.grid import VoxelGrid
 
 
 # Список стандартных компонентов для предрегистрации.
@@ -85,6 +86,7 @@ class ResourceManager:
         self.shaders: Dict[str, "ShaderMultyPhaseProgramm"] = {}
         self.meshes: Dict[str, "MeshDrawable"] = {}
         self.textures: Dict[str, "Texture"] = {}
+        self.voxel_grids: Dict[str, "VoxelGrid"] = {}  # VoxelGrid instances by name
         self.components: Dict[str, type["Component"]] = {}
         self.frame_passes: Dict[str, type] = {}  # FramePass classes by name
         self.post_effects: Dict[str, type] = {}  # PostEffect classes by name
@@ -347,6 +349,38 @@ class ResourceManager:
             del self._mesh_keepers[name]
         if name in self.meshes:
             del self.meshes[name]
+
+    # --------- Воксельные сетки ---------
+    def register_voxel_grid(self, name: str, grid: "VoxelGrid") -> None:
+        """
+        Регистрирует воксельную сетку.
+
+        Args:
+            name: Имя сетки
+            grid: VoxelGrid
+        """
+        grid.name = name
+        self.voxel_grids[name] = grid
+
+    def get_voxel_grid(self, name: str) -> Optional["VoxelGrid"]:
+        """Получить воксельную сетку по имени."""
+        return self.voxel_grids.get(name)
+
+    def list_voxel_grid_names(self) -> list[str]:
+        """Список имён всех воксельных сеток."""
+        return sorted(self.voxel_grids.keys())
+
+    def find_voxel_grid_name(self, grid: "VoxelGrid") -> Optional[str]:
+        """Найти имя воксельной сетки."""
+        for n, g in self.voxel_grids.items():
+            if g is grid:
+                return n
+        return None
+
+    def unregister_voxel_grid(self, name: str) -> None:
+        """Удаляет воксельную сетку."""
+        if name in self.voxel_grids:
+            del self.voxel_grids[name]
 
     # --------- TextureKeeper'ы ---------
     def get_or_create_texture_keeper(self, name: str) -> "TextureKeeper":

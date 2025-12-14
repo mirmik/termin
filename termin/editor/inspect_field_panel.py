@@ -261,6 +261,13 @@ class InspectFieldPanel(QWidget):
                 combo.addItem(n)
             return combo
 
+        if kind == "voxel_grid" and self._resources is not None:
+            combo = QComboBox()
+            names = self._resources.list_voxel_grid_names()
+            for n in names:
+                combo.addItem(n)
+            return combo
+
         if kind == "enum":
             combo = QComboBox()
             if field.choices:
@@ -354,6 +361,30 @@ class InspectFieldPanel(QWidget):
                 w.setCurrentIndex(-1)
                 return
             name = self._resources.find_mesh_name(value)
+            if name is None:
+                w.setCurrentIndex(-1)
+                return
+            idx = w.findText(name)
+            w.setCurrentIndex(idx if idx >= 0 else -1)
+            return
+
+        if isinstance(w, QComboBox) and field.kind == "voxel_grid":
+            if self._resources is None:
+                w.setCurrentIndex(-1)
+                return
+
+            # Refresh voxel grid list if changed
+            existing = [w.itemText(i) for i in range(w.count())]
+            all_names = self._resources.list_voxel_grid_names()
+            if existing != all_names:
+                w.clear()
+                for n in all_names:
+                    w.addItem(n)
+
+            if value is None:
+                w.setCurrentIndex(-1)
+                return
+            name = self._resources.find_voxel_grid_name(value)
             if name is None:
                 w.setCurrentIndex(-1)
                 return
@@ -480,6 +511,14 @@ class InspectFieldPanel(QWidget):
             if not name:
                 return None
             return self._resources.get_mesh(name)
+
+        if isinstance(w, QComboBox) and field.kind == "voxel_grid":
+            if self._resources is None:
+                return None
+            name = w.currentText()
+            if not name:
+                return None
+            return self._resources.get_voxel_grid(name)
 
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:

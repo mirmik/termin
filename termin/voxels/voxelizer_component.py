@@ -25,10 +25,15 @@ class VoxelizerComponent(Component):
 
     Добавляется к entity с MeshRenderer.
     В инспекторе показывает кнопку "Voxelize" и настройки.
-    По нажатию кнопки вокселизирует меш и сохраняет в файл.
+    По нажатию кнопки вокселизирует меш, регистрирует в ResourceManager и сохраняет в файл.
     """
 
     inspect_fields = {
+        "grid_name": InspectField(
+            path="grid_name",
+            label="Grid Name",
+            kind="string",
+        ),
         "cell_size": InspectField(
             path="cell_size",
             label="Cell Size",
@@ -43,33 +48,36 @@ class VoxelizerComponent(Component):
             kind="string",
         ),
         "voxelize_btn": InspectField(
-            label="Voxelize Mesh",
+            label="Voxelize",
             kind="button",
             action=_voxelize_action,
             non_serializable=True,
         ),
     }
 
-    serializable_fields = ["cell_size", "output_path"]
+    serializable_fields = ["grid_name", "cell_size", "output_path"]
 
     def __init__(
         self,
+        grid_name: str = "",
         cell_size: float = 0.25,
         output_path: str = "",
     ) -> None:
         super().__init__()
+        self.grid_name = grid_name
         self.cell_size = cell_size
         self.output_path = output_path
         self._last_voxel_count: int = 0
 
     def voxelize(self) -> bool:
         """
-        Вокселизировать меш entity и сохранить в файл.
+        Вокселизировать меш entity, зарегистрировать в ResourceManager и сохранить в файл.
 
         Returns:
             True если успешно, False если ошибка.
         """
         from termin.visualization.render.components import MeshRenderer
+        from termin.visualization.core.resources import ResourceManager
         from termin.voxels.grid import VoxelGrid
         from termin.voxels.voxelizer import MeshVoxelizer
         from termin.voxels.persistence import VoxelPersistence
@@ -99,30 +107,34 @@ class VoxelizerComponent(Component):
             print("VoxelizerComponent: mesh is None")
             return False
 
+        # Определяем имя сетки
+        name = self.grid_name.strip()
+        if not name:
+            name = self.entity.name or "voxel_grid"
+
         # Определяем путь для сохранения
         output = self.output_path.strip()
         if not output:
-            # Генерируем имя по умолчанию
-            entity_name = self.entity.name or "entity"
-            output = f"{entity_name}.voxels"
+            output = f"{name}.voxels"
 
         if not output.endswith(".voxels"):
             output += ".voxels"
 
-        # Определяем имя сетки
-        entity_name = self.entity.name or "entity"
-        grid_name = entity_name
-
         # Вокселизируем меш в локальных координатах (без трансформа)
-        grid = VoxelGrid(origin=(0, 0, 0), cell_size=self.cell_size, name=grid_name)
+        grid = VoxelGrid(origin=(0, 0, 0), cell_size=self.cell_size, name=name)
         voxelizer = MeshVoxelizer(grid)
 
         # Вокселизируем без трансформа — в локальной СК меша
-        count = voxelizer.voxelize_mesh(mesh, transform_matrix=None)
+        voxelizer.voxelize_mesh(mesh, transform_matrix=None)
 
         self._last_voxel_count = grid.voxel_count
 
-        # Сохраняем
+        # Регистрируем в ResourceManager
+        rm = ResourceManager.instance()
+        rm.register_voxel_grid(name, grid)
+        print(f"VoxelizerComponent: registered '{name}' with {grid.voxel_count} voxels")
+
+        # Сохраняем в файл
         try:
             output_path = Path(output)
 
@@ -138,7 +150,7 @@ class VoxelizerComponent(Component):
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
             VoxelPersistence.save(grid, output_path)
-            print(f"VoxelizerComponent: saved {grid.voxel_count} voxels to {output_path.absolute()}")
+            print(f"VoxelizerComponent: saved to {output_path.absolute()}")
             return True
         except Exception as e:
             print(f"VoxelizerComponent: failed to save: {e}")
@@ -148,6 +160,7 @@ class VoxelizerComponent(Component):
     def deserialize(cls, data: dict, context) -> "VoxelizerComponent":
         """Десериализовать компонент."""
         return cls(
+            grid_name=data.get("grid_name", ""),
             cell_size=data.get("cell_size", 0.25),
             output_path=data.get("output_path", ""),
         )

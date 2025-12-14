@@ -1,12 +1,12 @@
 """
-VoxelDisplayComponent — компонент для отображения .voxels файла.
+VoxelDisplayComponent — компонент для отображения воксельной сетки.
 
 Реализует протокол Drawable и рендерит воксели напрямую.
+Выбирает сетку из ResourceManager через комбобокс.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Set
 
 import numpy as np
@@ -88,62 +88,62 @@ CUBE_SCALE = 0.85  # Размер кубика относительно ячей
 MAX_VOXELS = 100_000
 
 
-def _get_grid_name(comp: "VoxelDisplayComponent") -> str:
-    """Получить имя загруженной сетки."""
-    if comp._grid is not None:
-        return comp._grid.name or "(unnamed)"
-    return "(not loaded)"
-
-
 class VoxelDisplayComponent(Component):
     """
-    Компонент для отображения воксельной сетки из .voxels файла.
+    Компонент для отображения воксельной сетки из ResourceManager.
 
     Реализует протокол Drawable — рендерит воксели напрямую без MeshRenderer.
+    Выбирает сетку через комбобокс из зарегистрированных в ResourceManager.
     """
 
     inspect_fields = {
-        "grid_name": InspectField(
-            label="Grid Name",
-            kind="string",
-            getter=_get_grid_name,
-            non_serializable=True,
-        ),
-        "voxel_file": InspectField(
-            path="voxel_file",
-            label="Voxel File",
-            kind="string",
+        "voxel_grid": InspectField(
+            path="voxel_grid",
+            label="Voxel Grid",
+            kind="voxel_grid",
+            setter=lambda obj, val: obj.set_voxel_grid(val),
         ),
     }
 
-    serializable_fields = ["voxel_file"]
+    serializable_fields = ["voxel_grid_name"]
 
-    def __init__(self, voxel_file: str = "") -> None:
+    def __init__(self, voxel_grid_name: str = "") -> None:
         super().__init__()
-        self._voxel_file = voxel_file
+        self._voxel_grid_name = voxel_grid_name
         self._grid: Optional["VoxelGrid"] = None
         self._mesh_drawable: Optional[MeshDrawable] = None
         self._material = Material(
             color=(0.2, 0.6, 1.0, 0.7),
             phase_mark="editor",
         )
-        self._needs_reload = True
+        self._needs_rebuild = True
 
     @property
-    def voxel_file(self) -> str:
-        """Путь к .voxels файлу."""
-        return self._voxel_file
-
-    @voxel_file.setter
-    def voxel_file(self, value: str) -> None:
-        if self._voxel_file != value:
-            self._voxel_file = value
-            self._needs_reload = True
-
-    @property
-    def grid(self) -> Optional["VoxelGrid"]:
-        """Загруженная воксельная сетка."""
+    def voxel_grid(self) -> Optional["VoxelGrid"]:
+        """Текущая воксельная сетка."""
         return self._grid
+
+    @voxel_grid.setter
+    def voxel_grid(self, value: Optional["VoxelGrid"]) -> None:
+        self.set_voxel_grid(value)
+
+    def set_voxel_grid(self, grid: Optional["VoxelGrid"]) -> None:
+        """Установить воксельную сетку."""
+        if grid is self._grid:
+            return
+        self._grid = grid
+        if grid is not None:
+            self._voxel_grid_name = grid.name
+        else:
+            self._voxel_grid_name = ""
+        self._needs_rebuild = True
+
+    def set_voxel_grid_by_name(self, name: str) -> None:
+        """Установить воксельную сетку по имени из ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
+        grid = rm.get_voxel_grid(name)
+        self.set_voxel_grid(grid)
 
     # --- Drawable protocol ---
 
@@ -173,42 +173,7 @@ class VoxelDisplayComponent(Component):
         result.sort(key=lambda p: p.priority)
         return result
 
-    # --- Логика загрузки и построения меша ---
-
-    def _resolve_path(self, path_str: str) -> Path:
-        """Разрешить путь относительно директории проекта."""
-        path = Path(path_str)
-        if path.is_absolute():
-            return path
-
-        from termin.editor.project_browser import ProjectBrowser
-        project_root = ProjectBrowser.current_project_path
-        if project_root is not None:
-            return project_root / path
-        return path
-
-    def _load_file(self) -> bool:
-        """Загрузить .voxels файл."""
-        if not self._voxel_file:
-            self._grid = None
-            return False
-
-        try:
-            from termin.voxels.persistence import VoxelPersistence
-
-            resolved_path = self._resolve_path(self._voxel_file)
-            if not resolved_path.exists():
-                print(f"VoxelDisplayComponent: file not found: {resolved_path}")
-                self._grid = None
-                return False
-
-            self._grid = VoxelPersistence.load(resolved_path)
-            print(f"VoxelDisplayComponent: loaded {self._grid.voxel_count} voxels from {resolved_path}")
-            return True
-        except Exception as e:
-            print(f"VoxelDisplayComponent: failed to load {self._voxel_file}: {e}")
-            self._grid = None
-            return False
+    # --- Построение меша ---
 
     def _rebuild_mesh(self) -> None:
         """Перестроить меш из воксельной сетки."""
@@ -273,11 +238,14 @@ class VoxelDisplayComponent(Component):
     # --- Lifecycle ---
 
     def on_added(self, scene: "Scene") -> None:
-        """При добавлении в сцену загрузить файл и построить меш."""
-        if self._needs_reload:
-            self._load_file()
+        """При добавлении в сцену загрузить сетку и построить меш."""
+        # Если есть сохранённое имя, загружаем сетку
+        if self._voxel_grid_name and self._grid is None:
+            self.set_voxel_grid_by_name(self._voxel_grid_name)
+
+        if self._needs_rebuild:
             self._rebuild_mesh()
-            self._needs_reload = False
+            self._needs_rebuild = False
 
     def on_removed(self) -> None:
         """Очистить меш при удалении."""
@@ -287,18 +255,19 @@ class VoxelDisplayComponent(Component):
 
     def update(self, dt: float) -> None:
         """Обновить меш если нужно."""
-        if self._needs_reload:
-            self._load_file()
+        if self._needs_rebuild:
             self._rebuild_mesh()
-            self._needs_reload = False
+            self._needs_rebuild = False
 
-    def reload(self) -> None:
-        """Перезагрузить файл вручную."""
-        self._needs_reload = True
+    def serialize_data(self) -> dict:
+        """Сериализует данные компонента."""
+        return {
+            "voxel_grid_name": self._voxel_grid_name,
+        }
 
     @classmethod
     def deserialize(cls, data: dict, context) -> "VoxelDisplayComponent":
         """Десериализовать компонент."""
         return cls(
-            voxel_file=data.get("voxel_file", ""),
+            voxel_grid_name=data.get("voxel_grid_name", ""),
         )
