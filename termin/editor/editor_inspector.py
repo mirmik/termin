@@ -398,6 +398,13 @@ class ComponentInspectorPanel(QWidget):
                 combo.addItem(n)
             return combo
 
+        if kind == "navmesh":
+            combo = QComboBox()
+            names = self._resources.list_navmesh_names()
+            for n in names:
+                combo.addItem(n)
+            return combo
+
         if kind == "enum":
             combo = QComboBox()
             if field.choices:
@@ -543,6 +550,27 @@ class ComponentInspectorPanel(QWidget):
                 w.setCurrentIndex(-1)
             return
 
+        if isinstance(w, QComboBox) and field.kind == "navmesh":
+            # value — это имя navmesh (строка)
+            name = value if isinstance(value, str) else None
+            existing = [w.itemText(i) for i in range(w.count())]
+            all_names = self._resources.list_navmesh_names()
+            if existing != all_names:
+                w.clear()
+                for n in all_names:
+                    w.addItem(n)
+
+            if name is None or name == "":
+                w.setCurrentIndex(-1)
+                return
+
+            idx = w.findText(name)
+            if idx >= 0:
+                w.setCurrentIndex(idx)
+            else:
+                w.setCurrentIndex(-1)
+            return
+
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:
                 for i in range(w.count()):
@@ -675,6 +703,13 @@ class ComponentInspectorPanel(QWidget):
             if not name:
                 return None
             return self._resources.get_voxel_grid(name)
+
+        if isinstance(w, QComboBox) and field.kind == "navmesh":
+            name = w.currentText()
+            if not name:
+                return None
+            # Возвращаем имя, а не объект — компонент сам получит navmesh по имени
+            return name
 
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:

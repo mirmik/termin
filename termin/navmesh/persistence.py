@@ -36,6 +36,7 @@ class NavMeshPersistence:
 
         data = {
             "version": NAVMESH_FORMAT_VERSION,
+            "name": navmesh.name,
             "cell_size": navmesh.cell_size,
             "origin": navmesh.origin.tolist(),
             "polygons": [],
@@ -81,6 +82,7 @@ class NavMeshPersistence:
         navmesh = NavMesh(
             cell_size=data.get("cell_size", 0.25),
             origin=np.array(data.get("origin", [0, 0, 0]), dtype=np.float32),
+            name=data.get("name", ""),
         )
 
         for poly_data in data.get("polygons", []):
@@ -117,6 +119,7 @@ class NavMeshPersistence:
         vertex_count = sum(len(p.get("vertices", [])) for p in polygons)
 
         return {
+            "name": data.get("name", ""),
             "cell_size": data.get("cell_size", 0.25),
             "polygon_count": polygon_count,
             "triangle_count": triangle_count,

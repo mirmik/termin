@@ -61,6 +61,9 @@ class NavMesh:
     origin: np.ndarray = field(default_factory=lambda: np.zeros(3, dtype=np.float32))
     """Начало координат воксельной сетки."""
 
+    name: str = ""
+    """Имя навигационной сетки."""
+
     def polygon_count(self) -> int:
         """Количество полигонов."""
         return len(self.polygons)

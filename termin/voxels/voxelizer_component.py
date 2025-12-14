@@ -292,8 +292,11 @@ class VoxelizerComponent(Component):
         if not output.endswith(".navmesh"):
             output += ".navmesh"
 
-        # Регистрируем в ResourceManager
+        # Устанавливаем имя navmesh
         navmesh_name = name + "_navmesh" if not name.endswith("_navmesh") else name
+        navmesh.name = navmesh_name
+
+        # Регистрируем в ResourceManager
         rm.register_navmesh(navmesh_name, navmesh)
         print(f"VoxelizerComponent: registered NavMesh '{navmesh_name}'")
 

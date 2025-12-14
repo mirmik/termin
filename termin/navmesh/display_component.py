@@ -49,7 +49,7 @@ class NavMeshDisplayComponent(Component):
         "navmesh_name": InspectField(
             path="navmesh_name",
             label="NavMesh",
-            kind="string",
+            kind="navmesh",
         ),
         "color": InspectField(
             path="color",
@@ -150,14 +150,6 @@ class NavMeshDisplayComponent(Component):
         self._check_hot_reload()
 
         if self._mesh_drawable is None:
-            handle = self._navmesh_handle
-            print(f"[NavMeshDisplayComponent] draw_geometry: no mesh_drawable")
-            print(f"  navmesh_name={self._navmesh_name!r}")
-            print(f"  handle.is_named={handle.is_named}, handle.is_direct={handle.is_direct}")
-            print(f"  handle._keeper={handle._keeper}")
-            if handle._keeper:
-                print(f"  keeper.has_resource={handle._keeper.has_resource}")
-                print(f"  keeper.resource={handle._keeper.resource}")
             return
 
         self._mesh_drawable.draw(context)

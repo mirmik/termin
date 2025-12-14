@@ -299,6 +299,13 @@ class InspectFieldPanel(QWidget):
                 combo.addItem(n)
             return combo
 
+        if kind == "navmesh" and self._resources is not None:
+            combo = QComboBox()
+            names = self._resources.list_navmesh_names()
+            for n in names:
+                combo.addItem(n)
+            return combo
+
         if kind == "enum":
             combo = QComboBox()
             if field.choices:
@@ -422,6 +429,28 @@ class InspectFieldPanel(QWidget):
                 return
             name = self._resources.find_voxel_grid_name(value)
             if name is None:
+                w.setCurrentIndex(-1)
+                return
+            idx = w.findText(name)
+            w.setCurrentIndex(idx if idx >= 0 else -1)
+            return
+
+        if isinstance(w, QComboBox) and field.kind == "navmesh":
+            if self._resources is None:
+                w.setCurrentIndex(-1)
+                return
+
+            # Refresh navmesh list if changed
+            existing = [w.itemText(i) for i in range(w.count())]
+            all_names = self._resources.list_navmesh_names()
+            if existing != all_names:
+                w.clear()
+                for n in all_names:
+                    w.addItem(n)
+
+            # value — это имя navmesh (строка)
+            name = value if isinstance(value, str) else None
+            if name is None or name == "":
                 w.setCurrentIndex(-1)
                 return
             idx = w.findText(name)
@@ -560,6 +589,13 @@ class InspectFieldPanel(QWidget):
             if not name:
                 return None
             return self._resources.get_voxel_grid(name)
+
+        if isinstance(w, QComboBox) and field.kind == "navmesh":
+            name = w.currentText()
+            if not name:
+                return None
+            # Возвращаем имя, а не объект — компонент сам получит navmesh по имени
+            return name
 
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:

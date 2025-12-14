@@ -27,13 +27,14 @@ class NavMeshProcessor(FileTypeProcessor):
         """Load new navmesh file."""
         from termin.navmesh.persistence import NavMeshPersistence
 
-        name = os.path.splitext(os.path.basename(path))[0]
-
-        if name in self._resource_manager.navmeshes:
-            return
-
         try:
             navmesh = NavMeshPersistence.load(path)
+            # Используем имя из файла, или basename если не задано
+            name = navmesh.name if navmesh.name else os.path.splitext(os.path.basename(path))[0]
+
+            if name in self._resource_manager.navmeshes:
+                return
+
             self._resource_manager.register_navmesh(name, navmesh)
 
             if path not in self._file_to_resources:
@@ -51,10 +52,11 @@ class NavMeshProcessor(FileTypeProcessor):
         from termin.navmesh.persistence import NavMeshPersistence
 
         old_names = self._file_to_resources.get(path, set())
-        name = os.path.splitext(os.path.basename(path))[0]
 
         try:
             navmesh = NavMeshPersistence.load(path)
+            # Используем имя из файла, или basename если не задано
+            name = navmesh.name if navmesh.name else os.path.splitext(os.path.basename(path))[0]
 
             # Remove old name if different
             for old_name in old_names:
