@@ -73,18 +73,6 @@ class MeshHandle(ABC):
         ...
 
 
-class PolylineHandle(ABC):
-    """Backend polyline buffers."""
-
-    @abstractmethod
-    def draw(self):
-        ...
-
-    @abstractmethod
-    def delete(self):
-        ...
-
-
 class TextureHandle(ABC):
     """Backend texture object."""
 
@@ -170,10 +158,6 @@ class GraphicsBackend(ABC):
 
     @abstractmethod
     def create_mesh(self, mesh) -> MeshHandle:
-        ...
-
-    @abstractmethod
-    def create_polyline(self, polyline) -> PolylineHandle:
         ...
 
     @abstractmethod

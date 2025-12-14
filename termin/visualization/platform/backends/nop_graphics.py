@@ -11,7 +11,6 @@ from .base import (
     Key,
     MeshHandle,
     MouseButton,
-    PolylineHandle,
     ShaderHandle,
     TextureHandle,
     WindowBackend,
@@ -54,16 +53,6 @@ class NOPShaderHandle(ShaderHandle):
 
 class NOPMeshHandle(MeshHandle):
     """Меш-хэндл (указатель на геометрию), который ничего не рисует."""
-
-    def draw(self):
-        pass
-
-    def delete(self):
-        pass
-
-
-class NOPPolylineHandle(PolylineHandle):
-    """Полилиния, которая тоже ничего не рисует."""
 
     def draw(self):
         pass
@@ -165,9 +154,6 @@ class NOPGraphicsBackend(GraphicsBackend):
 
     def create_mesh(self, mesh) -> MeshHandle:
         return NOPMeshHandle()
-
-    def create_polyline(self, polyline) -> PolylineHandle:
-        return NOPPolylineHandle()
 
     def create_texture(
         self,

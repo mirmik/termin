@@ -14,11 +14,10 @@ import numpy as np
 
 from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.mesh import MeshDrawable, Mesh2Drawable
 from termin.visualization.core.navmesh_handle import NavMeshHandle
-from termin.visualization.core.polyline import Polyline, PolylineDrawable
 from termin.visualization.render.drawable import GeometryDrawCall
-from termin.mesh.mesh import Mesh3
+from termin.mesh.mesh import Mesh2, Mesh3
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -82,7 +81,7 @@ class NavMeshDisplayComponent(Component):
         self._navmesh_handle: NavMeshHandle = NavMeshHandle()
         self._last_navmesh: Optional["NavMesh"] = None
         self._mesh_drawable: Optional[MeshDrawable] = None
-        self._contour_drawable: Optional[PolylineDrawable] = None
+        self._contour_drawable: Optional[Mesh2Drawable] = None
         self._material: Optional[Material] = None
         self._contour_material: Optional[Material] = None
         self._needs_rebuild = True
@@ -387,7 +386,10 @@ void main() {
         if not contour_segments:
             return
 
-        # Создаём polyline из сегментов (GL_LINES режим)
-        line_vertices = np.array(contour_segments, dtype=np.float32)
-        polyline = Polyline(line_vertices, is_strip=False)
-        self._contour_drawable = PolylineDrawable(polyline)
+        # Создаём Mesh2 для линий (GL_LINES режим)
+        vertices = np.array(contour_segments, dtype=np.float32)
+        # Индексы: пары [0,1], [2,3], [4,5], ...
+        num_segments = len(vertices) // 2
+        indices = np.array([[i * 2, i * 2 + 1] for i in range(num_segments)], dtype=np.int32)
+        mesh = Mesh2(vertices, indices)
+        self._contour_drawable = Mesh2Drawable(mesh)

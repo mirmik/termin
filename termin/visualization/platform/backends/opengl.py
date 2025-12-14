@@ -16,7 +16,6 @@ from termin.visualization.platform.backends.base import (
     FramebufferHandle,
     GraphicsBackend,
     MeshHandle,
-    PolylineHandle,
     ShaderHandle,
     TextureHandle,
 )
@@ -192,52 +191,6 @@ class OpenGLMeshHandle(MeshHandle):
         gl.glDeleteVertexArrays(1, [self._vao])
         gl.glDeleteBuffers(1, [self._vbo])
         gl.glDeleteBuffers(1, [self._ebo])
-        self._vao = self._vbo = self._ebo = None
-
-
-class OpenGLPolylineHandle(PolylineHandle):
-    def __init__(self, vertices: np.ndarray, indices: np.ndarray | None, is_strip: bool):
-        self._vertices = vertices.astype(np.float32)
-        self._indices = indices.astype(np.uint32) if indices is not None else None
-        self._is_strip = is_strip
-        self._vao: int | None = None
-        self._vbo: int | None = None
-        self._ebo: int | None = None
-        self._upload()
-
-    def _upload(self):
-        vertex_block = self._vertices.ravel()
-        self._vao = gl.glGenVertexArrays(1)
-        self._vbo = gl.glGenBuffers(1)
-        gl.glBindVertexArray(self._vao)
-        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self._vbo)
-        gl.glBufferData(gl.GL_ARRAY_BUFFER, vertex_block.nbytes, vertex_block, gl.GL_STATIC_DRAW)
-        if self._indices is not None:
-            self._ebo = gl.glGenBuffers(1)
-            gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self._ebo)
-            gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, self._indices.nbytes, self._indices, gl.GL_STATIC_DRAW)
-        stride = 3 * 4
-        gl.glEnableVertexAttribArray(0)
-        _gl_vertex_attrib_pointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(0))
-        gl.glBindVertexArray(0)
-
-    def draw(self):
-        mode = gl.GL_LINE_STRIP if self._is_strip else gl.GL_LINES
-        gl.glBindVertexArray(self._vao or 0)
-        gl.glEnable(gl.GL_DEPTH_TEST)
-        if self._indices is not None:
-            gl.glDrawElements(mode, self._indices.size, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))
-        else:
-            gl.glDrawArrays(mode, 0, self._vertices.shape[0])
-        gl.glBindVertexArray(0)
-
-    def delete(self):
-        if self._vao is None:
-            return
-        gl.glDeleteVertexArrays(1, [self._vao])
-        gl.glDeleteBuffers(1, [self._vbo])
-        if self._ebo is not None:
-            gl.glDeleteBuffers(1, [self._ebo])
         self._vao = self._vbo = self._ebo = None
 
 
@@ -457,9 +410,6 @@ class OpenGLGraphicsBackend(GraphicsBackend):
 
     def create_mesh(self, mesh: Mesh) -> MeshHandle:
         return OpenGLMeshHandle(mesh)
-
-    def create_polyline(self, polyline) -> PolylineHandle:
-        return OpenGLPolylineHandle(polyline.vertices, polyline.indices, polyline.is_strip)
 
     def create_texture(self, image_data, size: Tuple[int, int], channels: int = 4, mipmap: bool = True, clamp: bool = False) -> TextureHandle:
         return OpenGLTextureHandle(image_data, size, channels=channels, mipmap=mipmap, clamp=clamp)
