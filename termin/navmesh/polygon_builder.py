@@ -116,22 +116,33 @@ class PolygonBuilder:
             "built": 0,
         }
 
+        # Используем face-based mesh для базовых стадий (без сшивки и контуров)
+        use_face_mesh = not stitch_polygons and not extract_contours and not retriangulate
+
         for region_idx, (region_voxels, region_normal) in enumerate(regions):
             if len(region_voxels) < self.config.min_region_voxels:
                 stats["skipped_small"] += 1
                 continue
 
-            polygon = self._build_polygon(
-                region_voxels,
-                region_normal,
-                grid,
-                voxel_to_regions=voxel_to_regions if stitch_polygons else None,
-                region_planes=region_planes if stitch_polygons else None,
-                current_region_idx=region_idx,
-                extract_contours=extract_contours,
-                simplify_contours=simplify_contours,
-                retriangulate=retriangulate,
-            )
+            if use_face_mesh:
+                polygon = self._build_polygon_from_faces(
+                    region_voxels,
+                    region_normal,
+                    grid,
+                    current_region_idx=region_idx,
+                )
+            else:
+                polygon = self._build_polygon(
+                    region_voxels,
+                    region_normal,
+                    grid,
+                    voxel_to_regions=voxel_to_regions if stitch_polygons else None,
+                    region_planes=region_planes if stitch_polygons else None,
+                    current_region_idx=region_idx,
+                    extract_contours=extract_contours,
+                    simplify_contours=simplify_contours,
+                    retriangulate=retriangulate,
+                )
             if polygon is not None:
                 polygons.append(polygon)
                 stats["built"] += 1
@@ -390,6 +401,152 @@ class PolygonBuilder:
         # Решаем систему
         x = np.linalg.solve(A, d)
         return x.astype(np.float32)
+
+    def _build_polygon_from_faces(
+        self,
+        voxels: list[tuple[int, int, int]],
+        normal: np.ndarray,
+        grid: VoxelGrid,
+        current_region_idx: int = 0,
+    ) -> NavPolygon | None:
+        """
+        Построить полигон из граней вокселей (квадратно-гнездовая сетка).
+
+        Генерирует:
+        1. Лицевые грани — по доминирующей оси нормали
+        2. Замыкающие грани — боковые грани на ступеньках
+        """
+        if len(voxels) < 1:
+            return None
+
+        cell_size = grid.cell_size
+        origin = grid.origin
+        voxel_set = set(voxels)
+
+        # Определяем доминирующую ось по нормали
+        abs_normal = np.abs(normal)
+        dominant_axis = int(np.argmax(abs_normal))  # 0=X, 1=Y, 2=Z
+        axis_sign = 1 if normal[dominant_axis] >= 0 else -1
+
+        # Оси для построения граней
+        # dominant_axis — направление нормали грани
+        # other_axes — две другие оси для плоскости грани
+        other_axes = [i for i in range(3) if i != dominant_axis]
+
+        # Смещения для 4 углов грани в локальных координатах вокселя
+        # Грань лежит на плоскости dominant_axis = 0 или 1
+        face_offset = 1 if axis_sign > 0 else 0  # какая сторона кубика
+
+        # 4 угла грани (против часовой стрелки если смотреть снаружи)
+        corner_offsets = []
+        for c0 in [0, 1]:
+            for c1 in [0, 1]:
+                offset = [0.0, 0.0, 0.0]
+                offset[dominant_axis] = face_offset
+                offset[other_axes[0]] = c0
+                offset[other_axes[1]] = c1
+                corner_offsets.append(offset)
+        # Переупорядочиваем для CCW: [0,0], [1,0], [1,1], [0,1]
+        corner_offsets = [corner_offsets[0], corner_offsets[1], corner_offsets[3], corner_offsets[2]]
+
+        # Собираем вершины и грани
+        vertices: list[np.ndarray] = []
+        vertex_map: dict[tuple[float, float, float], int] = {}
+        quads: list[list[int]] = []
+
+        def get_or_add_vertex(pos: np.ndarray) -> int:
+            key = (round(pos[0], 6), round(pos[1], 6), round(pos[2], 6))
+            if key in vertex_map:
+                return vertex_map[key]
+            idx = len(vertices)
+            vertices.append(pos.copy())
+            vertex_map[key] = idx
+            return idx
+
+        # 1. Генерируем лицевые грани для каждого вокселя
+        for vx, vy, vz in voxels:
+            voxel_origin = origin + np.array([vx, vy, vz], dtype=np.float32) * cell_size
+            quad_indices = []
+            for offset in corner_offsets:
+                pos = voxel_origin + np.array(offset, dtype=np.float32) * cell_size
+                quad_indices.append(get_or_add_vertex(pos))
+            quads.append(quad_indices)
+
+        # 2. Генерируем замыкающие (боковые) грани на ступеньках
+        # Для каждого вокселя проверяем соседей по other_axes
+        # Если сосед существует, но на другом уровне по dominant_axis — нужна боковая грань
+        for vx, vy, vz in voxels:
+            voxel_coord = [vx, vy, vz]
+
+            for side_axis in other_axes:
+                for direction in [-1, 1]:
+                    # Координата соседа по side_axis
+                    neighbor_coord = list(voxel_coord)
+                    neighbor_coord[side_axis] += direction
+                    neighbor = tuple(neighbor_coord)
+
+                    # Если сосед в регионе на том же уровне — грань не нужна
+                    if neighbor in voxel_set:
+                        continue
+
+                    # Проверяем, есть ли сосед ниже/выше по ступеньке
+                    # (сосед по side_axis + смещение по dominant_axis)
+                    step_neighbor = list(neighbor_coord)
+                    step_neighbor[dominant_axis] += (-axis_sign)  # "ниже" по нормали
+                    step_neighbor = tuple(step_neighbor)
+
+                    has_step = step_neighbor in voxel_set
+
+                    # Боковая грань нужна если:
+                    # - нет соседа на том же уровне (граница)
+                    # Генерируем грань между текущим вокселем и пустотой/ступенькой
+
+                    # Координаты боковой грани
+                    voxel_origin = origin + np.array(voxel_coord, dtype=np.float32) * cell_size
+
+                    # 4 угла боковой грани
+                    side_corners = []
+                    side_face_offset = 1 if direction > 0 else 0
+
+                    # Другая ось (не dominant и не side_axis)
+                    third_axis = [a for a in other_axes if a != side_axis][0]
+
+                    for d_off in [0, 1]:  # по dominant_axis
+                        for t_off in [0, 1]:  # по third_axis
+                            offset = [0.0, 0.0, 0.0]
+                            offset[side_axis] = side_face_offset
+                            offset[dominant_axis] = d_off
+                            offset[third_axis] = t_off
+                            pos = voxel_origin + np.array(offset, dtype=np.float32) * cell_size
+                            side_corners.append(get_or_add_vertex(pos))
+
+                    # Переупорядочиваем для CCW (зависит от направления)
+                    if direction > 0:
+                        quad_indices = [side_corners[0], side_corners[2], side_corners[3], side_corners[1]]
+                    else:
+                        quad_indices = [side_corners[0], side_corners[1], side_corners[3], side_corners[2]]
+
+                    quads.append(quad_indices)
+
+        if not vertices or not quads:
+            return None
+
+        # Триангулируем квады
+        triangles = []
+        for quad in quads:
+            # Каждый квад -> 2 треугольника
+            triangles.append([quad[0], quad[1], quad[2]])
+            triangles.append([quad[0], quad[2], quad[3]])
+
+        vertices_3d = np.array(vertices, dtype=np.float32)
+        triangles_arr = np.array(triangles, dtype=np.int32)
+
+        return NavPolygon(
+            vertices=vertices_3d,
+            triangles=triangles_arr,
+            normal=normal,
+            voxel_coords=voxels,
+        )
 
     def _build_polygon(
         self,
