@@ -110,8 +110,11 @@ class RenderEngine:
                 if error_msg not in self._logged_errors:
                     self._logged_errors.add(error_msg)
                     import logging
+                    import traceback
                     logger = logging.getLogger(__name__)
-                    logger.error(f"Pipeline error: {e}")
+                    tb = traceback.format_exc()
+                    logger.error(f"Pipeline error: {e}\n{tb}")
+                    print(f"Pipeline error: {e}\n{tb}")
 
         if present:
             surface.present()
