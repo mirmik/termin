@@ -37,7 +37,7 @@ class RegionGrowingTest(unittest.TestCase):
         """Один воксель = один регион."""
         grid = VoxelGrid(cell_size=1.0)
         grid.set(0, 0, 0, 2)  # VOXEL_SURFACE
-        grid.set_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
@@ -49,8 +49,8 @@ class RegionGrowingTest(unittest.TestCase):
         grid = VoxelGrid(cell_size=1.0)
         grid.set(0, 0, 0, 2)
         grid.set(1, 0, 0, 2)
-        grid.set_surface_normal(0, 0, 0, np.array([0, 0, 1]))
-        grid.set_surface_normal(1, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(1, 0, 0, np.array([0, 0, 1]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
@@ -64,8 +64,8 @@ class RegionGrowingTest(unittest.TestCase):
         grid.set(0, 0, 0, 2)
         grid.set(1, 0, 0, 2)
         # Нормали перпендикулярны — точно разные регионы
-        grid.set_surface_normal(0, 0, 0, np.array([0, 0, 1]))
-        grid.set_surface_normal(1, 0, 0, np.array([1, 0, 0]))
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(1, 0, 0, np.array([1, 0, 0]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
@@ -83,8 +83,8 @@ class RegionGrowingTest(unittest.TestCase):
         n2 = np.array([0.17, 0, 0.985], dtype=np.float32)  # ~10°
         n2 /= np.linalg.norm(n2)
 
-        grid.set_surface_normal(0, 0, 0, n1)
-        grid.set_surface_normal(1, 0, 0, n2)
+        grid.add_surface_normal(0, 0, 0, n1)
+        grid.add_surface_normal(1, 0, 0, n2)
 
         # Проверяем что dot > 0.9
         self.assertGreater(np.dot(n1, n2), 0.9)
@@ -99,8 +99,8 @@ class RegionGrowingTest(unittest.TestCase):
         grid = VoxelGrid(cell_size=1.0)
         grid.set(0, 0, 0, 2)
         grid.set(5, 5, 5, 2)  # Далеко
-        grid.set_surface_normal(0, 0, 0, np.array([0, 0, 1]))
-        grid.set_surface_normal(5, 5, 5, np.array([0, 0, 1]))
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(5, 5, 5, np.array([0, 0, 1]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
@@ -115,7 +115,7 @@ class ContourBuildingTest(unittest.TestCase):
         """Контур одного вокселя — 8 вершин (куб без внутренних)."""
         grid = VoxelGrid(cell_size=1.0)
         grid.set(0, 0, 0, 2)
-        grid.set_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
@@ -129,8 +129,8 @@ class ContourBuildingTest(unittest.TestCase):
         grid = VoxelGrid(cell_size=1.0)
         grid.set(0, 0, 0, 2)
         grid.set(1, 0, 0, 2)
-        grid.set_surface_normal(0, 0, 0, np.array([0, 0, 1]))
-        grid.set_surface_normal(1, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(1, 0, 0, np.array([0, 0, 1]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
@@ -174,7 +174,7 @@ class TriangulationTest(unittest.TestCase):
         """Триангуляция создаёт треугольники."""
         grid = VoxelGrid(cell_size=1.0)
         grid.set(0, 0, 0, 2)
-        grid.set_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
@@ -187,6 +187,156 @@ class TriangulationTest(unittest.TestCase):
         max_idx = len(polygon.vertices) - 1
         for tri in polygon.triangles:
             self.assertTrue(all(0 <= idx <= max_idx for idx in tri))
+
+
+class VoxelFaceMeshTest(unittest.TestCase):
+    """Тесты для построения меша из граней вокселей."""
+
+    def test_single_voxel_face_count(self):
+        """Один воксель: 1 лицевая грань = 1 квад = 2 треугольника."""
+        grid = VoxelGrid(cell_size=1.0)
+        grid.set(0, 0, 0, 2)
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid)
+
+        self.assertEqual(navmesh.polygon_count(), 1)
+        polygon = navmesh.polygons[0]
+
+        # 1 квад = 2 треугольника
+        self.assertEqual(len(polygon.triangles), 2)
+        # 4 уникальных вершины (углы лицевой грани)
+        self.assertEqual(len(polygon.vertices), 4)
+
+    def test_single_voxel_normals(self):
+        """Нормали лицевых треугольников совпадают с нормалью региона."""
+        grid = VoxelGrid(cell_size=1.0)
+        grid.set(0, 0, 0, 2)
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid)
+        polygon = navmesh.polygons[0]
+
+        region_normal = polygon.normal
+
+        # Хотя бы 2 треугольника (лицевая грань) должны иметь нормаль по направлению региона
+        aligned_count = 0
+        for tri in polygon.triangles:
+            v0, v1, v2 = polygon.vertices[tri]
+            edge1 = v1 - v0
+            edge2 = v2 - v0
+            tri_normal = np.cross(edge1, edge2)
+            norm_len = np.linalg.norm(tri_normal)
+            if norm_len > 1e-6:
+                tri_normal = tri_normal / norm_len
+                dot = np.dot(tri_normal, region_normal)
+                if dot > 0.9:  # Почти параллельны
+                    aligned_count += 1
+
+        # Лицевая грань = 2 треугольника
+        self.assertGreaterEqual(aligned_count, 2, f"Expected at least 2 triangles aligned with region normal, got {aligned_count}")
+
+    def test_two_adjacent_voxels_horizontal(self):
+        """Два смежных вокселя по горизонтали: 2 лицевых грани с общими вершинами."""
+        grid = VoxelGrid(cell_size=1.0)
+        grid.set(0, 0, 0, 2)
+        grid.set(1, 0, 0, 2)
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        grid.add_surface_normal(1, 0, 0, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid)
+
+        self.assertEqual(navmesh.polygon_count(), 1)
+        polygon = navmesh.polygons[0]
+
+        # 2 лицевые грани = 4 треугольника
+        self.assertEqual(len(polygon.triangles), 4)
+        # 6 уникальных вершин (общие 2 вершины на границе)
+        self.assertEqual(len(polygon.vertices), 6)
+
+    def test_step_voxels(self):
+        """Ступенька: два вокселя на разных уровнях = 2 лицевые грани."""
+        grid = VoxelGrid(cell_size=1.0)
+        # Воксель на уровне 0
+        grid.set(0, 0, 0, 2)
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        # Воксель на уровне 1, смещённый по X
+        grid.set(1, 0, 1, 2)
+        grid.add_surface_normal(1, 0, 1, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid)
+
+        self.assertEqual(navmesh.polygon_count(), 1)
+        polygon = navmesh.polygons[0]
+
+        # 2 лицевые грани = 4 треугольника
+        self.assertEqual(len(polygon.triangles), 4)
+        # 8 уникальных вершин (грани не касаются)
+        self.assertEqual(len(polygon.vertices), 8)
+
+    def test_diagonal_step_no_shared_edges(self):
+        """Диагональная ступенька: лицевые грани не перекрываются."""
+        grid = VoxelGrid(cell_size=1.0)
+        # Воксель на уровне z=0
+        grid.set(0, 0, 0, 2)
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        # Воксель на уровне z=1, смежный по диагонали (x+1, z+1)
+        grid.set(1, 0, 1, 2)
+        grid.add_surface_normal(1, 0, 1, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid)
+
+        polygon = navmesh.polygons[0]
+
+        # 2 лицевые грани = 4 треугольника
+        self.assertEqual(len(polygon.triangles), 4)
+
+        # Проверяем что нет дублирующихся рёбер
+        edge_count = {}
+        for tri in polygon.triangles:
+            for i in range(3):
+                v0, v1 = tri[i], tri[(i + 1) % 3]
+                edge = (min(v0, v1), max(v0, v1))
+                edge_count[edge] = edge_count.get(edge, 0) + 1
+
+        for edge, count in edge_count.items():
+            self.assertIn(count, [1, 2], f"Edge {edge} has {count} triangles")
+
+    def test_no_holes_in_mesh(self):
+        """Меш не должен иметь дыр — все boundary рёбра образуют замкнутый контур."""
+        grid = VoxelGrid(cell_size=1.0)
+        grid.set(0, 0, 0, 2)
+        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid)
+        polygon = navmesh.polygons[0]
+
+        # Собираем boundary рёбра (которые принадлежат только 1 треугольнику)
+        edge_count = {}
+        for tri in polygon.triangles:
+            for i in range(3):
+                v0, v1 = tri[i], tri[(i + 1) % 3]
+                edge = (min(v0, v1), max(v0, v1))
+                edge_count[edge] = edge_count.get(edge, 0) + 1
+
+        boundary_edges = {e for e, c in edge_count.items() if c == 1}
+
+        # Строим граф смежности boundary вершин
+        from collections import defaultdict
+        adj = defaultdict(set)
+        for v0, v1 in boundary_edges:
+            adj[v0].add(v1)
+            adj[v1].add(v0)
+
+        # Каждая boundary вершина должна иметь чётное число соседей (для замкнутого контура)
+        for v, neighbors in adj.items():
+            self.assertEqual(len(neighbors) % 2, 0, f"Vertex {v} has odd degree {len(neighbors)} — hole detected")
 
 
 class EmptyGridTest(unittest.TestCase):

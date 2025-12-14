@@ -464,62 +464,9 @@ class PolygonBuilder:
                 quad_indices.append(get_or_add_vertex(pos))
             quads.append((quad_indices, face_normal))
 
-        # 2. Генерируем замыкающие (боковые) грани на ступеньках
-        # Для каждого вокселя проверяем соседей по other_axes
-        # Если сосед существует, но на другом уровне по dominant_axis — нужна боковая грань
-        for vx, vy, vz in voxels:
-            voxel_coord = [vx, vy, vz]
-
-            for side_axis in other_axes:
-                for direction in [-1, 1]:
-                    # Координата соседа по side_axis
-                    neighbor_coord = list(voxel_coord)
-                    neighbor_coord[side_axis] += direction
-                    neighbor = tuple(neighbor_coord)
-
-                    # Если сосед в регионе на том же уровне — грань не нужна
-                    if neighbor in voxel_set:
-                        continue
-
-                    # Проверяем, есть ли сосед ниже/выше по ступеньке
-                    # (сосед по side_axis + смещение по dominant_axis)
-                    step_neighbor = list(neighbor_coord)
-                    step_neighbor[dominant_axis] += (-axis_sign)  # "ниже" по нормали
-                    step_neighbor = tuple(step_neighbor)
-
-                    has_step = step_neighbor in voxel_set
-
-                    # Боковая грань нужна если:
-                    # - нет соседа на том же уровне (граница)
-                    # Генерируем грань между текущим вокселем и пустотой/ступенькой
-
-                    # Координаты боковой грани
-                    voxel_origin = origin + np.array(voxel_coord, dtype=np.float32) * cell_size
-
-                    # 4 угла боковой грани
-                    side_corners = []
-                    side_face_offset = 1 if direction > 0 else 0
-
-                    # Другая ось (не dominant и не side_axis)
-                    third_axis = [a for a in other_axes if a != side_axis][0]
-
-                    for d_off in [0, 1]:  # по dominant_axis
-                        for t_off in [0, 1]:  # по third_axis
-                            offset = [0.0, 0.0, 0.0]
-                            offset[side_axis] = side_face_offset
-                            offset[dominant_axis] = d_off
-                            offset[third_axis] = t_off
-                            pos = voxel_origin + np.array(offset, dtype=np.float32) * cell_size
-                            side_corners.append(get_or_add_vertex(pos))
-
-                    # Нормаль боковой грани — в направлении direction по side_axis
-                    side_normal = np.zeros(3, dtype=np.float32)
-                    side_normal[side_axis] = direction
-
-                    # Порядок вершин (будет скорректирован при триангуляции)
-                    quad_indices = [side_corners[0], side_corners[1], side_corners[2], side_corners[3]]
-
-                    quads.append((quad_indices, side_normal))
+        # TODO: Замыкающие (боковые) грани на ступеньках — отключены пока
+        # Проблема: текущая логика создаёт дублирующиеся грани
+        # Нужен более сложный алгоритм для корректного замыкания
 
         if not vertices or not quads:
             return None
