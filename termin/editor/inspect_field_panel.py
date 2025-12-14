@@ -593,11 +593,15 @@ class InspectFieldPanel(QWidget):
 
         if isinstance(w, QComboBox) and field.kind == "navmesh":
             if self._resources is None:
+                print("[_read_widget_value navmesh] resources is None")
                 return None
             name = w.currentText()
             if not name:
+                print("[_read_widget_value navmesh] name is empty")
                 return None
-            return self._resources.get_navmesh(name)
+            result = self._resources.get_navmesh(name)
+            print(f"[_read_widget_value navmesh] name='{name}', result={result}, type={type(result)}")
+            return result
 
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:
