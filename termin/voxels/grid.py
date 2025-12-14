@@ -215,8 +215,41 @@ class VoxelGrid:
         return min_world, max_world
 
     # ----------------------------------------------------------------
-    # Fill interior
+    # Surface / Interior operations
     # ----------------------------------------------------------------
+
+    def extract_surface(self, surface_value: int = 1) -> "VoxelGrid":
+        """
+        Создаёт новую сетку только с поверхностными вокселями.
+
+        Поверхностный воксель — solid, у которого есть хотя бы один пустой сосед.
+
+        Args:
+            surface_value: Тип для поверхностных вокселей.
+
+        Returns:
+            Новая VoxelGrid только с поверхностными вокселями.
+        """
+        result = VoxelGrid(
+            origin=tuple(self._origin),
+            cell_size=self._cell_size,
+            name=self._name + "_surface" if self._name else "surface",
+        )
+
+        neighbors = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+
+        for x, y, z, vtype in self.iter_non_empty():
+            # Проверяем есть ли пустой сосед
+            has_empty_neighbor = False
+            for dx, dy, dz in neighbors:
+                if self.get(x + dx, y + dy, z + dz) == 0:
+                    has_empty_neighbor = True
+                    break
+
+            if has_empty_neighbor:
+                result.set(x, y, z, surface_value)
+
+        return result
 
     def fill_interior(self, fill_value: int = 1) -> int:
         """
