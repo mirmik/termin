@@ -203,6 +203,7 @@ class SceneFileController:
             return True
 
         except Exception as e:
-            self._log(f"Could not restore last scene: {e}")
+            import traceback
+            self._log(f"Could not restore last scene: {e}\n{traceback.format_exc()}")
             self._on_after_load()  # Update title
             return False
