@@ -85,7 +85,7 @@ class MaterialPhase:
             self.shader_programm.set_uniform_int(uniform_name, unit)
 
         for name, value in self.uniforms.items():
-            if self._DEBUG_APPLY and name in ("u_fill_percent", "u_color_below", "u_color_above", "u_bounds_min", "u_bounds_max"):
+            if self._DEBUG_APPLY and name in ("u_fill_percent", "u_color_below", "u_color_above", "u_bounds_min", "u_bounds_max", "u_slice_axis"):
                 print(f"[MaterialPhase.apply] {name}={value}")
             self.shader_programm.set_uniform_auto(name, value)
 

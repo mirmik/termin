@@ -128,6 +128,13 @@ class VoxelDisplayComponent(Component):
             max=100,
             setter=lambda obj, val: obj._set_fill_percent(val),
         ),
+        "slice_axis_name": InspectField(
+            path="slice_axis_name",
+            label="Slice Axis",
+            kind="enum",
+            enum_values=["X", "Y", "Z"],
+            setter=lambda obj, val: obj._set_slice_axis_name(val),
+        ),
     }
 
     serializable_fields = [
@@ -135,8 +142,15 @@ class VoxelDisplayComponent(Component):
         "color_below",
         "color_above",
         "fill_percent",
-        "slice_axis",
+        "slice_axis_name",
     ]
+
+    # Mapping from axis name to vector
+    _AXIS_VECTORS = {
+        "X": (1.0, 0.0, 0.0),
+        "Y": (0.0, 1.0, 0.0),
+        "Z": (0.0, 0.0, 1.0),
+    }
 
     def __init__(self, voxel_grid_name: str = "") -> None:
         super().__init__()
