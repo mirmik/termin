@@ -41,4 +41,43 @@ class ColorMaterial(Material):
         self.shader = ShaderProgram(ColorMaterial_VERT, ColorMaterial_FRAG)
         super().__init__(shader=self.shader, color=color)
 
-    
+
+# Unlit shader - просто цвет без освещения
+UNLIT_VERT = """
+#version 330 core
+layout(location = 0) in vec3 a_position;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+"""
+
+UNLIT_FRAG = """
+#version 330 core
+uniform vec4 u_color;
+
+out vec4 FragColor;
+
+void main() {
+    FragColor = u_color;
+}
+"""
+
+_unlit_shader: ShaderProgram | None = None
+
+def unlit_shader() -> ShaderProgram:
+    """Возвращает кэшированный unlit шейдер."""
+    global _unlit_shader
+    if _unlit_shader is None:
+        _unlit_shader = ShaderProgram(UNLIT_VERT, UNLIT_FRAG)
+    return _unlit_shader
+
+
+class UnlitMaterial(Material):
+    """Материал без освещения - просто цвет."""
+    def __init__(self, color: tuple[float, float, float, float], **kwargs):
+        super().__init__(shader=unlit_shader(), color=color, **kwargs)

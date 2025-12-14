@@ -100,6 +100,9 @@ class GizmoPass(RenderFramePass):
         graphics.bind_framebuffer(fb)
         graphics.set_viewport(0, 0, pw, ph)
 
+        # очищаем depth чтобы гизмо был кликабелен поверх сцены
+        graphics.clear_depth()
+
         # глубину тестируем, но не пишем
         graphics.set_depth_test(True)
         graphics.set_depth_mask(False)

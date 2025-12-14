@@ -4,7 +4,7 @@ from termin.editor.undo_stack import UndoCommand
 from termin.editor.editor_commands import TransformEditCommand
 
 from termin.mesh.mesh import CylinderMesh, ConeMesh, RingMesh
-from termin.visualization.core.material import Material
+from termin.visualization.render.materials.simple import UnlitMaterial
 from termin.visualization.core.entity import Entity, InputComponent
 from termin.visualization.render.components import MeshRenderer
 from termin.geombase.pose3 import Pose3
@@ -126,7 +126,7 @@ class GizmoArrow(Entity):
         shaft_mesh = CylinderMesh(radius=0.03, height=shaft_len, segments=24)
         head_mesh = ConeMesh(radius=0.06, height=head_len, segments=24)
 
-        mat = Material(color=color, phase_mark="gizmo")
+        mat = UnlitMaterial(color=color, phase_mark="gizmo")
 
         # цилиндр (ствол)
         shaft_ent = Entity(
@@ -237,7 +237,7 @@ class GizmoRing(Entity):
         """Создаёт видимое кольцо гизмо."""
         ring_mesh = RingMesh(radius=radius, thickness=thickness, segments=48)
         # cull=False для двустороннего рендеринга
-        mat = Material(color=color, render_state=RenderState(cull=False), phase_mark="gizmo")
+        mat = UnlitMaterial(color=color, render_state=RenderState(cull=False), phase_mark="gizmo")
 
         ring_ent = Entity(
             Pose3.identity(),
