@@ -35,11 +35,13 @@ class PhaseDrawCall:
         drawable: Drawable компонент (MeshRenderer, LineRenderer, etc.)
         phase: Фаза материала для отрисовки
         priority: Приоритет отрисовки (меньше = раньше)
+        geometry_id: Идентификатор геометрии для draw_geometry
     """
     entity: "Entity"
     drawable: Drawable
     phase: "MaterialPhase"
     priority: int
+    geometry_id: str = ""
 
 
 class ColorPass(RenderFramePass):
@@ -138,7 +140,7 @@ class ColorPass(RenderFramePass):
         1. Обходит все entities сцены
         2. Для каждой entity находит компоненты, реализующие Drawable
         3. Фильтрует drawable по phase_marks
-        4. Получает фазы из drawable.get_phases(phase_mark)
+        4. Получает GeometryDrawCalls из drawable.get_geometry_draws(phase_mark)
         5. Возвращает список PhaseDrawCall отсортированный по priority
 
         Параметры:
@@ -175,16 +177,17 @@ class ColorPass(RenderFramePass):
                         print(f"  -> SKIP: {phase_mark!r} not in {drawable.phase_marks}")
                     continue
 
-                # Получаем фазы из Drawable
-                phases = drawable.get_phases(phase_mark)
+                # Получаем GeometryDrawCalls из Drawable
+                geometry_draws = drawable.get_geometry_draws(phase_mark)
                 if self._DEBUG_COLLECT:
-                    print(f"  -> get_phases({phase_mark!r}) returned {len(phases)} phases: {[p.phase_mark for p in phases]}")
-                for phase in phases:
+                    print(f"  -> get_geometry_draws({phase_mark!r}) returned {len(geometry_draws)} draws: {[(gd.phase.phase_mark, gd.geometry_id) for gd in geometry_draws]}")
+                for gd in geometry_draws:
                     draw_calls.append(PhaseDrawCall(
                         entity=entity,
                         drawable=drawable,
-                        phase=phase,
-                        priority=phase.priority,
+                        phase=gd.phase,
+                        priority=gd.phase.priority,
+                        geometry_id=gd.geometry_id,
                     ))
 
         # Сортируем по priority (меньше = раньше)
@@ -395,7 +398,7 @@ class ColorPass(RenderFramePass):
                     upload_shadow_maps_to_shader(shader, shadow_array)
 
                 # Рисуем геометрию через Drawable
-                dc.drawable.draw_geometry(render_context)
+                dc.drawable.draw_geometry(render_context, dc.geometry_id)
 
                 if debugger_window is not None and dc.entity.name == debug_symbol:
                     self._blit_to_debugger(graphics, fb, debugger_window, (pw, ph))

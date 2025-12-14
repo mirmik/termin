@@ -9,9 +9,10 @@ from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.resources import ResourceManager
+from termin.visualization.render.drawable import GeometryDrawCall
 
 if TYPE_CHECKING:
-    from termin.visualization.core.material import MaterialPhase
+    pass
 
 
 class MeshRenderer(Component):
@@ -143,34 +144,35 @@ class MeshRenderer(Component):
 
     # --- рендеринг ---
 
-    def draw_geometry(self, context: RenderContext) -> None:
+    def draw_geometry(self, context: RenderContext, geometry_id: str = "") -> None:
         """Рисует геометрию (шейдер уже привязан пассом)."""
+        # geometry_id игнорируется — у MeshRenderer одна геометрия
         if self.mesh is None:
             return
         self.mesh.draw(context)
 
-    def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
+    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """
-        Возвращает MaterialPhases для указанной метки фазы.
+        Возвращает GeometryDrawCalls для указанной метки фазы.
 
         Параметры:
             phase_mark: Фильтр по метке ("opaque", "transparent", "editor", etc.)
                         Если None, возвращает все фазы.
 
         Возвращает:
-            Список MaterialPhase с совпадающим phase_mark, отсортированный по priority.
+            Список GeometryDrawCall с совпадающим phase_mark, отсортированный по priority.
         """
         mat = self._material_handle.get_or_none()
         if mat is None:
             return []
 
         if phase_mark is None:
-            result = list(mat.phases)
+            phases = list(mat.phases)
         else:
-            result = [p for p in mat.phases if p.phase_mark == phase_mark]
+            phases = [p for p in mat.phases if p.phase_mark == phase_mark]
 
-        result.sort(key=lambda p: p.priority)
-        return result
+        phases.sort(key=lambda p: p.priority)
+        return [GeometryDrawCall(phase=p) for p in phases]
 
     # --- сериализация ---
 

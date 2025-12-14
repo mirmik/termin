@@ -23,10 +23,11 @@ from termin.visualization.core.mesh import Mesh2Drawable, MeshDrawable
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.render.renderpass import RenderState
+from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.core.material import MaterialPhase
+    pass
 
 
 # Дефолтный шейдер для линий
@@ -399,42 +400,43 @@ class LineRenderer(Component):
 
     # --- Drawable protocol ---
 
-    def draw_geometry(self, context: RenderContext) -> None:
+    def draw_geometry(self, context: RenderContext, geometry_id: str = "") -> None:
         """
         Рисует геометрию линий (шейдер уже привязан пассом).
 
         Параметры:
             context: Контекст рендеринга.
+            geometry_id: Идентификатор геометрии (игнорируется — одна геометрия).
         """
         drawable = self._get_drawable()
         if drawable is not None:
             drawable.draw(context)
 
-    def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
+    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """
-        Возвращает MaterialPhases для указанной метки фазы.
+        Возвращает GeometryDrawCalls для указанной метки фазы.
 
         Параметры:
             phase_mark: Фильтр по метке ("opaque", "transparent", "editor", etc.)
                         Если None, возвращает все фазы.
 
         Возвращает:
-            Список MaterialPhase с совпадающим phase_mark, отсортированный по priority.
+            Список GeometryDrawCall с совпадающим phase_mark, отсортированный по priority.
         """
         mat = self._get_material_or_default()
 
         if phase_mark is None:
-            result = list(mat.phases)
+            phases = list(mat.phases)
         else:
-            result = [p for p in mat.phases if p.phase_mark == phase_mark]
+            phases = [p for p in mat.phases if p.phase_mark == phase_mark]
 
         # Для ribbon режима отключаем culling
         if not self._raw_lines:
-            for phase in result:
+            for phase in phases:
                 phase.render_state.cull = False
 
-        result.sort(key=lambda p: p.priority)
-        return result
+        phases.sort(key=lambda p: p.priority)
+        return [GeometryDrawCall(phase=p) for p in phases]
 
     # --- Сериализация ---
 

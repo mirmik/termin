@@ -11,10 +11,10 @@ Drawable protocol — унифицированный интерфейс для �
 Использование:
     # ColorPass спрашивает фазы у Drawable, применяет их и рисует
     for drawable in drawables:
-        for phase in drawable.get_phases(phase_mark):
-            graphics.apply_render_state(phase.render_state)
-            phase.apply(model, view, projection, graphics, context_key)
-            drawable.draw_geometry(context)
+        for draw_call in drawable.get_geometry_draws(phase_mark):
+            graphics.apply_render_state(draw_call.phase.render_state)
+            draw_call.phase.apply(model, view, projection, graphics, context_key)
+            drawable.draw_geometry(context, draw_call.geometry_id)
 
     # ShadowPass использует свой шейдер
     for drawable in drawables:
@@ -32,11 +32,34 @@ Drawable protocol — унифицированный интерфейс для �
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Protocol, Set, runtime_checkable
 
 if TYPE_CHECKING:
     from termin.visualization.core.material import MaterialPhase
     from termin.visualization.render.render_context import RenderContext
+
+
+# Идентификатор геометрии по умолчанию
+DEFAULT_GEOMETRY_ID = ""
+
+
+@dataclass
+class GeometryDrawCall:
+    """
+    Описание одного запроса на отрисовку геометрии.
+
+    Связывает MaterialPhase с идентификатором геометрии.
+    Позволяет Drawable рисовать разную геометрию с разными материалами
+    в одной фазе рендеринга.
+
+    Атрибуты:
+        phase: Фаза материала (шейдер, render state, uniforms).
+        geometry_id: Идентификатор геометрии для draw_geometry.
+                     Пустая строка = основная геометрия.
+    """
+    phase: "MaterialPhase"
+    geometry_id: str = DEFAULT_GEOMETRY_ID
 
 
 @runtime_checkable
@@ -52,12 +75,12 @@ class Drawable(Protocol):
 
     Методы:
         draw_geometry: Рисует геометрию (шейдер уже привязан пассом).
-        get_phases: Возвращает MaterialPhases для ColorPass.
+        get_geometry_draws: Возвращает GeometryDrawCalls для ColorPass.
     """
 
     phase_marks: Set[str]
 
-    def draw_geometry(self, context: "RenderContext") -> None:
+    def draw_geometry(self, context: "RenderContext", geometry_id: str = DEFAULT_GEOMETRY_ID) -> None:
         """
         Рисует геометрию.
 
@@ -67,14 +90,16 @@ class Drawable(Protocol):
         Параметры:
             context: Контекст рендеринга.
                      context.model содержит матрицу модели (для VAO binding).
+            geometry_id: Идентификатор геометрии для отрисовки.
+                         Пустая строка = основная/единственная геометрия.
         """
         ...
 
-    def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
+    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """
-        Возвращает MaterialPhases для этого drawable.
+        Возвращает GeometryDrawCalls для этого drawable.
 
-        Используется ColorPass для получения материалов.
+        Используется ColorPass для получения материалов и геометрий.
         ShadowPass и IdPass игнорируют этот метод и используют свои шейдеры.
 
         Параметры:
@@ -82,6 +107,6 @@ class Drawable(Protocol):
                         Если None, возвращает все фазы.
 
         Возвращает:
-            Список MaterialPhase, отсортированный по priority.
+            Список GeometryDrawCall, отсортированный по priority.
         """
         ...

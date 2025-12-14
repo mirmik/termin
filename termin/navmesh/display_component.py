@@ -18,12 +18,12 @@ from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.navmesh_handle import NavMeshHandle
 from termin.visualization.core.polyline import Polyline, PolylineDrawable
 from termin.visualization.core.serialization import serializable
+from termin.visualization.render.drawable import GeometryDrawCall
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
-    from termin.visualization.core.material import MaterialPhase
     from termin.visualization.render.render_context import RenderContext
     from termin.navmesh.types import NavMesh
 
@@ -85,6 +85,7 @@ class NavMeshDisplayComponent(Component):
         self._mesh_drawable: Optional[MeshDrawable] = None
         self._contour_drawable: Optional[PolylineDrawable] = None
         self._material: Optional[Material] = None
+        self._contour_material: Optional[Material] = None
         self._needs_rebuild = True
 
         # Цвет с альфа-каналом (RGBA) — полупрозрачный зелёный
@@ -154,6 +155,58 @@ class NavMeshDisplayComponent(Component):
             )
         return self._material
 
+    def _get_or_create_contour_material(self) -> Material:
+        """Получить или создать материал для контуров."""
+        if self._contour_material is None:
+            from termin.visualization.render.renderpass import RenderState
+            from termin.visualization.render.shader import ShaderProgram
+
+            # Простой шейдер для линий
+            vertex_source = """
+#version 330 core
+
+layout(location = 0) in vec3 a_position;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+"""
+            fragment_source = """
+#version 330 core
+
+uniform vec4 u_color;
+
+out vec4 FragColor;
+
+void main() {
+    FragColor = u_color;
+}
+"""
+            shader = ShaderProgram(
+                vertex_source=vertex_source,
+                fragment_source=fragment_source,
+            )
+
+            # Контуры — яркий контрастный цвет (жёлтый)
+            contour_color = (1.0, 1.0, 0.0, 1.0)
+
+            self._contour_material = Material(
+                shader=shader,
+                color=contour_color,
+                phase_mark="opaque",
+                render_state=RenderState(
+                    depth_test=True,
+                    depth_write=True,
+                    blend=False,
+                    cull=False,
+                ),
+            )
+        return self._contour_material
+
     @property
     def navmesh(self) -> Optional["NavMesh"]:
         """Текущий NavMesh (через handle)."""
@@ -165,18 +218,30 @@ class NavMeshDisplayComponent(Component):
     def phase_marks(self) -> Set[str]:
         """Фазы рендеринга."""
         mat = self._get_or_create_material()
-        return {p.phase_mark for p in mat.phases}
+        marks = {p.phase_mark for p in mat.phases}
 
-    def draw_geometry(self, context: "RenderContext") -> None:
+        # Добавляем фазы контуров если включены
+        if self.show_contours:
+            contour_mat = self._get_or_create_contour_material()
+            marks.update(p.phase_mark for p in contour_mat.phases)
+
+        return marks
+
+    # Константы для geometry_id
+    GEOMETRY_MESH = "mesh"
+    GEOMETRY_CONTOURS = "contours"
+
+    def draw_geometry(self, context: "RenderContext", geometry_id: str = "") -> None:
         """Рисует геометрию NavMesh."""
         self._check_hot_reload()
 
-        if self._mesh_drawable is not None:
-            self._mesh_drawable.draw(context)
+        if geometry_id == "" or geometry_id == self.GEOMETRY_MESH:
+            if self._mesh_drawable is not None:
+                self._mesh_drawable.draw(context)
 
-        # TODO: контуры пока не рисуем — нужен правильный шейдер
-        # if self.show_contours and self._contour_drawable is not None:
-        #     self._contour_drawable.draw(context)
+        if geometry_id == self.GEOMETRY_CONTOURS:
+            if self._contour_drawable is not None:
+                self._contour_drawable.draw(context)
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
@@ -185,20 +250,40 @@ class NavMeshDisplayComponent(Component):
             self._needs_rebuild = False
             self._rebuild_mesh()
 
-    def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
-        """Возвращает MaterialPhases для рендеринга."""
+    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
+        """Возвращает GeometryDrawCalls для рендеринга."""
+        result: List[GeometryDrawCall] = []
+
+        # Основной меш
         mat = self._get_or_create_material()
 
         if phase_mark is None:
-            result = list(mat.phases)
+            phases = list(mat.phases)
         else:
-            result = [p for p in mat.phases if p.phase_mark == phase_mark]
+            phases = [p for p in mat.phases if p.phase_mark == phase_mark]
 
         # Обновляем цвет
-        for phase in result:
+        for phase in phases:
             phase.uniforms["u_color"] = np.array(self.color, dtype=np.float32)
 
-        result.sort(key=lambda p: p.priority)
+        phases.sort(key=lambda p: p.priority)
+
+        # Добавляем основной меш
+        for phase in phases:
+            result.append(GeometryDrawCall(phase=phase, geometry_id=self.GEOMETRY_MESH))
+
+        # Контуры (если включены и есть контурный drawable)
+        if self.show_contours and self._contour_drawable is not None:
+            contour_material = self._get_or_create_contour_material()
+            if phase_mark is None:
+                contour_phases = list(contour_material.phases)
+            else:
+                contour_phases = [p for p in contour_material.phases if p.phase_mark == phase_mark]
+
+            contour_phases.sort(key=lambda p: p.priority)
+            for phase in contour_phases:
+                result.append(GeometryDrawCall(phase=phase, geometry_id=self.GEOMETRY_CONTOURS))
+
         return result
 
     # --- Построение меша ---
@@ -259,7 +344,7 @@ class NavMeshDisplayComponent(Component):
         mesh = Mesh3(vertices=vertices, triangles=triangles, normals=normals)
         self._mesh_drawable = MeshDrawable(mesh)
 
-        # Создаём контуры если есть
+        # Строим контуры
         self._build_contour_drawable(navmesh)
 
         print(f"NavMeshDisplayComponent: built mesh with {len(vertices)} vertices, {len(triangles)} triangles")

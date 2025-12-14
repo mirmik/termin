@@ -17,12 +17,12 @@ from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
+from termin.visualization.render.drawable import GeometryDrawCall
 from termin.voxels.voxel_mesh import VoxelMesh
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
-    from termin.visualization.core.material import MaterialPhase
     from termin.visualization.render.render_context import RenderContext
     from termin.voxels.grid import VoxelGrid
 
@@ -258,8 +258,9 @@ class VoxelDisplayComponent(Component):
         mat = self._get_or_create_material()
         return {p.phase_mark for p in mat.phases}
 
-    def draw_geometry(self, context: "RenderContext") -> None:
+    def draw_geometry(self, context: "RenderContext", geometry_id: str = "") -> None:
         """Рисует геометрию вокселей."""
+        # geometry_id игнорируется — у VoxelDisplayComponent одна геометрия
         # Проверяем hot-reload перед отрисовкой
         self._check_hot_reload()
 
@@ -274,20 +275,20 @@ class VoxelDisplayComponent(Component):
         if current_grid is not self._last_grid:
             self._rebuild_mesh()
 
-    _DEBUG_GET_PHASES = False  # Debug: отладка get_phases
+    _DEBUG_GET_PHASES = False  # Debug: отладка get_geometry_draws
 
-    def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
-        """Возвращает MaterialPhases для рендеринга."""
+    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
+        """Возвращает GeometryDrawCalls для рендеринга."""
         mat = self._get_or_create_material()
 
         if phase_mark is None:
-            result = list(mat.phases)
+            phases = list(mat.phases)
         else:
-            result = [p for p in mat.phases if p.phase_mark == phase_mark]
+            phases = [p for p in mat.phases if p.phase_mark == phase_mark]
 
         # Обновляем uniforms перед возвратом фаз
         # (ColorPass вызовет phase.apply() который загрузит их в GPU)
-        for phase in result:
+        for phase in phases:
             phase.uniforms["u_color_below"] = np.array(self.color_below, dtype=np.float32)
             phase.uniforms["u_color_above"] = np.array(self.color_above, dtype=np.float32)
             phase.uniforms["u_color_surface"] = np.array(self.color_surface, dtype=np.float32)
@@ -299,11 +300,11 @@ class VoxelDisplayComponent(Component):
             phase.uniforms["u_ambient_intensity"] = 0.4
 
             if self._DEBUG_GET_PHASES:
-                print(f"[VoxelDisplayComponent.get_phases] phase_mark={phase_mark}, fill_percent={self.fill_percent}, u_fill_percent={phase.uniforms['u_fill_percent']}")
+                print(f"[VoxelDisplayComponent.get_geometry_draws] phase_mark={phase_mark}, fill_percent={self.fill_percent}, u_fill_percent={phase.uniforms['u_fill_percent']}")
                 print(f"  bounds_min={self._bounds_min}, bounds_max={self._bounds_max}")
 
-        result.sort(key=lambda p: p.priority)
-        return result
+        phases.sort(key=lambda p: p.priority)
+        return [GeometryDrawCall(phase=p) for p in phases]
 
     # --- Построение меша ---
 
