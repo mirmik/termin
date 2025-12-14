@@ -483,7 +483,8 @@ class PolygonBuilder:
             ]
 
         # Шаги 11-12: Перетриангуляция через Ear Clipping
-        if retriangulate and polygon.outer_contour is not None:
+        # DEBUG: временно отключено для поиска бага
+        if False and retriangulate and polygon.outer_contour is not None:
             # Получаем координаты упрощённого контура
             contour_coords = points_2d[polygon.outer_contour]
             expected_triangles = len(contour_coords) - 2
