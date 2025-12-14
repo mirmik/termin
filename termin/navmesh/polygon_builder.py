@@ -472,7 +472,8 @@ class PolygonBuilder:
             polygon.holes = holes
 
         # Шаг 10: Упрощение контуров Douglas-Peucker
-        if simplify_contours and polygon.outer_contour is not None:
+        # DEBUG: временно отключено для поиска бага
+        if False and simplify_contours and polygon.outer_contour is not None:
             epsilon = self.config.contour_epsilon
             polygon.outer_contour = self._simplify_contour(
                 polygon.outer_contour, points_2d, epsilon
