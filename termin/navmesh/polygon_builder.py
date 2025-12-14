@@ -421,7 +421,7 @@ class PolygonBuilder:
         # Грань лежит на плоскости dominant_axis = 0 или 1
         face_offset = 1 if axis_sign > 0 else 0  # какая сторона кубика
 
-        # 4 угла грани (против часовой стрелки если смотреть снаружи)
+        # 4 угла грани (против часовой стрелки если смотреть по направлению нормали)
         corner_offsets = []
         for c0 in [0, 1]:
             for c1 in [0, 1]:
@@ -430,13 +430,17 @@ class PolygonBuilder:
                 offset[other_axes[0]] = c0
                 offset[other_axes[1]] = c1
                 corner_offsets.append(offset)
-        # Переупорядочиваем для CCW: [0,0], [1,0], [1,1], [0,1]
-        corner_offsets = [corner_offsets[0], corner_offsets[1], corner_offsets[3], corner_offsets[2]]
+        # Порядок: (0,0) -> (1,0) -> (1,1) -> (0,1) — CCW при взгляде в направлении +axis
+        # Если axis_sign < 0, нужен обратный порядок
+        if axis_sign > 0:
+            corner_offsets = [corner_offsets[0], corner_offsets[1], corner_offsets[3], corner_offsets[2]]
+        else:
+            corner_offsets = [corner_offsets[0], corner_offsets[2], corner_offsets[3], corner_offsets[1]]
 
         # Собираем вершины и грани
         vertices: list[np.ndarray] = []
         vertex_map: dict[tuple[float, float, float], int] = {}
-        quads: list[list[int]] = []
+        quads: list[tuple[list[int], np.ndarray]] = []  # (indices, desired_normal)
 
         def get_or_add_vertex(pos: np.ndarray) -> int:
             key = (round(pos[0], 6), round(pos[1], 6), round(pos[2], 6))
@@ -447,6 +451,10 @@ class PolygonBuilder:
             vertex_map[key] = idx
             return idx
 
+        # Нормаль для лицевых граней — по доминирующей оси
+        face_normal = np.zeros(3, dtype=np.float32)
+        face_normal[dominant_axis] = axis_sign
+
         # 1. Генерируем лицевые грани для каждого вокселя
         for vx, vy, vz in voxels:
             voxel_origin = origin + np.array([vx, vy, vz], dtype=np.float32) * cell_size
@@ -454,7 +462,7 @@ class PolygonBuilder:
             for offset in corner_offsets:
                 pos = voxel_origin + np.array(offset, dtype=np.float32) * cell_size
                 quad_indices.append(get_or_add_vertex(pos))
-            quads.append(quad_indices)
+            quads.append((quad_indices, face_normal))
 
         # 2. Генерируем замыкающие (боковые) грани на ступеньках
         # Для каждого вокселя проверяем соседей по other_axes
@@ -504,23 +512,37 @@ class PolygonBuilder:
                             pos = voxel_origin + np.array(offset, dtype=np.float32) * cell_size
                             side_corners.append(get_or_add_vertex(pos))
 
-                    # Переупорядочиваем для CCW (зависит от направления)
-                    if direction > 0:
-                        quad_indices = [side_corners[0], side_corners[2], side_corners[3], side_corners[1]]
-                    else:
-                        quad_indices = [side_corners[0], side_corners[1], side_corners[3], side_corners[2]]
+                    # Нормаль боковой грани — в направлении direction по side_axis
+                    side_normal = np.zeros(3, dtype=np.float32)
+                    side_normal[side_axis] = direction
 
-                    quads.append(quad_indices)
+                    # Порядок вершин (будет скорректирован при триангуляции)
+                    quad_indices = [side_corners[0], side_corners[1], side_corners[2], side_corners[3]]
+
+                    quads.append((quad_indices, side_normal))
 
         if not vertices or not quads:
             return None
 
-        # Триангулируем квады
+        # Триангулируем квады с проверкой ориентации
         triangles = []
-        for quad in quads:
+        vertices_arr = np.array(vertices, dtype=np.float32)
+
+        for quad_indices, desired_normal in quads:
+            # Вычисляем нормаль квада
+            v0, v1, v2, v3 = [vertices_arr[i] for i in quad_indices]
+            edge1 = v1 - v0
+            edge2 = v3 - v0
+            quad_normal = np.cross(edge1, edge2)
+
+            # Проверяем, совпадает ли с желаемой нормалью
+            if np.dot(quad_normal, desired_normal) < 0:
+                # Инвертируем порядок
+                quad_indices = [quad_indices[0], quad_indices[3], quad_indices[2], quad_indices[1]]
+
             # Каждый квад -> 2 треугольника
-            triangles.append([quad[0], quad[1], quad[2]])
-            triangles.append([quad[0], quad[2], quad[3]])
+            triangles.append([quad_indices[0], quad_indices[1], quad_indices[2]])
+            triangles.append([quad_indices[0], quad_indices[2], quad_indices[3]])
 
         vertices_3d = np.array(vertices, dtype=np.float32)
         triangles_arr = np.array(triangles, dtype=np.int32)
