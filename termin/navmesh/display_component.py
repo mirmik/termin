@@ -14,10 +14,11 @@ import numpy as np
 
 from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh import MeshDrawable, Mesh2Drawable
+from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.navmesh_handle import NavMeshHandle
 from termin.visualization.render.drawable import GeometryDrawCall
-from termin.mesh.mesh import Mesh2, Mesh3
+from termin.visualization.render.components.line_renderer import _build_line_ribbon
+from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -81,7 +82,7 @@ class NavMeshDisplayComponent(Component):
         self._navmesh_handle: NavMeshHandle = NavMeshHandle()
         self._last_navmesh: Optional["NavMesh"] = None
         self._mesh_drawable: Optional[MeshDrawable] = None
-        self._contour_drawable: Optional[Mesh2Drawable] = None
+        self._contour_drawable: Optional[MeshDrawable] = None
         self._material: Optional[Material] = None
         self._contour_material: Optional[Material] = None
         self._needs_rebuild = True
@@ -93,6 +94,7 @@ class NavMeshDisplayComponent(Component):
         self.wireframe: bool = False
         self.show_normals: bool = False
         self.show_contours: bool = False
+        self.contour_width: float = 0.05
 
         # Инициализируем handle если имя задано
         if navmesh_name:
@@ -355,39 +357,55 @@ void main() {
         self._build_contour_drawable(navmesh)
 
     def _build_contour_drawable(self, navmesh: "NavMesh") -> None:
-        """Построить drawable для контуров."""
-        # Собираем все контуры из полигонов
-        contour_segments: list[np.ndarray] = []
+        """Построить drawable для контуров как ribbon (толстые линии)."""
+        all_vertices = []
+        all_triangles = []
+        vertex_offset = 0
 
         for polygon in navmesh.polygons:
             if polygon.outer_contour is None:
                 continue
 
             verts = polygon.vertices
+            normal = polygon.normal
+            # up_hint перпендикулярен плоскости полигона
+            up_hint = np.array(normal, dtype=np.float32)
 
             # Внешний контур
             outer = polygon.outer_contour
             if len(outer) >= 2:
-                for i in range(len(outer)):
-                    j = (i + 1) % len(outer)
-                    contour_segments.append(verts[outer[i]])
-                    contour_segments.append(verts[outer[j]])
+                # Замыкаем контур
+                points = [tuple(verts[idx]) for idx in outer]
+                points.append(points[0])  # замыкаем
+
+                ribbon_verts, ribbon_tris = _build_line_ribbon(
+                    points, self.contour_width, up_hint
+                )
+                if len(ribbon_tris) > 0:
+                    all_vertices.append(ribbon_verts)
+                    all_triangles.append(ribbon_tris + vertex_offset)
+                    vertex_offset += len(ribbon_verts)
 
             # Дыры
             for hole in polygon.holes:
                 if len(hole) >= 2:
-                    for i in range(len(hole)):
-                        j = (i + 1) % len(hole)
-                        contour_segments.append(verts[hole[i]])
-                        contour_segments.append(verts[hole[j]])
+                    points = [tuple(verts[idx]) for idx in hole]
+                    points.append(points[0])  # замыкаем
 
-        if not contour_segments:
+                    ribbon_verts, ribbon_tris = _build_line_ribbon(
+                        points, self.contour_width, up_hint
+                    )
+                    if len(ribbon_tris) > 0:
+                        all_vertices.append(ribbon_verts)
+                        all_triangles.append(ribbon_tris + vertex_offset)
+                        vertex_offset += len(ribbon_verts)
+
+        if not all_vertices:
             return
 
-        # Создаём Mesh2 для линий (GL_LINES режим)
-        vertices = np.array(contour_segments, dtype=np.float32)
-        # Индексы: пары [0,1], [2,3], [4,5], ...
-        num_segments = len(vertices) // 2
-        indices = np.array([[i * 2, i * 2 + 1] for i in range(num_segments)], dtype=np.int32)
-        mesh = Mesh2(vertices, indices)
-        self._contour_drawable = Mesh2Drawable(mesh)
+        # Объединяем все ribbon'ы в один меш
+        vertices = np.vstack(all_vertices).astype(np.float32)
+        triangles = np.vstack(all_triangles).astype(np.int32)
+
+        mesh = Mesh3(vertices=vertices, triangles=triangles)
+        self._contour_drawable = MeshDrawable(mesh)
