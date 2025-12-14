@@ -490,11 +490,8 @@ class PolygonBuilder:
             old_tri_count = len(polygon.triangles)
 
             if len(contour_coords) >= 3:
-                # DEBUG: пропускаем большие регионы для поиска бага
-                if old_tri_count > 500:
-                    print(f"Region {current_region_idx}: Skipping large region ({old_tri_count} tris)")
                 # Проверяем на самопересечение
-                elif self._is_self_intersecting(contour_coords):
+                if self._is_self_intersecting(contour_coords):
                     print(f"Region {current_region_idx}: Contour is self-intersecting ({len(contour_coords)} verts), skipping")
                 else:
                     # Ear clipping триангуляция
