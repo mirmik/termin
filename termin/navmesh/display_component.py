@@ -120,12 +120,9 @@ class NavMeshDisplayComponent(Component):
         """Получить или создать материал."""
         if self._material is None:
             from termin.visualization.render.renderpass import RenderState
+            from termin.navmesh.navmesh_shader import navmesh_display_shader
 
-            # Используем DefaultShader
-            from termin.visualization.core.resources import ResourceManager
-            rm = ResourceManager.instance()
-            rm.register_default_shader()
-            shader = rm.get_shader("DefaultShader")
+            shader = navmesh_display_shader()
 
             self._material = Material(
                 shader=shader,
@@ -235,11 +232,8 @@ class NavMeshDisplayComponent(Component):
         triangles = np.vstack(all_triangles).astype(np.int32)
 
         # Создаём Mesh3
-        mesh = Mesh3(
-            vertices=vertices,
-            normals=normals,
-            triangles=triangles,
-        )
+        mesh = Mesh3(vertices=vertices, triangles=triangles)
+        mesh.vertex_normals = normals
 
         self._mesh_drawable = MeshDrawable(mesh)
 
