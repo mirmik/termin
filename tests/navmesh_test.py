@@ -109,10 +109,10 @@ class RegionGrowingTest(unittest.TestCase):
 
 
 class ContourBuildingTest(unittest.TestCase):
-    """Тесты для построения контура."""
+    """Тесты для построения контура (лицевых граней)."""
 
     def test_single_voxel_contour(self):
-        """Контур одного вокселя — 8 вершин (куб без внутренних)."""
+        """Контур одного вокселя — 4 вершины (лицевая грань)."""
         grid = VoxelGrid(cell_size=1.0)
         grid.set(0, 0, 0, 2)
         grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
@@ -121,11 +121,11 @@ class ContourBuildingTest(unittest.TestCase):
         navmesh = builder.build(grid)
 
         self.assertEqual(navmesh.polygon_count(), 1)
-        # Один куб = 8 уникальных вершин
-        self.assertEqual(len(navmesh.polygons[0].vertices), 8)
+        # Одна лицевая грань = 4 вершины
+        self.assertEqual(len(navmesh.polygons[0].vertices), 4)
 
     def test_two_adjacent_voxels_shared_vertices(self):
-        """Два смежных вокселя — общие вершины на границе."""
+        """Два смежных вокселя — общие вершины на границе лицевых граней."""
         grid = VoxelGrid(cell_size=1.0)
         grid.set(0, 0, 0, 2)
         grid.set(1, 0, 0, 2)
@@ -136,39 +136,12 @@ class ContourBuildingTest(unittest.TestCase):
         navmesh = builder.build(grid)
 
         self.assertEqual(navmesh.polygon_count(), 1)
-        # Два куба рядом = 12 уникальных вершин (а не 16)
-        self.assertEqual(len(navmesh.polygons[0].vertices), 12)
+        # Две лицевые грани рядом = 6 уникальных вершин (2 общих)
+        self.assertEqual(len(navmesh.polygons[0].vertices), 6)
 
 
 class TriangulationTest(unittest.TestCase):
     """Тесты для триангуляции."""
-
-    def test_convex_hull_triangle(self):
-        """Выпуклая оболочка 3 точек = 3 точки."""
-        builder = PolygonBuilder()
-
-        points = np.array([
-            [0, 0],
-            [1, 0],
-            [0.5, 1],
-        ])
-
-        hull = builder._convex_hull_2d(points)
-        self.assertEqual(len(hull), 3)
-
-    def test_convex_hull_square(self):
-        """Выпуклая оболочка квадрата = 4 точки."""
-        builder = PolygonBuilder()
-
-        points = np.array([
-            [0, 0],
-            [1, 0],
-            [1, 1],
-            [0, 1],
-        ])
-
-        hull = builder._convex_hull_2d(points)
-        self.assertEqual(len(hull), 4)
 
     def test_triangulation_produces_triangles(self):
         """Триангуляция создаёт треугольники."""
