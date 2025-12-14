@@ -175,37 +175,55 @@ class VoxelizerComponent(Component):
                         fill_count += 1
             print(f"VoxelizerComponent: filled {fill_count} voxels in bounds")
         else:
-            # Стадия 1: Вокселизируем меш (поверхность)
-            voxelizer = MeshVoxelizer(grid)
-            voxelizer.voxelize_mesh(mesh, transform_matrix=None)
-            print(f"VoxelizerComponent: voxelized mesh, {grid.voxel_count} surface voxels")
+            # Пробуем использовать C++ native реализацию
+            from termin.voxels.native_voxelizer import is_native_available, voxelize_mesh_native
 
-            # Стадия 2: Заполняем внутреннее пространство (FILLED и выше)
-            if mode >= VoxelizeMode.FILLED:
-                filled = grid.fill_interior()
-                print(f"VoxelizerComponent: filled {filled} interior voxels")
-
-            # Стадия 3: Помечаем поверхность (MARKED и выше)
-            if mode >= VoxelizeMode.MARKED:
-                marked = grid.mark_surface(VOXEL_SURFACE)
-                print(f"VoxelizerComponent: marked {marked} surface voxels")
-
-            # Стадия 4: Удаляем внутренние (SURFACE_ONLY и выше)
-            if mode >= VoxelizeMode.SURFACE_ONLY:
-                cleared = grid.clear_by_type(VOXEL_SOLID)
-                print(f"VoxelizerComponent: cleared {cleared} interior voxels")
-
-            # Стадия 5: Вычисляем нормали для surface вокселей (WITH_NORMALS)
-            if mode >= VoxelizeMode.WITH_NORMALS:
-                surface_voxels: set[tuple[int, int, int]] = set()
-                for vx, vy, vz, vtype in grid.iter_non_empty():
-                    if vtype == VOXEL_SURFACE:
-                        surface_voxels.add((vx, vy, vz))
-
-                normals_count = voxelizer.compute_surface_normals(
-                    mesh, surface_voxels, transform_matrix=None
+            if is_native_available():
+                # Native C++ voxelization (~2000x faster)
+                grid = voxelize_mesh_native(
+                    mesh,
+                    cell_size=self.cell_size,
+                    fill_interior=(mode >= VoxelizeMode.FILLED),
+                    mark_surface=(mode >= VoxelizeMode.MARKED),
+                    clear_interior=(mode >= VoxelizeMode.SURFACE_ONLY),
+                    compute_normals=(mode >= VoxelizeMode.WITH_NORMALS),
                 )
-                print(f"VoxelizerComponent: computed {normals_count} surface normals")
+                grid.name = name
+            else:
+                # Fallback: Python voxelization
+                print("VoxelizerComponent: native not available, using Python fallback")
+
+                # Стадия 1: Вокселизируем меш (поверхность)
+                voxelizer = MeshVoxelizer(grid)
+                voxelizer.voxelize_mesh(mesh, transform_matrix=None)
+                print(f"VoxelizerComponent: voxelized mesh, {grid.voxel_count} surface voxels")
+
+                # Стадия 2: Заполняем внутреннее пространство (FILLED и выше)
+                if mode >= VoxelizeMode.FILLED:
+                    filled = grid.fill_interior()
+                    print(f"VoxelizerComponent: filled {filled} interior voxels")
+
+                # Стадия 3: Помечаем поверхность (MARKED и выше)
+                if mode >= VoxelizeMode.MARKED:
+                    marked = grid.mark_surface(VOXEL_SURFACE)
+                    print(f"VoxelizerComponent: marked {marked} surface voxels")
+
+                # Стадия 4: Удаляем внутренние (SURFACE_ONLY и выше)
+                if mode >= VoxelizeMode.SURFACE_ONLY:
+                    cleared = grid.clear_by_type(VOXEL_SOLID)
+                    print(f"VoxelizerComponent: cleared {cleared} interior voxels")
+
+                # Стадия 5: Вычисляем нормали для surface вокселей (WITH_NORMALS)
+                if mode >= VoxelizeMode.WITH_NORMALS:
+                    surface_voxels: set[tuple[int, int, int]] = set()
+                    for vx, vy, vz, vtype in grid.iter_non_empty():
+                        if vtype == VOXEL_SURFACE:
+                            surface_voxels.add((vx, vy, vz))
+
+                    normals_count = voxelizer.compute_surface_normals(
+                        mesh, surface_voxels, transform_matrix=None
+                    )
+                    print(f"VoxelizerComponent: computed {normals_count} surface normals")
 
         self._last_voxel_count = grid.voxel_count
 
