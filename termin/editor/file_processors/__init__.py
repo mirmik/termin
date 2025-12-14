@@ -7,6 +7,7 @@ from termin.editor.file_processors.texture_processor import TextureFileProcessor
 from termin.editor.file_processors.component_processor import ComponentFileProcessor
 from termin.editor.file_processors.pipeline_processor import PipelineFileProcessor
 from termin.editor.file_processors.voxel_grid_processor import VoxelGridProcessor
+from termin.editor.file_processors.navmesh_processor import NavMeshProcessor
 
 __all__ = [
     "MaterialFileProcessor",
@@ -16,4 +17,5 @@ __all__ = [
     "ComponentFileProcessor",
     "PipelineFileProcessor",
     "VoxelGridProcessor",
+    "NavMeshProcessor",
 ]

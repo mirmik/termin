@@ -30,6 +30,11 @@ def _voxelize_action(component: "VoxelizerComponent") -> None:
     component.voxelize()
 
 
+def _build_navmesh_action(component: "VoxelizerComponent") -> None:
+    """Действие кнопки построения NavMesh."""
+    component.build_navmesh()
+
+
 class VoxelizerComponent(Component):
     """
     Компонент для вокселизации меша entity.
@@ -77,9 +82,29 @@ class VoxelizerComponent(Component):
             action=_voxelize_action,
             non_serializable=True,
         ),
+        # --- NavMesh ---
+        "navmesh_output_path": InspectField(
+            path="navmesh_output_path",
+            label="NavMesh Path",
+            kind="string",
+        ),
+        "normal_threshold": InspectField(
+            path="normal_threshold",
+            label="Normal Threshold",
+            kind="float",
+            min=0.0,
+            max=1.0,
+            step=0.01,
+        ),
+        "build_navmesh_btn": InspectField(
+            label="Build NavMesh",
+            kind="button",
+            action=_build_navmesh_action,
+            non_serializable=True,
+        ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_threshold"]
 
     def __init__(
         self,
@@ -87,12 +112,16 @@ class VoxelizerComponent(Component):
         cell_size: float = 0.25,
         output_path: str = "",
         voxelize_mode: VoxelizeMode = VoxelizeMode.SHELL,
+        navmesh_output_path: str = "",
+        normal_threshold: float = 0.9,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
         self.cell_size = cell_size
         self.output_path = output_path
         self.voxelize_mode = voxelize_mode
+        self.navmesh_output_path = navmesh_output_path
+        self.normal_threshold = normal_threshold
         self._last_voxel_count: int = 0
 
     def voxelize(self) -> bool:
@@ -215,6 +244,81 @@ class VoxelizerComponent(Component):
             print(f"VoxelizerComponent: failed to save: {e}")
             return False
 
+    def build_navmesh(self) -> bool:
+        """
+        Построить NavMesh из воксельной сетки.
+
+        Требует предварительной вокселизации с нормалями (режим WITH_NORMALS).
+
+        Returns:
+            True если успешно, False если ошибка.
+        """
+        from termin.visualization.core.resources import ResourceManager
+        from termin.navmesh import PolygonBuilder, NavMeshConfig
+        from termin.navmesh.persistence import NavMeshPersistence
+
+        # Определяем имя сетки
+        name = self.grid_name.strip()
+        if not name:
+            if self.entity is not None:
+                name = self.entity.name or "voxel_grid"
+            else:
+                name = "voxel_grid"
+
+        # Получаем воксельную сетку из ResourceManager
+        rm = ResourceManager.instance()
+        grid = rm.get_voxel_grid(name)
+
+        if grid is None:
+            print(f"VoxelizerComponent: voxel grid '{name}' not found. Run Voxelize first.")
+            return False
+
+        if not grid.surface_normals:
+            print("VoxelizerComponent: voxel grid has no surface normals. Use WITH_NORMALS mode.")
+            return False
+
+        # Строим NavMesh
+        config = NavMeshConfig(normal_threshold=self.normal_threshold)
+        builder = PolygonBuilder(config)
+        navmesh = builder.build(grid)
+
+        print(f"VoxelizerComponent: built NavMesh with {navmesh.polygon_count()} polygons, {navmesh.triangle_count()} triangles")
+
+        # Определяем путь для сохранения
+        output = self.navmesh_output_path.strip()
+        if not output:
+            output = f"{name}.navmesh"
+
+        if not output.endswith(".navmesh"):
+            output += ".navmesh"
+
+        # Регистрируем в ResourceManager
+        navmesh_name = name + "_navmesh" if not name.endswith("_navmesh") else name
+        rm.register_navmesh(navmesh_name, navmesh)
+        print(f"VoxelizerComponent: registered NavMesh '{navmesh_name}'")
+
+        # Сохраняем в файл
+        try:
+            output_path = Path(output)
+
+            # Если путь относительный, разрешаем относительно директории проекта
+            if not output_path.is_absolute():
+                from termin.editor.project_browser import ProjectBrowser
+                project_root = ProjectBrowser.current_project_path
+                if project_root is not None:
+                    output_path = project_root / output_path
+
+            # Создаём директорию если не существует
+            if output_path.parent and not output_path.parent.exists():
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            NavMeshPersistence.save(navmesh, output_path)
+            print(f"VoxelizerComponent: saved NavMesh to {output_path.absolute()}")
+            return True
+        except Exception as e:
+            print(f"VoxelizerComponent: failed to save NavMesh: {e}")
+            return False
+
     @classmethod
     def deserialize(cls, data: dict, context) -> "VoxelizerComponent":
         """Десериализовать компонент."""
@@ -223,4 +327,6 @@ class VoxelizerComponent(Component):
             cell_size=data.get("cell_size", 0.25),
             output_path=data.get("output_path", ""),
             voxelize_mode=VoxelizeMode(data.get("voxelize_mode", VoxelizeMode.SHELL)),
+            navmesh_output_path=data.get("navmesh_output_path", ""),
+            normal_threshold=data.get("normal_threshold", 0.9),
         )

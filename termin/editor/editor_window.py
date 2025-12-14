@@ -35,6 +35,7 @@ from termin.editor.file_processors import (
     ComponentFileProcessor,
     PipelineFileProcessor,
     VoxelGridProcessor,
+    NavMeshProcessor,
 )
 from termin.editor.spacemouse_controller import SpaceMouseController
 
@@ -163,6 +164,12 @@ class EditorWindow(QMainWindow):
         )
         self._project_file_watcher.register_processor(
             VoxelGridProcessor(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            NavMeshProcessor(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
