@@ -10,6 +10,7 @@ VOXEL_VERTEX_SHADER = """#version 330 core
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in vec2 a_uv;
+layout(location = 3) in vec3 a_color;
 
 uniform mat4 u_model;
 uniform mat4 u_view;
@@ -18,12 +19,14 @@ uniform mat4 u_projection;
 out vec3 v_world_pos;
 out vec3 v_normal;
 out vec2 v_uv;
+out vec3 v_color;
 
 void main() {
     vec4 world = u_model * vec4(a_position, 1.0);
     v_world_pos = world.xyz;
     v_normal = mat3(transpose(inverse(u_model))) * a_normal;
     v_uv = a_uv;
+    v_color = a_color;
     gl_Position = u_projection * u_view * world;
 }
 """
@@ -33,11 +36,12 @@ VOXEL_FRAGMENT_SHADER = """#version 330 core
 in vec3 v_world_pos;
 in vec3 v_normal;
 in vec2 v_uv;
+in vec3 v_color;
 
 uniform mat4 u_model;
 uniform vec4 u_color_below;
 uniform vec4 u_color_above;
-uniform vec4 u_color_surface;   // color for VOXEL_SURFACE type (2)
+uniform vec4 u_color_surface;   // color for VOXEL_SURFACE type (2) when no normals
 uniform vec3 u_slice_axis;      // slice axis in entity local space
 uniform float u_fill_percent;   // 0.0 - 1.0
 uniform vec3 u_bounds_min;      // bounds in mesh space (before model transform)
@@ -91,8 +95,17 @@ void main() {
     vec4 base_color;
 
     if (abs(voxel_type - VOXEL_SURFACE) < 0.5) {
-        // Surface voxel - use surface color
-        base_color = u_color_surface;
+        // Surface voxel - check if we have normal-encoded color
+        // v_color = (1,1,1) means no normal, use u_color_surface
+        // otherwise v_color contains encoded normal as RGB
+        float color_sum = v_color.r + v_color.g + v_color.b;
+        if (abs(color_sum - 3.0) < 0.01) {
+            // Default white = no normal data, use uniform color
+            base_color = u_color_surface;
+        } else {
+            // Normal encoded as color
+            base_color = vec4(v_color, u_color_surface.a);
+        }
     } else if (normalized_pos > u_fill_percent) {
         // In blend zone (SOLID voxels)
         float t = (normalized_pos - u_fill_percent) / blend_zone;

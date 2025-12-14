@@ -17,7 +17,7 @@ from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
-from termin.mesh.mesh import Mesh3
+from termin.voxels.voxel_mesh import VoxelMesh
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -355,6 +355,10 @@ class VoxelDisplayComponent(Component):
         triangles = np.zeros((display_count * TRIS_PER_CUBE, 3), dtype=np.int32)
         normals = np.zeros((display_count * VERTS_PER_CUBE, 3), dtype=np.float32)
         uvs = np.zeros((display_count * VERTS_PER_CUBE, 2), dtype=np.float32)
+        colors = np.ones((display_count * VERTS_PER_CUBE, 3), dtype=np.float32)  # default white
+
+        # Получаем карту нормалей
+        surface_normals = grid.surface_normals
 
         cell_size = grid.cell_size
         idx = 0
@@ -370,6 +374,13 @@ class VoxelDisplayComponent(Component):
             normals[v_start:v_end] = _CUBE_NORMALS
             uvs[v_start:v_end, 0] = float(vtype)  # UV.x = тип вокселя
 
+            # Если есть нормаль для этого вокселя — кодируем в цвет
+            surface_normal = surface_normals.get((vx, vy, vz))
+            if surface_normal is not None:
+                # Кодируем нормаль как RGB: [-1,1] -> [0,1]
+                encoded_color = (surface_normal + 1.0) * 0.5
+                colors[v_start:v_end] = encoded_color
+
             # Смещаем индексы треугольников
             t_start = idx * TRIS_PER_CUBE
             t_end = t_start + TRIS_PER_CUBE
@@ -377,10 +388,11 @@ class VoxelDisplayComponent(Component):
 
             idx += 1
 
-        mesh = Mesh3(
+        mesh = VoxelMesh(
             vertices=vertices,
             triangles=triangles,
             uvs=uvs,
+            vertex_colors=colors,
         )
         mesh.vertex_normals = normals
         self._mesh_drawable = MeshDrawable(mesh, name="voxel_display")

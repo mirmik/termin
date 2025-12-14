@@ -23,6 +23,7 @@ from termin.voxels.persistence import (
 from termin.voxels.voxelizer_component import VoxelizerComponent, VoxelizeMode
 from termin.voxels.display_component import VoxelDisplayComponent
 from termin.voxels.voxel_shader import voxel_display_shader
+from termin.voxels.voxel_mesh import VoxelMesh
 
 __all__ = [
     "VoxelChunk",
@@ -36,6 +37,7 @@ __all__ = [
     "VoxelizerComponent",
     "VoxelizeMode",
     "VoxelDisplayComponent",
+    "VoxelMesh",
     "CHUNK_SIZE",
     "VOXEL_EMPTY",
     "VOXEL_SOLID",
