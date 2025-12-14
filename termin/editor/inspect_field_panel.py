@@ -502,6 +502,7 @@ class InspectFieldPanel(QWidget):
         elif isinstance(w, QLineEdit) and field.kind == "string":
             # Не подключаем commit для read-only полей
             if not (field.getter is not None and field.setter is None and field.path is None):
+                w.textEdited.connect(lambda _t: commit())
                 w.editingFinished.connect(commit)
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:

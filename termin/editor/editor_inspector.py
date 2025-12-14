@@ -623,6 +623,7 @@ class ComponentInspectorPanel(QWidget):
         elif isinstance(w, QLineEdit) and field.kind != "material":
             # Не подключаем commit для read-only полей
             if not (field.getter is not None and field.setter is None and field.path is None):
+                w.textEdited.connect(lambda _t: commit(True))
                 w.editingFinished.connect(lambda: commit(False))
         elif hasattr(w, "_boxes"):
             for sb in w._boxes:
