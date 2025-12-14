@@ -74,6 +74,15 @@ class NavMeshDisplayComponent(Component):
             kind="bool",
             setter=lambda obj, val: obj._set_show_contours(val),
         ),
+        "contour_width": InspectField(
+            path="contour_width",
+            label="Contour Width",
+            kind="float",
+            min=0.001,
+            max=1.0,
+            step=0.01,
+            setter=lambda obj, val: obj._set_contour_width(val),
+        ),
     }
 
     def __init__(self, navmesh_name: str = "") -> None:
@@ -140,6 +149,11 @@ class NavMeshDisplayComponent(Component):
     def _set_show_contours(self, value: bool) -> None:
         """Установить режим отображения контуров."""
         self.show_contours = value
+        self._needs_rebuild = True
+
+    def _set_contour_width(self, value: float) -> None:
+        """Установить толщину контуров."""
+        self.contour_width = value
         self._needs_rebuild = True
 
     def _get_or_create_material(self) -> Material:
