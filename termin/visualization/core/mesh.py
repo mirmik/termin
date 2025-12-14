@@ -87,8 +87,6 @@ class MeshDrawable:
         ctx = context.context_key
         if ctx in self._context_resources:
             return
-        # backend знает, как из Mesh3 сделать GPU-буферы
-        print(f"[MeshDrawable] upload name={self.name} context_key={ctx}")
         handle = context.graphics.create_mesh(self._mesh)
         self._context_resources[ctx] = handle
 
@@ -100,7 +98,6 @@ class MeshDrawable:
         handle.draw()
 
     def delete(self):
-        print(f"[MeshDrawable] delete name={self.name} keys={list(self._context_resources.keys())}")
         from termin.visualization.platform.backends.opengl import (
             get_context_make_current,
             get_current_context_key,
@@ -113,10 +110,7 @@ class MeshDrawable:
             # Делаем контекст текущим перед удалением VAO
             make_current = get_context_make_current(ctx_key)
             if make_current is not None:
-                print(f"[MeshDrawable] switching to context {ctx_key} before delete")
                 make_current()
-            else:
-                print(f"[MeshDrawable] WARNING: no make_current for context {ctx_key}")
             handle.delete()
         self._context_resources.clear()
 
@@ -124,7 +118,6 @@ class MeshDrawable:
         if original_ctx is not None:
             restore = get_context_make_current(original_ctx)
             if restore is not None:
-                print(f"[MeshDrawable] restoring context {original_ctx}")
                 restore()
 
     # --------- сериализация / десериализация ---------
@@ -252,7 +245,6 @@ class Mesh2Drawable:
         ctx = context.context_key
         if ctx in self._context_resources:
             return
-        print(f"[Mesh2Drawable] upload name={self.name} context_key={ctx}")
         handle = context.graphics.create_mesh(self._mesh)
         self._context_resources[ctx] = handle
 
@@ -264,7 +256,6 @@ class Mesh2Drawable:
         handle.draw()
 
     def delete(self):
-        print(f"[Mesh2Drawable] delete name={self.name} keys={list(self._context_resources.keys())}")
         from termin.visualization.platform.backends.opengl import (
             get_context_make_current,
             get_current_context_key,
@@ -277,10 +268,7 @@ class Mesh2Drawable:
             # Делаем контекст текущим перед удалением VAO
             make_current = get_context_make_current(ctx_key)
             if make_current is not None:
-                print(f"[Mesh2Drawable] switching to context {ctx_key} before delete")
                 make_current()
-            else:
-                print(f"[Mesh2Drawable] WARNING: no make_current for context {ctx_key}")
             handle.delete()
         self._context_resources.clear()
 
@@ -288,7 +276,6 @@ class Mesh2Drawable:
         if original_ctx is not None:
             restore = get_context_make_current(original_ctx)
             if restore is not None:
-                print(f"[Mesh2Drawable] restoring context {original_ctx}")
                 restore()
 
     def serialize(self) -> dict:

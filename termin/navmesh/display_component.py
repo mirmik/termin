@@ -246,9 +246,9 @@ void main() {
             if self._mesh_drawable is not None:
                 self._mesh_drawable.draw(context)
 
-        # if geometry_id == self.GEOMETRY_CONTOURS:
-        #     if self._contour_drawable is not None:
-        #         self._contour_drawable.draw(context)
+        if geometry_id == self.GEOMETRY_CONTOURS:
+            if self._contour_drawable is not None:
+                self._contour_drawable.draw(context)
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
@@ -297,7 +297,6 @@ void main() {
 
     def _rebuild_mesh(self) -> None:
         """Перестроить меш из NavMesh."""
-        print(f"[NavMesh] _rebuild_mesh called, has_old_mesh={self._mesh_drawable is not None}")
         # Очищаем старый меш
         if self._mesh_drawable is not None:
             self._mesh_drawable.delete()
@@ -354,8 +353,6 @@ void main() {
 
         # Строим контуры
         self._build_contour_drawable(navmesh)
-
-        print(f"NavMeshDisplayComponent: built mesh with {len(vertices)} vertices, {len(triangles)} triangles")
 
     def _build_contour_drawable(self, navmesh: "NavMesh") -> None:
         """Построить drawable для контуров."""
