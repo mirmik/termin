@@ -472,8 +472,7 @@ class PolygonBuilder:
             polygon.holes = holes
 
         # Шаг 10: Упрощение контуров Douglas-Peucker
-        # DEBUG: временно отключено для поиска бага
-        if False and simplify_contours and polygon.outer_contour is not None:
+        if simplify_contours and polygon.outer_contour is not None:
             epsilon = self.config.contour_epsilon
             polygon.outer_contour = self._simplify_contour(
                 polygon.outer_contour, points_2d, epsilon
@@ -491,23 +490,26 @@ class PolygonBuilder:
             old_tri_count = len(polygon.triangles)
 
             if len(contour_coords) >= 3:
+                # DEBUG: пропускаем большие регионы для поиска бага
+                if old_tri_count > 500:
+                    print(f"Region {current_region_idx}: Skipping large region ({old_tri_count} tris)")
                 # Проверяем на самопересечение
-                if self._is_self_intersecting(contour_coords):
-                    print(f"Contour is self-intersecting ({len(contour_coords)} verts), skipping ear clipping")
+                elif self._is_self_intersecting(contour_coords):
+                    print(f"Region {current_region_idx}: Contour is self-intersecting ({len(contour_coords)} verts), skipping")
                 else:
                     # Ear clipping триангуляция
                     new_tris = self._ear_clipping(contour_coords)
 
                     # Проверяем, что ear clipping дал ожидаемое число треугольников
                     if len(new_tris) != expected_triangles:
-                        print(f"Ear clipping failed: got {len(new_tris)}, expected {expected_triangles}")
+                        print(f"Region {current_region_idx}: Ear clipping failed: got {len(new_tris)}, expected {expected_triangles}")
                     else:
                         # Проверяем площадь
                         contour_area = abs(self._polygon_signed_area(contour_coords))
                         triangles_area = self._triangles_area(contour_coords, new_tris)
 
                         if contour_area > 1e-6 and abs(triangles_area - contour_area) / contour_area > 0.01:
-                            print(f"Ear clipping area mismatch: contour={contour_area:.4f}, triangles={triangles_area:.4f}")
+                            print(f"Region {current_region_idx}: Ear clipping area mismatch: contour={contour_area:.4f}, triangles={triangles_area:.4f}")
                         else:
                             # Конвертируем вершины контура в 3D
                             new_verts_3d = (
@@ -521,9 +523,9 @@ class PolygonBuilder:
                             # Контуры больше не валидны — индексы изменились
                             polygon.outer_contour = None
                             polygon.holes = []
-                            print(f"Ear clipping OK: {old_tri_count} -> {len(new_tris)} triangles, {len(contour_coords)} verts")
+                            print(f"Region {current_region_idx}: Ear clipping OK: {old_tri_count} -> {len(new_tris)} triangles, {len(contour_coords)} verts")
         elif retriangulate and polygon.outer_contour is None:
-            print(f"Ear clipping skipped: no outer_contour")
+            print(f"Region {current_region_idx}: Ear clipping skipped: no outer_contour")
 
         return polygon
 
