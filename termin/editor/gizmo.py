@@ -126,7 +126,7 @@ class GizmoArrow(Entity):
         shaft_mesh = CylinderMesh(radius=0.03, height=shaft_len, segments=24)
         head_mesh = ConeMesh(radius=0.06, height=head_len, segments=24)
 
-        mat = Material(color=color, phase_mark="editor")
+        mat = Material(color=color, phase_mark="gizmo")
 
         # цилиндр (ствол)
         shaft_ent = Entity(
@@ -236,8 +236,8 @@ class GizmoRing(Entity):
     ):
         """Создаёт видимое кольцо гизмо."""
         ring_mesh = RingMesh(radius=radius, thickness=thickness, segments=48)
-        # cull=False для двустороннего рендеринга, phase_mark="editor"
-        mat = Material(color=color, render_state=RenderState(cull=False), phase_mark="editor")
+        # cull=False для двустороннего рендеринга
+        mat = Material(color=color, render_state=RenderState(cull=False), phase_mark="gizmo")
 
         ring_ent = Entity(
             Pose3.identity(),

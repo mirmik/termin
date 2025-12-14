@@ -69,6 +69,7 @@ class ColorPass(RenderFramePass):
         "shadow_res": InspectField(path="shadow_res", label="Shadow Resource", kind="string"),
         "phase_mark": InspectField(path="phase_mark", label="Phase Mark", kind="string"),
         "sort_by_distance": InspectField(path="sort_by_distance", label="Sort by Distance", kind="bool"),
+        "clear_depth": InspectField(path="clear_depth", label="Clear Depth", kind="bool"),
     }
 
     def __init__(
@@ -79,6 +80,7 @@ class ColorPass(RenderFramePass):
         pass_name: str = "Color",
         phase_mark: str | None = None,
         sort_by_distance: bool = False,
+        clear_depth: bool = False,
     ):
         if phase_mark is None:
             phase_mark = "opaque"
@@ -97,6 +99,7 @@ class ColorPass(RenderFramePass):
         self.shadow_res = shadow_res
         self.phase_mark = phase_mark
         self.sort_by_distance = sort_by_distance
+        self.clear_depth = clear_depth
 
         # Кэш имён сущностей с MeshRenderer
         self._entity_names: List[str] = []
@@ -109,6 +112,7 @@ class ColorPass(RenderFramePass):
             "shadow_res": self.shadow_res,
             "phase_mark": self.phase_mark,
             "sort_by_distance": self.sort_by_distance,
+            "clear_depth": self.clear_depth,
         }
 
     @classmethod
@@ -121,6 +125,7 @@ class ColorPass(RenderFramePass):
             pass_name=data.get("pass_name", "Color"),
             phase_mark=data.get("phase_mark"),
             sort_by_distance=data.get("sort_by_distance", False),
+            clear_depth=data.get("clear_depth", False),
         )
 
     _DEBUG_COLLECT = False  # DEBUG: отладка сбора draw calls
@@ -323,6 +328,10 @@ class ColorPass(RenderFramePass):
 
         graphics.bind_framebuffer(fb)
         graphics.set_viewport(0, 0, pw, ph)
+
+        # Очищаем только depth buffer если флаг установлен
+        if self.clear_depth:
+            graphics.clear_depth()
 
         # Матрицы камеры
         view = camera.get_view_matrix()

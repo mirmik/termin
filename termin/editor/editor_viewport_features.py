@@ -390,10 +390,19 @@ class EditorViewportFeatures:
 
         editor_color_pass = ColorPass(
             input_res="color_transparent",
-            output_res="color",
+            output_res="color_editor",
             shadow_res=None,
             pass_name="EditorColor",
             phase_mark="editor",
+        )
+
+        gizmo_color_pass = ColorPass(
+            input_res="color_editor",
+            output_res="color",
+            shadow_res=None,
+            pass_name="GizmoColor",
+            phase_mark="gizmo",
+            clear_depth=True,
         )
 
         skybox_pass = SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox")
@@ -413,6 +422,7 @@ class EditorViewportFeatures:
             color_pass,
             transparent_pass,
             editor_color_pass,
+            gizmo_color_pass,
             depth_pass,
             IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
             GizmoPass(
