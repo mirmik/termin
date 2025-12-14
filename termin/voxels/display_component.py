@@ -134,12 +134,19 @@ class VoxelDisplayComponent(Component):
             kind="vec3",
             setter=lambda obj, val: obj._set_slice_axis(val),
         ),
+        "color_surface": InspectField(
+            path="color_surface",
+            label="Color Surface",
+            kind="color",
+            setter=lambda obj, val: obj._set_color_surface(val),
+        ),
     }
 
     serializable_fields = [
         "voxel_grid_name",
         "color_below",
         "color_above",
+        "color_surface",
         "fill_percent",
         "slice_axis",
     ]
@@ -156,6 +163,7 @@ class VoxelDisplayComponent(Component):
         # Цвета с альфа-каналом (RGBA)
         self.color_below: Tuple[float, float, float, float] = (0.2, 0.6, 1.0, 0.8)
         self.color_above: Tuple[float, float, float, float] = (1.0, 0.3, 0.2, 0.8)
+        self.color_surface: Tuple[float, float, float, float] = (0.2, 1.0, 0.3, 0.9)
 
         # Процент заполнения (0-100), 100 = вся сетка
         self.fill_percent: float = 100.0
@@ -174,6 +182,10 @@ class VoxelDisplayComponent(Component):
     def _set_color_above(self, value: Tuple[float, float, float, float]) -> None:
         """Установить цвет выше порога."""
         self.color_above = value
+
+    def _set_color_surface(self, value: Tuple[float, float, float, float]) -> None:
+        """Установить цвет поверхностных вокселей."""
+        self.color_surface = value
 
     def _set_fill_percent(self, value: float) -> None:
         """Установить процент заполнения."""
@@ -278,6 +290,7 @@ class VoxelDisplayComponent(Component):
         for phase in result:
             phase.uniforms["u_color_below"] = np.array(self.color_below, dtype=np.float32)
             phase.uniforms["u_color_above"] = np.array(self.color_above, dtype=np.float32)
+            phase.uniforms["u_color_surface"] = np.array(self.color_surface, dtype=np.float32)
             phase.uniforms["u_slice_axis"] = np.array(self.slice_axis, dtype=np.float32)
             phase.uniforms["u_fill_percent"] = self.fill_percent / 100.0
             phase.uniforms["u_bounds_min"] = self._bounds_min
@@ -341,6 +354,7 @@ class VoxelDisplayComponent(Component):
         vertices = np.zeros((display_count * VERTS_PER_CUBE, 3), dtype=np.float32)
         triangles = np.zeros((display_count * TRIS_PER_CUBE, 3), dtype=np.int32)
         normals = np.zeros((display_count * VERTS_PER_CUBE, 3), dtype=np.float32)
+        uvs = np.zeros((display_count * VERTS_PER_CUBE, 2), dtype=np.float32)
 
         cell_size = grid.cell_size
         idx = 0
@@ -354,6 +368,7 @@ class VoxelDisplayComponent(Component):
             v_end = v_start + VERTS_PER_CUBE
             vertices[v_start:v_end] = _CUBE_VERTICES * (cell_size * CUBE_SCALE) + center
             normals[v_start:v_end] = _CUBE_NORMALS
+            uvs[v_start:v_end, 0] = float(vtype)  # UV.x = тип вокселя
 
             # Смещаем индексы треугольников
             t_start = idx * TRIS_PER_CUBE
@@ -365,6 +380,7 @@ class VoxelDisplayComponent(Component):
         mesh = Mesh3(
             vertices=vertices,
             triangles=triangles,
+            uvs=uvs,
         )
         mesh.vertex_normals = normals
         self._mesh_drawable = MeshDrawable(mesh, name="voxel_display")
@@ -399,6 +415,7 @@ class VoxelDisplayComponent(Component):
             "voxel_grid_name": self._voxel_grid_name,
             "color_below": list(self.color_below),
             "color_above": list(self.color_above),
+            "color_surface": list(self.color_surface),
             "fill_percent": self.fill_percent,
             "slice_axis": list(self.slice_axis),
         }
@@ -415,6 +432,9 @@ class VoxelDisplayComponent(Component):
         color_above = data.get("color_above")
         if color_above is not None:
             comp.color_above = tuple(color_above)
+        color_surface = data.get("color_surface")
+        if color_surface is not None:
+            comp.color_surface = tuple(color_surface)
         comp.fill_percent = data.get("fill_percent", 100.0)
         slice_axis = data.get("slice_axis")
         if slice_axis is not None:

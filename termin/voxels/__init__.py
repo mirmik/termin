@@ -13,6 +13,7 @@ from termin.voxels.voxelizer import (
     SceneVoxelizer,
     voxelize_scene,
     VOXEL_EMPTY,
+    VOXEL_SOLID,
     VOXEL_SURFACE,
 )
 from termin.voxels.persistence import (
@@ -36,6 +37,7 @@ __all__ = [
     "VoxelDisplayComponent",
     "CHUNK_SIZE",
     "VOXEL_EMPTY",
+    "VOXEL_SOLID",
     "VOXEL_SURFACE",
     "VOXEL_FILE_EXTENSION",
     "voxel_display_shader",

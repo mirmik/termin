@@ -218,6 +218,59 @@ class VoxelGrid:
     # Surface / Interior operations
     # ----------------------------------------------------------------
 
+    def mark_surface(self, surface_value: int = 2) -> int:
+        """
+        Помечает поверхностные воксели отдельным типом (in-place).
+
+        Поверхностный воксель — непустой, у которого есть хотя бы один пустой сосед.
+
+        Args:
+            surface_value: Тип для поверхностных вокселей (default: VOXEL_SURFACE=2).
+
+        Returns:
+            Количество помеченных вокселей.
+        """
+        neighbors = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+
+        # Собираем координаты surface вокселей
+        surface_coords: list[tuple[int, int, int]] = []
+
+        for x, y, z, vtype in self.iter_non_empty():
+            # Проверяем есть ли пустой сосед
+            for dx, dy, dz in neighbors:
+                if self.get(x + dx, y + dy, z + dz) == 0:
+                    surface_coords.append((x, y, z))
+                    break
+
+        # Помечаем
+        for x, y, z in surface_coords:
+            self.set(x, y, z, surface_value)
+
+        return len(surface_coords)
+
+    def clear_by_type(self, type_to_clear: int = 1) -> int:
+        """
+        Удаляет все воксели указанного типа (in-place).
+
+        Args:
+            type_to_clear: Тип вокселей для удаления (default: VOXEL_SOLID=1).
+
+        Returns:
+            Количество удалённых вокселей.
+        """
+        # Собираем координаты вокселей для удаления
+        to_clear: list[tuple[int, int, int]] = []
+
+        for x, y, z, vtype in self.iter_non_empty():
+            if vtype == type_to_clear:
+                to_clear.append((x, y, z))
+
+        # Удаляем
+        for x, y, z in to_clear:
+            self.set(x, y, z, 0)
+
+        return len(to_clear)
+
     def extract_surface(self, surface_value: int = 1) -> "VoxelGrid":
         """
         Создаёт новую сетку только с поверхностными вокселями.

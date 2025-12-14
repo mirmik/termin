@@ -18,7 +18,8 @@ if TYPE_CHECKING:
 
 # Типы вокселей
 VOXEL_EMPTY = 0
-VOXEL_SURFACE = 1
+VOXEL_SOLID = 1      # Заполненный воксель (после вокселизации и fill)
+VOXEL_SURFACE = 2    # Поверхностный воксель (после mark_surface)
 
 
 class MeshVoxelizer:
@@ -38,7 +39,7 @@ class MeshVoxelizer:
         self,
         mesh: "Mesh3",
         transform_matrix: Optional[np.ndarray] = None,
-        voxel_type: int = VOXEL_SURFACE,
+        voxel_type: int = VOXEL_SOLID,
     ) -> int:
         """
         Вокселизировать меш.

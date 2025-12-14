@@ -146,11 +146,13 @@ class VoxelizerComponent(Component):
             filled = grid.fill_interior()
             print(f"VoxelizerComponent: filled {filled} interior voxels")
 
-        # Извлекаем только поверхность если включено
+        # Помечаем поверхность и удаляем внутренние если включено
         if self.extract_surface:
-            grid = grid.extract_surface()
-            grid.name = name  # Сохраняем оригинальное имя
-            print(f"VoxelizerComponent: extracted {grid.voxel_count} surface voxels")
+            from termin.voxels.voxelizer import VOXEL_SOLID, VOXEL_SURFACE
+            marked = grid.mark_surface(VOXEL_SURFACE)
+            print(f"VoxelizerComponent: marked {marked} surface voxels")
+            cleared = grid.clear_by_type(VOXEL_SOLID)
+            print(f"VoxelizerComponent: cleared {cleared} interior voxels")
 
         self._last_voxel_count = grid.voxel_count
 
