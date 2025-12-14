@@ -578,7 +578,7 @@ class ConeMesh(Mesh3):
             # Боковые грани: нормаль наружу
             triangles.append([0, base1, base0])
             # Основание: нормаль вниз (-Y)
-            triangles.append([len(vertices), base1, base0])
+            triangles.append([base0, base1, len(vertices)])
         vertices.append(base_center)
         super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
