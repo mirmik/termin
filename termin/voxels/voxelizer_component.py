@@ -42,6 +42,11 @@ class VoxelizerComponent(Component):
             max=10.0,
             step=0.001,
         ),
+        "fill_interior": InspectField(
+            path="fill_interior",
+            label="Fill Interior",
+            kind="bool",
+        ),
         "output_path": InspectField(
             path="output_path",
             label="Output Path",
@@ -55,18 +60,20 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "fill_interior"]
 
     def __init__(
         self,
         grid_name: str = "",
         cell_size: float = 0.25,
         output_path: str = "",
+        fill_interior: bool = False,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
         self.cell_size = cell_size
         self.output_path = output_path
+        self.fill_interior = fill_interior
         self._last_voxel_count: int = 0
 
     def voxelize(self) -> bool:
@@ -127,6 +134,11 @@ class VoxelizerComponent(Component):
         # Вокселизируем без трансформа — в локальной СК меша
         voxelizer.voxelize_mesh(mesh, transform_matrix=None)
 
+        # Заполняем внутреннее пространство если включено
+        if self.fill_interior:
+            filled = grid.fill_interior()
+            print(f"VoxelizerComponent: filled {filled} interior voxels")
+
         self._last_voxel_count = grid.voxel_count
 
         # Регистрируем в ResourceManager
@@ -163,4 +175,5 @@ class VoxelizerComponent(Component):
             grid_name=data.get("grid_name", ""),
             cell_size=data.get("cell_size", 0.25),
             output_path=data.get("output_path", ""),
+            fill_interior=data.get("fill_interior", False),
         )

@@ -215,6 +215,82 @@ class VoxelGrid:
         return min_world, max_world
 
     # ----------------------------------------------------------------
+    # Fill interior
+    # ----------------------------------------------------------------
+
+    def fill_interior(self, fill_value: int = 1) -> int:
+        """
+        Заполняет внутреннее пространство замкнутого меша.
+
+        Алгоритм: flood fill снаружи, всё недостижимое — внутри.
+
+        Args:
+            fill_value: Тип вокселя для заполнения.
+
+        Returns:
+            Количество заполненных вокселей.
+        """
+        from collections import deque
+
+        voxel_bounds = self.bounds()
+        if voxel_bounds is None:
+            return 0
+
+        (min_x, min_y, min_z), (max_x, max_y, max_z) = voxel_bounds
+
+        # Расширяем bounds на 1 чтобы гарантировать что угол снаружи
+        min_x -= 1
+        min_y -= 1
+        min_z -= 1
+        max_x += 1
+        max_y += 1
+        max_z += 1
+
+        # BFS от угла — помечаем всё достижимое снаружи
+        outside: set[tuple[int, int, int]] = set()
+        queue: deque[tuple[int, int, int]] = deque()
+        start = (min_x, min_y, min_z)
+        queue.append(start)
+        outside.add(start)
+
+        neighbors = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+
+        while queue:
+            x, y, z = queue.popleft()
+
+            for dx, dy, dz in neighbors:
+                nx, ny, nz = x + dx, y + dy, z + dz
+
+                # Проверяем bounds
+                if nx < min_x or nx > max_x:
+                    continue
+                if ny < min_y or ny > max_y:
+                    continue
+                if nz < min_z or nz > max_z:
+                    continue
+
+                if (nx, ny, nz) in outside:
+                    continue
+
+                # Если solid — не проходим
+                if self.get(nx, ny, nz) != 0:
+                    continue
+
+                outside.add((nx, ny, nz))
+                queue.append((nx, ny, nz))
+
+        # Заполняем всё что не outside и не solid
+        filled_count = 0
+        for x in range(min_x, max_x + 1):
+            for y in range(min_y, max_y + 1):
+                for z in range(min_z, max_z + 1):
+                    if (x, y, z) not in outside and self.get(x, y, z) == 0:
+                        self.set(x, y, z, fill_value)
+                        filled_count += 1
+
+        return filled_count
+
+    # ----------------------------------------------------------------
     # Сериализация
     # ----------------------------------------------------------------
 
