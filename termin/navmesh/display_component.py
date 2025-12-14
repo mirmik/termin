@@ -117,12 +117,15 @@ class NavMeshDisplayComponent(Component):
 
     def _set_navmesh(self, value: "NavMesh") -> None:
         """Установить NavMesh (объект или None)."""
+        print(f"[_set_navmesh] value={value}, type={type(value)}")
         if value is None:
             self.navmesh_name = ""
         elif hasattr(value, "name"):
+            print(f"[_set_navmesh] value.name='{value.name}'")
             self.navmesh_name = value.name
         else:
             self.navmesh_name = ""
+        print(f"[_set_navmesh] result: navmesh_name='{self._navmesh_name}', handle.get()={self._navmesh_handle.get()}")
 
     def _set_color(self, value: Tuple[float, float, float, float]) -> None:
         """Установить цвет."""
