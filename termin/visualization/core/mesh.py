@@ -88,6 +88,7 @@ class MeshDrawable:
         if ctx in self._context_resources:
             return
         # backend знает, как из Mesh3 сделать GPU-буферы
+        print(f"[MeshDrawable] upload name={self.name} context_key={ctx}")
         handle = context.graphics.create_mesh(self._mesh)
         self._context_resources[ctx] = handle
 
@@ -99,6 +100,7 @@ class MeshDrawable:
         handle.draw()
 
     def delete(self):
+        print(f"[MeshDrawable] delete name={self.name} keys={list(self._context_resources.keys())}")
         for handle in self._context_resources.values():
             handle.delete()
         self._context_resources.clear()
@@ -228,6 +230,7 @@ class Mesh2Drawable:
         ctx = context.context_key
         if ctx in self._context_resources:
             return
+        print(f"[Mesh2Drawable] upload name={self.name} context_key={ctx}")
         handle = context.graphics.create_mesh(self._mesh)
         self._context_resources[ctx] = handle
 
@@ -239,6 +242,7 @@ class Mesh2Drawable:
         handle.draw()
 
     def delete(self):
+        print(f"[Mesh2Drawable] delete name={self.name} keys={list(self._context_resources.keys())}")
         for handle in self._context_resources.values():
             handle.delete()
         self._context_resources.clear()

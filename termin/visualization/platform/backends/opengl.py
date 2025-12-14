@@ -150,6 +150,9 @@ class OpenGLMeshHandle(MeshHandle):
         self._vbo = gl.glGenBuffers(1)
         self._ebo = gl.glGenBuffers(1)
 
+        mesh_type = getattr(self._mesh, "type", "triangles")
+        print(f"[VAO] Created VAO={self._vao} VBO={self._vbo} EBO={self._ebo} mesh_type={mesh_type} indices={self._index_count}")
+
         gl.glBindVertexArray(self._vao)
 
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self._vbo)
@@ -176,7 +179,12 @@ class OpenGLMeshHandle(MeshHandle):
 
     def draw(self):
         gl.glEnable(gl.GL_DEPTH_TEST)
-        gl.glBindVertexArray(self._vao or 0)
+        vao_to_bind = self._vao or 0
+        try:
+            gl.glBindVertexArray(vao_to_bind)
+        except Exception as e:
+            print(f"[VAO] ERROR binding VAO={vao_to_bind} mesh_type={getattr(self._mesh, 'type', 'triangles')} indices={self._index_count}")
+            raise
 
         mode = gl.GL_TRIANGLES
         if getattr(self._mesh, "type", "triangles") == "lines":
@@ -188,6 +196,7 @@ class OpenGLMeshHandle(MeshHandle):
     def delete(self):
         if self._vao is None:
             return
+        print(f"[VAO] Deleting VAO={self._vao} VBO={self._vbo} EBO={self._ebo}")
         gl.glDeleteVertexArrays(1, [self._vao])
         gl.glDeleteBuffers(1, [self._vbo])
         gl.glDeleteBuffers(1, [self._ebo])
