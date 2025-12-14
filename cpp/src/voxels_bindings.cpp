@@ -15,8 +15,8 @@ std::vector<Vec3> numpy_to_vec3_vector(py::array_t<double> arr) {
         throw std::runtime_error("Expected Nx3 array for vertices");
     }
     std::vector<Vec3> result;
-    result.reserve(buf.shape(0));
-    for (ssize_t i = 0; i < buf.shape(0); i++) {
+    result.reserve(static_cast<size_t>(buf.shape(0)));
+    for (py::ssize_t i = 0; i < buf.shape(0); i++) {
         result.emplace_back(buf(i, 0), buf(i, 1), buf(i, 2));
     }
     return result;
@@ -29,8 +29,8 @@ std::vector<std::tuple<int, int, int>> numpy_to_triangles(py::array_t<int> arr) 
         throw std::runtime_error("Expected Mx3 array for triangles");
     }
     std::vector<std::tuple<int, int, int>> result;
-    result.reserve(buf.shape(0));
-    for (ssize_t i = 0; i < buf.shape(0); i++) {
+    result.reserve(static_cast<size_t>(buf.shape(0)));
+    for (py::ssize_t i = 0; i < buf.shape(0); i++) {
         result.emplace_back(buf(i, 0), buf(i, 1), buf(i, 2));
     }
     return result;
