@@ -13,11 +13,21 @@ layout(location = 1) in vec3 a_normal;
 uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
+uniform vec3 u_slice_axis;  // slice axis in entity local space
 
+out vec3 v_local_pos;  // Position in mesh local space (for bounds comparison)
 out vec3 v_world_pos;
 out vec3 v_normal;
+out vec3 v_slice_axis_world;  // slice axis transformed to mesh space
 
 void main() {
+    v_local_pos = a_position;  // Mesh local position for slice clipping
+
+    // Transform slice_axis from entity local space to mesh space
+    // We need inverse of model's rotation to go from entity space to mesh space
+    mat3 inv_rotation = transpose(mat3(u_model));
+    v_slice_axis_world = inv_rotation * u_slice_axis;
+
     vec4 world = u_model * vec4(a_position, 1.0);
     v_world_pos = world.xyz;
     v_normal = mat3(transpose(inverse(u_model))) * a_normal;
@@ -27,14 +37,15 @@ void main() {
 
 VOXEL_FRAGMENT_SHADER = """#version 330 core
 
+in vec3 v_local_pos;  // Position in grid/mesh local space
 in vec3 v_world_pos;
 in vec3 v_normal;
+in vec3 v_slice_axis_world;  // slice axis transformed to mesh space
 
 uniform vec4 u_color_below;
 uniform vec4 u_color_above;
-uniform vec3 u_slice_axis;      // normalized axis direction
 uniform float u_fill_percent;   // 0.0 - 1.0
-uniform vec3 u_bounds_min;
+uniform vec3 u_bounds_min;      // bounds in mesh local space
 uniform vec3 u_bounds_max;
 
 // Basic lighting
@@ -45,13 +56,16 @@ uniform float u_ambient_intensity;
 out vec4 FragColor;
 
 void main() {
+    // Use transformed slice axis
+    vec3 slice_axis = normalize(v_slice_axis_world);
+
     // Project bounds onto slice axis to get min/max along that axis
-    float axis_min = dot(u_bounds_min, u_slice_axis);
-    float axis_max = dot(u_bounds_max, u_slice_axis);
+    float axis_min = dot(u_bounds_min, slice_axis);
+    float axis_max = dot(u_bounds_max, slice_axis);
     float axis_range = axis_max - axis_min;
 
     // Project current position onto slice axis
-    float pos_on_axis = dot(v_world_pos, u_slice_axis);
+    float pos_on_axis = dot(v_local_pos, slice_axis);
 
     // Normalize position to 0-1 range along axis
     float normalized_pos = 0.5;
