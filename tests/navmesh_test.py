@@ -231,7 +231,7 @@ class VoxelFaceMeshTest(unittest.TestCase):
         self.assertEqual(len(polygon.vertices), 6)
 
     def test_step_voxels(self):
-        """Ступенька: два вокселя на разных уровнях = 2 лицевые грани."""
+        """Ступенька: два вокселя на разных уровнях = 2 лицевые + 1 боковая."""
         grid = VoxelGrid(cell_size=1.0)
         # Воксель на уровне 0
         grid.set(0, 0, 0, 2)
@@ -246,28 +246,53 @@ class VoxelFaceMeshTest(unittest.TestCase):
         self.assertEqual(navmesh.polygon_count(), 1)
         polygon = navmesh.polygons[0]
 
-        # 2 лицевые грани = 4 треугольника
-        self.assertEqual(len(polygon.triangles), 4)
-        # 8 уникальных вершин (грани не касаются)
-        self.assertEqual(len(polygon.vertices), 8)
+        # 2 лицевые грани + 1 боковая = 6 треугольников
+        self.assertEqual(len(polygon.triangles), 6)
 
-    def test_diagonal_step_no_shared_edges(self):
-        """Диагональная ступенька: лицевые грани не перекрываются."""
+    def test_step_with_side_face(self):
+        """Ступенька с боковой гранью: сосед ярусом ниже по X."""
         grid = VoxelGrid(cell_size=1.0)
-        # Воксель на уровне z=0
-        grid.set(0, 0, 0, 2)
-        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
-        # Воксель на уровне z=1, смежный по диагонали (x+1, z+1)
-        grid.set(1, 0, 1, 2)
-        grid.add_surface_normal(1, 0, 1, np.array([0, 0, 1]))
+        # Воксель на уровне z=1 (верхний)
+        grid.set(0, 0, 1, 2)
+        grid.add_surface_normal(0, 0, 1, np.array([0, 0, 1]))
+        # Воксель на уровне z=0 (нижний), смещён по X
+        grid.set(1, 0, 0, 2)
+        grid.add_surface_normal(1, 0, 0, np.array([0, 0, 1]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
 
         polygon = navmesh.polygons[0]
 
-        # 2 лицевые грани = 4 треугольника
-        self.assertEqual(len(polygon.triangles), 4)
+        # 2 лицевые грани + 1 боковая = 3 квада = 6 треугольников
+        self.assertEqual(len(polygon.triangles), 6)
+
+        # Проверяем что нет дублирующихся рёбер (max 2)
+        edge_count = {}
+        for tri in polygon.triangles:
+            for i in range(3):
+                v0, v1 = tri[i], tri[(i + 1) % 3]
+                edge = (min(v0, v1), max(v0, v1))
+                edge_count[edge] = edge_count.get(edge, 0) + 1
+
+        for edge, count in edge_count.items():
+            self.assertIn(count, [1, 2], f"Edge {edge} has {count} triangles")
+
+    def test_staircase(self):
+        """Лестница из 3 ступенек: каждая выше предыдущей."""
+        grid = VoxelGrid(cell_size=1.0)
+        # Три ступеньки: (0,0,0), (1,0,1), (2,0,2)
+        for i in range(3):
+            grid.set(i, 0, i, 2)
+            grid.add_surface_normal(i, 0, i, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid)
+
+        polygon = navmesh.polygons[0]
+
+        # 3 лицевые грани + 2 боковые (между ступеньками) = 5 квадов = 10 треугольников
+        self.assertEqual(len(polygon.triangles), 10)
 
         # Проверяем что нет дублирующихся рёбер
         edge_count = {}
@@ -279,6 +304,22 @@ class VoxelFaceMeshTest(unittest.TestCase):
 
         for edge, count in edge_count.items():
             self.assertIn(count, [1, 2], f"Edge {edge} has {count} triangles")
+
+    def test_no_side_faces_same_level(self):
+        """Соседи на том же уровне не генерируют боковые грани."""
+        grid = VoxelGrid(cell_size=1.0)
+        # Три вокселя в ряд на одном уровне
+        for i in range(3):
+            grid.set(i, 0, 0, 2)
+            grid.add_surface_normal(i, 0, 0, np.array([0, 0, 1]))
+
+        builder = PolygonBuilder()
+        navmesh = builder.build(grid)
+
+        polygon = navmesh.polygons[0]
+
+        # Только 3 лицевые грани = 6 треугольников (без боковых)
+        self.assertEqual(len(polygon.triangles), 6)
 
     def test_no_holes_in_mesh(self):
         """Меш не должен иметь дыр — все boundary рёбра образуют замкнутый контур."""

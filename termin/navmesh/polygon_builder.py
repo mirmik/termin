@@ -464,9 +464,83 @@ class PolygonBuilder:
                 quad_indices.append(get_or_add_vertex(pos))
             quads.append((quad_indices, face_normal))
 
-        # TODO: Замыкающие (боковые) грани на ступеньках — отключены пока
-        # Проблема: текущая логика создаёт дублирующиеся грани
-        # Нужен более сложный алгоритм для корректного замыкания
+        # 2. Генерируем замыкающие (боковые) грани на ступеньках
+        # Логика: кубик рисует боковые грани только к соседям в ярусе НИЖЕ него
+        # (соседи выше сами нарисуют грани к нему)
+        # "Нижний ярус" = смещение по dominant_axis в направлении -axis_sign
+        lower_level_offset = -axis_sign
+
+        # Направления для 4 соседей в нижнем ярусе (по other_axes)
+        # side_directions[i] = (смещение по other_axes[0], смещение по other_axes[1])
+        side_directions = [
+            (1, 0),   # +other_axes[0]
+            (-1, 0),  # -other_axes[0]
+            (0, 1),   # +other_axes[1]
+            (0, -1),  # -other_axes[1]
+        ]
+
+        for vx, vy, vz in voxels:
+            voxel_coord = [vx, vy, vz]
+
+            for dir_0, dir_1 in side_directions:
+                # Координата соседа в нижнем ярусе
+                neighbor_coord = list(voxel_coord)
+                neighbor_coord[dominant_axis] += lower_level_offset
+                neighbor_coord[other_axes[0]] += dir_0
+                neighbor_coord[other_axes[1]] += dir_1
+                neighbor = tuple(neighbor_coord)
+
+                # Если сосед существует — рисуем боковую грань
+                if neighbor not in voxel_set:
+                    continue
+
+                # Боковая грань соединяет верхние края лицевых граней
+                # Текущий воксель: лицевая грань на dominant_axis + face_offset
+                # Сосед: лицевая грань на (dominant_axis + lower_level_offset) + face_offset
+                #      = dominant_axis + lower_level_offset + face_offset
+
+                # Определяем какую боковую грань рисовать
+                # Если dir_0 != 0, грань перпендикулярна other_axes[0]
+                # Если dir_1 != 0, грань перпендикулярна other_axes[1]
+                if dir_0 != 0:
+                    side_axis = other_axes[0]
+                    side_dir = dir_0
+                    edge_axis = other_axes[1]
+                else:
+                    side_axis = other_axes[1]
+                    side_dir = dir_1
+                    edge_axis = other_axes[0]
+
+                # Позиция боковой грани по side_axis
+                side_pos = voxel_coord[side_axis] + (1 if side_dir > 0 else 0)
+
+                # Диапазон по dominant_axis: от верха соседа до верха текущего
+                # Верх текущего = voxel_coord[dominant_axis] + face_offset
+                # Верх соседа = neighbor_coord[dominant_axis] + face_offset
+                #             = voxel_coord[dominant_axis] + lower_level_offset + face_offset
+                d_top = voxel_coord[dominant_axis] + face_offset
+                d_bottom = voxel_coord[dominant_axis] + lower_level_offset + face_offset
+
+                # 4 угла боковой грани
+                voxel_origin = origin + np.array(voxel_coord, dtype=np.float32) * cell_size
+                side_corners = []
+
+                for d_val in [d_bottom, d_top]:
+                    for e_val in [0, 1]:
+                        corner = [0.0, 0.0, 0.0]
+                        corner[side_axis] = side_pos - voxel_coord[side_axis]
+                        corner[dominant_axis] = d_val - voxel_coord[dominant_axis]
+                        corner[edge_axis] = e_val
+                        pos = voxel_origin + np.array(corner, dtype=np.float32) * cell_size
+                        side_corners.append(get_or_add_vertex(pos))
+
+                # Нормаль боковой грани — в направлении side_dir по side_axis
+                side_normal = np.zeros(3, dtype=np.float32)
+                side_normal[side_axis] = side_dir
+
+                # Порядок вершин (будет скорректирован при триангуляции)
+                quad_indices = [side_corners[0], side_corners[1], side_corners[2], side_corners[3]]
+                quads.append((quad_indices, side_normal))
 
         if not vertices or not quads:
             return None
