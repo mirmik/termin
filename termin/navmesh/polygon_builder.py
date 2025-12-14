@@ -470,12 +470,14 @@ class PolygonBuilder:
         if retriangulate and polygon.outer_contour is not None:
             # Получаем координаты упрощённого контура
             contour_coords = points_2d[polygon.outer_contour]
+            expected_triangles = len(contour_coords) - 2
 
             if len(contour_coords) >= 3:
                 # Ear clipping триангуляция
                 new_tris = self._ear_clipping(contour_coords)
 
-                if len(new_tris) > 0:
+                # Проверяем, что ear clipping дал ожидаемое число треугольников
+                if len(new_tris) == expected_triangles:
                     # Конвертируем вершины контура в 3D
                     new_verts_3d = (
                         centroid +
@@ -488,6 +490,9 @@ class PolygonBuilder:
                     # Контуры больше не валидны — индексы изменились
                     polygon.outer_contour = None
                     polygon.holes = []
+                else:
+                    # Ear clipping не справился — оставляем исходные треугольники
+                    print(f"Ear clipping failed: got {len(new_tris)}, expected {expected_triangles}")
 
         return polygon
 
