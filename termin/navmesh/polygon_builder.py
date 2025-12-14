@@ -116,33 +116,17 @@ class PolygonBuilder:
             "built": 0,
         }
 
-        # Используем face-based mesh для базовых стадий (без сшивки и контуров)
-        use_face_mesh = not stitch_polygons and not extract_contours and not retriangulate
-
         for region_idx, (region_voxels, region_normal) in enumerate(regions):
             if len(region_voxels) < self.config.min_region_voxels:
                 stats["skipped_small"] += 1
                 continue
 
-            if use_face_mesh:
-                polygon = self._build_polygon_from_faces(
-                    region_voxels,
-                    region_normal,
-                    grid,
-                    current_region_idx=region_idx,
-                )
-            else:
-                polygon = self._build_polygon(
-                    region_voxels,
-                    region_normal,
-                    grid,
-                    voxel_to_regions=voxel_to_regions if stitch_polygons else None,
-                    region_planes=region_planes if stitch_polygons else None,
-                    current_region_idx=region_idx,
-                    extract_contours=extract_contours,
-                    simplify_contours=simplify_contours,
-                    retriangulate=retriangulate,
-                )
+            polygon = self._build_polygon_from_faces(
+                region_voxels,
+                region_normal,
+                grid,
+                current_region_idx=region_idx,
+            )
             if polygon is not None:
                 polygons.append(polygon)
                 stats["built"] += 1
