@@ -14,12 +14,10 @@ uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
 
-out vec3 v_local_pos;  // Position in mesh local space
 out vec3 v_world_pos;
 out vec3 v_normal;
 
 void main() {
-    v_local_pos = a_position;
     vec4 world = u_model * vec4(a_position, 1.0);
     v_world_pos = world.xyz;
     v_normal = mat3(transpose(inverse(u_model))) * a_normal;
@@ -29,7 +27,6 @@ void main() {
 
 VOXEL_FRAGMENT_SHADER = """#version 330 core
 
-in vec3 v_local_pos;  // Position in mesh space
 in vec3 v_world_pos;
 in vec3 v_normal;
 
@@ -38,7 +35,7 @@ uniform vec4 u_color_below;
 uniform vec4 u_color_above;
 uniform vec3 u_slice_axis;      // slice axis in entity local space
 uniform float u_fill_percent;   // 0.0 - 1.0
-uniform vec3 u_bounds_min;      // bounds in mesh space
+uniform vec3 u_bounds_min;      // bounds in mesh space (before model transform)
 uniform vec3 u_bounds_max;
 
 // Basic lighting
@@ -49,16 +46,18 @@ uniform float u_ambient_intensity;
 out vec4 FragColor;
 
 void main() {
-    // Transform slice_axis from entity local space to mesh space
-    vec3 slice_axis = normalize(mat3(u_model) * u_slice_axis);
+    // Transform everything to world space
+    vec3 world_bounds_min = (u_model * vec4(u_bounds_min, 1.0)).xyz;
+    vec3 world_bounds_max = (u_model * vec4(u_bounds_max, 1.0)).xyz;
+    vec3 world_slice_axis = normalize(mat3(u_model) * u_slice_axis);
 
-    // Project bounds onto slice axis to get min/max along that axis
-    float axis_min = dot(u_bounds_min, slice_axis);
-    float axis_max = dot(u_bounds_max, slice_axis);
+    // Project bounds onto slice axis
+    float axis_min = dot(world_bounds_min, world_slice_axis);
+    float axis_max = dot(world_bounds_max, world_slice_axis);
     float axis_range = axis_max - axis_min;
 
-    // Project current position onto slice axis
-    float pos_on_axis = dot(v_local_pos, slice_axis);
+    // Project current world position onto slice axis
+    float pos_on_axis = dot(v_world_pos, world_slice_axis);
 
     // Normalize position to 0-1 range along axis
     float normalized_pos = 0.5;
@@ -72,8 +71,7 @@ void main() {
     }
 
     // Choose color based on position relative to threshold
-    // Below threshold: color_below, near threshold: blend to color_above
-    float blend_zone = 0.05;  // 5% blend zone near threshold
+    float blend_zone = 0.05;
     float blend_start = u_fill_percent - blend_zone;
 
     vec4 base_color;
@@ -86,7 +84,7 @@ void main() {
 
     // Simple Lambert diffuse lighting
     vec3 N = normalize(v_normal);
-    vec3 light_dir = normalize(vec3(0.5, 0.8, 1.0));  // Fixed light direction
+    vec3 light_dir = normalize(vec3(0.5, 0.8, 1.0));
     float ndotl = max(dot(N, light_dir), 0.0);
 
     vec3 ambient = u_ambient_color * u_ambient_intensity;
