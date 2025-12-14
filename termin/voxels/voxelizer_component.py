@@ -119,9 +119,9 @@ class VoxelizerComponent(Component):
             path="contour_epsilon",
             label="Contour Epsilon",
             kind="float",
-            min=0.01,
+            min=0.001,
             max=1.0,
-            step=0.01,
+            step=0.001,
         ),
         "build_navmesh_btn": InspectField(
             label="Build NavMesh",
