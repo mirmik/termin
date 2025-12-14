@@ -244,24 +244,6 @@ class VoxelDisplayComponent(Component):
         if self._mesh_drawable is None:
             return
 
-        mat = self._get_or_create_material()
-
-        # Загружаем uniforms напрямую в шейдер
-        for phase in mat.phases:
-            shader = phase.shader_programm
-            # Убеждаемся что шейдер скомпилирован и активируем его
-            shader.ensure_ready(context.graphics)
-            shader.use()
-            shader.set_uniform_vec4("u_color_below", np.array(self.color_below, dtype=np.float32))
-            shader.set_uniform_vec4("u_color_above", np.array(self.color_above, dtype=np.float32))
-            shader.set_uniform_vec3("u_slice_axis", np.array(self.slice_axis, dtype=np.float32))
-            shader.set_uniform_float("u_fill_percent", self.fill_percent / 100.0)
-            shader.set_uniform_vec3("u_bounds_min", self._bounds_min)
-            shader.set_uniform_vec3("u_bounds_max", self._bounds_max)
-            # Ambient lighting
-            shader.set_uniform_vec3("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
-            shader.set_uniform_float("u_ambient_intensity", 0.4)
-
         self._mesh_drawable.draw(context)
 
     def _check_hot_reload(self) -> None:
@@ -278,6 +260,18 @@ class VoxelDisplayComponent(Component):
             result = list(mat.phases)
         else:
             result = [p for p in mat.phases if p.phase_mark == phase_mark]
+
+        # Обновляем uniforms перед возвратом фаз
+        # (ColorPass вызовет phase.apply() который загрузит их в GPU)
+        for phase in result:
+            phase.uniforms["u_color_below"] = np.array(self.color_below, dtype=np.float32)
+            phase.uniforms["u_color_above"] = np.array(self.color_above, dtype=np.float32)
+            phase.uniforms["u_slice_axis"] = np.array(self.slice_axis, dtype=np.float32)
+            phase.uniforms["u_fill_percent"] = self.fill_percent / 100.0
+            phase.uniforms["u_bounds_min"] = self._bounds_min
+            phase.uniforms["u_bounds_max"] = self._bounds_max
+            phase.uniforms["u_ambient_color"] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+            phase.uniforms["u_ambient_intensity"] = 0.4
 
         result.sort(key=lambda p: p.priority)
         return result
