@@ -3,6 +3,7 @@ VoxelDisplayComponent — компонент для отображения во�
 
 Реализует протокол Drawable и рендерит воксели напрямую.
 Выбирает сетку из ResourceManager через комбобокс.
+Использует VoxelGridHandle для поддержки hot-reload.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import numpy as np
 from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
 
@@ -94,6 +96,7 @@ class VoxelDisplayComponent(Component):
 
     Реализует протокол Drawable — рендерит воксели напрямую без MeshRenderer.
     Выбирает сетку через комбобокс из зарегистрированных в ResourceManager.
+    Использует VoxelGridHandle для поддержки hot-reload.
     """
 
     inspect_fields = {
@@ -110,7 +113,8 @@ class VoxelDisplayComponent(Component):
     def __init__(self, voxel_grid_name: str = "") -> None:
         super().__init__()
         self._voxel_grid_name = voxel_grid_name
-        self._grid: Optional["VoxelGrid"] = None
+        self._grid_handle: VoxelGridHandle = VoxelGridHandle()
+        self._last_grid: Optional["VoxelGrid"] = None  # Для отслеживания изменений
         self._mesh_drawable: Optional[MeshDrawable] = None
         self._material = Material(
             color=(0.2, 0.6, 1.0, 0.7),
@@ -120,8 +124,8 @@ class VoxelDisplayComponent(Component):
 
     @property
     def voxel_grid(self) -> Optional["VoxelGrid"]:
-        """Текущая воксельная сетка."""
-        return self._grid
+        """Текущая воксельная сетка (через handle)."""
+        return self._grid_handle.get()
 
     @voxel_grid.setter
     def voxel_grid(self, value: Optional["VoxelGrid"]) -> None:
@@ -129,21 +133,29 @@ class VoxelDisplayComponent(Component):
 
     def set_voxel_grid(self, grid: Optional["VoxelGrid"]) -> None:
         """Установить воксельную сетку."""
-        if grid is self._grid:
-            return
-        self._grid = grid
-        if grid is not None:
-            self._voxel_grid_name = grid.name
-        else:
+        if grid is None:
+            self._grid_handle = VoxelGridHandle()
             self._voxel_grid_name = ""
+        else:
+            # Создаём handle по имени для поддержки hot-reload
+            name = grid.name
+            if name:
+                self._grid_handle = VoxelGridHandle.from_name(name)
+                self._voxel_grid_name = name
+            else:
+                self._grid_handle = VoxelGridHandle.from_grid(grid)
+                self._voxel_grid_name = ""
         self._needs_rebuild = True
 
     def set_voxel_grid_by_name(self, name: str) -> None:
         """Установить воксельную сетку по имени из ResourceManager."""
-        from termin.visualization.core.resources import ResourceManager
-        rm = ResourceManager.instance()
-        grid = rm.get_voxel_grid(name)
-        self.set_voxel_grid(grid)
+        if name:
+            self._grid_handle = VoxelGridHandle.from_name(name)
+            self._voxel_grid_name = name
+        else:
+            self._grid_handle = VoxelGridHandle()
+            self._voxel_grid_name = ""
+        self._needs_rebuild = True
 
     # --- Drawable protocol ---
 
@@ -182,10 +194,13 @@ class VoxelDisplayComponent(Component):
             self._mesh_drawable.delete()
             self._mesh_drawable = None
 
-        if self._grid is None:
+        grid = self._grid_handle.get()
+        self._last_grid = grid
+
+        if grid is None:
             return
 
-        voxel_count = self._grid.voxel_count
+        voxel_count = grid.voxel_count
         if voxel_count == 0:
             return
 
@@ -199,15 +214,15 @@ class VoxelDisplayComponent(Component):
         triangles = np.zeros((voxel_count * TRIS_PER_CUBE, 3), dtype=np.int32)
         normals = np.zeros((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
 
-        cell_size = self._grid.cell_size
+        cell_size = grid.cell_size
         idx = 0
 
-        for vx, vy, vz, vtype in self._grid.iter_non_empty():
+        for vx, vy, vz, vtype in grid.iter_non_empty():
             if idx >= MAX_VOXELS:
                 break
 
             # Позиция центра вокселя
-            center = self._grid.voxel_to_world(vx, vy, vz)
+            center = grid.voxel_to_world(vx, vy, vz)
 
             # Смещаем и масштабируем вершины куба
             v_start = idx * VERTS_PER_CUBE
@@ -254,7 +269,12 @@ class VoxelDisplayComponent(Component):
             self._mesh_drawable = None
 
     def update(self, dt: float) -> None:
-        """Обновить меш если нужно."""
+        """Обновить меш если нужно или если grid изменился (hot-reload)."""
+        # Проверяем hot-reload: grid в keeper мог измениться
+        current_grid = self._grid_handle.get()
+        if current_grid is not self._last_grid:
+            self._needs_rebuild = True
+
         if self._needs_rebuild:
             self._rebuild_mesh()
             self._needs_rebuild = False

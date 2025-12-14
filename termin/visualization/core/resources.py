@@ -101,6 +101,9 @@ class ResourceManager:
         # TextureKeeper'ы — владельцы текстур по имени
         self._texture_keepers: Dict[str, "TextureKeeper"] = {}
 
+        # VoxelGridKeeper'ы — владельцы воксельных сеток по имени
+        self._voxel_grid_keepers: Dict[str, "VoxelGridKeeper"] = {}
+
     @classmethod
     def instance(cls) -> "ResourceManager":
         if cls._instance is None:
@@ -350,20 +353,45 @@ class ResourceManager:
         if name in self.meshes:
             del self.meshes[name]
 
-    # --------- Воксельные сетки ---------
-    def register_voxel_grid(self, name: str, grid: "VoxelGrid") -> None:
+    # --------- VoxelGridKeeper'ы ---------
+    def get_or_create_voxel_grid_keeper(self, name: str) -> "VoxelGridKeeper":
         """
-        Регистрирует воксельную сетку.
+        Получить или создать VoxelGridKeeper по имени.
+
+        Используется VoxelGridHandle для получения keeper'а.
+        """
+        from termin.visualization.core.voxel_grid_handle import VoxelGridKeeper
+
+        if name not in self._voxel_grid_keepers:
+            self._voxel_grid_keepers[name] = VoxelGridKeeper(name)
+        return self._voxel_grid_keepers[name]
+
+    def get_voxel_grid_keeper(self, name: str) -> Optional["VoxelGridKeeper"]:
+        """Получить VoxelGridKeeper по имени или None."""
+        return self._voxel_grid_keepers.get(name)
+
+    # --------- Воксельные сетки ---------
+    def register_voxel_grid(self, name: str, grid: "VoxelGrid", source_path: str | None = None) -> None:
+        """
+        Регистрирует воксельную сетку через keeper.
 
         Args:
             name: Имя сетки
             grid: VoxelGrid
+            source_path: Путь к файлу-источнику
         """
         grid.name = name
+        keeper = self.get_or_create_voxel_grid_keeper(name)
+        keeper.set_grid(grid, source_path)
+
+        # Для обратной совместимости сохраняем и в старый dict
         self.voxel_grids[name] = grid
 
     def get_voxel_grid(self, name: str) -> Optional["VoxelGrid"]:
         """Получить воксельную сетку по имени."""
+        keeper = self._voxel_grid_keepers.get(name)
+        if keeper is not None:
+            return keeper.grid
         return self.voxel_grids.get(name)
 
     def list_voxel_grid_names(self) -> list[str]:
@@ -379,6 +407,10 @@ class ResourceManager:
 
     def unregister_voxel_grid(self, name: str) -> None:
         """Удаляет воксельную сетку."""
+        keeper = self._voxel_grid_keepers.get(name)
+        if keeper is not None:
+            keeper.clear()
+            del self._voxel_grid_keepers[name]
         if name in self.voxel_grids:
             del self.voxel_grids[name]
 
