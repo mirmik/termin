@@ -146,7 +146,6 @@ class VoxelizerComponent(Component):
         navmesh_output_path: str = "",
         normal_angle: float = 25.0,
         navmesh_stage: NavMeshStage = NavMeshStage.REGIONS_BASIC,
-        decimation_ratio: float = 0.5,
         contour_epsilon: float = 0.1,
     ) -> None:
         super().__init__()
@@ -157,7 +156,6 @@ class VoxelizerComponent(Component):
         self.navmesh_output_path = navmesh_output_path
         self.normal_angle = normal_angle
         self.navmesh_stage = navmesh_stage
-        self.decimation_ratio = decimation_ratio
         self.contour_epsilon = contour_epsilon
         self._last_voxel_count: int = 0
 
@@ -329,7 +327,6 @@ class VoxelizerComponent(Component):
         stage = self.navmesh_stage
         expand_regions = stage >= NavMeshStage.REGIONS_EXPANDED
         stitch_polygons = stage >= NavMeshStage.STITCHED
-        decimate = stage >= NavMeshStage.DECIMATED
         extract_contours = stage >= NavMeshStage.WITH_CONTOURS
         simplify_contours = stage >= NavMeshStage.SIMPLIFIED
         retriangulate = False  # TODO: ear clipping
@@ -338,8 +335,6 @@ class VoxelizerComponent(Component):
             grid,
             expand_regions=expand_regions,
             stitch_polygons=stitch_polygons,
-            decimate=decimate,
-            decimation_ratio=self.decimation_ratio,
             extract_contours=extract_contours,
             simplify_contours=simplify_contours,
             retriangulate=retriangulate,
