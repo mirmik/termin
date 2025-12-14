@@ -483,6 +483,14 @@ class PolygonBuilder:
             voxel_coord = [vx, vy, vz]
 
             for dir_0, dir_1 in side_directions:
+                # Проверяем, есть ли сосед на том же уровне в этом направлении
+                # Если есть — он сам нарисует боковую грань к соседу снизу
+                same_level_neighbor = list(voxel_coord)
+                same_level_neighbor[other_axes[0]] += dir_0
+                same_level_neighbor[other_axes[1]] += dir_1
+                if tuple(same_level_neighbor) in voxel_set:
+                    continue
+
                 # Координата соседа в нижнем ярусе
                 neighbor_coord = list(voxel_coord)
                 neighbor_coord[dominant_axis] += lower_level_offset
@@ -490,7 +498,7 @@ class PolygonBuilder:
                 neighbor_coord[other_axes[1]] += dir_1
                 neighbor = tuple(neighbor_coord)
 
-                # Если сосед существует — рисуем боковую грань
+                # Если сосед в нижнем ярусе существует — рисуем боковую грань
                 if neighbor not in voxel_set:
                     continue
 
