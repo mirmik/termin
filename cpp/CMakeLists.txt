@@ -61,4 +61,4 @@ target_compile_options(_voxels_native PRIVATE
 install(TARGETS _geom_native DESTINATION ${CMAKE_INSTALL_PREFIX}/geombase)
 install(TARGETS _colliders_native DESTINATION ${CMAKE_INSTALL_PREFIX}/colliders)
 install(TARGETS _physics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/physics)
-install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/termin/voxels)
+install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/voxels)
