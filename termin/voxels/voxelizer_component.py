@@ -4,6 +4,7 @@ VoxelizerComponent — компонент для вокселизации меш
 
 from __future__ import annotations
 
+from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -12,6 +13,15 @@ from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
+
+
+class VoxelizeMode(IntEnum):
+    """Режимы вокселизации (стадии пайплайна)."""
+    SHELL = 0           # Только поверхность меша
+    FILLED = 1          # Поверхность + заполнение внутри
+    MARKED = 2          # Заполнение + пометка поверхности (SOLID + SURFACE)
+    SURFACE_ONLY = 3    # Только поверхность (внутренние удалены)
+    FULL_GRID = 4       # Заполнить всю сетку (без вокселизации меша)
 
 
 def _voxelize_action(component: "VoxelizerComponent") -> None:
@@ -42,15 +52,17 @@ class VoxelizerComponent(Component):
             max=10.0,
             step=0.001,
         ),
-        "fill_interior": InspectField(
-            path="fill_interior",
-            label="Fill Interior",
-            kind="bool",
-        ),
-        "extract_surface": InspectField(
-            path="extract_surface",
-            label="Extract Surface",
-            kind="bool",
+        "voxelize_mode": InspectField(
+            path="voxelize_mode",
+            label="Mode",
+            kind="enum",
+            choices=[
+                (VoxelizeMode.SHELL, "Shell (surface only)"),
+                (VoxelizeMode.FILLED, "Filled (interior)"),
+                (VoxelizeMode.MARKED, "Marked (surface tagged)"),
+                (VoxelizeMode.SURFACE_ONLY, "Surface Only (interior removed)"),
+                (VoxelizeMode.FULL_GRID, "Full Grid (fill bounds)"),
+            ],
         ),
         "output_path": InspectField(
             path="output_path",
@@ -65,22 +77,20 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "fill_interior", "extract_surface"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode"]
 
     def __init__(
         self,
         grid_name: str = "",
         cell_size: float = 0.25,
         output_path: str = "",
-        fill_interior: bool = False,
-        extract_surface: bool = False,
+        voxelize_mode: VoxelizeMode = VoxelizeMode.SHELL,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
         self.cell_size = cell_size
         self.output_path = output_path
-        self.fill_interior = fill_interior
-        self.extract_surface = extract_surface
+        self.voxelize_mode = voxelize_mode
         self._last_voxel_count: int = 0
 
     def voxelize(self) -> bool:
@@ -93,8 +103,9 @@ class VoxelizerComponent(Component):
         from termin.visualization.render.components import MeshRenderer
         from termin.visualization.core.resources import ResourceManager
         from termin.voxels.grid import VoxelGrid
-        from termin.voxels.voxelizer import MeshVoxelizer
+        from termin.voxels.voxelizer import MeshVoxelizer, VOXEL_SOLID, VOXEL_SURFACE
         from termin.voxels.persistence import VoxelPersistence
+        import numpy as np
 
         if self.entity is None:
             print("VoxelizerComponent: no entity")
@@ -134,25 +145,53 @@ class VoxelizerComponent(Component):
         if not output.endswith(".voxels"):
             output += ".voxels"
 
-        # Вокселизируем меш в локальных координатах (без трансформа)
+        # Создаём пустую сетку
         grid = VoxelGrid(origin=(0, 0, 0), cell_size=self.cell_size, name=name)
-        voxelizer = MeshVoxelizer(grid)
 
-        # Вокселизируем без трансформа — в локальной СК меша
-        voxelizer.voxelize_mesh(mesh, transform_matrix=None)
+        mode = self.voxelize_mode
 
-        # Заполняем внутреннее пространство если включено
-        if self.fill_interior:
-            filled = grid.fill_interior()
-            print(f"VoxelizerComponent: filled {filled} interior voxels")
+        if mode == VoxelizeMode.FULL_GRID:
+            # Режим заполнения всей сетки — вычисляем bounds меша и заполняем
+            vertices = mesh.vertices
+            if vertices is None or len(vertices) == 0:
+                print("VoxelizerComponent: mesh has no vertices")
+                return False
 
-        # Помечаем поверхность и удаляем внутренние если включено
-        if self.extract_surface:
-            from termin.voxels.voxelizer import VOXEL_SOLID, VOXEL_SURFACE
-            marked = grid.mark_surface(VOXEL_SURFACE)
-            print(f"VoxelizerComponent: marked {marked} surface voxels")
-            cleared = grid.clear_by_type(VOXEL_SOLID)
-            print(f"VoxelizerComponent: cleared {cleared} interior voxels")
+            mesh_min = vertices.min(axis=0)
+            mesh_max = vertices.max(axis=0)
+
+            # Преобразуем в индексы вокселей
+            voxel_min = grid.world_to_voxel(mesh_min)
+            voxel_max = grid.world_to_voxel(mesh_max)
+
+            # Заполняем все воксели в bounds
+            fill_count = 0
+            for vx in range(voxel_min[0], voxel_max[0] + 1):
+                for vy in range(voxel_min[1], voxel_max[1] + 1):
+                    for vz in range(voxel_min[2], voxel_max[2] + 1):
+                        grid.set(vx, vy, vz, VOXEL_SOLID)
+                        fill_count += 1
+            print(f"VoxelizerComponent: filled {fill_count} voxels in bounds")
+        else:
+            # Стадия 1: Вокселизируем меш (поверхность)
+            voxelizer = MeshVoxelizer(grid)
+            voxelizer.voxelize_mesh(mesh, transform_matrix=None)
+            print(f"VoxelizerComponent: voxelized mesh, {grid.voxel_count} surface voxels")
+
+            # Стадия 2: Заполняем внутреннее пространство (FILLED и выше)
+            if mode >= VoxelizeMode.FILLED:
+                filled = grid.fill_interior()
+                print(f"VoxelizerComponent: filled {filled} interior voxels")
+
+            # Стадия 3: Помечаем поверхность (MARKED и выше)
+            if mode >= VoxelizeMode.MARKED:
+                marked = grid.mark_surface(VOXEL_SURFACE)
+                print(f"VoxelizerComponent: marked {marked} surface voxels")
+
+            # Стадия 4: Удаляем внутренние (SURFACE_ONLY)
+            if mode >= VoxelizeMode.SURFACE_ONLY:
+                cleared = grid.clear_by_type(VOXEL_SOLID)
+                print(f"VoxelizerComponent: cleared {cleared} interior voxels")
 
         self._last_voxel_count = grid.voxel_count
 
@@ -186,10 +225,24 @@ class VoxelizerComponent(Component):
     @classmethod
     def deserialize(cls, data: dict, context) -> "VoxelizerComponent":
         """Десериализовать компонент."""
+        # Поддержка старого формата с fill_interior/extract_surface
+        mode_value = data.get("voxelize_mode")
+        if mode_value is None:
+            # Конвертируем старые флаги в новый режим
+            fill_interior = data.get("fill_interior", False)
+            extract_surface = data.get("extract_surface", False)
+            if extract_surface:
+                mode_value = VoxelizeMode.SURFACE_ONLY
+            elif fill_interior:
+                mode_value = VoxelizeMode.FILLED
+            else:
+                mode_value = VoxelizeMode.SHELL
+        else:
+            mode_value = VoxelizeMode(mode_value)
+
         return cls(
             grid_name=data.get("grid_name", ""),
             cell_size=data.get("cell_size", 0.25),
             output_path=data.get("output_path", ""),
-            fill_interior=data.get("fill_interior", False),
-            extract_surface=data.get("extract_surface", False),
+            voxelize_mode=mode_value,
         )

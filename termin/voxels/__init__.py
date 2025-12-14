@@ -20,7 +20,7 @@ from termin.voxels.persistence import (
     VoxelPersistence,
     VOXEL_FILE_EXTENSION,
 )
-from termin.voxels.voxelizer_component import VoxelizerComponent
+from termin.voxels.voxelizer_component import VoxelizerComponent, VoxelizeMode
 from termin.voxels.display_component import VoxelDisplayComponent
 from termin.voxels.voxel_shader import voxel_display_shader
 
@@ -34,6 +34,7 @@ __all__ = [
     "voxelize_scene",
     "VoxelPersistence",
     "VoxelizerComponent",
+    "VoxelizeMode",
     "VoxelDisplayComponent",
     "CHUNK_SIZE",
     "VOXEL_EMPTY",
