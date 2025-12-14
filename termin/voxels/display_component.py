@@ -218,6 +218,7 @@ class VoxelDisplayComponent(Component):
 
     def set_voxel_grid(self, grid: Optional["VoxelGrid"]) -> None:
         """Установить воксельную сетку."""
+        print(f"[VoxelDisplayComponent.set_voxel_grid] grid={grid}, type={type(grid)}")
         if grid is None:
             self._grid_handle = VoxelGridHandle()
             self._voxel_grid_name = ""

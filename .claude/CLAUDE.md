@@ -1,5 +1,9 @@
 # Project Rules
 
+## Debugging
+
+Debug prints are allowed for investigating issues.
+
 ## Code Style
 
 ### No Speculative Code
