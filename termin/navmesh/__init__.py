@@ -11,6 +11,7 @@ NavMesh generation from voxel grids.
 from termin.navmesh.types import NavPolygon, NavMesh, NavMeshConfig
 from termin.navmesh.polygon_builder import PolygonBuilder
 from termin.navmesh.persistence import NavMeshPersistence
+from termin.navmesh.display_component import NavMeshDisplayComponent
 
 __all__ = [
     "NavPolygon",
@@ -18,4 +19,5 @@ __all__ = [
     "NavMeshConfig",
     "PolygonBuilder",
     "NavMeshPersistence",
+    "NavMeshDisplayComponent",
 ]

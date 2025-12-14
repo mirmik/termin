@@ -38,6 +38,8 @@ _BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     # Воксели
     ("termin.voxels.voxelizer_component", "VoxelizerComponent"),
     ("termin.voxels.display_component", "VoxelDisplayComponent"),
+    # NavMesh
+    ("termin.navmesh.display_component", "NavMeshDisplayComponent"),
 ]
 
 # Список встроенных FramePass'ов для предрегистрации.
