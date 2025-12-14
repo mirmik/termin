@@ -592,11 +592,12 @@ class InspectFieldPanel(QWidget):
             return self._resources.get_voxel_grid(name)
 
         if isinstance(w, QComboBox) and field.kind == "navmesh":
+            if self._resources is None:
+                return None
             name = w.currentText()
             if not name:
                 return None
-            # Возвращаем имя, а не объект — компонент сам получит navmesh по имени
-            return name
+            return self._resources.get_navmesh(name)
 
         if isinstance(w, QComboBox) and field.kind == "enum":
             if field.choices:

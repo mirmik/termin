@@ -115,12 +115,10 @@ class NavMeshDisplayComponent(Component):
                 self._navmesh_handle = NavMeshHandle()
             self._needs_rebuild = True
 
-    def _set_navmesh(self, value) -> None:
-        """Установить NavMesh (объект, имя или None)."""
+    def _set_navmesh(self, value: "NavMesh") -> None:
+        """Установить NavMesh (объект или None)."""
         if value is None:
             self.navmesh_name = ""
-        elif isinstance(value, str):
-            self.navmesh_name = value
         elif hasattr(value, "name"):
             self.navmesh_name = value.name
         else:
