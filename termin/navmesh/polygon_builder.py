@@ -54,8 +54,6 @@ class PolygonBuilder:
         grid: VoxelGrid,
         expand_regions: bool = True,
         stitch_polygons: bool = False,
-        decimate: bool = False,
-        decimation_ratio: float = 0.5,
         extract_contours: bool = False,
         simplify_contours: bool = False,
         retriangulate: bool = False,
@@ -67,8 +65,6 @@ class PolygonBuilder:
             grid: Воксельная сетка с поверхностными вокселями и нормалями.
             expand_regions: Расширять регионы (шаг 2.5).
             stitch_polygons: Сшивать полигоны через plane intersections.
-            decimate: Упрощать меш через edge collapse.
-            decimation_ratio: Целевое соотношение треугольников (0.5 = 50%).
             extract_contours: Извлекать контуры из треугольников (шаги 7-9).
             simplify_contours: Упрощать контуры Douglas-Peucker (шаг 10).
             retriangulate: Перетриангулировать через ear clipping (шаги 11-12).
@@ -124,8 +120,6 @@ class PolygonBuilder:
                 voxel_to_regions=voxel_to_regions if stitch_polygons else None,
                 region_planes=region_planes if stitch_polygons else None,
                 current_region_idx=region_idx,
-                decimate=decimate,
-                decimation_ratio=decimation_ratio,
                 extract_contours=extract_contours,
                 simplify_contours=simplify_contours,
                 retriangulate=retriangulate,
@@ -392,8 +386,6 @@ class PolygonBuilder:
         voxel_to_regions: dict[tuple[int, int, int], list[int]] | None = None,
         region_planes: list[tuple[np.ndarray, np.ndarray]] | None = None,
         current_region_idx: int = 0,
-        decimate: bool = False,
-        decimation_ratio: float = 0.5,
         extract_contours: bool = False,
         simplify_contours: bool = False,
         retriangulate: bool = False,
@@ -438,15 +430,6 @@ class PolygonBuilder:
         # Шаг 6: Alpha Shape (Delaunay + фильтрация)
         alpha = cell_size * 1.5  # Немного больше диагонали вокселя
         triangles_2d = self._alpha_shape(points_2d, alpha)
-
-        if len(triangles_2d) == 0:
-            return None
-
-        # Шаг 6.5: Edge Collapse (опционально)
-        if decimate and len(triangles_2d) > 3:
-            points_2d, triangles_2d = self._decimate_mesh(
-                points_2d, triangles_2d, decimation_ratio
-            )
 
         if len(triangles_2d) == 0:
             return None
