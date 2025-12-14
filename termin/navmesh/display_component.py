@@ -242,12 +242,3 @@ class NavMeshDisplayComponent(Component):
         comp.wireframe = data.get("wireframe", False)
         comp.show_normals = data.get("show_normals", False)
         return comp
-
-    def serialize(self) -> dict:
-        """Сериализовать компонент."""
-        return {
-            "navmesh_name": self._navmesh_name,
-            "color": list(self.color),
-            "wireframe": self.wireframe,
-            "show_normals": self.show_normals,
-        }
