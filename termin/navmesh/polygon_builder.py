@@ -466,9 +466,27 @@ class PolygonBuilder:
                 for hole in polygon.holes
             ]
 
-        # Шаги 11-12: Перетриангуляция (TODO)
-        if retriangulate:
-            pass  # TODO: Bridge + Ear Clipping
+        # Шаги 11-12: Перетриангуляция через Voronoi
+        if retriangulate and polygon.outer_contour is not None:
+            voronoi_cell_size = self.config.voronoi_cell_size
+
+            # Voronoi-разбиение в 2D
+            new_verts_2d, new_tris = self._voronoi_decomposition(
+                polygon.outer_contour,
+                points_2d,
+                voronoi_cell_size,
+            )
+
+            if len(new_tris) > 0:
+                # Конвертируем обратно в 3D
+                new_verts_3d = (
+                    centroid +
+                    new_verts_2d[:, 0:1] * basis_u +
+                    new_verts_2d[:, 1:2] * basis_v
+                ).astype(np.float32)
+
+                polygon.vertices = new_verts_3d
+                polygon.triangles = new_tris
 
         return polygon
 
@@ -793,4 +811,240 @@ class PolygonBuilder:
             right = self._douglas_peucker(indices[max_idx:], coords, epsilon)
             # Объединяем (без дублирования средней точки)
             return left[:-1] + right
+
+    # =========== Voronoi Decomposition ===========
+
+    def _voronoi_decomposition(
+        self,
+        contour: list[int],
+        points_2d: np.ndarray,
+        cell_size: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Разбить регион на ячейки Вороного.
+
+        Args:
+            contour: Индексы вершин контура (CCW).
+            points_2d: 2D координаты вершин.
+            cell_size: Шаг сетки сидов.
+
+        Returns:
+            (vertices, triangles) — новые вершины и треугольники.
+        """
+        from scipy.spatial import Voronoi
+
+        # Получаем координаты контура
+        contour_points = points_2d[contour]
+
+        # Bounding box
+        min_xy = contour_points.min(axis=0)
+        max_xy = contour_points.max(axis=0)
+
+        # Расставляем сиды на сетке
+        seeds = self._place_seeds_on_grid(contour_points, min_xy, max_xy, cell_size)
+
+        if len(seeds) < 3:
+            # Слишком мало сидов — возвращаем исходный контур как один полигон
+            return self._triangulate_convex_polygon(contour_points)
+
+        # Добавляем далёкие точки для ограничения бесконечных рёбер
+        padding = max(max_xy[0] - min_xy[0], max_xy[1] - min_xy[1]) * 2
+        far_points = np.array([
+            [min_xy[0] - padding, min_xy[1] - padding],
+            [max_xy[0] + padding, min_xy[1] - padding],
+            [max_xy[0] + padding, max_xy[1] + padding],
+            [min_xy[0] - padding, max_xy[1] + padding],
+        ])
+        all_seeds = np.vstack([seeds, far_points])
+
+        # Вычисляем Voronoi
+        try:
+            vor = Voronoi(all_seeds)
+        except Exception:
+            return self._triangulate_convex_polygon(contour_points)
+
+        # Собираем ячейки и обрезаем по контуру
+        all_vertices: list[np.ndarray] = []
+        all_triangles: list[np.ndarray] = []
+        vertex_offset = 0
+
+        for i in range(len(seeds)):  # Только наши сиды, не far_points
+            region_idx = vor.point_region[i]
+            region = vor.regions[region_idx]
+
+            if -1 in region or len(region) < 3:
+                continue  # Бесконечная или вырожденная ячейка
+
+            # Вершины ячейки Вороного
+            cell_verts = vor.vertices[region]
+
+            # Обрезаем по контуру
+            clipped = self._clip_polygon_to_boundary(cell_verts, contour_points)
+
+            if len(clipped) < 3:
+                continue
+
+            # Триангулируем ячейку (fan triangulation для выпуклых)
+            cell_verts_arr, cell_tris = self._triangulate_convex_polygon(clipped)
+
+            # Добавляем со смещением индексов
+            all_vertices.append(cell_verts_arr)
+            all_triangles.append(cell_tris + vertex_offset)
+            vertex_offset += len(cell_verts_arr)
+
+        if not all_vertices:
+            return self._triangulate_convex_polygon(contour_points)
+
+        return np.vstack(all_vertices), np.vstack(all_triangles)
+
+    def _place_seeds_on_grid(
+        self,
+        contour: np.ndarray,
+        min_xy: np.ndarray,
+        max_xy: np.ndarray,
+        cell_size: float,
+    ) -> np.ndarray:
+        """
+        Расставить сиды на сетке внутри контура.
+
+        Returns:
+            Массив 2D координат сидов.
+        """
+        seeds = []
+
+        # Немного отступаем от границ
+        x = min_xy[0] + cell_size / 2
+        while x < max_xy[0]:
+            y = min_xy[1] + cell_size / 2
+            while y < max_xy[1]:
+                point = np.array([x, y])
+                if self._point_in_polygon(point, contour):
+                    seeds.append(point)
+                y += cell_size
+            x += cell_size
+
+        return np.array(seeds) if seeds else np.array([]).reshape(0, 2)
+
+    def _point_in_polygon(self, point: np.ndarray, polygon: np.ndarray) -> bool:
+        """
+        Проверить, находится ли точка внутри полигона (ray casting).
+        """
+        x, y = point
+        n = len(polygon)
+        inside = False
+
+        j = n - 1
+        for i in range(n):
+            xi, yi = polygon[i]
+            xj, yj = polygon[j]
+
+            if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):
+                inside = not inside
+
+            j = i
+
+        return inside
+
+    def _clip_polygon_to_boundary(
+        self,
+        polygon: np.ndarray,
+        boundary: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Обрезать полигон по границе (Sutherland-Hodgman).
+
+        Args:
+            polygon: Вершины обрезаемого полигона.
+            boundary: Вершины границы (CCW).
+
+        Returns:
+            Обрезанный полигон.
+        """
+        output = polygon.tolist()
+
+        for i in range(len(boundary)):
+            if len(output) < 3:
+                return np.array([]).reshape(0, 2)
+
+            input_list = output
+            output = []
+
+            # Ребро границы
+            edge_start = boundary[i]
+            edge_end = boundary[(i + 1) % len(boundary)]
+
+            for j in range(len(input_list)):
+                current = np.array(input_list[j])
+                previous = np.array(input_list[j - 1])
+
+                # Проверяем с какой стороны ребра находятся точки
+                curr_inside = self._is_left(edge_start, edge_end, current)
+                prev_inside = self._is_left(edge_start, edge_end, previous)
+
+                if curr_inside:
+                    if not prev_inside:
+                        # Входим в область — добавляем пересечение
+                        intersection = self._line_intersection(
+                            previous, current, edge_start, edge_end
+                        )
+                        if intersection is not None:
+                            output.append(intersection.tolist())
+                    output.append(current.tolist())
+                elif prev_inside:
+                    # Выходим из области — добавляем пересечение
+                    intersection = self._line_intersection(
+                        previous, current, edge_start, edge_end
+                    )
+                    if intersection is not None:
+                        output.append(intersection.tolist())
+
+        return np.array(output) if output else np.array([]).reshape(0, 2)
+
+    def _is_left(self, a: np.ndarray, b: np.ndarray, p: np.ndarray) -> bool:
+        """Проверить, находится ли точка p слева от линии a→b."""
+        return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) >= 0
+
+    def _line_intersection(
+        self,
+        p1: np.ndarray,
+        p2: np.ndarray,
+        p3: np.ndarray,
+        p4: np.ndarray,
+    ) -> np.ndarray | None:
+        """
+        Найти точку пересечения отрезков p1-p2 и p3-p4.
+        """
+        d1 = p2 - p1
+        d2 = p4 - p3
+        d3 = p3 - p1
+
+        cross = d1[0] * d2[1] - d1[1] * d2[0]
+
+        if abs(cross) < 1e-10:
+            return None
+
+        t = (d3[0] * d2[1] - d3[1] * d2[0]) / cross
+
+        return p1 + t * d1
+
+    def _triangulate_convex_polygon(
+        self,
+        vertices: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Триангулировать выпуклый полигон (fan triangulation).
+
+        Returns:
+            (vertices, triangles)
+        """
+        n = len(vertices)
+        if n < 3:
+            return vertices, np.array([]).reshape(0, 3).astype(np.int32)
+
+        # Fan triangulation от первой вершины
+        triangles = []
+        for i in range(1, n - 1):
+            triangles.append([0, i, i + 1])
+
+        return vertices.astype(np.float32), np.array(triangles, dtype=np.int32)
 

@@ -116,7 +116,7 @@ class VoxelizerComponent(Component):
                 (NavMeshStage.STITCHED, "3. Stitched (plane intersections)"),
                 (NavMeshStage.WITH_CONTOURS, "4. With Contours"),
                 (NavMeshStage.SIMPLIFIED, "5. Simplified (Douglas-Peucker)"),
-                (NavMeshStage.FINAL, "6. Final (Ear Clipping)"),
+                (NavMeshStage.FINAL, "6. Final (Voronoi)"),
             ],
         ),
         "contour_epsilon": InspectField(
@@ -127,6 +127,14 @@ class VoxelizerComponent(Component):
             max=1.0,
             step=0.001,
         ),
+        "voronoi_cell_size": InspectField(
+            path="voronoi_cell_size",
+            label="Voronoi Cell Size",
+            kind="float",
+            min=0.1,
+            max=10.0,
+            step=0.1,
+        ),
         "build_navmesh_btn": InspectField(
             label="Build NavMesh",
             kind="button",
@@ -135,7 +143,7 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "navmesh_stage", "contour_epsilon"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "navmesh_stage", "contour_epsilon", "voronoi_cell_size"]
 
     def __init__(
         self,
@@ -147,6 +155,7 @@ class VoxelizerComponent(Component):
         normal_angle: float = 25.0,
         navmesh_stage: NavMeshStage = NavMeshStage.REGIONS_BASIC,
         contour_epsilon: float = 0.1,
+        voronoi_cell_size: float = 1.0,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
@@ -157,6 +166,7 @@ class VoxelizerComponent(Component):
         self.normal_angle = normal_angle
         self.navmesh_stage = navmesh_stage
         self.contour_epsilon = contour_epsilon
+        self.voronoi_cell_size = voronoi_cell_size
         self._last_voxel_count: int = 0
 
     def voxelize(self) -> bool:
@@ -320,6 +330,7 @@ class VoxelizerComponent(Component):
         config = NavMeshConfig(
             normal_threshold=normal_threshold,
             contour_epsilon=self.contour_epsilon,
+            voronoi_cell_size=self.voronoi_cell_size,
         )
         builder = PolygonBuilder(config)
 
@@ -329,7 +340,7 @@ class VoxelizerComponent(Component):
         stitch_polygons = stage >= NavMeshStage.STITCHED
         extract_contours = stage >= NavMeshStage.WITH_CONTOURS
         simplify_contours = stage >= NavMeshStage.SIMPLIFIED
-        retriangulate = False  # TODO: ear clipping
+        retriangulate = stage >= NavMeshStage.FINAL
 
         navmesh = builder.build(
             grid,
@@ -391,4 +402,5 @@ class VoxelizerComponent(Component):
             normal_angle=data.get("normal_angle", 25.0),
             navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.REGIONS_BASIC)),
             contour_epsilon=data.get("contour_epsilon", 0.1),
+            voronoi_cell_size=data.get("voronoi_cell_size", 1.0),
         )
