@@ -126,6 +126,9 @@ class PolygonBuilder:
                 region_normal,
                 grid,
                 current_region_idx=region_idx,
+                extract_contours=extract_contours,
+                simplify_contours=simplify_contours,
+                retriangulate=retriangulate,
             )
             if polygon is not None:
                 polygons.append(polygon)
@@ -392,6 +395,9 @@ class PolygonBuilder:
         normal: np.ndarray,
         grid: VoxelGrid,
         current_region_idx: int = 0,
+        extract_contours: bool = False,
+        simplify_contours: bool = False,
+        retriangulate: bool = False,
     ) -> NavPolygon | None:
         """
         Построить полигон из граней вокселей (квадратно-гнездовая сетка).
@@ -601,12 +607,55 @@ class PolygonBuilder:
         vertices_3d = np.array(vertices, dtype=np.float32)
         triangles_arr = np.array(triangles, dtype=np.int32)
 
-        return NavPolygon(
+        polygon = NavPolygon(
             vertices=vertices_3d,
             triangles=triangles_arr,
             normal=normal,
             voxel_coords=voxels,
         )
+
+        # Извлечение контуров (если запрошено)
+        if extract_contours:
+            # Проецируем вершины в 2D для извлечения контуров
+            centroid = vertices_3d.mean(axis=0)
+            points_2d, basis_u, basis_v = self._project_to_2d(vertices_3d, normal, centroid)
+
+            outer, holes = self._extract_contours(triangles_arr, points_2d)
+            polygon.outer_contour = outer
+            polygon.holes = holes
+
+            # Упрощение контуров Douglas-Peucker
+            if simplify_contours and polygon.outer_contour:
+                epsilon = self.config.contour_epsilon
+                polygon.outer_contour = self._simplify_contour(
+                    polygon.outer_contour, points_2d, epsilon
+                )
+                polygon.holes = [
+                    self._simplify_contour(hole, points_2d, epsilon)
+                    for hole in polygon.holes
+                ]
+
+            # Перетриангуляция через Ear Clipping
+            if retriangulate and polygon.outer_contour:
+                contour_coords = points_2d[polygon.outer_contour]
+                if len(contour_coords) >= 3 and not self._is_self_intersecting(contour_coords):
+                    new_tris = self._ear_clipping(contour_coords)
+                    expected_triangles = len(contour_coords) - 2
+
+                    if len(new_tris) == expected_triangles:
+                        # Конвертируем вершины контура в 3D
+                        new_verts_3d = (
+                            centroid +
+                            contour_coords[:, 0:1] * basis_u +
+                            contour_coords[:, 1:2] * basis_v
+                        ).astype(np.float32)
+
+                        polygon.vertices = new_verts_3d
+                        polygon.triangles = new_tris
+                        polygon.outer_contour = None
+                        polygon.holes = []
+
+        return polygon
 
     def _build_polygon(
         self,
