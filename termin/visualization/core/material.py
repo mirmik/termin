@@ -63,6 +63,8 @@ class MaterialPhase:
         self.color = rgba_array
         self.uniforms["u_color"] = rgba_array
 
+    _DEBUG_APPLY = True  # Debug: log uniform uploads
+
     def apply(
         self,
         model: np.ndarray,
@@ -83,6 +85,8 @@ class MaterialPhase:
             self.shader_programm.set_uniform_int(uniform_name, unit)
 
         for name, value in self.uniforms.items():
+            if self._DEBUG_APPLY and name == "u_fill_percent":
+                print(f"[MaterialPhase.apply] {name}={value}")
             self.shader_programm.set_uniform_auto(name, value)
 
     def serialize(self) -> dict:
