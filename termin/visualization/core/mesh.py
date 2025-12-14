@@ -101,7 +101,13 @@ class MeshDrawable:
 
     def delete(self):
         print(f"[MeshDrawable] delete name={self.name} keys={list(self._context_resources.keys())}")
-        from termin.visualization.platform.backends.opengl import get_context_make_current
+        from termin.visualization.platform.backends.opengl import (
+            get_context_make_current,
+            get_current_context_key,
+        )
+
+        # Запоминаем текущий контекст чтобы восстановить после удаления
+        original_ctx = get_current_context_key()
 
         for ctx_key, handle in self._context_resources.items():
             # Делаем контекст текущим перед удалением VAO
@@ -113,6 +119,13 @@ class MeshDrawable:
                 print(f"[MeshDrawable] WARNING: no make_current for context {ctx_key}")
             handle.delete()
         self._context_resources.clear()
+
+        # Восстанавливаем исходный контекст
+        if original_ctx is not None:
+            restore = get_context_make_current(original_ctx)
+            if restore is not None:
+                print(f"[MeshDrawable] restoring context {original_ctx}")
+                restore()
 
     # --------- сериализация / десериализация ---------
 
@@ -252,7 +265,13 @@ class Mesh2Drawable:
 
     def delete(self):
         print(f"[Mesh2Drawable] delete name={self.name} keys={list(self._context_resources.keys())}")
-        from termin.visualization.platform.backends.opengl import get_context_make_current
+        from termin.visualization.platform.backends.opengl import (
+            get_context_make_current,
+            get_current_context_key,
+        )
+
+        # Запоминаем текущий контекст чтобы восстановить после удаления
+        original_ctx = get_current_context_key()
 
         for ctx_key, handle in self._context_resources.items():
             # Делаем контекст текущим перед удалением VAO
@@ -264,6 +283,13 @@ class Mesh2Drawable:
                 print(f"[Mesh2Drawable] WARNING: no make_current for context {ctx_key}")
             handle.delete()
         self._context_resources.clear()
+
+        # Восстанавливаем исходный контекст
+        if original_ctx is not None:
+            restore = get_context_make_current(original_ctx)
+            if restore is not None:
+                print(f"[Mesh2Drawable] restoring context {original_ctx}")
+                restore()
 
     def serialize(self) -> dict:
         if self._source_id is not None:

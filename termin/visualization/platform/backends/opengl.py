@@ -26,15 +26,36 @@ _OPENGL_INITED = False
 # Используется для переключения контекста при удалении GPU ресурсов
 _context_registry: Dict[int, Callable[[], None]] = {}
 
+# Текущий активный context_key (обновляется при make_current)
+_current_context_key: int | None = None
+
 
 def register_context(context_key: int, make_current: Callable[[], None]) -> None:
     """Регистрирует контекст для последующего переключения при удалении ресурсов."""
+    global _current_context_key
     _context_registry[context_key] = make_current
+    # При регистрации контекст уже активен
+    _current_context_key = context_key
 
 
 def get_context_make_current(context_key: int) -> Callable[[], None] | None:
     """Возвращает функцию make_current для контекста или None."""
-    return _context_registry.get(context_key)
+    original = _context_registry.get(context_key)
+    if original is None:
+        return None
+
+    # Оборачиваем чтобы обновлять _current_context_key
+    def wrapped():
+        global _current_context_key
+        original()
+        _current_context_key = context_key
+
+    return wrapped
+
+
+def get_current_context_key() -> int | None:
+    """Возвращает текущий активный context_key или None."""
+    return _current_context_key
 
 
 def _compile_shader(source: str, shader_type: int) -> int:
