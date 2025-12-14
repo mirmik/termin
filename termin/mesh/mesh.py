@@ -238,5 +238,6 @@ from .primitives import (
     PlaneMesh,
     CylinderMesh,
     ConeMesh,
+    TorusMesh,
     RingMesh,
 )

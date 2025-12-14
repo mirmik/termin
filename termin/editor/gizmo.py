@@ -3,13 +3,12 @@ from typing import Optional, Callable
 from termin.editor.undo_stack import UndoCommand
 from termin.editor.editor_commands import TransformEditCommand
 
-from termin.mesh.mesh import CylinderMesh, ConeMesh, RingMesh
+from termin.mesh.mesh import CylinderMesh, ConeMesh, TorusMesh
 from termin.visualization.render.materials.simple import UnlitMaterial
 from termin.visualization.core.entity import Entity, InputComponent
 from termin.visualization.render.components import MeshRenderer
 from termin.geombase.pose3 import Pose3
-from termin.util import qmul   # <-- вот это добавляем
-from termin.visualization.render.renderpass import RenderState
+from termin.util import qmul
 
 
 # ---------- ВСПОМОГАТЕЛЬНАЯ МАТЕМАТИКА ----------
@@ -217,7 +216,7 @@ class GizmoRing(Entity):
         # вспомогательная утолщённая геометрия для пиккинга
         self._create_pick_geometry(axis, self.radius, self.thickness)
 
-        # базовый RingMesh имеет нормаль (ось) вдоль +Y,
+        # базовый TorusMesh лежит в XZ-плоскости (ось вдоль +Y),
         # поворачиваем так же, как стрелки:
         if axis == "x":
             # нормаль Y → X
@@ -235,9 +234,8 @@ class GizmoRing(Entity):
         color,
     ):
         """Создаёт видимое кольцо гизмо."""
-        ring_mesh = RingMesh(radius=radius, thickness=thickness, segments=48)
-        # cull=False для двустороннего рендеринга
-        mat = UnlitMaterial(color=color, render_state=RenderState(cull=False), phase_mark="gizmo")
+        ring_mesh = TorusMesh(major_radius=radius, minor_radius=thickness, major_segments=48, minor_segments=12)
+        mat = UnlitMaterial(color=color, phase_mark="gizmo")
 
         ring_ent = Entity(
             Pose3.identity(),
@@ -256,13 +254,14 @@ class GizmoRing(Entity):
         thickness: float,
     ):
         """
-        Создаёт утолщённое невидимое кольцо для удобного пиккинга.
+        Создаёт утолщённый невидимый тор для удобного пиккинга.
         Без материала — не рендерится в ColorPass, только в GizmoPass.
         """
-        pick_ring_mesh = RingMesh(
-            radius=radius,
-            thickness=thickness * 2.0,
-            segments=32,
+        pick_ring_mesh = TorusMesh(
+            major_radius=radius,
+            minor_radius=thickness * 2.0,
+            major_segments=32,
+            minor_segments=8,
         )
         pick_ring_ent = Entity(
             Pose3.identity(),

@@ -361,6 +361,73 @@ class ConeMesh(Mesh3):
         super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
 
+class TorusMesh(Mesh3):
+    """
+    Тор (бублик) в XZ-плоскости.
+
+    Параметры:
+        major_radius: Расстояние от центра тора до центра трубки
+        minor_radius: Радиус трубки
+        major_segments: Количество сегментов по большому кругу
+        minor_segments: Количество сегментов по трубке
+    """
+
+    def __init__(
+        self,
+        major_radius: float = 1.0,
+        minor_radius: float = 0.25,
+        major_segments: int = 32,
+        minor_segments: int = 16,
+    ):
+        if major_segments < 3:
+            raise ValueError("TorusMesh: major_segments must be >= 3")
+        if minor_segments < 3:
+            raise ValueError("TorusMesh: minor_segments must be >= 3")
+
+        vertices: list[list[float]] = []
+        triangles: list[list[int]] = []
+
+        # Генерируем вершины
+        for i in range(major_segments):
+            u = 2.0 * np.pi * i / major_segments
+            cos_u = np.cos(u)
+            sin_u = np.sin(u)
+
+            for j in range(minor_segments):
+                v = 2.0 * np.pi * j / minor_segments
+                cos_v = np.cos(v)
+                sin_v = np.sin(v)
+
+                # Параметрическое уравнение тора
+                x = (major_radius + minor_radius * cos_v) * cos_u
+                y = minor_radius * sin_v
+                z = (major_radius + minor_radius * cos_v) * sin_u
+
+                vertices.append([x, y, z])
+
+        # Генерируем треугольники
+        for i in range(major_segments):
+            next_i = (i + 1) % major_segments
+            for j in range(minor_segments):
+                next_j = (j + 1) % minor_segments
+
+                # Индексы четырёх вершин квада
+                v0 = i * minor_segments + j
+                v1 = next_i * minor_segments + j
+                v2 = next_i * minor_segments + next_j
+                v3 = i * minor_segments + next_j
+
+                # Два треугольника на квад (CCW для нормалей наружу)
+                triangles.append([v0, v1, v2])
+                triangles.append([v0, v2, v3])
+
+        vertices_np = np.asarray(vertices, dtype=float)
+        triangles_np = np.asarray(triangles, dtype=int)
+
+        super().__init__(vertices=vertices_np, triangles=triangles_np, uvs=None)
+        self.compute_vertex_normals()
+
+
 class RingMesh(Mesh3):
     """
     Плоское кольцо (annulus) в XZ-плоскости.

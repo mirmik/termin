@@ -143,10 +143,6 @@ class GizmoPass(RenderFramePass):
             if mr is None or mr.mesh is None:
                 continue
 
-            # кольца плоские — рендерим без culling
-            is_ring = ent.name.endswith("_ring")
-            graphics.set_cull_face(not is_ring)
-
             # alpha < 1.0 для гизмо, alpha=1.0 зарезервирована для обычных объектов
             alpha = index * 1.0 / (maxindex + 1)
             shader.set_uniform_vec4("u_color", (0.0, 0.0, 0.0, alpha))
