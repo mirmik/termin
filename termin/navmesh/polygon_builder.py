@@ -21,11 +21,20 @@ from termin.navmesh.types import NavPolygon, NavMesh, NavMeshConfig
 from termin.voxels.grid import VoxelGrid
 
 
-# 6-связность для 3D
+# 6-связность для 3D (только по осям)
 NEIGHBORS_6 = [
     (1, 0, 0), (-1, 0, 0),
     (0, 1, 0), (0, -1, 0),
     (0, 0, 1), (0, 0, -1),
+]
+
+# 26-связность для 3D (все соседи включая диагональные)
+NEIGHBORS_26 = [
+    (dx, dy, dz)
+    for dx in (-1, 0, 1)
+    for dy in (-1, 0, 1)
+    for dz in (-1, 0, 1)
+    if (dx, dy, dz) != (0, 0, 0)
 ]
 
 
@@ -133,7 +142,7 @@ class PolygonBuilder:
                 normal_sum += current_normal
 
                 vx, vy, vz = current
-                for dx, dy, dz in NEIGHBORS_6:
+                for dx, dy, dz in NEIGHBORS_26:
                     neighbor = (vx + dx, vy + dy, vz + dz)
                     if neighbor in remaining:
                         remaining.remove(neighbor)
