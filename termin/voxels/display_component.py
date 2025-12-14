@@ -106,9 +106,36 @@ class VoxelDisplayComponent(Component):
             kind="voxel_grid",
             setter=lambda obj, val: obj.set_voxel_grid(val),
         ),
+        "slice_x": InspectField(
+            path="slice_x",
+            label="Slice X %",
+            kind="float",
+            min=0.0,
+            max=100.0,
+            step=1.0,
+            setter=lambda obj, val: obj._set_slice("x", val),
+        ),
+        "slice_y": InspectField(
+            path="slice_y",
+            label="Slice Y %",
+            kind="float",
+            min=0.0,
+            max=100.0,
+            step=1.0,
+            setter=lambda obj, val: obj._set_slice("y", val),
+        ),
+        "slice_z": InspectField(
+            path="slice_z",
+            label="Slice Z %",
+            kind="float",
+            min=0.0,
+            max=100.0,
+            step=1.0,
+            setter=lambda obj, val: obj._set_slice("z", val),
+        ),
     }
 
-    serializable_fields = ["voxel_grid_name"]
+    serializable_fields = ["voxel_grid_name", "slice_x", "slice_y", "slice_z"]
 
     def __init__(self, voxel_grid_name: str = "") -> None:
         super().__init__()
@@ -120,6 +147,20 @@ class VoxelDisplayComponent(Component):
             color=(0.2, 0.6, 1.0, 0.7),
             phase_mark="editor",
         )
+        self._needs_rebuild = True
+        # Срезы по осям (0-100%), 100 = показать всё
+        self.slice_x: float = 100.0
+        self.slice_y: float = 100.0
+        self.slice_z: float = 100.0
+
+    def _set_slice(self, axis: str, value: float) -> None:
+        """Установить срез по оси и перестроить меш."""
+        if axis == "x":
+            self.slice_x = value
+        elif axis == "y":
+            self.slice_y = value
+        elif axis == "z":
+            self.slice_z = value
         self._needs_rebuild = True
 
     @property
@@ -197,7 +238,7 @@ class VoxelDisplayComponent(Component):
     # --- Построение меша ---
 
     def _rebuild_mesh(self) -> None:
-        """Перестроить меш из воксельной сетки."""
+        """Перестроить меш из воксельной сетки с учётом срезов."""
         # Очищаем старый меш
         if self._mesh_drawable is not None:
             self._mesh_drawable.delete()
@@ -213,23 +254,55 @@ class VoxelDisplayComponent(Component):
         if voxel_count == 0:
             return
 
+        # Собираем все воксели и находим bounds для срезов
+        all_voxels: list[tuple[int, int, int, int]] = []
+        min_v = [float('inf'), float('inf'), float('inf')]
+        max_v = [float('-inf'), float('-inf'), float('-inf')]
+
+        for vx, vy, vz, vtype in grid.iter_non_empty():
+            all_voxels.append((vx, vy, vz, vtype))
+            min_v[0] = min(min_v[0], vx)
+            min_v[1] = min(min_v[1], vy)
+            min_v[2] = min(min_v[2], vz)
+            max_v[0] = max(max_v[0], vx)
+            max_v[1] = max(max_v[1], vy)
+            max_v[2] = max(max_v[2], vz)
+
+        if not all_voxels:
+            return
+
+        # Вычисляем пороги для срезов (в воксельных координатах)
+        # slice 100% = показать всё, slice 50% = показать нижнюю половину
+        threshold_x = min_v[0] + (max_v[0] - min_v[0] + 1) * (self.slice_x / 100.0)
+        threshold_y = min_v[1] + (max_v[1] - min_v[1] + 1) * (self.slice_y / 100.0)
+        threshold_z = min_v[2] + (max_v[2] - min_v[2] + 1) * (self.slice_z / 100.0)
+
+        # Фильтруем воксели по срезам
+        filtered_voxels = [
+            (vx, vy, vz, vtype)
+            for vx, vy, vz, vtype in all_voxels
+            if vx < threshold_x and vy < threshold_y and vz < threshold_z
+        ]
+
+        if not filtered_voxels:
+            return
+
         # Ограничение для производительности
-        if voxel_count > MAX_VOXELS:
-            print(f"VoxelDisplayComponent: too many voxels ({voxel_count}), showing first {MAX_VOXELS}")
-            voxel_count = MAX_VOXELS
+        display_count = len(filtered_voxels)
+        if display_count > MAX_VOXELS:
+            print(f"VoxelDisplayComponent: too many voxels ({display_count}), showing first {MAX_VOXELS}")
+            filtered_voxels = filtered_voxels[:MAX_VOXELS]
+            display_count = MAX_VOXELS
 
         # Выделяем массивы
-        vertices = np.zeros((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
-        triangles = np.zeros((voxel_count * TRIS_PER_CUBE, 3), dtype=np.int32)
-        normals = np.zeros((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
+        vertices = np.zeros((display_count * VERTS_PER_CUBE, 3), dtype=np.float32)
+        triangles = np.zeros((display_count * TRIS_PER_CUBE, 3), dtype=np.int32)
+        normals = np.zeros((display_count * VERTS_PER_CUBE, 3), dtype=np.float32)
 
         cell_size = grid.cell_size
         idx = 0
 
-        for vx, vy, vz, vtype in grid.iter_non_empty():
-            if idx >= MAX_VOXELS:
-                break
-
+        for vx, vy, vz, vtype in filtered_voxels:
             # Позиция центра вокселя
             center = grid.voxel_to_world(vx, vy, vz)
 
@@ -245,12 +318,6 @@ class VoxelDisplayComponent(Component):
             triangles[t_start:t_end] = _CUBE_TRIANGLES + v_start
 
             idx += 1
-
-        # Обрезаем если меньше max_voxels
-        if idx < MAX_VOXELS:
-            vertices = vertices[:idx * VERTS_PER_CUBE]
-            triangles = triangles[:idx * TRIS_PER_CUBE]
-            normals = normals[:idx * VERTS_PER_CUBE]
 
         mesh = Mesh3(
             vertices=vertices,
@@ -287,11 +354,18 @@ class VoxelDisplayComponent(Component):
         """Сериализует данные компонента."""
         return {
             "voxel_grid_name": self._voxel_grid_name,
+            "slice_x": self.slice_x,
+            "slice_y": self.slice_y,
+            "slice_z": self.slice_z,
         }
 
     @classmethod
     def deserialize(cls, data: dict, context) -> "VoxelDisplayComponent":
         """Десериализовать компонент."""
-        return cls(
+        comp = cls(
             voxel_grid_name=data.get("voxel_grid_name", ""),
         )
+        comp.slice_x = data.get("slice_x", 100.0)
+        comp.slice_y = data.get("slice_y", 100.0)
+        comp.slice_z = data.get("slice_z", 100.0)
+        return comp
