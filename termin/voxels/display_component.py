@@ -252,6 +252,8 @@ class VoxelDisplayComponent(Component):
         if current_grid is not self._last_grid:
             self._rebuild_mesh()
 
+    _DEBUG_GET_PHASES = False  # Debug: отладка get_phases
+
     def get_phases(self, phase_mark: str | None = None) -> List["MaterialPhase"]:
         """Возвращает MaterialPhases для рендеринга."""
         mat = self._get_or_create_material()
@@ -272,6 +274,10 @@ class VoxelDisplayComponent(Component):
             phase.uniforms["u_bounds_max"] = self._bounds_max
             phase.uniforms["u_ambient_color"] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
             phase.uniforms["u_ambient_intensity"] = 0.4
+
+            if self._DEBUG_GET_PHASES:
+                print(f"[VoxelDisplayComponent.get_phases] phase_mark={phase_mark}, fill_percent={self.fill_percent}, u_fill_percent={phase.uniforms['u_fill_percent']}")
+                print(f"  bounds_min={self._bounds_min}, bounds_max={self._bounds_max}")
 
         result.sort(key=lambda p: p.priority)
         return result
