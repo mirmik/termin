@@ -61,6 +61,7 @@ class NavMeshDisplayComponent(Component):
             path="wireframe",
             label="Wireframe",
             kind="bool",
+            setter=lambda obj, val: obj._set_wireframe(val),
         ),
         "show_normals": InspectField(
             path="show_normals",
@@ -111,6 +112,12 @@ class NavMeshDisplayComponent(Component):
         if self._material is not None:
             self._material.color = value
 
+    def _set_wireframe(self, value: bool) -> None:
+        """Установить режим wireframe."""
+        self.wireframe = value
+        # Пересоздаём материал с новым render_state
+        self._material = None
+
     def _get_or_create_material(self) -> Material:
         """Получить или создать материал."""
         if self._material is None:
@@ -124,6 +131,7 @@ class NavMeshDisplayComponent(Component):
                 color=self.color,
                 phase_mark="opaque",
                 render_state=RenderState(
+                    polygon_mode="line" if self.wireframe else "fill",
                     depth_test=True,
                     depth_write=True,
                     blend=True,
