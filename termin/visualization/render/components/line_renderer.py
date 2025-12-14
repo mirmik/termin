@@ -463,22 +463,3 @@ class LineRenderer(Component):
 
         return data
 
-    @classmethod
-    def deserialize(cls, data: dict, context=None) -> "LineRenderer":
-        """Восстанавливает LineRenderer из сериализованных данных."""
-        from termin.visualization.core.resources import ResourceManager
-        rm = ResourceManager.instance()
-
-        points = [tuple(p) for p in data.get("points", [])]
-        width = data.get("width", 0.1)
-        raw_lines = data.get("raw_lines", False)
-
-        renderer = cls(points=points, width=width, raw_lines=raw_lines)
-        renderer.enabled = data.get("enabled", True)
-
-        # Материал
-        mat_name = data.get("material")
-        if mat_name:
-            renderer.set_material_by_name(mat_name)
-
-        return renderer

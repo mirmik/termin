@@ -17,7 +17,6 @@ from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.navmesh_handle import NavMeshHandle
 from termin.visualization.core.polyline import Polyline, PolylineDrawable
-from termin.visualization.core.serialization import serializable
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
@@ -36,7 +35,6 @@ def _get_navmesh_choices() -> list[tuple[str, str]]:
     return [(name, name) for name in names]
 
 
-@serializable(fields=["navmesh_name", "color", "wireframe", "show_normals", "show_contours"])
 class NavMeshDisplayComponent(Component):
     """
     Компонент для отображения NavMesh из ResourceManager.
@@ -47,10 +45,11 @@ class NavMeshDisplayComponent(Component):
     """
 
     inspect_fields = {
-        "navmesh_name": InspectField(
-            path="navmesh_name",
+        "navmesh": InspectField(
+            path="navmesh",
             label="NavMesh",
             kind="navmesh",
+            setter=lambda obj, val: obj._set_navmesh(val),
         ),
         "color": InspectField(
             path="color",
@@ -115,6 +114,15 @@ class NavMeshDisplayComponent(Component):
             else:
                 self._navmesh_handle = NavMeshHandle()
             self._needs_rebuild = True
+
+    def _set_navmesh(self, value: "NavMesh") -> None:
+        """Установить NavMesh (объект или None)."""
+        if value is None:
+            self.navmesh_name = ""
+        elif hasattr(value, "name"):
+            self.navmesh_name = value.name
+        else:
+            self.navmesh_name = ""
 
     def _set_color(self, value: Tuple[float, float, float, float]) -> None:
         """Установить цвет."""
@@ -383,15 +391,3 @@ void main() {
         line_vertices = np.array(contour_segments, dtype=np.float32)
         polyline = Polyline(line_vertices, is_strip=False)
         self._contour_drawable = PolylineDrawable(polyline)
-
-    # --- Сериализация ---
-
-    @classmethod
-    def deserialize(cls, data: dict, context) -> "NavMeshDisplayComponent":
-        """Десериализовать компонент."""
-        comp = cls(navmesh_name=data.get("navmesh_name", ""))
-        comp.color = tuple(data.get("color", (0.2, 0.8, 0.3, 0.7)))
-        comp.wireframe = data.get("wireframe", False)
-        comp.show_normals = data.get("show_normals", False)
-        comp.show_contours = data.get("show_contours", False)
-        return comp

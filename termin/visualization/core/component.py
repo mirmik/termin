@@ -70,7 +70,12 @@ class Component:
 
     def serialize_data(self):
         fields = self.serializable_fields
-        inspect_fields = self.inspect_fields
+
+        # Собираем inspect_fields из всей иерархии классов
+        inspect_fields = {}
+        for klass in reversed(type(self).__mro__):
+            if hasattr(klass, 'inspect_fields') and klass.inspect_fields:
+                inspect_fields.update(klass.inspect_fields)
 
         if fields is None and not inspect_fields:
             return None
@@ -91,7 +96,24 @@ class Component:
                 key = field.path if field.path is not None else name
                 if key in result:
                     continue
-                result[key] = field.get_value(self)
+
+                value = field.get_value(self)
+                kind = field.kind
+
+                # Конвертация ресурсов в имена
+                if kind in ("mesh", "material", "voxel_grid", "navmesh"):
+                    if value is not None and hasattr(value, "name"):
+                        value = value.name
+                    else:
+                        value = None
+                # Конвертация tuple/list для JSON
+                elif kind in ("color", "vec3", "vec4") and isinstance(value, (tuple, list)):
+                    value = list(value)
+                elif kind == "vec3_list" and isinstance(value, (tuple, list)):
+                    value = [list(v) for v in value]
+
+                if value is not None:
+                    result[key] = value
 
         return result
 
@@ -104,19 +126,74 @@ class Component:
 
     @classmethod
     def deserialize(cls, data, context):
+        from termin.visualization.core.resources import ResourceManager
+
         obj = cls.__new__(cls)
         cls.__init__(obj)
 
+        # Восстанавливаем поля из serializable_fields
         fields = cls.serializable_fields
         if fields is None:
             pass  # Нет полей для десериализации
         elif isinstance(fields, dict):
             for key, typ in fields.items():
+                if key not in data:
+                    continue
                 value = data[key]
                 setattr(obj, key, typ.deserialize(value, context) if typ else value)
         else:
             for key in fields:
-                setattr(obj, key, data[key])
+                if key in data:
+                    setattr(obj, key, data[key])
+
+        # Восстанавливаем поля из inspect_fields (включая базовые)
+        inspect_fields = {}
+        for klass in reversed(cls.__mro__):
+            if hasattr(klass, 'inspect_fields') and klass.inspect_fields:
+                inspect_fields.update(klass.inspect_fields)
+        if inspect_fields:
+            rm = ResourceManager.instance()
+            for name, field in inspect_fields.items():
+                if field.non_serializable:
+                    continue
+                key = field.path if field.path is not None else name
+                if key not in data or key == "enabled":
+                    continue
+
+                value = data[key]
+                kind = field.kind
+
+                # Конвертация типов и загрузка ресурсов
+                if kind == "mesh" and isinstance(value, str):
+                    resource = rm.get_mesh(value)
+                    if resource is not None and field.setter:
+                        field.setter(obj, resource)
+                    continue
+                elif kind == "material" and isinstance(value, str):
+                    resource = rm.get_material(value)
+                    if resource is not None and field.setter:
+                        field.setter(obj, resource)
+                    continue
+                elif kind == "voxel_grid" and isinstance(value, str):
+                    resource = rm.get_voxel_grid(value)
+                    if resource is not None and field.setter:
+                        field.setter(obj, resource)
+                    continue
+                elif kind == "navmesh" and isinstance(value, str):
+                    resource = rm.get_navmesh(value)
+                    if resource is not None and field.setter:
+                        field.setter(obj, resource)
+                    continue
+                elif kind in ("color", "vec3", "vec4") and isinstance(value, list):
+                    value = tuple(value)
+                elif kind == "vec3_list" and isinstance(value, list):
+                    value = [tuple(v) for v in value]
+
+                # Устанавливаем значение через setter или напрямую
+                if field.setter:
+                    field.setter(obj, value)
+                elif field.path:
+                    setattr(obj, field.path, value)
 
         return obj
 

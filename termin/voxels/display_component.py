@@ -142,14 +142,6 @@ class VoxelDisplayComponent(Component):
         ),
     }
 
-    serializable_fields = [
-        "voxel_grid_name",
-        "color_below",
-        "color_above",
-        "color_surface",
-        "fill_percent",
-        "slice_axis",
-    ]
 
     def __init__(self, voxel_grid_name: str = "") -> None:
         super().__init__()
@@ -422,34 +414,3 @@ class VoxelDisplayComponent(Component):
             self._rebuild_mesh()
             self._needs_rebuild = False
 
-    def serialize_data(self) -> dict:
-        """Сериализует данные компонента."""
-        return {
-            "voxel_grid_name": self._voxel_grid_name,
-            "color_below": list(self.color_below),
-            "color_above": list(self.color_above),
-            "color_surface": list(self.color_surface),
-            "fill_percent": self.fill_percent,
-            "slice_axis": list(self.slice_axis),
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict, context) -> "VoxelDisplayComponent":
-        """Десериализовать компонент."""
-        comp = cls(
-            voxel_grid_name=data.get("voxel_grid_name", ""),
-        )
-        color_below = data.get("color_below")
-        if color_below is not None:
-            comp.color_below = tuple(color_below)
-        color_above = data.get("color_above")
-        if color_above is not None:
-            comp.color_above = tuple(color_above)
-        color_surface = data.get("color_surface")
-        if color_surface is not None:
-            comp.color_surface = tuple(color_surface)
-        comp.fill_percent = data.get("fill_percent", 100.0)
-        slice_axis = data.get("slice_axis")
-        if slice_axis is not None:
-            comp.slice_axis = tuple(slice_axis)
-        return comp

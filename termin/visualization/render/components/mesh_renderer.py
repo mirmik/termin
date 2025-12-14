@@ -202,32 +202,3 @@ class MeshRenderer(Component):
 
         return data
 
-    @classmethod
-    def deserialize(cls, data: dict, context=None) -> "MeshRenderer":
-        """Восстанавливает MeshRenderer из сериализованных данных."""
-        rm = ResourceManager.instance()
-
-        mesh = None
-        mesh_name = data.get("mesh")
-        if mesh_name:
-            mesh = rm.get_mesh(mesh_name)
-
-        material = None
-        mat_name = data.get("material")
-        if mat_name:
-            material = rm.get_material(mat_name)
-
-        renderer = cls(
-            mesh=mesh,
-            material=material,
-            cast_shadow=data.get("cast_shadow", True),
-        )
-        renderer.enabled = data.get("enabled", True)
-
-        # Bind by name for hot-reload support
-        if mesh_name:
-            renderer.set_mesh_by_name(mesh_name)
-        if mat_name:
-            renderer.set_material_by_name(mat_name)
-
-        return renderer
