@@ -973,13 +973,24 @@ class PolygonBuilder:
         b: np.ndarray,
         c: np.ndarray,
     ) -> bool:
-        """Проверить, находится ли точка p внутри треугольника abc."""
+        """
+        Проверить, находится ли точка p строго внутри треугольника abc.
+
+        Возвращает False для точек на границе треугольника, чтобы ear clipping
+        мог корректно вырезать уши с вершинами на границе.
+        """
+        EPS = 1e-10
+
         def sign(p1, p2, p3):
             return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
 
         d1 = sign(p, a, b)
         d2 = sign(p, b, c)
         d3 = sign(p, c, a)
+
+        # Точка на границе (любой sign близок к 0) — не считаем внутри
+        if abs(d1) < EPS or abs(d2) < EPS or abs(d3) < EPS:
+            return False
 
         has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
         has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
