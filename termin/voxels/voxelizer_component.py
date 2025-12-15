@@ -502,8 +502,8 @@ class VoxelizerComponent(Component):
 
         for mesh, transform in meshes:
             vertices = mesh.vertices
-            indices = mesh.indices
-            normals = mesh.normals
+            triangles = mesh.triangles
+            normals = mesh.vertex_normals
 
             if vertices is None or len(vertices) == 0:
                 continue
@@ -527,21 +527,21 @@ class VoxelizerComponent(Component):
                 transformed_normals = transformed_normals / norms
                 all_normals.append(transformed_normals.astype(np.float32))
 
-            # Смещаем индексы
-            if indices is not None and len(indices) > 0:
-                all_indices.append(indices + vertex_offset)
+            # Смещаем индексы треугольников
+            if triangles is not None and len(triangles) > 0:
+                all_indices.append(triangles + vertex_offset)
                 vertex_offset += len(vertices)
 
         if not all_vertices:
             return None
 
         combined_vertices = np.vstack(all_vertices)
-        combined_indices = np.hstack(all_indices) if all_indices else None
+        combined_triangles = np.vstack(all_indices) if all_indices else None
         combined_normals = np.vstack(all_normals) if all_normals else None
 
         return Mesh3(
             vertices=combined_vertices,
-            indices=combined_indices,
+            triangles=combined_triangles,
             normals=combined_normals,
         )
 
