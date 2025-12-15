@@ -123,7 +123,9 @@ void main() {
     float roughness = max(u_roughness, 0.04);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // DEBUG: full PBR diffuse (no specular)
+    // DEBUG: full PBR diffuse + ambient (no specular)
+    vec3 ambient = u_ambient_color * u_ambient_intensity * albedo * (1.0 - metallic * 0.5);
+
     vec3 L = normalize(-u_light_direction[0]);
     float NdotL = max(dot(N, L), 0.0);
     vec3 H = normalize(V + L);
@@ -132,7 +134,9 @@ void main() {
     vec3 kD = (1.0 - F) * (1.0 - metallic);
     vec3 radiance = u_light_color[0] * u_light_intensity[0];
     vec3 diffuse = kD * albedo * NdotL * radiance;
-    FragColor = vec4(diffuse, 1.0);
+
+    vec3 color = ambient + diffuse;
+    FragColor = vec4(color, 1.0);
 }
 """
 
