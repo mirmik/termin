@@ -638,14 +638,18 @@ class GizmoMoveController(InputComponent):
             self._on_transform_dragging()
 
     def _get_axis_vector(self, axis: str) -> np.ndarray:
+        """Get world-space axis direction vector.
+
+        Convention: X=right, Y=forward, Z=up
+        """
         t = self.gizmo.transform
 
         if axis == "x":
             v = t.right(1.0)
         elif axis == "y":
-            v = t.up(1.0)
+            v = t.forward(1.0)  # Y = forward
         else:
-            v = t.forward(1.0)
+            v = t.up(1.0)  # Z = up
 
         v = np.asarray(v, dtype=np.float32)
         n = np.linalg.norm(v)
