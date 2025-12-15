@@ -122,6 +122,11 @@ class ResourceManager:
                 cls._creating_singleton = False
         return cls._instance
 
+    @classmethod
+    def _reset_for_testing(cls) -> None:
+        """Reset singleton instance. For testing only."""
+        cls._instance = None
+
     # --------- MaterialKeeper'ы ---------
     def get_or_create_keeper(self, name: str) -> "MaterialKeeper":
         """

@@ -18,12 +18,14 @@ except ImportError:
 
 from .pose2 import Pose2
 from .pose3 import Pose3
+from .general_pose3 import GeneralPose3
 from .screw import Screw, Screw2, Screw3
 from .aabb import AABB, TransformAABB
 
 __all__ = [
     'Pose2',
     'Pose3',
+    'GeneralPose3',
     'Screw',
     'Screw2',
     'Screw3',

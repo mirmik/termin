@@ -9,6 +9,7 @@ from termin.visualization.core.entity import Component
 from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat, Screw3
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase.pose3 import Pose3
+from termin.geombase.general_pose3 import GeneralPose3
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -164,14 +165,16 @@ class RigidBodyComponent(Component):
         cpp_body = self._physics_world.get_body(self._body_index)
         cpp_pose = cpp_body.pose
 
-        # Конвертируем в Python Pose3
-        py_pose = Pose3(
+        # Конвертируем в GeneralPose3, сохраняя текущий scale
+        current_scale = self.entity.transform.local_pose().scale.copy()
+        general_pose = GeneralPose3(
             ang=np.array([cpp_pose.ang.x, cpp_pose.ang.y, cpp_pose.ang.z, cpp_pose.ang.w]),
-            lin=np.array([cpp_pose.lin.x, cpp_pose.lin.y, cpp_pose.lin.z])
+            lin=np.array([cpp_pose.lin.x, cpp_pose.lin.y, cpp_pose.lin.z]),
+            scale=current_scale
         )
 
         # Обновляем трансформ сущности
-        self.entity.transform.relocate(py_pose)
+        self.entity.transform.relocate(general_pose)
 
     def sync_to_physics(self):
         """Синхронизация физического тела из трансформа сущности (для редактора)."""

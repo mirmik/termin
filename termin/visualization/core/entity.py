@@ -7,7 +7,8 @@ from typing import Iterable, List, Optional, Type, TypeVar, TYPE_CHECKING
 import numpy as np
 
 from termin.geombase.pose3 import Pose3
-from termin.kinematic.transform import Transform3
+from termin.geombase.general_pose3 import GeneralPose3
+from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.render.render_context import RenderContext
@@ -28,23 +29,52 @@ class Entity:
     _next_pick_id: int = 1
     _entities_by_pick_id: dict[int, "Entity"] = {}
 
-    def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float | numpy.ndarray = 1.0, priority: int = 0,
-            pickable: bool = True,
-            selectable: bool = True,
-            serializable: bool = True,
-            layer: int = 0,
-            flags: int = 0):
-
+    def __init__(
+        self,
+        pose: Pose3 | GeneralPose3 = None,
+        name: str = "entity",
+        scale: float | np.ndarray = 1.0,
+        priority: int = 0,
+        pickable: bool = True,
+        selectable: bool = True,
+        serializable: bool = True,
+        layer: int = 0,
+        flags: int = 0
+    ):
+        # Convert scale to numpy array
         if scale is None:
-            scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+            scale_arr = np.array([1.0, 1.0, 1.0], dtype=np.float64)
+        elif isinstance(scale, (int, float)):
+            scale_arr = np.full(3, float(scale), dtype=np.float64)
+        else:
+            scale_arr = np.array(scale, dtype=np.float64)
+            if scale_arr.shape == ():
+                scale_arr = np.full(3, float(scale_arr), dtype=np.float64)
+            elif scale_arr.shape != (3,):
+                raise ValueError(f"Entity.scale must be scalar or length-3, got shape {scale_arr.shape}")
 
-        self.transform = Transform3(pose)
+        # Convert pose to GeneralPose3
+        if pose is None:
+            general_pose = GeneralPose3(scale=scale_arr)
+        elif isinstance(pose, GeneralPose3):
+            general_pose = GeneralPose3(
+                ang=pose.ang.copy(),
+                lin=pose.lin.copy(),
+                scale=scale_arr
+            )
+        else:
+            # Pose3
+            general_pose = GeneralPose3(
+                ang=pose.ang.copy(),
+                lin=pose.lin.copy(),
+                scale=scale_arr
+            )
+
+        self.transform = GeneralTransform3(general_pose)
         self.transform.entity = self
         self.visible = True
         self.active = True
         self.name = name
-        self._scale: np.ndarray = np.array([1.0, 1.0, 1.0], dtype=float)
-        self.scale = scale # вызов сеттера
         self.priority = priority  # rendering priority, lower values drawn first
         self._components: List[Component] = []
         self.scene: Optional["Scene"] = None
@@ -57,33 +87,33 @@ class Entity:
 
     @property
     def scale(self) -> np.ndarray:
-        return self._scale
+        """Get scale from local pose."""
+        return self.transform.local_pose().scale
 
     @scale.setter
     def scale(self, value):
+        """Set scale in local pose."""
         if isinstance(value, (int, float)):
-            arr = np.full(3, float(value), dtype=float)
+            arr = np.full(3, float(value), dtype=np.float64)
         else:
-            arr = np.array(value, dtype=float)
-
-            # скаляр → [s, s, s]
+            arr = np.array(value, dtype=np.float64)
             if arr.shape == ():
-                arr = np.full(3, float(arr), dtype=float)
+                arr = np.full(3, float(arr), dtype=np.float64)
             elif arr.shape != (3,):
                 raise ValueError(f"Entity.scale must be scalar or length-3, got shape {arr.shape}")
 
-        self._scale = arr
-
+        local_pose = self.transform.local_pose()
+        local_pose.scale = arr
+        local_pose.invalidate_cache()
+        self.transform._mark_dirty()
 
     def __post_init__(self):
         self.scene: Optional["Scene"] = None
         self._components: List[Component] = []
 
     def model_matrix(self) -> np.ndarray:
-        """Construct homogeneous model matrix ``M = [R|t]`` with optional uniform scale."""
-        matrix = self.transform.global_pose().as_matrix().copy()
-        matrix[:3, :3] = matrix[:3, :3] @ np.diag(self._scale)
-        return matrix
+        """Construct homogeneous model matrix with scale baked in."""
+        return self.transform.global_pose().as_matrix()
 
     def set_visible(self, flag: bool):
         self.visible = flag
@@ -188,7 +218,7 @@ class Entity:
         data = {
             "name": self.name,
             "priority": self.priority,
-            "scale": list(self.scale),
+            "scale": list(pose.scale),
             "visible": self.visible,
             "active": self.active,
             "pickable": self.pickable,
@@ -221,7 +251,6 @@ class Entity:
     @classmethod
     def deserialize(cls, data, context=None):
         import numpy as np
-        from termin.geombase.pose3 import Pose3
 
         ent = cls(
             pose=Pose3(
@@ -229,7 +258,7 @@ class Entity:
                 ang=np.array(data["pose"]["rotation"]),
             ),
             name=data["name"],
-            scale=data.get("scale", 1.0),
+            scale=np.array(data.get("scale", [1.0, 1.0, 1.0])),
             priority=data.get("priority", 0),
             pickable=data.get("pickable", True),
             selectable=data.get("selectable", True),

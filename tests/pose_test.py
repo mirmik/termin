@@ -200,7 +200,7 @@ class TestPose3(unittest.TestCase):
         
         # The Z axis (local up, index 2 in rotation matrix) should align with world up
         rot_mat = pose.rotation_matrix()
-        local_up = rot_mat[:, 1]  # Column 1 is the up direction
+        local_up = rot_mat[:, 2]  # Column 2 is the up direction (X=right, Y=forward, Z=up)
         numpy.testing.assert_array_almost_equal(
             local_up,
             up,

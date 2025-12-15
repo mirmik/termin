@@ -1,5 +1,6 @@
 
 from termin.geombase import Pose3
+from termin.geombase.general_pose3 import GeneralPose3
 from termin.colliders.collider import Collider
 from termin.kinematic import Transform3
 import numpy
@@ -13,7 +14,11 @@ class AttachedCollider:
 
     def transformed_collider(self) -> Collider:
         """Get the collider in world coordinates."""
-        world_transform = self._transform.global_pose() * self._local_pose
+        global_pose = self._transform.global_pose()
+        # Convert GeneralPose3 to Pose3 at physics boundary
+        if isinstance(global_pose, GeneralPose3):
+            global_pose = global_pose.to_pose3()
+        world_transform = global_pose * self._local_pose
         wcol = self._collider.transform_by(world_transform)
         return wcol
 

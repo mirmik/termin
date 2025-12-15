@@ -8,6 +8,7 @@
 """
 
 from .transform import Transform, Transform3
+from .general_transform import GeneralTransform3
 from .kinematic import (
     KinematicTransform3,
     KinematicTransform3OneScrew,
@@ -20,6 +21,7 @@ from .conditions import SymCondition, ConditionCollection
 __all__ = [
     'Transform',
     'Transform3',
+    'GeneralTransform3',
     'KinematicTransform3',
     'KinematicTransform3OneScrew',
     'Rotator3',

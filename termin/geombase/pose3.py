@@ -385,3 +385,16 @@ class Pose3:
     def rotate_vector(self, vec: numpy.ndarray) -> numpy.ndarray:
         """Rotate a 3D vector using the pose's rotation."""
         return qrot(self.ang, vec)
+
+    def to_general_pose3(self, scale: numpy.ndarray = None) -> 'GeneralPose3':
+        """Convert to GeneralPose3 with optional scale.
+
+        Args:
+            scale: 3D scale vector. Defaults to [1, 1, 1].
+        """
+        from .general_pose3 import GeneralPose3
+        return GeneralPose3(
+            ang=self.ang.copy(),
+            lin=self.lin.copy(),
+            scale=scale.copy() if scale is not None else None
+        )

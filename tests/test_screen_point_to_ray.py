@@ -24,7 +24,8 @@ def test_center_ray_direction_forward():
     cam_entity, cam = build_basic_camera()
     ray = cam.screen_point_to_ray(w * 0.5, h * 0.5, viewport)
 
-    forward = np.array([0, 0, -1], dtype=float)
+    # Project uses Y-forward convention (local +Y = forward)
+    forward = np.array([0, 1, 0], dtype=float)
     dot = np.dot(ray.direction / np.linalg.norm(ray.direction), forward)
     assert dot > 0.99, f"Bad direction: {ray.direction}, dot={dot}"
 
@@ -52,7 +53,8 @@ def test_top_bottom_symmetry():
     ray_top = cam.screen_point_to_ray(w * 0.5, 0, viewport)
     ray_bottom = cam.screen_point_to_ray(w * 0.5, h, viewport)
 
-    assert pytest.approx(ray_top.direction[1], rel=1e-3) == -ray_bottom.direction[1]
+    # Y-forward convention: vertical screen maps to Z axis
+    assert pytest.approx(ray_top.direction[2], rel=1e-3) == -ray_bottom.direction[2]
     assert pytest.approx(ray_top.direction[0], rel=1e-3) == ray_bottom.direction[0]
 
 
@@ -64,8 +66,9 @@ def test_raycast_center_hits_object():
     cam_entity, cam = build_basic_camera()
     scene.add(cam_entity)
 
-    obj = Entity(pose=Pose3(lin=np.array([0.0, 0.0, -5.0])), name="obj")
-    sphere = SphereCollider(np.array([0.0, 0.0, -5.0]), 1.0)
+    # Y-forward convention: object in front of camera is at +Y
+    obj = Entity(pose=Pose3(lin=np.array([0.0, 5.0, 0.0])), name="obj")
+    sphere = SphereCollider(np.array([0.0, 5.0, 0.0]), 1.0)
 
     from termin.colliders.collider_component import ColliderComponent
     obj.add_component(ColliderComponent(sphere))

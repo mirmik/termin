@@ -315,7 +315,8 @@ def test_resource_manager_serialize():
     from termin.visualization.core.mesh import MeshDrawable
     from termin.mesh.mesh import Mesh3
 
-    rm = ResourceManager()
+    ResourceManager._reset_for_testing()
+    rm = ResourceManager.instance()
 
     mat = Material(color=np.array([1, 0, 0, 1], dtype=np.float32))
     rm.register_material("red", mat)
@@ -342,7 +343,8 @@ def test_resource_manager_deserialize():
     from termin.visualization.core.mesh import MeshDrawable
     from termin.mesh.mesh import Mesh3
 
-    rm = ResourceManager()
+    ResourceManager._reset_for_testing()
+    rm = ResourceManager.instance()
 
     mat = Material(color=np.array([1, 0, 0, 1], dtype=np.float32))
     mat.name = "red"
@@ -385,7 +387,8 @@ def test_full_world_json_roundtrip():
         raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
     # Создаём ресурсы
-    rm = ResourceManager()
+    ResourceManager._reset_for_testing()
+    rm = ResourceManager.instance()
 
     mat = Material(color=np.array([0.8, 0.2, 0.1, 1.0], dtype=np.float32))
     mat.name = "test_mat"
