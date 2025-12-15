@@ -35,6 +35,7 @@ in vec2 v_uv;
 
 uniform vec4 u_color; // RGBA базового материала
 uniform sampler2D u_albedo_texture; // Текстура цвета (белая 1x1 по умолчанию)
+uniform float u_shininess; // Размер блика (1-128)
 
 // ============== Источники света ==============
 const int LIGHT_TYPE_DIRECTIONAL = 0;
@@ -198,8 +199,7 @@ void main() {
         vec3 V = normalize(u_camera_position - v_world_pos);
         vec3 H = normalize(L + V);
         float ndoth = max(dot(N, H), 0.0);
-        float shininess = 16.0;
-        float spec = pow(ndoth, shininess);
+        float spec = pow(ndoth, u_shininess);
 
         vec3 specular_color = vec3(1.0);
         vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n
