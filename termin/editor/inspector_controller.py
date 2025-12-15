@@ -172,6 +172,10 @@ class InspectorController:
         """Access to the stack widget."""
         return self._stack
 
+    def set_scene(self, scene: "Scene | None") -> None:
+        """Set the scene for layer/flag names in entity inspector."""
+        self._entity_inspector.set_scene(scene)
+
     def show_entity_inspector(self, entity: "Entity | None" = None) -> None:
         """Show EntityInspector and optionally set target entity."""
         self._stack.setCurrentIndex(self.ENTITY_INSPECTOR_INDEX)

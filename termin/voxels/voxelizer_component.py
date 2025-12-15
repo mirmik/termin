@@ -34,6 +34,12 @@ class VoxelizeMode(IntEnum):
     FULL_GRID = 5       # Заполнить всю сетку (без вокселизации меша)
 
 
+class VoxelizeSource(IntEnum):
+    """Источник мешей для вокселизации."""
+    CURRENT_MESH = 0      # Только меш текущего entity
+    ALL_DESCENDANTS = 1   # Меши всех потомков (включая текущий entity)
+
+
 class NavMeshStage(IntEnum):
     """Стадии алгоритма построения NavMesh."""
     REGIONS_BASIC = 0       # Регионы до расширения
@@ -88,6 +94,15 @@ class VoxelizerComponent(Component):
                 (VoxelizeMode.SURFACE_ONLY, "Surface Only (interior removed)"),
                 (VoxelizeMode.WITH_NORMALS, "With Normals"),
                 (VoxelizeMode.FULL_GRID, "Full Grid (fill bounds)"),
+            ],
+        ),
+        "voxelize_source": InspectField(
+            path="voxelize_source",
+            label="Source",
+            kind="enum",
+            choices=[
+                (VoxelizeSource.CURRENT_MESH, "Current Mesh"),
+                (VoxelizeSource.ALL_DESCENDANTS, "All Descendants"),
             ],
         ),
         "output_path": InspectField(
@@ -185,7 +200,7 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours", "project_contours", "stitch_contours", "share_boundary", "show_multi_normal_voxels", "show_boundary_voxels"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "voxelize_source", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours", "project_contours", "stitch_contours", "share_boundary", "show_multi_normal_voxels", "show_boundary_voxels"]
 
     def __init__(
         self,
@@ -193,6 +208,7 @@ class VoxelizerComponent(Component):
         cell_size: float = 0.25,
         output_path: str = "",
         voxelize_mode: VoxelizeMode = VoxelizeMode.SHELL,
+        voxelize_source: VoxelizeSource = VoxelizeSource.CURRENT_MESH,
         navmesh_output_path: str = "",
         normal_angle: float = 25.0,
         expand_regions: bool = False,
@@ -211,6 +227,7 @@ class VoxelizerComponent(Component):
         self.cell_size = cell_size
         self.output_path = output_path
         self.voxelize_mode = voxelize_mode
+        self.voxelize_source = voxelize_source
         self.navmesh_output_path = navmesh_output_path
         self.normal_angle = normal_angle
         self.expand_regions = expand_regions
@@ -421,6 +438,113 @@ class VoxelizerComponent(Component):
             )
         return self._debug_contour_material
 
+    def _collect_meshes_from_entity(
+        self,
+        entity,
+        root_transform_inv: np.ndarray,
+        recurse: bool = True,
+    ) -> List[tuple["Mesh3", np.ndarray]]:
+        """
+        Собрать меши из entity (и опционально его потомков).
+
+        Args:
+            entity: Entity для обхода
+            root_transform_inv: Обратная матрица трансформа корневого entity
+            recurse: Если True — рекурсивно обходить детей
+
+        Returns:
+            Список (mesh, transform_matrix) для каждого найденного меша
+        """
+        from termin.visualization.render.components import MeshRenderer
+
+        result: List[tuple["Mesh3", np.ndarray]] = []
+
+        # Проверяем MeshRenderer на текущем entity
+        for comp in entity.components:
+            if isinstance(comp, MeshRenderer):
+                mesh_drawable = comp.mesh
+                if mesh_drawable is not None and mesh_drawable.mesh is not None:
+                    # Получаем мировую трансформацию entity
+                    world_matrix = entity.transform.world_matrix()
+                    # Преобразуем в локальную систему координат корневого entity
+                    local_matrix = root_transform_inv @ world_matrix
+                    result.append((mesh_drawable.mesh, local_matrix))
+                break  # Только один MeshRenderer на entity
+
+        # Рекурсивно обходим детей (если нужно)
+        if recurse:
+            for child in entity.transform.children:
+                if child.entity is not None:
+                    result.extend(self._collect_meshes_from_entity(child.entity, root_transform_inv, recurse=True))
+
+        return result
+
+    def _create_combined_mesh(
+        self,
+        meshes: List[tuple["Mesh3", np.ndarray]],
+    ) -> Optional["Mesh3"]:
+        """
+        Объединить несколько мешей в один с применением трансформаций.
+
+        Args:
+            meshes: Список (mesh, transform_matrix)
+
+        Returns:
+            Объединённый меш или None если нет данных
+        """
+        if not meshes:
+            return None
+
+        all_vertices = []
+        all_indices = []
+        all_normals = []
+        vertex_offset = 0
+
+        for mesh, transform in meshes:
+            vertices = mesh.vertices
+            indices = mesh.indices
+            normals = mesh.normals
+
+            if vertices is None or len(vertices) == 0:
+                continue
+
+            # Применяем трансформацию к вершинам
+            # transform - матрица 4x4
+            ones = np.ones((len(vertices), 1), dtype=np.float32)
+            vertices_h = np.hstack([vertices, ones])  # Nx4
+            transformed = (transform @ vertices_h.T).T[:, :3]  # Nx3
+            all_vertices.append(transformed.astype(np.float32))
+
+            # Применяем трансформацию к нормалям (только вращение, без переноса)
+            if normals is not None and len(normals) > 0:
+                # Нормали трансформируются обратно-транспонированной матрицей
+                # Но для uniform scale достаточно просто вращения
+                rotation = transform[:3, :3]
+                # Нормализуем после трансформации (на случай non-uniform scale)
+                transformed_normals = (rotation @ normals.T).T
+                norms = np.linalg.norm(transformed_normals, axis=1, keepdims=True)
+                norms[norms == 0] = 1  # Избегаем деления на 0
+                transformed_normals = transformed_normals / norms
+                all_normals.append(transformed_normals.astype(np.float32))
+
+            # Смещаем индексы
+            if indices is not None and len(indices) > 0:
+                all_indices.append(indices + vertex_offset)
+                vertex_offset += len(vertices)
+
+        if not all_vertices:
+            return None
+
+        combined_vertices = np.vstack(all_vertices)
+        combined_indices = np.hstack(all_indices) if all_indices else None
+        combined_normals = np.vstack(all_normals) if all_normals else None
+
+        return Mesh3(
+            vertices=combined_vertices,
+            indices=combined_indices,
+            normals=combined_normals,
+        )
+
     def voxelize(self) -> bool:
         """
         Вокселизировать меш entity, зарегистрировать в ResourceManager и сохранить в файл.
@@ -428,7 +552,6 @@ class VoxelizerComponent(Component):
         Returns:
             True если успешно, False если ошибка.
         """
-        from termin.visualization.render.components import MeshRenderer
         from termin.visualization.core.resources import ResourceManager
         from termin.voxels.grid import VoxelGrid
         from termin.voxels.voxelizer import VOXEL_SOLID
@@ -439,25 +562,24 @@ class VoxelizerComponent(Component):
             print("VoxelizerComponent: no entity")
             return False
 
-        # Ищем MeshRenderer на этом entity
-        renderer: Optional[MeshRenderer] = None
-        for comp in self.entity.components:
-            if isinstance(comp, MeshRenderer):
-                renderer = comp
-                break
+        # Получаем обратную матрицу корневого entity для перевода в локальные координаты
+        root_world = self.entity.transform.world_matrix()
+        root_inv = np.linalg.inv(root_world)
 
-        if renderer is None:
-            print("VoxelizerComponent: no MeshRenderer on entity")
+        # Собираем меши в зависимости от режима
+        recurse = (self.voxelize_source == VoxelizeSource.ALL_DESCENDANTS)
+        meshes = self._collect_meshes_from_entity(self.entity, root_inv, recurse=recurse)
+
+        if not meshes:
+            print("VoxelizerComponent: no meshes found")
             return False
 
-        mesh_drawable = renderer.mesh
-        if mesh_drawable is None:
-            print("VoxelizerComponent: MeshRenderer has no mesh")
-            return False
+        if len(meshes) > 1:
+            print(f"VoxelizerComponent: found {len(meshes)} meshes")
 
-        mesh = mesh_drawable.mesh
+        mesh = self._create_combined_mesh(meshes)
         if mesh is None:
-            print("VoxelizerComponent: mesh is None")
+            print("VoxelizerComponent: failed to create mesh")
             return False
 
         # Определяем имя сетки

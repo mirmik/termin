@@ -159,3 +159,11 @@ class DialogManager:
 
         dialog = SettingsDialog(self._parent)
         dialog.exec()
+
+    def show_layers_dialog(self) -> None:
+        """Opens layers and flags configuration dialog."""
+        from termin.editor.layers_dialog import LayersDialog
+
+        scene = self._get_scene()
+        dialog = LayersDialog(scene, self._parent)
+        dialog.exec()

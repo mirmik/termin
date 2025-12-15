@@ -41,6 +41,7 @@ class MenuBarController:
         on_redo: Callable,
         on_settings: Callable,
         on_scene_properties: Callable,
+        on_layers_settings: Callable,
         on_toggle_game_mode: Callable,
         on_show_undo_stack_viewer: Callable,
         on_show_framegraph_debugger: Callable,
@@ -71,6 +72,7 @@ class MenuBarController:
             on_redo=on_redo,
             on_settings=on_settings,
             on_scene_properties=on_scene_properties,
+            on_layers_settings=on_layers_settings,
             on_toggle_game_mode=on_toggle_game_mode,
             on_show_undo_stack_viewer=on_show_undo_stack_viewer,
             on_show_framegraph_debugger=on_show_framegraph_debugger,
@@ -93,6 +95,7 @@ class MenuBarController:
         on_redo: Callable,
         on_settings: Callable,
         on_scene_properties: Callable,
+        on_layers_settings: Callable,
         on_toggle_game_mode: Callable,
         on_show_undo_stack_viewer: Callable,
         on_show_framegraph_debugger: Callable,
@@ -163,6 +166,9 @@ class MenuBarController:
         # Scene menu
         scene_properties_action = scene_menu.addAction("Scene Properties...")
         scene_properties_action.triggered.connect(on_scene_properties)
+
+        layers_settings_action = scene_menu.addAction("Layers && Flags...")
+        layers_settings_action.triggered.connect(on_layers_settings)
 
         # Game menu
         self._action_play = game_menu.addAction("Play")

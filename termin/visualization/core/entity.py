@@ -31,7 +31,9 @@ class Entity:
     def __init__(self, pose: Pose3 = Pose3.identity(), name : str = "entity", scale: float | numpy.ndarray = 1.0, priority: int = 0,
             pickable: bool = True,
             selectable: bool = True,
-            serializable: bool = True):
+            serializable: bool = True,
+            layer: int = 0,
+            flags: int = 0):
 
         if scale is None:
             scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
@@ -50,6 +52,8 @@ class Entity:
         self.selectable = selectable
         self.serializable = serializable  # False для редакторных сущностей (гизмо и т.д.)
         self._pick_id: int | None = None
+        self.layer: int = max(0, min(63, layer))  # 0-63
+        self.flags: int = flags & 0xFFFFFFFFFFFFFFFF  # 64-bit mask
 
     @property
     def scale(self) -> np.ndarray:
@@ -189,6 +193,8 @@ class Entity:
             "active": self.active,
             "pickable": self.pickable,
             "selectable": self.selectable,
+            "layer": self.layer,
+            "flags": self.flags,
             "pose": {
                 "position": list(pose.lin),
                 "rotation": list(pose.ang),
@@ -227,6 +233,8 @@ class Entity:
             priority=data.get("priority", 0),
             pickable=data.get("pickable", True),
             selectable=data.get("selectable", True),
+            layer=data.get("layer", 0),
+            flags=data.get("flags", 0),
         )
 
         # Восстанавливаем дополнительные поля

@@ -48,6 +48,10 @@ class Scene:
         # Lighting manager
         self._lighting = LightingManager()
 
+        # Layer and flag names (index -> name)
+        self.layer_names: dict[int, str] = {}  # 0-63
+        self.flag_names: dict[int, str] = {}   # 0-63 (bit index)
+
     # --- Skybox delegation (backward compatibility) ---
 
     @property
@@ -193,6 +197,30 @@ class Scene:
 
         return best_hit
 
+    # --- Layer and flag names ---
+
+    def get_layer_name(self, index: int) -> str:
+        """Get layer name by index, or default 'Layer N'."""
+        return self.layer_names.get(index, f"Layer {index}")
+
+    def get_flag_name(self, index: int) -> str:
+        """Get flag name by bit index, or default 'Flag N'."""
+        return self.flag_names.get(index, f"Flag {index}")
+
+    def set_layer_name(self, index: int, name: str):
+        """Set layer name. Empty name removes the entry."""
+        if name:
+            self.layer_names[index] = name
+        else:
+            self.layer_names.pop(index, None)
+
+    def set_flag_name(self, index: int, name: str):
+        """Set flag name. Empty name removes the entry."""
+        if name:
+            self.flag_names[index] = name
+        else:
+            self.flag_names.pop(index, None)
+
     # --- Entity management ---
 
     def add_non_recurse(self, entity: Entity) -> Entity:
@@ -320,6 +348,8 @@ class Scene:
         result = {
             "background_color": list(self.background_color),
             "entities": serialized_entities,
+            "layer_names": {str(k): v for k, v in self.layer_names.items()},
+            "flag_names": {str(k): v for k, v in self.flag_names.items()},
         }
         result.update(self._lighting.serialize())
         result.update(self._skybox.serialize())
@@ -351,6 +381,9 @@ class Scene:
             )
             self._lighting.load_from_data(data)
             self._skybox.load_from_data(data)
+            # Load layer and flag names
+            self.layer_names = {int(k): v for k, v in data.get("layer_names", {}).items()}
+            self.flag_names = {int(k): v for k, v in data.get("flag_names", {}).items()}
 
         loaded_count = 0
         for ent_data in data.get("entities", []):

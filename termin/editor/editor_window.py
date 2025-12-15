@@ -209,6 +209,7 @@ class EditorWindow(QMainWindow):
         self.entity_inspector = self._inspector_controller.entity_inspector
         self.material_inspector = self._inspector_controller.material_inspector
         self.inspector = self.entity_inspector
+        self._inspector_controller.set_scene(self.scene)
 
         # --- DialogManager ---
         self._dialog_manager = DialogManager(
@@ -387,6 +388,7 @@ class EditorWindow(QMainWindow):
             on_redo=self.redo,
             on_settings=self._show_settings_dialog,
             on_scene_properties=self._show_scene_properties,
+            on_layers_settings=self._show_layers_dialog,
             on_toggle_game_mode=self._toggle_game_mode,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
@@ -452,6 +454,10 @@ class EditorWindow(QMainWindow):
     def _show_scene_properties(self) -> None:
         """Opens scene properties dialog."""
         self._dialog_manager.show_scene_properties()
+
+    def _show_layers_dialog(self) -> None:
+        """Opens layers and flags configuration dialog."""
+        self._dialog_manager.show_layers_dialog()
 
     def _show_undo_stack_viewer(self) -> None:
         """Opens undo/redo stack viewer window."""
@@ -1279,7 +1285,9 @@ class EditorWindow(QMainWindow):
             self.scene_tree_controller._scene = new_scene
             self.scene_tree_controller.rebuild()
 
-        # Clear inspector
+        # Clear inspector and update scene for layer/flag names
+        if self._inspector_controller is not None:
+            self._inspector_controller.set_scene(new_scene)
         if self.inspector is not None:
             self.inspector.set_target(None)
 
