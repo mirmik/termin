@@ -1,5 +1,56 @@
 # termin/loaders/fbx_loader.py
-"""FBX loader using ufbx library."""
+"""FBX loader using ufbx library.
+
+UFBX QUIRKS AND LIMITATIONS (discovered 2025-12):
+=================================================
+
+1. SINGLE-PASS ITERATION ONLY
+   ufbx crashes (segfault) if you iterate over the same collection twice,
+   or iterate over different collections in certain orders.
+
+   BAD (crashes):
+       for mesh in scene.meshes: ...
+       for mesh in scene.meshes: ...  # Second iteration = segfault
+
+   BAD (crashes):
+       for mesh in scene.meshes: ...
+       for node in scene.nodes: ...   # Wrong order = segfault
+
+   GOOD:
+       for node in nodes:
+           if node.mesh:
+               process(node.mesh)  # Access mesh through node in single pass
+
+2. ACCESS ORDER MATTERS
+   Safe order: nodes -> meshes (through nodes) -> materials
+   The only reliable way is to extract ALL mesh data while traversing nodes.
+
+3. NO as_triangles() METHOD
+   Despite what some docs suggest, ufbx.Mesh has no as_triangles() method.
+   Triangulation must be done manually using face.index_begin and face.num_indices.
+
+4. UV DATA LOCATION
+   UVs are NOT in uv_sets[0].values directly.
+   Correct path: mesh.uv_sets[0].vertex_uv.values and .indices
+
+5. TRANSFORM IS TRS, NOT MATRIX
+   node.local_transform contains .translation, .rotation (quaternion), .scale
+   NOT a 4x4 matrix with m00, m01, etc.
+
+6. LIST OBJECTS DON'T SUPPORT SLICING
+   ufbx lists (Vec3List, Uint32List, etc.) don't support slice syntax [:10].
+   Use index access in a loop instead.
+
+7. ALTERNATIVE LIBRARIES
+   - pyassimp: Also crashes on complex FBX files with bones (NULL pointer access)
+   - trimesh: Doesn't support FBX directly
+   - Consider converting FBX to glTF externally for more reliable loading
+
+8. TEXTURE EXTRACTION
+   Do NOT iterate scene.textures separately - it causes segfault.
+   Extract texture data while iterating materials (via mat.pbr.base_color.texture).
+   Embedded texture content is in tex.content with tex.content_size bytes.
+"""
 
 import numpy as np
 import ufbx
@@ -15,11 +66,19 @@ class FBXMeshData:
         self.material_index = material_index
 
 
+class FBXTextureData:
+    """Holds texture data extracted from FBX."""
+    def __init__(self, name, filename, content=None):
+        self.name = name
+        self.filename = filename  # Original filename from FBX
+        self.content = content    # Raw bytes (PNG/JPG data) if embedded
+
+
 class FBXMaterialData:
     def __init__(self, name, diffuse_color=None, diffuse_texture=None):
         self.name = name
         self.diffuse_color = diffuse_color
-        self.diffuse_texture = diffuse_texture
+        self.diffuse_texture = diffuse_texture  # Texture filename/path
 
 
 class FBXNodeData:
@@ -50,6 +109,7 @@ class FBXSceneData:
     def __init__(self):
         self.meshes = []
         self.materials = []
+        self.textures = []  # FBXTextureData list (embedded textures)
         self.root = None
         self.animations = []
 
@@ -405,8 +465,12 @@ def load_fbx_file(path) -> FBXSceneData:
         for i in range(len(node.children)):
             stack.append(node.children[i])
 
-    # Materials - parsed separately (seems safe after nodes)
+    # Materials and textures - extract together to avoid multiple iterations
+    # NOTE: iterating scene.textures separately causes segfault!
     mat_data_list = []
+    tex_data_list = []
+    processed_textures = set()
+
     for mat in scene.materials:
         diffuse_color = None
         if mat.pbr.base_color.has_value:
@@ -414,8 +478,29 @@ def load_fbx_file(path) -> FBXSceneData:
             diffuse_color = (c.x, c.y, c.z, c.w)
 
         diffuse_texture = None
-        if mat.pbr.base_color.texture and mat.pbr.base_color.texture.filename:
-            diffuse_texture = mat.pbr.base_color.texture.filename
+        tex = mat.pbr.base_color.texture
+        if tex and tex.filename:
+            diffuse_texture = tex.filename
+
+            # Extract texture content while we have access to it
+            tex_key = tex.filename or id(tex)
+            if tex_key not in processed_textures:
+                processed_textures.add(tex_key)
+
+                content = None
+                # Check for embedded content (raw image bytes)
+                if hasattr(tex, 'content') and tex.content:
+                    try:
+                        if hasattr(tex, 'content_size') and tex.content_size > 0:
+                            content = bytes(tex.content[:tex.content_size])
+                    except Exception:
+                        pass  # Some textures may not have accessible content
+
+                tex_data_list.append({
+                    'name': tex.name if tex.name else tex.filename,
+                    'filename': tex.filename,
+                    'content': content,
+                })
 
         mat_data_list.append({
             'name': mat.name if mat.name else "Material",
@@ -431,6 +516,14 @@ def load_fbx_file(path) -> FBXSceneData:
             name=mat_data['name'],
             diffuse_color=np.array(mat_data['diffuse_color'], dtype=np.float32) if mat_data['diffuse_color'] else None,
             diffuse_texture=mat_data['diffuse_texture'],
+        ))
+
+    # Textures
+    for tex_data in tex_data_list:
+        scene_data.textures.append(FBXTextureData(
+            name=tex_data['name'],
+            filename=tex_data['filename'],
+            content=tex_data['content'],
         ))
 
     # Meshes

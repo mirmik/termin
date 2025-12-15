@@ -669,6 +669,12 @@ class ProjectBrowser:
                 open_action.triggered.connect(lambda: self._open_file(file_path))
                 menu.addAction(open_action)
 
+                # FBX extraction
+                if file_path.suffix.lower() == ".fbx":
+                    extract_action = QAction("Extract FBX...", self._file_list)
+                    extract_action.triggered.connect(lambda checked, p=file_path: self._extract_fbx(p))
+                    menu.addAction(extract_action)
+
                 menu.addSeparator()
 
             # Показать в проводнике
@@ -819,6 +825,45 @@ class ProjectBrowser:
                 self._file_list,
                 "Error",
                 f"Failed to delete: {e}",
+            )
+
+    def _extract_fbx(self, fbx_path: Path) -> None:
+        """Extract FBX file contents (meshes, textures) to a directory."""
+        from termin.loaders.fbx_extractor import extract_fbx
+
+        # Default output directory is same name as FBX file
+        output_dir = fbx_path.parent / fbx_path.stem
+
+        if output_dir.exists():
+            reply = QMessageBox.question(
+                self._file_list,
+                "Directory Exists",
+                f"Directory '{output_dir.name}' already exists.\nOverwrite contents?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        try:
+            output_dir, created_files = extract_fbx(fbx_path, output_dir)
+
+            QMessageBox.information(
+                self._file_list,
+                "FBX Extracted",
+                f"Extracted {len(created_files)} files to:\n{output_dir}",
+            )
+
+            self._refresh()
+
+            # Navigate to extracted directory
+            self._navigate_to_directory(output_dir)
+
+        except Exception as e:
+            QMessageBox.warning(
+                self._file_list,
+                "Extract Failed",
+                f"Failed to extract FBX:\n{e}",
             )
 
     def _create_material(self) -> None:
