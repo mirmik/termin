@@ -663,14 +663,42 @@ class VoxelizerComponent(Component):
         builder = PolygonBuilder()
         contour_width = grid.cell_size * 0.15
 
+        # Для сшивки контуров: строим mapping и плоскости
+        voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
+        region_planes: list[tuple[np.ndarray, np.ndarray]] = []
+
+        if self.stitch_contours:
+            for region_idx, (region_voxels, _) in enumerate(self._debug_regions):
+                for voxel in region_voxels:
+                    if voxel not in voxel_to_regions:
+                        voxel_to_regions[voxel] = []
+                    voxel_to_regions[voxel].append(region_idx)
+
+            for region_voxels, region_normal in self._debug_regions:
+                centers_3d = np.array([
+                    grid.voxel_to_world(vx, vy, vz)
+                    for vx, vy, vz in region_voxels
+                ], dtype=np.float32)
+                centroid = centers_3d.mean(axis=0)
+                region_planes.append((centroid, region_normal))
+
         all_vertices: list[np.ndarray] = []
         all_triangles: list[np.ndarray] = []
         all_colors: list[np.ndarray] = []
         vertex_offset = 0
 
         for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
-            # Извлекаем контур
-            polygon = builder._extract_contour_from_voxels(region_voxels, region_normal, grid)
+            # Извлекаем контур с учётом настроек проекции/сшивки
+            polygon = builder._extract_contour_from_voxels(
+                region_voxels,
+                region_normal,
+                grid,
+                region_idx=region_idx,
+                project_contours=self.project_contours,
+                stitch_contours=self.stitch_contours,
+                voxel_to_regions=voxel_to_regions if self.stitch_contours else None,
+                region_planes=region_planes if self.stitch_contours else None,
+            )
 
             if polygon is None or polygon.outer_contour is None:
                 continue
@@ -680,22 +708,6 @@ class VoxelizerComponent(Component):
 
             if len(outer) < 2:
                 continue
-
-            # Проецируем на плоскость региона (если включено)
-            if self.project_contours:
-                # Вычисляем центроид региона
-                region_centers = np.array([
-                    grid.voxel_to_world(vx, vy, vz)
-                    for vx, vy, vz in region_voxels
-                ], dtype=np.float32)
-                centroid = region_centers.mean(axis=0)
-                normal = np.array(region_normal, dtype=np.float32)
-
-                # Проецируем каждую вершину контура на плоскость
-                for i in range(len(verts)):
-                    point = verts[i]
-                    dist = np.dot(point - centroid, normal)
-                    verts[i] = point - dist * normal
 
             # Строим ribbon для контура
             up_hint = np.array(region_normal, dtype=np.float32)
