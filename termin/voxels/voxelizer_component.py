@@ -821,12 +821,17 @@ class VoxelizerComponent(Component):
         min_world = np.array([float('inf'), float('inf'), float('inf')], dtype=np.float32)
         max_world = np.array([float('-inf'), float('-inf'), float('-inf')], dtype=np.float32)
 
-        # Генерируем случайные цвета для регионов
+        # Генерируем яркие цвета для регионов через HSV
+        # H = случайный, S = высокая насыщенность, V = высокая яркость
+        import colorsys
         random.seed(42)  # Фиксированный seed для воспроизводимости
-        region_colors = [
-            (random.random() * 0.7 + 0.3, random.random() * 0.7 + 0.3, random.random() * 0.7 + 0.3)
-            for _ in self._debug_regions
-        ]
+        region_colors = []
+        for _ in self._debug_regions:
+            h = random.random()  # Полный диапазон оттенков
+            s = random.random() * 0.3 + 0.7  # Насыщенность [0.7, 1.0]
+            v = random.random() * 0.2 + 0.8  # Яркость [0.8, 1.0]
+            r, g, b = colorsys.hsv_to_rgb(h, s, v)
+            region_colors.append((r, g, b))
 
         voxel_idx = 0
         for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
