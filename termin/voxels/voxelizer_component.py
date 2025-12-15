@@ -55,9 +55,8 @@ def _build_navmesh_action(component: "VoxelizerComponent") -> None:
 
 
 def _set_debug_region(component: "VoxelizerComponent", value: int) -> None:
-    """Setter для debug_region_idx — перестраивает отладочный меш."""
+    """Setter для debug_region_idx (не используется, все регионы показываются сразу)."""
     component.debug_region_idx = int(value)
-    component._rebuild_debug_mesh()
 
 
 class VoxelizerComponent(Component):
@@ -212,8 +211,6 @@ class VoxelizerComponent(Component):
         """Рисует отладочную геометрию."""
         if self._debug_mesh_drawable is not None:
             self._debug_mesh_drawable.draw(context)
-        if self.debug_show_contour and self._debug_contour_drawable is not None:
-            self._debug_contour_drawable.draw(context)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
@@ -489,11 +486,13 @@ class VoxelizerComponent(Component):
             return False
 
     def _rebuild_debug_mesh(self) -> None:
-        """Перестроить отладочный меш для выбранного региона."""
+        """Перестроить отладочный меш для всех регионов."""
         from termin.voxels.display_component import (
             _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS,
             VERTS_PER_CUBE, TRIS_PER_CUBE, CUBE_SCALE,
         )
+        from termin.voxels.voxel_mesh import VoxelMesh
+        import random
 
         # Очищаем старые drawable
         if self._debug_mesh_drawable is not None:
@@ -506,52 +505,57 @@ class VoxelizerComponent(Component):
         if not self._debug_regions or self._debug_grid is None:
             return
 
-        region_idx = self.debug_region_idx
-        if region_idx < 0 or region_idx >= len(self._debug_regions):
-            print(f"VoxelizerComponent: region {region_idx} out of range (0-{len(self._debug_regions)-1})")
-            return
-
-        region_voxels, region_normal = self._debug_regions[region_idx]
-        if not region_voxels:
-            return
-
         grid = self._debug_grid
         cell_size = grid.cell_size
-
-        from termin.voxels.voxel_mesh import VoxelMesh
-
-        # Строим меш из вокселей региона
-        voxel_count = len(region_voxels)
-        vertices = np.zeros((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
-        triangles = np.zeros((voxel_count * TRIS_PER_CUBE, 3), dtype=np.int32)
-        normals = np.zeros((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
-        uvs = np.zeros((voxel_count * VERTS_PER_CUBE, 2), dtype=np.float32)
-        colors = np.ones((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
-
         cube_size = cell_size * CUBE_SCALE
+
+        # Считаем общее количество вокселей
+        total_voxels = sum(len(voxels) for voxels, _ in self._debug_regions)
+        if total_voxels == 0:
+            return
+
+        # Выделяем массивы
+        vertices = np.zeros((total_voxels * VERTS_PER_CUBE, 3), dtype=np.float32)
+        triangles = np.zeros((total_voxels * TRIS_PER_CUBE, 3), dtype=np.int32)
+        normals = np.zeros((total_voxels * VERTS_PER_CUBE, 3), dtype=np.float32)
+        uvs = np.zeros((total_voxels * VERTS_PER_CUBE, 2), dtype=np.float32)
+        colors = np.zeros((total_voxels * VERTS_PER_CUBE, 3), dtype=np.float32)
 
         # Вычисляем bounds
         min_world = np.array([float('inf'), float('inf'), float('inf')], dtype=np.float32)
         max_world = np.array([float('-inf'), float('-inf'), float('-inf')], dtype=np.float32)
 
-        for i, (vx, vy, vz) in enumerate(region_voxels):
-            center = grid.voxel_to_world(vx, vy, vz)
-            min_world = np.minimum(min_world, center)
-            max_world = np.maximum(max_world, center)
+        # Генерируем случайные цвета для регионов
+        random.seed(42)  # Фиксированный seed для воспроизводимости
+        region_colors = [
+            (random.random() * 0.7 + 0.3, random.random() * 0.7 + 0.3, random.random() * 0.7 + 0.3)
+            for _ in self._debug_regions
+        ]
 
-            v_offset = i * VERTS_PER_CUBE
-            t_offset = i * TRIS_PER_CUBE
+        voxel_idx = 0
+        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
+            region_color = region_colors[region_idx]
 
-            # Масштабируем и смещаем вершины куба
-            vertices[v_offset:v_offset + VERTS_PER_CUBE] = (
-                _CUBE_VERTICES * cube_size + center
-            )
-            triangles[t_offset:t_offset + TRIS_PER_CUBE] = (
-                _CUBE_TRIANGLES + v_offset
-            )
-            normals[v_offset:v_offset + VERTS_PER_CUBE] = _CUBE_NORMALS
-            # UV.x = тип вокселя (1.0 = SOLID для отладки)
-            uvs[v_offset:v_offset + VERTS_PER_CUBE, 0] = 1.0
+            for vx, vy, vz in region_voxels:
+                center = grid.voxel_to_world(vx, vy, vz)
+                min_world = np.minimum(min_world, center)
+                max_world = np.maximum(max_world, center)
+
+                v_offset = voxel_idx * VERTS_PER_CUBE
+                t_offset = voxel_idx * TRIS_PER_CUBE
+
+                vertices[v_offset:v_offset + VERTS_PER_CUBE] = (
+                    _CUBE_VERTICES * cube_size + center
+                )
+                triangles[t_offset:t_offset + TRIS_PER_CUBE] = (
+                    _CUBE_TRIANGLES + v_offset
+                )
+                normals[v_offset:v_offset + VERTS_PER_CUBE] = _CUBE_NORMALS
+                # UV.x = 2.0 (VOXEL_SURFACE) чтобы шейдер использовал vertex color
+                uvs[v_offset:v_offset + VERTS_PER_CUBE, 0] = 2.0
+                colors[v_offset:v_offset + VERTS_PER_CUBE] = region_color
+
+                voxel_idx += 1
 
         # Расширяем bounds на половину куба
         half_cube = cube_size * 0.5
@@ -562,10 +566,7 @@ class VoxelizerComponent(Component):
         mesh.vertex_normals = normals
         self._debug_mesh_drawable = MeshDrawable(mesh)
 
-        # Строим контур региона
-        self._rebuild_debug_contour(region_voxels, region_normal, grid)
-
-        print(f"VoxelizerComponent: debug mesh built for region {region_idx} ({voxel_count} voxels)")
+        print(f"VoxelizerComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
 
     def _rebuild_debug_contour(
         self,
