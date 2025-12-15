@@ -297,6 +297,7 @@ class PolygonBuilder:
         sorted_indices = sorted(range(len(regions)), key=lambda i: len(region_sets[i]), reverse=True)
 
         total_absorbed = 0
+        total_pruned = 0
 
         # Обрабатываем каждый регион от большего к меньшему
         for rank, region_idx in enumerate(sorted_indices):
@@ -365,7 +366,37 @@ class PolygonBuilder:
                     absorbed_this_region += 1
 
             total_absorbed += absorbed_this_region
-            if absorbed_this_region > 0:
+
+            # Прореживание висящих вокселей после поглощения
+            # Удаляем воксели с менее чем 2 соседями из этого региона
+            pruned_this_region = 0
+            prune_changed = True
+            while prune_changed and len(region_set) > 2:
+                prune_changed = False
+                to_prune: list[tuple[int, int, int]] = []
+
+                for voxel in region_set:
+                    vx, vy, vz = voxel
+                    neighbor_count = 0
+                    for dx, dy, dz in NEIGHBORS_26:
+                        neighbor = (vx + dx, vy + dy, vz + dz)
+                        if neighbor in region_set:
+                            neighbor_count += 1
+
+                    if neighbor_count < 2:
+                        to_prune.append(voxel)
+
+                for voxel in to_prune:
+                    region_set.discard(voxel)
+                    # Возвращаем воксель в "ничей" — удаляем из voxel_to_region
+                    if voxel in voxel_to_region:
+                        del voxel_to_region[voxel]
+                    prune_changed = True
+                    pruned_this_region += 1
+
+            total_pruned += pruned_this_region
+
+            if absorbed_this_region > 0 or pruned_this_region > 0:
                 # Пересчитываем нормаль региона
                 normal_sum = np.zeros(3, dtype=np.float64)
                 for v in region_set:
@@ -385,8 +416,8 @@ class PolygonBuilder:
                 empty_count += 1
 
         print(f"PolygonBuilder: greedy absorption: {len(regions)} regions, "
-              f"absorbed {total_absorbed} voxels, removed {empty_count} empty regions, "
-              f"result: {len(result)} regions")
+              f"absorbed {total_absorbed} voxels, pruned {total_pruned} hanging, "
+              f"removed {empty_count} empty regions, result: {len(result)} regions")
 
         return result
 
