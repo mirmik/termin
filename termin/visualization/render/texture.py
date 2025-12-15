@@ -22,6 +22,7 @@ class Texture:
         self._size: Optional[tuple[int, int]] = None
         self.source_path: str | None = None
         self.flip_y: bool = True  # Flip for OpenGL by default
+        self.transpose: bool = False  # Swap X and Y axes
         self._preview_pixmap: Optional["QPixmap"] = None
         if path is not None:
             self.load(path)
@@ -32,6 +33,7 @@ class Texture:
         # Load spec for this texture
         spec = TextureSpec.for_texture_file(path)
         self.flip_y = spec.flip_y
+        self.transpose = spec.transpose
 
         # Load image without flipping - flip happens at GPU upload
         image = Image.open(path).convert("RGBA")
@@ -61,12 +63,19 @@ class Texture:
         if self._image_data is None or self._size is None:
             raise RuntimeError("Texture has no image data to upload.")
 
-        # Apply flip_y when uploading to GPU
+        # Apply transformations when uploading to GPU
         data = self._image_data
+        size = self._size
+
+        if self.transpose:
+            # Swap axes 0 and 1 (height and width)
+            data = np.swapaxes(data, 0, 1).copy()
+            size = (size[1], size[0])  # Swap width and height
+
         if self.flip_y:
             data = data[::-1, :, :].copy()
 
-        handle = graphics.create_texture(data, self._size, channels=4)
+        handle = graphics.create_texture(data, size, channels=4)
         self._handles[context_key] = handle
         return handle
 

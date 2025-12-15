@@ -111,6 +111,15 @@ class TextureInspector(QWidget):
         self._flip_y_checkbox.stateChanged.connect(self._on_flip_y_changed)
         form.addRow("Flip Y:", self._flip_y_checkbox)
 
+        # Transpose checkbox
+        self._transpose_checkbox = QCheckBox()
+        self._transpose_checkbox.setToolTip(
+            "Transpose texture (swap X and Y axes).\n"
+            "Use if texture appears rotated 90 degrees."
+        )
+        self._transpose_checkbox.stateChanged.connect(self._on_transpose_changed)
+        form.addRow("Transpose:", self._transpose_checkbox)
+
         layout.addLayout(form)
         layout.addStretch()
 
@@ -158,6 +167,9 @@ class TextureInspector(QWidget):
             # Flip Y setting
             self._flip_y_checkbox.setChecked(texture.flip_y)
 
+            # Transpose setting
+            self._transpose_checkbox.setChecked(texture.transpose)
+
             # Preview
             self._update_preview(texture)
         finally:
@@ -189,12 +201,22 @@ class TextureInspector(QWidget):
         """Handle flip_y checkbox change."""
         if self._updating or not self._file_path:
             return
+        self._save_spec_and_reload()
 
+    def _on_transpose_changed(self, state: int) -> None:
+        """Handle transpose checkbox change."""
+        if self._updating or not self._file_path:
+            return
+        self._save_spec_and_reload()
+
+    def _save_spec_and_reload(self) -> None:
+        """Save current settings to spec file and trigger reload."""
         from termin.loaders.texture_spec import TextureSpec
 
-        # Save spec
-        flip_y = self._flip_y_checkbox.isChecked()
-        spec = TextureSpec(flip_y=flip_y)
+        spec = TextureSpec(
+            flip_y=self._flip_y_checkbox.isChecked(),
+            transpose=self._transpose_checkbox.isChecked(),
+        )
         spec.save_for_texture(self._file_path)
 
         # Emit signal to trigger texture reload
@@ -211,6 +233,7 @@ class TextureInspector(QWidget):
         self._file_size_label.setText("-")
         self._path_label.setText("-")
         self._flip_y_checkbox.setChecked(True)
+        self._transpose_checkbox.setChecked(False)
         self._preview_label.clear()
 
     def _format_size(self, size: int) -> str:

@@ -18,6 +18,8 @@ class TextureSpec:
 
     # Flip texture vertically for OpenGL (origin at bottom-left)
     flip_y: bool = True
+    # Transpose texture (swap X and Y axes)
+    transpose: bool = False
 
     @classmethod
     def load(cls, spec_path: str | Path) -> "TextureSpec":
@@ -31,6 +33,7 @@ class TextureSpec:
                 data = json.load(f)
             return cls(
                 flip_y=data.get("flip_y", True),
+                transpose=data.get("transpose", False),
             )
         except Exception:
             return cls()
@@ -46,6 +49,7 @@ class TextureSpec:
         path = Path(spec_path)
         data = {
             "flip_y": self.flip_y,
+            "transpose": self.transpose,
         }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
