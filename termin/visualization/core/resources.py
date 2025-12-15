@@ -232,7 +232,7 @@ class ResourceManager:
             uniforms=[
                 MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
                 MaterialProperty("u_albedo_texture", "Texture", None),
-                MaterialProperty("u_shininess", "Float", 32.0, 1.0, 128.0),
+                MaterialProperty("u_shininess", "Float", 32.0, 1.0, 512.0),
             ],
         )
 
