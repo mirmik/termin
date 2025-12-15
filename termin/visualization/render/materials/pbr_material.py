@@ -143,8 +143,8 @@ void main() {
     float denominator = 4.0 * NdotV * NdotL + 0.0001;
     vec3 specular = numerator / denominator;
 
-    // DEBUG: output roughness
-    FragColor = vec4(roughness, roughness, roughness, 1.0);
+    // DEBUG: output specular (set roughness to 0.3 in inspector!)
+    FragColor = vec4(specular, 1.0);
 }
 """
 
