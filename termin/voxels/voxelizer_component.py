@@ -54,11 +54,6 @@ def _build_navmesh_action(component: "VoxelizerComponent") -> None:
     component.build_navmesh()
 
 
-def _set_debug_region(component: "VoxelizerComponent", value: int) -> None:
-    """Setter для debug_region_idx (не используется, все регионы показываются сразу)."""
-    component.debug_region_idx = int(value)
-
-
 class VoxelizerComponent(Component):
     """
     Компонент для вокселизации меша entity.
@@ -153,22 +148,19 @@ class VoxelizerComponent(Component):
             non_serializable=True,
         ),
         # --- Debug ---
-        "debug_region_idx": InspectField(
-            path="debug_region_idx",
-            label="Debug Region",
-            kind="int",
-            min=-1,
-            max=1000,
-            setter=_set_debug_region,
+        "show_debug_voxels": InspectField(
+            path="show_debug_voxels",
+            label="Show Voxels",
+            kind="bool",
         ),
-        "debug_show_contour": InspectField(
-            path="debug_show_contour",
-            label="Show Contour",
+        "show_debug_contours": InspectField(
+            path="show_debug_contours",
+            label="Show Contours",
             kind="bool",
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "debug_region_idx"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours"]
 
     def __init__(
         self,
@@ -181,7 +173,8 @@ class VoxelizerComponent(Component):
         expand_regions: bool = False,
         navmesh_stage: NavMeshStage = NavMeshStage.REGIONS_BASIC,
         contour_epsilon: float = 0.1,
-        debug_region_idx: int = -1,
+        show_debug_voxels: bool = True,
+        show_debug_contours: bool = True,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
@@ -196,12 +189,12 @@ class VoxelizerComponent(Component):
         self._last_voxel_count: int = 0
 
         # Debug visualization
-        self.debug_region_idx: int = debug_region_idx
-        self.debug_show_contour: bool = True
+        self.show_debug_voxels: bool = show_debug_voxels
+        self.show_debug_contours: bool = show_debug_contours
         self._debug_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
         self._debug_grid: Optional["VoxelGrid"] = None
         self._debug_mesh_drawable: Optional[MeshDrawable] = None
-        self._debug_contour_drawable: Optional[MeshDrawable] = None
+        self._debug_contours_drawable: Optional[MeshDrawable] = None
         self._debug_material: Optional[Material] = None
         self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
         self._debug_bounds_max: np.ndarray = np.zeros(3, dtype=np.float32)
@@ -216,8 +209,10 @@ class VoxelizerComponent(Component):
 
     def draw_geometry(self, context: "RenderContext", geometry_id: str = "") -> None:
         """Рисует отладочную геометрию."""
-        if self._debug_mesh_drawable is not None:
+        if self.show_debug_voxels and self._debug_mesh_drawable is not None:
             self._debug_mesh_drawable.draw(context)
+        if self.show_debug_contours and self._debug_contours_drawable is not None:
+            self._debug_contours_drawable.draw(context)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
@@ -504,9 +499,9 @@ class VoxelizerComponent(Component):
         if self._debug_mesh_drawable is not None:
             self._debug_mesh_drawable.delete()
             self._debug_mesh_drawable = None
-        if self._debug_contour_drawable is not None:
-            self._debug_contour_drawable.delete()
-            self._debug_contour_drawable = None
+        if self._debug_contours_drawable is not None:
+            self._debug_contours_drawable.delete()
+            self._debug_contours_drawable = None
 
         if not self._debug_regions or self._debug_grid is None:
             return
@@ -572,44 +567,79 @@ class VoxelizerComponent(Component):
         mesh.vertex_normals = normals
         self._debug_mesh_drawable = MeshDrawable(mesh)
 
+        # Строим контуры для всех регионов
+        self._build_debug_contours(grid, region_colors)
+
         print(f"VoxelizerComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
 
-    def _rebuild_debug_contour(
+    def _build_debug_contours(
         self,
-        voxels: list[tuple[int, int, int]],
-        normal: np.ndarray,
         grid: "VoxelGrid",
+        region_colors: list[tuple[float, float, float]],
     ) -> None:
-        """Построить отладочный контур для региона."""
+        """Построить контуры для всех регионов с vertex colors."""
         from termin.navmesh.polygon_builder import PolygonBuilder
         from termin.navmesh.display_component import _build_line_ribbon
+        from termin.voxels.voxel_mesh import VoxelMesh
 
-        # Используем тот же алгоритм что и для NavMesh
         builder = PolygonBuilder()
-        polygon = builder._extract_contour_from_voxels(voxels, normal, grid)
+        contour_width = grid.cell_size * 0.15
 
-        if polygon is None or polygon.outer_contour is None:
+        all_vertices: list[np.ndarray] = []
+        all_triangles: list[np.ndarray] = []
+        all_colors: list[np.ndarray] = []
+        vertex_offset = 0
+
+        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
+            # Извлекаем контур
+            polygon = builder._extract_contour_from_voxels(region_voxels, region_normal, grid)
+
+            if polygon is None or polygon.outer_contour is None:
+                continue
+
+            outer = polygon.outer_contour
+            verts = polygon.vertices
+
+            if len(outer) < 2:
+                continue
+
+            # Строим ribbon для контура
+            up_hint = np.array(region_normal, dtype=np.float32)
+            points = [tuple(verts[idx]) for idx in outer]
+            points.append(points[0])  # Замыкаем
+
+            ribbon_verts, ribbon_tris = _build_line_ribbon(points, contour_width, up_hint)
+
+            if len(ribbon_tris) == 0:
+                continue
+
+            # Добавляем вершины и треугольники
+            all_vertices.append(ribbon_verts)
+            all_triangles.append(ribbon_tris + vertex_offset)
+
+            # Цвет для всех вершин этого контура
+            region_color = region_colors[region_idx]
+            contour_colors = np.full((len(ribbon_verts), 3), region_color, dtype=np.float32)
+            all_colors.append(contour_colors)
+
+            vertex_offset += len(ribbon_verts)
+
+        if not all_vertices:
             return
 
-        # Строим ribbon для контура
-        contour_width = grid.cell_size * 0.1
-        up_hint = np.array(normal, dtype=np.float32)
+        # Объединяем в один меш
+        vertices = np.vstack(all_vertices).astype(np.float32)
+        triangles = np.vstack(all_triangles).astype(np.int32)
+        colors = np.vstack(all_colors).astype(np.float32)
 
-        outer = polygon.outer_contour
-        verts = polygon.vertices
+        # Нормали и UV для совместимости с voxel шейдером
+        normals = np.zeros_like(vertices)
+        normals[:, 2] = 1.0  # Вверх по Z
+        uvs = np.full((len(vertices), 2), [2.0, 0.0], dtype=np.float32)  # UV.x = 2.0 для vertex color
 
-        if len(outer) < 2:
-            return
-
-        # Замыкаем контур
-        points = [tuple(verts[idx]) for idx in outer]
-        points.append(points[0])
-
-        ribbon_verts, ribbon_tris = _build_line_ribbon(points, contour_width, up_hint)
-
-        if len(ribbon_tris) > 0:
-            mesh = Mesh3(vertices=ribbon_verts, triangles=ribbon_tris)
-            self._debug_contour_drawable = MeshDrawable(mesh)
+        mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
+        mesh.vertex_normals = normals
+        self._debug_contours_drawable = MeshDrawable(mesh)
 
     @classmethod
     def deserialize(cls, data: dict, context) -> "VoxelizerComponent":
@@ -624,5 +654,6 @@ class VoxelizerComponent(Component):
             expand_regions=data.get("expand_regions", False),
             navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.REGIONS_BASIC)),
             contour_epsilon=data.get("contour_epsilon", 0.1),
-            debug_region_idx=data.get("debug_region_idx", -1),
+            show_debug_voxels=data.get("show_debug_voxels", True),
+            show_debug_contours=data.get("show_debug_contours", True),
         )
