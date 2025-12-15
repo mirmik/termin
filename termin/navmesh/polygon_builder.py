@@ -384,7 +384,6 @@ class PolygonBuilder:
         while changed:
             changed = False
             iteration += 1
-            to_remove: list[tuple[int, int, int]] = []
 
             for voxel in result:
                 # Находим соседей этого вокселя, которые тоже в boundary
@@ -401,11 +400,11 @@ class PolygonBuilder:
 
                 # Проверяем, связаны ли соседи между собой без этого вокселя
                 if self._are_connected_26(neighbors_in_boundary):
-                    to_remove.append(voxel)
-
-            for voxel in to_remove:
-                result.discard(voxel)
-                changed = True
+                    # Удаляем только один воксель за итерацию,
+                    # чтобы не создать дыры при одновременном удалении нескольких
+                    result.discard(voxel)
+                    changed = True
+                    break
 
         print(f"PolygonBuilder: boundary decimation: {len(boundary)} -> {len(result)} ({iteration} iterations)")
         return result
