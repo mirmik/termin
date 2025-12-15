@@ -196,48 +196,90 @@ class VoxelizerComponent(Component):
         self._debug_mesh_drawable: Optional[MeshDrawable] = None
         self._debug_contours_drawable: Optional[MeshDrawable] = None
         self._debug_material: Optional[Material] = None
+        self._debug_contour_material: Optional[Material] = None
         self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
         self._debug_bounds_max: np.ndarray = np.zeros(3, dtype=np.float32)
 
     # --- Drawable protocol ---
 
+    # Константы для geometry_id
+    GEOMETRY_VOXELS = "voxels"
+    GEOMETRY_CONTOURS = "contours"
+
     @property
     def phase_marks(self) -> Set[str]:
         """Фазы рендеринга для отладочной визуализации."""
-        mat = self._get_or_create_debug_material()
-        return {p.phase_mark for p in mat.phases}
+        marks: Set[str] = set()
+        if self.show_debug_voxels:
+            mat = self._get_or_create_debug_material()
+            marks.update(p.phase_mark for p in mat.phases)
+        if self.show_debug_contours:
+            mat = self._get_or_create_contour_material()
+            marks.update(p.phase_mark for p in mat.phases)
+        return marks
 
     def draw_geometry(self, context: "RenderContext", geometry_id: str = "") -> None:
         """Рисует отладочную геометрию."""
-        if self.show_debug_voxels and self._debug_mesh_drawable is not None:
-            self._debug_mesh_drawable.draw(context)
-        if self.show_debug_contours and self._debug_contours_drawable is not None:
-            self._debug_contours_drawable.draw(context)
+        if geometry_id == "" or geometry_id == self.GEOMETRY_VOXELS:
+            if self.show_debug_voxels and self._debug_mesh_drawable is not None:
+                self._debug_mesh_drawable.draw(context)
+        if geometry_id == "" or geometry_id == self.GEOMETRY_CONTOURS:
+            if self.show_debug_contours and self._debug_contours_drawable is not None:
+                self._debug_contours_drawable.draw(context)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
-        mat = self._get_or_create_debug_material()
+        result: List[GeometryDrawCall] = []
 
-        if phase_mark is None:
-            phases = list(mat.phases)
-        else:
-            phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+        # Воксели
+        if self.show_debug_voxels and self._debug_mesh_drawable is not None:
+            mat = self._get_or_create_debug_material()
+            if phase_mark is None:
+                phases = list(mat.phases)
+            else:
+                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
 
-        # Устанавливаем uniforms для voxel шейдера
-        debug_color = np.array([1.0, 0.5, 0.0, 0.8], dtype=np.float32)
-        for phase in phases:
-            phase.uniforms["u_color_below"] = debug_color
-            phase.uniforms["u_color_above"] = debug_color
-            phase.uniforms["u_color_surface"] = debug_color
-            phase.uniforms["u_slice_axis"] = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-            phase.uniforms["u_fill_percent"] = 1.0
-            phase.uniforms["u_bounds_min"] = self._debug_bounds_min
-            phase.uniforms["u_bounds_max"] = self._debug_bounds_max
-            phase.uniforms["u_ambient_color"] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-            phase.uniforms["u_ambient_intensity"] = 0.4
+            # Устанавливаем uniforms для voxel шейдера
+            debug_color = np.array([1.0, 0.5, 0.0, 0.8], dtype=np.float32)
+            for phase in phases:
+                phase.uniforms["u_color_below"] = debug_color
+                phase.uniforms["u_color_above"] = debug_color
+                phase.uniforms["u_color_surface"] = debug_color
+                phase.uniforms["u_slice_axis"] = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+                phase.uniforms["u_fill_percent"] = 1.0
+                phase.uniforms["u_bounds_min"] = self._debug_bounds_min
+                phase.uniforms["u_bounds_max"] = self._debug_bounds_max
+                phase.uniforms["u_ambient_color"] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+                phase.uniforms["u_ambient_intensity"] = 0.4
 
-        phases.sort(key=lambda p: p.priority)
-        return [GeometryDrawCall(phase=p) for p in phases]
+            phases.sort(key=lambda p: p.priority)
+            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_VOXELS) for p in phases)
+
+        # Контуры
+        if self.show_debug_contours and self._debug_contours_drawable is not None:
+            mat = self._get_or_create_contour_material()
+            if phase_mark is None:
+                phases = list(mat.phases)
+            else:
+                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+
+            # Устанавливаем uniforms для контуров (непрозрачные)
+            contour_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+            for phase in phases:
+                phase.uniforms["u_color_below"] = contour_color
+                phase.uniforms["u_color_above"] = contour_color
+                phase.uniforms["u_color_surface"] = contour_color
+                phase.uniforms["u_slice_axis"] = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+                phase.uniforms["u_fill_percent"] = 1.0
+                phase.uniforms["u_bounds_min"] = self._debug_bounds_min
+                phase.uniforms["u_bounds_max"] = self._debug_bounds_max
+                phase.uniforms["u_ambient_color"] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+                phase.uniforms["u_ambient_intensity"] = 0.6  # Ярче для контуров
+
+            phases.sort(key=lambda p: p.priority)
+            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_CONTOURS) for p in phases)
+
+        return result
 
     def _get_or_create_debug_material(self) -> Material:
         """Создаёт материал для отладочной визуализации."""
@@ -258,6 +300,26 @@ class VoxelizerComponent(Component):
                 ),
             )
         return self._debug_material
+
+    def _get_or_create_contour_material(self) -> Material:
+        """Создаёт материал для контуров (без прозрачности, без culling)."""
+        if self._debug_contour_material is None:
+            from termin.voxels.voxel_shader import voxel_display_shader
+            from termin.visualization.render.renderpass import RenderState
+
+            shader = voxel_display_shader()
+            self._debug_contour_material = Material(
+                shader=shader,
+                color=(1.0, 1.0, 1.0, 1.0),  # Полностью непрозрачный
+                phase_mark="opaque",
+                render_state=RenderState(
+                    depth_test=True,
+                    depth_write=True,
+                    blend=False,  # Без прозрачности
+                    cull=False,   # Двусторонний рендеринг
+                ),
+            )
+        return self._debug_contour_material
 
     def voxelize(self) -> bool:
         """
