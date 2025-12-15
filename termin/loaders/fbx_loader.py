@@ -80,16 +80,34 @@ def _parse_materials(scene, out):
         )
 
 
+def _triangulate_face(vertex_indices, face):
+    """Fan triangulation of a face with N vertices."""
+    triangles = []
+    begin = face.index_begin
+    n = face.num_indices
+    if n < 3:
+        return triangles
+    # Fan: (0, 1, 2), (0, 2, 3), (0, 3, 4), ...
+    v0 = vertex_indices[begin]
+    for i in range(1, n - 1):
+        v1 = vertex_indices[begin + i]
+        v2 = vertex_indices[begin + i + 1]
+        triangles.append((v0, v1, v2))
+    return triangles
+
+
 def _parse_meshes(scene, out):
     for mesh in scene.meshes:
-        # Get triangulated mesh for easier processing
-        try:
-            tri_mesh = mesh.as_triangles()
-        except Exception:
-            tri_mesh = mesh
+        if mesh.num_vertices == 0:
+            continue
 
-        num_indices = len(tri_mesh.indices)
-        if num_indices == 0:
+        # Triangulate all faces
+        tri_indices = []
+        for face_idx in range(mesh.num_faces):
+            face = mesh.faces[face_idx]
+            tri_indices.extend(_triangulate_face(mesh.vertex_indices, face))
+
+        if not tri_indices:
             continue
 
         # Build vertex arrays from triangulated indices
@@ -97,26 +115,27 @@ def _parse_meshes(scene, out):
         normals = []
         uvs = []
 
-        has_normals = len(mesh.vertex_normal.values) > 0
-        has_uvs = len(mesh.uv_sets) > 0 and len(mesh.uv_sets[0].values) > 0
+        has_normals = mesh.vertex_normal.values and len(mesh.vertex_normal.values) > 0
+        has_uvs = mesh.uv_sets and len(mesh.uv_sets) > 0 and mesh.uv_sets[0].vertex_uv.values and len(mesh.uv_sets[0].vertex_uv.values) > 0
 
-        for idx in tri_mesh.indices:
-            # Position
-            v = mesh.vertices[idx]
-            vertices.append((v.x, v.y, v.z))
+        for v0, v1, v2 in tri_indices:
+            for idx in (v0, v1, v2):
+                # Position
+                v = mesh.vertices[idx]
+                vertices.append((v.x, v.y, v.z))
 
-            # Normal
-            if has_normals:
-                n_idx = mesh.vertex_normal.indices[idx]
-                n = mesh.vertex_normal.values[n_idx]
-                normals.append((n.x, n.y, n.z))
+                # Normal
+                if has_normals:
+                    n_idx = mesh.vertex_normal.indices[idx]
+                    n = mesh.vertex_normal.values[n_idx]
+                    normals.append((n.x, n.y, n.z))
 
-            # UV
-            if has_uvs:
-                uv_set = mesh.uv_sets[0]
-                uv_idx = uv_set.indices[idx]
-                uv = uv_set.values[uv_idx]
-                uvs.append((uv.x, uv.y))
+                # UV
+                if has_uvs:
+                    vertex_uv = mesh.uv_sets[0].vertex_uv
+                    uv_idx = vertex_uv.indices[idx]
+                    uv = vertex_uv.values[uv_idx]
+                    uvs.append((uv.x, uv.y))
 
         vertices_np = np.array(vertices, dtype=np.float32)
         normals_np = np.array(normals, dtype=np.float32) if normals else None
@@ -125,8 +144,12 @@ def _parse_meshes(scene, out):
 
         # Material index
         mat_idx = 0
-        if mesh.materials:
-            mat_idx = scene.materials.index(mesh.materials[0]) if mesh.materials[0] in scene.materials else 0
+        if mesh.materials and len(mesh.materials) > 0:
+            first_mat = mesh.materials[0]
+            for i in range(len(scene.materials)):
+                if scene.materials[i] == first_mat:
+                    mat_idx = i
+                    break
 
         out.meshes.append(
             FBXMeshData(
@@ -140,30 +163,54 @@ def _parse_meshes(scene, out):
         )
 
 
-def _parse_node(node, scene, mesh_index_map):
-    """Recursively parse node hierarchy."""
-    name = node.name if node.name else "Node"
+def _parse_nodes_flat(scene, mesh_index_map):
+    """
+    Parse node hierarchy into flat list to avoid ufbx segfault issues.
+    Returns root FBXNodeData with all mesh nodes as direct children.
+    """
+    root = FBXNodeData("Root", children=[], mesh_indices=[], transform=np.eye(4, dtype=np.float32))
 
-    # Get local transform as 4x4 matrix
-    t = node.local_transform
-    transform = np.array([
-        [t.m00, t.m01, t.m02, t.m03],
-        [t.m10, t.m11, t.m12, t.m13],
-        [t.m20, t.m21, t.m22, t.m23],
-        [0, 0, 0, 1],
-    ], dtype=np.float32)
+    # Iterate through all nodes and collect those with meshes
+    stack = [scene.root_node]
+    while stack:
+        node = stack.pop()
 
-    # Mesh indices
-    mesh_indices = []
-    if node.mesh:
-        idx = mesh_index_map.get(id(node.mesh))
-        if idx is not None:
-            mesh_indices.append(idx)
+        if node.mesh:
+            idx = mesh_index_map.get(id(node.mesh))
+            if idx is not None:
+                # Extract transform data immediately (avoid keeping ufbx refs)
+                t = node.local_transform
+                translation = np.array([t.translation.x, t.translation.y, t.translation.z], dtype=np.float32)
+                rotation = np.array([t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w], dtype=np.float32)
+                scale_vec = np.array([t.scale.x, t.scale.y, t.scale.z], dtype=np.float32)
 
-    # Recursively parse children
-    children = [_parse_node(child, scene, mesh_index_map) for child in node.children]
+                # Build transform matrix
+                x, y, z, w = rotation
+                xx, yy, zz = x * x, y * y, z * z
+                xy, xz, yz = x * y, x * z, y * z
+                wx, wy, wz = w * x, w * y, w * z
 
-    return FBXNodeData(name, children, mesh_indices, transform)
+                rot = np.array([
+                    [1 - 2 * (yy + zz), 2 * (xy - wz), 2 * (xz + wy)],
+                    [2 * (xy + wz), 1 - 2 * (xx + zz), 2 * (yz - wx)],
+                    [2 * (xz - wy), 2 * (yz + wx), 1 - 2 * (xx + yy)],
+                ], dtype=np.float32)
+
+                rot_scaled = rot * scale_vec
+
+                transform = np.eye(4, dtype=np.float32)
+                transform[:3, :3] = rot_scaled
+                transform[:3, 3] = translation
+
+                name = node.name if node.name else f"Mesh_{idx}"
+                child = FBXNodeData(name, children=[], mesh_indices=[idx], transform=transform)
+                root.children.append(child)
+
+        # Add children to stack
+        for i in range(len(node.children)):
+            stack.append(node.children[i])
+
+    return root
 
 
 def _parse_animations(scene, out):
@@ -267,22 +314,159 @@ def _extract_keys(anim_value):
 # ---------- PUBLIC API ----------
 
 def load_fbx_file(path) -> FBXSceneData:
-    """Load FBX file using ufbx."""
+    """Load FBX file using ufbx.
+
+    Note: ufbx has issues with multiple iterations over collections.
+    All data must be extracted in a single pass.
+    """
     scene_data = FBXSceneData()
 
     scene = ufbx.load_file(path)
     if not scene:
         raise RuntimeError(f"Failed to load FBX: {path}")
 
-    # Build mesh index map for node parsing
-    mesh_index_map = {id(mesh): i for i, mesh in enumerate(scene.meshes)}
+    # Extract ALL data in a single pass to avoid ufbx segfaults
+    # IMPORTANT: ufbx crashes if we iterate over the same collection twice!
+    # First, collect raw data from ufbx objects
 
-    _parse_materials(scene, scene_data)
-    _parse_meshes(scene, scene_data)
+    # Meshes - extract geometry data AND build mesh_id_to_idx in ONE iteration
+    mesh_data_list = []
+    mesh_id_to_idx = {}
+    for i, mesh in enumerate(scene.meshes):
+        mesh_id_to_idx[id(mesh)] = i
+        if mesh.num_vertices == 0:
+            continue
 
-    if scene.root_node:
-        scene_data.root = _parse_node(scene.root_node, scene, mesh_index_map)
+        # Triangulate
+        tri_indices = []
+        for face_idx in range(mesh.num_faces):
+            face = mesh.faces[face_idx]
+            begin = face.index_begin
+            n = face.num_indices
+            if n >= 3:
+                v0 = mesh.vertex_indices[begin]
+                for i in range(1, n - 1):
+                    v1 = mesh.vertex_indices[begin + i]
+                    v2 = mesh.vertex_indices[begin + i + 1]
+                    tri_indices.append((v0, v1, v2))
 
-    _parse_animations(scene, scene_data)
+        if not tri_indices:
+            continue
+
+        # Build vertex arrays
+        vertices = []
+        normals = []
+        uvs = []
+
+        has_normals = mesh.vertex_normal.values and len(mesh.vertex_normal.values) > 0
+        has_uvs = mesh.uv_sets and len(mesh.uv_sets) > 0 and mesh.uv_sets[0].vertex_uv.values and len(mesh.uv_sets[0].vertex_uv.values) > 0
+
+        for v0, v1, v2 in tri_indices:
+            for idx in (v0, v1, v2):
+                v = mesh.vertices[idx]
+                vertices.append((v.x, v.y, v.z))
+
+                if has_normals:
+                    n_idx = mesh.vertex_normal.indices[idx]
+                    n = mesh.vertex_normal.values[n_idx]
+                    normals.append((n.x, n.y, n.z))
+
+                if has_uvs:
+                    vertex_uv = mesh.uv_sets[0].vertex_uv
+                    uv_idx = vertex_uv.indices[idx]
+                    uv = vertex_uv.values[uv_idx]
+                    uvs.append((uv.x, uv.y))
+
+        mesh_data_list.append({
+            'name': mesh.name if mesh.name else "Mesh",
+            'vertices': np.array(vertices, dtype=np.float32),
+            'normals': np.array(normals, dtype=np.float32) if normals else None,
+            'uvs': np.array(uvs, dtype=np.float32) if uvs else None,
+        })
+
+    # Nodes with meshes - extract transform data
+    node_data_list = []
+    stack = [scene.root_node] if scene.root_node else []
+    while stack:
+        node = stack.pop()
+        if node.mesh:
+            idx = mesh_id_to_idx.get(id(node.mesh))
+            if idx is not None:
+                t = node.local_transform
+                node_data_list.append({
+                    'name': node.name if node.name else f"Mesh_{idx}",
+                    'mesh_idx': idx,
+                    'translation': (t.translation.x, t.translation.y, t.translation.z),
+                    'rotation': (t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w),
+                    'scale': (t.scale.x, t.scale.y, t.scale.z),
+                })
+
+        for i in range(len(node.children)):
+            stack.append(node.children[i])
+
+    # Materials - extract color/texture info
+    mat_data_list = []
+    for mat in scene.materials:
+        diffuse_color = None
+        if mat.pbr.base_color.has_value:
+            c = mat.pbr.base_color.value_vec4
+            diffuse_color = (c.x, c.y, c.z, c.w)
+
+        diffuse_texture = None
+        if mat.pbr.base_color.texture and mat.pbr.base_color.texture.filename:
+            diffuse_texture = mat.pbr.base_color.texture.filename
+
+        mat_data_list.append({
+            'name': mat.name if mat.name else "Material",
+            'diffuse_color': diffuse_color,
+            'diffuse_texture': diffuse_texture,
+        })
+
+    # Now build FBXSceneData from extracted data (no more ufbx access)
+
+    # Materials
+    for mat_data in mat_data_list:
+        scene_data.materials.append(FBXMaterialData(
+            name=mat_data['name'],
+            diffuse_color=np.array(mat_data['diffuse_color'], dtype=np.float32) if mat_data['diffuse_color'] else None,
+            diffuse_texture=mat_data['diffuse_texture'],
+        ))
+
+    # Meshes
+    for i, mesh_data in enumerate(mesh_data_list):
+        scene_data.meshes.append(FBXMeshData(
+            name=mesh_data['name'],
+            vertices=mesh_data['vertices'],
+            normals=mesh_data['normals'],
+            uvs=mesh_data['uvs'],
+            indices=np.arange(len(mesh_data['vertices']), dtype=np.uint32),
+            material_index=0,
+        ))
+
+    # Node hierarchy (flat)
+    root = FBXNodeData("Root", children=[], mesh_indices=[], transform=np.eye(4, dtype=np.float32))
+    for node_data in node_data_list:
+        x, y, z, w = node_data['rotation']
+        xx, yy, zz = x * x, y * y, z * z
+        xy, xz, yz = x * y, x * z, y * z
+        wx, wy, wz = w * x, w * y, w * z
+
+        rot = np.array([
+            [1 - 2 * (yy + zz), 2 * (xy - wz), 2 * (xz + wy)],
+            [2 * (xy + wz), 1 - 2 * (xx + zz), 2 * (yz - wx)],
+            [2 * (xz - wy), 2 * (yz + wx), 1 - 2 * (xx + yy)],
+        ], dtype=np.float32)
+
+        sx, sy, sz = node_data['scale']
+        rot_scaled = rot * np.array([sx, sy, sz], dtype=np.float32)
+
+        transform = np.eye(4, dtype=np.float32)
+        transform[:3, :3] = rot_scaled
+        transform[:3, 3] = node_data['translation']
+
+        child = FBXNodeData(node_data['name'], children=[], mesh_indices=[node_data['mesh_idx']], transform=transform)
+        root.children.append(child)
+
+    scene_data.root = root
 
     return scene_data

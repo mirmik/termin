@@ -14,12 +14,16 @@ from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.materials.default_material import DefaultMaterial
 
-from termin.loaders.fbx_loader import (
-    load_fbx_file,
-    FBXSceneData,
-    FBXNodeData,
-    FBXMeshData,
-)
+try:
+    from termin.loaders.fbx_loader import (
+        load_fbx_file,
+        FBXSceneData,
+        FBXNodeData,
+        FBXMeshData,
+    )
+    FBX_AVAILABLE = True
+except ImportError:
+    FBX_AVAILABLE = False
 
 
 def _matrix_to_pose(matrix: np.ndarray) -> Pose3:
@@ -117,7 +121,17 @@ def instantiate_fbx(path: Path, name: str = None) -> Entity:
 
     Returns:
         Root Entity containing the FBX hierarchy with MeshRenderers.
+
+    Raises:
+        ImportError: If ufbx library is not installed.
     """
+    if not FBX_AVAILABLE:
+        raise ImportError(
+            "FBX loading requires 'ufbx' library.\n"
+            "Install with: pip install ufbx\n"
+            "Note: ufbx requires Python 3.10-3.12 and C compiler for building."
+        )
+
     scene_data = load_fbx_file(str(path))
 
     if name is None:
