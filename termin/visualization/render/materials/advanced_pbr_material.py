@@ -1,5 +1,5 @@
-# termin/visualization/render/materials/pbr_material.py
-"""PBR (Physically Based Rendering) material using GGX/Cook-Torrance BRDF."""
+# termin/visualization/render/materials/advanced_pbr_material.py
+"""Advanced PBR material with SSS approximation and ACES tone mapping."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from termin.visualization.core.material import Material
 from termin.visualization.render.shader import ShaderProgram
 
 
-PBR_VERT = """#version 330 core
+ADVANCED_PBR_VERT = """#version 330 core
 
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
@@ -30,7 +30,7 @@ void main() {
 }
 """
 
-PBR_FRAG = """#version 330 core
+ADVANCED_PBR_FRAG = """#version 330 core
 
 in vec3 v_world_pos;
 in vec3 v_normal;
@@ -41,6 +41,7 @@ uniform vec4 u_color;
 uniform sampler2D u_albedo_texture;
 uniform float u_metallic;
 uniform float u_roughness;
+uniform float u_subsurface;  // SSS intensity (0 = off, 1 = full)
 
 // Camera
 uniform vec3 u_camera_position;
@@ -69,6 +70,19 @@ out vec4 FragColor;
 
 const float PI = 3.14159265359;
 
+// ============== ACES Tone Mapping ==============
+// More cinematic than Reinhard, better highlight rolloff
+vec3 aces_tonemap(vec3 x) {
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+// ============== PBR Functions ==============
+
 // Normal Distribution Function (GGX/Trowbridge-Reitz)
 float D_GGX(float NdotH, float roughness) {
     float a = roughness * roughness;
@@ -88,9 +102,23 @@ float G_Smith(float NdotV, float NdotL, float roughness) {
 
 // Fresnel (Schlick approximation)
 vec3 F_Schlick(float cosTheta, vec3 F0) {
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// ============== SSS Approximation ==============
+// Wrap lighting: softens the terminator (shadow edge)
+// Creates the appearance of light scattering through the surface
+float wrap_diffuse(float NdotL, float wrap) {
+    return max(0.0, (NdotL + wrap) / (1.0 + wrap));
+}
+
+// Subsurface color shift - light passing through skin picks up red/orange
+vec3 subsurface_color(vec3 albedo) {
+    // Shift towards warm tones (blood under skin)
+    return albedo * vec3(1.0, 0.4, 0.25);
+}
+
+// ============== Attenuation ==============
 float compute_distance_attenuation(int idx, float dist) {
     vec3 att = u_light_attenuation[idx];
     float denom = att.x + att.y * dist + att.z * dist * dist;
@@ -121,6 +149,7 @@ void main() {
 
     float metallic = u_metallic;
     float roughness = max(u_roughness, 0.04);
+    float subsurface = u_subsurface;
 
     // F0: reflectance at normal incidence
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
@@ -149,7 +178,8 @@ void main() {
 
         vec3 H = normalize(V + L);
 
-        float NdotL = max(dot(N, L), 0.0);
+        float NdotL_raw = dot(N, L);
+        float NdotL = max(NdotL_raw, 0.0);
         float NdotV = max(dot(N, V), 0.001);
         float NdotH = max(dot(N, H), 0.0);
         float HdotV = max(dot(H, V), 0.0);
@@ -164,37 +194,54 @@ void main() {
         float denominator = 4.0 * NdotV * NdotL + 0.0001;
         vec3 specular = numerator / denominator;
 
-        // Energy conservation
+        // Diffuse with energy conservation
         vec3 kD = (1.0 - F) * (1.0 - metallic);
+
+        // Standard diffuse
+        vec3 diffuse_standard = kD * albedo;
+
+        // SSS diffuse: wrap lighting + color shift
+        float wrap_amount = subsurface * 0.5;  // How much to wrap (0.5 = 180 degree wrap)
+        float diffuse_wrap = wrap_diffuse(NdotL_raw, wrap_amount);
+        vec3 sss_color = subsurface_color(albedo);
+
+        // Blend between standard and SSS based on wrap region
+        // In the wrap region (NdotL < 0 but wrapped > 0), use SSS color
+        float sss_mask = max(0.0, diffuse_wrap - NdotL) * 2.0;
+        vec3 diffuse_sss = kD * mix(albedo, sss_color, sss_mask * subsurface);
+
+        // Final diffuse: blend between standard and SSS
+        vec3 diffuse_final = mix(diffuse_standard * NdotL, diffuse_sss * diffuse_wrap, subsurface);
 
         // Combine
         vec3 radiance = u_light_color[i] * u_light_intensity[i] * attenuation;
-        Lo += (kD * albedo + specular) * radiance * NdotL;
+        Lo += (diffuse_final + specular * NdotL) * radiance;
     }
 
     vec3 color = ambient + Lo;
 
-    // Reinhard tone mapping
-    color = color / (color + vec3(1.0));
+    // ACES tone mapping
+    color = aces_tonemap(color);
 
     FragColor = vec4(color, u_color.a * tex_color.a);
 }
 """
 
 
-def pbr_shader() -> ShaderProgram:
-    """Create PBR shader program."""
-    return ShaderProgram(vertex_source=PBR_VERT, fragment_source=PBR_FRAG)
+def advanced_pbr_shader() -> ShaderProgram:
+    """Create Advanced PBR shader program."""
+    return ShaderProgram(vertex_source=ADVANCED_PBR_VERT, fragment_source=ADVANCED_PBR_FRAG)
 
 
-class PBRMaterial(Material):
+class AdvancedPBRMaterial(Material):
     """
-    PBR material using Cook-Torrance BRDF.
+    Advanced PBR material with SSS approximation and ACES tone mapping.
 
     Parameters:
         color: Base color (albedo) multiplier
         metallic: 0 = dielectric, 1 = metal
         roughness: 0 = smooth/mirror, 1 = rough/matte
+        subsurface: 0 = no SSS, 1 = full SSS (for skin, wax, etc.)
     """
 
     def __init__(
@@ -202,16 +249,19 @@ class PBRMaterial(Material):
         color: tuple[float, float, float, float] | None = None,
         metallic: float = 0.0,
         roughness: float = 0.5,
+        subsurface: float = 0.0,
     ):
         from termin.visualization.render.texture import get_white_texture
 
-        shader = pbr_shader()
+        shader = advanced_pbr_shader()
         white_tex = get_white_texture()
         super().__init__(shader=shader, color=color, textures={"u_albedo_texture": white_tex})
         self.metallic = metallic
         self.roughness = roughness
+        self.subsurface = subsurface
 
     def apply(self, graphics):
         super().apply(graphics)
         self.shader.set_uniform("u_metallic", self.metallic)
         self.shader.set_uniform("u_roughness", self.roughness)
+        self.shader.set_uniform("u_subsurface", self.subsurface)

@@ -278,6 +278,45 @@ class ResourceManager:
         program = ShaderMultyPhaseProgramm(program="PBRShader", phases=[phase])
         self.shaders["PBRShader"] = program
 
+    def register_advanced_pbr_shader(self) -> None:
+        """Регистрирует встроенный Advanced PBR шейдер с SSS и ACES."""
+        if "AdvancedPBRShader" in self.shaders:
+            return
+
+        from termin.visualization.render.materials.advanced_pbr_material import (
+            ADVANCED_PBR_VERT,
+            ADVANCED_PBR_FRAG,
+        )
+        from termin.visualization.render.shader_parser import (
+            ShaderMultyPhaseProgramm,
+            ShaderPhase,
+            ShasderStage,
+            MaterialProperty,
+        )
+
+        vertex_stage = ShasderStage("vertex", ADVANCED_PBR_VERT)
+        fragment_stage = ShasderStage("fragment", ADVANCED_PBR_FRAG)
+
+        phase = ShaderPhase(
+            phase_mark="opaque",
+            priority=0,
+            gl_depth_mask=True,
+            gl_depth_test=True,
+            gl_blend=False,
+            gl_cull=True,
+            stages={"vertex": vertex_stage, "fragment": fragment_stage},
+            uniforms=[
+                MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
+                MaterialProperty("u_albedo_texture", "Texture", None),
+                MaterialProperty("u_metallic", "Float", 0.0, 0.0, 1.0),
+                MaterialProperty("u_roughness", "Float", 0.5, 0.0, 1.0),
+                MaterialProperty("u_subsurface", "Float", 0.0, 0.0, 1.0),
+            ],
+        )
+
+        program = ShaderMultyPhaseProgramm(program="AdvancedPBRShader", phases=[phase])
+        self.shaders["AdvancedPBRShader"] = program
+
     def register_builtin_materials(self) -> None:
         """Регистрирует встроенные материалы."""
         from termin.visualization.core.material import Material
@@ -286,6 +325,7 @@ class ResourceManager:
         # Убедимся что шейдеры зарегистрированы
         self.register_default_shader()
         self.register_pbr_shader()
+        self.register_advanced_pbr_shader()
 
         white_tex = get_white_texture()
 
@@ -306,6 +346,15 @@ class ResourceManager:
                 mat.name = "PBRMaterial"
                 mat.color = (0.8, 0.8, 0.8, 1.0)
                 self.register_material("PBRMaterial", mat)
+
+        # AdvancedPBRMaterial (SSS + ACES)
+        if "AdvancedPBRMaterial" not in self.materials:
+            shader = self.shaders.get("AdvancedPBRShader")
+            if shader is not None:
+                mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
+                mat.name = "AdvancedPBRMaterial"
+                mat.color = (0.8, 0.8, 0.8, 1.0)
+                self.register_material("AdvancedPBRMaterial", mat)
 
     def register_builtin_meshes(self) -> List[str]:
         """
