@@ -420,19 +420,6 @@ class MaterialInspector(QWidget):
         shader_layout.addWidget(self._shader_combo, 1)
         main_layout.addLayout(shader_layout)
 
-        # Debug UV checkbox
-        debug_layout = QHBoxLayout()
-        self._debug_uv_checkbox = QCheckBox("Debug UV (show UV as color)")
-        self._debug_uv_checkbox.setToolTip(
-            "Визуализировать UV координаты как цвет:\n"
-            "R = U, G = V\n"
-            "Помогает диагностировать проблемы с текстурными координатами."
-        )
-        self._debug_uv_checkbox.stateChanged.connect(self._on_debug_uv_changed)
-        debug_layout.addWidget(self._debug_uv_checkbox)
-        debug_layout.addStretch()
-        main_layout.addLayout(debug_layout)
-
         # Разделитель
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
@@ -562,13 +549,7 @@ class MaterialInspector(QWidget):
             self._name_edit.setText("")
             self._shader_combo.setCurrentIndex(-1)
             self._shader_combo.blockSignals(False)
-            self._debug_uv_checkbox.setChecked(False)
             return
-
-        # Debug UV checkbox
-        self._debug_uv_checkbox.blockSignals(True)
-        self._debug_uv_checkbox.setChecked(getattr(self._material, 'debug_uv', False))
-        self._debug_uv_checkbox.blockSignals(False)
 
         # Имя материала
         self._name_edit.setText(self._material.name or "")
@@ -823,19 +804,6 @@ class MaterialInspector(QWidget):
     def _on_editing_finished(self) -> None:
         """Обработчик окончания редактирования — автосохранение."""
         self.save_material_file()
-
-    def _on_debug_uv_changed(self, state: int) -> None:
-        """Обработчик изменения Debug UV чекбокса."""
-        if self._material is None:
-            return
-
-        debug_uv = state == Qt.CheckState.Checked.value
-
-        # Устанавливаем debug_uv для DefaultMaterial
-        if hasattr(self._material, 'debug_uv'):
-            self._material.debug_uv = debug_uv
-
-        self.material_changed.emit()
 
     @property
     def material(self) -> Material | None:
