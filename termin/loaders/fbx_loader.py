@@ -316,8 +316,8 @@ def _extract_keys(anim_value):
 def load_fbx_file(path) -> FBXSceneData:
     """Load FBX file using ufbx.
 
-    Note: ufbx has issues with multiple iterations over collections.
-    All data must be extracted in a single pass.
+    Note: ufbx has critical bugs with multiple iterations over collections.
+    All data MUST be extracted in a SINGLE pass through nodes.
     """
     scene_data = FBXSceneData()
 
@@ -325,86 +325,87 @@ def load_fbx_file(path) -> FBXSceneData:
     if not scene:
         raise RuntimeError(f"Failed to load FBX: {path}")
 
-    # Extract ALL data in a single pass to avoid ufbx segfaults
-    # IMPORTANT: ufbx crashes if we iterate over the same collection twice!
-    # First, collect raw data from ufbx objects
+    # CRITICAL: ufbx crashes if we iterate over scene.meshes separately!
+    # Extract ALL data in ONE pass through node tree.
 
-    # Meshes - extract geometry data AND build mesh_id_to_idx in ONE iteration
     mesh_data_list = []
-    mesh_id_to_idx = {}
-    for i, mesh in enumerate(scene.meshes):
-        mesh_id_to_idx[id(mesh)] = i
-        if mesh.num_vertices == 0:
-            continue
-
-        # Triangulate
-        tri_indices = []
-        for face_idx in range(mesh.num_faces):
-            face = mesh.faces[face_idx]
-            begin = face.index_begin
-            n = face.num_indices
-            if n >= 3:
-                v0 = mesh.vertex_indices[begin]
-                for i in range(1, n - 1):
-                    v1 = mesh.vertex_indices[begin + i]
-                    v2 = mesh.vertex_indices[begin + i + 1]
-                    tri_indices.append((v0, v1, v2))
-
-        if not tri_indices:
-            continue
-
-        # Build vertex arrays
-        vertices = []
-        normals = []
-        uvs = []
-
-        has_normals = mesh.vertex_normal.values and len(mesh.vertex_normal.values) > 0
-        has_uvs = mesh.uv_sets and len(mesh.uv_sets) > 0 and mesh.uv_sets[0].vertex_uv.values and len(mesh.uv_sets[0].vertex_uv.values) > 0
-
-        for v0, v1, v2 in tri_indices:
-            for idx in (v0, v1, v2):
-                v = mesh.vertices[idx]
-                vertices.append((v.x, v.y, v.z))
-
-                if has_normals:
-                    n_idx = mesh.vertex_normal.indices[idx]
-                    n = mesh.vertex_normal.values[n_idx]
-                    normals.append((n.x, n.y, n.z))
-
-                if has_uvs:
-                    vertex_uv = mesh.uv_sets[0].vertex_uv
-                    uv_idx = vertex_uv.indices[idx]
-                    uv = vertex_uv.values[uv_idx]
-                    uvs.append((uv.x, uv.y))
-
-        mesh_data_list.append({
-            'name': mesh.name if mesh.name else "Mesh",
-            'vertices': np.array(vertices, dtype=np.float32),
-            'normals': np.array(normals, dtype=np.float32) if normals else None,
-            'uvs': np.array(uvs, dtype=np.float32) if uvs else None,
-        })
-
-    # Nodes with meshes - extract transform data
     node_data_list = []
+    processed_meshes = set()  # Track by mesh name to avoid duplicates
+
     stack = [scene.root_node] if scene.root_node else []
     while stack:
         node = stack.pop()
-        if node.mesh:
-            idx = mesh_id_to_idx.get(id(node.mesh))
-            if idx is not None:
-                t = node.local_transform
-                node_data_list.append({
-                    'name': node.name if node.name else f"Mesh_{idx}",
-                    'mesh_idx': idx,
-                    'translation': (t.translation.x, t.translation.y, t.translation.z),
-                    'rotation': (t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w),
-                    'scale': (t.scale.x, t.scale.y, t.scale.z),
-                })
+
+        if node.mesh and node.mesh.name not in processed_meshes:
+            processed_meshes.add(node.mesh.name)
+            mesh = node.mesh
+
+            # Extract transform
+            t = node.local_transform
+            translation = (t.translation.x, t.translation.y, t.translation.z)
+            rotation = (t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w)
+            scale = (t.scale.x, t.scale.y, t.scale.z)
+
+            # Triangulate mesh
+            tri_indices = []
+            for face_idx in range(mesh.num_faces):
+                face = mesh.faces[face_idx]
+                begin = face.index_begin
+                n = face.num_indices
+                if n >= 3:
+                    v0 = mesh.vertex_indices[begin]
+                    for j in range(1, n - 1):
+                        tri_indices.append((v0, mesh.vertex_indices[begin + j], mesh.vertex_indices[begin + j + 1]))
+
+            if not tri_indices:
+                for i in range(len(node.children)):
+                    stack.append(node.children[i])
+                continue
+
+            # Build vertex arrays
+            vertices = []
+            normals = []
+            uvs = []
+
+            has_normals = mesh.vertex_normal.values and len(mesh.vertex_normal.values) > 0
+            has_uvs = mesh.uv_sets and len(mesh.uv_sets) > 0 and mesh.uv_sets[0].vertex_uv.values and len(mesh.uv_sets[0].vertex_uv.values) > 0
+
+            for v0, v1, v2 in tri_indices:
+                for idx in (v0, v1, v2):
+                    v = mesh.vertices[idx]
+                    vertices.append((v.x, v.y, v.z))
+
+                    if has_normals:
+                        n_idx = mesh.vertex_normal.indices[idx]
+                        n = mesh.vertex_normal.values[n_idx]
+                        normals.append((n.x, n.y, n.z))
+
+                    if has_uvs:
+                        vertex_uv = mesh.uv_sets[0].vertex_uv
+                        uv_idx = vertex_uv.indices[idx]
+                        uv = vertex_uv.values[uv_idx]
+                        uvs.append((uv.x, uv.y))
+
+            mesh_idx = len(mesh_data_list)
+            mesh_data_list.append({
+                'name': mesh.name if mesh.name else f"Mesh_{mesh_idx}",
+                'vertices': np.array(vertices, dtype=np.float32),
+                'normals': np.array(normals, dtype=np.float32) if normals else None,
+                'uvs': np.array(uvs, dtype=np.float32) if uvs else None,
+            })
+
+            node_data_list.append({
+                'name': node.name if node.name else f"Node_{mesh_idx}",
+                'mesh_idx': mesh_idx,
+                'translation': translation,
+                'rotation': rotation,
+                'scale': scale,
+            })
 
         for i in range(len(node.children)):
             stack.append(node.children[i])
 
-    # Materials - extract color/texture info
+    # Materials - parsed separately (seems safe after nodes)
     mat_data_list = []
     for mat in scene.materials:
         diffuse_color = None
