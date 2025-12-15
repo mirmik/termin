@@ -115,12 +115,18 @@ class InspectFieldPanel(QWidget):
     def _connect_widget(
         self, widget: FieldWidget, key: str, field: InspectField
     ) -> None:
+        # Capture target in closure to avoid accessing wrong target after set_target()
+        target = self._target
+
         def on_change() -> None:
+            # Check that target is still current (avoid stale callbacks)
             if self._updating_from_model or self._target is None:
                 return
-            old_value = field.get_value(self._target)
+            if self._target is not target:
+                return  # Target changed, ignore stale callback
+            old_value = field.get_value(target)
             new_value = widget.get_value()
-            field.set_value(self._target, new_value)
+            field.set_value(target, new_value)
             self.field_changed.emit(key, old_value, new_value)
 
         widget.value_changed.connect(on_change)
