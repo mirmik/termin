@@ -21,6 +21,7 @@ class Texture:
         self._image_data: Optional[np.ndarray] = None  # Original data (not flipped)
         self._size: Optional[tuple[int, int]] = None
         self.source_path: str | None = None
+        self.flip_x: bool = False  # Mirror horizontally
         self.flip_y: bool = True  # Flip for OpenGL by default
         self.transpose: bool = False  # Swap X and Y axes
         self._preview_pixmap: Optional["QPixmap"] = None
@@ -32,6 +33,7 @@ class Texture:
 
         # Load spec for this texture
         spec = TextureSpec.for_texture_file(path)
+        self.flip_x = spec.flip_x
         self.flip_y = spec.flip_y
         self.transpose = spec.transpose
 
@@ -71,6 +73,9 @@ class Texture:
             # Swap axes 0 and 1 (height and width)
             data = np.swapaxes(data, 0, 1).copy()
             size = (size[1], size[0])  # Swap width and height
+
+        if self.flip_x:
+            data = data[:, ::-1, :].copy()
 
         if self.flip_y:
             data = data[::-1, :, :].copy()

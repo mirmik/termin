@@ -101,6 +101,12 @@ class TextureInspector(QWidget):
         settings_header.setStyleSheet("font-weight: bold; margin-top: 8px;")
         form.addRow(settings_header)
 
+        # Flip X checkbox
+        self._flip_x_checkbox = QCheckBox()
+        self._flip_x_checkbox.setToolTip("Flip texture horizontally (mirror X).")
+        self._flip_x_checkbox.stateChanged.connect(self._on_flip_x_changed)
+        form.addRow("Flip X:", self._flip_x_checkbox)
+
         # Flip Y checkbox
         self._flip_y_checkbox = QCheckBox()
         self._flip_y_checkbox.setToolTip(
@@ -164,6 +170,9 @@ class TextureInspector(QWidget):
                 self._path_label.setText("-")
                 self._file_path = ""
 
+            # Flip X setting
+            self._flip_x_checkbox.setChecked(texture.flip_x)
+
             # Flip Y setting
             self._flip_y_checkbox.setChecked(texture.flip_y)
 
@@ -197,6 +206,12 @@ class TextureInspector(QWidget):
         else:
             self._preview_label.clear()
 
+    def _on_flip_x_changed(self, state: int) -> None:
+        """Handle flip_x checkbox change."""
+        if self._updating or not self._file_path:
+            return
+        self._save_spec_and_reload()
+
     def _on_flip_y_changed(self, state: int) -> None:
         """Handle flip_y checkbox change."""
         if self._updating or not self._file_path:
@@ -214,6 +229,7 @@ class TextureInspector(QWidget):
         from termin.loaders.texture_spec import TextureSpec
 
         spec = TextureSpec(
+            flip_x=self._flip_x_checkbox.isChecked(),
             flip_y=self._flip_y_checkbox.isChecked(),
             transpose=self._transpose_checkbox.isChecked(),
         )
@@ -232,6 +248,7 @@ class TextureInspector(QWidget):
         self._channels_label.setText("-")
         self._file_size_label.setText("-")
         self._path_label.setText("-")
+        self._flip_x_checkbox.setChecked(False)
         self._flip_y_checkbox.setChecked(True)
         self._transpose_checkbox.setChecked(False)
         self._preview_label.clear()

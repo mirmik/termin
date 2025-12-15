@@ -16,6 +16,8 @@ class TextureSpec:
     Stored as .spec file next to the texture (e.g., image.png.spec).
     """
 
+    # Flip texture horizontally (mirror X)
+    flip_x: bool = False
     # Flip texture vertically for OpenGL (origin at bottom-left)
     flip_y: bool = True
     # Transpose texture (swap X and Y axes)
@@ -32,6 +34,7 @@ class TextureSpec:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return cls(
+                flip_x=data.get("flip_x", False),
                 flip_y=data.get("flip_y", True),
                 transpose=data.get("transpose", False),
             )
@@ -48,6 +51,7 @@ class TextureSpec:
         """Save spec to file."""
         path = Path(spec_path)
         data = {
+            "flip_x": self.flip_x,
             "flip_y": self.flip_y,
             "transpose": self.transpose,
         }
