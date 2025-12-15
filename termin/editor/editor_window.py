@@ -821,8 +821,9 @@ class EditorWindow(QMainWindow):
         if project_path is None:
             return
 
-        # Register built-in DefaultShader
+        # Register built-in shaders
         self.resource_manager.register_default_shader()
+        self.resource_manager.register_pbr_shader()
 
         # Enable file watching and scan project
         self._project_file_watcher.enable(project_path)
@@ -843,6 +844,7 @@ class EditorWindow(QMainWindow):
 
         # Register built-in resources
         self.resource_manager.register_default_shader()
+        self.resource_manager.register_pbr_shader()
         self.resource_manager.register_builtin_materials()
         self.resource_manager.register_builtin_meshes()
 

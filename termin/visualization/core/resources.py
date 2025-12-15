@@ -240,27 +240,72 @@ class ResourceManager:
         program = ShaderMultyPhaseProgramm(program="DefaultShader", phases=[phase])
         self.shaders["DefaultShader"] = program
 
-    def register_builtin_materials(self) -> None:
-        """Регистрирует встроенные материалы."""
-        if "DefaultMaterial" in self.materials:
+    def register_pbr_shader(self) -> None:
+        """Регистрирует встроенный PBR шейдер."""
+        if "PBRShader" in self.shaders:
             return
 
+        from termin.visualization.render.materials.pbr_material import (
+            PBR_VERT,
+            PBR_FRAG,
+        )
+        from termin.visualization.render.shader_parser import (
+            ShaderMultyPhaseProgramm,
+            ShaderPhase,
+            ShasderStage,
+            MaterialProperty,
+        )
+
+        vertex_stage = ShasderStage("vertex", PBR_VERT)
+        fragment_stage = ShasderStage("fragment", PBR_FRAG)
+
+        phase = ShaderPhase(
+            phase_mark="opaque",
+            priority=0,
+            gl_depth_mask=True,
+            gl_depth_test=True,
+            gl_blend=False,
+            gl_cull=True,
+            stages={"vertex": vertex_stage, "fragment": fragment_stage},
+            uniforms=[
+                MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
+                MaterialProperty("u_albedo_texture", "Texture", None),
+                MaterialProperty("u_metallic", "Float", 0.0, 0.0, 1.0),
+                MaterialProperty("u_roughness", "Float", 0.5, 0.0, 1.0),
+            ],
+        )
+
+        program = ShaderMultyPhaseProgramm(program="PBRShader", phases=[phase])
+        self.shaders["PBRShader"] = program
+
+    def register_builtin_materials(self) -> None:
+        """Регистрирует встроенные материалы."""
         from termin.visualization.core.material import Material
         from termin.visualization.render.texture import get_white_texture
 
-        # Убедимся что DefaultShader зарегистрирован
+        # Убедимся что шейдеры зарегистрированы
         self.register_default_shader()
+        self.register_pbr_shader()
 
-        shader = self.shaders.get("DefaultShader")
-        if shader is None:
-            return
-
-        # Создаём DefaultMaterial с циановым цветом и белой текстурой
         white_tex = get_white_texture()
-        mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
-        mat.name = "DefaultMaterial"
-        mat.color = (0.3, 0.85, 0.9, 1.0)  # Умеренно-яркий циан
-        self.register_material("DefaultMaterial", mat)
+
+        # DefaultMaterial (Blinn-Phong)
+        if "DefaultMaterial" not in self.materials:
+            shader = self.shaders.get("DefaultShader")
+            if shader is not None:
+                mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
+                mat.name = "DefaultMaterial"
+                mat.color = (0.3, 0.85, 0.9, 1.0)
+                self.register_material("DefaultMaterial", mat)
+
+        # PBRMaterial
+        if "PBRMaterial" not in self.materials:
+            shader = self.shaders.get("PBRShader")
+            if shader is not None:
+                mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
+                mat.name = "PBRMaterial"
+                mat.color = (0.8, 0.8, 0.8, 1.0)
+                self.register_material("PBRMaterial", mat)
 
     def register_builtin_meshes(self) -> List[str]:
         """
