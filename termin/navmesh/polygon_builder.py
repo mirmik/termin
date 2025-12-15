@@ -749,10 +749,19 @@ class PolygonBuilder:
         voxel_set: set[tuple[int, int]],
     ) -> list[tuple[int, int]]:
         """
-        Обход граничных вокселей по часовой стрелке (wall-following).
+        Обход граничных вокселей по часовой стрелке (8-связность).
         """
-        # Направления: вправо, вниз, влево, вверх (по часовой)
-        directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+        # 8 направлений по часовой стрелке начиная с востока
+        directions = [
+            (1, 0),   # E
+            (1, 1),   # SE
+            (0, 1),   # S
+            (-1, 1),  # SW
+            (-1, 0),  # W
+            (-1, -1), # NW
+            (0, -1),  # N
+            (1, -1),  # NE
+        ]
 
         contour = [start]
         visited = {start}
@@ -766,11 +775,12 @@ class PolygonBuilder:
                 current_dir = i
                 break
 
-        max_steps = len(boundary_set) * 4
+        max_steps = len(boundary_set) * 8
         for _ in range(max_steps):
-            # Пробуем повернуть направо, потом прямо, потом налево, потом назад
-            for turn in [-1, 0, 1, 2]:  # право, прямо, лево, назад
-                new_dir = (current_dir + turn) % 4
+            # Пробуем направления начиная с "правее текущего"
+            found = False
+            for offset in range(-2, 6):  # от -2 (сильно вправо) до 5 (почти назад)
+                new_dir = (current_dir + offset) % 8
                 dx, dy = directions[new_dir]
                 neighbor = (current[0] + dx, current[1] + dy)
 
@@ -784,9 +794,10 @@ class PolygonBuilder:
                         visited.add(neighbor)
                         current = neighbor
                         current_dir = new_dir
+                        found = True
                         break
-            else:
-                # Не нашли следующий воксель — тупик
+
+            if not found:
                 break
 
         return contour
