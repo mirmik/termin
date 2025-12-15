@@ -518,11 +518,15 @@ class VoxelizerComponent(Component):
         grid = self._debug_grid
         cell_size = grid.cell_size
 
+        from termin.voxels.voxel_mesh import VoxelMesh
+
         # Строим меш из вокселей региона
         voxel_count = len(region_voxels)
         vertices = np.zeros((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
         triangles = np.zeros((voxel_count * TRIS_PER_CUBE, 3), dtype=np.int32)
         normals = np.zeros((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
+        uvs = np.zeros((voxel_count * VERTS_PER_CUBE, 2), dtype=np.float32)
+        colors = np.ones((voxel_count * VERTS_PER_CUBE, 3), dtype=np.float32)
 
         cube_size = cell_size * CUBE_SCALE
 
@@ -546,13 +550,16 @@ class VoxelizerComponent(Component):
                 _CUBE_TRIANGLES + v_offset
             )
             normals[v_offset:v_offset + VERTS_PER_CUBE] = _CUBE_NORMALS
+            # UV.x = тип вокселя (1.0 = SOLID для отладки)
+            uvs[v_offset:v_offset + VERTS_PER_CUBE, 0] = 1.0
 
         # Расширяем bounds на половину куба
         half_cube = cube_size * 0.5
         self._debug_bounds_min = min_world - half_cube
         self._debug_bounds_max = max_world + half_cube
 
-        mesh = Mesh3(vertices=vertices, triangles=triangles, normals=normals)
+        mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
+        mesh.vertex_normals = normals
         self._debug_mesh_drawable = MeshDrawable(mesh)
 
         # Строим контур региона
