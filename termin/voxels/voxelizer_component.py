@@ -464,8 +464,8 @@ class VoxelizerComponent(Component):
             if isinstance(comp, MeshRenderer):
                 mesh_drawable = comp.mesh
                 if mesh_drawable is not None and mesh_drawable.mesh is not None:
-                    # Получаем мировую трансформацию entity
-                    world_matrix = entity.transform.world_matrix()
+                    # Получаем мировую трансформацию entity с учётом scale
+                    world_matrix = entity.model_matrix()
                     # Преобразуем в локальную систему координат корневого entity
                     local_matrix = root_transform_inv @ world_matrix
                     result.append((mesh_drawable.mesh, local_matrix))
@@ -563,7 +563,8 @@ class VoxelizerComponent(Component):
             return False
 
         # Получаем обратную матрицу корневого entity для перевода в локальные координаты
-        root_world = self.entity.transform.world_matrix()
+        # model_matrix() включает position, rotation и scale
+        root_world = self.entity.model_matrix()
         root_inv = np.linalg.inv(root_world)
 
         # Собираем меши в зависимости от режима

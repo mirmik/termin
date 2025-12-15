@@ -83,6 +83,10 @@ class Transform:
             self._dirty = False
         return self._global_pose
 
+    def world_matrix(self) -> numpy.ndarray:
+        """Return 4x4 homogeneous transformation matrix in world coordinates."""
+        return self.global_pose().as_matrix()
+
     def _has_ancestor(self, possible_ancestor):
         current = self.parent
         while current:
