@@ -56,7 +56,7 @@ def _build_navmesh_action(component: "VoxelizerComponent") -> None:
 
 def _set_debug_region(component: "VoxelizerComponent", value: int) -> None:
     """Setter для debug_region_idx — перестраивает отладочный меш."""
-    component.debug_region_idx = value
+    component.debug_region_idx = int(value)
     component._rebuild_debug_mesh()
 
 
