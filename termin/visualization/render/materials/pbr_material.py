@@ -112,15 +112,14 @@ float compute_spot_weight(int idx, vec3 L) {
 }
 
 void main() {
-    // DEBUG: output NdotL for first light
     vec3 N = normalize(v_normal);
+    vec3 V = normalize(u_camera_position - v_world_pos);
+
+    // DEBUG: output NdotL for first light
     vec3 L = normalize(-u_light_direction[0]);
     float NdotL = max(dot(N, L), 0.0);
     FragColor = vec4(NdotL, NdotL, NdotL, 1.0);
     return;
-
-    vec3 N = normalize(v_normal);
-    vec3 V = normalize(u_camera_position - v_world_pos);
 
     // Sample albedo
     vec4 tex_color = texture(u_albedo_texture, v_uv);
