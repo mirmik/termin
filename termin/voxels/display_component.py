@@ -143,9 +143,10 @@ class VoxelDisplayComponent(Component):
     }
 
 
-    def __init__(self, voxel_grid_name: str = "") -> None:
+    def __init__(self, voxel_grid_name: str = "", grid_name: str = "") -> None:
         super().__init__()
-        self._voxel_grid_name = voxel_grid_name
+        # grid_name is the canonical name, voxel_grid_name is deprecated alias
+        self._voxel_grid_name = grid_name or voxel_grid_name
         self._grid_handle: VoxelGridHandle = VoxelGridHandle()
         self._last_grid: Optional["VoxelGrid"] = None  # Для отслеживания изменений
         self._mesh_drawable: Optional[MeshDrawable] = None
@@ -166,6 +167,17 @@ class VoxelDisplayComponent(Component):
         # Границы сетки в мировых координатах (вычисляются при построении меша)
         self._bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
         self._bounds_max: np.ndarray = np.zeros(3, dtype=np.float32)
+
+    @property
+    def grid_name(self) -> str:
+        """Name of the voxel grid."""
+        return self._voxel_grid_name
+
+    @grid_name.setter
+    def grid_name(self, value: str) -> None:
+        self._voxel_grid_name = value
+        if value:
+            self.set_voxel_grid_by_name(value)
 
     def _set_color_below(self, value: Tuple[float, float, float, float]) -> None:
         """Установить цвет ниже порога."""
