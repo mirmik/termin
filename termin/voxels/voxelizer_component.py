@@ -235,7 +235,7 @@ class VoxelizerComponent(Component):
             self._debug_material = Material(
                 shader=shader,
                 color=(1.0, 0.5, 0.0, 0.8),  # Оранжевый для отладки
-                phase_mark="editor",
+                phase_mark="opaque",
                 render_state=RenderState(
                     depth_test=True,
                     depth_write=True,
