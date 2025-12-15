@@ -104,6 +104,8 @@ class MeshFileProcessor(FileTypeProcessor):
         )
         if mesh_data.normals is not None:
             mesh3.vertex_normals = mesh_data.normals
+        if mesh_data.uvs is not None:
+            mesh3.uvs = mesh_data.uvs
 
         drawable = MeshDrawable(mesh3, source_id=path, name=name)
         return drawable
