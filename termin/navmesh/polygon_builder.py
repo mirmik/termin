@@ -320,29 +320,28 @@ class PolygonBuilder:
                 iteration += 1
 
                 # Собираем границу текущего региона
+                # Ищем соседей, которые либо в другом регионе, либо "свободные" (в surface_voxels, но не в регионе)
                 boundary_neighbors: set[tuple[int, int, int]] = set()
                 for vx, vy, vz in region_set:
                     for dx, dy, dz in NEIGHBORS_26:
                         neighbor = (vx + dx, vy + dy, vz + dz)
-                        # Сосед должен быть в другом регионе (не в текущем)
-                        if neighbor in voxel_to_region and neighbor not in region_set:
+                        if neighbor not in region_set and neighbor in surface_voxels:
                             boundary_neighbors.add(neighbor)
 
                 # Проверяем каждого соседа на возможность поглощения
                 to_absorb: list[tuple[int, int, int]] = []
 
                 for neighbor in boundary_neighbors:
-                    neighbor_region_idx = voxel_to_region[neighbor]
-                    neighbor_region_size = len(region_sets[neighbor_region_idx])
-
-                    # Можем поглощать только из регионов меньшего размера
-                    if neighbor_region_size >= current_size:
-                        continue
+                    # Проверяем, принадлежит ли воксель другому региону
+                    if neighbor in voxel_to_region:
+                        neighbor_region_idx = voxel_to_region[neighbor]
+                        neighbor_region_size = len(region_sets[neighbor_region_idx])
+                        # Можем поглощать только из регионов меньшего размера
+                        if neighbor_region_size >= current_size:
+                            continue
+                    # Если воксель не в регионе (свободный) — можно поглощать
 
                     # Проверяем совместимость нормали
-                    if neighbor not in surface_voxels:
-                        continue
-
                     neighbor_normals = surface_voxels[neighbor]
                     compatible = False
                     for normal in neighbor_normals:
@@ -356,9 +355,10 @@ class PolygonBuilder:
 
                 # Переносим воксели
                 for voxel in to_absorb:
-                    old_region_idx = voxel_to_region[voxel]
-                    # Удаляем из старого региона
-                    region_sets[old_region_idx].discard(voxel)
+                    if voxel in voxel_to_region:
+                        old_region_idx = voxel_to_region[voxel]
+                        # Удаляем из старого региона
+                        region_sets[old_region_idx].discard(voxel)
                     # Добавляем в текущий регион
                     region_set.add(voxel)
                     voxel_to_region[voxel] = region_idx
