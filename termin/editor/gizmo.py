@@ -628,8 +628,9 @@ class GizmoMoveController(InputComponent):
         )
         self.target.transform.relocate_global(new_pose)
 
+        # Use to_pose3() to ignore target's scale - gizmo should have fixed size
         self.gizmo.transform.relocate_global(
-            self.target.transform.global_pose()
+            self.target.transform.global_pose().to_pose3()
         )
 
         # Уведомляем инспектор об изменении трансформа
@@ -769,8 +770,9 @@ class GizmoMoveController(InputComponent):
 
         self.target.transform.relocate_global(new_pose)
 
+        # Use to_pose3() to ignore target's scale - gizmo should have fixed size
         self.gizmo.transform.relocate_global(
-            self.target.transform.global_pose()
+            self.target.transform.global_pose().to_pose3()
         )
 
         # Уведомляем инспектор об изменении трансформа
