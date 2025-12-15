@@ -168,14 +168,24 @@ class VoxelizerComponent(Component):
             label="Stitch Contours",
             kind="bool",
         ),
+        "share_boundary": InspectField(
+            path="share_boundary",
+            label="Share Boundary",
+            kind="bool",
+        ),
         "show_multi_normal_voxels": InspectField(
             path="show_multi_normal_voxels",
             label="Show Multi-Normal",
             kind="bool",
         ),
+        "show_boundary_voxels": InspectField(
+            path="show_boundary_voxels",
+            label="Show Boundary",
+            kind="bool",
+        ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours", "project_contours", "stitch_contours", "show_multi_normal_voxels"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours", "project_contours", "stitch_contours", "share_boundary", "show_multi_normal_voxels", "show_boundary_voxels"]
 
     def __init__(
         self,
@@ -192,7 +202,9 @@ class VoxelizerComponent(Component):
         show_debug_contours: bool = True,
         project_contours: bool = False,
         stitch_contours: bool = False,
+        share_boundary: bool = False,
         show_multi_normal_voxels: bool = False,
+        show_boundary_voxels: bool = False,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
@@ -211,12 +223,16 @@ class VoxelizerComponent(Component):
         self.show_debug_contours: bool = show_debug_contours
         self.project_contours: bool = project_contours
         self.stitch_contours: bool = stitch_contours
+        self.share_boundary: bool = share_boundary
         self.show_multi_normal_voxels: bool = show_multi_normal_voxels
+        self.show_boundary_voxels: bool = show_boundary_voxels
         self._debug_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+        self._debug_boundary_voxels: set[tuple[int, int, int]] = set()
         self._debug_grid: Optional["VoxelGrid"] = None
         self._debug_mesh_drawable: Optional[MeshDrawable] = None
         self._debug_contours_drawable: Optional[MeshDrawable] = None
         self._debug_multi_normal_drawable: Optional[MeshDrawable] = None
+        self._debug_boundary_drawable: Optional[MeshDrawable] = None
         self._debug_material: Optional[Material] = None
         self._debug_contour_material: Optional[Material] = None
         self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
@@ -228,6 +244,7 @@ class VoxelizerComponent(Component):
     GEOMETRY_VOXELS = "voxels"
     GEOMETRY_CONTOURS = "contours"
     GEOMETRY_MULTI_NORMAL = "multi_normal"
+    GEOMETRY_BOUNDARY = "boundary"
 
     @property
     def phase_marks(self) -> Set[str]:
@@ -252,6 +269,9 @@ class VoxelizerComponent(Component):
         if geometry_id == "" or geometry_id == self.GEOMETRY_MULTI_NORMAL:
             if self.show_multi_normal_voxels and self._debug_multi_normal_drawable is not None:
                 self._debug_multi_normal_drawable.draw(context)
+        if geometry_id == "" or geometry_id == self.GEOMETRY_BOUNDARY:
+            if self.show_boundary_voxels and self._debug_boundary_drawable is not None:
+                self._debug_boundary_drawable.draw(context)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
@@ -328,6 +348,30 @@ class VoxelizerComponent(Component):
 
             phases.sort(key=lambda p: p.priority)
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_MULTI_NORMAL) for p in phases)
+
+        # Boundary воксели
+        if self.show_boundary_voxels and self._debug_boundary_drawable is not None:
+            mat = self._get_or_create_debug_material()
+            if phase_mark is None:
+                phases = list(mat.phases)
+            else:
+                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+
+            # Яркий жёлтый цвет для boundary вокселей
+            boundary_color = np.array([1.0, 1.0, 0.2, 1.0], dtype=np.float32)
+            for phase in phases:
+                phase.uniforms["u_color_below"] = boundary_color
+                phase.uniforms["u_color_above"] = boundary_color
+                phase.uniforms["u_color_surface"] = boundary_color
+                phase.uniforms["u_slice_axis"] = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+                phase.uniforms["u_fill_percent"] = 1.0
+                phase.uniforms["u_bounds_min"] = self._debug_bounds_min
+                phase.uniforms["u_bounds_max"] = self._debug_bounds_max
+                phase.uniforms["u_ambient_color"] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+                phase.uniforms["u_ambient_intensity"] = 0.5
+
+            phases.sort(key=lambda p: p.priority)
+            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_BOUNDARY) for p in phases)
 
         return result
 
@@ -545,6 +589,7 @@ class VoxelizerComponent(Component):
         navmesh = builder.build(
             grid,
             expand_regions=self.expand_regions,  # Из чекбокса
+            share_boundary=self.share_boundary,  # Из чекбокса
             project_contours=self.project_contours,  # Из чекбокса
             stitch_contours=self.stitch_contours,  # Из чекбокса
             stitch_polygons=stitch_polygons,
@@ -555,6 +600,7 @@ class VoxelizerComponent(Component):
 
         # Сохраняем регионы и grid для отладочной визуализации
         self._debug_regions = builder._last_regions
+        self._debug_boundary_voxels = builder._last_boundary_voxels
         self._debug_grid = grid
         print(f"VoxelizerComponent: saved {len(self._debug_regions)} regions for debug")
 
@@ -619,6 +665,9 @@ class VoxelizerComponent(Component):
         if self._debug_multi_normal_drawable is not None:
             self._debug_multi_normal_drawable.delete()
             self._debug_multi_normal_drawable = None
+        if self._debug_boundary_drawable is not None:
+            self._debug_boundary_drawable.delete()
+            self._debug_boundary_drawable = None
 
         if not self._debug_regions or self._debug_grid is None:
             return
@@ -689,6 +738,9 @@ class VoxelizerComponent(Component):
 
         # Строим меш для вокселей с несколькими нормалями
         self._build_debug_multi_normal(grid, cube_size, _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS, VERTS_PER_CUBE, TRIS_PER_CUBE)
+
+        # Строим меш для граничных вокселей
+        self._build_debug_boundary(grid, cube_size, _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS, VERTS_PER_CUBE, TRIS_PER_CUBE)
 
         print(f"VoxelizerComponent: debug mesh built for {len(self._debug_regions)} regions ({total_voxels} voxels)")
 
@@ -839,6 +891,50 @@ class VoxelizerComponent(Component):
 
         print(f"VoxelizerComponent: {count} voxels with multiple normals")
 
+    def _build_debug_boundary(
+        self,
+        grid: "VoxelGrid",
+        cube_size: float,
+        cube_vertices: np.ndarray,
+        cube_triangles: np.ndarray,
+        cube_normals: np.ndarray,
+        verts_per_cube: int,
+        tris_per_cube: int,
+    ) -> None:
+        """Построить меш для граничных вокселей (общих между регионами)."""
+        from termin.voxels.voxel_mesh import VoxelMesh
+
+        if not self._debug_boundary_voxels:
+            return
+
+        count = len(self._debug_boundary_voxels)
+        vertices = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
+        triangles = np.zeros((count * tris_per_cube, 3), dtype=np.int32)
+        normals = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
+        uvs = np.zeros((count * verts_per_cube, 2), dtype=np.float32)
+        colors = np.zeros((count * verts_per_cube, 3), dtype=np.float32)
+
+        # Яркий жёлтый цвет для boundary вокселей
+        boundary_color = (1.0, 1.0, 0.2)
+
+        for i, (vx, vy, vz) in enumerate(self._debug_boundary_voxels):
+            center = grid.voxel_to_world(vx, vy, vz)
+
+            v_offset = i * verts_per_cube
+            t_offset = i * tris_per_cube
+
+            vertices[v_offset:v_offset + verts_per_cube] = cube_vertices * cube_size + center
+            triangles[t_offset:t_offset + tris_per_cube] = cube_triangles + v_offset
+            normals[v_offset:v_offset + verts_per_cube] = cube_normals
+            uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
+            colors[v_offset:v_offset + verts_per_cube] = boundary_color
+
+        mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
+        mesh.vertex_normals = normals
+        self._debug_boundary_drawable = MeshDrawable(mesh)
+
+        print(f"VoxelizerComponent: {count} boundary voxels")
+
     @classmethod
     def deserialize(cls, data: dict, context) -> "VoxelizerComponent":
         """Десериализовать компонент."""
@@ -856,5 +952,7 @@ class VoxelizerComponent(Component):
             show_debug_contours=data.get("show_debug_contours", True),
             project_contours=data.get("project_contours", False),
             stitch_contours=data.get("stitch_contours", False),
+            share_boundary=data.get("share_boundary", False),
             show_multi_normal_voxels=data.get("show_multi_normal_voxels", False),
+            show_boundary_voxels=data.get("show_boundary_voxels", False),
         )

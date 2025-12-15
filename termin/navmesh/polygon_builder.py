@@ -49,11 +49,13 @@ class PolygonBuilder:
     def __init__(self, config: NavMeshConfig | None = None) -> None:
         self.config = config or NavMeshConfig()
         self._last_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+        self._last_boundary_voxels: set[tuple[int, int, int]] = set()
 
     def build(
         self,
         grid: VoxelGrid,
         expand_regions: bool = True,
+        share_boundary: bool = False,
         project_contours: bool = False,
         stitch_contours: bool = False,
         stitch_polygons: bool = False,
@@ -67,6 +69,7 @@ class PolygonBuilder:
         Args:
             grid: Воксельная сетка с поверхностными вокселями и нормалями.
             expand_regions: Расширять регионы (шаг 2.5).
+            share_boundary: Граничные воксели добавляются в соседние регионы (тонкая общая граница).
             project_contours: Проецировать контуры на плоскость региона.
             stitch_contours: Сшивать контуры на границах регионов (проекция на пересечение плоскостей).
             stitch_polygons: Сшивать полигоны через plane intersections.
@@ -97,6 +100,12 @@ class PolygonBuilder:
         # Шаг 2.6: Фильтрация "висячих" вокселей
         # Воксели с <=1 соседом (по всем регионам) выселяются в отдельные регионы
         regions = self._filter_hanging_voxels(regions)
+
+        # Шаг 2.7: Общие граничные воксели
+        # Воксели на границе регионов добавляются в соседние регионы (тонкая граница)
+        self._last_boundary_voxels = set()
+        if share_boundary:
+            regions, self._last_boundary_voxels = self._share_boundary_voxels(regions)
 
         # Для сшивки контуров: находим какие воксели в каких регионах
         voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
@@ -300,6 +309,58 @@ class PolygonBuilder:
                 result.append((list(region_set), region_normal))
 
         return result
+
+    def _share_boundary_voxels(
+        self,
+        regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+    ) -> tuple[list[tuple[list[tuple[int, int, int]], np.ndarray]], set[tuple[int, int, int]]]:
+        """
+        Шаг 2.7: Граничные воксели становятся общими для соседних регионов.
+
+        Для каждого вокселя V в регионе R с индексом i:
+        - Если сосед N принадлежит региону S с индексом j > i
+        - То V добавляется в регион S
+
+        Это создаёт тонкую (1 воксель) общую границу между регионами.
+        Угловые воксели (на стыке 3+ регионов) будут принадлежать всем смежным регионам.
+
+        Returns:
+            (обновлённые регионы, множество граничных вокселей)
+        """
+        # Строим mapping воксель -> множество регионов
+        voxel_to_regions: dict[tuple[int, int, int], set[int]] = {}
+        for idx, (voxels, _) in enumerate(regions):
+            for v in voxels:
+                if v not in voxel_to_regions:
+                    voxel_to_regions[v] = set()
+                voxel_to_regions[v].add(idx)
+
+        # Находим граничные воксели и добавляем их в соседние регионы
+        boundary_voxels: set[tuple[int, int, int]] = set()
+        # to_add[region_idx] = set of voxels to add
+        to_add: dict[int, set[tuple[int, int, int]]] = {i: set() for i in range(len(regions))}
+
+        for region_idx, (region_voxels, _) in enumerate(regions):
+            for voxel in region_voxels:
+                vx, vy, vz = voxel
+                for dx, dy, dz in NEIGHBORS_26:
+                    neighbor = (vx + dx, vy + dy, vz + dz)
+                    if neighbor in voxel_to_regions:
+                        neighbor_regions = voxel_to_regions[neighbor]
+                        for other_idx in neighbor_regions:
+                            # Если сосед в регионе с большим индексом — добавляем туда текущий воксель
+                            if other_idx > region_idx:
+                                to_add[other_idx].add(voxel)
+                                boundary_voxels.add(voxel)
+
+        # Применяем добавления
+        result: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+        for idx, (voxels, normal) in enumerate(regions):
+            new_voxels = set(voxels) | to_add[idx]
+            result.append((list(new_voxels), normal))
+
+        print(f"PolygonBuilder: shared {len(boundary_voxels)} boundary voxels between regions")
+        return result, boundary_voxels
 
     def _expand_regions(
         self,
