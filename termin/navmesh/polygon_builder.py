@@ -384,25 +384,26 @@ class PolygonBuilder:
         while changed:
             changed = False
             iteration += 1
-            to_remove: list[tuple[int, int, int]] = []
+            to_remove: set[tuple[int, int, int]] = set()
 
             for voxel in result:
                 # Находим соседей этого вокселя, которые тоже в boundary
+                # и ещё не помечены на удаление в этой итерации
                 vx, vy, vz = voxel
                 neighbors_in_boundary: list[tuple[int, int, int]] = []
                 for dx, dy, dz in NEIGHBORS_26:
                     neighbor = (vx + dx, vy + dy, vz + dz)
-                    if neighbor in result and neighbor != voxel:
+                    if neighbor in result and neighbor not in to_remove:
                         neighbors_in_boundary.append(neighbor)
 
                 # Концевой воксель (< 2 соседей) — однозначно лишний
                 if len(neighbors_in_boundary) < 2:
-                    to_remove.append(voxel)
+                    to_remove.add(voxel)
                     continue
 
                 # Проверяем, связаны ли соседи между собой без этого вокселя
                 if self._are_connected_26(neighbors_in_boundary):
-                    to_remove.append(voxel)
+                    to_remove.add(voxel)
 
             for voxel in to_remove:
                 result.discard(voxel)
