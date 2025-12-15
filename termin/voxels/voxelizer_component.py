@@ -256,6 +256,12 @@ class VoxelizerComponent(Component):
         if self.show_debug_contours:
             mat = self._get_or_create_contour_material()
             marks.update(p.phase_mark for p in mat.phases)
+        if self.show_multi_normal_voxels:
+            mat = self._get_or_create_debug_material()
+            marks.update(p.phase_mark for p in mat.phases)
+        if self.show_boundary_voxels:
+            mat = self._get_or_create_debug_material()
+            marks.update(p.phase_mark for p in mat.phases)
         return marks
 
     def draw_geometry(self, context: "RenderContext", geometry_id: str = "") -> None:
