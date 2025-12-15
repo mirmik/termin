@@ -102,7 +102,7 @@ class NavMeshDisplayComponent(Component):
         # Режим отображения
         self.wireframe: bool = False
         self.show_normals: bool = False
-        self.show_contours: bool = False
+        self.show_contours: bool = True
         self.contour_width: float = 0.05
 
         # Инициализируем handle если имя задано
@@ -355,19 +355,16 @@ void main() {
 
             vertex_offset += len(verts)
 
-        if not all_vertices:
-            return
+        # Строим меш если есть треугольники
+        if all_vertices:
+            vertices = np.vstack(all_vertices).astype(np.float32)
+            normals = np.vstack(all_normals).astype(np.float32)
+            triangles = np.vstack(all_triangles).astype(np.int32)
 
-        # Объединяем в один меш
-        vertices = np.vstack(all_vertices).astype(np.float32)
-        normals = np.vstack(all_normals).astype(np.float32)
-        triangles = np.vstack(all_triangles).astype(np.int32)
+            mesh = Mesh3(vertices=vertices, triangles=triangles, normals=normals)
+            self._mesh_drawable = MeshDrawable(mesh)
 
-        # Создаём Mesh3
-        mesh = Mesh3(vertices=vertices, triangles=triangles, normals=normals)
-        self._mesh_drawable = MeshDrawable(mesh)
-
-        # Строим контуры
+        # Строим контуры (независимо от меша)
         self._build_contour_drawable(navmesh)
 
     def _build_contour_drawable(self, navmesh: "NavMesh") -> None:
