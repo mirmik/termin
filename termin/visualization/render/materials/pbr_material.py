@@ -112,8 +112,8 @@ float compute_spot_weight(int idx, vec3 L) {
 }
 
 void main() {
-    // DEBUG: output u_color
-    FragColor = u_color;
+    // DEBUG: output light count (red = count/8)
+    FragColor = vec4(float(u_light_count) / 8.0, 0.0, 0.0, 1.0);
     return;
 
     vec3 N = normalize(v_normal);
