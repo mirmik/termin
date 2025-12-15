@@ -158,9 +158,14 @@ class VoxelizerComponent(Component):
             label="Show Contours",
             kind="bool",
         ),
+        "project_contours": InspectField(
+            path="project_contours",
+            label="Project to Plane",
+            kind="bool",
+        ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours", "project_contours"]
 
     def __init__(
         self,
@@ -175,6 +180,7 @@ class VoxelizerComponent(Component):
         contour_epsilon: float = 0.1,
         show_debug_voxels: bool = True,
         show_debug_contours: bool = True,
+        project_contours: bool = False,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
@@ -191,6 +197,7 @@ class VoxelizerComponent(Component):
         # Debug visualization
         self.show_debug_voxels: bool = show_debug_voxels
         self.show_debug_contours: bool = show_debug_contours
+        self.project_contours: bool = project_contours
         self._debug_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
         self._debug_grid: Optional["VoxelGrid"] = None
         self._debug_mesh_drawable: Optional[MeshDrawable] = None
@@ -660,10 +667,26 @@ class VoxelizerComponent(Component):
                 continue
 
             outer = polygon.outer_contour
-            verts = polygon.vertices
+            verts = polygon.vertices.copy()
 
             if len(outer) < 2:
                 continue
+
+            # Проецируем на плоскость региона (если включено)
+            if self.project_contours:
+                # Вычисляем центроид региона
+                region_centers = np.array([
+                    grid.voxel_to_world(vx, vy, vz)
+                    for vx, vy, vz in region_voxels
+                ], dtype=np.float32)
+                centroid = region_centers.mean(axis=0)
+                normal = np.array(region_normal, dtype=np.float32)
+
+                # Проецируем каждую вершину контура на плоскость
+                for i in range(len(verts)):
+                    point = verts[i]
+                    dist = np.dot(point - centroid, normal)
+                    verts[i] = point - dist * normal
 
             # Строим ribbon для контура
             up_hint = np.array(region_normal, dtype=np.float32)
@@ -718,4 +741,5 @@ class VoxelizerComponent(Component):
             contour_epsilon=data.get("contour_epsilon", 0.1),
             show_debug_voxels=data.get("show_debug_voxels", True),
             show_debug_contours=data.get("show_debug_contours", True),
+            project_contours=data.get("project_contours", False),
         )
