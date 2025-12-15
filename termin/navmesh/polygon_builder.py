@@ -55,6 +55,7 @@ class PolygonBuilder:
         grid: VoxelGrid,
         expand_regions: bool = True,
         project_contours: bool = False,
+        stitch_contours: bool = False,
         stitch_polygons: bool = False,
         extract_contours: bool = False,
         simplify_contours: bool = False,
@@ -67,6 +68,7 @@ class PolygonBuilder:
             grid: Воксельная сетка с поверхностными вокселями и нормалями.
             expand_regions: Расширять регионы (шаг 2.5).
             project_contours: Проецировать контуры на плоскость региона.
+            stitch_contours: Сшивать контуры на границах регионов (проекция на пересечение плоскостей).
             stitch_polygons: Сшивать полигоны через plane intersections.
             extract_contours: Извлекать контуры из треугольников (шаги 7-9).
             simplify_contours: Упрощать контуры Douglas-Peucker (шаг 10).
@@ -96,26 +98,25 @@ class PolygonBuilder:
         # Воксели с <=1 соседом (по всем регионам) выселяются в отдельные регионы
         regions = self._filter_hanging_voxels(regions)
 
-        # NOTE: stitch_polygons временно отключён
+        # Для сшивки контуров: находим какие воксели в каких регионах
+        voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
+        region_planes: list[tuple[np.ndarray, np.ndarray]] = []  # (centroid, normal)
 
-        # # Для сшивки: находим какие воксели в каких регионах
-        # voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
-        # if stitch_polygons:
-        #     for region_idx, (region_voxels, _) in enumerate(regions):
-        #         for voxel in region_voxels:
-        #             if voxel not in voxel_to_regions:
-        #                 voxel_to_regions[voxel] = []
-        #             voxel_to_regions[voxel].append(region_idx)
+        if stitch_contours:
+            for region_idx, (region_voxels, _) in enumerate(regions):
+                for voxel in region_voxels:
+                    if voxel not in voxel_to_regions:
+                        voxel_to_regions[voxel] = []
+                    voxel_to_regions[voxel].append(region_idx)
 
-        # # Вычисляем плоскости для каждого региона (нужно для сшивки)
-        # region_planes: list[tuple[np.ndarray, np.ndarray]] = []  # (centroid, normal)
-        # for region_voxels, region_normal in regions:
-        #     centers_3d = np.array([
-        #         grid.origin + (np.array(v) + 0.5) * grid.cell_size
-        #         for v in region_voxels
-        #     ], dtype=np.float32)
-        #     centroid = centers_3d.mean(axis=0)
-        #     region_planes.append((centroid, region_normal))
+            # Вычисляем плоскости для каждого региона
+            for region_voxels, region_normal in regions:
+                centers_3d = np.array([
+                    grid.origin + (np.array(v) + 0.5) * grid.cell_size
+                    for v in region_voxels
+                ], dtype=np.float32)
+                centroid = centers_3d.mean(axis=0)
+                region_planes.append((centroid, region_normal))
 
         # Для каждого региона извлекаем контур напрямую из вокселей
         polygons: list[NavPolygon] = []
@@ -136,7 +137,11 @@ class PolygonBuilder:
                 region_voxels,
                 region_normal,
                 grid,
+                region_idx=region_idx,
                 project_contours=project_contours,
+                stitch_contours=stitch_contours,
+                voxel_to_regions=voxel_to_regions,
+                region_planes=region_planes,
             )
             if polygon is not None:
                 polygons.append(polygon)
@@ -742,7 +747,11 @@ class PolygonBuilder:
         voxels: list[tuple[int, int, int]],
         normal: np.ndarray,
         grid: VoxelGrid,
+        region_idx: int = 0,
         project_contours: bool = False,
+        stitch_contours: bool = False,
+        voxel_to_regions: dict[tuple[int, int, int], list[int]] | None = None,
+        region_planes: list[tuple[np.ndarray, np.ndarray]] | None = None,
     ) -> NavPolygon | None:
         """
         Извлечь контур региона напрямую из вокселей.
@@ -757,7 +766,11 @@ class PolygonBuilder:
             voxels: Список координат вокселей региона.
             normal: Нормаль региона.
             grid: Воксельная сетка.
+            region_idx: Индекс текущего региона.
             project_contours: Проецировать вершины контура на плоскость региона.
+            stitch_contours: Сшивать контуры на границах регионов.
+            voxel_to_regions: Mapping voxel -> list of region indices.
+            region_planes: List of (centroid, normal) for each region.
         """
         if len(voxels) < 1:
             return None
@@ -809,16 +822,72 @@ class PolygonBuilder:
             return None
 
         # Конвертируем в 3D координаты центров вокселей
+        # Сохраняем соответствие индекса вершины -> 3D координаты вокселя
         contour_3d = []
+        contour_voxels_3d: list[tuple[int, int, int]] = []
         for v2d in contour_2d:
             v3d = voxel_2d_to_3d[v2d]
             center = origin + (np.array(v3d, dtype=np.float32) + 0.5) * cell_size
             contour_3d.append(center)
+            contour_voxels_3d.append(v3d)
 
         vertices = np.array(contour_3d, dtype=np.float32)
 
-        # Проецируем вершины контура на плоскость региона (опционально)
-        if project_contours and len(voxels) > 0:
+        # Сшивка контуров: проецируем вершины на пересечение плоскостей соседних регионов
+        if stitch_contours and voxel_to_regions is not None and region_planes is not None:
+            current_plane = region_planes[region_idx]
+
+            for i, v3d in enumerate(contour_voxels_3d):
+                point = vertices[i]
+
+                # Собираем все регионы, в которые входит воксель и его 26-соседи
+                neighbor_regions: set[int] = set()
+                vx, vy, vz = v3d
+                for dx, dy, dz in NEIGHBORS_26:
+                    neighbor = (vx + dx, vy + dy, vz + dz)
+                    if neighbor in voxel_to_regions:
+                        neighbor_regions.update(voxel_to_regions[neighbor])
+                # Добавляем регионы самого вокселя
+                if v3d in voxel_to_regions:
+                    neighbor_regions.update(voxel_to_regions[v3d])
+
+                # Сортируем для детерминированности
+                region_list = sorted(neighbor_regions)
+
+                if len(region_list) <= 1:
+                    # Только один регион — проецируем на его плоскость
+                    plane_point, plane_normal = current_plane
+                    dist = np.dot(point - plane_point, plane_normal)
+                    vertices[i] = point - dist * plane_normal
+
+                elif len(region_list) == 2:
+                    # Два региона — проецируем на линию пересечения плоскостей
+                    planes = [region_planes[idx] for idx in region_list]
+                    vertices[i] = self._project_to_line_intersection(point, planes)
+
+                elif len(region_list) == 3:
+                    # Три региона — перемещаем в точку пересечения плоскостей
+                    planes = [region_planes[idx] for idx in region_list]
+                    intersection = self._intersect_three_planes(planes)
+                    if intersection is not None:
+                        vertices[i] = intersection
+                    else:
+                        # Fallback: проекция на плоскость текущего региона
+                        plane_point, plane_normal = current_plane
+                        dist = np.dot(point - plane_point, plane_normal)
+                        vertices[i] = point - dist * plane_normal
+
+                else:
+                    # 4+ региона — усредняем проекции на все плоскости
+                    projected_sum = np.zeros(3, dtype=np.float32)
+                    for ridx in region_list:
+                        plane_point, plane_normal = region_planes[ridx]
+                        dist = np.dot(point - plane_point, plane_normal)
+                        projected_sum += point - dist * plane_normal
+                    vertices[i] = projected_sum / len(region_list)
+
+        # Простая проекция на плоскость региона (без сшивки)
+        elif project_contours and len(voxels) > 0:
             # Вычисляем центроид всех вокселей региона
             all_centers = np.array([
                 origin + (np.array(v, dtype=np.float32) + 0.5) * cell_size

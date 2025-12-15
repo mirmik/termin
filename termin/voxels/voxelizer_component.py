@@ -163,9 +163,14 @@ class VoxelizerComponent(Component):
             label="Project to Plane",
             kind="bool",
         ),
+        "stitch_contours": InspectField(
+            path="stitch_contours",
+            label="Stitch Contours",
+            kind="bool",
+        ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours", "project_contours"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "show_debug_voxels", "show_debug_contours", "project_contours", "stitch_contours"]
 
     def __init__(
         self,
@@ -181,6 +186,7 @@ class VoxelizerComponent(Component):
         show_debug_voxels: bool = True,
         show_debug_contours: bool = True,
         project_contours: bool = False,
+        stitch_contours: bool = False,
     ) -> None:
         super().__init__()
         self.grid_name = grid_name
@@ -198,6 +204,7 @@ class VoxelizerComponent(Component):
         self.show_debug_voxels: bool = show_debug_voxels
         self.show_debug_contours: bool = show_debug_contours
         self.project_contours: bool = project_contours
+        self.stitch_contours: bool = stitch_contours
         self._debug_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
         self._debug_grid: Optional["VoxelGrid"] = None
         self._debug_mesh_drawable: Optional[MeshDrawable] = None
@@ -503,6 +510,7 @@ class VoxelizerComponent(Component):
             grid,
             expand_regions=self.expand_regions,  # Из чекбокса
             project_contours=self.project_contours,  # Из чекбокса
+            stitch_contours=self.stitch_contours,  # Из чекбокса
             stitch_polygons=stitch_polygons,
             extract_contours=extract_contours,
             simplify_contours=simplify_contours,
@@ -743,4 +751,5 @@ class VoxelizerComponent(Component):
             show_debug_voxels=data.get("show_debug_voxels", True),
             show_debug_contours=data.get("show_debug_contours", True),
             project_contours=data.get("project_contours", False),
+            stitch_contours=data.get("stitch_contours", False),
         )
