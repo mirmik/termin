@@ -152,8 +152,17 @@ float compute_shadow(int light_index) {
     return 1.0;
 }
 
+uniform int u_debug_uv; // 0 = normal, 1 = show UV as color
+
 void main() {
     vec3 N = normalize(v_normal);
+
+    // Debug: visualize UV as color (R=U, G=V, B=0)
+    if (u_debug_uv == 1) {
+        FragColor = vec4(v_uv.x, v_uv.y, 0.0, 1.0);
+        return;
+    }
+
     vec4 tex_color = texture(u_albedo_texture, v_uv);
     vec3 base_color = u_color.rgb * tex_color.rgb;
 
@@ -229,3 +238,8 @@ class DefaultMaterial(Material):
         shader = default_shader()
         white_tex = get_white_texture()
         super().__init__(shader=shader, color=color, textures={"u_albedo_texture": white_tex})
+        self.debug_uv = False  # Set to True to visualize UV as color
+
+    def apply(self, graphics):
+        super().apply(graphics)
+        self.shader.set_uniform("u_debug_uv", 1 if self.debug_uv else 0)
