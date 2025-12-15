@@ -92,6 +92,9 @@ class PolygonBuilder:
         # Шаг 2: Region Growing — разбиваем на группы
         regions = self._region_growing_basic(surface_voxels, grid)
 
+        # Шаг 2.3: Жадное поглощение — большие регионы поглощают воксели меньших
+        regions = self._greedy_absorption(regions, surface_voxels)
+
         # Шаг 2.5: Расширяем регионы (опционально)
         # После этого шага воксели могут входить в несколько регионов
         if expand_regions:
@@ -254,6 +257,138 @@ class PolygonBuilder:
                 regions.append((region, avg_normal.astype(np.float32)))
 
         return regions
+
+    def _greedy_absorption(
+        self,
+        regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+        surface_voxels: dict[tuple[int, int, int], list[np.ndarray]],
+    ) -> list[tuple[list[tuple[int, int, int]], np.ndarray]]:
+        """
+        Шаг 2.3: Жадное поглощение — большие регионы поглощают воксели меньших.
+
+        Алгоритм:
+        1. Сортируем регионы по площади (количеству вокселей) — от большего к меньшему
+        2. Для каждого региона (от большего к меньшему):
+           - Ищем на границе воксели из меньших регионов с подходящими нормалями
+           - Переносим их в текущий регион
+           - Повторяем пока есть изменения
+        3. Удаляем пустые регионы
+
+        Returns:
+            Обновлённый список регионов.
+        """
+        if len(regions) <= 1:
+            return regions
+
+        threshold = self.config.normal_threshold
+
+        # Создаём изменяемые структуры данных
+        # region_sets[i] = set of voxels in region i
+        region_sets: list[set[tuple[int, int, int]]] = [set(voxels) for voxels, _ in regions]
+        region_normals: list[np.ndarray] = [normal.copy() for _, normal in regions]
+
+        # voxel_to_region[voxel] = region index
+        voxel_to_region: dict[tuple[int, int, int], int] = {}
+        for idx, voxel_set in enumerate(region_sets):
+            for v in voxel_set:
+                voxel_to_region[v] = idx
+
+        # Сортируем индексы регионов по размеру (убывание)
+        sorted_indices = sorted(range(len(regions)), key=lambda i: len(region_sets[i]), reverse=True)
+
+        total_absorbed = 0
+
+        # Обрабатываем каждый регион от большего к меньшему
+        for rank, region_idx in enumerate(sorted_indices):
+            region_normal = region_normals[region_idx]
+            region_set = region_sets[region_idx]
+
+            if len(region_set) == 0:
+                continue
+
+            # Размер текущего региона — регионы меньше этого размера могут терять воксели
+            current_size = len(region_set)
+
+            # Итеративно поглощаем воксели
+            changed = True
+            iteration = 0
+            absorbed_this_region = 0
+
+            while changed:
+                changed = False
+                iteration += 1
+
+                # Собираем границу текущего региона
+                boundary_neighbors: set[tuple[int, int, int]] = set()
+                for vx, vy, vz in region_set:
+                    for dx, dy, dz in NEIGHBORS_26:
+                        neighbor = (vx + dx, vy + dy, vz + dz)
+                        # Сосед должен быть в другом регионе (не в текущем)
+                        if neighbor in voxel_to_region and neighbor not in region_set:
+                            boundary_neighbors.add(neighbor)
+
+                # Проверяем каждого соседа на возможность поглощения
+                to_absorb: list[tuple[int, int, int]] = []
+
+                for neighbor in boundary_neighbors:
+                    neighbor_region_idx = voxel_to_region[neighbor]
+                    neighbor_region_size = len(region_sets[neighbor_region_idx])
+
+                    # Можем поглощать только из регионов меньшего размера
+                    if neighbor_region_size >= current_size:
+                        continue
+
+                    # Проверяем совместимость нормали
+                    if neighbor not in surface_voxels:
+                        continue
+
+                    neighbor_normals = surface_voxels[neighbor]
+                    compatible = False
+                    for normal in neighbor_normals:
+                        dot = np.dot(region_normal, normal)
+                        if dot >= threshold:
+                            compatible = True
+                            break
+
+                    if compatible:
+                        to_absorb.append(neighbor)
+
+                # Переносим воксели
+                for voxel in to_absorb:
+                    old_region_idx = voxel_to_region[voxel]
+                    # Удаляем из старого региона
+                    region_sets[old_region_idx].discard(voxel)
+                    # Добавляем в текущий регион
+                    region_set.add(voxel)
+                    voxel_to_region[voxel] = region_idx
+                    changed = True
+                    absorbed_this_region += 1
+
+            total_absorbed += absorbed_this_region
+            if absorbed_this_region > 0:
+                # Пересчитываем нормаль региона
+                normal_sum = np.zeros(3, dtype=np.float64)
+                for v in region_set:
+                    if v in surface_voxels:
+                        normal_sum += surface_voxels[v][0]
+                norm = np.linalg.norm(normal_sum)
+                if norm > 1e-6:
+                    region_normals[region_idx] = (normal_sum / norm).astype(np.float32)
+
+        # Собираем результат — пропускаем пустые регионы
+        result: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+        empty_count = 0
+        for idx in range(len(regions)):
+            if len(region_sets[idx]) > 0:
+                result.append((list(region_sets[idx]), region_normals[idx]))
+            else:
+                empty_count += 1
+
+        print(f"PolygonBuilder: greedy absorption: {len(regions)} regions, "
+              f"absorbed {total_absorbed} voxels, removed {empty_count} empty regions, "
+              f"result: {len(result)} regions")
+
+        return result
 
     def _filter_hanging_voxels(
         self,
