@@ -123,19 +123,30 @@ void main() {
     float roughness = max(u_roughness, 0.04);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // DEBUG: full PBR diffuse + ambient (no specular)
+    // DEBUG: full PBR (diffuse + specular + ambient)
     vec3 ambient = u_ambient_color * u_ambient_intensity * albedo * (1.0 - metallic * 0.5);
 
     vec3 L = normalize(-u_light_direction[0]);
     float NdotL = max(dot(N, L), 0.0);
+    float NdotV = max(dot(N, V), 0.001);
     vec3 H = normalize(V + L);
+    float NdotH = max(dot(N, H), 0.0);
     float HdotV = max(dot(H, V), 0.0);
+
+    // Cook-Torrance BRDF
+    float D = D_GGX(NdotH, roughness);
+    float G = G_Smith(NdotV, NdotL, roughness);
     vec3 F = F_Schlick(HdotV, F0);
+
+    vec3 numerator = D * G * F;
+    float denominator = 4.0 * NdotV * NdotL + 0.0001;
+    vec3 specular = numerator / denominator;
+
     vec3 kD = (1.0 - F) * (1.0 - metallic);
     vec3 radiance = u_light_color[0] * u_light_intensity[0];
-    vec3 diffuse = kD * albedo * NdotL * radiance;
+    vec3 Lo = (kD * albedo + specular) * radiance * NdotL;
 
-    vec3 color = ambient + diffuse;
+    vec3 color = ambient + Lo;
     FragColor = vec4(color, 1.0);
 }
 """
