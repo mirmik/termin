@@ -119,8 +119,12 @@ void main() {
     vec4 tex_color = texture(u_albedo_texture, v_uv);
     vec3 albedo = u_color.rgb * tex_color.rgb;
 
-    // DEBUG: output albedo
-    FragColor = vec4(albedo, 1.0);
+    // DEBUG: simple diffuse (albedo * NdotL * radiance)
+    vec3 L = normalize(-u_light_direction[0]);
+    float NdotL = max(dot(N, L), 0.0);
+    vec3 radiance = u_light_color[0] * u_light_intensity[0];
+    vec3 diffuse = albedo * NdotL * radiance;
+    FragColor = vec4(diffuse, 1.0);
     return;
 
     float metallic = u_metallic;
