@@ -168,8 +168,8 @@ void main() {
         // Energy conservation: what's not reflected is refracted (diffuse)
         vec3 kD = (1.0 - F) * (1.0 - metallic);
 
-        // Diffuse (Lambertian)
-        vec3 diffuse = kD * albedo / PI;
+        // Diffuse (Lambertian, without /PI for brighter result in LDR)
+        vec3 diffuse = kD * albedo;
 
         // Combine
         vec3 radiance = u_light_color[i] * u_light_intensity[i] * attenuation;
