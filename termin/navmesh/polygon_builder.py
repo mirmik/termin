@@ -85,17 +85,16 @@ class PolygonBuilder:
         # Шаг 2: Region Growing — разбиваем на группы
         regions = self._region_growing_basic(surface_voxels, grid)
 
-        # Шаг 2.1: Фильтрация "висячих" вокселей
-        # Воксели с <=1 соседом из своего региона выселяются в отдельные регионы
+        # Шаг 2.5: Расширяем регионы (опционально)
+        # После этого шага воксели могут входить в несколько регионов
+        if expand_regions:
+            regions = self._expand_regions(regions, surface_voxels)
+
+        # Шаг 2.6: Фильтрация "висячих" вокселей
+        # Воксели с <=1 соседом (по всем регионам) выселяются в отдельные регионы
         regions = self._filter_hanging_voxels(regions)
 
-        # NOTE: Стадии expand_regions и stitch_polygons временно отключены,
-        # т.к. используется новый алгоритм построения меша из граней вокселей.
-        # Флаги expand_regions и stitch_polygons игнорируются.
-
-        # # Шаг 2.5: Расширяем регионы (опционально)
-        # if expand_regions:
-        #     regions = self._expand_regions(regions, surface_voxels)
+        # NOTE: stitch_polygons временно отключён
 
         # # Для сшивки: находим какие воксели в каких регионах
         # voxel_to_regions: dict[tuple[int, int, int], list[int]] = {}
@@ -244,15 +243,15 @@ class PolygonBuilder:
         regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
     ) -> list[tuple[list[tuple[int, int, int]], np.ndarray]]:
         """
-        Шаг 2.1: Фильтрация "висячих" вокселей.
+        Шаг 2.6: Фильтрация "висячих" вокселей.
 
-        Воксели с <=1 соседом из своего региона (по 26-связности)
-        выселяются в отдельные одиночные регионы.
+        Для каждого региона независимо:
+        - Воксели с <=1 соседом из ЭТОГО региона (по 26-связности) выселяются
+        - Воксель может остаться в других регионах, где у него достаточно соседей
 
-        Процесс повторяется итеративно, пока есть изменения.
+        Процесс повторяется итеративно для каждого региона.
         """
         result: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
-        evicted: list[tuple[tuple[int, int, int], np.ndarray]] = []
 
         for region_voxels, region_normal in regions:
             if len(region_voxels) <= 2:
@@ -279,10 +278,9 @@ class PolygonBuilder:
                     if neighbor_count <= 1:
                         to_evict.append(voxel)
 
-                # Выселяем помеченные воксели
+                # Выселяем помеченные воксели (без создания новых регионов)
                 for voxel in to_evict:
                     region_set.discard(voxel)
-                    evicted.append((voxel, region_normal))
                     changed = True
 
                 # Если регион стал слишком маленьким — прекращаем
@@ -292,10 +290,6 @@ class PolygonBuilder:
             # Добавляем оставшиеся воксели как регион
             if region_set:
                 result.append((list(region_set), region_normal))
-
-        # Добавляем выселенные воксели как одиночные регионы
-        for voxel, normal in evicted:
-            result.append(([voxel], normal))
 
         return result
 

@@ -120,6 +120,11 @@ class VoxelizerComponent(Component):
             max=90.0,
             step=1.0,
         ),
+        "expand_regions": InspectField(
+            path="expand_regions",
+            label="Expand Regions",
+            kind="bool",
+        ),
         "navmesh_stage": InspectField(
             path="navmesh_stage",
             label="NavMesh Stage",
@@ -163,7 +168,7 @@ class VoxelizerComponent(Component):
         ),
     }
 
-    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "navmesh_stage", "contour_epsilon", "debug_region_idx"]
+    serializable_fields = ["grid_name", "cell_size", "output_path", "voxelize_mode", "navmesh_output_path", "normal_angle", "expand_regions", "navmesh_stage", "contour_epsilon", "debug_region_idx"]
 
     def __init__(
         self,
@@ -173,6 +178,7 @@ class VoxelizerComponent(Component):
         voxelize_mode: VoxelizeMode = VoxelizeMode.SHELL,
         navmesh_output_path: str = "",
         normal_angle: float = 25.0,
+        expand_regions: bool = False,
         navmesh_stage: NavMeshStage = NavMeshStage.REGIONS_BASIC,
         contour_epsilon: float = 0.1,
         debug_region_idx: int = -1,
@@ -184,6 +190,7 @@ class VoxelizerComponent(Component):
         self.voxelize_mode = voxelize_mode
         self.navmesh_output_path = navmesh_output_path
         self.normal_angle = normal_angle
+        self.expand_regions = expand_regions
         self.navmesh_stage = navmesh_stage
         self.contour_epsilon = contour_epsilon
         self._last_voxel_count: int = 0
@@ -423,7 +430,6 @@ class VoxelizerComponent(Component):
 
         # Выбираем стадию алгоритма
         stage = self.navmesh_stage
-        expand_regions = stage >= NavMeshStage.REGIONS_EXPANDED
         stitch_polygons = stage >= NavMeshStage.STITCHED
         extract_contours = stage >= NavMeshStage.WITH_CONTOURS
         simplify_contours = stage >= NavMeshStage.SIMPLIFIED
@@ -431,7 +437,7 @@ class VoxelizerComponent(Component):
 
         navmesh = builder.build(
             grid,
-            expand_regions=expand_regions,
+            expand_regions=self.expand_regions,  # Из чекбокса
             stitch_polygons=stitch_polygons,
             extract_contours=extract_contours,
             simplify_contours=simplify_contours,
@@ -615,6 +621,7 @@ class VoxelizerComponent(Component):
             voxelize_mode=VoxelizeMode(data.get("voxelize_mode", VoxelizeMode.SHELL)),
             navmesh_output_path=data.get("navmesh_output_path", ""),
             normal_angle=data.get("normal_angle", 25.0),
+            expand_regions=data.get("expand_regions", False),
             navmesh_stage=NavMeshStage(data.get("navmesh_stage", NavMeshStage.REGIONS_BASIC)),
             contour_epsilon=data.get("contour_epsilon", 0.1),
             debug_region_idx=data.get("debug_region_idx", -1),
