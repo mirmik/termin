@@ -153,8 +153,8 @@ float compute_shadow(int light_index) {
 }
 
 void main() {
-    // DEBUG: show UV as color (R=U, G=V)
-    FragColor = vec4(v_uv.x, v_uv.y, 0.0, 1.0);
+    // DEBUG: show UV as color (R=0, G=V)
+    FragColor = vec4(0.0, v_uv.y, 0.0, 1.0);
     return;
 
     vec3 N = normalize(v_normal);
