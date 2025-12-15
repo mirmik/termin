@@ -48,6 +48,7 @@ class PolygonBuilder:
 
     def __init__(self, config: NavMeshConfig | None = None) -> None:
         self.config = config or NavMeshConfig()
+        self._last_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
 
     def build(
         self,
@@ -139,11 +140,28 @@ class PolygonBuilder:
 
         print(f"NavMesh build stats: {stats}, final polygons: {len(polygons)}")
 
+        # Сохраняем регионы для отладки
+        self._last_regions = regions
+
         return NavMesh(
             polygons=polygons,
             cell_size=grid.cell_size,
             origin=grid.origin.copy(),
         )
+
+    def get_regions(
+        self, grid: VoxelGrid
+    ) -> list[tuple[list[tuple[int, int, int]], np.ndarray]]:
+        """
+        Получить регионы из воксельной сетки (без построения NavMesh).
+
+        Returns:
+            Список (список вокселей региона, нормаль региона).
+        """
+        surface_voxels = self._collect_surface_voxels(grid)
+        if not surface_voxels:
+            return []
+        return self._region_growing_basic(surface_voxels, grid)
 
     def _collect_surface_voxels(
         self, grid: VoxelGrid
