@@ -353,14 +353,85 @@ class PolygonBuilder:
                                 to_add[other_idx].add(voxel)
                                 boundary_voxels.add(voxel)
 
-        # Применяем добавления
+        # Децимация границы — удаляем избыточные воксели
+        boundary_voxels = self._decimate_boundary(boundary_voxels)
+
+        # Применяем добавления (только оставшиеся после децимации)
         result: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
         for idx, (voxels, normal) in enumerate(regions):
-            new_voxels = set(voxels) | to_add[idx]
+            # Добавляем только те boundary воксели, что остались после децимации
+            filtered_to_add = to_add[idx] & boundary_voxels
+            new_voxels = set(voxels) | filtered_to_add
             result.append((list(new_voxels), normal))
 
         print(f"PolygonBuilder: shared {len(boundary_voxels)} boundary voxels between regions")
         return result, boundary_voxels
+
+    def _decimate_boundary(
+        self,
+        boundary: set[tuple[int, int, int]],
+    ) -> set[tuple[int, int, int]]:
+        """
+        Децимация границы — удаляем избыточные воксели.
+
+        Воксель считается избыточным, если его соседи (из boundary)
+        связаны между собой и без него.
+        """
+        result = set(boundary)
+        changed = True
+        iteration = 0
+
+        while changed:
+            changed = False
+            iteration += 1
+            to_remove: list[tuple[int, int, int]] = []
+
+            for voxel in result:
+                # Находим соседей этого вокселя, которые тоже в boundary
+                vx, vy, vz = voxel
+                neighbors_in_boundary: list[tuple[int, int, int]] = []
+                for dx, dy, dz in NEIGHBORS_26:
+                    neighbor = (vx + dx, vy + dy, vz + dz)
+                    if neighbor in result and neighbor != voxel:
+                        neighbors_in_boundary.append(neighbor)
+
+                # Если соседей меньше 2, воксель нужен (концевой или изолированный)
+                if len(neighbors_in_boundary) < 2:
+                    continue
+
+                # Проверяем, связаны ли соседи между собой без этого вокселя
+                if self._are_connected_26(neighbors_in_boundary):
+                    to_remove.append(voxel)
+
+            for voxel in to_remove:
+                result.discard(voxel)
+                changed = True
+
+        print(f"PolygonBuilder: boundary decimation: {len(boundary)} -> {len(result)} ({iteration} iterations)")
+        return result
+
+    def _are_connected_26(self, voxels: list[tuple[int, int, int]]) -> bool:
+        """
+        Проверить, связаны ли все воксели между собой по 26-связности.
+        """
+        if len(voxels) <= 1:
+            return True
+
+        voxel_set = set(voxels)
+        visited: set[tuple[int, int, int]] = set()
+        queue = [voxels[0]]
+        visited.add(voxels[0])
+
+        while queue:
+            current = queue.pop()
+            vx, vy, vz = current
+            for dx, dy, dz in NEIGHBORS_26:
+                neighbor = (vx + dx, vy + dy, vz + dz)
+                if neighbor in voxel_set and neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+
+        return len(visited) == len(voxels)
 
     def _expand_regions(
         self,
