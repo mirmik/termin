@@ -85,6 +85,10 @@ class PolygonBuilder:
         # Шаг 2: Region Growing — разбиваем на группы
         regions = self._region_growing_basic(surface_voxels, grid)
 
+        # Шаг 2.1: Фильтрация "висячих" вокселей
+        # Воксели с <=1 соседом из своего региона выселяются в отдельные регионы
+        regions = self._filter_hanging_voxels(regions)
+
         # NOTE: Стадии expand_regions и stitch_polygons временно отключены,
         # т.к. используется новый алгоритм построения меша из граней вокселей.
         # Флаги expand_regions и stitch_polygons игнорируются.
@@ -234,6 +238,66 @@ class PolygonBuilder:
                 regions.append((region, avg_normal.astype(np.float32)))
 
         return regions
+
+    def _filter_hanging_voxels(
+        self,
+        regions: list[tuple[list[tuple[int, int, int]], np.ndarray]],
+    ) -> list[tuple[list[tuple[int, int, int]], np.ndarray]]:
+        """
+        Шаг 2.1: Фильтрация "висячих" вокселей.
+
+        Воксели с <=1 соседом из своего региона (по 26-связности)
+        выселяются в отдельные одиночные регионы.
+
+        Процесс повторяется итеративно, пока есть изменения.
+        """
+        result: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
+        evicted: list[tuple[tuple[int, int, int], np.ndarray]] = []
+
+        for region_voxels, region_normal in regions:
+            if len(region_voxels) <= 2:
+                # Слишком маленький регион — не фильтруем
+                result.append((region_voxels, region_normal))
+                continue
+
+            region_set = set(region_voxels)
+            changed = True
+
+            while changed:
+                changed = False
+                to_evict: list[tuple[int, int, int]] = []
+
+                for voxel in region_set:
+                    # Считаем соседей из этого же региона
+                    neighbor_count = 0
+                    vx, vy, vz = voxel
+                    for dx, dy, dz in NEIGHBORS_26:
+                        neighbor = (vx + dx, vy + dy, vz + dz)
+                        if neighbor in region_set:
+                            neighbor_count += 1
+
+                    if neighbor_count <= 1:
+                        to_evict.append(voxel)
+
+                # Выселяем помеченные воксели
+                for voxel in to_evict:
+                    region_set.discard(voxel)
+                    evicted.append((voxel, region_normal))
+                    changed = True
+
+                # Если регион стал слишком маленьким — прекращаем
+                if len(region_set) <= 2:
+                    break
+
+            # Добавляем оставшиеся воксели как регион
+            if region_set:
+                result.append((list(region_set), region_normal))
+
+        # Добавляем выселенные воксели как одиночные регионы
+        for voxel, normal in evicted:
+            result.append(([voxel], normal))
+
+        return result
 
     def _expand_regions(
         self,
