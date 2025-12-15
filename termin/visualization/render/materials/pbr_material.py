@@ -123,16 +123,12 @@ void main() {
     float roughness = max(u_roughness, 0.04);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // DEBUG: PBR diffuse with kD (no specular)
+    // DEBUG: output Fresnel
     vec3 L = normalize(-u_light_direction[0]);
-    float NdotL = max(dot(N, L), 0.0);
     vec3 H = normalize(V + L);
     float HdotV = max(dot(H, V), 0.0);
     vec3 F = F_Schlick(HdotV, F0);
-    vec3 kD = (1.0 - F) * (1.0 - metallic);
-    vec3 radiance = u_light_color[0] * u_light_intensity[0];
-    vec3 diffuse = kD * albedo * NdotL * radiance;
-    FragColor = vec4(diffuse, 1.0);
+    FragColor = vec4(F, 1.0);
 }
 """
 
