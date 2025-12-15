@@ -43,6 +43,10 @@ class SceneTreeModel(QAbstractItemModel):
     # Args: (prefab_path: str, parent_entity: Entity | None)
     prefab_drop_requested = pyqtSignal(str, object)
 
+    # Signal emitted when FBX should be instantiated via drag-drop
+    # Args: (fbx_path: str, parent_entity: Entity | None)
+    fbx_drop_requested = pyqtSignal(str, object)
+
     def __init__(self, scene: Scene):
         super().__init__()
         self.scene = scene
@@ -223,11 +227,13 @@ class SceneTreeModel(QAbstractItemModel):
         parent: QModelIndex,
     ) -> bool:
         """Check if drop is allowed at this location."""
-        # Handle prefab asset drop (CopyAction)
+        # Handle prefab/fbx asset drop (CopyAction)
         if data.hasFormat(EditorMimeTypes.ASSET_PATH):
             path = parse_asset_path_mime_data(data)
-            if path and path.lower().endswith(".prefab"):
-                return True
+            if path:
+                lower_path = path.lower()
+                if lower_path.endswith(".prefab") or lower_path.endswith(".fbx"):
+                    return True
             return False
 
         # Handle entity reparent (MoveAction)
@@ -294,12 +300,17 @@ class SceneTreeModel(QAbstractItemModel):
             node: NodeWrapper = parent.internalPointer()
             target_entity = node.obj if isinstance(node.obj, Entity) else None
 
-        # Handle prefab asset drop
+        # Handle prefab/fbx asset drop
         if data.hasFormat(EditorMimeTypes.ASSET_PATH):
             path = parse_asset_path_mime_data(data)
-            if path and path.lower().endswith(".prefab"):
-                self.prefab_drop_requested.emit(path, target_entity)
-                return True
+            if path:
+                lower_path = path.lower()
+                if lower_path.endswith(".prefab"):
+                    self.prefab_drop_requested.emit(path, target_entity)
+                    return True
+                if lower_path.endswith(".fbx"):
+                    self.fbx_drop_requested.emit(path, target_entity)
+                    return True
             return False
 
         # Handle entity reparent

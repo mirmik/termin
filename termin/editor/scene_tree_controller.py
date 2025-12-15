@@ -64,9 +64,10 @@ class SceneTreeController:
         self._tree.setDragDropMode(QTreeView.DragDropMode.DragDrop)
         self._tree.setDefaultDropAction(Qt.DropAction.MoveAction)
 
-        # Connect model signals for reparenting and prefab drops
+        # Connect model signals for reparenting and prefab/fbx drops
         self._model.entity_reparent_requested.connect(self._on_entity_reparent_requested)
         self._model.prefab_drop_requested.connect(self._on_prefab_drop_requested)
+        self._model.fbx_drop_requested.connect(self._on_fbx_drop_requested)
 
         sel_model = self._tree.selectionModel()
         if sel_model is not None:
@@ -234,6 +235,31 @@ class SceneTreeController:
             entity = persistence.load(Path(prefab_path))
         except Exception as e:
             print(f"Failed to load prefab: {e}")
+            return
+
+        parent_transform = parent_entity.transform if parent_entity else None
+        cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
+        self._undo_handler(cmd, merge=False)
+
+        self.rebuild(select_obj=entity)
+
+        if self._request_viewport_update is not None:
+            self._request_viewport_update()
+
+    # ---------- fbx drop ----------
+
+    def _on_fbx_drop_requested(
+        self,
+        fbx_path: str,
+        parent_entity: Entity | None,
+    ) -> None:
+        """Handle FBX drop from Project Browser."""
+        from termin.loaders.fbx_instantiator import instantiate_fbx
+
+        try:
+            entity = instantiate_fbx(Path(fbx_path))
+        except Exception as e:
+            print(f"Failed to load FBX: {e}")
             return
 
         parent_transform = parent_entity.transform if parent_entity else None

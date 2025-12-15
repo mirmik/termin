@@ -342,12 +342,12 @@ class AssetIconProvider(QFileIconProvider):
 
 class PrefabDragFilter(QObject):
     """
-    Event filter для обработки drag prefab файлов из QListView.
+    Event filter для обработки drag prefab/fbx файлов из QListView.
 
     Перехватывает начало drag и создаёт кастомный QDrag с ASSET_PATH mime data.
     """
 
-    DRAGGABLE_EXTENSIONS = {".prefab"}
+    DRAGGABLE_EXTENSIONS = {".prefab", ".fbx"}
 
     def __init__(self, list_view: QListView, file_model: QFileSystemModel, parent=None):
         super().__init__(parent)
