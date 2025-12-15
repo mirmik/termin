@@ -97,9 +97,9 @@ class PolygonBuilder:
         if expand_regions:
             regions = self._expand_regions(regions, surface_voxels)
 
-        # Шаг 2.6: Фильтрация "висячих" вокселей
+        # Шаг 2.6: Фильтрация "висячих" вокселей (отключено)
         # Воксели с <=1 соседом (по всем регионам) выселяются в отдельные регионы
-        regions = self._filter_hanging_voxels(regions)
+        # regions = self._filter_hanging_voxels(regions)
 
         # Шаг 2.7: Общие граничные воксели
         # Воксели на границе регионов добавляются в соседние регионы (тонкая граница)
