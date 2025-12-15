@@ -115,14 +115,13 @@ void main() {
     vec3 N = normalize(v_normal);
     vec3 V = normalize(u_camera_position - v_world_pos);
 
-    // DEBUG: output light radiance
-    vec3 radiance = u_light_color[0] * u_light_intensity[0];
-    FragColor = vec4(radiance, 1.0);
-    return;
-
     // Sample albedo
     vec4 tex_color = texture(u_albedo_texture, v_uv);
     vec3 albedo = u_color.rgb * tex_color.rgb;
+
+    // DEBUG: output albedo
+    FragColor = vec4(albedo, 1.0);
+    return;
 
     float metallic = u_metallic;
     float roughness = max(u_roughness, 0.04); // Prevent division issues
