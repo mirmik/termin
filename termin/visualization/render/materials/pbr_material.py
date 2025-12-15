@@ -115,10 +115,9 @@ void main() {
     vec3 N = normalize(v_normal);
     vec3 V = normalize(u_camera_position - v_world_pos);
 
-    // DEBUG: output NdotL for first light
-    vec3 L = normalize(-u_light_direction[0]);
-    float NdotL = max(dot(N, L), 0.0);
-    FragColor = vec4(NdotL, NdotL, NdotL, 1.0);
+    // DEBUG: output light radiance
+    vec3 radiance = u_light_color[0] * u_light_intensity[0];
+    FragColor = vec4(radiance, 1.0);
     return;
 
     // Sample albedo
