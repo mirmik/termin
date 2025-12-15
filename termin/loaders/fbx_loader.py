@@ -407,17 +407,24 @@ def load_fbx_file(path) -> FBXSceneData:
             scale = (t.scale.x, t.scale.y, t.scale.z)
 
             # Triangulate mesh
-            tri_indices = []
+            # Store tuples of (vertex_index, face_vertex_index) for correct UV lookup
+            tri_data = []  # [(v_idx, fv_idx), ...]
             for face_idx in range(mesh.num_faces):
                 face = mesh.faces[face_idx]
                 begin = face.index_begin
                 n = face.num_indices
                 if n >= 3:
-                    v0 = mesh.vertex_indices[begin]
+                    # Fan triangulation: (0, 1, 2), (0, 2, 3), ...
+                    fv0 = begin
+                    v0 = mesh.vertex_indices[fv0]
                     for j in range(1, n - 1):
-                        tri_indices.append((v0, mesh.vertex_indices[begin + j], mesh.vertex_indices[begin + j + 1]))
+                        fv1 = begin + j
+                        fv2 = begin + j + 1
+                        v1 = mesh.vertex_indices[fv1]
+                        v2 = mesh.vertex_indices[fv2]
+                        tri_data.append(((v0, fv0), (v1, fv1), (v2, fv2)))
 
-            if not tri_indices:
+            if not tri_data:
                 for i in range(len(node.children)):
                     stack.append(node.children[i])
                 continue
@@ -430,19 +437,19 @@ def load_fbx_file(path) -> FBXSceneData:
             has_normals = mesh.vertex_normal.values and len(mesh.vertex_normal.values) > 0
             has_uvs = mesh.uv_sets and len(mesh.uv_sets) > 0 and mesh.uv_sets[0].vertex_uv.values and len(mesh.uv_sets[0].vertex_uv.values) > 0
 
-            for v0, v1, v2 in tri_indices:
-                for idx in (v0, v1, v2):
-                    v = mesh.vertices[idx]
+            for (v0, fv0), (v1, fv1), (v2, fv2) in tri_data:
+                for v_idx, fv_idx in ((v0, fv0), (v1, fv1), (v2, fv2)):
+                    v = mesh.vertices[v_idx]
                     vertices.append((v.x, v.y, v.z))
 
                     if has_normals:
-                        n_idx = mesh.vertex_normal.indices[idx]
+                        n_idx = mesh.vertex_normal.indices[fv_idx]
                         n = mesh.vertex_normal.values[n_idx]
                         normals.append((n.x, n.y, n.z))
 
                     if has_uvs:
                         vertex_uv = mesh.uv_sets[0].vertex_uv
-                        uv_idx = vertex_uv.indices[idx]
+                        uv_idx = vertex_uv.indices[fv_idx]
                         uv = vertex_uv.values[uv_idx]
                         uvs.append((uv.x, uv.y))
 
