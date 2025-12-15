@@ -197,6 +197,8 @@ class VoxelizerComponent(Component):
         self._debug_mesh_drawable: Optional[MeshDrawable] = None
         self._debug_contour_drawable: Optional[MeshDrawable] = None
         self._debug_material: Optional[Material] = None
+        self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
+        self._debug_bounds_max: np.ndarray = np.zeros(3, dtype=np.float32)
 
     # --- Drawable protocol ---
 
@@ -221,6 +223,19 @@ class VoxelizerComponent(Component):
             phases = list(mat.phases)
         else:
             phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+
+        # Устанавливаем uniforms для voxel шейдера
+        debug_color = np.array([1.0, 0.5, 0.0, 0.8], dtype=np.float32)
+        for phase in phases:
+            phase.uniforms["u_color_below"] = debug_color
+            phase.uniforms["u_color_above"] = debug_color
+            phase.uniforms["u_color_surface"] = debug_color
+            phase.uniforms["u_slice_axis"] = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+            phase.uniforms["u_fill_percent"] = 1.0
+            phase.uniforms["u_bounds_min"] = self._debug_bounds_min
+            phase.uniforms["u_bounds_max"] = self._debug_bounds_max
+            phase.uniforms["u_ambient_color"] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+            phase.uniforms["u_ambient_intensity"] = 0.4
 
         phases.sort(key=lambda p: p.priority)
         return [GeometryDrawCall(phase=p) for p in phases]
