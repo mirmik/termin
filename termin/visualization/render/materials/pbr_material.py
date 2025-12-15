@@ -143,8 +143,12 @@ void main() {
     float denominator = 4.0 * NdotV * NdotL + 0.0001;
     vec3 specular = numerator / denominator;
 
-    // DEBUG: output specular (set roughness to 0.3 in inspector!)
-    FragColor = vec4(specular, 1.0);
+    vec3 kD = (1.0 - F) * (1.0 - metallic);
+    vec3 radiance = u_light_color[0] * u_light_intensity[0];
+    vec3 Lo = (kD * albedo + specular) * radiance * NdotL;
+
+    vec3 color = ambient + Lo;
+    FragColor = vec4(color, 1.0);
 }
 """
 
