@@ -228,12 +228,12 @@ class VoxelizerComponent(Component):
     def _get_or_create_debug_material(self) -> Material:
         """Создаёт материал для отладочной визуализации."""
         if self._debug_material is None:
-            from termin.voxels.voxel_shader import VOXEL_VERTEX_SHADER, VOXEL_FRAGMENT_SHADER
+            from termin.voxels.voxel_shader import voxel_display_shader
             from termin.visualization.render.renderpass import RenderState
 
+            shader = voxel_display_shader()
             self._debug_material = Material(
-                vertex_shader=VOXEL_VERTEX_SHADER,
-                fragment_shader=VOXEL_FRAGMENT_SHADER,
+                shader=shader,
                 color=(1.0, 0.5, 0.0, 0.8),  # Оранжевый для отладки
                 phase_mark="editor",
                 render_state=RenderState(
