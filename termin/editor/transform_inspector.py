@@ -22,21 +22,19 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from termin.kinematic.transform import Transform3
+from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
+from termin.geombase.general_pose3 import GeneralPose3
 from termin.geombase.pose3 import Pose3
 from termin.visualization.core.resources import ResourceManager
 from termin.editor.inspect_field import InspectField
 from termin.editor.undo_stack import UndoCommand
 from termin.editor.editor_commands import TransformEditCommand
-# scale is now numpy.ndarray
 
-
-# scale is now numpy.ndarray
 
 class TransformInspector(QWidget):
-# Обработчик для отправки команд в общий undo-стек редактора.
-# handler(cmd, merge=False) -> None
+    """Inspector widget for editing transform properties."""
+
     transform_changed = pyqtSignal()
 
     def set_undo_command_handler(self, handler):
@@ -51,7 +49,7 @@ class TransformInspector(QWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
 
-        self._transform: Optional[Transform3] = None
+        self._transform: Optional[GeneralTransform3] = None
         self._updating_from_model = False
         self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
 
@@ -101,7 +99,7 @@ class TransformInspector(QWidget):
     def set_target(self, obj: Optional[object]):
         if isinstance(obj, Entity):
             transform = obj.transform
-        elif isinstance(obj, Transform3):
+        elif isinstance(obj, GeneralTransform3):
             transform = obj
         else:
             transform = None
@@ -125,7 +123,7 @@ class TransformInspector(QWidget):
                 return
 
             self._set_enabled(True)
-            pose: Pose3 = self._transform.global_pose()
+            pose: GeneralPose3 = self._transform.global_pose()
 
             px, py, pz = pose.lin
             x, y, z, w = pose.ang
@@ -138,8 +136,8 @@ class TransformInspector(QWidget):
             self._rot[1].setValue(float(ay))
             self._rot[2].setValue(float(az))
 
-            s = self._transform.entity.scale
-            assert s.shape == (3,)
+            # Scale is now in the local pose
+            s = self._transform.local_pose().scale
             self._scale[0].setValue(float(s[0]))
             self._scale[1].setValue(float(s[1]))
             self._scale[2].setValue(float(s[2]))
@@ -210,13 +208,8 @@ class TransformInspector(QWidget):
             return
 
         # Снимок старого состояния до применения правки из UI
-        old_pose: Pose3 = self._transform.global_pose()
-        entity = self._transform.entity
-        if entity is not None:
-            old_scale = np.asarray(entity.scale, dtype=float)
-        else:
-            # На всякий случай — одиночный Transform3 без сущности.
-            old_scale = np.ones(3, dtype=float)
+        old_pose: GeneralPose3 = self._transform.global_pose()
+        old_scale = self._transform.local_pose().scale.copy()
 
         # Новые значения из спинбоксов
         px = self._pos[0].value()
@@ -234,7 +227,8 @@ class TransformInspector(QWidget):
         s_z = self._scale[2].value()
         new_scale = np.array([s_x, s_y, s_z], dtype=float)
 
-        new_pose = Pose3(lin=new_lin, ang=new_ang)
+        # Create GeneralPose3 with new values
+        new_pose = GeneralPose3(lin=new_lin, ang=new_ang, scale=new_scale)
 
         if self._push_undo_command is not None:
             cmd = TransformEditCommand(
@@ -248,9 +242,7 @@ class TransformInspector(QWidget):
             # (пока пользователь крутит спинбоксы) в одну команду.
             self._push_undo_command(cmd, True)
         else:
-            # Режим без undo-стека — старое поведение "напрямую".
-            if entity is not None:
-                entity.scale = new_scale
-            self._transform.relocate(new_pose)
+            # Режим без undo-стека — применяем напрямую.
+            self._transform.relocate_global(new_pose)
 
         self.transform_changed.emit()

@@ -5,19 +5,22 @@ from typing import Any
 import numpy as np
 
 from termin.editor.undo_stack import UndoCommand
+from termin.geombase.general_pose3 import GeneralPose3
 from termin.geombase.pose3 import Pose3
-from termin.kinematic.transform import Transform3
+from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
 from termin.editor.inspect_field import InspectField
 
 
-def _clone_pose(pose: Pose3) -> Pose3:
+def _clone_pose(pose: GeneralPose3 | Pose3) -> GeneralPose3 | Pose3:
     """
     Создаёт независимую копию позы.
 
     Массивы угла и смещения копируются, чтобы последующие
     изменения позы не портили снимок для undo/redo.
     """
+    if isinstance(pose, GeneralPose3):
+        return GeneralPose3(ang=pose.ang.copy(), lin=pose.lin.copy(), scale=pose.scale.copy())
     return Pose3(ang=pose.ang.copy(), lin=pose.lin.copy())
 
 
@@ -38,39 +41,38 @@ class TransformEditCommand(UndoCommand):
     Команда изменения положения, ориентации и масштаба сущности
     через TransformInspector.
 
-    Ожидается, что transform принадлежит entity
-    (transform.entity is entity), а масштаб хранится в виде
-    вектора длины 3 в Entity.scale.
+    Ожидается, что transform принадлежит entity.
+    Масштаб хранится внутри GeneralPose3.
     """
 
     def __init__(
         self,
-        transform: Transform3,
-        old_pose: Pose3,
+        transform: GeneralTransform3,
+        old_pose: GeneralPose3,
         old_scale: np.ndarray,
-        new_pose: Pose3,
+        new_pose: GeneralPose3,
         new_scale: np.ndarray,
         text: str = "Transform change",
     ) -> None:
         super().__init__(text)
         self._transform = transform
-        self._entity = transform.entity
         self._old_pose = _clone_pose(old_pose)
         self._old_scale = np.asarray(old_scale, dtype=float).copy()
         self._new_pose = _clone_pose(new_pose)
         self._new_scale = np.asarray(new_scale, dtype=float).copy()
 
     def do(self) -> None:
-        if self._entity is not None:
-            self._entity.scale = self._new_scale
-        # Use relocate_global since gizmo works in world coordinates
+        # Scale is part of GeneralPose3
         self._transform.relocate_global(self._new_pose)
 
     def undo(self) -> None:
-        if self._entity is not None:
-            self._entity.scale = self._old_scale
-        # Use relocate_global since gizmo works in world coordinates
-        self._transform.relocate_global(self._old_pose)
+        # Restore old pose with old scale
+        old_pose_with_scale = GeneralPose3(
+            ang=self._old_pose.ang.copy(),
+            lin=self._old_pose.lin.copy(),
+            scale=self._old_scale.copy()
+        )
+        self._transform.relocate_global(old_pose_with_scale)
 
     def merge_with(self, other: UndoCommand) -> bool:
         """
@@ -203,7 +205,7 @@ class AddEntityCommand(UndoCommand):
         self,
         scene,
         entity: Entity,
-        parent_transform: Transform3 | None = None,
+        parent_transform: GeneralTransform3 | None = None,
         text: str = "Add entity",
     ) -> None:
         super().__init__(text)
@@ -280,8 +282,8 @@ class ReparentEntityCommand(UndoCommand):
     def __init__(
         self,
         entity: Entity,
-        old_parent: Transform3 | None,
-        new_parent: Transform3 | None,
+        old_parent: GeneralTransform3 | None,
+        new_parent: GeneralTransform3 | None,
         text: str | None = None,
     ) -> None:
         if text is None:
