@@ -526,8 +526,15 @@ class VoxelizerComponent(Component):
 
         cube_size = cell_size * CUBE_SCALE
 
+        # Вычисляем bounds
+        min_world = np.array([float('inf'), float('inf'), float('inf')], dtype=np.float32)
+        max_world = np.array([float('-inf'), float('-inf'), float('-inf')], dtype=np.float32)
+
         for i, (vx, vy, vz) in enumerate(region_voxels):
             center = grid.voxel_to_world(vx, vy, vz)
+            min_world = np.minimum(min_world, center)
+            max_world = np.maximum(max_world, center)
+
             v_offset = i * VERTS_PER_CUBE
             t_offset = i * TRIS_PER_CUBE
 
@@ -539,6 +546,11 @@ class VoxelizerComponent(Component):
                 _CUBE_TRIANGLES + v_offset
             )
             normals[v_offset:v_offset + VERTS_PER_CUBE] = _CUBE_NORMALS
+
+        # Расширяем bounds на половину куба
+        half_cube = cube_size * 0.5
+        self._debug_bounds_min = min_world - half_cube
+        self._debug_bounds_max = max_world + half_cube
 
         mesh = Mesh3(vertices=vertices, triangles=triangles, normals=normals)
         self._debug_mesh_drawable = MeshDrawable(mesh)
