@@ -28,6 +28,9 @@ class MeshSpec:
     axis_y: str = "y"
     axis_z: str = "z"
 
+    # UV transformations
+    flip_uv_v: bool = False  # Flip V coordinate (v = 1 - v)
+
     @classmethod
     def load(cls, spec_path: str | Path) -> "MeshSpec":
         """Load spec from file."""
@@ -43,6 +46,7 @@ class MeshSpec:
                 axis_x=data.get("axis_x", "x"),
                 axis_y=data.get("axis_y", "y"),
                 axis_z=data.get("axis_z", "z"),
+                flip_uv_v=data.get("flip_uv_v", False),
             )
         except Exception:
             return cls()
@@ -61,6 +65,7 @@ class MeshSpec:
             "axis_x": self.axis_x,
             "axis_y": self.axis_y,
             "axis_z": self.axis_z,
+            "flip_uv_v": self.flip_uv_v,
         }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
@@ -135,5 +140,25 @@ class MeshSpec:
         result[:, 0] = normals[:, src_x] * sign_x
         result[:, 1] = normals[:, src_y] * sign_y
         result[:, 2] = normals[:, src_z] * sign_z
+
+        return result.astype(np.float32)
+
+    def apply_to_uvs(self, uvs: np.ndarray) -> np.ndarray:
+        """
+        Apply UV transformations.
+
+        Args:
+            uvs: (N, 2) array of UV coordinates
+
+        Returns:
+            Transformed UVs (N, 2)
+        """
+        if uvs is None or len(uvs) == 0:
+            return uvs
+
+        result = uvs.copy()
+
+        if self.flip_uv_v:
+            result[:, 1] = 1.0 - result[:, 1]
 
         return result.astype(np.float32)

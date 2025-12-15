@@ -11,6 +11,7 @@ import os
 from typing import TYPE_CHECKING, Callable, Optional
 
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
@@ -141,6 +142,14 @@ class MeshInspector(QWidget):
         self._axis_z_combo.setCurrentText("z")
         settings_form.addRow("Axis Z:", self._axis_z_combo)
 
+        # UV settings
+        self._flip_uv_v_checkbox = QCheckBox()
+        self._flip_uv_v_checkbox.setToolTip(
+            "Flip V coordinate (v = 1 - v).\n"
+            "Use if texture appears upside down on the mesh."
+        )
+        settings_form.addRow("Flip UV V:", self._flip_uv_v_checkbox)
+
         layout.addLayout(settings_form)
 
         # Apply button
@@ -211,6 +220,7 @@ class MeshInspector(QWidget):
         self._axis_x_combo.setCurrentText(spec.axis_x)
         self._axis_y_combo.setCurrentText(spec.axis_y)
         self._axis_z_combo.setCurrentText(spec.axis_z)
+        self._flip_uv_v_checkbox.setChecked(spec.flip_uv_v)
 
     def _reset_spec_fields(self) -> None:
         """Reset spec fields to defaults."""
@@ -218,6 +228,7 @@ class MeshInspector(QWidget):
         self._axis_x_combo.setCurrentText("x")
         self._axis_y_combo.setCurrentText("y")
         self._axis_z_combo.setCurrentText("z")
+        self._flip_uv_v_checkbox.setChecked(False)
 
     def _on_apply_clicked(self) -> None:
         """Save spec and notify for mesh reload."""
@@ -231,6 +242,7 @@ class MeshInspector(QWidget):
             axis_x=self._axis_x_combo.currentText(),
             axis_y=self._axis_y_combo.currentText(),
             axis_z=self._axis_z_combo.currentText(),
+            flip_uv_v=self._flip_uv_v_checkbox.isChecked(),
         )
         spec.save_for_mesh(self._file_path)
 

@@ -127,6 +127,8 @@ def load_obj_file(path, spec: "MeshSpec | None" = None) -> OBJSceneData:
         mesh.vertices = spec.apply_to_vertices(mesh.vertices)
         if mesh.normals is not None:
             mesh.normals = spec.apply_to_normals(mesh.normals)
+        if mesh.uvs is not None:
+            mesh.uvs = spec.apply_to_uvs(mesh.uvs)
 
     scene_data.meshes.append(mesh)
     return scene_data
