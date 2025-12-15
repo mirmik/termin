@@ -119,77 +119,20 @@ void main() {
     vec4 tex_color = texture(u_albedo_texture, v_uv);
     vec3 albedo = u_color.rgb * tex_color.rgb;
 
-    // DEBUG: simple diffuse (albedo * NdotL * radiance)
-    vec3 L = normalize(-u_light_direction[0]);
-    float NdotL = max(dot(N, L), 0.0);
-    vec3 radiance = u_light_color[0] * u_light_intensity[0];
-    vec3 diffuse = albedo * NdotL * radiance;
-    FragColor = vec4(diffuse, 1.0);
-    return;
-
     float metallic = u_metallic;
-    float roughness = max(u_roughness, 0.04); // Prevent division issues
-
-    // F0: reflectance at normal incidence
-    // Dielectrics: 0.04, Metals: albedo color
+    float roughness = max(u_roughness, 0.04);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // Ambient (simple approximation)
-    vec3 ambient = u_ambient_color * u_ambient_intensity * albedo * (1.0 - metallic * 0.5);
-
-    vec3 Lo = vec3(0.0); // Accumulated outgoing radiance
-
-    for (int i = 0; i < u_light_count; ++i) {
-        vec3 L;
-        float attenuation = 1.0;
-
-        if (u_light_type[i] == LIGHT_TYPE_DIRECTIONAL) {
-            L = normalize(-u_light_direction[i]);
-        } else {
-            vec3 to_light = u_light_position[i] - v_world_pos;
-            float dist = length(to_light);
-            L = to_light / max(dist, 0.0001);
-            attenuation = compute_distance_attenuation(i, dist);
-
-            if (u_light_type[i] == LIGHT_TYPE_SPOT) {
-                attenuation *= compute_spot_weight(i, L);
-            }
-        }
-
-        vec3 H = normalize(V + L);
-
-        float NdotL = max(dot(N, L), 0.0);
-        float NdotV = max(dot(N, V), 0.001);
-        float NdotH = max(dot(N, H), 0.0);
-        float HdotV = max(dot(H, V), 0.0);
-
-        // Cook-Torrance BRDF
-        float D = D_GGX(NdotH, roughness);
-        float G = G_Smith(NdotV, NdotL, roughness);
-        vec3 F = F_Schlick(HdotV, F0);
-
-        // Specular
-        vec3 numerator = D * G * F;
-        float denominator = 4.0 * NdotV * NdotL + 0.0001;
-        vec3 specular = numerator / denominator;
-
-        // Energy conservation: what's not reflected is refracted (diffuse)
-        vec3 kD = (1.0 - F) * (1.0 - metallic);
-
-        // Diffuse (Lambertian, without /PI for brighter result in LDR)
-        vec3 diffuse = kD * albedo;
-
-        // Combine
-        vec3 radiance = u_light_color[i] * u_light_intensity[i] * attenuation;
-        Lo += (diffuse + specular) * radiance * NdotL;
-    }
-
-    vec3 color = ambient + Lo;
-
-    // Simple tone mapping (Reinhard)
-    color = color / (color + vec3(1.0));
-
-    FragColor = vec4(color, u_color.a * tex_color.a);
+    // DEBUG: PBR diffuse with kD (no specular)
+    vec3 L = normalize(-u_light_direction[0]);
+    float NdotL = max(dot(N, L), 0.0);
+    vec3 H = normalize(V + L);
+    float HdotV = max(dot(H, V), 0.0);
+    vec3 F = F_Schlick(HdotV, F0);
+    vec3 kD = (1.0 - F) * (1.0 - metallic);
+    vec3 radiance = u_light_color[0] * u_light_intensity[0];
+    vec3 diffuse = kD * albedo * NdotL * radiance;
+    FragColor = vec4(diffuse, 1.0);
 }
 """
 
