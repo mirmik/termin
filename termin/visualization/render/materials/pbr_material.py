@@ -143,8 +143,8 @@ void main() {
     float denominator = 4.0 * NdotV * NdotL + 0.0001;
     vec3 specular = numerator / denominator;
 
-    // DEBUG: output D (Normal Distribution)
-    FragColor = vec4(D, D, D, 1.0);
+    // DEBUG: output NdotH
+    FragColor = vec4(NdotH, NdotH, NdotH, 1.0);
 }
 """
 
