@@ -33,39 +33,32 @@ class NavMeshTypesTest(unittest.TestCase):
 class RegionGrowingTest(unittest.TestCase):
     """Тесты для Region Growing алгоритма."""
 
-    def test_single_voxel_region(self):
-        """Один воксель = один регион."""
+    def _make_2x2_region(self, grid: VoxelGrid, x: int, y: int, z: int, normal: np.ndarray):
+        """Создать 2x2 площадку вокселей."""
+        for dx in range(2):
+            for dy in range(2):
+                grid.set(x + dx, y + dy, z, 2)
+                grid.add_surface_normal(x + dx, y + dy, z, normal)
+
+    def test_2x2_region(self):
+        """Площадка 2x2 = один регион с контуром из 4 точек."""
         grid = VoxelGrid(cell_size=1.0)
-        grid.set(0, 0, 0, 2)  # VOXEL_SURFACE
-        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
+        self._make_2x2_region(grid, 0, 0, 0, np.array([0, 0, 1]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
 
         self.assertEqual(navmesh.polygon_count(), 1)
+        polygon = navmesh.polygons[0]
+        self.assertEqual(len(polygon.voxel_coords), 4)
+        self.assertIsNotNone(polygon.outer_contour)
+        self.assertEqual(len(polygon.outer_contour), 4)
 
-    def test_two_voxels_same_normal(self):
-        """Два соседних вокселя с одинаковой нормалью = один регион."""
+    def test_two_regions_different_normals(self):
+        """Две площадки с разными нормалями = два региона."""
         grid = VoxelGrid(cell_size=1.0)
-        grid.set(0, 0, 0, 2)
-        grid.set(1, 0, 0, 2)
-        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
-        grid.add_surface_normal(1, 0, 0, np.array([0, 0, 1]))
-
-        builder = PolygonBuilder()
-        navmesh = builder.build(grid)
-
-        self.assertEqual(navmesh.polygon_count(), 1)
-        self.assertEqual(len(navmesh.polygons[0].voxel_coords), 2)
-
-    def test_two_voxels_different_normals(self):
-        """Два вокселя с разными нормалями = два региона."""
-        grid = VoxelGrid(cell_size=1.0)
-        grid.set(0, 0, 0, 2)
-        grid.set(1, 0, 0, 2)
-        # Нормали перпендикулярны — точно разные регионы
-        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
-        grid.add_surface_normal(1, 0, 0, np.array([1, 0, 0]))
+        self._make_2x2_region(grid, 0, 0, 0, np.array([0, 0, 1]))
+        self._make_2x2_region(grid, 5, 0, 0, np.array([1, 0, 0]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)
@@ -75,32 +68,36 @@ class RegionGrowingTest(unittest.TestCase):
     def test_normal_threshold(self):
         """Порог нормали: похожие нормали объединяются."""
         grid = VoxelGrid(cell_size=1.0)
-        grid.set(0, 0, 0, 2)
-        grid.set(1, 0, 0, 2)
 
         # Нормали отличаются на ~10° — должны объединиться при threshold=0.9
         n1 = np.array([0, 0, 1], dtype=np.float32)
         n2 = np.array([0.17, 0, 0.985], dtype=np.float32)  # ~10°
         n2 /= np.linalg.norm(n2)
 
-        grid.add_surface_normal(0, 0, 0, n1)
-        grid.add_surface_normal(1, 0, 0, n2)
-
         # Проверяем что dot > 0.9
         self.assertGreater(np.dot(n1, n2), 0.9)
+
+        # Два соседних 2x2 блока с похожими нормалями
+        for x in range(2):
+            for y in range(2):
+                grid.set(x, y, 0, 2)
+                grid.add_surface_normal(x, y, 0, n1)
+        for x in range(2, 4):
+            for y in range(2):
+                grid.set(x, y, 0, 2)
+                grid.add_surface_normal(x, y, 0, n2)
 
         builder = PolygonBuilder(NavMeshConfig(normal_threshold=0.9))
         navmesh = builder.build(grid)
 
+        # Должны объединиться в один регион
         self.assertEqual(navmesh.polygon_count(), 1)
 
     def test_disconnected_same_normal(self):
-        """Несвязные воксели с одинаковой нормалью = разные регионы."""
+        """Несвязные площадки с одинаковой нормалью = разные регионы."""
         grid = VoxelGrid(cell_size=1.0)
-        grid.set(0, 0, 0, 2)
-        grid.set(5, 5, 5, 2)  # Далеко
-        grid.add_surface_normal(0, 0, 0, np.array([0, 0, 1]))
-        grid.add_surface_normal(5, 5, 5, np.array([0, 0, 1]))
+        self._make_2x2_region(grid, 0, 0, 0, np.array([0, 0, 1]))
+        self._make_2x2_region(grid, 10, 10, 10, np.array([0, 0, 1]))
 
         builder = PolygonBuilder()
         navmesh = builder.build(grid)

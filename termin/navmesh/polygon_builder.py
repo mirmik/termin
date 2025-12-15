@@ -111,7 +111,7 @@ class PolygonBuilder:
         #     centroid = centers_3d.mean(axis=0)
         #     region_planes.append((centroid, region_normal))
 
-        # Шаги 3-7: Для каждого региона строим полигон
+        # Для каждого региона извлекаем контур напрямую из вокселей
         polygons: list[NavPolygon] = []
         stats = {
             "total_regions": len(regions),
@@ -125,14 +125,11 @@ class PolygonBuilder:
                 stats["skipped_small"] += 1
                 continue
 
-            polygon = self._build_polygon_from_faces(
+            # Извлекаем контур напрямую из вокселей (без построения меша)
+            polygon = self._extract_contour_from_voxels(
                 region_voxels,
                 region_normal,
                 grid,
-                current_region_idx=region_idx,
-                extract_contours=extract_contours,
-                simplify_contours=simplify_contours,
-                retriangulate=retriangulate,
             )
             if polygon is not None:
                 polygons.append(polygon)
@@ -660,6 +657,139 @@ class PolygonBuilder:
                         polygon.holes = []
 
         return polygon
+
+    def _extract_contour_from_voxels(
+        self,
+        voxels: list[tuple[int, int, int]],
+        normal: np.ndarray,
+        grid: VoxelGrid,
+    ) -> NavPolygon | None:
+        """
+        Извлечь контур региона напрямую из вокселей.
+
+        Алгоритм:
+        1. Проецируем воксели в 2D по доминантной оси нормали
+        2. Находим граничные воксели (есть пустой сосед)
+        3. Упорядочиваем обходом по часовой стрелке
+        4. Возвращаем NavPolygon с контуром (без меша)
+        """
+        if len(voxels) < 1:
+            return None
+
+        cell_size = grid.cell_size
+        origin = grid.origin
+
+        # Определяем доминантную ось
+        abs_normal = np.abs(normal)
+        dominant_axis = int(np.argmax(abs_normal))
+        other_axes = [i for i in range(3) if i != dominant_axis]
+
+        # Проецируем в 2D: (voxel[other_axes[0]], voxel[other_axes[1]])
+        voxel_set = set(voxels)
+        voxel_2d_to_3d: dict[tuple[int, int], tuple[int, int, int]] = {}
+        for v in voxels:
+            key_2d = (v[other_axes[0]], v[other_axes[1]])
+            # Если несколько вокселей проецируются в одну точку, берём верхний
+            if key_2d not in voxel_2d_to_3d:
+                voxel_2d_to_3d[key_2d] = v
+            else:
+                existing = voxel_2d_to_3d[key_2d]
+                if v[dominant_axis] > existing[dominant_axis]:
+                    voxel_2d_to_3d[key_2d] = v
+
+        voxel_2d_set = set(voxel_2d_to_3d.keys())
+
+        # 4-связные соседи в 2D
+        neighbors_2d = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+
+        # Находим граничные воксели (есть хотя бы один пустой сосед)
+        boundary_voxels_2d: set[tuple[int, int]] = set()
+        for v2d in voxel_2d_set:
+            for dx, dy in neighbors_2d:
+                neighbor = (v2d[0] + dx, v2d[1] + dy)
+                if neighbor not in voxel_2d_set:
+                    boundary_voxels_2d.add(v2d)
+                    break
+
+        if not boundary_voxels_2d:
+            return None
+
+        # Упорядочиваем граничные воксели обходом
+        # Начинаем с минимального по (x, y)
+        start = min(boundary_voxels_2d)
+        contour_2d = self._trace_boundary_voxels(start, boundary_voxels_2d, voxel_2d_set)
+
+        if len(contour_2d) < 3:
+            return None
+
+        # Конвертируем в 3D координаты центров вокселей
+        contour_3d = []
+        for v2d in contour_2d:
+            v3d = voxel_2d_to_3d[v2d]
+            center = origin + (np.array(v3d, dtype=np.float32) + 0.5) * cell_size
+            contour_3d.append(center)
+
+        vertices = np.array(contour_3d, dtype=np.float32)
+
+        # Создаём NavPolygon с контуром, но без меша
+        polygon = NavPolygon(
+            vertices=vertices,
+            triangles=np.array([], dtype=np.int32).reshape(0, 3),
+            normal=normal,
+            voxel_coords=voxels,
+        )
+        polygon.outer_contour = list(range(len(contour_2d)))
+
+        return polygon
+
+    def _trace_boundary_voxels(
+        self,
+        start: tuple[int, int],
+        boundary_set: set[tuple[int, int]],
+        voxel_set: set[tuple[int, int]],
+    ) -> list[tuple[int, int]]:
+        """
+        Обход граничных вокселей по часовой стрелке (wall-following).
+        """
+        # Направления: вправо, вниз, влево, вверх (по часовой)
+        directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+
+        contour = [start]
+        visited = {start}
+        current = start
+
+        # Начальное направление: ищем первого соседа
+        current_dir = 0
+        for i, (dx, dy) in enumerate(directions):
+            neighbor = (current[0] + dx, current[1] + dy)
+            if neighbor in boundary_set:
+                current_dir = i
+                break
+
+        max_steps = len(boundary_set) * 4
+        for _ in range(max_steps):
+            # Пробуем повернуть направо, потом прямо, потом налево, потом назад
+            for turn in [-1, 0, 1, 2]:  # право, прямо, лево, назад
+                new_dir = (current_dir + turn) % 4
+                dx, dy = directions[new_dir]
+                neighbor = (current[0] + dx, current[1] + dy)
+
+                if neighbor in boundary_set:
+                    if neighbor == start and len(contour) > 2:
+                        # Замкнули контур
+                        return contour
+
+                    if neighbor not in visited:
+                        contour.append(neighbor)
+                        visited.add(neighbor)
+                        current = neighbor
+                        current_dir = new_dir
+                        break
+            else:
+                # Не нашли следующий воксель — тупик
+                break
+
+        return contour
 
     def _build_polygon(
         self,
