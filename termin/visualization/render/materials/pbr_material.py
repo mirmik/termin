@@ -123,12 +123,13 @@ void main() {
     float roughness = max(u_roughness, 0.04);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // DEBUG: output Fresnel
+    // DEBUG: output kD
     vec3 L = normalize(-u_light_direction[0]);
     vec3 H = normalize(V + L);
     float HdotV = max(dot(H, V), 0.0);
     vec3 F = F_Schlick(HdotV, F0);
-    FragColor = vec4(F, 1.0);
+    vec3 kD = (1.0 - F) * (1.0 - metallic);
+    FragColor = vec4(kD, 1.0);
 }
 """
 
