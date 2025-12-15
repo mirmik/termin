@@ -12,25 +12,27 @@
         "name": "cylinder",
         "priority": 0,
         "scale": [
-          1.0,
-          1.0,
-          1.0
+          5.0,
+          5.0,
+          5.0
         ],
         "visible": true,
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 0,
         "pose": {
           "position": [
-            -2.0,
-            2.298583149909973,
+            -7.492,
+            3.733,
             0.0
           ],
           "rotation": [
             0.0,
             0.0,
-            -0.12737781882430751,
-            0.9918542691704069
+            -0.12737621515523534,
+            0.9918544751185666
           ]
         },
         "components": [
@@ -42,6 +44,77 @@
               "material": "DefaultMaterial"
             },
             "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "grid_name": "Cyl",
+              "cell_size": 0.12,
+              "output_path": "Voxels/cylinder.voxels",
+              "voxelize_mode": 4,
+              "voxelize_source": 0,
+              "navmesh_output_path": "Voxels/cylinder.navmesh",
+              "normal_angle": 25.0,
+              "expand_regions": false,
+              "navmesh_stage": 0,
+              "contour_epsilon": 0.1,
+              "show_debug_voxels": true,
+              "show_debug_contours": true,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": false,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": false,
+              "enabled": true
+            },
+            "type": "VoxelizerComponent"
+          },
+          {
+            "data": {
+              "enabled": false,
+              "voxel_grid": "Cyl",
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "fill_percent": 100.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ]
+            },
+            "type": "VoxelDisplayComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "navmesh": "Cyl",
+              "color": [
+                0.2,
+                0.8,
+                0.3,
+                0.7
+              ],
+              "wireframe": false,
+              "show_normals": false,
+              "show_contours": true,
+              "contour_width": 0.05
+            },
+            "type": "NavMeshDisplayComponent"
           }
         ],
         "children": []
@@ -58,6 +131,8 @@
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 0,
         "pose": {
           "position": [
             0.0,
@@ -66,9 +141,9 @@
           ],
           "rotation": [
             0.0,
+            -0.034975674328059966,
             0.0,
-            0.0,
-            1.0
+            0.9993881639309611
           ]
         },
         "components": [
@@ -76,8 +151,8 @@
             "data": {
               "enabled": true,
               "cast_shadow": true,
-              "mesh": "mesh_1",
-              "material": "DefaultMaterial"
+              "mesh": "Cube",
+              "material": "Kairon"
             },
             "type": "MeshRenderer"
           }
@@ -96,11 +171,13 @@
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 0,
         "pose": {
           "position": [
-            3.2641043663024902,
-            0.0,
-            1.361357569694519
+            1.286,
+            0.24329628610610943,
+            -0.10679727935791017
           ],
           "rotation": [
             0.0,
@@ -114,10 +191,81 @@
             "data": {
               "enabled": true,
               "cast_shadow": true,
-              "mesh": "mesh_1",
-              "material": "DefaultMaterial"
+              "mesh": "Cube",
+              "material": "Skin"
             },
             "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "grid_name": "Cube",
+              "cell_size": 0.12,
+              "output_path": "Voxels/cube.voxels",
+              "voxelize_mode": 4,
+              "voxelize_source": 0,
+              "navmesh_output_path": "Voxels/cube.navmesh",
+              "normal_angle": 25.0,
+              "expand_regions": false,
+              "navmesh_stage": 3,
+              "contour_epsilon": 0.1,
+              "show_debug_voxels": false,
+              "show_debug_contours": true,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": false,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": false,
+              "enabled": true
+            },
+            "type": "VoxelizerComponent"
+          },
+          {
+            "data": {
+              "enabled": false,
+              "voxel_grid": "Cube",
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "fill_percent": 100.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ]
+            },
+            "type": "VoxelDisplayComponent"
+          },
+          {
+            "data": {
+              "enabled": false,
+              "navmesh": "Cube",
+              "color": [
+                0.2,
+                0.8,
+                0.3,
+                0.7
+              ],
+              "wireframe": false,
+              "show_normals": false,
+              "show_contours": true,
+              "contour_width": 0.05
+            },
+            "type": "NavMeshDisplayComponent"
           }
         ],
         "children": []
@@ -134,6 +282,8 @@
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 1,
         "pose": {
           "position": [
             0.0,
@@ -172,6 +322,8 @@
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 0,
         "pose": {
           "position": [
             0.0,
@@ -215,6 +367,8 @@
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 0,
         "pose": {
           "position": [
             1.0332441329956055,
@@ -231,6 +385,7 @@
         "components": [
           {
             "data": {
+              "enabled": true,
               "fov_deg": 59.99999999999999,
               "near": 0.1,
               "far": 100.0
@@ -252,6 +407,8 @@
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 0,
         "pose": {
           "position": [
             5.678521990776062,
@@ -312,6 +469,8 @@
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 0,
         "pose": {
           "position": [
             -1.8909255862236023,
@@ -341,8 +500,20 @@
               "cell_size": 0.25,
               "output_path": "Voxels/cube.voxels",
               "voxelize_mode": 0,
+              "voxelize_source": 0,
               "navmesh_output_path": "",
-              "normal_threshold": 0.9
+              "normal_angle": 25.0,
+              "expand_regions": false,
+              "navmesh_stage": 0,
+              "contour_epsilon": 0.1,
+              "show_debug_voxels": true,
+              "show_debug_contours": true,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": false,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": false,
+              "enabled": true
             },
             "type": "VoxelizerComponent"
           }
@@ -361,6 +532,8 @@
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 0,
         "pose": {
           "position": [
             3.389,
@@ -379,7 +552,6 @@
             "data": {
               "enabled": false,
               "cast_shadow": true,
-              "mesh": "bulbasaur",
               "material": "DefaultMaterial"
             },
             "type": "MeshRenderer"
@@ -387,17 +559,30 @@
           {
             "data": {
               "grid_name": "Bulba",
-              "cell_size": 0.04,
+              "cell_size": 0.01,
               "output_path": "Voxels/bulbasaur.voxels",
               "voxelize_mode": 4,
-              "navmesh_output_path": "",
-              "normal_threshold": 0.9
+              "voxelize_source": 0,
+              "navmesh_output_path": "Voxels/bulbasaur.navmesh",
+              "normal_angle": 9.0,
+              "expand_regions": false,
+              "navmesh_stage": 3,
+              "contour_epsilon": 0.006999999999999931,
+              "show_debug_voxels": false,
+              "show_debug_contours": false,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": true,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": true,
+              "enabled": true
             },
             "type": "VoxelizerComponent"
           },
           {
             "data": {
-              "voxel_grid_name": "Bulba",
+              "enabled": false,
+              "voxel_grid": "Bulba",
               "color_below": [
                 0.2,
                 0.6,
@@ -410,31 +595,37 @@
                 0.2,
                 0.8
               ],
-              "color_surface": [
-                0.2,
-                1.0,
-                0.3,
-                0.9
-              ],
               "fill_percent": 100.0,
               "slice_axis": [
                 0.0,
                 0.0,
                 1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
               ]
             },
             "type": "VoxelDisplayComponent"
           },
           {
-            "navmesh_name": "Voxels/bulbasaur.navmesh",
-            "color": [
-              0.2,
-              0.8,
-              0.3,
-              0.7
-            ],
-            "wireframe": false,
-            "show_normals": false
+            "data": {
+              "enabled": false,
+              "navmesh": "Bulba",
+              "color": [
+                0.2,
+                0.8,
+                0.3,
+                0.7
+              ],
+              "wireframe": false,
+              "show_normals": false,
+              "show_contours": true,
+              "contour_width": 0.005
+            },
+            "type": "NavMeshDisplayComponent"
           }
         ],
         "children": []
@@ -451,6 +642,8 @@
         "active": true,
         "pickable": true,
         "selectable": true,
+        "layer": 0,
+        "flags": 0,
         "pose": {
           "position": [
             -5.164,
@@ -467,7 +660,8 @@
         "components": [
           {
             "data": {
-              "voxel_grid_name": "Bulba",
+              "enabled": true,
+              "voxel_grid": "Bulba",
               "color_below": [
                 0.2,
                 0.6,
@@ -480,25 +674,305 @@
                 0.20000000298023224,
                 0.46399635076522827
               ],
-              "color_surface": [
-                0.2,
-                1.0,
-                0.3,
-                0.9
-              ],
               "fill_percent": 100.0,
               "slice_axis": [
                 0.0,
                 0.0,
                 1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
               ]
             },
             "type": "VoxelDisplayComponent"
           }
         ],
         "children": []
+      },
+      {
+        "name": "Platform",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            13.444427907466888,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "grid_name": "Platform",
+              "cell_size": 0.12,
+              "output_path": "Voxels/Platform.voxels",
+              "voxelize_mode": 4,
+              "voxelize_source": 0,
+              "navmesh_output_path": "Voxels/Platform.navmesh",
+              "normal_angle": 25.0,
+              "expand_regions": false,
+              "navmesh_stage": 0,
+              "contour_epsilon": 0.1,
+              "show_debug_voxels": false,
+              "show_debug_contours": false,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": true,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": true,
+              "enabled": true
+            },
+            "type": "VoxelizerComponent"
+          },
+          {
+            "data": {
+              "enabled": false,
+              "voxel_grid": "Platform",
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "fill_percent": 100.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ]
+            },
+            "type": "VoxelDisplayComponent"
+          }
+        ],
+        "children": [
+          {
+            "name": "A",
+            "priority": 0,
+            "scale": [
+              10.0,
+              10.0,
+              0.5
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                4.123572092533113,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": false,
+                  "cast_shadow": true,
+                  "mesh": "Cube",
+                  "material": "DefaultMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "name": "B",
+            "priority": 0,
+            "scale": [
+              9.6,
+              10.0,
+              0.5
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                11.64624610376358,
+                0.0,
+                3.839945251464844
+              ],
+              "rotation": [
+                0.0,
+                -0.4601145585047737,
+                0.0,
+                0.8878595570539054
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": false,
+                  "cast_shadow": true,
+                  "mesh": "Cube",
+                  "material": "DefaultMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "animcube",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [],
+        "children": [
+          {
+            "name": "Cube",
+            "priority": 0,
+            "scale": [
+              100.0,
+              100.0,
+              100.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.7071067966408566,
+                0.0,
+                0.0,
+                -0.7071067657322382
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "Cube"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "entity1",
+        "priority": 0,
+        "scale": [
+          0.1,
+          0.1,
+          0.1
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            -0.7424401726722718,
+            -2.863860471725464
+          ],
+          "rotation": [
+            0.6967583360764451,
+            0.0,
+            0.0,
+            0.7173059466559465
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "cast_shadow": true,
+              "mesh": "male_muscle_13290_003",
+              "material": "Skin"
+            },
+            "type": "MeshRenderer"
+          }
+        ],
+        "children": []
       }
     ],
+    "layer_names": {
+      "0": "Default"
+    },
+    "flag_names": {},
     "light_direction": [
       -0.5,
       -1.0,
@@ -535,15 +1009,15 @@
   "editor": {
     "camera": {
       "target": [
-        4.46684455871582,
-        -5.1645708084106445,
-        -0.7770068049430847
+        0.6577667006570097,
+        -0.5018190931502665,
+        -0.23380812644993226
       ],
-      "radius": 12.5,
-      "azimuth": 32.396801575517905,
-      "elevation": 0.5096361415823445
+      "radius": 2.5,
+      "azimuth": 38.655552273172106,
+      "elevation": 0.7470009198535748
     },
-    "selected_entity": "Bulba",
+    "selected_entity": "cube2",
     "displays": [
       {
         "name": "Editor",
@@ -625,6 +1099,16 @@
         "type": "material_file",
         "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\AAA.material",
         "name": "AAA"
+      },
+      "Kairon": {
+        "type": "material_file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\Kairon.material",
+        "name": "Kairon"
+      },
+      "Skin": {
+        "type": "material_file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Models\\Arthur\\Skin.material",
+        "name": "Skin"
       },
       "NewMaterial": {
         "type": "material_file",
@@ -7806,13 +8290,33 @@
           0.0
         ]
       },
-      "bulbasaur": {
+      "eyebrow001": {
         "type": "file",
-        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\bulbasaur.STL"
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurLite\\eyebrow001.obj"
       },
-      "bulbasaur1": {
+      "eyelashes01": {
         "type": "file",
-        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\bulbasaur1.stl"
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurLite\\eyelashes01.obj"
+      },
+      "jammers3": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurLite\\jammers3.obj"
+      },
+      "low-poly": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurLite\\low-poly.obj"
+      },
+      "male_muscle_13290_003": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurLite\\male_muscle_13290_003.obj"
+      },
+      "mens_tanks_elv1f": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurLite\\mens_tanks_elv1f.obj"
+      },
+      "spiky": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurLite\\spiky.obj"
       },
       "mesh_2": {
         "type": "inline",
@@ -8317,6 +8821,26 @@
       "6830-1745580165": {
         "type": "file",
         "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
+      },
+      "eye_in_space.002": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eye_in_space.002.png"
+      },
+      "eyebrow001_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyebrow001_png.png"
+      },
+      "eyelashes01_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyelashes01_png.png"
+      },
+      "toptex1_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\toptex1_png.png"
+      },
+      "young_lightskinned_male_diffuse2_png.001": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
       }
     }
   }
