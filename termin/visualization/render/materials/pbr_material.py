@@ -65,6 +65,14 @@ uniform vec3  u_light_attenuation[MAX_LIGHTS];
 uniform float u_light_inner_angle[MAX_LIGHTS];
 uniform float u_light_outer_angle[MAX_LIGHTS];
 
+// Shadow Mapping
+const int MAX_SHADOW_MAPS = 4;
+uniform int u_shadow_map_count;
+uniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];
+uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
+uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
+const float SHADOW_BIAS = 0.005;
+
 out vec4 FragColor;
 
 const float PI = 3.14159265359;
@@ -111,6 +119,27 @@ float compute_spot_weight(int idx, vec3 L) {
     return t * t * (3.0 - 2.0 * t);
 }
 
+float compute_shadow(int light_index) {
+    for (int sm = 0; sm < u_shadow_map_count; ++sm) {
+        if (u_shadow_light_index[sm] != light_index) continue;
+
+        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
+        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
+        proj_coords = proj_coords * 0.5 + 0.5;
+
+        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
+            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
+            proj_coords.z < 0.0 || proj_coords.z > 1.0) {
+            return 1.0;
+        }
+
+        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;
+        float current_depth = proj_coords.z;
+        return current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;
+    }
+    return 1.0;
+}
+
 void main() {
     vec3 N = normalize(v_normal);
     vec3 V = normalize(u_camera_position - v_world_pos);
@@ -145,7 +174,8 @@ void main() {
 
     vec3 kD = (1.0 - F) * (1.0 - metallic);
     vec3 radiance = u_light_color[0] * u_light_intensity[0];
-    vec3 Lo = (kD * albedo + specular) * radiance * NdotL;
+    float shadow = compute_shadow(0);
+    vec3 Lo = (kD * albedo + specular) * radiance * NdotL * shadow;
 
     vec3 color = ambient + Lo;
     FragColor = vec4(color, 1.0);
