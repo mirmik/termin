@@ -112,8 +112,11 @@ float compute_spot_weight(int idx, vec3 L) {
 }
 
 void main() {
-    // DEBUG: output light count (red = count/8)
-    FragColor = vec4(float(u_light_count) / 8.0, 0.0, 0.0, 1.0);
+    // DEBUG: output NdotL for first light
+    vec3 N = normalize(v_normal);
+    vec3 L = normalize(-u_light_direction[0]);
+    float NdotL = max(dot(N, L), 0.0);
+    FragColor = vec4(NdotL, NdotL, NdotL, 1.0);
     return;
 
     vec3 N = normalize(v_normal);
