@@ -112,15 +112,15 @@ float compute_spot_weight(int idx, vec3 L) {
 }
 
 void main() {
-    // DEBUG: output raw texture color
-    vec4 tex_color = texture(u_albedo_texture, v_uv);
-    FragColor = tex_color;
+    // DEBUG: output u_color
+    FragColor = u_color;
     return;
 
     vec3 N = normalize(v_normal);
     vec3 V = normalize(u_camera_position - v_world_pos);
 
     // Sample albedo
+    vec4 tex_color = texture(u_albedo_texture, v_uv);
     vec3 albedo = u_color.rgb * tex_color.rgb;
 
     float metallic = u_metallic;
