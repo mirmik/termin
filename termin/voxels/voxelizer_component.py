@@ -502,6 +502,7 @@ class VoxelizerComponent(Component):
         navmesh = builder.build(
             grid,
             expand_regions=self.expand_regions,  # Из чекбокса
+            project_contours=self.project_contours,  # Из чекбокса
             stitch_polygons=stitch_polygons,
             extract_contours=extract_contours,
             simplify_contours=simplify_contours,

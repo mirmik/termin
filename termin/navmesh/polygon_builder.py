@@ -54,6 +54,7 @@ class PolygonBuilder:
         self,
         grid: VoxelGrid,
         expand_regions: bool = True,
+        project_contours: bool = False,
         stitch_polygons: bool = False,
         extract_contours: bool = False,
         simplify_contours: bool = False,
@@ -65,6 +66,7 @@ class PolygonBuilder:
         Args:
             grid: Воксельная сетка с поверхностными вокселями и нормалями.
             expand_regions: Расширять регионы (шаг 2.5).
+            project_contours: Проецировать контуры на плоскость региона.
             stitch_polygons: Сшивать полигоны через plane intersections.
             extract_contours: Извлекать контуры из треугольников (шаги 7-9).
             simplify_contours: Упрощать контуры Douglas-Peucker (шаг 10).
@@ -134,6 +136,7 @@ class PolygonBuilder:
                 region_voxels,
                 region_normal,
                 grid,
+                project_contours=project_contours,
             )
             if polygon is not None:
                 polygons.append(polygon)
@@ -739,6 +742,7 @@ class PolygonBuilder:
         voxels: list[tuple[int, int, int]],
         normal: np.ndarray,
         grid: VoxelGrid,
+        project_contours: bool = False,
     ) -> NavPolygon | None:
         """
         Извлечь контур региона напрямую из вокселей.
@@ -748,6 +752,12 @@ class PolygonBuilder:
         2. Находим граничные воксели (есть пустой сосед)
         3. Упорядочиваем обходом по часовой стрелке
         4. Возвращаем NavPolygon с контуром (без меша)
+
+        Args:
+            voxels: Список координат вокселей региона.
+            normal: Нормаль региона.
+            grid: Воксельная сетка.
+            project_contours: Проецировать вершины контура на плоскость региона.
         """
         if len(voxels) < 1:
             return None
@@ -806,6 +816,22 @@ class PolygonBuilder:
             contour_3d.append(center)
 
         vertices = np.array(contour_3d, dtype=np.float32)
+
+        # Проецируем вершины контура на плоскость региона (опционально)
+        if project_contours and len(voxels) > 0:
+            # Вычисляем центроид всех вокселей региона
+            all_centers = np.array([
+                origin + (np.array(v, dtype=np.float32) + 0.5) * cell_size
+                for v in voxels
+            ], dtype=np.float32)
+            centroid = all_centers.mean(axis=0)
+
+            # Проецируем каждую вершину контура на плоскость
+            normal_vec = np.array(normal, dtype=np.float32)
+            for i in range(len(vertices)):
+                point = vertices[i]
+                dist = np.dot(point - centroid, normal_vec)
+                vertices[i] = point - dist * normal_vec
 
         # Создаём NavPolygon с контуром, но без меша
         polygon = NavPolygon(
