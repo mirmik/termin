@@ -304,11 +304,13 @@ class SDLEmbeddedWindowHandle(BackendWindow):
                 )
 
         elif event_type == sdl2.SDL_MOUSEBUTTONDOWN:
+            print(f"[SDL] MOUSEBUTTONDOWN window_id={event.button.windowID} callback={self._mouse_button_callback is not None}", flush=True)
             if self._mouse_button_callback is not None:
                 button = _translate_mouse_button(event.button.button)
                 self._mouse_button_callback(self, button, Action.PRESS, 0)
 
         elif event_type == sdl2.SDL_MOUSEBUTTONUP:
+            print(f"[SDL] MOUSEBUTTONUP window_id={event.button.windowID} callback={self._mouse_button_callback is not None}", flush=True)
             if self._mouse_button_callback is not None:
                 button = _translate_mouse_button(event.button.button)
                 self._mouse_button_callback(self, button, Action.RELEASE, 0)
