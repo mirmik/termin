@@ -9,6 +9,7 @@ EditorDisplayInputManager — обработка ввода для редакт�
 
 from __future__ import annotations
 
+import time
 from typing import Callable, Optional, Tuple, TYPE_CHECKING
 
 from termin.visualization.platform.backends.base import (
@@ -16,6 +17,7 @@ from termin.visualization.platform.backends.base import (
     Key,
     MouseButton,
 )
+from termin.visualization.core.camera import CameraController
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.picking import rgb_to_id
 
@@ -73,6 +75,10 @@ class EditorDisplayInputManager:
         self._active_viewport: Optional["Viewport"] = None
         self._last_cursor: Optional[Tuple[float, float]] = None
         self._world_mode = "editor"  # "editor" or "game"
+
+        # Double-click tracking
+        self._last_click_time: float = 0.0
+        self._double_click_threshold: float = 0.3
 
         # Подписываемся на события окна
         backend_window.set_cursor_pos_callback(self._handle_cursor_pos)
@@ -336,6 +342,14 @@ class EditorDisplayInputManager:
         x, y = self._backend_window.get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y)
 
+        # Double-click detection
+        is_double_click = False
+        if action == Action.PRESS and button == MouseButton.LEFT:
+            current_time = time.time()
+            if current_time - self._last_click_time < self._double_click_threshold:
+                is_double_click = True
+            self._last_click_time = current_time
+
         # Track active viewport
         if action == Action.PRESS:
             self._active_viewport = viewport
@@ -352,11 +366,33 @@ class EditorDisplayInputManager:
                 button=button, action=action, mods=mods
             )
 
+        # Double-click: center camera on clicked entity
+        if is_double_click and viewport is not None:
+            self._handle_double_click(x, y, viewport)
+
         # Внешний колбэк для редактора (picking, гизмо, etc.)
         if self._on_mouse_button_event is not None:
             self._on_mouse_button_event(button, action, x, y, viewport)
 
         self._request_update()
+
+    def _handle_double_click(self, x: float, y: float, viewport: "Viewport") -> None:
+        """Обработка двойного клика — центрирование камеры на объекте."""
+        entity = self.pick_entity_at(x, y, viewport)
+        if entity is None:
+            return
+
+        # Получаем позицию entity
+        target_position = entity.transform.global_pose().translation()
+
+        # Находим контроллер камеры
+        camera = viewport.camera
+        if camera is None or camera.entity is None:
+            return
+
+        controller = camera.entity.get_component(CameraController)
+        if controller is not None:
+            controller.center_on(target_position)
 
     def _handle_cursor_pos(self, window, x: float, y: float) -> None:
         """Обработчик движения мыши."""

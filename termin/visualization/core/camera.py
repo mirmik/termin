@@ -225,6 +225,10 @@ class CameraController(InputComponent):
     def zoom(self, delta: float):
         return
 
+    def center_on(self, position: np.ndarray) -> None:
+        """Центрирует камеру на заданной позиции."""
+        return
+
 
 class OrbitCameraController(CameraController):
     """Orbit controller similar to common DCC tools."""
@@ -358,3 +362,8 @@ class OrbitCameraController(CameraController):
         if not self.camera_component.has_viewport(viewport):
             return
         self.zoom(-yoffset * self._zoom_speed)
+
+    def center_on(self, position: np.ndarray) -> None:
+        """Центрирует камеру на заданной позиции."""
+        self.target = np.array(position, dtype=np.float32)
+        self._update_pose()

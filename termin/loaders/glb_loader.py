@@ -88,6 +88,8 @@ class GLBSceneData:
         # Map from glTF mesh index to list of our internal mesh indices
         # (one glTF mesh can have multiple primitives)
         self.mesh_index_map: Dict[int, List[int]] = {}
+        # Scale factor from inverse bind matrices (for skinned meshes)
+        self.skin_scale: float = 1.0
 
 
 # ---------- ACCESSOR HELPERS ----------
