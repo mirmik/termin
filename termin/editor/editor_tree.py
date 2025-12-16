@@ -47,6 +47,10 @@ class SceneTreeModel(QAbstractItemModel):
     # Args: (fbx_path: str, parent_entity: Entity | None)
     fbx_drop_requested = pyqtSignal(str, object)
 
+    # Signal emitted when GLB should be instantiated via drag-drop
+    # Args: (glb_path: str, parent_entity: Entity | None)
+    glb_drop_requested = pyqtSignal(str, object)
+
     def __init__(self, scene: Scene):
         super().__init__()
         self.scene = scene
@@ -310,6 +314,9 @@ class SceneTreeModel(QAbstractItemModel):
                     return True
                 if lower_path.endswith(".fbx"):
                     self.fbx_drop_requested.emit(path, target_entity)
+                    return True
+                if lower_path.endswith(".glb"):
+                    self.glb_drop_requested.emit(path, target_entity)
                     return True
             return False
 

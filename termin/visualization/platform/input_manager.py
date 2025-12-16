@@ -99,7 +99,6 @@ class SimpleDisplayInputManager:
 
     def _handle_mouse_button(self, window, button: MouseButton, action: Action, mods: int) -> None:
         """Обработчик нажатия кнопки мыши."""
-        print(f"[SimpleDisplayInputManager] mouse_button: {button} {action}", flush=True)
         x, y = self._backend_window.get_cursor_pos()
         viewport = self._viewport_under_cursor(x, y)
 

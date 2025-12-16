@@ -68,6 +68,7 @@ class SceneTreeController:
         self._model.entity_reparent_requested.connect(self._on_entity_reparent_requested)
         self._model.prefab_drop_requested.connect(self._on_prefab_drop_requested)
         self._model.fbx_drop_requested.connect(self._on_fbx_drop_requested)
+        self._model.glb_drop_requested.connect(self._on_glb_drop_requested)
 
         sel_model = self._tree.selectionModel()
         if sel_model is not None:
@@ -260,6 +261,31 @@ class SceneTreeController:
             entity = instantiate_fbx(Path(fbx_path))
         except Exception as e:
             print(f"Failed to load FBX: {e}")
+            return
+
+        parent_transform = parent_entity.transform if parent_entity else None
+        cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
+        self._undo_handler(cmd, merge=False)
+
+        self.rebuild(select_obj=entity)
+
+        if self._request_viewport_update is not None:
+            self._request_viewport_update()
+
+    # ---------- glb drop ----------
+
+    def _on_glb_drop_requested(
+        self,
+        glb_path: str,
+        parent_entity: Entity | None,
+    ) -> None:
+        """Handle GLB drop from Project Browser."""
+        from termin.loaders.glb_instantiator import instantiate_glb
+
+        try:
+            entity = instantiate_glb(Path(glb_path))
+        except Exception as e:
+            print(f"Failed to load GLB: {e}")
             return
 
         parent_transform = parent_entity.transform if parent_entity else None

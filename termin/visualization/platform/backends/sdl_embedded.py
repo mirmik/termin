@@ -304,13 +304,11 @@ class SDLEmbeddedWindowHandle(BackendWindow):
                 )
 
         elif event_type == sdl2.SDL_MOUSEBUTTONDOWN:
-            print(f"[SDL] MOUSEBUTTONDOWN window_id={event.button.windowID} callback={self._mouse_button_callback is not None}", flush=True)
             if self._mouse_button_callback is not None:
                 button = _translate_mouse_button(event.button.button)
                 self._mouse_button_callback(self, button, Action.PRESS, 0)
 
         elif event_type == sdl2.SDL_MOUSEBUTTONUP:
-            print(f"[SDL] MOUSEBUTTONUP window_id={event.button.windowID} callback={self._mouse_button_callback is not None}", flush=True)
             if self._mouse_button_callback is not None:
                 button = _translate_mouse_button(event.button.button)
                 self._mouse_button_callback(self, button, Action.RELEASE, 0)
@@ -396,8 +394,6 @@ class SDLEmbeddedWindowBackend(WindowBackend):
 
             if window_id in self._windows:
                 self._windows[window_id].handle_event(event)
-            elif event.type in (sdl2.SDL_MOUSEBUTTONDOWN, sdl2.SDL_MOUSEBUTTONUP):
-                print(f"[SDL poll_events] Mouse event for unknown window_id={window_id}, known={list(self._windows.keys())}", flush=True)
 
     def remove_window(self, window: SDLEmbeddedWindowHandle) -> None:
         """Remove window from tracking."""
