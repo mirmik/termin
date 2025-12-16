@@ -77,12 +77,13 @@ class GeneralTransform3:
     def relocate_global(self, global_pose: GeneralPose3 | Pose3):
         """Set global pose by computing corresponding local pose."""
         if isinstance(global_pose, Pose3):
-            # Convert Pose3 to GeneralPose3, preserving current scale
-            current_scale = self._local_pose.scale.copy()
+            # Convert Pose3 to GeneralPose3, preserving current GLOBAL scale
+            # (not local scale, to avoid scale drift when parent has non-unit scale)
+            current_global_scale = self.global_pose().scale.copy()
             global_pose = GeneralPose3(
                 ang=global_pose.ang.copy(),
                 lin=global_pose.lin.copy(),
-                scale=current_scale
+                scale=current_global_scale
             )
         if self.parent:
             parent_global = self.parent.global_pose()
