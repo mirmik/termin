@@ -455,11 +455,16 @@ class LineRenderer(Component):
         # Материал (только если явно задан, не дефолтный)
         mat = self._material_handle.get_material_or_none()
         if mat is not None:
-            mat_name = rm.find_material_name(mat)
-            if mat_name and mat_name != "__ErrorMaterial__":
-                data["material"] = mat_name
-            elif mat.name and mat.name != "__ErrorMaterial__":
-                data["material"] = mat.name
+            # Try to save UUID, fallback to name
+            mat_uuid = rm.find_material_uuid(mat)
+            if mat_uuid:
+                data["material"] = {"uuid": mat_uuid}
+            else:
+                mat_name = rm.find_material_name(mat)
+                if mat_name and mat_name != "__ErrorMaterial__":
+                    data["material"] = mat_name
+                elif mat.name and mat.name != "__ErrorMaterial__":
+                    data["material"] = mat.name
 
         return data
 

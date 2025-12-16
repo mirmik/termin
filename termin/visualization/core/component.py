@@ -100,10 +100,29 @@ class Component:
                 value = field.get_value(self)
                 kind = field.kind
 
-                # Конвертация ресурсов в имена
+                # Конвертация ресурсов в uuid (с fallback на имя для совместимости)
                 if kind in ("mesh", "material", "voxel_grid", "navmesh"):
-                    if value is not None and hasattr(value, "name"):
-                        value = value.name
+                    if value is not None:
+                        from termin.visualization.core.resources import ResourceManager
+                        rm = ResourceManager.instance()
+
+                        uuid = None
+                        if kind == "material":
+                            uuid = rm.find_material_uuid(value)
+                        elif kind == "mesh":
+                            uuid = rm.find_mesh_uuid(value)
+                        elif kind == "voxel_grid":
+                            uuid = rm.find_voxel_grid_uuid(value)
+                        elif kind == "navmesh":
+                            uuid = rm.find_navmesh_uuid(value)
+
+                        if uuid:
+                            value = {"uuid": uuid}
+                        elif hasattr(value, "name") and value.name:
+                            # Fallback to name if no uuid found
+                            value = value.name
+                        else:
+                            value = None
                     else:
                         value = None
                 # Конвертация tuple/list для JSON
@@ -164,23 +183,39 @@ class Component:
                 kind = field.kind
 
                 # Конвертация типов и загрузка ресурсов
-                if kind == "mesh" and isinstance(value, str):
-                    resource = rm.get_mesh(value)
+                if kind == "mesh":
+                    resource = None
+                    if isinstance(value, dict) and "uuid" in value:
+                        resource = rm.get_mesh_by_uuid(value["uuid"])
+                    elif isinstance(value, str):
+                        resource = rm.get_mesh(value)
                     if resource is not None and field.setter:
                         field.setter(obj, resource)
                     continue
-                elif kind == "material" and isinstance(value, str):
-                    resource = rm.get_material(value)
+                elif kind == "material":
+                    resource = None
+                    if isinstance(value, dict) and "uuid" in value:
+                        resource = rm.get_material_by_uuid(value["uuid"])
+                    elif isinstance(value, str):
+                        resource = rm.get_material(value)
                     if resource is not None and field.setter:
                         field.setter(obj, resource)
                     continue
-                elif kind == "voxel_grid" and isinstance(value, str):
-                    resource = rm.get_voxel_grid(value)
+                elif kind == "voxel_grid":
+                    resource = None
+                    if isinstance(value, dict) and "uuid" in value:
+                        resource = rm.get_voxel_grid_by_uuid(value["uuid"])
+                    elif isinstance(value, str):
+                        resource = rm.get_voxel_grid(value)
                     if resource is not None and field.setter:
                         field.setter(obj, resource)
                     continue
-                elif kind == "navmesh" and isinstance(value, str):
-                    resource = rm.get_navmesh(value)
+                elif kind == "navmesh":
+                    resource = None
+                    if isinstance(value, dict) and "uuid" in value:
+                        resource = rm.get_navmesh_by_uuid(value["uuid"])
+                    elif isinstance(value, str):
+                        resource = rm.get_navmesh(value)
                     if resource is not None and field.setter:
                         field.setter(obj, resource)
                     continue

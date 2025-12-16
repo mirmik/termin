@@ -596,6 +596,31 @@ class ResourceManager:
                 return n
         return None
 
+    def find_material_uuid(self, mat: "Material") -> Optional[str]:
+        """Find UUID of a Material by looking up its asset."""
+        for asset in self._material_assets.values():
+            if asset.material is mat:
+                return asset.uuid
+        return None
+
+    def get_material_by_uuid(self, uuid: str) -> Optional["Material"]:
+        """Get Material by UUID."""
+        from termin.visualization.core.material_asset import MaterialAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, MaterialAsset):
+            return asset.material
+        return None
+
+    def get_material_asset_by_uuid(self, uuid: str) -> Optional["MaterialAsset"]:
+        """Get MaterialAsset by UUID."""
+        from termin.visualization.core.material_asset import MaterialAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, MaterialAsset):
+            return asset
+        return None
+
     # --------- Шейдеры (Asset-based) ---------
     def get_shader_asset(self, name: str) -> Optional["ShaderAsset"]:
         """Получить ShaderAsset по имени."""
@@ -857,6 +882,33 @@ class ResourceManager:
                 return n
         return None
 
+    def find_mesh_uuid(self, mesh: "MeshDrawable") -> Optional[str]:
+        """Find UUID of a MeshDrawable by looking up its asset."""
+        if mesh.asset is not None:
+            return mesh.asset.uuid
+        return None
+
+    def get_mesh_by_uuid(self, uuid: str) -> Optional["MeshDrawable"]:
+        """Get MeshDrawable by UUID."""
+        from termin.visualization.core.mesh_asset import MeshAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, MeshAsset):
+            # Find MeshDrawable that wraps this asset
+            for drawable in self.meshes.values():
+                if drawable.asset is asset:
+                    return drawable
+        return None
+
+    def get_mesh_asset_by_uuid(self, uuid: str) -> Optional["MeshAsset"]:
+        """Get MeshAsset by UUID."""
+        from termin.visualization.core.mesh_asset import MeshAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, MeshAsset):
+            return asset
+        return None
+
     def unregister_mesh(self, name: str) -> None:
         """Удаляет меш."""
         if name in self._mesh_assets:
@@ -908,6 +960,31 @@ class ResourceManager:
                 return n
         return None
 
+    def find_voxel_grid_uuid(self, grid: "VoxelGrid") -> Optional[str]:
+        """Find UUID of a VoxelGrid by looking up its asset."""
+        for asset in self._voxel_grid_assets.values():
+            if asset.grid is grid:
+                return asset.uuid
+        return None
+
+    def get_voxel_grid_by_uuid(self, uuid: str) -> Optional["VoxelGrid"]:
+        """Get VoxelGrid by UUID."""
+        from termin.voxels.voxel_grid_asset import VoxelGridAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, VoxelGridAsset):
+            return asset.grid
+        return None
+
+    def get_voxel_grid_asset_by_uuid(self, uuid: str) -> Optional["VoxelGridAsset"]:
+        """Get VoxelGridAsset by UUID."""
+        from termin.voxels.voxel_grid_asset import VoxelGridAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, VoxelGridAsset):
+            return asset
+        return None
+
     def unregister_voxel_grid(self, name: str) -> None:
         """Удаляет воксельную сетку."""
         if name in self._voxel_grid_assets:
@@ -957,6 +1034,31 @@ class ResourceManager:
         for n, nm in self.navmeshes.items():
             if nm is navmesh:
                 return n
+        return None
+
+    def find_navmesh_uuid(self, navmesh: "NavMesh") -> Optional[str]:
+        """Find UUID of a NavMesh by looking up its asset."""
+        for asset in self._navmesh_assets.values():
+            if asset.navmesh is navmesh:
+                return asset.uuid
+        return None
+
+    def get_navmesh_by_uuid(self, uuid: str) -> Optional["NavMesh"]:
+        """Get NavMesh by UUID."""
+        from termin.navmesh.navmesh_asset import NavMeshAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, NavMeshAsset):
+            return asset.navmesh
+        return None
+
+    def get_navmesh_asset_by_uuid(self, uuid: str) -> Optional["NavMeshAsset"]:
+        """Get NavMeshAsset by UUID."""
+        from termin.navmesh.navmesh_asset import NavMeshAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, NavMeshAsset):
+            return asset
         return None
 
     def unregister_navmesh(self, name: str) -> None:

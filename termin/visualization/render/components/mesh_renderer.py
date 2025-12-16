@@ -193,19 +193,29 @@ class MeshRenderer(Component):
         }
 
         if self.mesh is not None:
-            mesh_name = rm.find_mesh_name(self.mesh)
-            if mesh_name:
-                data["mesh"] = mesh_name
-            elif self.mesh.name:
-                data["mesh"] = self.mesh.name
+            # Try to save UUID, fallback to name
+            mesh_uuid = rm.find_mesh_uuid(self.mesh)
+            if mesh_uuid:
+                data["mesh"] = {"uuid": mesh_uuid}
+            else:
+                mesh_name = rm.find_mesh_name(self.mesh)
+                if mesh_name:
+                    data["mesh"] = mesh_name
+                elif self.mesh.name:
+                    data["mesh"] = self.mesh.name
 
         mat = self._material_handle.get_material_or_none()
         if mat is not None:
-            mat_name = rm.find_material_name(mat)
-            if mat_name:
-                data["material"] = mat_name
-            elif mat.name:
-                data["material"] = mat.name
+            # Try to save UUID, fallback to name
+            mat_uuid = rm.find_material_uuid(mat)
+            if mat_uuid:
+                data["material"] = {"uuid": mat_uuid}
+            else:
+                mat_name = rm.find_material_name(mat)
+                if mat_name:
+                    data["material"] = mat_name
+                elif mat.name:
+                    data["material"] = mat.name
 
         return data
 
