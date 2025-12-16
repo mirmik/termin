@@ -236,7 +236,7 @@ class SceneTreeModel(QAbstractItemModel):
             path = parse_asset_path_mime_data(data)
             if path:
                 lower_path = path.lower()
-                if lower_path.endswith(".prefab") or lower_path.endswith(".fbx"):
+                if lower_path.endswith(".prefab") or lower_path.endswith(".fbx") or lower_path.endswith(".glb"):
                     return True
             return False
 
