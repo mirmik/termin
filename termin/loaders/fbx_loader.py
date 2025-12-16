@@ -334,10 +334,18 @@ def _parse_anim_prop(anim_prop, node_channels):
     """Parse a single animated property."""
     try:
         element = anim_prop.element
-        if not element or not element.name:
+        if not element:
             return
 
-        node_name = element.name
+        # element может быть не только нодой, но и материалом и т.п.
+        # У них может не быть атрибута name
+        try:
+            node_name = element.name
+            if not node_name:
+                return
+        except AttributeError:
+            return
+
         if node_name not in node_channels:
             node_channels[node_name] = {'pos_keys': [], 'rot_keys': [], 'scale_keys': []}
 
