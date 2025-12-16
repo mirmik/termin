@@ -191,12 +191,12 @@ def _create_animation_clips(scene_data: GLBSceneData) -> List[AnimationClip]:
 
         for glb_channel in glb_anim.channels:
             channel = AnimationChannel(
-                name=glb_channel.target_node,  # Use node name as channel name
+                name=glb_channel.node_name,  # Use node name as channel name
                 pos_keys=glb_channel.pos_keys,
                 rot_keys=glb_channel.rot_keys,
                 scale_keys=glb_channel.scale_keys,
             )
-            channels[glb_channel.target_node] = channel
+            channels[glb_channel.node_name] = channel
 
         clip = AnimationClip(
             name=glb_anim.name,
