@@ -66,13 +66,8 @@ class TransformEditCommand(UndoCommand):
         self._transform.relocate_global(self._new_pose)
 
     def undo(self) -> None:
-        # Restore old pose with old scale
-        old_pose_with_scale = GeneralPose3(
-            ang=self._old_pose.ang.copy(),
-            lin=self._old_pose.lin.copy(),
-            scale=self._old_scale.copy()
-        )
-        self._transform.relocate_global(old_pose_with_scale)
+        # _old_pose is already GeneralPose3 with correct global scale
+        self._transform.relocate_global(self._old_pose)
 
     def merge_with(self, other: UndoCommand) -> bool:
         """
