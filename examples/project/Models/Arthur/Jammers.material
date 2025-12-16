@@ -1,0 +1,18 @@
+{
+  "shader": "DefaultShader",
+  "uniforms": {
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_metallic": 0.0,
+    "u_roughness": 0.5,
+    "u_ambient": 0.1,
+    "u_shininess": 32.0
+  },
+  "textures": {
+    "u_albedo_texture": "toptex1_png"
+  }
+}

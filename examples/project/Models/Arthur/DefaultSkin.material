@@ -1,0 +1,16 @@
+{
+  "shader": "DefaultShader",
+  "uniforms": {
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_shininess": 256.0,
+    "u_ambient": 0.8999999999999999
+  },
+  "textures": {
+    "u_albedo_texture": "young_lightskinned_male_diffuse2_png.001"
+  }
+}

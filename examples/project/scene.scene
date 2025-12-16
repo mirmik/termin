@@ -9,117 +9,6 @@
     ],
     "entities": [
       {
-        "name": "cylinder",
-        "priority": 0,
-        "scale": [
-          5.0,
-          5.0,
-          5.0
-        ],
-        "visible": true,
-        "active": true,
-        "pickable": true,
-        "selectable": true,
-        "layer": 0,
-        "flags": 0,
-        "pose": {
-          "position": [
-            -7.492,
-            3.733,
-            0.0
-          ],
-          "rotation": [
-            0.0,
-            0.0,
-            -0.12737621515523534,
-            0.9918544751185666
-          ]
-        },
-        "components": [
-          {
-            "data": {
-              "enabled": true,
-              "cast_shadow": true,
-              "mesh": "mesh_2",
-              "material": "DefaultMaterial"
-            },
-            "type": "MeshRenderer"
-          },
-          {
-            "data": {
-              "grid_name": "Cyl",
-              "cell_size": 0.12,
-              "output_path": "Voxels/cylinder.voxels",
-              "voxelize_mode": 4,
-              "voxelize_source": 0,
-              "navmesh_output_path": "Voxels/cylinder.navmesh",
-              "normal_angle": 25.0,
-              "expand_regions": false,
-              "navmesh_stage": 0,
-              "contour_epsilon": 0.1,
-              "show_debug_voxels": true,
-              "show_debug_contours": true,
-              "project_contours": false,
-              "stitch_contours": false,
-              "share_boundary": false,
-              "show_multi_normal_voxels": false,
-              "show_boundary_voxels": false,
-              "enabled": true
-            },
-            "type": "VoxelizerComponent"
-          },
-          {
-            "data": {
-              "enabled": false,
-              "voxel_grid": "Cyl",
-              "color_below": [
-                0.2,
-                0.6,
-                1.0,
-                0.8
-              ],
-              "color_above": [
-                1.0,
-                0.3,
-                0.2,
-                0.8
-              ],
-              "fill_percent": 100.0,
-              "slice_axis": [
-                0.0,
-                0.0,
-                1.0
-              ],
-              "color_surface": [
-                0.2,
-                1.0,
-                0.3,
-                0.9
-              ]
-            },
-            "type": "VoxelDisplayComponent"
-          },
-          {
-            "data": {
-              "enabled": true,
-              "navmesh": "Cyl",
-              "color": [
-                0.2,
-                0.8,
-                0.3,
-                0.7
-              ],
-              "wireframe": false,
-              "show_normals": false,
-              "show_contours": true,
-              "contour_width": 0.05
-            },
-            "type": "NavMeshDisplayComponent"
-          }
-        ],
-        "children": []
-      },
-      {
         "name": "cube1",
         "priority": 0,
         "scale": [
@@ -135,15 +24,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            0.0,
-            0.0,
-            0.0
+            0.04879804397933185,
+            -0.2305206060409546,
+            -0.6963190212845802
           ],
           "rotation": [
-            0.0,
-            -0.034975674328059966,
-            0.0,
-            0.9993881639309611
+            -0.677741409721475,
+            -0.025704242581240128,
+            -0.023718975315609455,
+            0.7344680276717633
           ]
         },
         "components": [
@@ -155,6 +44,18 @@
               "material": "Kairon"
             },
             "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "speed": 90.0,
+              "axis": [
+                1.0,
+                3.0,
+                0.0
+              ],
+              "enabled": true
+            },
+            "type": "RotatorComponent"
           }
         ],
         "children": []
@@ -176,7 +77,7 @@
         "pose": {
           "position": [
             1.286,
-            0.24329628610610943,
+            1.8578306641578672,
             -0.10679727935791017
           ],
           "rotation": [
@@ -884,7 +785,7 @@
         ]
       },
       {
-        "name": "entity1",
+        "name": "Arti",
         "priority": 0,
         "scale": [
           0.1,
@@ -899,26 +800,302 @@
         "flags": 0,
         "pose": {
           "position": [
-            0.0,
-            -0.7424401726722718,
-            -2.863860471725464
+            0.06073400377960733,
+            -1.654418260075152,
+            -2.9634157810211184
           ],
           "rotation": [
-            0.6967583360764451,
+            0.6870661673749745,
+            0.15109634806073743,
+            0.17061359684691033,
+            0.6899282396179564
+          ]
+        },
+        "components": [],
+        "children": [
+          {
+            "name": "entity1",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                1.7763568394002505e-15,
+                7.105427357601002e-15,
+                -1.7763568394002505e-15
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0000000000000002
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "male_muscle_13290_003",
+                  "material": "AdvancedSkin"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "name": "entity2",
+            "priority": 0,
+            "scale": [
+              1000.0,
+              1000.0,
+              1000.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.026683880352550204,
+                1.29233601597889e-09
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "jammers3",
+                  "material": "DefaultMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "name": "entity3",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "spiky",
+                  "material": "AdvancedPBRMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "name": "entity4",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": false,
+                  "cast_shadow": true,
+                  "mesh": "mens_tanks_elv1f",
+                  "material": "WhiteMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "name": "entity2",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "jammers3",
+                  "material": "DefaultMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "name": "entity6",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "low-poly",
+                  "material": "AMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "entity5",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            -1.5446622371673584,
+            -0.4468865394592285
+          ],
+          "rotation": [
+            0.14468039355396725,
             0.0,
             0.0,
-            0.7173059466559465
+            0.9894784402507562
           ]
         },
         "components": [
           {
             "data": {
-              "enabled": true,
-              "cast_shadow": true,
-              "mesh": "male_muscle_13290_003",
-              "material": "Skin"
+              "light_type": "directional",
+              "color": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "intensity": 1.0,
+              "shadows_enabled": true,
+              "shadows_map_resolution": 1024
             },
-            "type": "MeshRenderer"
+            "type": "LightComponent"
           }
         ],
         "children": []
@@ -943,7 +1120,7 @@
       1.0,
       1.0
     ],
-    "ambient_intensity": 1.0,
+    "ambient_intensity": 0.1,
     "skybox_type": "gradient",
     "skybox_color": [
       0.30000001192092896,
@@ -964,15 +1141,15 @@
   "editor": {
     "camera": {
       "target": [
-        -0.6738388538360596,
-        -0.20694781839847565,
-        -2.267642021179199
+        -0.28635552525520325,
+        -0.15702827274799347,
+        -1.7966196537017822
       ],
-      "radius": 2.5,
-      "azimuth": 38.27507049623706,
-      "elevation": 0.39095375244673075
+      "radius": 5.0,
+      "azimuth": 32.37585762449852,
+      "elevation": 0.8028514559173894
     },
-    "selected_entity": "entity1",
+    "selected_entity": "cube1",
     "displays": [
       {
         "name": "Editor",
@@ -1030,7 +1207,6 @@
                 0.8999999761581421,
                 1.0
               ],
-              "u_ambient": 0.1,
               "u_shininess": 32.0
             },
             "textures": {
@@ -1044,7 +1220,88 @@
             },
             "shader": {
               "vertex": "#version 330 core\n\nlayout(location = 0) in vec3 a_position;\nlayout(location = 1) in vec3 a_normal;\nlayout(location = 2) in vec2 a_uv;\n\nuniform mat4 u_model;\nuniform mat4 u_view;\nuniform mat4 u_projection;\n\nout vec3 v_world_pos;\nout vec3 v_normal;\nout vec2 v_uv;\n\nvoid main() {\n    vec4 world = u_model * vec4(a_position, 1.0);\n    v_world_pos = world.xyz;\n    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n    v_uv = a_uv;\n    gl_Position = u_projection * u_view * world;\n}\n",
-              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\nin vec2 v_uv;\n\nuniform vec4 u_color; // RGBA базового материала\nuniform sampler2D u_albedo_texture; // Текстура цвета (белая 1x1 по умолчанию)\n\n// ============== Источники света ==============\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT       = 1;\nconst int LIGHT_TYPE_SPOT        = 2;\n\nconst int MAX_LIGHTS = 8;\n\n// ============== Camera ==============\nuniform vec3 u_camera_position;\n\n// ============== Ambient lighting (scene-level) ==============\nuniform vec3  u_ambient_color;\nuniform float u_ambient_intensity;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS]; // (constant, linear, quadratic)\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// ============== Shadow Mapping ==============\nconst int MAX_SHADOW_MAPS = 4;\n\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\n\n// Bias для устранения shadow acne\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) {\n        return 1.0;\n    }\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) {\n        w = 0.0;\n    }\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t); // smoothstep\n}\n\n/**\n * Вычисляет коэффициент тени для источника света.\n *\n * Алгоритм:\n * 1. Преобразуем мировую позицию в light-space: p_light = L * p_world\n * 2. Переводим в NDC: ndc = p_light.xyz / p_light.w\n * 3. Переводим в текстурные координаты: uv = ndc.xy * 0.5 + 0.5\n * 4. Сравниваем глубину фрагмента с глубиной в shadow map\n *\n * Возвращает:\n *   1.0 — фрагмент освещён\n *   0.0 — фрагмент в тени\n */\nfloat compute_shadow(int light_index) {\n    // Ищем shadow map для этого источника\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) {\n            continue;\n        }\n        \n        // Преобразуем в light-space\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        \n        // Perspective divide (для ортографической проекции w=1, но делаем для общности)\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        \n        // Переводим из [-1, 1] в [0, 1] для текстурных координат\n        proj_coords = proj_coords * 0.5 + 0.5;\n        \n        // Проверяем, что координаты внутри shadow map\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0; // Вне frustum'а — считаем освещённым\n        }\n        \n        // Читаем глубину из shadow map (записана в R канал как серый цвет)\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        \n        // Текущая глубина фрагмента\n        float current_depth = proj_coords.z;\n        \n        // Сравниваем с bias для устранения shadow acne\n        float shadow = current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n        \n        return shadow;\n    }\n    \n    // Нет shadow map для этого источника — полностью освещён\n    return 1.0;\n}\n\nvoid main() {\n    // DEBUG: show UV as color (R=U, G=0)\n    FragColor = vec4(v_uv.x * 2.0 - 1.0, 0.0, 0.0, 1.0);\n    return;\n\n    vec3 N = normalize(v_normal);\n    vec4 tex_color = texture(u_albedo_texture, v_uv);\n    vec3 base_color = u_color.rgb * tex_color.rgb;\n\n    // Scene-level ambient lighting\n    vec3 result = base_color * u_ambient_color * u_ambient_intensity;\n\n    for (int i = 0; i < u_light_count; ++i) {\n        int type = u_light_type[i];\n        vec3 radiance = u_light_color[i] * u_light_intensity[i];\n\n        vec3 L;\n        float dist;\n        float weight = 1.0;\n\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            L = normalize(-u_light_direction[i]); // направление на свет\n            dist = 1e9;\n        } else {\n            vec3 to_light = u_light_position[i] - v_world_pos;\n            dist = length(to_light);\n            if (dist > 0.0001)\n                L = to_light / dist;\n            else\n                L = vec3(0.0, 1.0, 0.0);\n\n            weight *= compute_distance_attenuation(i, dist);\n\n            if (type == LIGHT_TYPE_SPOT) {\n                weight *= compute_spot_weight(i, L);\n            }\n        }\n\n        // Вычисляем тень для directional lights\n        float shadow = 1.0;\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            shadow = compute_shadow(i);\n        }\n\n        float ndotl = max(dot(N, L), 0.0);\n        vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)\n\n        vec3 V = normalize(u_camera_position - v_world_pos);\n        vec3 H = normalize(L + V);\n        float ndoth = max(dot(N, H), 0.0);\n        float shininess = 16.0;\n        float spec = pow(ndoth, shininess);\n\n        vec3 specular_color = vec3(1.0);\n        vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n\n\n        // Применяем тень к диффузу и спекуляру\n        result += (diffuse + specular) * radiance * weight * shadow;\n    }\n\n    FragColor = vec4(result, u_color.a);\n}\n",
+              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\nin vec2 v_uv;\n\nuniform vec4 u_color; // RGBA базового материала\nuniform sampler2D u_albedo_texture; // Текстура цвета (белая 1x1 по умолчанию)\nuniform float u_shininess; // Размер блика (1-128)\n\n// ============== Источники света ==============\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT       = 1;\nconst int LIGHT_TYPE_SPOT        = 2;\n\nconst int MAX_LIGHTS = 8;\n\n// ============== Camera ==============\nuniform vec3 u_camera_position;\n\n// ============== Ambient lighting (scene-level) ==============\nuniform vec3  u_ambient_color;\nuniform float u_ambient_intensity;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS]; // (constant, linear, quadratic)\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// ============== Shadow Mapping ==============\nconst int MAX_SHADOW_MAPS = 4;\n\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\n\n// Bias для устранения shadow acne\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) {\n        return 1.0;\n    }\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) {\n        w = 0.0;\n    }\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t); // smoothstep\n}\n\n/**\n * Вычисляет коэффициент тени для источника света.\n *\n * Алгоритм:\n * 1. Преобразуем мировую позицию в light-space: p_light = L * p_world\n * 2. Переводим в NDC: ndc = p_light.xyz / p_light.w\n * 3. Переводим в текстурные координаты: uv = ndc.xy * 0.5 + 0.5\n * 4. Сравниваем глубину фрагмента с глубиной в shadow map\n *\n * Возвращает:\n *   1.0 — фрагмент освещён\n *   0.0 — фрагмент в тени\n */\nfloat compute_shadow(int light_index) {\n    // Ищем shadow map для этого источника\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) {\n            continue;\n        }\n        \n        // Преобразуем в light-space\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        \n        // Perspective divide (для ортографической проекции w=1, но делаем для общности)\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        \n        // Переводим из [-1, 1] в [0, 1] для текстурных координат\n        proj_coords = proj_coords * 0.5 + 0.5;\n        \n        // Проверяем, что координаты внутри shadow map\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0; // Вне frustum'а — считаем освещённым\n        }\n        \n        // Читаем глубину из shadow map (записана в R канал как серый цвет)\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        \n        // Текущая глубина фрагмента\n        float current_depth = proj_coords.z;\n        \n        // Сравниваем с bias для устранения shadow acne\n        float shadow = current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n        \n        return shadow;\n    }\n    \n    // Нет shadow map для этого источника — полностью освещён\n    return 1.0;\n}\n\nvoid main() {\n    vec3 N = normalize(v_normal);\n    vec4 tex_color = texture(u_albedo_texture, v_uv);\n    vec3 base_color = u_color.rgb * tex_color.rgb;\n\n    // Scene-level ambient lighting\n    vec3 result = base_color * u_ambient_color * u_ambient_intensity;\n\n    for (int i = 0; i < u_light_count; ++i) {\n        int type = u_light_type[i];\n        vec3 radiance = u_light_color[i] * u_light_intensity[i];\n\n        vec3 L;\n        float dist;\n        float weight = 1.0;\n\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            L = normalize(-u_light_direction[i]); // направление на свет\n            dist = 1e9;\n        } else {\n            vec3 to_light = u_light_position[i] - v_world_pos;\n            dist = length(to_light);\n            if (dist > 0.0001)\n                L = to_light / dist;\n            else\n                L = vec3(0.0, 1.0, 0.0);\n\n            weight *= compute_distance_attenuation(i, dist);\n\n            if (type == LIGHT_TYPE_SPOT) {\n                weight *= compute_spot_weight(i, L);\n            }\n        }\n\n        // Вычисляем тень для directional lights\n        float shadow = 1.0;\n        if (type == LIGHT_TYPE_DIRECTIONAL) {\n            shadow = compute_shadow(i);\n        }\n\n        float ndotl = max(dot(N, L), 0.0);\n        vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)\n\n        vec3 V = normalize(u_camera_position - v_world_pos);\n        vec3 H = normalize(L + V);\n        float ndoth = max(dot(N, H), 0.0);\n        float spec = pow(ndoth, u_shininess);\n\n        vec3 specular_color = vec3(1.0);\n        vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n\n\n        // Применяем тень к диффузу и спекуляру\n        result += (diffuse + specular) * radiance * weight * shadow;\n    }\n\n    FragColor = vec4(result, u_color.a);\n}\n",
+              "geometry": null
+            }
+          }
+        ]
+      },
+      "PBRMaterial": {
+        "type": "inline",
+        "name": "PBRMaterial",
+        "phases": [
+          {
+            "phase_mark": "opaque",
+            "priority": 0,
+            "color": [
+              0.800000011920929,
+              0.800000011920929,
+              0.800000011920929,
+              1.0
+            ],
+            "uniforms": {
+              "u_color": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929,
+                1.0
+              ],
+              "u_metallic": 0.0,
+              "u_roughness": 0.5
+            },
+            "textures": {
+              "u_albedo_texture": "__white_1x1__"
+            },
+            "render_state": {
+              "depth_test": true,
+              "depth_write": true,
+              "blend": false,
+              "cull": true
+            },
+            "shader": {
+              "vertex": "#version 330 core\n\nlayout(location = 0) in vec3 a_position;\nlayout(location = 1) in vec3 a_normal;\nlayout(location = 2) in vec2 a_uv;\n\nuniform mat4 u_model;\nuniform mat4 u_view;\nuniform mat4 u_projection;\n\nout vec3 v_world_pos;\nout vec3 v_normal;\nout vec2 v_uv;\n\nvoid main() {\n    vec4 world = u_model * vec4(a_position, 1.0);\n    v_world_pos = world.xyz;\n    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n    v_uv = a_uv;\n    gl_Position = u_projection * u_view * world;\n}\n",
+              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\nin vec2 v_uv;\n\n// Material parameters\nuniform vec4 u_color;\nuniform sampler2D u_albedo_texture;\nuniform float u_metallic;\nuniform float u_roughness;\n\n// Camera\nuniform vec3 u_camera_position;\n\n// Lighting\nconst int MAX_LIGHTS = 8;\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT = 1;\nconst int LIGHT_TYPE_SPOT = 2;\n\nuniform vec3  u_ambient_color;\nuniform float u_ambient_intensity;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS];\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// Shadow Mapping\nconst int MAX_SHADOW_MAPS = 4;\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nconst float PI = 3.14159265359;\n\n// Normal Distribution Function (GGX/Trowbridge-Reitz)\nfloat D_GGX(float NdotH, float roughness) {\n    float a = roughness * roughness;\n    float a2 = a * a;\n    float denom = NdotH * NdotH * (a2 - 1.0) + 1.0;\n    return a2 / (PI * denom * denom);\n}\n\n// Geometry Function (Smith's method with GGX)\nfloat G_Smith(float NdotV, float NdotL, float roughness) {\n    float r = roughness + 1.0;\n    float k = (r * r) / 8.0;\n    float G1_V = NdotV / (NdotV * (1.0 - k) + k);\n    float G1_L = NdotL / (NdotL * (1.0 - k) + k);\n    return G1_V * G1_L;\n}\n\n// Fresnel (Schlick approximation)\nvec3 F_Schlick(float cosTheta, vec3 F0) {\n    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);\n}\n\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) return 1.0;\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) w = 0.0;\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t);\n}\n\nfloat compute_shadow(int light_index) {\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) continue;\n\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        proj_coords = proj_coords * 0.5 + 0.5;\n\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0;\n        }\n\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        float current_depth = proj_coords.z;\n        return current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n    }\n    return 1.0;\n}\n\nvoid main() {\n    vec3 N = normalize(v_normal);\n    vec3 V = normalize(u_camera_position - v_world_pos);\n\n    // Sample albedo\n    vec4 tex_color = texture(u_albedo_texture, v_uv);\n    vec3 albedo = u_color.rgb * tex_color.rgb;\n\n    float metallic = u_metallic;\n    float roughness = max(u_roughness, 0.04);\n    vec3 F0 = mix(vec3(0.04), albedo, metallic);\n\n    // Ambient\n    vec3 ambient = u_ambient_color * u_ambient_intensity * albedo * (1.0 - metallic * 0.5);\n\n    // Single directional light (working version)\n    vec3 L = normalize(-u_light_direction[0]);\n    float NdotL = max(dot(N, L), 0.0);\n    float NdotV = max(dot(N, V), 0.001);\n    vec3 H = normalize(V + L);\n    float NdotH = max(dot(N, H), 0.0);\n    float HdotV = max(dot(H, V), 0.0);\n\n    // Cook-Torrance BRDF\n    float D = D_GGX(NdotH, roughness);\n    float G = G_Smith(NdotV, NdotL, roughness);\n    vec3 F = F_Schlick(HdotV, F0);\n\n    vec3 numerator = D * G * F;\n    float denominator = 4.0 * NdotV * NdotL + 0.0001;\n    vec3 specular = numerator / denominator;\n\n    vec3 kD = (1.0 - F) * (1.0 - metallic);\n    vec3 radiance = u_light_color[0] * u_light_intensity[0];\n    float shadow = compute_shadow(0);\n    vec3 Lo = (kD * albedo + specular) * radiance * NdotL * shadow;\n\n    vec3 color = ambient + Lo;\n    FragColor = vec4(color, 1.0);\n}\n",
+              "geometry": null
+            }
+          }
+        ]
+      },
+      "AdvancedPBRMaterial": {
+        "type": "inline",
+        "name": "AdvancedPBRMaterial",
+        "phases": [
+          {
+            "phase_mark": "opaque",
+            "priority": 0,
+            "color": [
+              0.800000011920929,
+              0.800000011920929,
+              0.800000011920929,
+              1.0
+            ],
+            "uniforms": {
+              "u_color": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929,
+                1.0
+              ],
+              "u_metallic": 0.0,
+              "u_roughness": 0.5,
+              "u_subsurface": 0.0
+            },
+            "textures": {
+              "u_albedo_texture": "__white_1x1__"
+            },
+            "render_state": {
+              "depth_test": true,
+              "depth_write": true,
+              "blend": false,
+              "cull": true
+            },
+            "shader": {
+              "vertex": "#version 330 core\n\nlayout(location = 0) in vec3 a_position;\nlayout(location = 1) in vec3 a_normal;\nlayout(location = 2) in vec2 a_uv;\n\nuniform mat4 u_model;\nuniform mat4 u_view;\nuniform mat4 u_projection;\n\nout vec3 v_world_pos;\nout vec3 v_normal;\nout vec2 v_uv;\n\nvoid main() {\n    vec4 world = u_model * vec4(a_position, 1.0);\n    v_world_pos = world.xyz;\n    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n    v_uv = a_uv;\n    gl_Position = u_projection * u_view * world;\n}\n",
+              "fragment": "#version 330 core\n\nin vec3 v_world_pos;\nin vec3 v_normal;\nin vec2 v_uv;\n\n// Material parameters\nuniform vec4 u_color;\nuniform sampler2D u_albedo_texture;\nuniform float u_metallic;\nuniform float u_roughness;\nuniform float u_subsurface;  // SSS intensity (0 = off, 1 = full)\n\n// Camera\nuniform vec3 u_camera_position;\n\n// Lighting\nconst int MAX_LIGHTS = 8;\nconst int LIGHT_TYPE_DIRECTIONAL = 0;\nconst int LIGHT_TYPE_POINT = 1;\nconst int LIGHT_TYPE_SPOT = 2;\n\nuniform vec3  u_ambient_color;\nuniform float u_ambient_intensity;\n\nuniform int   u_light_count;\nuniform int   u_light_type[MAX_LIGHTS];\nuniform vec3  u_light_color[MAX_LIGHTS];\nuniform float u_light_intensity[MAX_LIGHTS];\nuniform vec3  u_light_direction[MAX_LIGHTS];\nuniform vec3  u_light_position[MAX_LIGHTS];\nuniform float u_light_range[MAX_LIGHTS];\nuniform vec3  u_light_attenuation[MAX_LIGHTS];\nuniform float u_light_inner_angle[MAX_LIGHTS];\nuniform float u_light_outer_angle[MAX_LIGHTS];\n\n// Shadow Mapping\nconst int MAX_SHADOW_MAPS = 4;\nuniform int u_shadow_map_count;\nuniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];\nuniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];\nuniform int u_shadow_light_index[MAX_SHADOW_MAPS];\nconst float SHADOW_BIAS = 0.005;\n\nout vec4 FragColor;\n\nconst float PI = 3.14159265359;\n\n// ============== ACES Tone Mapping ==============\n// More cinematic than Reinhard, better highlight rolloff\nvec3 aces_tonemap(vec3 x) {\n    const float a = 2.51;\n    const float b = 0.03;\n    const float c = 2.43;\n    const float d = 0.59;\n    const float e = 0.14;\n    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);\n}\n\n// ============== PBR Functions ==============\n\n// Normal Distribution Function (GGX/Trowbridge-Reitz)\nfloat D_GGX(float NdotH, float roughness) {\n    float a = roughness * roughness;\n    float a2 = a * a;\n    float denom = NdotH * NdotH * (a2 - 1.0) + 1.0;\n    return a2 / (PI * denom * denom);\n}\n\n// Geometry Function (Smith's method with GGX)\nfloat G_Smith(float NdotV, float NdotL, float roughness) {\n    float r = roughness + 1.0;\n    float k = (r * r) / 8.0;\n    float G1_V = NdotV / (NdotV * (1.0 - k) + k);\n    float G1_L = NdotL / (NdotL * (1.0 - k) + k);\n    return G1_V * G1_L;\n}\n\n// Fresnel (Schlick approximation)\nvec3 F_Schlick(float cosTheta, vec3 F0) {\n    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n}\n\n// ============== SSS Approximation ==============\n// Wrap lighting: softens the terminator (shadow edge)\n// Creates the appearance of light scattering through the surface\nfloat wrap_diffuse(float NdotL, float wrap) {\n    return max(0.0, (NdotL + wrap) / (1.0 + wrap));\n}\n\n// Subsurface color shift - light passing through skin picks up red/orange\nvec3 subsurface_color(vec3 albedo) {\n    // Shift towards warm tones (blood under skin)\n    return albedo * vec3(1.0, 0.4, 0.25);\n}\n\n// ============== Attenuation ==============\nfloat compute_distance_attenuation(int idx, float dist) {\n    vec3 att = u_light_attenuation[idx];\n    float denom = att.x + att.y * dist + att.z * dist * dist;\n    if (denom <= 0.0) return 1.0;\n    float w = 1.0 / denom;\n    float range = u_light_range[idx];\n    if (range > 0.0 && dist > range) w = 0.0;\n    return w;\n}\n\nfloat compute_spot_weight(int idx, vec3 L) {\n    float cos_theta = dot(u_light_direction[idx], -L);\n    float cos_outer = cos(u_light_outer_angle[idx]);\n    float cos_inner = cos(u_light_inner_angle[idx]);\n    if (cos_theta <= cos_outer) return 0.0;\n    if (cos_theta >= cos_inner) return 1.0;\n    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);\n    return t * t * (3.0 - 2.0 * t);\n}\n\nfloat compute_shadow(int light_index) {\n    for (int sm = 0; sm < u_shadow_map_count; ++sm) {\n        if (u_shadow_light_index[sm] != light_index) continue;\n\n        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);\n        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;\n        proj_coords = proj_coords * 0.5 + 0.5;\n\n        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||\n            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||\n            proj_coords.z < 0.0 || proj_coords.z > 1.0) {\n            return 1.0;\n        }\n\n        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;\n        float current_depth = proj_coords.z;\n        return current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;\n    }\n    return 1.0;\n}\n\nvoid main() {\n    vec3 N = normalize(v_normal);\n    vec3 V = normalize(u_camera_position - v_world_pos);\n\n    // Sample albedo\n    vec4 tex_color = texture(u_albedo_texture, v_uv);\n    vec3 albedo = u_color.rgb * tex_color.rgb;\n\n    float metallic = u_metallic;\n    float roughness = max(u_roughness, 0.04);\n    float subsurface = u_subsurface;\n\n    // F0: reflectance at normal incidence\n    vec3 F0 = mix(vec3(0.04), albedo, metallic);\n\n    // Ambient\n    vec3 ambient = u_ambient_color * u_ambient_intensity * albedo * (1.0 - metallic * 0.5);\n\n    vec3 Lo = vec3(0.0);\n\n    for (int i = 0; i < u_light_count; ++i) {\n        vec3 L;\n        float attenuation = 1.0;\n\n        if (u_light_type[i] == LIGHT_TYPE_DIRECTIONAL) {\n            L = normalize(-u_light_direction[i]);\n        } else {\n            vec3 to_light = u_light_position[i] - v_world_pos;\n            float dist = length(to_light);\n            L = to_light / max(dist, 0.0001);\n            attenuation = compute_distance_attenuation(i, dist);\n\n            if (u_light_type[i] == LIGHT_TYPE_SPOT) {\n                attenuation *= compute_spot_weight(i, L);\n            }\n        }\n\n        vec3 H = normalize(V + L);\n\n        float NdotL_raw = dot(N, L);\n        float NdotL = max(NdotL_raw, 0.0);\n        float NdotV = max(dot(N, V), 0.001);\n        float NdotH = max(dot(N, H), 0.0);\n        float HdotV = max(dot(H, V), 0.0);\n\n        // Cook-Torrance BRDF\n        float D = D_GGX(NdotH, roughness);\n        float G = G_Smith(NdotV, NdotL, roughness);\n        vec3 F = F_Schlick(HdotV, F0);\n\n        // Specular\n        vec3 numerator = D * G * F;\n        float denominator = 4.0 * NdotV * NdotL + 0.0001;\n        vec3 specular = numerator / denominator;\n\n        // Diffuse with energy conservation\n        vec3 kD = (1.0 - F) * (1.0 - metallic);\n\n        // Standard diffuse\n        vec3 diffuse_standard = kD * albedo;\n\n        // SSS diffuse: wrap lighting + color shift\n        float wrap_amount = subsurface * 0.5;  // How much to wrap (0.5 = 180 degree wrap)\n        float diffuse_wrap = wrap_diffuse(NdotL_raw, wrap_amount);\n        vec3 sss_color = subsurface_color(albedo);\n\n        // Blend between standard and SSS based on wrap region\n        // In the wrap region (NdotL < 0 but wrapped > 0), use SSS color\n        float sss_mask = max(0.0, diffuse_wrap - NdotL) * 2.0;\n        vec3 diffuse_sss = kD * mix(albedo, sss_color, sss_mask * subsurface);\n\n        // Final diffuse: blend between standard and SSS\n        vec3 diffuse_final = mix(diffuse_standard * NdotL, diffuse_sss * diffuse_wrap, subsurface);\n\n        // Shadow (for directional lights)\n        float shadow = 1.0;\n        if (u_light_type[i] == LIGHT_TYPE_DIRECTIONAL) {\n            shadow = compute_shadow(i);\n        }\n\n        // Combine\n        vec3 radiance = u_light_color[i] * u_light_intensity[i] * attenuation;\n        Lo += (diffuse_final + specular * NdotL) * radiance * shadow;\n    }\n\n    vec3 color = ambient + Lo;\n\n    // ACES tone mapping\n    color = aces_tonemap(color);\n\n    FragColor = vec4(color, u_color.a * tex_color.a);\n}\n",
               "geometry": null
             }
           }
@@ -1060,10 +1317,30 @@
         "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\Kairon.material",
         "name": "Kairon"
       },
+      "AdvancedSkin": {
+        "type": "material_file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Models\\Arthur\\AdvancedSkin.material",
+        "name": "AdvancedSkin"
+      },
+      "DefaultSkin": {
+        "type": "material_file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Models\\Arthur\\DefaultSkin.material",
+        "name": "DefaultSkin"
+      },
+      "Jammers": {
+        "type": "material_file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Models\\Arthur\\Jammers.material",
+        "name": "Jammers"
+      },
       "Skin": {
         "type": "material_file",
         "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Models\\Arthur\\Skin.material",
         "name": "Skin"
+      },
+      "WhiteMaterial": {
+        "type": "material_file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Models\\Arthur\\WhiteMaterial.material",
+        "name": "WhiteMaterial"
       },
       "NewMaterial": {
         "type": "material_file",
@@ -8272,10 +8549,6 @@
       "spiky": {
         "type": "file",
         "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurLite\\spiky.obj"
-      },
-      "male_muscle_13290_00323414": {
-        "type": "file",
-        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Untitled\\male_muscle_13290_00323414.obj"
       },
       "mesh_2": {
         "type": "inline",

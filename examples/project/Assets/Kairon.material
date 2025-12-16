@@ -1,5 +1,5 @@
 {
-  "shader": "DefaultShader",
+  "shader": "AdvancedPBRShader",
   "uniforms": {
     "u_color": [
       1.0,
@@ -7,8 +7,11 @@
       1.0,
       1.0
     ],
-    "u_ambient": 0.1,
-    "u_shininess": 32.0
+    "u_metallic": 0.0,
+    "u_roughness": 0.30000000000000004,
+    "u_subsurface": 0.0,
+    "u_shininess": 32.0,
+    "u_ambient": 0.1
   },
   "textures": {
     "u_albedo_texture": "6830-1745580165"
