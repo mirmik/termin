@@ -14,11 +14,11 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm
     from termin.visualization.render.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
+    from termin.voxels.voxel_grid_asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
-    from termin.visualization.core.navmesh_handle import NavMeshKeeper
-    from termin.visualization.core.voxel_grid_handle import VoxelGridKeeper
+    from termin.navmesh.navmesh_asset import NavMeshAsset
     from termin.visualization.animation.clip import AnimationClip
-    from termin.visualization.core.animation_clip_handle import AnimationClipKeeper
+    from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
 
 
 # Список стандартных компонентов для предрегистрации.
@@ -102,16 +102,14 @@ class ResourceManager:
         self.post_effects: Dict[str, type] = {}  # PostEffect classes by name
         self.pipelines: Dict[str, "RenderPipeline"] = {}  # RenderPipeline instances by name
 
-        # Asset'ы по имени (новая система)
+        # Asset'ы по имени
         self._material_assets: Dict[str, "MaterialAsset"] = {}
         self._mesh_assets: Dict[str, "MeshAsset"] = {}
         self._texture_assets: Dict[str, "TextureAsset"] = {}
         self._shader_assets: Dict[str, "ShaderAsset"] = {}
-
-        # Keeper'ы для ресурсов без Asset'ов (legacy)
-        self._voxel_grid_keepers: Dict[str, "VoxelGridKeeper"] = {}
-        self._navmesh_keepers: Dict[str, "NavMeshKeeper"] = {}
-        self._animation_clip_keepers: Dict[str, "AnimationClipKeeper"] = {}
+        self._voxel_grid_assets: Dict[str, "VoxelGridAsset"] = {}
+        self._navmesh_assets: Dict[str, "NavMeshAsset"] = {}
+        self._animation_clip_assets: Dict[str, "AnimationClipAsset"] = {}
 
     @classmethod
     def instance(cls) -> "ResourceManager":
@@ -430,53 +428,45 @@ class ResourceManager:
         if name in self.meshes:
             del self.meshes[name]
 
-    # --------- VoxelGridKeeper'ы ---------
-    def get_or_create_voxel_grid_keeper(self, name: str) -> "VoxelGridKeeper":
-        """
-        Получить или создать VoxelGridKeeper по имени.
+    # --------- Воксельные сетки (Asset-based) ---------
+    def get_voxel_grid_asset(self, name: str) -> Optional["VoxelGridAsset"]:
+        """Получить VoxelGridAsset по имени."""
+        return self._voxel_grid_assets.get(name)
 
-        Используется VoxelGridHandle для получения keeper'а.
-        """
-        from termin.visualization.core.voxel_grid_handle import VoxelGridKeeper
-
-        if name not in self._voxel_grid_keepers:
-            self._voxel_grid_keepers[name] = VoxelGridKeeper(name)
-        return self._voxel_grid_keepers[name]
-
-    def get_voxel_grid_keeper(self, name: str) -> Optional["VoxelGridKeeper"]:
-        """Получить VoxelGridKeeper по имени или None."""
-        return self._voxel_grid_keepers.get(name)
-
-    # --------- Воксельные сетки ---------
     def register_voxel_grid(self, name: str, grid: "VoxelGrid", source_path: str | None = None) -> None:
         """
-        Регистрирует воксельную сетку через keeper.
+        Регистрирует воксельную сетку.
 
         Args:
             name: Имя сетки
             grid: VoxelGrid
             source_path: Путь к файлу-источнику
         """
-        grid.name = name
-        keeper = self.get_or_create_voxel_grid_keeper(name)
-        keeper.set_grid(grid, source_path)
+        from termin.voxels.voxel_grid_asset import VoxelGridAsset
 
-        # Для обратной совместимости сохраняем и в старый dict
+        grid.name = name
+        asset = VoxelGridAsset.from_grid(grid, name=name, source_path=source_path)
+        self._voxel_grid_assets[name] = asset
+        # Для обратной совместимости
         self.voxel_grids[name] = grid
 
     def get_voxel_grid(self, name: str) -> Optional["VoxelGrid"]:
         """Получить воксельную сетку по имени."""
-        keeper = self._voxel_grid_keepers.get(name)
-        if keeper is not None:
-            return keeper.grid
+        asset = self._voxel_grid_assets.get(name)
+        if asset is not None:
+            return asset.grid
         return self.voxel_grids.get(name)
 
     def list_voxel_grid_names(self) -> list[str]:
         """Список имён всех воксельных сеток."""
-        return sorted(self.voxel_grids.keys())
+        names = set(self._voxel_grid_assets.keys()) | set(self.voxel_grids.keys())
+        return sorted(names)
 
     def find_voxel_grid_name(self, grid: "VoxelGrid") -> Optional[str]:
         """Найти имя воксельной сетки."""
+        for n, asset in self._voxel_grid_assets.items():
+            if asset.grid is grid:
+                return n
         for n, g in self.voxel_grids.items():
             if g is grid:
                 return n
@@ -484,60 +474,50 @@ class ResourceManager:
 
     def unregister_voxel_grid(self, name: str) -> None:
         """Удаляет воксельную сетку."""
-        keeper = self._voxel_grid_keepers.get(name)
-        if keeper is not None:
-            keeper.clear()
-            del self._voxel_grid_keepers[name]
+        if name in self._voxel_grid_assets:
+            del self._voxel_grid_assets[name]
         if name in self.voxel_grids:
             del self.voxel_grids[name]
 
-    # --------- NavMeshKeeper'ы ---------
-    def get_or_create_navmesh_keeper(self, name: str) -> "NavMeshKeeper":
-        """
-        Получить или создать NavMeshKeeper по имени.
+    # --------- Навигационные сетки (Asset-based) ---------
+    def get_navmesh_asset(self, name: str) -> Optional["NavMeshAsset"]:
+        """Получить NavMeshAsset по имени."""
+        return self._navmesh_assets.get(name)
 
-        Используется NavMeshHandle для получения keeper'а.
-        """
-        from termin.visualization.core.navmesh_handle import NavMeshKeeper
-
-        if name not in self._navmesh_keepers:
-            self._navmesh_keepers[name] = NavMeshKeeper(name)
-        return self._navmesh_keepers[name]
-
-    def get_navmesh_keeper(self, name: str) -> Optional["NavMeshKeeper"]:
-        """Получить NavMeshKeeper по имени или None."""
-        return self._navmesh_keepers.get(name)
-
-    # --------- Навигационные сетки ---------
     def register_navmesh(self, name: str, navmesh: "NavMesh", source_path: str | None = None) -> None:
         """
-        Регистрирует NavMesh через keeper.
+        Регистрирует NavMesh.
 
         Args:
             name: Имя сетки
             navmesh: NavMesh
             source_path: Путь к файлу-источнику
         """
-        navmesh.name = name
-        keeper = self.get_or_create_navmesh_keeper(name)
-        keeper.set_navmesh(navmesh, source_path)
+        from termin.navmesh.navmesh_asset import NavMeshAsset
 
-        # Для обратной совместимости сохраняем и в старый dict
+        navmesh.name = name
+        asset = NavMeshAsset.from_navmesh(navmesh, name=name, source_path=source_path)
+        self._navmesh_assets[name] = asset
+        # Для обратной совместимости
         self.navmeshes[name] = navmesh
 
     def get_navmesh(self, name: str) -> Optional["NavMesh"]:
         """Получить NavMesh по имени."""
-        keeper = self._navmesh_keepers.get(name)
-        if keeper is not None:
-            return keeper.navmesh
+        asset = self._navmesh_assets.get(name)
+        if asset is not None:
+            return asset.navmesh
         return self.navmeshes.get(name)
 
     def list_navmesh_names(self) -> list[str]:
         """Список имён всех NavMesh."""
-        return sorted(self.navmeshes.keys())
+        names = set(self._navmesh_assets.keys()) | set(self.navmeshes.keys())
+        return sorted(names)
 
     def find_navmesh_name(self, navmesh: "NavMesh") -> Optional[str]:
         """Найти имя NavMesh."""
+        for n, asset in self._navmesh_assets.items():
+            if asset.navmesh is navmesh:
+                return n
         for n, nm in self.navmeshes.items():
             if nm is navmesh:
                 return n
@@ -545,62 +525,52 @@ class ResourceManager:
 
     def unregister_navmesh(self, name: str) -> None:
         """Удаляет NavMesh."""
-        keeper = self._navmesh_keepers.get(name)
-        if keeper is not None:
-            keeper.clear()
-            del self._navmesh_keepers[name]
+        if name in self._navmesh_assets:
+            del self._navmesh_assets[name]
         if name in self.navmeshes:
             del self.navmeshes[name]
 
-    # --------- AnimationClipKeeper'ы ---------
-    def get_or_create_animation_clip_keeper(self, name: str) -> "AnimationClipKeeper":
-        """
-        Получить или создать AnimationClipKeeper по имени.
+    # --------- Анимационные клипы (Asset-based) ---------
+    def get_animation_clip_asset(self, name: str) -> Optional["AnimationClipAsset"]:
+        """Получить AnimationClipAsset по имени."""
+        return self._animation_clip_assets.get(name)
 
-        Используется AnimationClipHandle для получения keeper'а.
-        """
-        from termin.visualization.core.animation_clip_handle import AnimationClipKeeper
-
-        if name not in self._animation_clip_keepers:
-            self._animation_clip_keepers[name] = AnimationClipKeeper(name)
-        return self._animation_clip_keepers[name]
-
-    def get_animation_clip_keeper(self, name: str) -> Optional["AnimationClipKeeper"]:
-        """Получить AnimationClipKeeper по имени или None."""
-        return self._animation_clip_keepers.get(name)
-
-    # --------- Анимационные клипы ---------
     def register_animation_clip(
         self, name: str, clip: "AnimationClip", source_path: str | None = None
     ) -> None:
         """
-        Регистрирует AnimationClip через keeper.
+        Регистрирует AnimationClip.
 
         Args:
             name: Имя клипа
             clip: AnimationClip
             source_path: Путь к файлу-источнику (.tanim)
         """
-        clip.name = name
-        keeper = self.get_or_create_animation_clip_keeper(name)
-        keeper.set_clip(clip, source_path)
+        from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
 
-        # Для обратной совместимости сохраняем и в старый dict
+        clip.name = name
+        asset = AnimationClipAsset.from_clip(clip, name=name, source_path=source_path)
+        self._animation_clip_assets[name] = asset
+        # Для обратной совместимости
         self.animation_clips[name] = clip
 
     def get_animation_clip(self, name: str) -> Optional["AnimationClip"]:
         """Получить AnimationClip по имени."""
-        keeper = self._animation_clip_keepers.get(name)
-        if keeper is not None:
-            return keeper.clip
+        asset = self._animation_clip_assets.get(name)
+        if asset is not None:
+            return asset.clip
         return self.animation_clips.get(name)
 
     def list_animation_clip_names(self) -> list[str]:
         """Список имён всех AnimationClip."""
-        return sorted(self.animation_clips.keys())
+        names = set(self._animation_clip_assets.keys()) | set(self.animation_clips.keys())
+        return sorted(names)
 
     def find_animation_clip_name(self, clip: "AnimationClip") -> Optional[str]:
         """Найти имя AnimationClip."""
+        for n, asset in self._animation_clip_assets.items():
+            if asset.clip is clip:
+                return n
         for n, c in self.animation_clips.items():
             if c is clip:
                 return n
@@ -608,10 +578,8 @@ class ResourceManager:
 
     def unregister_animation_clip(self, name: str) -> None:
         """Удаляет AnimationClip."""
-        keeper = self._animation_clip_keepers.get(name)
-        if keeper is not None:
-            keeper.clear()
-            del self._animation_clip_keepers[name]
+        if name in self._animation_clip_assets:
+            del self._animation_clip_assets[name]
         if name in self.animation_clips:
             del self.animation_clips[name]
 

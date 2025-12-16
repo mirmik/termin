@@ -233,7 +233,7 @@ void main() {
     @property
     def navmesh(self) -> Optional["NavMesh"]:
         """Текущий NavMesh (через handle)."""
-        return self._navmesh_handle.get()
+        return self._navmesh_handle.get_navmesh()
 
     # --- Drawable protocol ---
 
@@ -268,7 +268,7 @@ void main() {
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
-        current = self._navmesh_handle.get()
+        current = self._navmesh_handle.get_navmesh()
         if self._needs_rebuild or current is not self._last_navmesh:
             self._needs_rebuild = False
             self._rebuild_mesh()
@@ -322,7 +322,7 @@ void main() {
             self._contour_drawable.delete()
             self._contour_drawable = None
 
-        navmesh = self._navmesh_handle.get()
+        navmesh = self._navmesh_handle.get_navmesh()
         self._last_navmesh = navmesh
 
         if navmesh is None or navmesh.polygon_count() == 0:

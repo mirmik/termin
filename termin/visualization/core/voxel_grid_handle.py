@@ -1,81 +1,100 @@
 """
-VoxelGridKeeper и VoxelGridHandle — управление ссылками на воксельные сетки.
+VoxelGridHandle — умная ссылка на VoxelGridAsset.
 
-Наследуются от ResourceKeeper/ResourceHandle.
+Указывает на VoxelGridAsset напрямую или по имени через ResourceManager.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.resource_handle import ResourceHandle, ResourceKeeper
+from termin.visualization.core.resource_handle import ResourceHandle
 
 if TYPE_CHECKING:
     from termin.voxels.grid import VoxelGrid
+    from termin.voxels.voxel_grid_asset import VoxelGridAsset
 
 
-class VoxelGridKeeper(ResourceKeeper["VoxelGrid"]):
+def _get_voxel_grid_asset(name: str) -> "VoxelGridAsset | None":
+    """Lookup VoxelGridAsset by name in ResourceManager."""
+    from termin.visualization.core.resources import ResourceManager
+
+    return ResourceManager.instance().get_voxel_grid_asset(name)
+
+
+class VoxelGridHandle(ResourceHandle["VoxelGridAsset"]):
     """
-    Владелец воксельной сетки по имени.
-
-    VoxelGrid не требует GPU cleanup.
-    """
-
-    @property
-    def grid(self) -> "VoxelGrid | None":
-        """Алиас для resource."""
-        return self._resource
-
-    @property
-    def has_grid(self) -> bool:
-        """Алиас для has_resource."""
-        return self.has_resource
-
-    def set_grid(self, grid: "VoxelGrid", source_path: str | None = None) -> None:
-        """Алиас для set_resource."""
-        self.set_resource(grid, source_path)
-
-    def update_grid(self, grid: "VoxelGrid") -> None:
-        """Алиас для update_resource."""
-        self.update_resource(grid)
-
-    def _on_cleanup(self, resource: "VoxelGrid") -> None:
-        """VoxelGrid не требует специальной очистки."""
-        pass
-
-
-class VoxelGridHandle(ResourceHandle["VoxelGrid"]):
-    """
-    Умная ссылка на воксельную сетку.
+    Умная ссылка на VoxelGridAsset.
 
     Использование:
-        handle = VoxelGridHandle.from_grid(grid)  # прямая ссылка
-        handle = VoxelGridHandle.from_name("navmesh")  # по имени (hot-reload)
+        handle = VoxelGridHandle.from_asset(asset)  # прямая ссылка на asset
+        handle = VoxelGridHandle.from_grid(grid)    # прямая ссылка (создаёт asset)
+        handle = VoxelGridHandle.from_name("grid")  # по имени (hot-reload)
     """
+
+    _resource_getter = staticmethod(_get_voxel_grid_asset)
+
+    @classmethod
+    def from_asset(cls, asset: "VoxelGridAsset") -> "VoxelGridHandle":
+        """Создать handle с прямой ссылкой на VoxelGridAsset."""
+        handle = cls()
+        handle._init_direct(asset)
+        return handle
 
     @classmethod
     def from_grid(cls, grid: "VoxelGrid") -> "VoxelGridHandle":
-        """Создать handle с прямой ссылкой на сетку."""
-        handle = cls()
-        handle._init_direct(grid)
-        return handle
+        """
+        Создать handle из VoxelGrid (обратная совместимость).
+
+        Создаёт VoxelGridAsset из VoxelGrid.
+        """
+        from termin.voxels.voxel_grid_asset import VoxelGridAsset
+
+        asset = VoxelGridAsset.from_grid(grid)
+        return cls.from_asset(asset)
 
     @classmethod
     def from_name(cls, name: str) -> "VoxelGridHandle":
         """Создать handle по имени сетки."""
-        from termin.visualization.core.resources import ResourceManager
-
         handle = cls()
-        keeper = ResourceManager.instance().get_or_create_voxel_grid_keeper(name)
-        handle._init_named(name, keeper)
+        handle._init_named(name)
         return handle
+
+    # --- Convenience accessors ---
+
+    def get_asset(self) -> "VoxelGridAsset | None":
+        """Получить VoxelGridAsset."""
+        return self.get()
+
+    @property
+    def asset(self) -> "VoxelGridAsset | None":
+        """Алиас для get()."""
+        return self.get()
+
+    def get_grid(self) -> "VoxelGrid | None":
+        """
+        Получить VoxelGrid.
+
+        Returns:
+            VoxelGrid или None если недоступен
+        """
+        asset = self.get()
+        if asset is not None:
+            return asset.grid
+        return None
+
+    def get_grid_or_none(self) -> "VoxelGrid | None":
+        """Алиас для get_grid()."""
+        return self.get_grid()
+
+    # --- Serialization ---
 
     def serialize(self) -> dict:
         """Сериализация."""
         if self._direct is not None:
             return {
                 "type": "direct",
-                "name": self._direct.name if self._direct.name else None,
+                "name": self._direct.name,
             }
         elif self._name is not None:
             return {
@@ -95,8 +114,6 @@ class VoxelGridHandle(ResourceHandle["VoxelGrid"]):
             if name:
                 return cls.from_name(name)
         elif handle_type == "direct":
-            # Прямые ссылки на VoxelGrid не сериализуются полностью,
-            # используем имя
             name = data.get("name")
             if name:
                 return cls.from_name(name)

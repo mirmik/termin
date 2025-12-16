@@ -35,20 +35,20 @@
 - [x] Создать `ShaderHandle`
 - [x] Удалить `ShaderKeeper`
 
-## Этап 7: Убрать Keeper'ы (в процессе)
+## Этап 7: Убрать Keeper'ы ✅
 - [x] `MeshHandle` → напрямую ищет в ResourceManager
 - [x] `TextureHandle` → напрямую ищет в ResourceManager
 - [x] `MaterialHandle` → напрямую ищет в ResourceManager
 - [x] `ShaderHandle` → напрямую ищет в ResourceManager
-- [ ] `VoxelGridHandle` — нужен `VoxelGridAsset` сначала
-- [ ] `NavMeshHandle` — нужен `NavMeshAsset` сначала
-- [ ] `AnimationClipHandle` — нужен `AnimationClipAsset` сначала
-- [ ] Обновить `ResourceManager` — хранить Asset'ы напрямую
+- [x] `VoxelGridHandle` → через `VoxelGridAsset`
+- [x] `NavMeshHandle` → через `NavMeshAsset`
+- [x] `AnimationClipHandle` → через `AnimationClipAsset`
+- [x] Обновить `ResourceManager` — хранить Asset'ы напрямую
 
-## Этап 8: Остальные Asset'ы
-- [ ] `AnimationClipAsset` + убрать `AnimationClipKeeper`
-- [ ] `NavMeshAsset` + убрать `NavMeshKeeper`
-- [ ] `VoxelGridAsset` + убрать `VoxelGridKeeper`
+## Этап 8: Остальные Asset'ы ✅
+- [x] `VoxelGridAsset` + убрать `VoxelGridKeeper`
+- [x] `NavMeshAsset` + убрать `NavMeshKeeper`
+- [x] `AnimationClipAsset` + убрать `AnimationClipKeeper`
 
 ## Этап 9: ResourceManager
 - [ ] Убрать дублирование (dict ресурсов + dict keeper'ов)

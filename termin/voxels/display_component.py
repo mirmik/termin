@@ -222,7 +222,7 @@ class VoxelDisplayComponent(Component):
     @property
     def voxel_grid(self) -> Optional["VoxelGrid"]:
         """Текущая воксельная сетка (через handle)."""
-        return self._grid_handle.get()
+        return self._grid_handle.get_grid()
 
     @voxel_grid.setter
     def voxel_grid(self, value: Optional["VoxelGrid"]) -> None:
@@ -275,7 +275,7 @@ class VoxelDisplayComponent(Component):
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
-        current_grid = self._grid_handle.get()
+        current_grid = self._grid_handle.get_grid()
         if current_grid is not self._last_grid:
             self._rebuild_mesh()
 
@@ -319,7 +319,7 @@ class VoxelDisplayComponent(Component):
             self._mesh_drawable.delete()
             self._mesh_drawable = None
 
-        grid = self._grid_handle.get()
+        grid = self._grid_handle.get_grid()
         self._last_grid = grid
 
         if grid is None:
@@ -408,7 +408,7 @@ class VoxelDisplayComponent(Component):
     def on_added(self, scene: "Scene") -> None:
         """При добавлении в сцену загрузить сетку и построить меш."""
         # Если есть сохранённое имя сетки, загружаем
-        if self._voxel_grid_name and self._grid_handle.get() is None:
+        if self._voxel_grid_name and self._grid_handle.get_grid() is None:
             self.set_voxel_grid_by_name(self._voxel_grid_name)
 
         if self._needs_rebuild:
