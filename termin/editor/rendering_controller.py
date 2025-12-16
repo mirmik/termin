@@ -897,6 +897,11 @@ class RenderingController:
                 self.set_display_name(new_display, name)
                 new_display.editor_only = editor_only
 
+                # Восстанавливаем input mode и block_input
+                display_id = id(new_display)
+                self._display_input_modes[display_id] = input_mode
+                self._display_block_input_in_editor[display_id] = block_input
+
                 # Создаём viewport'ы
                 for vp_data in viewports_data:
                     camera_entity_name = vp_data.get("camera_entity")
