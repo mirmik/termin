@@ -158,12 +158,21 @@ class OpenGLShaderHandle(ShaderHandle):
         self._ensure_compiled()
         gl.glUniform1i(self._uniform_location(name), int(value))
 
+    _DEBUG_UNIFORM_ARRAY = True
+
     def set_uniform_matrix4_array(self, name: str, matrices, count: int):
         """Upload an array of 4x4 matrices to shader uniform."""
         self._ensure_compiled()
+        location = self._uniform_location(name)
+        if self._DEBUG_UNIFORM_ARRAY:
+            print(f"[OpenGL] set_uniform_matrix4_array: name={name!r}, count={count}, location={location}")
+        if location < 0:
+            if self._DEBUG_UNIFORM_ARRAY:
+                print(f"  WARNING: uniform {name!r} not found in shader!")
+            return
         mat = np.asarray(matrices, dtype=np.float32).reshape(count, 4, 4)
         gl.glUniformMatrix4fv(
-            self._uniform_location(name),
+            location,
             count,
             True,  # transpose (row-major to column-major)
             mat.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
