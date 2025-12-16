@@ -33,13 +33,13 @@ class MeshRenderer(Component):
             path="mesh",
             label="Mesh",
             kind="mesh",
-            setter=lambda obj, value: obj.set_mesh_by_name(value.name) if value else obj.set_mesh(None),
+            setter=lambda obj, value: obj.set_mesh(value),
         ),
         "material": InspectField(
             path="material",
             label="Material",
             kind="material",
-            setter=lambda obj, value: obj.set_material_by_name(value.name) if value else obj.set_material(None),
+            setter=lambda obj, value: obj.set_material(value),
         ),
         "cast_shadow": InspectField(
             path="cast_shadow",
