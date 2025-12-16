@@ -110,6 +110,7 @@ def _create_entity_from_node(
     scene_data: GLBSceneData,
     mesh_drawables: Dict[int, MeshDrawable],
     default_material: DefaultMaterial,
+    skinned_material,
     skeleton_instance: Optional[SkeletonInstance] = None,
     glb_name: str = "",
 ) -> Entity:
@@ -156,11 +157,11 @@ def _create_entity_from_node(
 
             drawable = mesh_drawables[mesh_idx]
 
-            # Use SkinnedMeshRenderer for skinned meshes
+            # Use SkinnedMeshRenderer with SkinnedMaterial for skinned meshes
             if glb_mesh.is_skinned and node_skeleton is not None:
                 renderer = SkinnedMeshRenderer(
                     mesh=drawable,
-                    material=default_material,
+                    material=skinned_material,
                     skeleton_instance=node_skeleton,
                 )
             else:
@@ -171,7 +172,7 @@ def _create_entity_from_node(
     # Recursively create children
     for child_index in node.children:
         child_entity = _create_entity_from_node(
-            child_index, scene_data, mesh_drawables, default_material, node_skeleton, glb_name
+            child_index, scene_data, mesh_drawables, default_material, skinned_material, node_skeleton, glb_name
         )
         entity.transform.add_child(child_entity.transform)
 
@@ -242,13 +243,19 @@ def instantiate_glb(
     if name is None:
         name = path.stem
 
-    # Get default material from ResourceManager
+    # Get materials from ResourceManager
     from termin.visualization.core.resources import ResourceManager
+    from termin.visualization.render.materials.skinned_material import SkinnedMaterial
     rm = ResourceManager.instance()
     default_material = rm.get_material("DefaultMaterial")
     if default_material is None:
         # Fallback if not registered yet
         default_material = DefaultMaterial(color=(0.8, 0.8, 0.8, 1.0))
+
+    # Get or create skinned material for skeletal animation
+    skinned_material = rm.get_material("SkinnedMaterial")
+    if skinned_material is None:
+        skinned_material = SkinnedMaterial(color=(0.8, 0.8, 0.8, 1.0))
 
     # Cache for MeshDrawables (shared between nodes referencing same mesh)
     mesh_drawables: Dict[int, MeshDrawable] = {}
@@ -270,6 +277,7 @@ def instantiate_glb(
                 scene_data,
                 mesh_drawables,
                 default_material,
+                skinned_material,
                 skeleton_instance,
                 glb_name=name,
             )
@@ -283,6 +291,7 @@ def instantiate_glb(
                     scene_data,
                     mesh_drawables,
                     default_material,
+                    skinned_material,
                     skeleton_instance,
                     glb_name=name,
                 )
@@ -304,7 +313,7 @@ def instantiate_glb(
             if glb_mesh.is_skinned and skeleton_instance is not None:
                 renderer = SkinnedMeshRenderer(
                     mesh=drawable,
-                    material=default_material,
+                    material=skinned_material,
                     skeleton_instance=skeleton_instance,
                 )
             else:
