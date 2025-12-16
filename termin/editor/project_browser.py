@@ -347,7 +347,7 @@ class PrefabDragFilter(QObject):
     Перехватывает начало drag и создаёт кастомный QDrag с ASSET_PATH mime data.
     """
 
-    DRAGGABLE_EXTENSIONS = {".prefab", ".fbx"}
+    DRAGGABLE_EXTENSIONS = {".prefab", ".fbx", ".glb"}
 
     def __init__(self, list_view: QListView, file_model: QFileSystemModel, parent=None):
         super().__init__(parent)
@@ -675,6 +675,12 @@ class ProjectBrowser:
                     extract_action.triggered.connect(lambda checked, p=file_path: self._extract_fbx(p))
                     menu.addAction(extract_action)
 
+                # GLB extraction
+                if file_path.suffix.lower() == ".glb":
+                    extract_action = QAction("Extract GLB...", self._file_list)
+                    extract_action.triggered.connect(lambda checked, p=file_path: self._extract_glb(p))
+                    menu.addAction(extract_action)
+
                 menu.addSeparator()
 
             # Показать в проводнике
@@ -864,6 +870,45 @@ class ProjectBrowser:
                 self._file_list,
                 "Extract Failed",
                 f"Failed to extract FBX:\n{e}",
+            )
+
+    def _extract_glb(self, glb_path: Path) -> None:
+        """Extract GLB file contents (meshes, textures, animations) to a directory."""
+        from termin.loaders.glb_extractor import extract_glb
+
+        # Default output directory is same name as GLB file
+        output_dir = glb_path.parent / glb_path.stem
+
+        if output_dir.exists():
+            reply = QMessageBox.question(
+                self._file_list,
+                "Directory Exists",
+                f"Directory '{output_dir.name}' already exists.\nOverwrite contents?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        try:
+            output_dir, created_files = extract_glb(glb_path, output_dir)
+
+            QMessageBox.information(
+                self._file_list,
+                "GLB Extracted",
+                f"Extracted {len(created_files)} files to:\n{output_dir}",
+            )
+
+            self._refresh()
+
+            # Navigate to extracted directory
+            self._navigate_to_directory(output_dir)
+
+        except Exception as e:
+            QMessageBox.warning(
+                self._file_list,
+                "Extract Failed",
+                f"Failed to extract GLB:\n{e}",
             )
 
     def _create_material(self) -> None:
