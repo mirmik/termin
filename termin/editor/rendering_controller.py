@@ -822,6 +822,8 @@ class RenderingController:
             result.append({
                 "name": name,
                 "editor_only": display.editor_only,
+                "input_mode": self._display_input_modes.get(display_id, "simple"),
+                "block_input_in_editor": self._display_block_input_in_editor.get(display_id, False),
                 "viewports": viewports_data,
             })
 
@@ -856,6 +858,8 @@ class RenderingController:
             editor_only = display_data.get("editor_only", display_data.get("is_editor", False))
             name = display_data.get("name", "Display")
             viewports_data = display_data.get("viewports", [])
+            input_mode = display_data.get("input_mode", "simple")
+            block_input = display_data.get("block_input_in_editor", False)
 
             # Первый дисплей из данных восстанавливаем в editor_display
             if not first_display_restored and editor_display is not None:
