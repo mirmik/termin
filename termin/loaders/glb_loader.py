@@ -424,14 +424,14 @@ def _parse_animations(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
                     "scale_keys": [],
                 }
 
-            # Build keyframe list
+            # Build keyframe list (use lists, not tuples, for mutability in normalize_glb_scale)
             keys = []
             for i, t in enumerate(times):
                 if values.ndim == 1:
                     v = values[i:i+1]
                 else:
                     v = values[i]
-                keys.append((float(t), v.copy()))
+                keys.append([float(t), v.copy()])
 
             if path == "translation":
                 node_channels[node_idx]["pos_keys"] = keys
