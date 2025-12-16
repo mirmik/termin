@@ -131,11 +131,13 @@ class ResourceManager:
         """Получить MaterialAsset по имени."""
         return self._material_assets.get(name)
 
-    def register_material(self, name: str, mat: "Material", source_path: str | None = None):
+    def register_material(
+        self, name: str, mat: "Material", source_path: str | None = None, uuid: str | None = None
+    ):
         """Регистрирует материал."""
         from termin.visualization.core.material_asset import MaterialAsset
 
-        asset = MaterialAsset.from_material(mat, name=name, source_path=source_path)
+        asset = MaterialAsset.from_material(mat, name=name, source_path=source_path, uuid=uuid)
         self._material_assets[name] = asset
         # Для обратной совместимости
         self.materials[name] = mat
@@ -1032,9 +1034,10 @@ class ResourceManager:
     def serialize(self) -> dict:
         """
         Сериализует все ресурсы ResourceManager.
+
+        Материалы не сериализуются — они загружаются из .material файлов.
         """
         return {
-            "materials": {name: mat.serialize() for name, mat in self.materials.items()},
             "meshes": {name: mesh.serialize() for name, mesh in self.meshes.items()},
             "textures": {name: self._serialize_texture(tex) for name, tex in self.textures.items()},
         }
@@ -1053,18 +1056,12 @@ class ResourceManager:
 
         Добавляет десериализованные ресурсы к существующему синглтону,
         не перезаписывая уже загруженные ресурсы (например, из файлов проекта).
+
+        Материалы не загружаются — они загружаются из .material файлов.
         """
-        from termin.visualization.core.material import Material
         from termin.visualization.core.mesh import MeshDrawable
 
         rm = cls.instance()
-
-        # Материалы - добавляем только если ещё нет
-        for name, mat_data in data.get("materials", {}).items():
-            if name not in rm.materials:
-                mat = Material.deserialize(mat_data)
-                mat.name = name
-                rm.register_material(name, mat)
 
         # Меши - добавляем только если ещё нет
         for name, mesh_data in data.get("meshes", {}).items():

@@ -103,11 +103,7 @@ class MaterialHandle(ResourceHandle["MaterialAsset"]):
                     "type": "path",
                     "path": str(self._direct.source_path),
                 }
-            if self._direct.material is not None:
-                return {
-                    "type": "direct",
-                    "material": self._direct.material.serialize(),
-                }
+            # No source_path - save by name (material must exist in ResourceManager)
             return {
                 "type": "named",
                 "name": self._direct.name,
@@ -123,7 +119,6 @@ class MaterialHandle(ResourceHandle["MaterialAsset"]):
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "MaterialHandle":
         """Десериализация."""
-        from termin.visualization.core.material import Material
         from termin.visualization.core.material_asset import MaterialAsset
 
         handle_type = data.get("type", "none")
@@ -137,10 +132,5 @@ class MaterialHandle(ResourceHandle["MaterialAsset"]):
             if path:
                 asset = MaterialAsset.from_file(path)
                 return cls.from_asset(asset)
-        elif handle_type == "direct":
-            mat_data = data.get("material")
-            if mat_data:
-                material = Material.deserialize(mat_data, context)
-                return cls.from_material(material)
 
         return cls()

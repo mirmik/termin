@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
+
+import numpy as np
 
 from termin.visualization.core.asset import Asset
 
@@ -63,9 +66,11 @@ class MaterialAsset(Asset):
             return False
 
         try:
-            from termin.visualization.core.material import Material
-
-            self._material = Material.load_from_material_file(str(self._source_path))
+            material, file_uuid = load_material_file(str(self._source_path))
+            self._material = material
+            # If file has UUID and we don't, adopt it
+            if file_uuid and not self._uuid:
+                self._uuid = file_uuid
             self._loaded = True
             return True
         except Exception:
@@ -75,6 +80,31 @@ class MaterialAsset(Asset):
         """Unload material to free memory."""
         self._material = None
         self._loaded = False
+
+    def save_to_file(self, path: str | Path | None = None) -> bool:
+        """
+        Save material to .material file.
+
+        Args:
+            path: Path to save. If None, uses source_path.
+
+        Returns:
+            True if saved successfully.
+        """
+        if self._material is None:
+            return False
+
+        save_path = Path(path) if path else self._source_path
+        if save_path is None:
+            return False
+
+        try:
+            save_material_file(self._material, save_path, uuid=self.uuid)
+            self._source_path = Path(save_path)
+            self.mark_just_saved()
+            return True
+        except Exception:
+            return False
 
     def update_from(self, other: "MaterialAsset") -> None:
         """
@@ -115,13 +145,13 @@ class MaterialAsset(Asset):
     @classmethod
     def from_file(cls, path: str | Path, name: str | None = None) -> "MaterialAsset":
         """Create MaterialAsset from .material file."""
-        from termin.visualization.core.material import Material
-
-        material = Material.load_from_material_file(str(path))
+        path = Path(path)
+        material, file_uuid = load_material_file(str(path))
         return cls(
             material=material,
-            name=name or Path(path).stem,
+            name=name or path.stem,
             source_path=path,
+            uuid=file_uuid,
         )
 
     @classmethod
@@ -130,10 +160,117 @@ class MaterialAsset(Asset):
         material: "Material",
         name: str | None = None,
         source_path: str | Path | None = None,
+        uuid: str | None = None,
     ) -> "MaterialAsset":
         """Create MaterialAsset from existing Material."""
         return cls(
             material=material,
             name=name or material.name or "material",
             source_path=source_path or material.source_path,
+            uuid=uuid,
         )
+
+
+# --- File I/O functions ---
+
+def load_material_file(path: str) -> tuple["Material", str | None]:
+    """
+    Load material from .material file.
+
+    Args:
+        path: Path to .material file
+
+    Returns:
+        Tuple of (Material, uuid or None)
+    """
+    from termin.visualization.core.material import Material
+    from termin.visualization.core.resources import ResourceManager
+
+    path = Path(path)
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    shader_name = data.get("shader", "DefaultShader")
+    file_uuid = data.get("uuid")
+
+    rm = ResourceManager.instance()
+    program = rm.get_shader(shader_name)
+
+    if program is None:
+        raise ValueError(f"Shader '{shader_name}' not found in ResourceManager")
+
+    # Convert uniforms
+    uniforms_data = data.get("uniforms", {})
+    uniforms: Dict[str, Any] = {}
+    for name, value in uniforms_data.items():
+        if isinstance(value, list):
+            uniforms[name] = np.array(value, dtype=np.float32)
+        else:
+            uniforms[name] = value
+
+    # Load textures by name from ResourceManager
+    textures_data = data.get("textures", {})
+    textures = {}
+    for uniform_name, tex_name in textures_data.items():
+        tex = rm.get_texture(tex_name)
+        if tex is not None:
+            textures[uniform_name] = tex
+
+    # Create material
+    mat = Material.from_parsed(
+        program,
+        uniforms=uniforms,
+        textures=textures if textures else None,
+        name=path.stem,
+        source_path=str(path),
+    )
+    mat.shader_name = shader_name
+
+    return mat, file_uuid
+
+
+def save_material_file(material: "Material", path: str | Path, uuid: str | None = None) -> None:
+    """
+    Save material to .material file.
+
+    Args:
+        material: Material to save
+        path: Path to save to
+        uuid: UUID to include in file
+    """
+    from termin.visualization.core.resources import ResourceManager
+
+    def serialize_value(val: Any) -> Any:
+        if isinstance(val, np.ndarray):
+            return val.tolist()
+        return val
+
+    rm = ResourceManager.instance()
+
+    # Collect uniforms from all phases
+    uniforms: Dict[str, Any] = {}
+    textures: Dict[str, str] = {}
+
+    for phase in material.phases:
+        for name, value in phase.uniforms.items():
+            if name not in uniforms:
+                uniforms[name] = serialize_value(value)
+        for name, tex in phase.textures.items():
+            if name not in textures:
+                tex_name = rm.find_texture_name(tex)
+                # Don't save white texture - it's the default
+                if tex_name and tex_name != "__white_1x1__":
+                    textures[name] = tex_name
+
+    result: Dict[str, Any] = {}
+    if uuid:
+        result["uuid"] = uuid
+    result["shader"] = material.shader_name
+    if uniforms:
+        result["uniforms"] = uniforms
+    if textures:
+        result["textures"] = textures
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)

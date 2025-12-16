@@ -32,11 +32,11 @@ class MaterialFileProcessor(FileTypeProcessor):
             return
 
         try:
-            from termin.visualization.core.material import Material
+            from termin.visualization.core.material_asset import load_material_file
 
-            mat = Material.load_from_material_file(path)
+            mat, file_uuid = load_material_file(path)
             mat.name = name
-            self._resource_manager.register_material(name, mat, source_path=path)
+            self._resource_manager.register_material(name, mat, source_path=path, uuid=file_uuid)
 
             # Track file -> resource mapping
             if path not in self._file_to_resources:
@@ -67,9 +67,9 @@ class MaterialFileProcessor(FileTypeProcessor):
             return
 
         try:
-            from termin.visualization.core.material import Material
+            from termin.visualization.core.material_asset import load_material_file
 
-            new_mat = Material.load_from_material_file(path)
+            new_mat, _ = load_material_file(path)
 
             # Update existing material in-place for hot-reload
             if asset.material is not None:

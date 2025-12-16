@@ -494,9 +494,13 @@ class MaterialInspector(QWidget):
         if self._material is None:
             return False
 
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
+        asset = rm.get_material_asset(self._material.name)
+
         # Определяем путь для сохранения
         if path is None:
-            path = self._material.source_path
+            path = asset.source_path if asset else self._material.source_path
 
         if path is None:
             # Открываем диалог выбора файла
@@ -515,34 +519,32 @@ class MaterialInspector(QWidget):
         if path.suffix != ".material":
             path = path.with_suffix(".material")
 
-        try:
-            # Формируем данные материала
-            data = self._material.serialize_to_material_file()
-
-            # Сохраняем
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
-            # Обновляем source_path
-            self._material.source_path = str(path)
-
-            # Mark asset as just saved to prevent redundant reload from FileWatcher
-            from termin.visualization.core.resources import ResourceManager
-            rm = ResourceManager.instance()
-            asset = rm.get_material_asset(self._material.name)
-            if asset is not None:
-                asset.source_path = path  # ensure asset has same path
-                asset.mark_just_saved()
-
-            return True
-
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Error Saving Material",
-                f"Failed to save material:\n{path}\n\nError: {e}",
-            )
-            return False
+        if asset is not None:
+            # Use asset's save method (handles UUID automatically)
+            if asset.save_to_file(path):
+                self._material.source_path = str(path)
+                return True
+            else:
+                QMessageBox.critical(
+                    self,
+                    "Error Saving Material",
+                    f"Failed to save material:\n{path}",
+                )
+                return False
+        else:
+            # No asset - save directly (shouldn't normally happen)
+            try:
+                from termin.visualization.core.material_asset import save_material_file
+                save_material_file(self._material, path)
+                self._material.source_path = str(path)
+                return True
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Error Saving Material",
+                    f"Failed to save material:\n{path}\n\nError: {e}",
+                )
+                return False
 
     def _rebuild_ui(self) -> None:
         """Перестроить UI под текущий материал."""
