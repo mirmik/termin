@@ -48,7 +48,7 @@ class MeshRenderer(Component):
         ),
     }
 
-    _DEBUG_INIT = True
+    _DEBUG_INIT = False
 
     def __init__(
         self,
@@ -165,7 +165,7 @@ class MeshRenderer(Component):
             return
         self.mesh.draw(context)
 
-    _DEBUG_DRAWS = True  # DEBUG: отладка get_geometry_draws
+    _DEBUG_DRAWS = False  # DEBUG: отладка get_geometry_draws
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """

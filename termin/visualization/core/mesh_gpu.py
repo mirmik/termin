@@ -73,8 +73,16 @@ class MeshGPU:
         # Draw
         self._handles[ctx_key].draw()
 
+    _DEBUG_UPLOAD = True
+
     def _upload(self, context: "RenderContext", mesh_data: "Mesh3") -> None:
         """Upload mesh data to GPU for this context."""
+        if self._DEBUG_UPLOAD:
+            print(f"[MeshGPU._upload] mesh_data type: {type(mesh_data).__name__}")
+            layout = mesh_data.get_vertex_layout()
+            print(f"  vertex_layout stride={layout.stride}, attrs={[a.name for a in layout.attributes]}")
+            buf = mesh_data.interleaved_buffer()
+            print(f"  interleaved_buffer shape: {buf.shape}")
         handle = context.graphics.create_mesh(mesh_data)
         self._handles[context.context_key] = handle
 

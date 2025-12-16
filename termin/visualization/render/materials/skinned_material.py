@@ -225,7 +225,7 @@ class SkinnedMaterial(Material):
     in the vertex shader.
     """
 
-    _DEBUG_INIT = True
+    _DEBUG_INIT = False
 
     def __init__(self, color: tuple[float, float, float, float] | None = None):
         from termin.visualization.render.texture import get_white_texture

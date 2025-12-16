@@ -30,7 +30,7 @@ class SkinnedMeshRenderer(MeshRenderer):
         # skeleton_instance is typically set programmatically, not in inspector
     }
 
-    _DEBUG_INIT = True
+    _DEBUG_INIT = False
 
     def __init__(
         self,
