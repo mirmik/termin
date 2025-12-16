@@ -877,9 +877,15 @@ class ResourceManager:
         return sorted(self.meshes.keys())
 
     def find_mesh_name(self, mesh: "MeshDrawable") -> Optional[str]:
+        # Try identity check first (fast path)
         for n, m in self.meshes.items():
             if m is mesh:
                 return n
+        # Try asset comparison (for MeshDrawables created separately)
+        if mesh.asset is not None:
+            for n, asset in self._mesh_assets.items():
+                if asset is mesh.asset:
+                    return n
         return None
 
     def find_mesh_uuid(self, mesh: "MeshDrawable") -> Optional[str]:
