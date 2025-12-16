@@ -53,18 +53,19 @@ def _create_entity_from_node(
 
     entity = Entity(pose=pose, name=node.name, scale=scale)
 
-    # Add MeshRenderer if node has a mesh
-    if node.mesh_index is not None and node.mesh_index < len(scene_data.meshes):
-        mesh_idx = node.mesh_index
+    # Add MeshRenderer for each primitive in the referenced mesh
+    if node.mesh_index is not None and node.mesh_index in scene_data.mesh_index_map:
+        our_mesh_indices = scene_data.mesh_index_map[node.mesh_index]
 
-        # Get or create MeshDrawable
-        if mesh_idx not in mesh_drawables:
-            mesh3 = _glb_mesh_to_mesh3(scene_data.meshes[mesh_idx])
-            mesh_drawables[mesh_idx] = MeshDrawable(mesh3, name=scene_data.meshes[mesh_idx].name)
+        for mesh_idx in our_mesh_indices:
+            # Get or create MeshDrawable
+            if mesh_idx not in mesh_drawables:
+                mesh3 = _glb_mesh_to_mesh3(scene_data.meshes[mesh_idx])
+                mesh_drawables[mesh_idx] = MeshDrawable(mesh3, name=scene_data.meshes[mesh_idx].name)
 
-        drawable = mesh_drawables[mesh_idx]
-        renderer = MeshRenderer(mesh=drawable, material=default_material)
-        entity.add_component(renderer)
+            drawable = mesh_drawables[mesh_idx]
+            renderer = MeshRenderer(mesh=drawable, material=default_material)
+            entity.add_component(renderer)
 
     # Recursively create children
     for child_index in node.children:

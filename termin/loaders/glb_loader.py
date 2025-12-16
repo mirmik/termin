@@ -85,6 +85,9 @@ class GLBSceneData:
         self.animations: List[GLBAnimationClip] = []
         self.nodes: List[GLBNodeData] = []
         self.root_nodes: List[int] = []
+        # Map from glTF mesh index to list of our internal mesh indices
+        # (one glTF mesh can have multiple primitives)
+        self.mesh_index_map: Dict[int, List[int]] = {}
 
 
 # ---------- ACCESSOR HELPERS ----------
@@ -161,6 +164,7 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
     """Parse all meshes from glTF."""
     for mesh_idx, mesh in enumerate(gltf.get("meshes", [])):
         mesh_name = mesh.get("name", f"Mesh_{mesh_idx}")
+        scene_data.mesh_index_map[mesh_idx] = []
 
         for prim_idx, primitive in enumerate(mesh.get("primitives", [])):
             attributes = primitive.get("attributes", {})
@@ -198,6 +202,9 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             expanded_uvs = uvs[indices] if uvs is not None else None
 
             prim_name = mesh_name if prim_idx == 0 else f"{mesh_name}_{prim_idx}"
+
+            our_mesh_idx = len(scene_data.meshes)
+            scene_data.mesh_index_map[mesh_idx].append(our_mesh_idx)
 
             scene_data.meshes.append(GLBMeshData(
                 name=prim_name,
