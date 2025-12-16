@@ -111,6 +111,10 @@ class ResourceManager:
         self._navmesh_assets: Dict[str, "NavMeshAsset"] = {}
         self._animation_clip_assets: Dict[str, "AnimationClipAsset"] = {}
 
+        # Asset'ы по UUID (для поиска существующих при загрузке)
+        from termin.visualization.core.asset import Asset
+        self._assets_by_uuid: Dict[str, Asset] = {}
+
     @classmethod
     def instance(cls) -> "ResourceManager":
         if cls._instance is None:
@@ -125,6 +129,107 @@ class ResourceManager:
     def _reset_for_testing(cls) -> None:
         """Reset singleton instance. For testing only."""
         cls._instance = None
+
+    # --------- PreLoadResult-based registration ---------
+
+    def register_file(self, result: "PreLoadResult") -> None:
+        """
+        Register a file from PreLoadResult.
+
+        If UUID exists and is registered → uses existing Asset.
+        Otherwise → creates new Asset.
+        Then calls Asset.load() with content from result.
+        """
+        from termin.editor.project_file_watcher import PreLoadResult
+        import os
+
+        name = os.path.splitext(os.path.basename(result.path))[0]
+
+        # Dispatch by resource type
+        if result.resource_type == "material":
+            self._register_material_file(name, result)
+        # TODO: add other resource types
+        else:
+            print(f"[ResourceManager] Unknown resource type: {result.resource_type}")
+
+    def reload_file(self, result: "PreLoadResult") -> None:
+        """
+        Reload a file from PreLoadResult.
+
+        Finds existing Asset and calls load() with new content.
+        """
+        import os
+
+        name = os.path.splitext(os.path.basename(result.path))[0]
+
+        if result.resource_type == "material":
+            self._reload_material_file(name, result)
+        # TODO: add other resource types
+        else:
+            print(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
+
+    def _register_material_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register material from PreLoadResult."""
+        from termin.visualization.core.material_asset import MaterialAsset
+
+        # Check if already registered by name
+        if name in self._material_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, MaterialAsset):
+                # UUID collision with different asset type - ignore
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = MaterialAsset(
+                material=None,
+                name=name,
+                source_path=result.path,
+                uuid=result.uuid,  # May be None - will auto-generate
+            )
+            # Register in UUID registry
+            self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name
+        self._material_assets[name] = asset
+
+        # Load content (Asset parses it)
+        asset.load_from_content(result.content)
+
+        # Update legacy dict
+        if asset.material is not None:
+            self.materials[name] = asset.material
+
+        print(f"[ResourceManager] Registered material: {name}")
+
+    def _reload_material_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload material from PreLoadResult."""
+        asset = self._material_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload content
+        asset.load_from_content(result.content)
+
+        # Update legacy dict
+        if asset.material is not None:
+            self.materials[name] = asset.material
+
+        print(f"[ResourceManager] Reloaded material: {name}")
+
+    def get_asset_by_uuid(self, uuid: str) -> Optional["Asset"]:
+        """Get any Asset by UUID."""
+        from termin.visualization.core.asset import Asset
+        return self._assets_by_uuid.get(uuid)
 
     # --------- Материалы (Asset-based) ---------
     def get_material_asset(self, name: str) -> Optional["MaterialAsset"]:

@@ -1,6 +1,6 @@
-"""File type processors for ProjectFileWatcher."""
+"""File pre-loaders for ProjectFileWatcher."""
 
-from termin.editor.file_processors.material_processor import MaterialFileProcessor
+from termin.editor.file_processors.material_processor import MaterialPreLoader
 from termin.editor.file_processors.mesh_processor import MeshFileProcessor
 from termin.editor.file_processors.shader_processor import ShaderFileProcessor
 from termin.editor.file_processors.texture_processor import TextureFileProcessor
@@ -9,8 +9,12 @@ from termin.editor.file_processors.pipeline_processor import PipelineFileProcess
 from termin.editor.file_processors.voxel_grid_processor import VoxelGridProcessor
 from termin.editor.file_processors.navmesh_processor import NavMeshProcessor
 
+# Backward compatibility aliases
+MaterialFileProcessor = MaterialPreLoader
+
 __all__ = [
-    "MaterialFileProcessor",
+    "MaterialPreLoader",
+    "MaterialFileProcessor",  # backward compat
     "MeshFileProcessor",
     "ShaderFileProcessor",
     "TextureFileProcessor",

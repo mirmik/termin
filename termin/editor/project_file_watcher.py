@@ -1,15 +1,22 @@
 """
-Project file watching system with pluggable file type processors.
+Project file watching system with pluggable file pre-loaders.
 
 Provides centralized file watching for the editor with support for
-different file types via FileTypeProcessor implementations.
+different file types via FilePreLoader implementations.
+
+PreLoaders don't parse files - they only:
+- Determine file type
+- Read UUID if possible (currently only .material files)
+- Read file content (to avoid re-reading)
+- Pass data to ResourceManager which creates/finds Asset and calls Asset.load()
 """
 
 from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Dict, Set
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Callable, Dict, Set
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QFileSystemWatcher, QTimer
@@ -19,12 +26,24 @@ if TYPE_CHECKING:
 DEBOUNCE_DELAY_MS = 300
 
 
-class FileTypeProcessor(ABC):
-    """
-    Abstract base class for file type handlers.
+@dataclass
+class PreLoadResult:
+    """Result of pre-loading a file."""
 
-    Each processor handles specific file extensions and notifies
-    ResourceManager when files are added, changed, or removed.
+    resource_type: str  # "material", "shader", "texture", "mesh", etc.
+    path: str  # path to main file
+    content: str | bytes | None = None  # file content (text or bytes)
+    uuid: str | None = None  # UUID if found in file
+    spec_data: dict | None = None  # data from .spec file if exists
+    extra: dict = field(default_factory=dict)  # additional data
+
+
+class FilePreLoader(ABC):
+    """
+    Abstract base class for file pre-loaders.
+
+    PreLoaders detect file type, read UUID if possible, and pass
+    data to ResourceManager. Actual parsing is done by Asset.load().
     """
 
     def __init__(
@@ -54,7 +73,7 @@ class FileTypeProcessor(ABC):
     @abstractmethod
     def extensions(self) -> Set[str]:
         """
-        Set of file extensions this processor handles.
+        Set of file extensions this pre-loader handles.
         Extensions include the dot, e.g., {'.material', '.shader'}.
         """
         ...
@@ -63,44 +82,72 @@ class FileTypeProcessor(ABC):
     @abstractmethod
     def resource_type(self) -> str:
         """
-        Resource type name for callbacks (e.g., 'material', 'shader', 'texture').
+        Resource type name (e.g., 'material', 'shader', 'texture').
         """
         ...
 
     @abstractmethod
+    def preload(self, path: str) -> PreLoadResult | None:
+        """
+        Pre-load a file: read content, extract UUID if possible.
+
+        Args:
+            path: Path to the file
+
+        Returns:
+            PreLoadResult with file data, or None if file cannot be processed.
+        """
+        ...
+
     def on_file_added(self, path: str) -> None:
         """
         Called when a new file is detected.
-        Should load the resource and register it with ResourceManager.
+        Pre-loads the file and registers with ResourceManager.
         """
-        ...
+        result = self.preload(path)
+        if result is None:
+            return
 
-    @abstractmethod
+        name = os.path.splitext(os.path.basename(path))[0]
+
+        # Register with ResourceManager (it will create/find Asset and call load)
+        self._resource_manager.register_file(result)
+
+        # Track file -> resource mapping
+        if path not in self._file_to_resources:
+            self._file_to_resources[path] = set()
+        self._file_to_resources[path].add(name)
+
+        self._notify_reloaded(name)
+
     def on_file_changed(self, path: str) -> None:
         """
         Called when an existing file is modified.
-        Should reload the resource in ResourceManager.
+        Re-preloads the file and updates via ResourceManager.
         """
-        ...
+        result = self.preload(path)
+        if result is None:
+            return
 
-    @abstractmethod
+        name = os.path.splitext(os.path.basename(path))[0]
+
+        # ResourceManager handles reload logic
+        self._resource_manager.reload_file(result)
+
+        self._notify_reloaded(name)
+
     def on_file_removed(self, path: str) -> None:
         """
         Called when a file is deleted.
-        Should handle cleanup if needed.
+        Cleans up tracking.
         """
-        ...
+        if path in self._file_to_resources:
+            del self._file_to_resources[path]
 
     def on_spec_changed(self, spec_path: str, resource_path: str) -> None:
         """
         Called when a .spec file for a resource changes.
-
-        Default implementation reloads the resource via on_file_changed.
-        Override for custom behavior.
-
-        Args:
-            spec_path: Path to the .spec file
-            resource_path: Path to the resource file (without .spec)
+        Triggers reload of the main resource.
         """
         if os.path.exists(resource_path):
             self.on_file_changed(resource_path)
@@ -123,12 +170,16 @@ class FileTypeProcessor(ABC):
             self._on_resource_reloaded(self.resource_type, resource_name)
 
 
+# Backward compatibility alias
+FileTypeProcessor = FilePreLoader
+
+
 class ProjectFileWatcher:
     """
     Central file watcher for project resources.
 
     Owns QFileSystemWatcher, tracks all files by extension,
-    and dispatches events to registered FileTypeProcessors.
+    and dispatches events to registered FilePreLoaders.
     """
 
     def __init__(
@@ -141,7 +192,7 @@ class ProjectFileWatcher:
         self._watched_files: Set[str] = set()
 
         # extension -> processor
-        self._processors: Dict[str, FileTypeProcessor] = {}
+        self._processors: Dict[str, FilePreLoader] = {}
         self._on_resource_reloaded = on_resource_reloaded
 
         # All project files by extension (for statistics)
@@ -151,9 +202,9 @@ class ProjectFileWatcher:
         self._pending_changes: Set[str] = set()
         self._debounce_timer: "QTimer | None" = None
 
-    def register_processor(self, processor: FileTypeProcessor) -> None:
+    def register_processor(self, processor: FilePreLoader) -> None:
         """
-        Register a FileTypeProcessor for its extensions.
+        Register a FilePreLoader for its extensions.
 
         Raises:
             ValueError: If extension already registered.
@@ -463,14 +514,14 @@ class ProjectFileWatcher:
         """Get all registered extensions."""
         return set(self._processors.keys())
 
-    def get_processor(self, ext: str) -> FileTypeProcessor | None:
+    def get_processor(self, ext: str) -> FilePreLoader | None:
         """Get processor for extension."""
         return self._processors.get(ext)
 
-    def get_all_processors(self) -> list[FileTypeProcessor]:
+    def get_all_processors(self) -> list[FilePreLoader]:
         """Get list of unique processors."""
         seen: Set[int] = set()
-        result: list[FileTypeProcessor] = []
+        result: list[FilePreLoader] = []
         for processor in self._processors.values():
             if id(processor) not in seen:
                 seen.add(id(processor))

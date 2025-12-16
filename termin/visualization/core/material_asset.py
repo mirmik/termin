@@ -66,11 +66,35 @@ class MaterialAsset(Asset):
             return False
 
         try:
-            material, file_uuid = load_material_file(str(self._source_path))
+            with open(self._source_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return self.load_from_content(content)
+        except Exception:
+            return False
+
+    def load_from_content(self, content: str | None) -> bool:
+        """
+        Load material from JSON content string.
+
+        Args:
+            content: JSON content of .material file
+
+        Returns:
+            True if loaded successfully.
+        """
+        if content is None:
+            return False
+
+        try:
+            material, file_uuid = parse_material_content(
+                content,
+                name=self._name,
+                source_path=str(self._source_path) if self._source_path else None,
+            )
             self._material = material
 
             if file_uuid:
-                # File has UUID - adopt it
+                # File has UUID - adopt it (may differ from ours if file was edited)
                 self._uuid = file_uuid
             else:
                 # Old file without UUID - save immediately to persist our UUID
@@ -78,7 +102,8 @@ class MaterialAsset(Asset):
 
             self._loaded = True
             return True
-        except Exception:
+        except Exception as e:
+            print(f"[MaterialAsset] Failed to parse content: {e}")
             return False
 
     def unload(self) -> None:
@@ -158,12 +183,18 @@ class MaterialAsset(Asset):
 
 # --- File I/O functions ---
 
-def load_material_file(path: str) -> tuple["Material", str | None]:
+def parse_material_content(
+    content: str,
+    name: str | None = None,
+    source_path: str | None = None,
+) -> tuple["Material", str | None]:
     """
-    Load material from .material file.
+    Parse material from JSON content string.
 
     Args:
-        path: Path to .material file
+        content: JSON content of .material file
+        name: Material name (defaults to "material")
+        source_path: Source path for the material
 
     Returns:
         Tuple of (Material, uuid or None)
@@ -171,10 +202,7 @@ def load_material_file(path: str) -> tuple["Material", str | None]:
     from termin.visualization.core.material import Material
     from termin.visualization.core.resources import ResourceManager
 
-    path = Path(path)
-
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    data = json.loads(content)
 
     shader_name = data.get("shader", "DefaultShader")
     file_uuid = data.get("uuid")
@@ -188,11 +216,11 @@ def load_material_file(path: str) -> tuple["Material", str | None]:
     # Convert uniforms
     uniforms_data = data.get("uniforms", {})
     uniforms: Dict[str, Any] = {}
-    for name, value in uniforms_data.items():
+    for uname, value in uniforms_data.items():
         if isinstance(value, list):
-            uniforms[name] = np.array(value, dtype=np.float32)
+            uniforms[uname] = np.array(value, dtype=np.float32)
         else:
-            uniforms[name] = value
+            uniforms[uname] = value
 
     # Load textures by name from ResourceManager
     textures_data = data.get("textures", {})
@@ -207,12 +235,30 @@ def load_material_file(path: str) -> tuple["Material", str | None]:
         program,
         uniforms=uniforms,
         textures=textures if textures else None,
-        name=path.stem,
-        source_path=str(path),
+        name=name or "material",
+        source_path=source_path,
     )
     mat.shader_name = shader_name
 
     return mat, file_uuid
+
+
+def load_material_file(path: str) -> tuple["Material", str | None]:
+    """
+    Load material from .material file.
+
+    Args:
+        path: Path to .material file
+
+    Returns:
+        Tuple of (Material, uuid or None)
+    """
+    path = Path(path)
+
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    return parse_material_content(content, name=path.stem, source_path=str(path))
 
 
 def save_material_file(material: "Material", path: str | Path, uuid: str) -> None:
