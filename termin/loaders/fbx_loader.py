@@ -274,55 +274,44 @@ def _parse_nodes_flat(scene, mesh_index_map):
 
 
 def _parse_animations(scene, out):
-    for anim_stack in scene.anim_stacks:
-        name = anim_stack.name if anim_stack.name else "Anim"
+    """
+    Parse animations from ufbx scene.
 
-        # Get duration from layers
+    Note: ufbx animation API is unstable. We wrap everything in try/except.
+    """
+    try:
+        for anim_stack in scene.anim_stacks:
+            _parse_single_animation(anim_stack, out)
+    except Exception as e:
+        print(f"[FBX] Warning: Failed to parse animations: {e}")
+
+
+def _parse_single_animation(anim_stack, out):
+    """Parse a single animation stack."""
+    try:
+        name = anim_stack.name or "Anim"
+        tps = 30.0
+
+        # Duration
         duration = 0.0
-        tps = 30.0  # Default ticks per second
+        try:
+            duration = anim_stack.time_end - anim_stack.time_begin
+        except Exception as e:
+            print(f"[FBX] Warning: Failed to get animation duration: {e}")
 
-        if anim_stack.layers:
-            layer = anim_stack.layers[0]
-            for anim_value in layer.anim_values:
-                for curve in [anim_value.curves_x, anim_value.curves_y, anim_value.curves_z]:
-                    if curve and curve.keyframes:
-                        last_time = curve.keyframes[-1].time
-                        if last_time > duration:
-                            duration = last_time
+        if not anim_stack.layers:
+            return
 
-        # Parse channels
+        layer = anim_stack.layers[0]
+        node_channels = {}
+
+        for anim_prop in layer.anim_props:
+            _parse_anim_prop(anim_prop, node_channels)
+
+        # Build channel list
         channels = []
-        if anim_stack.layers:
-            layer = anim_stack.layers[0]
-            node_channels = {}
-
-            for anim_prop in layer.anim_props:
-                node = anim_prop.element
-                if not node or not hasattr(node, 'name'):
-                    continue
-
-                node_name = node.name
-                if node_name not in node_channels:
-                    node_channels[node_name] = {
-                        'pos_keys': [],
-                        'rot_keys': [],
-                        'scale_keys': []
-                    }
-
-                # Determine property type and extract keys
-                prop_name = anim_prop.prop_name if hasattr(anim_prop, 'prop_name') else ""
-                anim_value = anim_prop.anim_value
-
-                if anim_value:
-                    keys = _extract_keys(anim_value)
-                    if 'translation' in prop_name.lower() or 'lcl translation' in prop_name.lower():
-                        node_channels[node_name]['pos_keys'] = keys
-                    elif 'rotation' in prop_name.lower() or 'lcl rotation' in prop_name.lower():
-                        node_channels[node_name]['rot_keys'] = keys
-                    elif 'scaling' in prop_name.lower() or 'lcl scaling' in prop_name.lower():
-                        node_channels[node_name]['scale_keys'] = keys
-
-            for node_name, ch_data in node_channels.items():
+        for node_name, ch_data in node_channels.items():
+            if ch_data['pos_keys'] or ch_data['rot_keys'] or ch_data['scale_keys']:
                 channels.append(
                     FBXAnimationChannel(
                         node_name=node_name,
@@ -332,43 +321,86 @@ def _parse_animations(scene, out):
                     )
                 )
 
-        out.animations.append(
-            FBXAnimationClip(
-                name=name,
-                duration=duration,
-                tps=tps,
-                channels=channels
+        if channels:
+            out.animations.append(
+                FBXAnimationClip(name=name, duration=duration, tps=tps, channels=channels)
             )
-        )
+
+    except Exception as e:
+        print(f"[FBX] Warning: Failed to parse animation stack: {e}")
 
 
-def _extract_keys(anim_value):
-    """Extract keyframes from anim value."""
-    keys = []
-    curves = [anim_value.curves_x, anim_value.curves_y, anim_value.curves_z]
+def _parse_anim_prop(anim_prop, node_channels):
+    """Parse a single animated property."""
+    try:
+        element = anim_prop.element
+        if not element or not element.name:
+            return
 
-    # Find all unique times
-    times = set()
-    for curve in curves:
-        if curve:
-            for kf in curve.keyframes:
-                times.add(kf.time)
+        node_name = element.name
+        if node_name not in node_channels:
+            node_channels[node_name] = {'pos_keys': [], 'rot_keys': [], 'scale_keys': []}
 
-    for t in sorted(times):
-        values = []
+        prop_name = (anim_prop.prop_name or "").lower()
+        anim_value = anim_prop.anim_value
+        if anim_value is None:
+            return
+
+        keys = _extract_keys_safe(anim_value)
+        if not keys:
+            return
+
+        if 'translation' in prop_name or 'lcl translation' in prop_name:
+            node_channels[node_name]['pos_keys'] = keys
+        elif 'rotation' in prop_name or 'lcl rotation' in prop_name:
+            node_channels[node_name]['rot_keys'] = keys
+        elif 'scaling' in prop_name or 'lcl scaling' in prop_name:
+            node_channels[node_name]['scale_keys'] = keys
+
+    except Exception as e:
+        print(f"[FBX] Warning: Failed to parse anim prop: {e}")
+
+
+def _extract_keys_safe(anim_value):
+    """Extract keyframes from ufbx anim_value."""
+    try:
+        # Get curves (ufbx stores as .curves list)
+        curves = list(anim_value.curves)[:3] if anim_value.curves else []
+        if not curves:
+            return []
+
+        # Collect all keyframe times
+        times = set()
         for curve in curves:
-            if curve:
-                # Find value at time t (simple linear search)
-                val = curve.keyframes[0].value if curve.keyframes else 0.0
+            if curve and curve.keyframes:
                 for kf in curve.keyframes:
-                    if kf.time <= t:
-                        val = kf.value
-                values.append(val)
-            else:
-                values.append(0.0)
-        keys.append((t, np.array(values, dtype=np.float32)))
+                    times.add(kf.time)
 
-    return keys
+        if not times:
+            return []
+
+        # Sample at each time
+        keys = []
+        for t in sorted(times):
+            values = []
+            for curve in curves:
+                val = 0.0
+                if curve and curve.keyframes:
+                    for kf in curve.keyframes:
+                        if kf.time <= t:
+                            val = kf.value
+                values.append(val)
+
+            while len(values) < 3:
+                values.append(0.0)
+
+            keys.append((t, np.array(values[:3], dtype=np.float32)))
+
+        return keys
+
+    except Exception as e:
+        print(f"[FBX] Warning: Failed to extract keyframes: {e}")
+        return []
 
 
 # ---------- PUBLIC API ----------
