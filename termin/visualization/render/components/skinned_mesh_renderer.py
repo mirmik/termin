@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from termin.editor.inspect_field import InspectField
 from termin.mesh.skinned_mesh import SkinnedMesh3
 from termin.visualization.core.entity import RenderContext
@@ -90,6 +92,10 @@ class SkinnedMeshRenderer(MeshRenderer):
             if self._DEBUG_SKINNING:
                 print(f"[SkinnedMeshRenderer] bone_count={bone_count}, shader={shader}")
                 if bone_count > 0:
+                    # Check if any bone matrix is non-identity
+                    identity = np.eye(4, dtype=np.float32)
+                    non_identity_count = sum(1 for m in bone_matrices if not np.allclose(m, identity, atol=1e-4))
+                    print(f"  non_identity_matrices: {non_identity_count}/{bone_count}")
                     print(f"  bone_matrix[0] diagonal: {bone_matrices[0].diagonal()}")
 
             if shader is not None:

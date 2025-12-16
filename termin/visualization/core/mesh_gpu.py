@@ -83,6 +83,13 @@ class MeshGPU:
             print(f"  vertex_layout stride={layout.stride}, attrs={[a.name for a in layout.attributes]}")
             buf = mesh_data.interleaved_buffer()
             print(f"  interleaved_buffer shape: {buf.shape}")
+            # Check joints/weights for skinned meshes
+            if hasattr(mesh_data, 'joint_indices') and hasattr(mesh_data, 'joint_weights'):
+                print(f"  joint_indices[0:3]: {mesh_data.joint_indices[:3]}")
+                print(f"  joint_weights[0:3]: {mesh_data.joint_weights[:3]}")
+                # Check if weights sum to ~1.0
+                weight_sums = mesh_data.joint_weights.sum(axis=1)
+                print(f"  weight_sums min={weight_sums.min():.3f}, max={weight_sums.max():.3f}, mean={weight_sums.mean():.3f}")
         handle = context.graphics.create_mesh(mesh_data)
         self._handles[context.context_key] = handle
 

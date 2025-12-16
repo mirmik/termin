@@ -20,6 +20,8 @@ class AnimationPlayer(Component):
     Может также обновлять SkeletonInstance для скелетной анимации.
     """
 
+    _DEBUG_UPDATE = True
+
     def __init__(self, enabled: bool = True):
         super().__init__(enabled=enabled)
         self.clips: Dict[str, AnimationClip] = {}
@@ -56,6 +58,8 @@ class AnimationPlayer(Component):
     def stop(self):
         self.playing = False
 
+    _debug_frame_count = 0
+
     def update(self, dt: float):
         if not (self.enabled and self.playing and self.current):
             return
@@ -63,6 +67,13 @@ class AnimationPlayer(Component):
         self.time += dt
 
         sample = self.current.sample(self.time)
+
+        if self._DEBUG_UPDATE and AnimationPlayer._debug_frame_count < 3:
+            AnimationPlayer._debug_frame_count += 1
+            print(f"[AnimationPlayer.update] time={self.time:.3f}, channels={len(sample)}")
+            for name, data in list(sample.items())[:3]:
+                tr, rot, sc = data
+                print(f"  {name}: tr={tr}, rot={rot}")
 
         # If we have a target skeleton, apply bone transforms
         if self._target_skeleton is not None:
@@ -77,14 +88,14 @@ class AnimationPlayer(Component):
         for channel_name, channel_data in sample.items():
             tr = channel_data[0]  # translation
             rot = channel_data[1]  # rotation (quaternion xyzw)
-            sc = channel_data[2]  # scale
+            sc = channel_data[2]  # scale (float or None)
 
             # Set bone transform
             self._target_skeleton.set_bone_transform_by_name(
                 channel_name,
                 translation=tr,
                 rotation=rot,
-                scale=sc[0] if sc is not None else None,  # Use X component for uniform scale
+                scale=sc,  # Already a float from AnimationChannel.sample()
             )
 
     def _update_entity(self, sample: Dict):
