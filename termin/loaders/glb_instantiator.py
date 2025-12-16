@@ -111,6 +111,7 @@ def _create_entity_from_node(
     mesh_drawables: Dict[int, MeshDrawable],
     default_material: DefaultMaterial,
     skeleton_instance: Optional[SkeletonInstance] = None,
+    glb_name: str = "",
 ) -> Entity:
     """Recursively create Entity hierarchy from GLBNodeData."""
     node = scene_data.nodes[node_index]
@@ -139,8 +140,19 @@ def _create_entity_from_node(
 
             # Get or create MeshDrawable
             if mesh_idx not in mesh_drawables:
-                mesh3 = _glb_mesh_to_mesh3(glb_mesh)
-                mesh_drawables[mesh_idx] = MeshDrawable(mesh3, name=glb_mesh.name)
+                # Try to get from ResourceManager first (registered by GLBAsset)
+                mesh_name = f"{glb_name}_{glb_mesh.name}" if glb_name else glb_mesh.name
+                from termin.visualization.core.resources import ResourceManager
+                rm = ResourceManager.instance()
+                drawable = rm.meshes.get(mesh_name)
+
+                if drawable is None:
+                    # Fallback: create new MeshDrawable
+                    mesh3 = _glb_mesh_to_mesh3(glb_mesh)
+                    drawable = MeshDrawable(mesh3, name=mesh_name)
+                    rm.meshes[mesh_name] = drawable
+
+                mesh_drawables[mesh_idx] = drawable
 
             drawable = mesh_drawables[mesh_idx]
 
@@ -159,7 +171,7 @@ def _create_entity_from_node(
     # Recursively create children
     for child_index in node.children:
         child_entity = _create_entity_from_node(
-            child_index, scene_data, mesh_drawables, default_material, node_skeleton
+            child_index, scene_data, mesh_drawables, default_material, node_skeleton, glb_name
         )
         entity.transform.add_child(child_entity.transform)
 
@@ -219,8 +231,13 @@ def instantiate_glb(
     if name is None:
         name = path.stem
 
-    # Shared material for all meshes
-    default_material = DefaultMaterial(color=(0.8, 0.8, 0.8, 1.0))
+    # Get default material from ResourceManager
+    from termin.visualization.core.resources import ResourceManager
+    rm = ResourceManager.instance()
+    default_material = rm.get_material("DefaultMaterial")
+    if default_material is None:
+        # Fallback if not registered yet
+        default_material = DefaultMaterial(color=(0.8, 0.8, 0.8, 1.0))
 
     # Cache for MeshDrawables (shared between nodes referencing same mesh)
     mesh_drawables: Dict[int, MeshDrawable] = {}
@@ -243,6 +260,7 @@ def instantiate_glb(
                 mesh_drawables,
                 default_material,
                 skeleton_instance,
+                glb_name=name,
             )
             root_entity.name = name
         else:
@@ -255,6 +273,7 @@ def instantiate_glb(
                     mesh_drawables,
                     default_material,
                     skeleton_instance,
+                    glb_name=name,
                 )
                 root_entity.transform.add_child(child_entity.transform)
     else:
@@ -263,8 +282,12 @@ def instantiate_glb(
 
         for i, glb_mesh in enumerate(scene_data.meshes):
             mesh3 = _glb_mesh_to_mesh3(glb_mesh)
-            drawable = MeshDrawable(mesh3, name=glb_mesh.name)
+            mesh_name = f"{name}_{glb_mesh.name}" if name else glb_mesh.name
+            drawable = MeshDrawable(mesh3, name=mesh_name)
             mesh_drawables[i] = drawable
+
+            # Register mesh in ResourceManager
+            rm.meshes[mesh_name] = drawable
 
             mesh_entity = Entity(pose=Pose3.identity(), name=glb_mesh.name)
             if glb_mesh.is_skinned and skeleton_instance is not None:

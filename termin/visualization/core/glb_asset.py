@@ -95,9 +95,14 @@ class GLBAsset(Asset):
             self._scene_data = load_glb_file_from_buffer(content, normalize_scale=normalize_scale)
             self._loaded = True
 
-            # Save spec file if no UUID was in spec
-            if not has_uuid_in_spec:
-                self._save_spec_file(spec_data)
+            # Register meshes in ResourceManager (may generate new UUIDs)
+            updated_spec, meshes_updated = self._register_meshes(spec_data)
+
+            # Save spec file if:
+            # - No UUID was in spec (need to save GLB's own UUID)
+            # - Resources were updated with new UUIDs
+            if not has_uuid_in_spec or meshes_updated:
+                self._save_spec_file(updated_spec)
 
             return True
         except Exception as e:
@@ -120,6 +125,68 @@ class GLBAsset(Asset):
             print(f"[GLBAsset] Added UUID to spec: {self._name}")
             return True
         return False
+
+    def _register_meshes(self, spec_data: dict | None) -> tuple[dict, bool]:
+        """
+        Register all meshes from GLB in ResourceManager.
+
+        Returns:
+            (spec_data, updated) - spec_data with mesh UUIDs, and whether new UUIDs were added.
+        """
+        spec_data = dict(spec_data) if spec_data else {}
+
+        if self._scene_data is None:
+            return spec_data, False
+
+        import uuid as uuid_module
+        from termin.visualization.core.resources import ResourceManager
+        from termin.visualization.core.mesh import MeshDrawable
+        from termin.visualization.core.mesh_asset import MeshAsset
+        from termin.loaders.glb_instantiator import _glb_mesh_to_mesh3
+
+        rm = ResourceManager.instance()
+
+        # Get or create resources section in spec
+        if "resources" not in spec_data:
+            spec_data["resources"] = {}
+        if "meshes" not in spec_data["resources"]:
+            spec_data["resources"]["meshes"] = {}
+
+        mesh_uuids = spec_data["resources"]["meshes"]
+        updated = False
+
+        for i, glb_mesh in enumerate(self._scene_data.meshes):
+            # Create unique name: glb_name + mesh_name
+            mesh_name = f"{self._name}_{glb_mesh.name}"
+
+            # Get or generate UUID for this mesh
+            mesh_uuid = mesh_uuids.get(glb_mesh.name)
+            if mesh_uuid is None:
+                mesh_uuid = str(uuid_module.uuid4())
+                mesh_uuids[glb_mesh.name] = mesh_uuid
+                updated = True
+
+            # Skip if already registered
+            if mesh_name in rm.meshes:
+                continue
+
+            mesh3 = _glb_mesh_to_mesh3(glb_mesh)
+
+            # Create MeshAsset with UUID
+            asset = MeshAsset(
+                mesh_data=mesh3,
+                name=mesh_name,
+                source_path=str(self._source_path) if self._source_path else None,
+                uuid=mesh_uuid,
+            )
+            rm._mesh_assets[mesh_name] = asset
+            rm._assets_by_uuid[mesh_uuid] = asset
+
+            # Create MeshDrawable wrapper
+            drawable = MeshDrawable(asset, name=mesh_name)
+            rm.meshes[mesh_name] = drawable
+
+        return spec_data, updated
 
     def unload(self) -> None:
         """Unload GLB data to free memory."""
