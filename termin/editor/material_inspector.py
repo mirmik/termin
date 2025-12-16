@@ -412,6 +412,15 @@ class MaterialInspector(QWidget):
         name_layout.addWidget(self._name_edit)
         main_layout.addLayout(name_layout)
 
+        # UUID (read-only)
+        uuid_layout = QHBoxLayout()
+        uuid_layout.addWidget(QLabel("UUID:"))
+        self._uuid_label = QLabel()
+        self._uuid_label.setStyleSheet("color: #888; font-family: monospace; font-size: 10px;")
+        self._uuid_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        uuid_layout.addWidget(self._uuid_label, 1)
+        main_layout.addLayout(uuid_layout)
+
         # Выбор шейдера
         shader_layout = QHBoxLayout()
         shader_layout.addWidget(QLabel("Shader:"))
@@ -555,12 +564,17 @@ class MaterialInspector(QWidget):
 
         if self._material is None:
             self._name_edit.setText("")
+            self._uuid_label.setText("")
             self._shader_combo.setCurrentIndex(-1)
             self._shader_combo.blockSignals(False)
             return
 
         # Имя материала
         self._name_edit.setText(self._material.name or "")
+
+        # UUID (from MaterialAsset)
+        asset = rm.get_material_asset(self._material.name)
+        self._uuid_label.setText(asset.uuid if asset else "—")
 
         # Выбор шейдера
         shader_name = self._material.shader_name

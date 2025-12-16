@@ -103,6 +103,12 @@ class EntityInspector(QWidget):
         self._name_edit.editingFinished.connect(self._on_name_changed)
         form.addRow("Name:", self._name_edit)
 
+        # UUID (read-only)
+        self._uuid_label = QLabel()
+        self._uuid_label.setStyleSheet("color: #888; font-family: monospace; font-size: 10px;")
+        self._uuid_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        form.addRow("UUID:", self._uuid_label)
+
         # Layer
         self._layer_combo = QComboBox()
         self._layer_combo.currentIndexChanged.connect(self._on_layer_changed)
@@ -188,12 +194,16 @@ class EntityInspector(QWidget):
     def _refresh_from_entity(self) -> None:
         """Refresh all widgets from entity values."""
         if self._entity is None:
+            self._uuid_label.setText("")
             return
 
         self._updating_from_model = True
         try:
             # Name
             self._name_edit.setText(self._entity.name)
+
+            # UUID
+            self._uuid_label.setText(self._entity.uuid or "—")
 
             # Layer
             self._layer_combo.setCurrentIndex(self._entity.layer)

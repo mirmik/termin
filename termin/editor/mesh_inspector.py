@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Callable, Optional
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -73,6 +74,12 @@ class MeshInspector(QWidget):
         # Name
         self._name_label = QLabel("-")
         form.addRow("Name:", self._name_label)
+
+        # UUID
+        self._uuid_label = QLabel("-")
+        self._uuid_label.setStyleSheet("color: #888; font-family: monospace; font-size: 10px;")
+        self._uuid_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        form.addRow("UUID:", self._uuid_label)
 
         # Vertex count
         self._vertex_count_label = QLabel("-")
@@ -174,6 +181,12 @@ class MeshInspector(QWidget):
             return
 
         self._name_label.setText(name or mesh.name or "-")
+
+        # UUID from MeshAsset
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
+        asset = rm.get_mesh_asset(name) if name else None
+        self._uuid_label.setText(asset.uuid if asset else "—")
 
         mesh3 = mesh.mesh
 
@@ -324,6 +337,7 @@ class MeshInspector(QWidget):
         self._mesh_name = ""
         self._file_path = ""
         self._name_label.setText("-")
+        self._uuid_label.setText("-")
         self._vertex_count_label.setText("-")
         self._triangle_count_label.setText("-")
         self._has_normals_label.setText("-")

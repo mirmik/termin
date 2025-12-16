@@ -78,6 +78,12 @@ class TextureInspector(QWidget):
         self._name_label = QLabel("-")
         form.addRow("Name:", self._name_label)
 
+        # UUID
+        self._uuid_label = QLabel("-")
+        self._uuid_label.setStyleSheet("color: #888; font-family: monospace; font-size: 10px;")
+        self._uuid_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        form.addRow("UUID:", self._uuid_label)
+
         # Resolution
         self._resolution_label = QLabel("-")
         form.addRow("Resolution:", self._resolution_label)
@@ -141,6 +147,12 @@ class TextureInspector(QWidget):
                 return
 
             self._name_label.setText(name or "-")
+
+            # UUID from TextureAsset
+            from termin.visualization.core.resources import ResourceManager
+            rm = ResourceManager.instance()
+            asset = rm.get_texture_asset(name) if name else None
+            self._uuid_label.setText(asset.uuid if asset else "—")
 
             # Resolution
             if texture._size is not None:
@@ -244,6 +256,7 @@ class TextureInspector(QWidget):
         self._texture_name = ""
         self._file_path = ""
         self._name_label.setText("-")
+        self._uuid_label.setText("-")
         self._resolution_label.setText("-")
         self._channels_label.setText("-")
         self._file_size_label.setText("-")
