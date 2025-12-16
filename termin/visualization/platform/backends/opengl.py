@@ -154,9 +154,16 @@ class OpenGLShaderHandle(ShaderHandle):
         self._ensure_compiled()
         gl.glUniform1f(self._uniform_location(name), float(value))
 
+    _DEBUG_UNIFORM_INT = True
+
     def set_uniform_int(self, name: str, value: int):
         self._ensure_compiled()
-        gl.glUniform1i(self._uniform_location(name), int(value))
+        location = self._uniform_location(name)
+        if self._DEBUG_UNIFORM_INT and name == "u_bone_count":
+            print(f"[OpenGL] set_uniform_int: name={name!r}, value={value}, location={location}")
+        if location < 0:
+            return
+        gl.glUniform1i(location, int(value))
 
     _DEBUG_UNIFORM_ARRAY = True
 
