@@ -775,9 +775,9 @@ class MaterialInspector(QWidget):
         if program is None:
             return
 
-        # Обновляем shader_program и shader_name
+        # Обновляем shader_program и пересоздаём phases материала
         self._shader_program = program
-        self._material.shader_name = shader_name
+        self._material.set_shader(program, shader_name)
 
         # Перестраиваем UI (редакторы свойств)
         self._rebuild_ui()

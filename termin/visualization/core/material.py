@@ -385,6 +385,46 @@ class Material:
         self.shader_name = other.shader_name
         # name и source_path не меняем — они идентифицируют материал
 
+    def set_shader(self, program: "ShaderMultyPhaseProgramm", shader_name: str) -> None:
+        """
+        Устанавливает новый шейдер, пересоздавая phases.
+
+        Сохраняет существующие uniforms и textures, применяя их к новым phases
+        если соответствующие параметры существуют в новом шейдере.
+
+        Args:
+            program: Новая ShaderMultyPhaseProgramm
+            shader_name: Имя шейдера
+        """
+        # Сохраняем текущие uniforms и textures
+        old_uniforms: Dict[str, Any] = {}
+        old_textures: Dict[str, Any] = {}
+        for phase in self.phases:
+            old_uniforms.update(phase.uniforms)
+            old_textures.update(phase.textures)
+
+        # Пересоздаём phases из нового шейдера
+        self.phases = []
+        for shader_phase in program.phases:
+            phase = MaterialPhase.from_shader_phase(
+                shader_phase=shader_phase,
+                color=(1.0, 1.0, 1.0, 1.0),
+                textures={},
+                extra_uniforms={},
+            )
+            self.phases.append(phase)
+
+        # Применяем сохранённые uniforms к новым phases
+        for phase in self.phases:
+            for name, value in old_uniforms.items():
+                if name in phase.uniforms:
+                    phase.uniforms[name] = value
+            for name, value in old_textures.items():
+                if name in phase.textures:
+                    phase.textures[name] = value
+
+        self.shader_name = shader_name
+
     def serialize(self) -> dict:
         """
         Сериализует материал.
