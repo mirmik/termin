@@ -73,6 +73,30 @@ class MeshHandle(ResourceHandle["MeshAsset"]):
         """Алиас для get()."""
         return self.get()
 
+    def get_drawable(self) -> "MeshDrawable | None":
+        """
+        Получить MeshDrawable.
+
+        Returns:
+            MeshDrawable или None если недоступен
+        """
+        from termin.visualization.core.resources import ResourceManager
+
+        # По имени - ищем MeshDrawable в ResourceManager
+        if self._name is not None:
+            return ResourceManager.instance().get_mesh(self._name)
+
+        # По asset - ищем по имени asset'а
+        asset = self.get()
+        if asset is not None:
+            return ResourceManager.instance().get_mesh(asset.name)
+
+        return None
+
+    def get_drawable_or_none(self) -> "MeshDrawable | None":
+        """Алиас для get_drawable()."""
+        return self.get_drawable()
+
     # --- Serialization ---
 
     def serialize(self) -> dict:

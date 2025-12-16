@@ -106,7 +106,7 @@ class MeshRenderer(Component):
     @property
     def mesh(self) -> MeshDrawable | None:
         """Возвращает текущий меш."""
-        return self._mesh_handle.get_or_none()
+        return self._mesh_handle.get_drawable_or_none()
 
     @mesh.setter
     def mesh(self, value: MeshDrawable | None):
