@@ -1,7 +1,9 @@
 """
-TextureHandle — умная ссылка на TextureAsset.
+TextureHandle — умная ссылка на текстуру.
 
-Указывает на TextureAsset напрямую или по имени через ResourceManager.
+Два режима:
+1. Direct — хранит TextureData напрямую
+2. Asset — хранит TextureAsset (lookup по имени через ResourceManager)
 """
 
 from __future__ import annotations
@@ -11,89 +13,73 @@ from typing import TYPE_CHECKING
 from termin.visualization.core.resource_handle import ResourceHandle
 
 if TYPE_CHECKING:
-    from termin.visualization.render.texture import Texture
+    from termin.visualization.render.texture_data import TextureData
     from termin.visualization.render.texture_asset import TextureAsset
 
 
-def _get_texture_asset(name: str) -> "TextureAsset | None":
-    """Lookup TextureAsset by name in ResourceManager."""
-    from termin.visualization.core.resources import ResourceManager
-
-    return ResourceManager.instance().get_texture_asset(name)
-
-
-class TextureHandle(ResourceHandle["TextureAsset"]):
+class TextureHandle(ResourceHandle["TextureData", "TextureAsset"]):
     """
-    Умная ссылка на TextureAsset.
+    Умная ссылка на текстуру.
 
     Использование:
-        handle = TextureHandle.from_asset(asset)   # прямая ссылка
-        handle = TextureHandle.from_name("wood")   # по имени (hot-reload)
+        handle = TextureHandle.from_direct(texture_data)  # raw TextureData
+        handle = TextureHandle.from_asset(asset)          # TextureAsset
+        handle = TextureHandle.from_name("wood")          # lookup в ResourceManager
     """
 
-    _resource_getter = staticmethod(_get_texture_asset)
+    @classmethod
+    def from_direct(cls, texture_data: "TextureData") -> "TextureHandle":
+        """Создать handle с raw TextureData."""
+        handle = cls()
+        handle._init_direct(texture_data)
+        return handle
 
     @classmethod
     def from_asset(cls, asset: "TextureAsset") -> "TextureHandle":
-        """Создать handle с прямой ссылкой на TextureAsset."""
+        """Создать handle с TextureAsset."""
         handle = cls()
-        handle._init_direct(asset)
+        handle._init_asset(asset)
         return handle
-
-    @classmethod
-    def from_texture(cls, texture: "Texture") -> "TextureHandle":
-        """
-        Создать handle из Texture (обратная совместимость).
-
-        Извлекает TextureAsset из Texture.
-        """
-        from termin.visualization.render.texture import Texture
-
-        if isinstance(texture, Texture):
-            asset = texture.asset
-            if asset is not None:
-                return cls.from_asset(asset)
-        return cls()
 
     @classmethod
     def from_name(cls, name: str) -> "TextureHandle":
-        """Создать handle по имени текстуры."""
-        handle = cls()
-        handle._init_named(name)
-        return handle
+        """Создать handle по имени (lookup в ResourceManager)."""
+        from termin.visualization.core.resources import ResourceManager
+
+        asset = ResourceManager.instance().get_texture_asset(name)
+        if asset is not None:
+            return cls.from_asset(asset)
+        return cls()
+
+    # --- Resource extraction ---
+
+    def _get_resource_from_asset(self, asset: "TextureAsset") -> "TextureData | None":
+        """Извлечь TextureData из TextureAsset."""
+        return asset.texture_data
 
     # --- Convenience accessors ---
 
-    def get_asset(self) -> "TextureAsset | None":
-        """Получить TextureAsset."""
+    @property
+    def texture_data(self) -> "TextureData | None":
+        """Получить TextureData."""
         return self.get()
 
     @property
     def asset(self) -> "TextureAsset | None":
-        """Алиас для get()."""
+        """Получить TextureAsset."""
+        return self.get_asset()
+
+    def get_texture_data(self) -> "TextureData | None":
+        """Получить TextureData."""
         return self.get()
 
     # --- Serialization ---
 
-    def serialize(self) -> dict:
-        """Сериализация."""
+    def _serialize_direct(self) -> dict:
+        """Сериализовать raw TextureData."""
         if self._direct is not None:
-            if self._direct.source_path:
-                return {
-                    "type": "path",
-                    "path": str(self._direct.source_path),
-                }
-            return {
-                "type": "named",
-                "name": self._direct.name,
-            }
-        elif self._name is not None:
-            return {
-                "type": "named",
-                "name": self._name,
-            }
-        else:
-            return {"type": "none"}
+            return self._direct.direct_serialize()
+        return {"type": "direct_unsupported"}
 
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "TextureHandle":

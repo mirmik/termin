@@ -26,11 +26,13 @@ class ShaderProgram:
         self,
         vertex_source: str,
         fragment_source: str,
-        geometry_source: str | None = None
+        geometry_source: str | None = None,
+        source_path: str | None = None,
     ):
         self.vertex_source = vertex_source
         self.fragment_source = fragment_source
         self.geometry_source = geometry_source
+        self.source_path: str | None = source_path
         self._compiled = False
         self._handle: ShaderHandle | None = None
         self._backend: GraphicsBackend | None = None
@@ -121,3 +123,40 @@ class ShaderProgram:
         vertex_source = Path(vertex_path).read_text(encoding="utf-8")
         fragment_source = Path(fragment_path).read_text(encoding="utf-8")
         return cls(vertex_source=vertex_source, fragment_source=fragment_source)
+
+    # ----------------------------------------------------------------
+    # Сериализация
+    # ----------------------------------------------------------------
+
+    def direct_serialize(self) -> dict:
+        """
+        Сериализует шейдер в словарь.
+
+        Если source_path задан, возвращает ссылку на файл.
+        Иначе сериализует исходники inline.
+        """
+        if self.source_path is not None:
+            return {
+                "type": "path",
+                "path": self.source_path,
+            }
+
+        result: dict = {
+            "type": "inline",
+            "vertex": self.vertex_source,
+            "fragment": self.fragment_source,
+        }
+        if self.geometry_source is not None:
+            result["geometry"] = self.geometry_source
+        return result
+
+    @classmethod
+    def direct_deserialize(cls, data: dict) -> "ShaderProgram":
+        """Десериализует шейдер из словаря."""
+        source_path = data.get("path") if data.get("type") == "path" else None
+        return cls(
+            vertex_source=data["vertex"],
+            fragment_source=data["fragment"],
+            geometry_source=data.get("geometry"),
+            source_path=source_path,
+        )

@@ -120,26 +120,6 @@ class MaterialAsset(Asset):
             self._loaded = True
             self._bump_version()
 
-    # --- Serialization ---
-
-    def serialize(self) -> dict:
-        """Serialize material asset reference."""
-        return {
-            "uuid": self.uuid,
-            "name": self._name,
-            "source_path": str(self._source_path) if self._source_path else None,
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict, context=None) -> "MaterialAsset":
-        """Deserialize material asset (lazy - doesn't load material)."""
-        return cls(
-            material=None,
-            name=data.get("name", "material"),
-            source_path=data.get("source_path"),
-            uuid=data.get("uuid"),
-        )
-
     # --- Factory methods ---
 
     @classmethod

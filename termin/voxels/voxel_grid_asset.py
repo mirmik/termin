@@ -77,26 +77,6 @@ class VoxelGridAsset(Asset):
         self._grid = None
         self._loaded = False
 
-    # --- Serialization ---
-
-    def serialize(self) -> dict:
-        """Serialize voxel grid asset reference."""
-        return {
-            "uuid": self.uuid,
-            "name": self._name,
-            "source_path": str(self._source_path) if self._source_path else None,
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict, context=None) -> "VoxelGridAsset":
-        """Deserialize voxel grid asset (lazy - doesn't load data)."""
-        return cls(
-            grid=None,
-            name=data.get("name", "voxel_grid"),
-            source_path=data.get("source_path"),
-            uuid=data.get("uuid"),
-        )
-
     # --- Factory methods ---
 
     @classmethod

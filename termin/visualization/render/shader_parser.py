@@ -498,9 +498,15 @@ class ShaderMultyPhaseProgramm:
     Полное описание мультифазной программы.
     """
 
-    def __init__(self, program: Optional[str], phases: List[ShaderPhase]):
+    def __init__(
+        self,
+        program: Optional[str],
+        phases: List[ShaderPhase],
+        source_path: Optional[str] = None,
+    ):
         self.program = program
         self.phases = phases
+        self.source_path: Optional[str] = source_path
 
     @staticmethod
     def from_tree(tree: Dict[str, Any]) -> "ShaderMultyPhaseProgramm":
@@ -513,3 +519,88 @@ class ShaderMultyPhaseProgramm:
         for phase_dict in phases_list_raw:
             phases.append(ShaderPhase.from_tree(phase_dict))
         return ShaderMultyPhaseProgramm(program=program_name, phases=phases)
+
+    # ----------------------------------------------------------------
+    # Сериализация
+    # ----------------------------------------------------------------
+
+    def direct_serialize(self) -> dict:
+        """
+        Сериализует шейдерную программу в словарь.
+
+        Если source_path задан, возвращает ссылку на файл.
+        Иначе сериализует данные inline.
+        """
+        if self.source_path is not None:
+            return {
+                "type": "path",
+                "path": self.source_path,
+            }
+
+        phases_data = []
+        for phase in self.phases:
+            phase_data = {
+                "phase_mark": phase.phase_mark,
+                "priority": phase.priority,
+                "stages": {
+                    name: stage.source
+                    for name, stage in phase.stages.items()
+                },
+            }
+            if phase.gl_depth_mask is not None:
+                phase_data["gl_depth_mask"] = phase.gl_depth_mask
+            if phase.gl_depth_test is not None:
+                phase_data["gl_depth_test"] = phase.gl_depth_test
+            if phase.gl_blend is not None:
+                phase_data["gl_blend"] = phase.gl_blend
+            if phase.gl_cull is not None:
+                phase_data["gl_cull"] = phase.gl_cull
+            if phase.uniforms:
+                phase_data["uniforms"] = [
+                    {"name": u.name, "type": u.type, "default": u.default}
+                    for u in phase.uniforms
+                ]
+            phases_data.append(phase_data)
+
+        return {
+            "type": "inline",
+            "program": self.program,
+            "phases": phases_data,
+        }
+
+    @classmethod
+    def direct_deserialize(cls, data: dict) -> "ShaderMultyPhaseProgramm":
+        """Десериализует шейдерную программу из словаря."""
+        source_path = data.get("path") if data.get("type") == "path" else None
+
+        phases = []
+        for phase_data in data.get("phases", []):
+            stages = {
+                name: ShasderStage(name=name, source=source)
+                for name, source in phase_data.get("stages", {}).items()
+            }
+            uniforms = [
+                UniformProperty(
+                    name=u["name"],
+                    type=u["type"],
+                    default=u.get("default"),
+                )
+                for u in phase_data.get("uniforms", [])
+            ]
+            phase = ShaderPhase(
+                phase_mark=phase_data["phase_mark"],
+                priority=phase_data.get("priority", 0),
+                gl_depth_mask=phase_data.get("gl_depth_mask"),
+                gl_depth_test=phase_data.get("gl_depth_test"),
+                gl_blend=phase_data.get("gl_blend"),
+                gl_cull=phase_data.get("gl_cull"),
+                stages=stages,
+                uniforms=uniforms,
+            )
+            phases.append(phase)
+
+        return cls(
+            program=data.get("program"),
+            phases=phases,
+            source_path=source_path,
+        )

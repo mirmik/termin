@@ -81,6 +81,7 @@ class Mesh3(Mesh):
         triangles: np.ndarray,
         uvs: np.ndarray | None = None,
         normals: np.ndarray | None = None,
+        source_path: str | None = None,
     ):
         super().__init__(vertices, triangles)
 
@@ -88,6 +89,7 @@ class Mesh3(Mesh):
         self._validate_mesh()
         self.vertex_normals = np.asarray(normals, dtype=np.float32) if normals is not None else None
         self.face_normals = None
+        self.source_path: str | None = source_path
 
     def copy(self) -> "Mesh3":
         uvs_copy = self.uvs.copy() if self.uvs is not None else None
@@ -233,6 +235,45 @@ class Mesh3(Mesh):
                 triangles[i, [1, 2]] = triangles[i, [2, 1]]
 
         return Mesh3(vertices=vertices, triangles=triangles)
+
+    # ----------------------------------------------------------------
+    # Сериализация
+    # ----------------------------------------------------------------
+
+    def direct_serialize(self) -> dict:
+        """
+        Сериализует меш в словарь.
+
+        Если source_path задан, возвращает ссылку на файл.
+        Иначе сериализует данные inline.
+        """
+        if self.source_path is not None:
+            return {
+                "type": "path",
+                "path": self.source_path,
+            }
+
+        result = {
+            "type": "inline",
+            "vertices": self.vertices.tolist(),
+            "triangles": self.triangles.tolist(),
+        }
+        if self.uvs is not None:
+            result["uvs"] = self.uvs.tolist()
+        if self.vertex_normals is not None:
+            result["normals"] = self.vertex_normals.tolist()
+        return result
+
+    @classmethod
+    def direct_deserialize(cls, data: dict) -> "Mesh3":
+        """Десериализует меш из словаря."""
+        vertices = np.array(data["vertices"], dtype=np.float32)
+        triangles = np.array(data["triangles"], dtype=np.int32)
+        uvs = np.array(data["uvs"], dtype=np.float32) if "uvs" in data else None
+        normals = np.array(data["normals"], dtype=np.float32) if "normals" in data else None
+        source_path = data.get("path") if data.get("type") == "path" else None
+        return cls(vertices=vertices, triangles=triangles, uvs=uvs, normals=normals, source_path=source_path)
+
 
 # Re-export primitives for backward compatibility
 from .primitives import (

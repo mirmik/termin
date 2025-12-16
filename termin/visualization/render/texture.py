@@ -34,12 +34,17 @@ class Texture:
     @property
     def asset(self) -> TextureAsset | None:
         """Get underlying TextureAsset."""
+        return self._handle.get_asset()
+
+    @property
+    def texture_data(self) -> TextureData | None:
+        """Get underlying TextureData."""
         return self._handle.get()
 
     @property
     def source_path(self) -> str | None:
         """Source path of the texture."""
-        asset = self._handle.get()
+        asset = self._handle.get_asset()
         if asset is not None and asset.source_path is not None:
             return str(asset.source_path)
         return None
@@ -47,17 +52,17 @@ class Texture:
     @property
     def _size(self) -> tuple[int, int] | None:
         """Size of the texture (width, height)."""
-        asset = self._handle.get()
-        if asset is not None and asset.texture_data is not None:
-            return (asset.width, asset.height)
+        td = self._handle.get()
+        if td is not None:
+            return (td.width, td.height)
         return None
 
     @property
     def _image_data(self) -> np.ndarray | None:
         """Raw image data (for preview)."""
-        asset = self._handle.get()
-        if asset is not None and asset.texture_data is not None:
-            return asset.texture_data.data
+        td = self._handle.get()
+        if td is not None:
+            return td.data
         return None
 
     def load(self, path: str | Path) -> None:
@@ -73,7 +78,7 @@ class Texture:
 
         If source_path is set, reloads the texture from disk.
         """
-        asset = self._handle.get()
+        asset = self._handle.get_asset()
         if asset is not None:
             asset.reload()
         self._gpu.delete()
@@ -81,14 +86,16 @@ class Texture:
 
     def bind(self, graphics: "GraphicsBackend", unit: int = 0, context_key: int | None = None) -> None:
         """Bind texture to specified unit."""
-        asset = self._handle.get()
-        if asset is None or asset.texture_data is None:
+        texture_data = self._handle.get()
+        asset = self._handle.get_asset()
+        if texture_data is None:
             return
 
+        version = asset.version if asset else 0
         self._gpu.bind(
             graphics=graphics,
-            texture_data=asset.texture_data,
-            version=asset.version,
+            texture_data=texture_data,
+            version=version,
             unit=unit,
             context_key=context_key,
         )
@@ -106,14 +113,13 @@ class Texture:
         if self._preview_pixmap is not None:
             return self._preview_pixmap
 
-        asset = self._handle.get()
-        if asset is None or asset.texture_data is None:
+        texture_data = self._handle.get()
+        if texture_data is None:
             return None
 
         from PyQt6.QtGui import QImage, QPixmap
         from PyQt6.QtCore import Qt
 
-        texture_data = asset.texture_data
         width = texture_data.width
         height = texture_data.height
         data = texture_data.data

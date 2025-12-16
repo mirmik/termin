@@ -82,26 +82,6 @@ class ShaderAsset(Asset):
         self._program = None
         self._loaded = False
 
-    # --- Serialization ---
-
-    def serialize(self) -> dict:
-        """Serialize shader asset reference."""
-        return {
-            "uuid": self.uuid,
-            "name": self._name,
-            "source_path": str(self._source_path) if self._source_path else None,
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict, context=None) -> "ShaderAsset":
-        """Deserialize shader asset (lazy - doesn't load shader)."""
-        return cls(
-            program=None,
-            name=data.get("name", "shader"),
-            source_path=data.get("source_path"),
-            uuid=data.get("uuid"),
-        )
-
     # --- Factory methods ---
 
     @classmethod

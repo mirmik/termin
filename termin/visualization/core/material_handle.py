@@ -1,7 +1,9 @@
 """
-MaterialHandle — умная ссылка на MaterialAsset.
+MaterialHandle — умная ссылка на материал.
 
-Указывает на MaterialAsset напрямую или по имени через ResourceManager.
+Два режима:
+1. Direct — хранит Material напрямую
+2. Asset — хранит MaterialAsset (lookup по имени через ResourceManager)
 """
 
 from __future__ import annotations
@@ -15,61 +17,60 @@ if TYPE_CHECKING:
     from termin.visualization.core.material_asset import MaterialAsset
 
 
-def _get_material_asset(name: str) -> "MaterialAsset | None":
-    """Lookup MaterialAsset by name in ResourceManager."""
-    from termin.visualization.core.resources import ResourceManager
-
-    return ResourceManager.instance().get_material_asset(name)
-
-
-class MaterialHandle(ResourceHandle["MaterialAsset"]):
+class MaterialHandle(ResourceHandle["Material", "MaterialAsset"]):
     """
-    Умная ссылка на MaterialAsset.
+    Умная ссылка на материал.
 
     Использование:
-        handle = MaterialHandle.from_asset(asset)     # прямая ссылка на asset
-        handle = MaterialHandle.from_material(mat)   # прямая ссылка (создаёт asset)
-        handle = MaterialHandle.from_name("Metal")   # по имени (hot-reload)
+        handle = MaterialHandle.from_direct(material)  # raw Material
+        handle = MaterialHandle.from_asset(asset)      # MaterialAsset
+        handle = MaterialHandle.from_name("Metal")     # lookup в ResourceManager
     """
 
-    _resource_getter = staticmethod(_get_material_asset)
+    @classmethod
+    def from_direct(cls, material: "Material") -> "MaterialHandle":
+        """Создать handle с raw Material."""
+        handle = cls()
+        handle._init_direct(material)
+        return handle
+
+    # Alias for backward compatibility
+    from_material = from_direct
 
     @classmethod
     def from_asset(cls, asset: "MaterialAsset") -> "MaterialHandle":
-        """Создать handle с прямой ссылкой на MaterialAsset."""
+        """Создать handle с MaterialAsset."""
         handle = cls()
-        handle._init_direct(asset)
+        handle._init_asset(asset)
         return handle
-
-    @classmethod
-    def from_material(cls, material: "Material") -> "MaterialHandle":
-        """
-        Создать handle из Material (обратная совместимость).
-
-        Создаёт MaterialAsset из Material.
-        """
-        from termin.visualization.core.material_asset import MaterialAsset
-
-        asset = MaterialAsset.from_material(material)
-        return cls.from_asset(asset)
 
     @classmethod
     def from_name(cls, name: str) -> "MaterialHandle":
-        """Создать handle по имени материала."""
-        handle = cls()
-        handle._init_named(name)
-        return handle
+        """Создать handle по имени (lookup в ResourceManager)."""
+        from termin.visualization.core.resources import ResourceManager
+
+        asset = ResourceManager.instance().get_material_asset(name)
+        if asset is not None:
+            return cls.from_asset(asset)
+        return cls()
+
+    # --- Resource extraction ---
+
+    def _get_resource_from_asset(self, asset: "MaterialAsset") -> "Material | None":
+        """Извлечь Material из MaterialAsset."""
+        return asset.material
 
     # --- Convenience accessors ---
 
-    def get_asset(self) -> "MaterialAsset | None":
-        """Получить MaterialAsset."""
+    @property
+    def material(self) -> "Material | None":
+        """Получить Material."""
         return self.get()
 
     @property
     def asset(self) -> "MaterialAsset | None":
-        """Алиас для get()."""
-        return self.get()
+        """Получить MaterialAsset."""
+        return self.get_asset()
 
     def get_material(self) -> "Material":
         """
@@ -78,43 +79,28 @@ class MaterialHandle(ResourceHandle["MaterialAsset"]):
         Returns:
             Material или ErrorMaterial если материал недоступен
         """
-        asset = self.get()
-        if asset is not None and asset.material is not None:
-            return asset.material
+        mat = self.get()
+        if mat is not None:
+            return mat
 
         from termin.visualization.core.material import get_error_material
-
         return get_error_material()
 
     def get_material_or_none(self) -> "Material | None":
         """Получить Material или None если недоступен."""
-        asset = self.get()
-        if asset is not None:
-            return asset.material
-        return None
+        return self.get()
 
     # --- Serialization ---
 
-    def serialize(self) -> dict:
-        """Сериализация."""
-        if self._direct is not None:
-            if self._direct.source_path:
-                return {
-                    "type": "path",
-                    "path": str(self._direct.source_path),
-                }
-            # No source_path - save by name (material must exist in ResourceManager)
+    def _serialize_direct(self) -> dict:
+        """Сериализовать raw Material."""
+        if self._direct is not None and self._direct.source_path:
             return {
-                "type": "named",
-                "name": self._direct.name,
+                "type": "path",
+                "path": str(self._direct.source_path),
             }
-        elif self._name is not None:
-            return {
-                "type": "named",
-                "name": self._name,
-            }
-        else:
-            return {"type": "none"}
+        # No source_path - can't serialize raw material without file
+        return {"type": "direct_unsupported"}
 
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "MaterialHandle":

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -24,6 +25,7 @@ class TextureData:
         flip_x: Mirror horizontally when uploading to GPU.
         flip_y: Flip vertically when uploading to GPU (default True for OpenGL).
         transpose: Swap X and Y axes when uploading to GPU.
+        source_path: Path to source file (not used in operation, for serialization).
     """
 
     data: np.ndarray
@@ -33,6 +35,7 @@ class TextureData:
     flip_x: bool = False
     flip_y: bool = True  # OpenGL default
     transpose: bool = False
+    source_path: str | None = None
 
     @classmethod
     def from_file(cls, path: str | Path) -> "TextureData":
@@ -127,3 +130,58 @@ class TextureData:
             data = data[::-1, :, :].copy()
 
         return data, size
+
+    # ----------------------------------------------------------------
+    # Сериализация
+    # ----------------------------------------------------------------
+
+    def direct_serialize(self) -> dict:
+        """
+        Сериализует текстуру в словарь.
+
+        Если source_path задан, возвращает ссылку на файл.
+        Иначе сериализует данные в base64.
+        """
+        if self.source_path is not None:
+            return {
+                "type": "path",
+                "path": self.source_path,
+            }
+
+        # Inline сериализация через base64
+        data_bytes = self.data.tobytes()
+        data_b64 = base64.b64encode(data_bytes).decode("ascii")
+
+        return {
+            "type": "inline",
+            "width": self.width,
+            "height": self.height,
+            "channels": self.channels,
+            "flip_x": self.flip_x,
+            "flip_y": self.flip_y,
+            "transpose": self.transpose,
+            "data_b64": data_b64,
+        }
+
+    @classmethod
+    def direct_deserialize(cls, data: dict) -> "TextureData":
+        """Десериализует текстуру из словаря."""
+        width = data["width"]
+        height = data["height"]
+        channels = data.get("channels", 4)
+
+        data_bytes = base64.b64decode(data["data_b64"])
+        pixels = np.frombuffer(data_bytes, dtype=np.uint8).reshape(height, width, channels)
+
+        source_path = data.get("path") if data.get("type") == "path" else None
+
+        return cls(
+            data=pixels,
+            width=width,
+            height=height,
+            channels=channels,
+            flip_x=data.get("flip_x", False),
+            flip_y=data.get("flip_y", True),
+            transpose=data.get("transpose", False),
+            source_path=source_path,
+        )

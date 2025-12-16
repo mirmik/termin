@@ -77,26 +77,6 @@ class NavMeshAsset(Asset):
         self._navmesh = None
         self._loaded = False
 
-    # --- Serialization ---
-
-    def serialize(self) -> dict:
-        """Serialize navmesh asset reference."""
-        return {
-            "uuid": self.uuid,
-            "name": self._name,
-            "source_path": str(self._source_path) if self._source_path else None,
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict, context=None) -> "NavMeshAsset":
-        """Deserialize navmesh asset (lazy - doesn't load data)."""
-        return cls(
-            navmesh=None,
-            name=data.get("name", "navmesh"),
-            source_path=data.get("source_path"),
-            uuid=data.get("uuid"),
-        )
-
     # --- Factory methods ---
 
     @classmethod

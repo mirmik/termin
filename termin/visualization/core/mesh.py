@@ -66,7 +66,7 @@ class MeshDrawable:
         То, что кладём в сериализацию и по чему грузим обратно.
         Обычно это путь к файлу или GUID.
         """
-        asset = self._handle.get()
+        asset = self._handle.get_asset()
         if asset is not None and asset.source_path is not None:
             return str(asset.source_path)
         return None
@@ -74,18 +74,18 @@ class MeshDrawable:
     @property
     def name(self) -> Optional[str]:
         """Имя ресурса."""
-        asset = self._handle.get()
+        asset = self._handle.get_asset()
         return asset.name if asset else None
 
     @name.setter
     def name(self, value: Optional[str]) -> None:
         """Устанавливает имя."""
-        asset = self._handle.get()
+        asset = self._handle.get_asset()
         if asset is not None and value is not None:
             asset.name = value
 
     def set_source_id(self, source_id: str):
-        asset = self._handle.get()
+        asset = self._handle.get_asset()
         if asset is not None:
             asset.source_path = source_id
             if asset.name == "mesh":
@@ -96,18 +96,17 @@ class MeshDrawable:
     @property
     def asset(self) -> MeshAsset | None:
         """Получить MeshAsset."""
-        return self._handle.get()
+        return self._handle.get_asset()
 
     @property
     def mesh(self) -> Mesh3 | None:
         """Геометрия (Mesh3)."""
-        asset = self._handle.get()
-        return asset.mesh_data if asset else None
+        return self._handle.get()
 
     @mesh.setter
     def mesh(self, value: Mesh3):
         """Устанавливает геометрию."""
-        asset = self._handle.get()
+        asset = self._handle.get_asset()
         if asset is not None:
             asset.mesh_data = value
             # version автоматически увеличится в asset.mesh_data setter
@@ -116,8 +115,8 @@ class MeshDrawable:
 
     def upload(self, context: RenderContext):
         """Загрузить в GPU (если ещё не загружено)."""
-        asset = self._handle.get()
-        if asset is None or asset.mesh_data is None:
+        mesh = self._handle.get()
+        if mesh is None:
             return
         # MeshGPU сам проверит версию и загрузит если нужно
         # Но upload() в старом API не рисует, поэтому просто пропускаем
@@ -125,10 +124,12 @@ class MeshDrawable:
 
     def draw(self, context: RenderContext):
         """Рисует меш."""
-        asset = self._handle.get()
-        if asset is None or asset.mesh_data is None:
+        mesh = self._handle.get()
+        asset = self._handle.get_asset()
+        if mesh is None:
             return
-        self._gpu.draw(context, asset.mesh_data, asset.version)
+        version = asset.version if asset else 0
+        self._gpu.draw(context, mesh, version)
 
     def delete(self):
         """Удаляет GPU ресурсы."""
@@ -143,7 +144,7 @@ class MeshDrawable:
         Сохраняет только ссылку на файл (source_path).
         Inline сериализация удалена.
         """
-        asset = self._handle.get()
+        asset = self._handle.get_asset()
         if asset is None:
             return {"type": "none"}
 
@@ -196,17 +197,17 @@ class MeshDrawable:
 
     def interleaved_buffer(self):
         """Проброс к геометрии."""
-        asset = self._handle.get()
-        if asset is None or asset.mesh_data is None:
+        mesh = self._handle.get()
+        if mesh is None:
             return None
-        return asset.mesh_data.interleaved_buffer()
+        return mesh.interleaved_buffer()
 
     def get_vertex_layout(self):
         """Проброс к геометрии."""
-        asset = self._handle.get()
-        if asset is None or asset.mesh_data is None:
+        mesh = self._handle.get()
+        if mesh is None:
             return None
-        return asset.mesh_data.get_vertex_layout()
+        return mesh.get_vertex_layout()
 
 
 class Mesh2Drawable:

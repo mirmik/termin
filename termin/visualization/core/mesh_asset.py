@@ -112,26 +112,6 @@ class MeshAsset(Asset):
             return None
         return self._mesh_data.get_vertex_layout()
 
-    # --- Serialization ---
-
-    def serialize(self) -> dict:
-        """Serialize mesh asset reference."""
-        return {
-            "uuid": self.uuid,
-            "name": self._name,
-            "source_path": str(self._source_path) if self._source_path else None,
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict, context=None) -> "MeshAsset":
-        """Deserialize mesh asset (lazy - doesn't load data)."""
-        return cls(
-            mesh_data=None,
-            name=data.get("name", "mesh"),
-            source_path=data.get("source_path"),
-            uuid=data.get("uuid"),
-        )
-
     # --- Factory methods ---
 
     @classmethod

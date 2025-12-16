@@ -425,6 +425,58 @@ class Material:
 
         self.shader_name = shader_name
 
+    # --- Serialization ---
+
+    def direct_serialize(self) -> dict:
+        """
+        Сериализует материал.
+
+        Если материал загружен из .material файла, возвращает ссылку на файл.
+        Иначе сериализует inline со всеми фазами.
+        """
+        if self.source_path is not None:
+            return {
+                "type": "path",
+                "path": self.source_path,
+                "name": self.name,
+            }
+
+        return {
+            "type": "inline",
+            "name": self.name,
+            "shader_name": self.shader_name,
+            "phases": [phase.serialize() for phase in self.phases],
+        }
+
+    @classmethod
+    def direct_deserialize(cls, data: dict, context=None) -> "Material":
+        """
+        Десериализует материал.
+
+        Поддерживает типы:
+        - "path": ссылка на .material файл
+        - "inline": полная inline-сериализация
+        """
+        material_type = data.get("type", "inline")
+
+        if material_type == "inline":
+            mat = cls.__new__(cls)
+            mat.name = data.get("name")
+            mat.source_path = None
+            mat.shader_path = None
+            mat.shader_name = data.get("shader_name")
+            mat.phases = [
+                MaterialPhase.deserialize(phase_data, context)
+                for phase_data in data.get("phases", [])
+            ]
+            return mat
+
+        raise ValueError(f"Unknown material type: {material_type}")
+
+    # Backward compatibility aliases
+    serialize = direct_serialize
+    deserialize = direct_deserialize
+
     @classmethod
     def from_parsed(
         cls,

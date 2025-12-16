@@ -1,7 +1,11 @@
 """
 ResourceHandle — базовый класс для умных ссылок на ресурсы.
 
-Handle указывает на Asset напрямую или по имени через ResourceManager.
+Три режима работы:
+1. Direct — хранит raw объект напрямую (Texture, ShaderProgram)
+2. Asset — хранит ссылку на Asset
+3. Named — хранит имя, ищет в ResourceManager при get()
+
 ResourceKeeper оставлен для обратной совместимости (VoxelGrid, NavMesh, AnimationClip).
 """
 
@@ -10,9 +14,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 
 if TYPE_CHECKING:
-    pass
+    from termin.visualization.core.asset import Asset
 
-T = TypeVar("T")
+T = TypeVar("T")  # Raw resource type (Texture, ShaderProgram, etc.)
+AssetT = TypeVar("AssetT", bound="Asset")  # Asset type
 
 
 class ResourceKeeper(Generic[T]):
@@ -62,58 +67,63 @@ class ResourceKeeper(Generic[T]):
         self._resource = resource
 
 
-class ResourceHandle(Generic[T]):
+class ResourceHandle(Generic[T, AssetT]):
     """
-    Базовая умная ссылка на ресурс (Asset).
+    Базовая умная ссылка на ресурс.
 
     Два режима работы:
-    1. Direct — хранит прямую ссылку на Asset
-    2. Named — хранит имя, ищет Asset в ResourceManager при get()
+    1. Direct — хранит raw объект напрямую (Texture, ShaderProgram)
+    2. Asset — хранит ссылку на Asset (lookup по имени через ResourceManager)
     """
 
-    # Subclasses должны переопределить для lookup по имени
-    _resource_getter: Callable[[str], T | None] | None = None
-
     def __init__(self):
-        self._direct: T | None = None
-        self._name: str | None = None
-        self._keeper: "ResourceKeeper[T] | None" = None
+        self._direct: T | None = None  # Raw object
+        self._asset: AssetT | None = None  # Asset wrapper
 
     @property
     def is_direct(self) -> bool:
-        """True если это прямая ссылка на ресурс."""
+        """True если хранится raw объект."""
         return self._direct is not None
 
     @property
-    def is_named(self) -> bool:
-        """True если это ссылка по имени."""
-        return self._name is not None and self._direct is None
+    def is_asset(self) -> bool:
+        """True если хранится Asset."""
+        return self._asset is not None
 
     @property
     def name(self) -> str | None:
-        """Имя ресурса."""
-        if self._direct is not None and hasattr(self._direct, "name"):
-            return self._direct.name  # type: ignore
-        return self._name
+        """Имя ресурса (из Asset)."""
+        if self._asset is not None:
+            return self._asset.name  # type: ignore
+        return None
+
+    def get_asset(self) -> AssetT | None:
+        """Получить Asset."""
+        return self._asset
 
     def get(self) -> T | None:
         """
-        Получить ресурс.
+        Получить raw ресурс.
 
         Returns:
-            Ресурс или None если недоступен
+            Raw ресурс или None если недоступен
         """
+        # Direct raw object
         if self._direct is not None:
             return self._direct
 
-        # Legacy: через keeper (VoxelGrid, NavMesh, AnimationClip)
-        if self._keeper is not None:
-            return self._keeper.resource
+        # From asset
+        if self._asset is not None:
+            return self._get_resource_from_asset(self._asset)
 
-        # New: через _resource_getter (Mesh, Texture, Material, Shader)
-        if self._name is not None and self._resource_getter is not None:
-            return self._resource_getter(self._name)
+        return None
 
+    def _get_resource_from_asset(self, asset: AssetT) -> T | None:
+        """
+        Извлечь raw ресурс из Asset.
+
+        Subclasses должны переопределить.
+        """
         return None
 
     def get_or_none(self) -> T | None:
@@ -121,35 +131,37 @@ class ResourceHandle(Generic[T]):
         return self.get()
 
     def _init_direct(self, resource: T) -> None:
-        """Инициализировать как прямую ссылку."""
+        """Инициализировать с raw объектом."""
         self._direct = resource
-        self._name = None
+        self._asset = None
 
-    def _init_named(self, name: str, keeper: "ResourceKeeper[T] | None" = None) -> None:
-        """
-        Инициализировать как ссылку по имени.
-
-        Args:
-            name: Имя ресурса
-            keeper: (legacy) ResourceKeeper для VoxelGrid/NavMesh/AnimationClip
-        """
+    def _init_asset(self, asset: AssetT) -> None:
+        """Инициализировать с Asset."""
         self._direct = None
-        self._name = name
-        self._keeper = keeper
+        self._asset = asset
 
     def serialize(self) -> dict:
         """Сериализация для сохранения сцены."""
         if self._direct is not None:
-            if hasattr(self._direct, "serialize"):
+            # Raw object - subclass должен реализовать _serialize_direct
+            return self._serialize_direct()
+        elif self._asset is not None:
+            if self._asset.source_path:
                 return {
-                    "type": "direct",
-                    "data": self._direct.serialize(),  # type: ignore
+                    "type": "path",
+                    "path": str(self._asset.source_path),
                 }
-            return {"type": "direct_unsupported"}
-        elif self._name is not None:
             return {
                 "type": "named",
-                "name": self._name,
+                "name": self._asset.name,
             }
         else:
             return {"type": "none"}
+
+    def _serialize_direct(self) -> dict:
+        """
+        Сериализовать raw объект.
+
+        Subclasses должны переопределить.
+        """
+        return {"type": "direct_unsupported"}

@@ -10,11 +10,19 @@ class AnimationClip:
     tps: ticks per second
     """
 
-    def __init__(self, name: str, channels: Dict[str, AnimationChannel], tps: float, loop=True):
+    def __init__(
+        self,
+        name: str,
+        channels: Dict[str, AnimationChannel],
+        tps: float,
+        loop: bool = True,
+        source_path: str | None = None,
+    ):
         self.name = name
         self.channels = channels
         self.loop = loop
         self.tps = tps
+        self.source_path: str | None = source_path
 
         # переводим тики → секунды
         max_ticks = 0.0
@@ -90,9 +98,21 @@ class AnimationClip:
 
     # --------------------------------------------
 
-    def serialize(self) -> dict:
-        """Сериализует клип в словарь для JSON."""
+    def direct_serialize(self) -> dict:
+        """
+        Сериализует клип в словарь для JSON.
+
+        Если source_path задан, возвращает ссылку на файл.
+        Иначе сериализует данные inline.
+        """
+        if self.source_path is not None:
+            return {
+                "type": "path",
+                "path": self.source_path,
+            }
+
         return {
+            "type": "inline",
             "version": 1,
             "name": self.name,
             "tps": self.tps,
@@ -101,8 +121,9 @@ class AnimationClip:
         }
 
     @classmethod
-    def deserialize(cls, data: dict) -> "AnimationClip":
+    def direct_deserialize(cls, data: dict) -> "AnimationClip":
         """Десериализует клип из словаря."""
+        source_path = data.get("path") if data.get("type") == "path" else None
         channels = {
             name: AnimationChannel.deserialize(ch_data)
             for name, ch_data in data.get("channels", {}).items()
@@ -112,4 +133,9 @@ class AnimationClip:
             channels=channels,
             tps=data.get("tps", 30.0),
             loop=data.get("loop", True),
+            source_path=source_path,
         )
+
+    # Backward compatibility aliases
+    serialize = direct_serialize
+    deserialize = direct_deserialize

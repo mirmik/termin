@@ -73,6 +73,9 @@ class NavMesh:
     name: str = ""
     """Имя навигационной сетки."""
 
+    source_path: str | None = None
+    """Путь к файлу-источнику."""
+
     def polygon_count(self) -> int:
         """Количество полигонов."""
         return len(self.polygons)
@@ -84,3 +87,59 @@ class NavMesh:
     def vertex_count(self) -> int:
         """Общее количество вершин."""
         return sum(len(p.vertices) for p in self.polygons)
+
+    # ----------------------------------------------------------------
+    # Сериализация
+    # ----------------------------------------------------------------
+
+    def direct_serialize(self) -> dict:
+        """
+        Сериализует NavMesh в словарь.
+
+        Если source_path задан, возвращает ссылку на файл.
+        Иначе сериализует данные inline.
+        """
+        if self.source_path is not None:
+            return {
+                "type": "path",
+                "path": self.source_path,
+            }
+
+        return {
+            "type": "inline",
+            "name": self.name,
+            "cell_size": self.cell_size,
+            "origin": self.origin.tolist(),
+            "polygons": [
+                {
+                    "vertices": p.vertices.tolist(),
+                    "triangles": p.triangles.tolist(),
+                    "normal": p.normal.tolist(),
+                    "neighbors": p.neighbors,
+                }
+                for p in self.polygons
+            ],
+        }
+
+    @classmethod
+    def direct_deserialize(cls, data: dict) -> "NavMesh":
+        """Десериализует NavMesh из словаря."""
+        source_path = data.get("path") if data.get("type") == "path" else None
+
+        polygons = []
+        for p_data in data.get("polygons", []):
+            polygon = NavPolygon(
+                vertices=np.array(p_data["vertices"], dtype=np.float32),
+                triangles=np.array(p_data["triangles"], dtype=np.int32),
+                normal=np.array(p_data["normal"], dtype=np.float32),
+                neighbors=p_data.get("neighbors", []),
+            )
+            polygons.append(polygon)
+
+        return cls(
+            polygons=polygons,
+            cell_size=data.get("cell_size", 0.25),
+            origin=np.array(data.get("origin", [0, 0, 0]), dtype=np.float32),
+            name=data.get("name", ""),
+            source_path=source_path,
+        )

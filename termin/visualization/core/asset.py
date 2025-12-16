@@ -158,8 +158,8 @@ class Asset(Identifiable):
         """
         self._loaded = False
 
-    def serialize(self) -> dict:
-        """Serialize asset reference for scene saving."""
+    def serialize_ref(self) -> dict:
+        """Serialize asset reference (uuid, name, source_path) for scene saving."""
         return {
             "uuid": self.uuid,
             "name": self._name,
@@ -167,7 +167,7 @@ class Asset(Identifiable):
         }
 
     @classmethod
-    def deserialize(cls, data: dict, context=None) -> "Asset":
+    def deserialize_ref(cls, data: dict, context=None) -> "Asset":
         """
         Deserialize asset.
 

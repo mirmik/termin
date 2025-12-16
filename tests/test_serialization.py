@@ -79,45 +79,70 @@ def test_material_phase_json_serializable():
 def test_material_serialize_inline():
     """Material без source_path сериализуется inline."""
     from termin.visualization.core.material import Material
+    from termin.visualization.render.shader import ShaderProgram
 
-    mat = Material(color=np.array([0.5, 0.5, 0.5, 1.0], dtype=np.float32))
-    mat.name = "test_material"
+    shader = ShaderProgram(
+        vertex_source="void main() { gl_Position = vec4(0); }",
+        fragment_source="void main() { gl_FragColor = vec4(1); }",
+    )
+    mat = Material(
+        shader=shader,
+        color=np.array([1.0, 0.5, 0.2, 1.0], dtype=np.float32),
+        name="test_material",
+    )
+    mat.uniforms["roughness"] = 0.5
 
     data = mat.serialize()
 
     assert data["type"] == "inline"
     assert data["name"] == "test_material"
     assert "phases" in data
-    assert len(data["phases"]) > 0
+    assert len(data["phases"]) >= 1
 
 
 def test_material_serialize_file_reference():
     """Material с source_path сериализуется как ссылка на файл."""
     from termin.visualization.core.material import Material
+    from termin.visualization.render.shader import ShaderProgram
 
-    mat = Material(color=np.array([1, 0, 0, 1], dtype=np.float32))
-    mat.name = "file_material"
-    mat.source_path = "/path/to/material.shader"
+    shader = ShaderProgram(
+        vertex_source="void main() {}",
+        fragment_source="void main() {}",
+    )
+    mat = Material(
+        shader=shader,
+        name="file_material",
+        source_path="/path/to/material.material",
+    )
 
     data = mat.serialize()
 
-    assert data["type"] == "material_file"
-    assert data["source_path"] == "/path/to/material.shader"
+    assert data["type"] == "path"
+    assert data["path"] == "/path/to/material.material"
     assert data["name"] == "file_material"
 
 
 def test_material_deserialize_inline():
-    """Material десериализуется из inline данных."""
+    """Material десериализуется из inline формата."""
     from termin.visualization.core.material import Material
+    from termin.visualization.render.shader import ShaderProgram
 
-    mat = Material(color=np.array([0.8, 0.2, 0.1, 1.0], dtype=np.float32))
-    mat.name = "original"
+    shader = ShaderProgram(
+        vertex_source="void main() { gl_Position = vec4(0); }",
+        fragment_source="void main() { gl_FragColor = vec4(1); }",
+    )
+    mat = Material(
+        shader=shader,
+        color=np.array([0.8, 0.2, 0.1, 1.0], dtype=np.float32),
+        name="original",
+    )
 
     data = mat.serialize()
     restored = Material.deserialize(data)
 
     assert restored.name == "original"
     assert len(restored.phases) == len(mat.phases)
+    assert np.allclose(restored.color, [0.8, 0.2, 0.1, 1.0])
 
 
 # ============== MeshDrawable ==============
@@ -312,25 +337,20 @@ def test_resource_manager_serialize():
 
     data = rm.serialize()
 
-    assert "materials" in data
+    # Materials are NOT serialized - they are loaded from .material files
+    assert "materials" not in data
     assert "meshes" in data
-    assert "red" in data["materials"]
     assert "triangle" in data["meshes"]
 
 
 def test_resource_manager_deserialize():
     """ResourceManager десериализуется."""
     from termin.visualization.core.resources import ResourceManager
-    from termin.visualization.core.material import Material
     from termin.visualization.core.mesh import MeshDrawable
     from termin.mesh.mesh import Mesh3
 
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()
-
-    mat = Material(color=np.array([1, 0, 0, 1], dtype=np.float32))
-    mat.name = "red"
-    rm.register_material("red", mat)
 
     mesh = Mesh3(
         vertices=np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32),
@@ -342,7 +362,7 @@ def test_resource_manager_deserialize():
     data = rm.serialize()
     restored = ResourceManager.deserialize(data)
 
-    assert "red" in restored.materials
+    # Materials are NOT serialized/deserialized - they are loaded from .material files
     assert "triangle" in restored.meshes
 
 

@@ -1,7 +1,9 @@
 """
-MeshHandle — умная ссылка на MeshAsset.
+MeshHandle — умная ссылка на меш.
 
-Указывает на MeshAsset напрямую или по имени через ResourceManager.
+Два режима:
+1. Direct — хранит Mesh3 напрямую
+2. Asset — хранит MeshAsset (lookup по имени через ResourceManager)
 """
 
 from __future__ import annotations
@@ -11,125 +13,94 @@ from typing import TYPE_CHECKING
 from termin.visualization.core.resource_handle import ResourceHandle
 
 if TYPE_CHECKING:
-    from termin.visualization.core.mesh import MeshDrawable
+    from termin.mesh.mesh import Mesh3
     from termin.visualization.core.mesh_asset import MeshAsset
 
 
-def _get_mesh_asset(name: str) -> "MeshAsset | None":
-    """Lookup MeshAsset by name in ResourceManager."""
-    from termin.visualization.core.resources import ResourceManager
-
-    return ResourceManager.instance().get_mesh_asset(name)
-
-
-class MeshHandle(ResourceHandle["MeshAsset"]):
+class MeshHandle(ResourceHandle["Mesh3", "MeshAsset"]):
     """
-    Умная ссылка на MeshAsset.
+    Умная ссылка на меш.
 
     Использование:
-        handle = MeshHandle.from_asset(asset)    # прямая ссылка
-        handle = MeshHandle.from_name("cube")    # по имени (hot-reload)
+        handle = MeshHandle.from_direct(mesh)     # raw Mesh3
+        handle = MeshHandle.from_asset(asset)     # MeshAsset
+        handle = MeshHandle.from_name("cube")     # lookup в ResourceManager
     """
 
-    _resource_getter = staticmethod(_get_mesh_asset)
+    @classmethod
+    def from_direct(cls, mesh: "Mesh3") -> "MeshHandle":
+        """Создать handle с raw Mesh3."""
+        handle = cls()
+        handle._init_direct(mesh)
+        return handle
+
+    # Alias for backward compatibility
+    from_mesh = from_direct
 
     @classmethod
     def from_asset(cls, asset: "MeshAsset") -> "MeshHandle":
-        """Создать handle с прямой ссылкой на MeshAsset."""
+        """Создать handle с MeshAsset."""
         handle = cls()
-        handle._init_direct(asset)
+        handle._init_asset(asset)
         return handle
-
-    @classmethod
-    def from_mesh(cls, drawable: "MeshDrawable") -> "MeshHandle":
-        """
-        Создать handle из MeshDrawable (обратная совместимость).
-
-        Извлекает MeshAsset из MeshDrawable.
-        """
-        from termin.visualization.core.mesh import MeshDrawable
-
-        if isinstance(drawable, MeshDrawable):
-            asset = drawable.asset
-            if asset is not None:
-                return cls.from_asset(asset)
-        return cls()
 
     @classmethod
     def from_name(cls, name: str) -> "MeshHandle":
-        """Создать handle по имени меша."""
-        handle = cls()
-        handle._init_named(name)
-        return handle
+        """Создать handle по имени (lookup в ResourceManager)."""
+        from termin.visualization.core.resources import ResourceManager
+
+        asset = ResourceManager.instance().get_mesh_asset(name)
+        if asset is not None:
+            return cls.from_asset(asset)
+        return cls()
+
+    # --- Resource extraction ---
+
+    def _get_resource_from_asset(self, asset: "MeshAsset") -> "Mesh3 | None":
+        """Извлечь Mesh3 из MeshAsset."""
+        return asset.mesh_data
 
     # --- Convenience accessors ---
 
-    def get_asset(self) -> "MeshAsset | None":
-        """Получить MeshAsset."""
+    @property
+    def mesh(self) -> "Mesh3 | None":
+        """Получить Mesh3."""
         return self.get()
 
     @property
     def asset(self) -> "MeshAsset | None":
-        """Алиас для get()."""
+        """Получить MeshAsset."""
+        return self.get_asset()
+
+    def get_mesh(self) -> "Mesh3 | None":
+        """Получить Mesh3."""
         return self.get()
 
-    def get_drawable(self) -> "MeshDrawable | None":
-        """
-        Получить MeshDrawable.
-
-        Returns:
-            MeshDrawable или None если недоступен
-        """
-        from termin.visualization.core.resources import ResourceManager
-
-        # По имени - ищем MeshDrawable в ResourceManager
-        if self._name is not None:
-            return ResourceManager.instance().get_mesh(self._name)
-
-        # По asset - ищем по имени asset'а
-        asset = self.get()
-        if asset is not None:
-            return ResourceManager.instance().get_mesh(asset.name)
-
-        return None
-
-    def get_drawable_or_none(self) -> "MeshDrawable | None":
-        """Алиас для get_drawable()."""
-        return self.get_drawable()
+    def get_mesh_or_none(self) -> "Mesh3 | None":
+        """Алиас для get_mesh()."""
+        return self.get()
 
     # --- Serialization ---
 
-    def serialize(self) -> dict:
-        """Сериализация."""
-        if self._direct is not None:
-            return {
-                "type": "direct",
-                "asset": self._direct.serialize(),
-            }
-        elif self._name is not None:
-            return {
-                "type": "named",
-                "name": self._name,
-            }
-        else:
-            return {"type": "none"}
+    def _serialize_direct(self) -> dict:
+        """Сериализовать raw Mesh3 — не поддерживается."""
+        # Mesh3 слишком большой для inline сериализации
+        return {"type": "direct_unsupported"}
 
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "MeshHandle":
         """Десериализация."""
-        from termin.visualization.core.mesh_asset import MeshAsset
-
         handle_type = data.get("type", "none")
 
         if handle_type == "named":
             name = data.get("name")
             if name:
                 return cls.from_name(name)
-        elif handle_type == "direct":
-            asset_data = data.get("asset") or data.get("mesh")
-            if asset_data:
-                asset = MeshAsset.deserialize(asset_data, context)
-                if asset is not None:
-                    return cls.from_asset(asset)
+        elif handle_type == "path":
+            path = data.get("path")
+            if path:
+                from termin.visualization.core.mesh_asset import MeshAsset
+                asset = MeshAsset(mesh_data=None, source_path=path)
+                return cls.from_asset(asset)
 
         return cls()

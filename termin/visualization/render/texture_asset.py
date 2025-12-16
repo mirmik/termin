@@ -89,26 +89,6 @@ class TextureAsset(Asset):
         self._texture_data = None
         self._loaded = False
 
-    # --- Serialization ---
-
-    def serialize(self) -> dict:
-        """Serialize texture asset reference."""
-        return {
-            "uuid": self.uuid,
-            "name": self._name,
-            "source_path": str(self._source_path) if self._source_path else None,
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict, context=None) -> "TextureAsset":
-        """Deserialize texture asset (lazy - doesn't load data)."""
-        return cls(
-            texture_data=None,
-            name=data.get("name", "texture"),
-            source_path=data.get("source_path"),
-            uuid=data.get("uuid"),
-        )
-
     # --- Factory methods ---
 
     @classmethod

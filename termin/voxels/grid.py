@@ -20,19 +20,21 @@ class VoxelGrid:
         surface_normals: Словарь нормалей для поверхностных вокселей.
     """
 
-    __slots__ = ("_origin", "_cell_size", "_chunks", "_name", "_surface_normals")
+    __slots__ = ("_origin", "_cell_size", "_chunks", "_name", "_surface_normals", "_source_path")
 
     def __init__(
         self,
         origin: tuple[float, float, float] = (0.0, 0.0, 0.0),
         cell_size: float = 0.25,
         name: str = "",
+        source_path: str | None = None,
     ) -> None:
         self._origin = np.array(origin, dtype=np.float32)
         self._cell_size = cell_size
         self._chunks: dict[tuple[int, int, int], VoxelChunk] = {}
         self._name = name
         self._surface_normals: dict[tuple[int, int, int], list[np.ndarray]] = {}
+        self._source_path: str | None = source_path
 
     @property
     def origin(self) -> np.ndarray:
@@ -60,6 +62,15 @@ class VoxelGrid:
     @name.setter
     def name(self, value: str) -> None:
         self._name = value
+
+    @property
+    def source_path(self) -> str | None:
+        """Путь к файлу-источнику."""
+        return self._source_path
+
+    @source_path.setter
+    def source_path(self, value: str | None) -> None:
+        self._source_path = value
 
     @property
     def surface_normals(self) -> dict[tuple[int, int, int], list[np.ndarray]]:
@@ -409,9 +420,21 @@ class VoxelGrid:
     # Сериализация
     # ----------------------------------------------------------------
 
-    def serialize(self) -> dict:
-        """Сериализовать сетку в dict."""
+    def direct_serialize(self) -> dict:
+        """
+        Сериализовать сетку в dict.
+
+        Если source_path задан, возвращает ссылку на файл.
+        Иначе сериализует данные inline.
+        """
+        if self._source_path is not None:
+            return {
+                "type": "path",
+                "path": self._source_path,
+            }
+
         return {
+            "type": "inline",
             "origin": self._origin.tolist(),
             "cell_size": self._cell_size,
             "chunks": {
@@ -421,11 +444,13 @@ class VoxelGrid:
         }
 
     @classmethod
-    def deserialize(cls, data: dict) -> VoxelGrid:
+    def direct_deserialize(cls, data: dict) -> "VoxelGrid":
         """Десериализовать сетку из dict."""
+        source_path = data.get("path") if data.get("type") == "path" else None
         grid = cls(
             origin=tuple(data["origin"]),
             cell_size=data["cell_size"],
+            source_path=source_path,
         )
 
         for key_str, chunk_data in data.get("chunks", {}).items():
@@ -435,3 +460,7 @@ class VoxelGrid:
                 grid._chunks[(cx, cy, cz)] = chunk
 
         return grid
+
+    # Backward compatibility aliases
+    serialize = direct_serialize
+    deserialize = direct_deserialize
