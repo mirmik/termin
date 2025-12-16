@@ -47,6 +47,7 @@ class Asset(Identifiable):
         self._source_path: Path | None = Path(source_path) if source_path else None
         self._version: int = 0
         self._loaded: bool = False
+        self._last_save_mtime: float | None = None  # mtime after internal save
 
     @property
     def name(self) -> str:
@@ -84,6 +85,42 @@ class Asset(Identifiable):
     def _bump_version(self) -> None:
         """Increment version counter. Call after modifying data."""
         self._version += 1
+
+    def mark_just_saved(self) -> None:
+        """
+        Mark that the asset was just saved from within the application.
+
+        Call this after saving to file. FileWatcher will then ignore
+        the file change event since it's our own save, not external.
+        """
+        if self._source_path is not None and self._source_path.exists():
+            self._last_save_mtime = self._source_path.stat().st_mtime
+
+    def should_reload_from_file(self) -> bool:
+        """
+        Check if the file was modified externally and needs reload.
+
+        Returns:
+            True if file changed externally (not by our save), False otherwise.
+        """
+        if self._source_path is None or not self._source_path.exists():
+            return False
+
+        current_mtime = self._source_path.stat().st_mtime
+
+        # If we just saved, check if mtime matches
+        if self._last_save_mtime is not None:
+            if current_mtime == self._last_save_mtime:
+                # Our own save - reset flag and skip reload
+                self._last_save_mtime = None
+                return False
+            else:
+                # File was modified again after our save
+                self._last_save_mtime = None
+                return True
+
+        # No recent save - this is external modification
+        return True
 
     def load(self) -> bool:
         """

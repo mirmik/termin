@@ -62,6 +62,10 @@ class MaterialFileProcessor(FileTypeProcessor):
         if asset.source_path is None or not str(asset.source_path).endswith(".material"):
             return
 
+        # Skip reload if this is our own save (not external modification)
+        if not asset.should_reload_from_file():
+            return
+
         try:
             from termin.visualization.core.material import Material
 

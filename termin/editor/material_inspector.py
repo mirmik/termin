@@ -517,6 +517,14 @@ class MaterialInspector(QWidget):
             # Обновляем source_path
             self._material.source_path = str(path)
 
+            # Mark asset as just saved to prevent redundant reload from FileWatcher
+            from termin.visualization.core.resources import ResourceManager
+            rm = ResourceManager.instance()
+            asset = rm.get_material_asset(self._material.name)
+            if asset is not None:
+                asset.source_path = path  # ensure asset has same path
+                asset.mark_just_saved()
+
             return True
 
         except Exception as e:
