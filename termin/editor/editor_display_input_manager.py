@@ -383,7 +383,7 @@ class EditorDisplayInputManager:
             return
 
         # Получаем позицию entity
-        target_position = entity.transform.global_pose().translation()
+        target_position = entity.transform.global_pose().lin
 
         # Находим контроллер камеры
         camera = viewport.camera
