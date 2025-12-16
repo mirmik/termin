@@ -283,11 +283,12 @@ class SceneTreeController:
         from termin.loaders.glb_instantiator import instantiate_glb
 
         try:
-            entity = instantiate_glb(Path(glb_path))
+            result = instantiate_glb(Path(glb_path))
         except Exception as e:
             print(f"Failed to load GLB: {e}")
             return
 
+        entity = result.entity
         parent_transform = parent_entity.transform if parent_entity else None
         cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
         self._undo_handler(cmd, merge=False)
