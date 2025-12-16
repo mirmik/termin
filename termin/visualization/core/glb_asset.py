@@ -106,7 +106,9 @@ class GLBAsset(Asset):
 
             return True
         except Exception as e:
+            import traceback
             print(f"[GLBAsset] Failed to load content: {e}")
+            traceback.print_exc()
             return False
 
     def _save_spec_file(self, existing_spec_data: dict | None = None) -> bool:
@@ -133,7 +135,8 @@ class GLBAsset(Asset):
         Returns:
             (spec_data, updated) - spec_data with mesh UUIDs, and whether new UUIDs were added.
         """
-        spec_data = dict(spec_data) if spec_data else {}
+        import copy
+        spec_data = copy.deepcopy(spec_data) if spec_data else {}
 
         if self._scene_data is None:
             return spec_data, False
@@ -147,9 +150,9 @@ class GLBAsset(Asset):
         rm = ResourceManager.instance()
 
         # Get or create resources section in spec
-        if "resources" not in spec_data:
+        if "resources" not in spec_data or not isinstance(spec_data["resources"], dict):
             spec_data["resources"] = {}
-        if "meshes" not in spec_data["resources"]:
+        if "meshes" not in spec_data["resources"] or not isinstance(spec_data["resources"]["meshes"], dict):
             spec_data["resources"]["meshes"] = {}
 
         mesh_uuids = spec_data["resources"]["meshes"]
