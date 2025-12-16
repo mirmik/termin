@@ -94,12 +94,20 @@ class AnimationChannel:
 
         Args:
             ch: FBXAnimationChannel с pos_keys, rot_keys, scale_keys в тиках
+                rot_keys содержат Euler углы (в градусах) которые конвертируются в кватернионы
         """
+        from termin.geombase.pose3 import Pose3
+
         tr = [AnimationKeyframe(t, translation=np.array(v))
               for (t, v) in ch.pos_keys]
 
-        rot = [AnimationKeyframe(t, rotation=np.array(v))
-               for (t, v) in ch.rot_keys]
+        # FBX хранит rotation как Euler углы (градусы), конвертируем в кватернионы
+        rot = []
+        for (t, v) in ch.rot_keys:
+            # v = [rx, ry, rz] в градусах
+            rad = np.radians(v)
+            pose = Pose3.from_euler(rad[0], rad[1], rad[2], order='xyz')
+            rot.append(AnimationKeyframe(t, rotation=pose.ang))
 
         sc = [AnimationKeyframe(t, scale=float(np.mean(v)))
               for (t, v) in ch.scale_keys]

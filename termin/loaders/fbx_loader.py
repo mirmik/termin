@@ -305,7 +305,12 @@ def _parse_single_animation(anim_stack, out):
         layer = anim_stack.layers[0]
         node_channels = {}
 
-        for anim_prop in layer.anim_props:
+        # CRITICAL: ufbx crashes if we iterate over anim_props directly!
+        # Must cache into a Python list first.
+        n_props = len(layer.anim_props)
+        cached_props = [layer.anim_props[i] for i in range(n_props)]
+
+        for anim_prop in cached_props:
             _parse_anim_prop(anim_prop, node_channels)
 
         # Build channel list
@@ -416,18 +421,25 @@ def _extract_keys_safe(anim_value):
 def load_fbx_file(path) -> FBXSceneData:
     """Load FBX file using ufbx.
 
-    Note: ufbx has critical bugs with multiple iterations over collections.
-    All data MUST be extracted in a SINGLE pass through nodes.
+    Note: ufbx has critical bugs - accessing animations corrupts mesh data and vice versa.
+    We MUST load the file TWICE: once for animations, once for meshes.
     """
     scene_data = FBXSceneData()
 
+    # LOAD #1: Extract animations first (in separate scene instance)
+    # This must be done before mesh extraction due to ufbx memory corruption bugs
+    scene_anim = ufbx.load_file(path)
+    if not scene_anim:
+        raise RuntimeError(f"Failed to load FBX: {path}")
+    _parse_animations(scene_anim, scene_data)
+    del scene_anim  # Release animation scene
+
+    # LOAD #2: Extract meshes and materials
     scene = ufbx.load_file(path)
     if not scene:
         raise RuntimeError(f"Failed to load FBX: {path}")
 
-    # CRITICAL: ufbx crashes if we iterate over scene.meshes separately!
     # Extract ALL data in ONE pass through node tree.
-
     mesh_data_list = []
     node_data_list = []
     processed_meshes = set()  # Track by mesh name to avoid duplicates
@@ -609,8 +621,5 @@ def load_fbx_file(path) -> FBXSceneData:
         root.children.append(child)
 
     scene_data.root = root
-
-    # Parse animations (after all other processing to avoid ufbx iteration issues)
-    _parse_animations(scene, scene_data)
 
     return scene_data
