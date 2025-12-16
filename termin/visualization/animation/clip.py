@@ -26,27 +26,22 @@ class AnimationClip:
     # --------------------------------------------
 
     @staticmethod
-    def _to_str(x):
-        if isinstance(x, str): return x
-        if hasattr(x, "data"): return x.data
-        return str(x)
+    def from_fbx_clip(fbx_clip) -> "AnimationClip":
+        """
+        Создаёт AnimationClip из FBXAnimationClip.
 
-    # --------------------------------------------
-
-    @staticmethod
-    def from_assimp_clip(assimp_clip):
-        tps = getattr(assimp_clip, "tickspersecond", 0.0) or 30.0
-
+        Args:
+            fbx_clip: FBXAnimationClip из fbx_loader
+        """
         channels = {}
-        for ch in assimp_clip.channels:
-            node_name = AnimationClip._to_str(ch.node_name)
-            channels[node_name] = AnimationChannel.from_assimp_channel(ch)
+        for ch in fbx_clip.channels:
+            channels[ch.node_name] = AnimationChannel.from_fbx_channel(ch)
 
         return AnimationClip(
-            name=AnimationClip._to_str(assimp_clip.name),
+            name=fbx_clip.name,
             channels=channels,
-            tps=tps,
-            loop=True
+            tps=fbx_clip.ticks_per_second or 30.0,
+            loop=True,
         )
 
     # --------------------------------------------
@@ -70,3 +65,29 @@ class AnimationClip:
 
     def __repr__(self):
         return f"<AnimationClip name={self.name} duration={self.duration:.2f}s channels={len(self.channels)}>"
+
+    # --------------------------------------------
+
+    def serialize(self) -> dict:
+        """Сериализует клип в словарь для JSON."""
+        return {
+            "version": 1,
+            "name": self.name,
+            "tps": self.tps,
+            "loop": self.loop,
+            "channels": {name: ch.serialize() for name, ch in self.channels.items()},
+        }
+
+    @classmethod
+    def deserialize(cls, data: dict) -> "AnimationClip":
+        """Десериализует клип из словаря."""
+        channels = {
+            name: AnimationChannel.deserialize(ch_data)
+            for name, ch_data in data.get("channels", {}).items()
+        }
+        return cls(
+            name=data.get("name", "Unnamed"),
+            channels=channels,
+            tps=data.get("tps", 30.0),
+            loop=data.get("loop", True),
+        )

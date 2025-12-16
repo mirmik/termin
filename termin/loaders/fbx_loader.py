@@ -570,4 +570,7 @@ def load_fbx_file(path) -> FBXSceneData:
 
     scene_data.root = root
 
+    # Parse animations (after all other processing to avoid ufbx iteration issues)
+    _parse_animations(scene, scene_data)
+
     return scene_data

@@ -15,6 +15,8 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.voxels.grid import VoxelGrid
     from termin.navmesh.types import NavMesh
     from termin.visualization.core.navmesh_handle import NavMeshKeeper
+    from termin.visualization.animation.clip import AnimationClip
+    from termin.visualization.core.animation_clip_handle import AnimationClipKeeper
 
 
 # Список стандартных компонентов для предрегистрации.
@@ -92,6 +94,7 @@ class ResourceManager:
         self.textures: Dict[str, "Texture"] = {}
         self.voxel_grids: Dict[str, "VoxelGrid"] = {}  # VoxelGrid instances by name
         self.navmeshes: Dict[str, "NavMesh"] = {}  # NavMesh instances by name
+        self.animation_clips: Dict[str, "AnimationClip"] = {}  # AnimationClip instances by name
         self.components: Dict[str, type["Component"]] = {}
         self.frame_passes: Dict[str, type] = {}  # FramePass classes by name
         self.post_effects: Dict[str, type] = {}  # PostEffect classes by name
@@ -111,6 +114,9 @@ class ResourceManager:
 
         # NavMeshKeeper'ы — владельцы навигационных сеток по имени
         self._navmesh_keepers: Dict[str, "NavMeshKeeper"] = {}
+
+        # AnimationClipKeeper'ы — владельцы анимационных клипов по имени
+        self._animation_clip_keepers: Dict[str, "AnimationClipKeeper"] = {}
 
     @classmethod
     def instance(cls) -> "ResourceManager":
@@ -580,6 +586,69 @@ class ResourceManager:
             del self._navmesh_keepers[name]
         if name in self.navmeshes:
             del self.navmeshes[name]
+
+    # --------- AnimationClipKeeper'ы ---------
+    def get_or_create_animation_clip_keeper(self, name: str) -> "AnimationClipKeeper":
+        """
+        Получить или создать AnimationClipKeeper по имени.
+
+        Используется AnimationClipHandle для получения keeper'а.
+        """
+        from termin.visualization.core.animation_clip_handle import AnimationClipKeeper
+
+        if name not in self._animation_clip_keepers:
+            self._animation_clip_keepers[name] = AnimationClipKeeper(name)
+        return self._animation_clip_keepers[name]
+
+    def get_animation_clip_keeper(self, name: str) -> Optional["AnimationClipKeeper"]:
+        """Получить AnimationClipKeeper по имени или None."""
+        return self._animation_clip_keepers.get(name)
+
+    # --------- Анимационные клипы ---------
+    def register_animation_clip(
+        self, name: str, clip: "AnimationClip", source_path: str | None = None
+    ) -> None:
+        """
+        Регистрирует AnimationClip через keeper.
+
+        Args:
+            name: Имя клипа
+            clip: AnimationClip
+            source_path: Путь к файлу-источнику (.tanim)
+        """
+        clip.name = name
+        keeper = self.get_or_create_animation_clip_keeper(name)
+        keeper.set_clip(clip, source_path)
+
+        # Для обратной совместимости сохраняем и в старый dict
+        self.animation_clips[name] = clip
+
+    def get_animation_clip(self, name: str) -> Optional["AnimationClip"]:
+        """Получить AnimationClip по имени."""
+        keeper = self._animation_clip_keepers.get(name)
+        if keeper is not None:
+            return keeper.clip
+        return self.animation_clips.get(name)
+
+    def list_animation_clip_names(self) -> list[str]:
+        """Список имён всех AnimationClip."""
+        return sorted(self.animation_clips.keys())
+
+    def find_animation_clip_name(self, clip: "AnimationClip") -> Optional[str]:
+        """Найти имя AnimationClip."""
+        for n, c in self.animation_clips.items():
+            if c is clip:
+                return n
+        return None
+
+    def unregister_animation_clip(self, name: str) -> None:
+        """Удаляет AnimationClip."""
+        keeper = self._animation_clip_keepers.get(name)
+        if keeper is not None:
+            keeper.clear()
+            del self._animation_clip_keepers[name]
+        if name in self.animation_clips:
+            del self.animation_clips[name]
 
     # --------- TextureKeeper'ы ---------
     def get_or_create_texture_keeper(self, name: str) -> "TextureKeeper":

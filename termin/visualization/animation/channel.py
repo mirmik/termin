@@ -88,20 +88,21 @@ class AnimationChannel:
     # --------------------------------------------
 
     @staticmethod
-    def from_assimp_channel(ch):
+    def from_fbx_channel(ch) -> "AnimationChannel":
         """
-        Берёт pos_keys, rot_keys, scale_keys в ТИКАХ (как из fbx_loader)
-        и создаёт единый канал.
-        """
+        Создаёт AnimationChannel из FBXAnimationChannel.
 
+        Args:
+            ch: FBXAnimationChannel с pos_keys, rot_keys, scale_keys в тиках
+        """
         tr = [AnimationKeyframe(t, translation=np.array(v))
-              for (t, v) in getattr(ch, "pos_keys", [])]
+              for (t, v) in ch.pos_keys]
 
         rot = [AnimationKeyframe(t, rotation=np.array(v))
-               for (t, v) in getattr(ch, "rot_keys", [])]
+               for (t, v) in ch.rot_keys]
 
         sc = [AnimationKeyframe(t, scale=float(np.mean(v)))
-              for (t, v) in getattr(ch, "scale_keys", [])]
+              for (t, v) in ch.scale_keys]
 
         return AnimationChannel(tr, rot, sc)
 
@@ -109,3 +110,36 @@ class AnimationChannel:
 
     def __repr__(self):
         return f"<AnimationChannel ticks={self.duration:.2f} tr_keys={len(self.translation_keys)} rot_keys={len(self.rotation_keys)} scale_keys={len(self.scale_keys)}>"
+
+    # --------------------------------------------
+
+    def serialize(self) -> dict:
+        """Сериализует канал в словарь для JSON."""
+        return {
+            "translation": [
+                [kf.time, kf.translation.tolist()] for kf in self.translation_keys
+            ],
+            "rotation": [
+                [kf.time, kf.rotation.tolist()] for kf in self.rotation_keys
+            ],
+            "scale": [
+                [kf.time, kf.scale] for kf in self.scale_keys
+            ],
+        }
+
+    @classmethod
+    def deserialize(cls, data: dict) -> "AnimationChannel":
+        """Десериализует канал из словаря."""
+        translation_keys = [
+            AnimationKeyframe(time=t, translation=np.array(v, dtype=float))
+            for t, v in data.get("translation", [])
+        ]
+        rotation_keys = [
+            AnimationKeyframe(time=t, rotation=np.array(v, dtype=float))
+            for t, v in data.get("rotation", [])
+        ]
+        scale_keys = [
+            AnimationKeyframe(time=t, scale=float(v))
+            for t, v in data.get("scale", [])
+        ]
+        return cls(translation_keys, rotation_keys, scale_keys)

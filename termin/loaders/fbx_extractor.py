@@ -150,4 +150,61 @@ def extract_fbx(fbx_path: Path, output_dir: Path = None) -> Tuple[Path, List[Pat
     embedded_tex_count = sum(1 for t in scene_data.textures if t.content is not None)
     print(f"[FBX Extract] Extracted {len(scene_data.meshes)} meshes, {embedded_tex_count} textures to {output_dir}")
 
+    # Extract animations
+    anim_files = extract_animations(fbx_path, output_dir, scene_data)
+    created_files.extend(anim_files)
+
     return output_dir, created_files
+
+
+def extract_animations(
+    fbx_path: Path,
+    output_dir: Path = None,
+    scene_data=None,
+) -> List[Path]:
+    """Extract animations from FBX file into .tanim files.
+
+    Args:
+        fbx_path: Path to the FBX file
+        output_dir: Directory to extract to. If None, creates directory
+                   next to FBX with same name.
+        scene_data: Pre-loaded FBXSceneData (optional, avoids reloading)
+
+    Returns:
+        List of created animation files
+    """
+    from termin.visualization.animation.clip import AnimationClip
+    from termin.visualization.animation.clip_io import save_animation_clip
+
+    fbx_path = Path(fbx_path)
+
+    if output_dir is None:
+        output_dir = fbx_path.parent / fbx_path.stem
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load FBX if not provided
+    if scene_data is None:
+        scene_data = load_fbx_file(str(fbx_path))
+
+    created_files = []
+
+    # Extract animations
+    for fbx_anim in scene_data.animations:
+        # Convert FBX animation to AnimationClip
+        clip = AnimationClip.from_fbx_clip(fbx_anim)
+
+        # Sanitize name for filename
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in clip.name)
+        if not safe_name:
+            safe_name = f"animation_{len(created_files)}"
+
+        anim_path = output_dir / f"{safe_name}.tanim"
+        save_animation_clip(clip, anim_path)
+        created_files.append(anim_path)
+        print(f"[FBX Extract] Saved animation: {anim_path.name} ({clip.duration:.2f}s, {len(clip.channels)} channels)")
+
+    if created_files:
+        print(f"[FBX Extract] Extracted {len(created_files)} animation(s)")
+
+    return created_files
