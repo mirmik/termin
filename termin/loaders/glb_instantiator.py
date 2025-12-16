@@ -182,20 +182,15 @@ class GLBInstantiateResult:
 
 def _create_animation_clips(scene_data: GLBSceneData) -> List[AnimationClip]:
     """Convert GLB animations to AnimationClips."""
+    from termin.visualization.animation.channel import AnimationChannel
+
     clips = []
 
     for glb_anim in scene_data.animations:
-        from termin.visualization.animation.clip import AnimationChannel
-
         channels: Dict[str, AnimationChannel] = {}
 
         for glb_channel in glb_anim.channels:
-            channel = AnimationChannel(
-                name=glb_channel.node_name,  # Use node name as channel name
-                pos_keys=glb_channel.pos_keys,
-                rot_keys=glb_channel.rot_keys,
-                scale_keys=glb_channel.scale_keys,
-            )
+            channel = AnimationChannel.from_glb_channel(glb_channel)
             channels[glb_channel.node_name] = channel
 
         clip = AnimationClip(
