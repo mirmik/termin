@@ -80,14 +80,14 @@ class Mesh3(Mesh):
         vertices: np.ndarray,
         triangles: np.ndarray,
         uvs: np.ndarray | None = None,
-        normals: np.ndarray | None = None,
+        vertex_normals: np.ndarray | None = None,
         source_path: str | None = None,
     ):
         super().__init__(vertices, triangles)
 
         self.uvs = np.asarray(uvs, dtype=float) if uvs is not None else None
         self._validate_mesh()
-        self.vertex_normals = np.asarray(normals, dtype=np.float32) if normals is not None else None
+        self.vertex_normals = np.asarray(vertex_normals, dtype=np.float32) if vertex_normals is not None else None
         self.face_normals = None
         self.source_path: str | None = source_path
 

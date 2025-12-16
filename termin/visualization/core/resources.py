@@ -419,7 +419,7 @@ class ResourceManager:
         # Invalidate GPU mesh to force re-upload
         drawable = self.meshes.get(name)
         if drawable is not None:
-            drawable._gpu.invalidate()
+            drawable._gpu.delete()
 
         print(f"[ResourceManager] Reloaded mesh: {name}")
 
