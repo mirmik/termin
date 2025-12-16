@@ -276,14 +276,14 @@ class LineRenderer(Component):
         self._dirty = True
 
         # Проверяем совместимость с текущим материалом
-        mat = self._material_handle.get_or_none()
+        mat = self._material_handle.get_material_or_none()
         if mat is not None:
             self._warn_if_incompatible(mat)
 
     @property
     def material(self) -> Material | None:
         """Текущий материал."""
-        return self._material_handle.get()
+        return self._material_handle.get_material_or_none()
 
     @material.setter
     def material(self, value: Material | None):
@@ -371,7 +371,7 @@ class LineRenderer(Component):
 
     def _get_material_or_default(self) -> Material:
         """Возвращает материал или создаёт дефолтный."""
-        mat = self._material_handle.get_or_none()
+        mat = self._material_handle.get_material_or_none()
         if mat is None:
             # Создаём дефолтный материал для линий
             from termin.visualization.core.material import Material
@@ -453,7 +453,7 @@ class LineRenderer(Component):
         }
 
         # Материал (только если явно задан, не дефолтный)
-        mat = self._material_handle.get()
+        mat = self._material_handle.get_material_or_none()
         if mat is not None:
             mat_name = rm.find_material_name(mat)
             if mat_name and mat_name != "__ErrorMaterial__":

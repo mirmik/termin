@@ -45,7 +45,7 @@ class RenderPass:
     @property
     def material(self) -> "Material":
         """Возвращает актуальный материал через handle."""
-        return self._material_handle.get()
+        return self._material_handle.get_material()
 
     @material.setter
     def material(self, value: "Material | None"):
