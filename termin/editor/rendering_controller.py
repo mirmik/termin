@@ -909,7 +909,7 @@ class RenderingController:
                 self._display_block_input_in_editor[display_id] = block_input
 
                 # Применяем input mode (пересоздаём input manager если нужно)
-                backend_window = new_display.backend_window
+                backend_window = self.get_display_backend_window(new_display)
                 if backend_window is not None:
                     self._apply_display_input_mode(new_display, backend_window, input_mode)
 
