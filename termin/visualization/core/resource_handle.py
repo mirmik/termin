@@ -77,6 +77,7 @@ class ResourceHandle(Generic[T]):
     def __init__(self):
         self._direct: T | None = None
         self._name: str | None = None
+        self._keeper: "ResourceKeeper[T] | None" = None
 
     @property
     def is_direct(self) -> bool:
@@ -105,6 +106,11 @@ class ResourceHandle(Generic[T]):
         if self._direct is not None:
             return self._direct
 
+        # Legacy: через keeper (VoxelGrid, NavMesh, AnimationClip)
+        if self._keeper is not None:
+            return self._keeper.resource
+
+        # New: через _resource_getter (Mesh, Texture, Material, Shader)
         if self._name is not None and self._resource_getter is not None:
             return self._resource_getter(self._name)
 
@@ -119,10 +125,17 @@ class ResourceHandle(Generic[T]):
         self._direct = resource
         self._name = None
 
-    def _init_named(self, name: str) -> None:
-        """Инициализировать как ссылку по имени."""
+    def _init_named(self, name: str, keeper: "ResourceKeeper[T] | None" = None) -> None:
+        """
+        Инициализировать как ссылку по имени.
+
+        Args:
+            name: Имя ресурса
+            keeper: (legacy) ResourceKeeper для VoxelGrid/NavMesh/AnimationClip
+        """
         self._direct = None
         self._name = name
+        self._keeper = keeper
 
     def serialize(self) -> dict:
         """Сериализация для сохранения сцены."""

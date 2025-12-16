@@ -19,6 +19,7 @@ class STLMeshData:
         self.vertices = vertices  # np.ndarray (N, 3) float32
         self.normals = normals    # np.ndarray (N, 3) float32 or None
         self.indices = indices    # np.ndarray (M,) uint32
+        self.uvs = None           # STL format has no UV coordinates
 
 
 class STLSceneData:

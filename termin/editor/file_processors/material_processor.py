@@ -28,8 +28,7 @@ class MaterialFileProcessor(FileTypeProcessor):
         name = os.path.splitext(os.path.basename(path))[0]
 
         # Check if already loaded
-        keeper = self._resource_manager.get_keeper(name)
-        if keeper is not None and keeper.has_material:
+        if name in self._resource_manager.materials:
             return
 
         try:
@@ -53,24 +52,29 @@ class MaterialFileProcessor(FileTypeProcessor):
     def on_file_changed(self, path: str) -> None:
         """Reload modified material."""
         name = os.path.splitext(os.path.basename(path))[0]
-        keeper = self._resource_manager.get_keeper(name)
 
-        if keeper is None or keeper.source_path is None:
+        # Find existing MaterialAsset
+        asset = self._resource_manager.get_material_asset(name)
+        if asset is None:
             return
 
-        # Only reload .material files (not .shader dependencies)
-        if not keeper.source_path.endswith(".material"):
+        # Only reload .material files
+        if asset.source_path is None or not str(asset.source_path).endswith(".material"):
             return
 
         try:
             from termin.visualization.core.material import Material
 
             new_mat = Material.load_from_material_file(path)
-            keeper.update_material(new_mat)
+
+            # Update existing material in-place for hot-reload
+            if asset.material is not None:
+                asset.material.update_from(new_mat)
+            else:
+                asset.material = new_mat
 
             # Update materials dict for compatibility
-            if keeper.material is not None:
-                self._resource_manager.materials[name] = keeper.material
+            self._resource_manager.materials[name] = asset.material
 
             print(f"[MaterialProcessor] Reloaded: {name}")
             self._notify_reloaded(name)

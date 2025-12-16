@@ -47,30 +47,31 @@ class TextureFileProcessor(FileTypeProcessor):
             print(f"[TextureProcessor] Failed to load {path}: {e}")
 
     def on_file_changed(self, path: str) -> None:
-        """Reload modified texture via keeper invalidation."""
+        """Reload modified texture."""
         name = os.path.splitext(os.path.basename(path))[0]
 
-        # Find keeper by source_path or name
-        keeper = None
-        for tex_name, k in self._resource_manager._texture_keepers.items():
-            if k.source_path == path:
-                keeper = k
-                name = tex_name
+        # Find texture by source_path or name
+        texture = None
+        found_name = name
+        for tex_name, tex in self._resource_manager.textures.items():
+            if tex.source_path == path:
+                texture = tex
+                found_name = tex_name
                 break
 
-        if keeper is None:
-            keeper = self._resource_manager.get_texture_keeper(name)
+        if texture is None:
+            texture = self._resource_manager.get_texture(name)
 
-        if keeper is None:
+        if texture is None:
             return
 
         try:
-            # Invalidate via keeper - texture will reload on next use
-            keeper.invalidate()
-            print(f"[TextureProcessor] Reloaded: {name}")
-            self._notify_reloaded(name)
+            # Invalidate forces texture reload on next use
+            texture.invalidate()
+            print(f"[TextureProcessor] Reloaded: {found_name}")
+            self._notify_reloaded(found_name)
         except Exception as e:
-            print(f"[TextureProcessor] Failed to reload {name}: {e}")
+            print(f"[TextureProcessor] Failed to reload {found_name}: {e}")
 
     def on_file_removed(self, path: str) -> None:
         """Handle texture file deletion."""

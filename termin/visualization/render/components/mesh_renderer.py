@@ -80,7 +80,7 @@ class MeshRenderer(Component):
         """
         marks: Set[str] = set()
 
-        mat = self._material_handle.get_or_none()
+        mat = self._material_handle.get_material_or_none()
         if mat:
             for phase in mat.phases:
                 marks.add(phase.phase_mark)
@@ -93,7 +93,7 @@ class MeshRenderer(Component):
     @property
     def material(self) -> Material | None:
         """Возвращает текущий материал."""
-        return self._material_handle.get_or_none()
+        return self._material_handle.get_material_or_none()
 
     @material.setter
     def material(self, value: Material | None):
@@ -162,7 +162,7 @@ class MeshRenderer(Component):
         Возвращает:
             Список GeometryDrawCall с совпадающим phase_mark, отсортированный по priority.
         """
-        mat = self._material_handle.get_or_none()
+        mat = self._material_handle.get_material_or_none()
         if mat is None:
             return []
 
@@ -192,7 +192,7 @@ class MeshRenderer(Component):
             elif self.mesh.name:
                 data["mesh"] = self.mesh.name
 
-        mat = self._material_handle.get_or_none()
+        mat = self._material_handle.get_material_or_none()
         if mat is not None:
             mat_name = rm.find_material_name(mat)
             if mat_name:
