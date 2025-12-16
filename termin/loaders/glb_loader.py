@@ -534,3 +534,91 @@ def load_glb_file(path: str | Path) -> GLBSceneData:
     _parse_animations(gltf, bin_data, scene_data)
 
     return scene_data
+
+
+def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
+    """
+    Normalize root scale to 1.0 by baking into geometry.
+
+    If the root node has scale != 1.0, this function:
+    1. Scales all vertex positions
+    2. Scales inverse bind matrices for skinning
+    3. Scales animation translations
+    4. Resets root scale to 1.0
+
+    Args:
+        scene_data: GLBSceneData to normalize (modified in place)
+
+    Returns:
+        True if normalization was performed, False if already normalized
+    """
+    if not scene_data.root_nodes or not scene_data.nodes:
+        return False
+
+    root_idx = scene_data.root_nodes[0]
+    if root_idx >= len(scene_data.nodes):
+        return False
+
+    root_node = scene_data.nodes[root_idx]
+    root_scale = root_node.scale
+
+    # Check if already normalized
+    if np.allclose(root_scale, [1.0, 1.0, 1.0]):
+        return False
+
+    # Use uniform scale (average or X component)
+    # Most exports use uniform scale
+    if np.allclose(root_scale[0], root_scale[1]) and np.allclose(root_scale[1], root_scale[2]):
+        scale_factor = float(root_scale[0])
+    else:
+        # Non-uniform scale - use average (best effort)
+        scale_factor = float(np.mean(root_scale))
+        print(f"[normalize_glb_scale] Warning: non-uniform scale {root_scale}, using average {scale_factor}")
+
+    # Build scale matrix for IBM transformation
+    scale_mat = np.diag([scale_factor, scale_factor, scale_factor, 1.0]).astype(np.float32)
+
+    # 1. Scale vertex positions in all meshes
+    for mesh in scene_data.meshes:
+        mesh.vertices *= scale_factor
+
+    # 2. Scale inverse bind matrices
+    for skin in scene_data.skins:
+        for i in range(len(skin.inverse_bind_matrices)):
+            # IBM_new = Scale * IBM_old
+            skin.inverse_bind_matrices[i] = scale_mat @ skin.inverse_bind_matrices[i]
+
+    # 3. Scale animation translations
+    for anim in scene_data.animations:
+        for channel in anim.channels:
+            if channel.pos_keys:
+                for key in channel.pos_keys:
+                    # key is (time, [x, y, z])
+                    key[1] = key[1] * scale_factor
+
+    # 4. Reset root scale to 1.0
+    root_node.scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+
+    # Store original scale for reference
+    scene_data.skin_scale = scale_factor
+
+    return True
+
+
+def load_glb_file_normalized(path: str | Path, normalize_scale: bool = False) -> GLBSceneData:
+    """
+    Load GLB file with optional scale normalization.
+
+    Args:
+        path: Path to .glb file
+        normalize_scale: If True, normalize root scale to 1.0
+
+    Returns:
+        GLBSceneData (possibly normalized)
+    """
+    scene_data = load_glb_file(path)
+
+    if normalize_scale:
+        normalize_glb_scale(scene_data)
+
+    return scene_data

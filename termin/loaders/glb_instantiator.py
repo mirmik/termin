@@ -23,6 +23,8 @@ from termin.visualization.animation.clip import AnimationClip
 
 from termin.loaders.glb_loader import (
     load_glb_file,
+    load_glb_file_normalized,
+    normalize_glb_scale,
     GLBSceneData,
     GLBNodeData,
     GLBMeshData,
@@ -206,18 +208,30 @@ def _create_animation_clips(scene_data: GLBSceneData) -> List[AnimationClip]:
     return clips
 
 
-def instantiate_glb(path: Path, name: str = None) -> GLBInstantiateResult:
+def instantiate_glb(
+    path: Path,
+    name: str = None,
+    normalize_scale: bool | None = None,
+) -> GLBInstantiateResult:
     """
     Load GLB file and create Entity hierarchy.
 
     Args:
         path: Path to the GLB file.
         name: Optional name for the root entity. Defaults to filename without extension.
+        normalize_scale: If True, normalize root scale to 1.0.
+                        If None, reads from .glb.spec file.
 
     Returns:
         GLBInstantiateResult containing root Entity, SkeletonInstance, and AnimationPlayer.
     """
-    scene_data = load_glb_file(str(path))
+    # Read normalize_scale from spec if not explicitly provided
+    if normalize_scale is None:
+        from termin.editor.project_file_watcher import FilePreLoader
+        spec_data = FilePreLoader.read_spec_file(str(path))
+        normalize_scale = spec_data.get("normalize_scale", False) if spec_data else False
+
+    scene_data = load_glb_file_normalized(str(path), normalize_scale=normalize_scale)
 
     if name is None:
         name = path.stem
