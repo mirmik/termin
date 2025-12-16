@@ -159,14 +159,24 @@ class GLBInspector(QWidget):
         settings_form.setContentsMargins(0, 0, 0, 0)
         settings_form.setSpacing(4)
 
+        # Convert to Z-Up checkbox
+        self._convert_z_up_checkbox = QCheckBox()
+        self._convert_z_up_checkbox.setChecked(True)  # Default enabled
+        self._convert_z_up_checkbox.setToolTip(
+            "Convert from glTF Y-up to engine Z-up coordinate system.\n"
+            "glTF uses Y-up, -Z forward.\n"
+            "Engine uses Z-up, Y forward.\n"
+            "Disable only for models already in Z-up format."
+        )
+        settings_form.addRow("Convert to Z-Up:", self._convert_z_up_checkbox)
+
         # Normalize Scale checkbox
         self._normalize_scale_checkbox = QCheckBox()
         self._normalize_scale_checkbox.setToolTip(
             "If root node has scale != 1.0, normalize it by:\n"
             "1. Scaling all vertex positions\n"
-            "2. Scaling inverse bind matrices\n"
-            "3. Scaling animation translations\n"
-            "4. Setting root scale to 1.0"
+            "2. Scaling animation translations\n"
+            "3. Setting root scale to 1.0"
         )
         settings_form.addRow("Normalize Scale:", self._normalize_scale_checkbox)
 
@@ -277,9 +287,13 @@ class GLBInspector(QWidget):
 
         spec_data = FilePreLoader.read_spec_file(glb_path)
         if spec_data:
+            # Convert to Z-Up defaults to True
+            convert_z_up = spec_data.get("convert_to_z_up", True)
+            self._convert_z_up_checkbox.setChecked(convert_z_up)
             normalize = spec_data.get("normalize_scale", False)
             self._normalize_scale_checkbox.setChecked(normalize)
         else:
+            self._convert_z_up_checkbox.setChecked(True)  # Default enabled
             self._normalize_scale_checkbox.setChecked(False)
 
     def _on_apply_clicked(self) -> None:
@@ -295,6 +309,7 @@ class GLBInspector(QWidget):
         # Update with new settings
         spec_data = {
             **existing,
+            "convert_to_z_up": self._convert_z_up_checkbox.isChecked(),
             "normalize_scale": self._normalize_scale_checkbox.isChecked(),
         }
 
@@ -326,6 +341,7 @@ class GLBInspector(QWidget):
         self._file_size_label.setText("-")
         self._path_label.setText("-")
         self._clear_content()
+        self._convert_z_up_checkbox.setChecked(True)  # Default enabled
         self._normalize_scale_checkbox.setChecked(False)
 
     def _format_size(self, size: int) -> str:

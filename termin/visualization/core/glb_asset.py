@@ -89,10 +89,15 @@ class GLBAsset(Asset):
 
             from termin.loaders.glb_loader import load_glb_file_from_buffer
 
-            # Get normalize_scale setting from spec
+            # Get settings from spec
             normalize_scale = spec_data.get("normalize_scale", False) if spec_data else False
+            convert_to_z_up = spec_data.get("convert_to_z_up", True) if spec_data else True
 
-            self._scene_data = load_glb_file_from_buffer(content, normalize_scale=normalize_scale)
+            self._scene_data = load_glb_file_from_buffer(
+                content,
+                normalize_scale=normalize_scale,
+                convert_to_z_up=convert_to_z_up,
+            )
             self._loaded = True
 
             # Register meshes in ResourceManager (may generate new UUIDs)

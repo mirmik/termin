@@ -207,6 +207,7 @@ def instantiate_glb(
     path: Path,
     name: str = None,
     normalize_scale: bool | None = None,
+    convert_to_z_up: bool | None = None,
 ) -> GLBInstantiateResult:
     """
     Load GLB file and create Entity hierarchy.
@@ -216,17 +217,27 @@ def instantiate_glb(
         name: Optional name for the root entity. Defaults to filename without extension.
         normalize_scale: If True, normalize root scale to 1.0.
                         If None, reads from .glb.spec file.
+        convert_to_z_up: If True, convert from glTF Y-up to engine Z-up.
+                        If None, reads from .glb.spec file (default True).
 
     Returns:
         GLBInstantiateResult containing root Entity, SkeletonInstance, and AnimationPlayer.
     """
-    # Read normalize_scale from spec if not explicitly provided
+    # Read settings from spec if not explicitly provided
+    from termin.editor.project_file_watcher import FilePreLoader
+    spec_data = FilePreLoader.read_spec_file(str(path))
+
     if normalize_scale is None:
-        from termin.editor.project_file_watcher import FilePreLoader
-        spec_data = FilePreLoader.read_spec_file(str(path))
         normalize_scale = spec_data.get("normalize_scale", False) if spec_data else False
 
-    scene_data = load_glb_file_normalized(str(path), normalize_scale=normalize_scale)
+    if convert_to_z_up is None:
+        convert_to_z_up = spec_data.get("convert_to_z_up", True) if spec_data else True
+
+    scene_data = load_glb_file_normalized(
+        str(path),
+        normalize_scale=normalize_scale,
+        convert_to_z_up=convert_to_z_up,
+    )
 
     if name is None:
         name = path.stem

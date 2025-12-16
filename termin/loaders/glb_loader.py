@@ -536,6 +536,113 @@ def load_glb_file(path: str | Path) -> GLBSceneData:
     return scene_data
 
 
+def convert_y_up_to_z_up(scene_data: GLBSceneData) -> None:
+    """
+    Convert GLB data from glTF Y-up coordinate system to engine Z-up.
+
+    glTF coordinate system: Y-up, -Z forward, X right
+    Engine coordinate system: Z-up, Y forward, X right
+
+    Conversion:
+        X_engine = X_gltf
+        Y_engine = -Z_gltf
+        Z_engine = Y_gltf
+
+    This modifies scene_data in place, converting:
+    1. Vertex positions and normals
+    2. Node translations and rotations
+    3. Inverse bind matrices
+    4. Animation keyframes (positions and rotations)
+
+    Args:
+        scene_data: GLBSceneData to convert (modified in place)
+    """
+
+    def convert_position(pos: np.ndarray) -> np.ndarray:
+        """Convert position vector: (x, y, z) -> (x, -z, y)"""
+        return np.array([pos[0], -pos[2], pos[1]], dtype=np.float32)
+
+    def convert_positions_batch(positions: np.ndarray) -> np.ndarray:
+        """Convert array of positions: (..., 3) shape"""
+        result = np.empty_like(positions)
+        result[..., 0] = positions[..., 0]
+        result[..., 1] = -positions[..., 2]
+        result[..., 2] = positions[..., 1]
+        return result
+
+    def convert_quaternion(q: np.ndarray) -> np.ndarray:
+        """
+        Convert quaternion from Y-up to Z-up.
+
+        Quaternion (x, y, z, w) represents rotation around axis (x, y, z).
+        We need to convert the axis using the same coordinate transform.
+        """
+        # q = (x, y, z, w) -> (x, -z, y, w)
+        return np.array([q[0], -q[2], q[1], q[3]], dtype=np.float32)
+
+    def convert_matrix(m: np.ndarray) -> np.ndarray:
+        """
+        Convert 4x4 transformation matrix from Y-up to Z-up.
+
+        We apply: M' = C @ M @ C^(-1)
+        where C is the coordinate conversion matrix.
+        """
+        # Conversion matrix: swaps Y and Z, negates new Y
+        # [1  0  0  0]
+        # [0  0 -1  0]
+        # [0  1  0  0]
+        # [0  0  0  1]
+        c = np.array([
+            [1, 0, 0, 0],
+            [0, 0, -1, 0],
+            [0, 1, 0, 0],
+            [0, 0, 0, 1],
+        ], dtype=np.float32)
+
+        # C^(-1) is the transpose since it's orthogonal
+        c_inv = c.T
+
+        return c @ m @ c_inv
+
+    # 1. Convert vertex positions and normals in all meshes
+    for mesh in scene_data.meshes:
+        mesh.vertices = convert_positions_batch(mesh.vertices)
+        if mesh.normals is not None:
+            mesh.normals = convert_positions_batch(mesh.normals)
+
+    # 2. Convert node transforms
+    for node in scene_data.nodes:
+        node.translation = convert_position(node.translation)
+        node.rotation = convert_quaternion(node.rotation)
+        # Scale is scalar per-axis, doesn't change with coordinate system
+        # but axes swap: (sx, sy, sz) -> (sx, sz, sy)
+        node.scale = np.array([node.scale[0], node.scale[2], node.scale[1]], dtype=np.float32)
+
+    # 3. Convert inverse bind matrices
+    for skin in scene_data.skins:
+        for i in range(len(skin.inverse_bind_matrices)):
+            skin.inverse_bind_matrices[i] = convert_matrix(skin.inverse_bind_matrices[i])
+
+    # 4. Convert animation keyframes
+    for anim in scene_data.animations:
+        for channel in anim.channels:
+            # Position keys
+            if channel.pos_keys:
+                for key in channel.pos_keys:
+                    key[1] = convert_position(key[1])
+
+            # Rotation keys
+            if channel.rot_keys:
+                for key in channel.rot_keys:
+                    key[1] = convert_quaternion(key[1])
+
+            # Scale keys - swap Y and Z
+            if channel.scale_keys:
+                for key in channel.scale_keys:
+                    s = key[1]
+                    key[1] = np.array([s[0], s[2], s[1]], dtype=np.float32)
+
+
 def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     """
     Normalize root scale to 1.0 by baking into geometry.
@@ -575,18 +682,16 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
         scale_factor = float(np.mean(root_scale))
         print(f"[normalize_glb_scale] Warning: non-uniform scale {root_scale}, using average {scale_factor}")
 
-    # Build scale matrix for IBM transformation
-    scale_mat = np.diag([scale_factor, scale_factor, scale_factor, 1.0]).astype(np.float32)
-
     # 1. Scale vertex positions in all meshes
     for mesh in scene_data.meshes:
         mesh.vertices *= scale_factor
 
-    # 2. Scale inverse bind matrices
-    for skin in scene_data.skins:
-        for i in range(len(skin.inverse_bind_matrices)):
-            # IBM_new = Scale * IBM_old
-            skin.inverse_bind_matrices[i] = scale_mat @ skin.inverse_bind_matrices[i]
+    # 2. DO NOT scale inverse bind matrices!
+    # IBM already contains inverse scale from Blender export.
+    # When vertices are scaled, IBM compensates automatically.
+    # Example: root_scale=0.1, IBM has 10x baked in
+    #   vertices *= 0.1 → vertices become 0.1x
+    #   skinned_pos = bone @ IBM @ vertex = bone @ (10x matrix) @ (0.1x vertex) = 1x result
 
     # 3. Scale animation translations
     for anim in scene_data.animations:
@@ -605,18 +710,27 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     return True
 
 
-def load_glb_file_normalized(path: str | Path, normalize_scale: bool = False) -> GLBSceneData:
+def load_glb_file_normalized(
+    path: str | Path,
+    normalize_scale: bool = False,
+    convert_to_z_up: bool = True,
+) -> GLBSceneData:
     """
-    Load GLB file with optional scale normalization.
+    Load GLB file with optional transformations.
 
     Args:
         path: Path to .glb file
         normalize_scale: If True, normalize root scale to 1.0
+        convert_to_z_up: If True, convert from glTF Y-up to engine Z-up (default True)
 
     Returns:
-        GLBSceneData (possibly normalized)
+        GLBSceneData (possibly transformed)
     """
     scene_data = load_glb_file(path)
+
+    # Coordinate conversion first (before scale normalization)
+    if convert_to_z_up:
+        convert_y_up_to_z_up(scene_data)
 
     if normalize_scale:
         normalize_glb_scale(scene_data)
@@ -624,16 +738,21 @@ def load_glb_file_normalized(path: str | Path, normalize_scale: bool = False) ->
     return scene_data
 
 
-def load_glb_file_from_buffer(data: bytes, normalize_scale: bool = False) -> GLBSceneData:
+def load_glb_file_from_buffer(
+    data: bytes,
+    normalize_scale: bool = False,
+    convert_to_z_up: bool = True,
+) -> GLBSceneData:
     """
-    Load GLB from binary buffer with optional scale normalization.
+    Load GLB from binary buffer with optional transformations.
 
     Args:
         data: Binary GLB data
         normalize_scale: If True, normalize root scale to 1.0
+        convert_to_z_up: If True, convert from glTF Y-up to engine Z-up (default True)
 
     Returns:
-        GLBSceneData (possibly normalized)
+        GLBSceneData (possibly transformed)
     """
     # Parse header
     if len(data) < 12:
@@ -683,6 +802,10 @@ def load_glb_file_from_buffer(data: bytes, normalize_scale: bool = False) -> GLB
     _parse_meshes(gltf, bin_data, scene_data)
     _parse_skins(gltf, bin_data, scene_data)
     _parse_animations(gltf, bin_data, scene_data)
+
+    # Coordinate conversion first (before scale normalization)
+    if convert_to_z_up:
+        convert_y_up_to_z_up(scene_data)
 
     if normalize_scale:
         normalize_glb_scale(scene_data)
