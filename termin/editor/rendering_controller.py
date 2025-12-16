@@ -537,6 +537,18 @@ class RenderingController:
 
         _tab_container, backend_window, _qwindow = tab_info
 
+        self._apply_display_input_mode(display, backend_window, mode)
+
+        # Notify EditorWindow to handle editor mode setup/teardown
+        if self._on_display_input_mode_changed_callback is not None:
+            self._on_display_input_mode_changed_callback(display, mode)
+
+        self._request_update()
+
+    def _apply_display_input_mode(self, display: "Display", backend_window, mode: str) -> None:
+        """Apply input mode to a display."""
+        display_id = id(display)
+
         # Remove old input manager (if managed here, not by EditorViewportFeatures)
         if display_id in self._display_input_managers:
             del self._display_input_managers[display_id]
@@ -568,12 +580,6 @@ class RenderingController:
 
         # Store mode
         self._display_input_modes[display_id] = mode
-
-        # Notify EditorWindow to handle editor mode setup/teardown
-        if self._on_display_input_mode_changed_callback is not None:
-            self._on_display_input_mode_changed_callback(display, mode)
-
-        self._request_update()
 
     def _on_display_block_input_in_editor_changed(self, blocked: bool) -> None:
         """Handle 'block input in editor' checkbox change from inspector."""
@@ -901,6 +907,11 @@ class RenderingController:
                 display_id = id(new_display)
                 self._display_input_modes[display_id] = input_mode
                 self._display_block_input_in_editor[display_id] = block_input
+
+                # Применяем input mode (пересоздаём input manager если нужно)
+                backend_window = new_display.backend_window
+                if backend_window is not None:
+                    self._apply_display_input_mode(new_display, backend_window, input_mode)
 
                 # Создаём viewport'ы
                 for vp_data in viewports_data:
