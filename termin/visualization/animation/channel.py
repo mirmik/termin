@@ -116,6 +116,30 @@ class AnimationChannel:
 
     # --------------------------------------------
 
+    @staticmethod
+    def from_glb_channel(ch) -> "AnimationChannel":
+        """
+        Создаёт AnimationChannel из GLBAnimationChannel.
+
+        Args:
+            ch: GLBAnimationChannel с pos_keys, rot_keys, scale_keys
+                Время уже в секундах, кватернионы в формате XYZW
+        """
+        tr = [AnimationKeyframe(t, translation=np.array(v))
+              for (t, v) in ch.pos_keys]
+
+        # GLB хранит кватернионы как XYZW, наша система тоже
+        rot = [AnimationKeyframe(t, rotation=np.array(v))
+               for (t, v) in ch.rot_keys]
+
+        # GLB хранит scale как vec3, берём среднее для uniform scale
+        sc = [AnimationKeyframe(t, scale=float(np.mean(v)))
+              for (t, v) in ch.scale_keys]
+
+        return AnimationChannel(tr, rot, sc)
+
+    # --------------------------------------------
+
     def __repr__(self):
         return f"<AnimationChannel ticks={self.duration:.2f} tr_keys={len(self.translation_keys)} rot_keys={len(self.rotation_keys)} scale_keys={len(self.scale_keys)}>"
 

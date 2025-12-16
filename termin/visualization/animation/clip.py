@@ -46,6 +46,28 @@ class AnimationClip:
 
     # --------------------------------------------
 
+    @staticmethod
+    def from_glb_clip(glb_clip) -> "AnimationClip":
+        """
+        Создаёт AnimationClip из GLBAnimationClip.
+
+        Args:
+            glb_clip: GLBAnimationClip из glb_loader
+        """
+        channels = {}
+        for ch in glb_clip.channels:
+            channels[ch.node_name] = AnimationChannel.from_glb_channel(ch)
+
+        # GLB хранит время в секундах, используем tps=1.0
+        return AnimationClip(
+            name=glb_clip.name,
+            channels=channels,
+            tps=1.0,  # GLB использует секунды напрямую
+            loop=True,
+        )
+
+    # --------------------------------------------
+
     def sample(self, t_seconds: float):
         """
         sample в секундах (как в движке).
