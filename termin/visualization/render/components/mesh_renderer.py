@@ -7,7 +7,6 @@ from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.core.mesh import MeshDrawable
-from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.render.drawable import GeometryDrawCall
 

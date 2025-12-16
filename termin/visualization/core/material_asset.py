@@ -68,9 +68,14 @@ class MaterialAsset(Asset):
         try:
             material, file_uuid = load_material_file(str(self._source_path))
             self._material = material
-            # If file has UUID and we don't, adopt it
-            if file_uuid and not self._uuid:
+
+            if file_uuid:
+                # File has UUID - adopt it
                 self._uuid = file_uuid
+            else:
+                # Old file without UUID - save immediately to persist our UUID
+                self.save_to_file()
+
             self._loaded = True
             return True
         except Exception:
@@ -210,7 +215,7 @@ def load_material_file(path: str) -> tuple["Material", str | None]:
     return mat, file_uuid
 
 
-def save_material_file(material: "Material", path: str | Path, uuid: str | None = None) -> None:
+def save_material_file(material: "Material", path: str | Path, uuid: str) -> None:
     """
     Save material to .material file.
 
@@ -243,10 +248,10 @@ def save_material_file(material: "Material", path: str | Path, uuid: str | None 
                 if tex_name and tex_name != "__white_1x1__":
                     textures[name] = tex_name
 
-    result: Dict[str, Any] = {}
-    if uuid:
-        result["uuid"] = uuid
-    result["shader"] = material.shader_name
+    result: Dict[str, Any] = {
+        "uuid": uuid,
+        "shader": material.shader_name,
+    }
     if uniforms:
         result["uniforms"] = uniforms
     if textures:
