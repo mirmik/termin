@@ -51,17 +51,18 @@ class MeshRenderer(Component):
 
     def __init__(
         self,
-        mesh: MeshDrawable | None = None,
+        mesh: MeshDrawable | Mesh3 | None = None,
         material: Material | None = None,
         cast_shadow: bool = True,
     ):
         super().__init__(enabled=True)
 
-        self._mesh_handle: MeshHandle = MeshHandle()
+        self._mesh: MeshDrawable | None = None
         if mesh is not None:
             if isinstance(mesh, Mesh3):
-                mesh = MeshDrawable(mesh)
-            self._mesh_handle = MeshHandle.from_mesh(mesh)
+                self._mesh = MeshDrawable(mesh)
+            else:
+                self._mesh = mesh
 
         self.cast_shadow = cast_shadow
 
@@ -106,28 +107,35 @@ class MeshRenderer(Component):
     @property
     def mesh(self) -> MeshDrawable | None:
         """Возвращает текущий меш."""
-        return self._mesh_handle.get_drawable_or_none()
+        return self._mesh
 
     @mesh.setter
-    def mesh(self, value: MeshDrawable | None):
+    def mesh(self, value: MeshDrawable | Mesh3 | None):
         """Устанавливает меш."""
         if value is None:
-            self._mesh_handle = MeshHandle()
+            self._mesh = None
+        elif isinstance(value, Mesh3):
+            self._mesh = MeshDrawable(value)
         else:
-            self._mesh_handle = MeshHandle.from_mesh(value)
+            self._mesh = value
 
-    def set_mesh(self, mesh: MeshDrawable | None):
+    def set_mesh(self, mesh: MeshDrawable | Mesh3 | None):
         """Устанавливает меш напрямую."""
         self.mesh = mesh
 
     def set_mesh_by_name(self, name: str):
         """
         Устанавливает меш по имени из ResourceManager.
-        Меш будет автоматически обновляться при hot-reload.
+        Меш загружается из ResourceManager и оборачивается в MeshDrawable.
         """
-        self._mesh_handle = MeshHandle.from_name(name)
+        rm = ResourceManager.instance()
+        asset = rm.get_mesh_asset(name)
+        if asset is not None:
+            self._mesh = MeshDrawable(asset)
+        else:
+            self._mesh = None
 
-    def update_mesh(self, mesh: MeshDrawable | None):
+    def update_mesh(self, mesh: MeshDrawable | Mesh3 | None):
         """Устанавливает меш (legacy alias)."""
         self.mesh = mesh
 
