@@ -130,7 +130,7 @@ class ColorPass(RenderFramePass):
             clear_depth=data.get("clear_depth", False),
         )
 
-    _DEBUG_COLLECT = False  # DEBUG: отладка сбора draw calls
+    _DEBUG_COLLECT = True  # DEBUG: отладка сбора draw calls
 
     def _collect_draw_calls(self, scene, phase_mark: str | None) -> List[PhaseDrawCall]:
         """

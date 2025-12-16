@@ -30,6 +30,8 @@ class SkinnedMeshRenderer(MeshRenderer):
         # skeleton_instance is typically set programmatically, not in inspector
     }
 
+    _DEBUG_INIT = True
+
     def __init__(
         self,
         mesh: MeshDrawable | SkinnedMesh3 | None = None,
@@ -46,8 +48,15 @@ class SkinnedMeshRenderer(MeshRenderer):
             skeleton_instance: Runtime skeleton for bone animation
             cast_shadow: Whether this object casts shadows
         """
+        if self._DEBUG_INIT:
+            print(f"[SkinnedMeshRenderer.__init__] mesh={mesh}, material={material}")
+            if material:
+                print(f"  material type: {type(material).__name__}")
+                print(f"  material phases: {len(material.phases) if hasattr(material, 'phases') else 'N/A'}")
         super().__init__(mesh=mesh, material=material, cast_shadow=cast_shadow)
         self._skeleton_instance: "SkeletonInstance | None" = skeleton_instance
+        if self._DEBUG_INIT:
+            print(f"  After super().__init__: _material_handle._direct={self._material_handle._direct}")
 
     @property
     def skeleton_instance(self) -> "SkeletonInstance | None":
@@ -58,6 +67,8 @@ class SkinnedMeshRenderer(MeshRenderer):
     def skeleton_instance(self, value: "SkeletonInstance | None"):
         """Set the skeleton instance for animation."""
         self._skeleton_instance = value
+
+    _DEBUG_SKINNING = True  # Temporary debug flag
 
     def draw_geometry(self, context: RenderContext, geometry_id: str = "") -> None:
         """
@@ -76,9 +87,16 @@ class SkinnedMeshRenderer(MeshRenderer):
 
             # Get current shader from context and upload bone matrices
             shader = context.current_shader
+            if self._DEBUG_SKINNING:
+                print(f"[SkinnedMeshRenderer] bone_count={bone_count}, shader={shader}")
+                if bone_count > 0:
+                    print(f"  bone_matrix[0] diagonal: {bone_matrices[0].diagonal()}")
+
             if shader is not None:
                 shader.set_uniform_matrix4_array("u_bone_matrices", bone_matrices, bone_count)
                 shader.set_uniform_int("u_bone_count", bone_count)
+            elif self._DEBUG_SKINNING:
+                print("  WARNING: context.current_shader is None!")
 
         # Draw the mesh
         self.mesh.draw(context)

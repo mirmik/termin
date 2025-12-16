@@ -199,12 +199,22 @@ def _create_entity_from_node(
             drawable = mesh_drawables[mesh_idx]
 
             # Use SkinnedMeshRenderer with SkinnedMaterial for skinned meshes
+            _DEBUG_INSTANTIATE = True
+            if _DEBUG_INSTANTIATE:
+                print(f"[glb_instantiator] mesh={glb_mesh.name!r}, is_skinned={glb_mesh.is_skinned}, node_skeleton={node_skeleton}")
             if glb_mesh.is_skinned and node_skeleton is not None:
+                if _DEBUG_INSTANTIATE:
+                    print(f"  -> Creating SkinnedMeshRenderer with material={skinned_material}")
+                    print(f"     material type: {type(skinned_material).__name__}")
+                    if skinned_material:
+                        print(f"     material phases: {len(skinned_material.phases)}")
                 renderer = SkinnedMeshRenderer(
                     mesh=drawable,
                     material=skinned_material,
                     skeleton_instance=node_skeleton,
                 )
+                if _DEBUG_INSTANTIATE:
+                    print(f"  -> renderer._material_handle._direct={renderer._material_handle._direct}")
             else:
                 renderer = MeshRenderer(mesh=drawable, material=default_material)
 

@@ -48,6 +48,8 @@ class MeshRenderer(Component):
         ),
     }
 
+    _DEBUG_INIT = True
+
     def __init__(
         self,
         mesh: MeshDrawable | Mesh3 | None = None,
@@ -55,6 +57,9 @@ class MeshRenderer(Component):
         cast_shadow: bool = True,
     ):
         super().__init__(enabled=True)
+
+        if self._DEBUG_INIT:
+            print(f"[MeshRenderer.__init__] mesh={mesh}, material={material}")
 
         self._mesh: MeshDrawable | None = None
         if mesh is not None:
@@ -68,6 +73,8 @@ class MeshRenderer(Component):
         self._material_handle: MaterialHandle = MaterialHandle()
         if material is not None:
             self._material_handle = MaterialHandle.from_material(material)
+            if self._DEBUG_INIT:
+                print(f"  Created MaterialHandle from material: _direct={self._material_handle._direct}")
 
     @property
     def phase_marks(self) -> Set[str]:
@@ -158,6 +165,8 @@ class MeshRenderer(Component):
             return
         self.mesh.draw(context)
 
+    _DEBUG_DRAWS = True  # DEBUG: отладка get_geometry_draws
+
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """
         Возвращает GeometryDrawCalls для указанной метки фазы.
@@ -170,6 +179,14 @@ class MeshRenderer(Component):
             Список GeometryDrawCall с совпадающим phase_mark, отсортированный по priority.
         """
         mat = self._material_handle.get_material_or_none()
+        if self._DEBUG_DRAWS:
+            entity_name = self.entity.name if self.entity else "no_entity"
+            print(f"[MeshRenderer.get_geometry_draws] entity={entity_name!r}, phase_mark={phase_mark!r}")
+            print(f"  _material_handle._direct={self._material_handle._direct}")
+            print(f"  _material_handle._asset={self._material_handle._asset}")
+            print(f"  mat={mat}")
+            if mat:
+                print(f"  mat.phases={[(p.phase_mark, type(p.shader_programm).__name__) for p in mat.phases]}")
         if mat is None:
             return []
 
