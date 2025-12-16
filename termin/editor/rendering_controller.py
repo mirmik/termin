@@ -548,6 +548,8 @@ class RenderingController:
     def _apply_display_input_mode(self, display: "Display", backend_window, mode: str) -> None:
         """Apply input mode to a display."""
         display_id = id(display)
+        is_blocked = self._display_block_input_in_editor.get(display_id, False)
+        print(f"[DEBUG _apply_display_input_mode] mode={mode}, is_blocked={is_blocked}", flush=True)
 
         # Remove old input manager (if managed here, not by EditorViewportFeatures)
         if display_id in self._display_input_managers:
@@ -560,7 +562,6 @@ class RenderingController:
         backend_window.set_key_callback(None)
 
         # Create new input manager based on mode (unless blocked in editor)
-        is_blocked = self._display_block_input_in_editor.get(display_id, False)
         if mode == "none" or is_blocked:
             # No input handling - callbacks already cleared
             pass
@@ -573,6 +574,7 @@ class RenderingController:
                 on_request_update=self._request_update,
             )
             self._display_input_managers[display_id] = input_manager
+            print(f"[DEBUG _apply_display_input_mode] Created SimpleDisplayInputManager", flush=True)
         elif mode == "editor":
             # Editor mode is handled by EditorWindow via callback
             # It will create EditorViewportFeatures which owns EditorDisplayInputManager
@@ -910,6 +912,7 @@ class RenderingController:
 
                 # Применяем input mode (пересоздаём input manager если нужно)
                 backend_window = self.get_display_backend_window(new_display)
+                print(f"[DEBUG restore_displays] display={name}, input_mode={input_mode}, block_input={block_input}, backend_window={backend_window}", flush=True)
                 if backend_window is not None:
                     self._apply_display_input_mode(new_display, backend_window, input_mode)
 
