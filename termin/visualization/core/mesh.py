@@ -6,46 +6,53 @@ from typing import Dict, Optional
 
 from termin.mesh.mesh import Mesh2, Mesh3
 from termin.visualization.core.entity import RenderContext
-from termin.visualization.platform.backends.base import MeshHandle
+from termin.visualization.core.mesh_asset import MeshAsset
+from termin.visualization.core.mesh_gpu import MeshGPU
+from termin.visualization.core.mesh_handle import MeshHandle
+from termin.visualization.platform.backends.base import MeshHandle as GPUMeshHandle
 
 
 class MeshDrawable:
     """
     Рендер-ресурс для 3D-меша.
 
-    Держит ссылку на CPU-геометрию (Mesh3), умеет грузить её в GPU через
-    graphics backend, хранит GPU-хендлы per-context, а также метаданные
-    ресурса: имя и source_id (путь / идентификатор в системе ресурсов).
+    Обёртка над MeshHandle (ссылка на MeshAsset) + MeshGPU (GPU handles).
+    Сохраняет обратную совместимость с существующим API.
     """
 
     RESOURCE_KIND = "mesh"
 
-    unical_id_counter = 0
-
-    def unical_id() -> int:
-        MeshDrawable.unical_id_counter += 1
-        return MeshDrawable.unical_id_counter
-
     def __init__(
         self,
-        mesh: Mesh3,
+        mesh: Mesh3 | MeshAsset | None = None,
         *,
         source_id: Optional[str] = None,
         name: Optional[str] = None,
     ):
-        self._mesh: Mesh3 = mesh
+        """
+        Создаёт MeshDrawable.
 
-        # если нормали ещё не посчитаны — посчитаем здесь, а не в Mesh3
-        if self._mesh.vertex_normals is None:
-            self._mesh.compute_vertex_normals()
+        Args:
+            mesh: Mesh3 геометрия или MeshAsset
+            source_id: Путь к файлу-источнику
+            name: Имя ресурса
+        """
+        # Создаём MeshAsset из входных данных
+        if mesh is None:
+            asset = MeshAsset(mesh_data=None, name=name or "mesh", source_path=source_id)
+        elif isinstance(mesh, MeshAsset):
+            asset = mesh
+        else:
+            # Mesh3
+            asset = MeshAsset(
+                mesh_data=mesh,
+                name=name or source_id or "mesh",
+                source_path=source_id,
+            )
 
-        # GPU-хендлы на разных контекстах
-        self._context_resources: Dict[int, MeshHandle] = {}
-
-        # ресурсные метаданные (чтоб Mesh3 о них не знал)
-        self._source_id: Optional[str] = source_id
-        # name по умолчанию можно взять из source_id, если имя не задано явно
-        self.name: Optional[str] = name or source_id or f"mesh_{MeshDrawable.unical_id()}"
+        # Храним через MeshHandle для единообразия
+        self._handle: MeshHandle = MeshHandle.from_asset(asset)
+        self._gpu: MeshGPU = MeshGPU()
 
     # --------- интерфейс ресурса ---------
 
@@ -59,66 +66,73 @@ class MeshDrawable:
         То, что кладём в сериализацию и по чему грузим обратно.
         Обычно это путь к файлу или GUID.
         """
-        return self._source_id
-
-    def set_source_id(self, source_id: str):
-        self._source_id = source_id
-        # если имени ещё не было — логично синхронизировать
-        if self.name is None:
-            self.name = source_id
-
-    # --------- доступ к геометрии ---------
+        asset = self._handle.get()
+        if asset is not None and asset.source_path is not None:
+            return str(asset.source_path)
+        return None
 
     @property
-    def mesh(self) -> Mesh3:
-        return self._mesh
+    def name(self) -> Optional[str]:
+        """Имя ресурса."""
+        asset = self._handle.get()
+        return asset.name if asset else None
+
+    @name.setter
+    def name(self, value: Optional[str]) -> None:
+        """Устанавливает имя."""
+        asset = self._handle.get()
+        if asset is not None and value is not None:
+            asset.name = value
+
+    def set_source_id(self, source_id: str):
+        asset = self._handle.get()
+        if asset is not None:
+            asset.source_path = source_id
+            if asset.name == "mesh":
+                asset.name = source_id
+
+    # --------- доступ к данным ---------
+
+    @property
+    def asset(self) -> MeshAsset | None:
+        """Получить MeshAsset."""
+        return self._handle.get()
+
+    @property
+    def mesh(self) -> Mesh3 | None:
+        """Геометрия (Mesh3)."""
+        asset = self._handle.get()
+        return asset.mesh_data if asset else None
 
     @mesh.setter
     def mesh(self, value: Mesh3):
-        # при смене геометрии надо будет перевыгрузить в GPU
-        self.delete()
-        self._mesh = value
-        if self._mesh.vertex_normals is None:
-            self._mesh.compute_vertex_normals()
+        """Устанавливает геометрию."""
+        asset = self._handle.get()
+        if asset is not None:
+            asset.mesh_data = value
+            # version автоматически увеличится в asset.mesh_data setter
 
     # --------- GPU lifecycle ---------
 
     def upload(self, context: RenderContext):
-        ctx = context.context_key
-        if ctx in self._context_resources:
+        """Загрузить в GPU (если ещё не загружено)."""
+        asset = self._handle.get()
+        if asset is None or asset.mesh_data is None:
             return
-        handle = context.graphics.create_mesh(self._mesh)
-        self._context_resources[ctx] = handle
+        # MeshGPU сам проверит версию и загрузит если нужно
+        # Но upload() в старом API не рисует, поэтому просто пропускаем
+        # Реальная загрузка произойдёт при draw()
 
     def draw(self, context: RenderContext):
-        ctx = context.context_key
-        if ctx not in self._context_resources:
-            self.upload(context)
-        handle = self._context_resources[ctx]
-        handle.draw()
+        """Рисует меш."""
+        asset = self._handle.get()
+        if asset is None or asset.mesh_data is None:
+            return
+        self._gpu.draw(context, asset.mesh_data, asset.version)
 
     def delete(self):
-        from termin.visualization.platform.backends.opengl import (
-            get_context_make_current,
-            get_current_context_key,
-        )
-
-        # Запоминаем текущий контекст чтобы восстановить после удаления
-        original_ctx = get_current_context_key()
-
-        for ctx_key, handle in self._context_resources.items():
-            # Делаем контекст текущим перед удалением VAO
-            make_current = get_context_make_current(ctx_key)
-            if make_current is not None:
-                make_current()
-            handle.delete()
-        self._context_resources.clear()
-
-        # Восстанавливаем исходный контекст
-        if original_ctx is not None:
-            restore = get_context_make_current(original_ctx)
-            if restore is not None:
-                restore()
+        """Удаляет GPU ресурсы."""
+        self._gpu.delete()
 
     # --------- сериализация / десериализация ---------
 
@@ -126,58 +140,50 @@ class MeshDrawable:
         """
         Сериализует меш.
 
-        Если source_id задан - сохраняет только ссылку на файл.
-        Иначе сериализует геометрию inline.
+        Сохраняет только ссылку на файл (source_path).
+        Inline сериализация удалена.
         """
-        if self._source_id is not None:
+        asset = self._handle.get()
+        if asset is None:
+            return {"type": "none"}
+
+        if asset.source_path is not None:
             return {
                 "type": "file",
-                "source_id": self._source_id,
+                "source_id": str(asset.source_path),
             }
 
-        # Inline сериализация геометрии
+        # Без source_path сохраняем имя
         return {
-            "type": "inline",
-            "vertices": list(self._mesh.vertices.flatten()) if self._mesh.vertices is not None else [],
-            "triangles": list(self._mesh.triangles.flatten()) if self._mesh.triangles is not None else [],
-            "normals": list(self._mesh.vertex_normals.flatten()) if self._mesh.vertex_normals is not None else None,
+            "type": "named",
+            "name": asset.name,
         }
 
     @classmethod
-    def deserialize(cls, data: dict, context=None) -> "MeshDrawable":
+    def deserialize(cls, data: dict, context=None) -> "MeshDrawable | None":
         """
         Восстанавливает MeshDrawable из сериализованных данных.
         """
-        import numpy as np
-
         mesh_type = data.get("type", "file")
 
         if mesh_type == "file":
             source_id = data.get("source_id") or data.get("mesh")
-            if context is not None:
-                mesh = context.load_mesh(source_id)
-                return cls(mesh, source_id=source_id, name=source_id)
-            # Без контекста не можем загрузить файл
+            if source_id and context is not None:
+                mesh3 = context.load_mesh(source_id)
+                if mesh3 is not None:
+                    return cls(mesh3, source_id=source_id, name=source_id)
             return None
 
-        # Inline
-        vertices_flat = data.get("vertices", [])
-        triangles_flat = data.get("triangles", [])
-        normals_flat = data.get("normals")
+        if mesh_type == "named":
+            name = data.get("name")
+            if name:
+                # Создаём пустой drawable, данные загрузятся через ResourceManager
+                return cls(mesh=None, name=name)
+            return None
 
-        vertices = np.array(vertices_flat, dtype=np.float32).reshape(-1, 3)
-        triangles = np.array(triangles_flat, dtype=np.int32).reshape(-1, 3)
-        normals = None
-        if normals_flat is not None:
-            normals = np.array(normals_flat, dtype=np.float32).reshape(-1, 3)
+        return None
 
-        mesh = Mesh3(vertices=vertices, triangles=triangles)
-        if normals is not None:
-            mesh.vertex_normals = normals
-
-        return cls(mesh, name=data.get("name"))
-
-    # --------- утилиты для инспектора / дебага ---------
+    # --------- утилиты ---------
 
     @staticmethod
     def from_vertices_indices(vertices, indices) -> "MeshDrawable":
@@ -189,20 +195,26 @@ class MeshDrawable:
         return MeshDrawable(mesh)
 
     def interleaved_buffer(self):
-        """
-        Проброс к геометрии. Формат буфера и layout определяет Mesh3.
-        Это всё ещё геометрическая часть, не завязанная на конкретный API.
-        """
-        return self._mesh.interleaved_buffer()
+        """Проброс к геометрии."""
+        asset = self._handle.get()
+        if asset is None or asset.mesh_data is None:
+            return None
+        return asset.mesh_data.interleaved_buffer()
 
     def get_vertex_layout(self):
-        return self._mesh.get_vertex_layout()
+        """Проброс к геометрии."""
+        asset = self._handle.get()
+        if asset is None or asset.mesh_data is None:
+            return None
+        return asset.mesh_data.get_vertex_layout()
 
 
 class Mesh2Drawable:
     """
     Рендер-ресурс для 2D-меша (линии/треугольники в плоскости).
     Аналогично MeshDrawable, но поверх Mesh2.
+
+    TODO: Переделать аналогично MeshDrawable когда понадобится.
     """
 
     RESOURCE_KIND = "mesh2"
@@ -215,7 +227,7 @@ class Mesh2Drawable:
         name: Optional[str] = None,
     ):
         self._mesh: Mesh2 = mesh
-        self._context_resources: Dict[int, MeshHandle] = {}
+        self._context_resources: Dict[int, GPUMeshHandle] = {}
         self._source_id: Optional[str] = source_id
         self.name: Optional[str] = name or source_id
 
@@ -261,18 +273,15 @@ class Mesh2Drawable:
             get_current_context_key,
         )
 
-        # Запоминаем текущий контекст чтобы восстановить после удаления
         original_ctx = get_current_context_key()
 
         for ctx_key, handle in self._context_resources.items():
-            # Делаем контекст текущим перед удалением VAO
             make_current = get_context_make_current(ctx_key)
             if make_current is not None:
                 make_current()
             handle.delete()
         self._context_resources.clear()
 
-        # Восстанавливаем исходный контекст
         if original_ctx is not None:
             restore = get_context_make_current(original_ctx)
             if restore is not None:
@@ -281,16 +290,14 @@ class Mesh2Drawable:
     def serialize(self) -> dict:
         if self._source_id is not None:
             return {"mesh": self._source_id}
-        if hasattr(self._mesh, "source_path"):
-            return {"mesh": getattr(self._mesh, "source_path")}
         raise ValueError(
-            "Mesh2Drawable.serialize: не задан source_id и нет mesh.source_path."
+            "Mesh2Drawable.serialize: не задан source_id."
         )
 
     @classmethod
     def deserialize(cls, data: dict, context) -> "Mesh2Drawable":
         mesh_id = data["mesh"]
-        mesh = context.load_mesh(mesh_id)  # должен вернуть Mesh2
+        mesh = context.load_mesh(mesh_id)
         return cls(mesh, source_id=mesh_id, name=mesh_id)
 
     @staticmethod

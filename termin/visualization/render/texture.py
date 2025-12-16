@@ -6,47 +6,66 @@ from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 import numpy as np
-from PIL import Image
-from termin.visualization.platform.backends.base import GraphicsBackend, TextureHandle
+
+from termin.visualization.core.texture_handle import TextureHandle
+from termin.visualization.render.texture_asset import TextureAsset
+from termin.visualization.render.texture_data import TextureData
+from termin.visualization.render.texture_gpu import TextureGPU
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QPixmap
+    from termin.visualization.platform.backends.base import GraphicsBackend
 
 
 class Texture:
-    """Loads an image via Pillow and uploads it as ``GL_TEXTURE_2D``."""
+    """
+    Loads an image via Pillow and uploads it as ``GL_TEXTURE_2D``.
+
+    This is a wrapper over TextureHandle + TextureGPU.
+    """
 
     def __init__(self, path: Optional[str | Path] = None):
-        self._handles: dict[int | None, TextureHandle] = {}
-        self._image_data: Optional[np.ndarray] = None  # Original data (not flipped)
-        self._size: Optional[tuple[int, int]] = None
-        self.source_path: str | None = None
-        self.flip_x: bool = False  # Mirror horizontally
-        self.flip_y: bool = True  # Flip for OpenGL by default
-        self.transpose: bool = False  # Swap X and Y axes
+        self._handle: TextureHandle = TextureHandle()
+        self._gpu: TextureGPU = TextureGPU()
         self._preview_pixmap: Optional["QPixmap"] = None
         if path is not None:
             self.load(path)
 
-    def load(self, path: str | Path):
-        from termin.loaders.texture_spec import TextureSpec
+    @property
+    def asset(self) -> TextureAsset | None:
+        """Get underlying TextureAsset."""
+        return self._handle.get()
 
-        # Load spec for this texture
-        spec = TextureSpec.for_texture_file(path)
-        self.flip_x = spec.flip_x
-        self.flip_y = spec.flip_y
-        self.transpose = spec.transpose
+    @property
+    def source_path(self) -> str | None:
+        """Source path of the texture."""
+        asset = self._handle.get()
+        if asset is not None and asset.source_path is not None:
+            return str(asset.source_path)
+        return None
 
-        # Load image without flipping - flip happens at GPU upload
-        image = Image.open(path).convert("RGBA")
-        data = np.array(image, dtype=np.uint8)
-        width, height = image.size
+    @property
+    def _size(self) -> tuple[int, int] | None:
+        """Size of the texture (width, height)."""
+        asset = self._handle.get()
+        if asset is not None and asset.texture_data is not None:
+            return (asset.width, asset.height)
+        return None
 
-        self._image_data = data
-        self._size = (width, height)
-        self._handles.clear()
-        self._preview_pixmap = None  # Invalidate preview
-        self.source_path = str(path)
+    @property
+    def _image_data(self) -> np.ndarray | None:
+        """Raw image data (for preview)."""
+        asset = self._handle.get()
+        if asset is not None and asset.texture_data is not None:
+            return asset.texture_data.data
+        return None
+
+    def load(self, path: str | Path) -> None:
+        """Load texture from file."""
+        asset = TextureAsset.from_file(path)
+        self._handle = TextureHandle.from_asset(asset)
+        self._gpu = TextureGPU()
+        self._preview_pixmap = None
 
     def invalidate(self) -> None:
         """
@@ -54,39 +73,25 @@ class Texture:
 
         If source_path is set, reloads the texture from disk.
         """
-        self._handles.clear()
-        if self.source_path is not None:
-            self.load(self.source_path)
+        asset = self._handle.get()
+        if asset is not None:
+            asset.reload()
+        self._gpu.delete()
+        self._preview_pixmap = None
 
-    def _ensure_handle(self, graphics: GraphicsBackend, context_key: int | None) -> TextureHandle:
-        handle = self._handles.get(context_key)
-        if handle is not None:
-            return handle
-        if self._image_data is None or self._size is None:
-            raise RuntimeError("Texture has no image data to upload.")
+    def bind(self, graphics: "GraphicsBackend", unit: int = 0, context_key: int | None = None) -> None:
+        """Bind texture to specified unit."""
+        asset = self._handle.get()
+        if asset is None or asset.texture_data is None:
+            return
 
-        # Apply transformations when uploading to GPU
-        data = self._image_data
-        size = self._size
-
-        if self.transpose:
-            # Swap axes 0 and 1 (height and width)
-            data = np.swapaxes(data, 0, 1).copy()
-            size = (size[1], size[0])  # Swap width and height
-
-        if self.flip_x:
-            data = data[:, ::-1, :].copy()
-
-        if self.flip_y:
-            data = data[::-1, :, :].copy()
-
-        handle = graphics.create_texture(data, size, channels=4)
-        self._handles[context_key] = handle
-        return handle
-
-    def bind(self, graphics: GraphicsBackend, unit: int = 0, context_key: int | None = None):
-        handle = self._ensure_handle(graphics, context_key)
-        handle.bind(unit)
+        self._gpu.bind(
+            graphics=graphics,
+            texture_data=asset.texture_data,
+            version=asset.version,
+            unit=unit,
+            context_key=context_key,
+        )
 
     def get_preview_pixmap(self, max_size: int = 200) -> Optional["QPixmap"]:
         """
@@ -101,14 +106,17 @@ class Texture:
         if self._preview_pixmap is not None:
             return self._preview_pixmap
 
-        if self._image_data is None or self._size is None:
+        asset = self._handle.get()
+        if asset is None or asset.texture_data is None:
             return None
 
         from PyQt6.QtGui import QImage, QPixmap
         from PyQt6.QtCore import Qt
 
-        width, height = self._size
-        data = self._image_data
+        texture_data = asset.texture_data
+        width = texture_data.width
+        height = texture_data.height
+        data = texture_data.data
 
         # Create QImage from RGBA data (no flip needed - data is original orientation)
         if len(data.shape) == 3 and data.shape[2] == 4:
@@ -138,6 +146,7 @@ class Texture:
 
     @classmethod
     def from_file(cls, path: str | Path) -> "Texture":
+        """Create texture from file."""
         tex = cls()
         tex.load(path)
         return tex
@@ -162,10 +171,22 @@ class Texture:
         Returns:
             Texture instance with the provided data.
         """
+        texture_data = TextureData(
+            data=data,
+            width=width,
+            height=height,
+            channels=4,
+            flip_x=False,
+            flip_y=True,
+            transpose=False,
+        )
+        asset = TextureAsset(
+            texture_data=texture_data,
+            name=source_path or "texture",
+            source_path=source_path,
+        )
         tex = cls()
-        tex._image_data = data
-        tex._size = (width, height)
-        tex.source_path = source_path
+        tex._handle = TextureHandle.from_asset(asset)
         return tex
 
 

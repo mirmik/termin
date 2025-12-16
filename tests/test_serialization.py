@@ -122,8 +122,8 @@ def test_material_deserialize_inline():
 
 # ============== MeshDrawable ==============
 
-def test_mesh_drawable_serialize_inline():
-    """MeshDrawable без source_id сериализуется inline."""
+def test_mesh_drawable_serialize_named():
+    """MeshDrawable без source_id сериализуется как named."""
     from termin.visualization.core.mesh import MeshDrawable
     from termin.mesh.mesh import Mesh3
 
@@ -135,9 +135,9 @@ def test_mesh_drawable_serialize_inline():
 
     data = drawable.serialize()
 
-    assert data["type"] == "inline"
-    assert len(data["vertices"]) == 9  # 3 vertices * 3 coords
-    assert len(data["triangles"]) == 3  # 1 triangle * 3 indices
+    # Без source_path сериализуется как named (inline сериализация удалена)
+    assert data["type"] == "named"
+    assert data["name"] == "test_mesh"
 
 
 def test_mesh_drawable_serialize_file_reference():
@@ -152,24 +152,6 @@ def test_mesh_drawable_serialize_file_reference():
 
     assert data["type"] == "file"
     assert data["source_id"] == "/path/to/mesh.obj"
-
-
-def test_mesh_drawable_deserialize_inline():
-    """MeshDrawable десериализуется из inline данных."""
-    from termin.visualization.core.mesh import MeshDrawable
-    from termin.mesh.mesh import Mesh3
-
-    vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
-    triangles = np.array([[0, 1, 2]], dtype=np.int32)
-    mesh = Mesh3(vertices=vertices, triangles=triangles)
-    drawable = MeshDrawable(mesh, name="original")
-
-    data = drawable.serialize()
-    restored = MeshDrawable.deserialize(data)
-
-    assert restored is not None
-    assert restored._mesh.vertices.shape == (3, 3)
-    assert restored._mesh.triangles.shape == (1, 3)
 
 
 # ============== Entity ==============

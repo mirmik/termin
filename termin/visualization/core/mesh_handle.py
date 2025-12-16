@@ -1,77 +1,86 @@
 """
-MeshKeeper и MeshHandle — управление ссылками на меши.
+MeshHandle — умная ссылка на MeshAsset.
 
-Наследуются от ResourceKeeper/ResourceHandle.
+Указывает на MeshAsset напрямую или по имени через ResourceManager.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.resource_handle import ResourceHandle, ResourceKeeper
+from termin.visualization.core.resource_handle import ResourceHandle
 
 if TYPE_CHECKING:
     from termin.visualization.core.mesh import MeshDrawable
+    from termin.visualization.core.mesh_asset import MeshAsset
 
 
-class MeshKeeper(ResourceKeeper["MeshDrawable"]):
+def _get_mesh_asset(name: str) -> "MeshAsset | None":
+    """Lookup MeshAsset by name in ResourceManager."""
+    from termin.visualization.core.resources import ResourceManager
+
+    return ResourceManager.instance().get_mesh_asset(name)
+
+
+class MeshHandle(ResourceHandle["MeshAsset"]):
     """
-    Владелец меша по имени.
-
-    Меш требует GPU cleanup через delete().
-    """
-
-    @property
-    def mesh(self) -> "MeshDrawable | None":
-        """Алиас для resource."""
-        return self._resource
-
-    @property
-    def has_mesh(self) -> bool:
-        """Алиас для has_resource."""
-        return self.has_resource
-
-    def set_mesh(self, mesh: "MeshDrawable", source_path: str | None = None) -> None:
-        """Алиас для set_resource."""
-        self.set_resource(mesh, source_path)
-
-    def update_mesh(self, mesh: "MeshDrawable") -> None:
-        """Алиас для update_resource."""
-        self.update_resource(mesh)
-
-
-class MeshHandle(ResourceHandle["MeshDrawable"]):
-    """
-    Умная ссылка на меш.
+    Умная ссылка на MeshAsset.
 
     Использование:
-        handle = MeshHandle.from_mesh(drawable)  # прямая ссылка
+        handle = MeshHandle.from_asset(asset)    # прямая ссылка
         handle = MeshHandle.from_name("cube")    # по имени (hot-reload)
     """
 
+    _resource_getter = staticmethod(_get_mesh_asset)
+
     @classmethod
-    def from_mesh(cls, mesh: "MeshDrawable") -> "MeshHandle":
-        """Создать handle с прямой ссылкой на меш."""
+    def from_asset(cls, asset: "MeshAsset") -> "MeshHandle":
+        """Создать handle с прямой ссылкой на MeshAsset."""
         handle = cls()
-        handle._init_direct(mesh)
+        handle._init_direct(asset)
         return handle
+
+    @classmethod
+    def from_mesh(cls, drawable: "MeshDrawable") -> "MeshHandle":
+        """
+        Создать handle из MeshDrawable (обратная совместимость).
+
+        Извлекает MeshAsset из MeshDrawable.
+        """
+        from termin.visualization.core.mesh import MeshDrawable
+
+        if isinstance(drawable, MeshDrawable):
+            asset = drawable.asset
+            if asset is not None:
+                return cls.from_asset(asset)
+        return cls()
 
     @classmethod
     def from_name(cls, name: str) -> "MeshHandle":
         """Создать handle по имени меша."""
-        from termin.visualization.core.resources import ResourceManager
-
         handle = cls()
-        keeper = ResourceManager.instance().get_or_create_mesh_keeper(name)
-        handle._init_named(name, keeper)
+        handle._init_named(name)
         return handle
+
+    # --- Convenience accessors ---
+
+    def get_asset(self) -> "MeshAsset | None":
+        """Получить MeshAsset."""
+        return self.get()
+
+    @property
+    def asset(self) -> "MeshAsset | None":
+        """Алиас для get()."""
+        return self.get()
+
+    # --- Serialization ---
 
     def serialize(self) -> dict:
         """Сериализация."""
         if self._direct is not None:
             return {
                 "type": "direct",
-                "mesh": self._direct.serialize(),
+                "asset": self._direct.serialize(),
             }
         elif self._name is not None:
             return {
@@ -84,6 +93,8 @@ class MeshHandle(ResourceHandle["MeshDrawable"]):
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "MeshHandle":
         """Десериализация."""
+        from termin.visualization.core.mesh_asset import MeshAsset
+
         handle_type = data.get("type", "none")
 
         if handle_type == "named":
@@ -91,12 +102,10 @@ class MeshHandle(ResourceHandle["MeshDrawable"]):
             if name:
                 return cls.from_name(name)
         elif handle_type == "direct":
-            from termin.visualization.core.mesh import MeshDrawable
-
-            mesh_data = data.get("mesh")
-            if mesh_data:
-                mesh = MeshDrawable.deserialize(mesh_data, context)
-                if mesh is not None:
-                    return cls.from_mesh(mesh)
+            asset_data = data.get("asset") or data.get("mesh")
+            if asset_data:
+                asset = MeshAsset.deserialize(asset_data, context)
+                if asset is not None:
+                    return cls.from_asset(asset)
 
         return cls()

@@ -5,16 +5,18 @@ from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # только для типов, чтобы не ловить циклы импортов
     from termin.visualization.core.material import Material
-    from termin.visualization.core.material_handle import MaterialKeeper
+    from termin.visualization.core.material_asset import MaterialAsset
     from termin.visualization.core.mesh import MeshDrawable
-    from termin.visualization.core.mesh_handle import MeshKeeper
-    from termin.visualization.core.texture_handle import TextureKeeper
-    from termin.visualization.render.texture import Texture
+    from termin.visualization.core.mesh_asset import MeshAsset
     from termin.visualization.core.entity import Component
+    from termin.visualization.render.texture import Texture
+    from termin.visualization.render.texture_asset import TextureAsset
     from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm
+    from termin.visualization.render.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
     from termin.navmesh.types import NavMesh
     from termin.visualization.core.navmesh_handle import NavMeshKeeper
+    from termin.visualization.core.voxel_grid_handle import VoxelGridKeeper
     from termin.visualization.animation.clip import AnimationClip
     from termin.visualization.core.animation_clip_handle import AnimationClipKeeper
 
@@ -100,22 +102,15 @@ class ResourceManager:
         self.post_effects: Dict[str, type] = {}  # PostEffect classes by name
         self.pipelines: Dict[str, "RenderPipeline"] = {}  # RenderPipeline instances by name
 
-        # MaterialKeeper'ы — владельцы материалов по имени
-        self._material_keepers: Dict[str, "MaterialKeeper"] = {}
+        # Asset'ы по имени (новая система)
+        self._material_assets: Dict[str, "MaterialAsset"] = {}
+        self._mesh_assets: Dict[str, "MeshAsset"] = {}
+        self._texture_assets: Dict[str, "TextureAsset"] = {}
+        self._shader_assets: Dict[str, "ShaderAsset"] = {}
 
-        # MeshKeeper'ы — владельцы мешей по имени
-        self._mesh_keepers: Dict[str, "MeshKeeper"] = {}
-
-        # TextureKeeper'ы — владельцы текстур по имени
-        self._texture_keepers: Dict[str, "TextureKeeper"] = {}
-
-        # VoxelGridKeeper'ы — владельцы воксельных сеток по имени
+        # Keeper'ы для ресурсов без Asset'ов (legacy)
         self._voxel_grid_keepers: Dict[str, "VoxelGridKeeper"] = {}
-
-        # NavMeshKeeper'ы — владельцы навигационных сеток по имени
         self._navmesh_keepers: Dict[str, "NavMeshKeeper"] = {}
-
-        # AnimationClipKeeper'ы — владельцы анимационных клипов по имени
         self._animation_clip_keepers: Dict[str, "AnimationClipKeeper"] = {}
 
     @classmethod
@@ -133,79 +128,66 @@ class ResourceManager:
         """Reset singleton instance. For testing only."""
         cls._instance = None
 
-    # --------- MaterialKeeper'ы ---------
-    def get_or_create_keeper(self, name: str) -> "MaterialKeeper":
-        """
-        Получить или создать MaterialKeeper для имени.
+    # --------- Материалы (Asset-based) ---------
+    def get_material_asset(self, name: str) -> Optional["MaterialAsset"]:
+        """Получить MaterialAsset по имени."""
+        return self._material_assets.get(name)
 
-        Всегда возвращает keeper — создаёт новый если не существует.
-        """
-        from termin.visualization.core.material_handle import MaterialKeeper
-
-        if name not in self._material_keepers:
-            self._material_keepers[name] = MaterialKeeper(name)
-        return self._material_keepers[name]
-
-    def get_keeper(self, name: str) -> Optional["MaterialKeeper"]:
-        """Получить MaterialKeeper по имени или None."""
-        return self._material_keepers.get(name)
-
-    def list_keeper_names(self) -> list[str]:
-        """Список имён всех keeper'ов."""
-        return sorted(self._material_keepers.keys())
-
-    # --------- Материалы ---------
     def register_material(self, name: str, mat: "Material", source_path: str | None = None):
-        """
-        Регистрирует материал через keeper.
+        """Регистрирует материал."""
+        from termin.visualization.core.material_asset import MaterialAsset
 
-        Args:
-            name: Имя материала
-            mat: Материал
-            source_path: Путь к файлу-источнику
-        """
-        keeper = self.get_or_create_keeper(name)
-        keeper.set_material(mat, source_path)
-
-        # Для обратной совместимости сохраняем и в старый dict
+        asset = MaterialAsset.from_material(mat, name=name, source_path=source_path)
+        self._material_assets[name] = asset
+        # Для обратной совместимости
         self.materials[name] = mat
 
     def get_material(self, name: str) -> Optional["Material"]:
         """Получить материал по имени."""
-        keeper = self._material_keepers.get(name)
-        if keeper is not None:
-            return keeper.material
+        asset = self._material_assets.get(name)
+        if asset is not None:
+            return asset.material
         return self.materials.get(name)
 
     def list_material_names(self) -> list[str]:
-        # Объединяем имена из keeper'ов и старого dict
-        names = set(self._material_keepers.keys()) | set(self.materials.keys())
+        names = set(self._material_assets.keys()) | set(self.materials.keys())
         return sorted(names)
 
     def find_material_name(self, mat: "Material") -> Optional[str]:
-        # Сначала ищем в keeper'ах
-        for name, keeper in self._material_keepers.items():
-            if keeper.material is mat:
+        for name, asset in self._material_assets.items():
+            if asset.material is mat:
                 return name
-        # Затем в старом dict
         for n, m in self.materials.items():
             if m is mat:
                 return n
         return None
 
-    # --------- Шейдеры ---------
+    # --------- Шейдеры (Asset-based) ---------
+    def get_shader_asset(self, name: str) -> Optional["ShaderAsset"]:
+        """Получить ShaderAsset по имени."""
+        return self._shader_assets.get(name)
+
     def register_shader(self, name: str, shader: "ShaderMultyPhaseProgramm", source_path: str | None = None):
-        """Регистрирует шейдер программу."""
+        """Регистрирует шейдер."""
+        from termin.visualization.render.shader_asset import ShaderAsset
+
+        asset = ShaderAsset.from_program(shader, name=name, source_path=source_path)
+        self._shader_assets[name] = asset
+        # Для обратной совместимости
         self.shaders[name] = shader
-        # Сохраняем путь к исходнику если есть
         if source_path:
             shader.source_path = source_path
 
     def get_shader(self, name: str) -> Optional["ShaderMultyPhaseProgramm"]:
+        """Получить шейдер по имени."""
+        asset = self._shader_assets.get(name)
+        if asset is not None:
+            return asset.program
         return self.shaders.get(name)
 
     def list_shader_names(self) -> list[str]:
-        return sorted(self.shaders.keys())
+        names = set(self._shader_assets.keys()) | set(self.shaders.keys())
+        return sorted(names)
 
     def register_default_shader(self) -> None:
         """Регистрирует встроенный DefaultShader."""
@@ -404,47 +386,32 @@ class ResourceManager:
 
         return registered
 
-    # --------- MeshKeeper'ы ---------
-    def get_or_create_mesh_keeper(self, name: str) -> "MeshKeeper":
-        """
-        Получить или создать MeshKeeper по имени.
+    # --------- Меши (Asset-based) ---------
+    def get_mesh_asset(self, name: str) -> Optional["MeshAsset"]:
+        """Получить MeshAsset по имени."""
+        asset = self._mesh_assets.get(name)
+        if asset is not None:
+            return asset
+        # Fallback: извлечь из MeshDrawable
+        drawable = self.meshes.get(name)
+        if drawable is not None:
+            return drawable.asset
+        return None
 
-        Используется MeshHandle для получения keeper'а.
-        """
-        from termin.visualization.core.mesh_handle import MeshKeeper
-
-        if name not in self._mesh_keepers:
-            self._mesh_keepers[name] = MeshKeeper(name)
-        return self._mesh_keepers[name]
-
-    def get_mesh_keeper(self, name: str) -> Optional["MeshKeeper"]:
-        """Получить MeshKeeper по имени или None."""
-        return self._mesh_keepers.get(name)
-
-    # --------- Меши ---------
     def register_mesh(self, name: str, mesh: "MeshDrawable", source_path: str | None = None):
-        """
-        Регистрирует меш через keeper.
-
-        Args:
-            name: Имя меша
-            mesh: Меш
-            source_path: Путь к файлу-источнику
-        """
-        # Устанавливаем имя на меш (чтобы setter в инспекторе мог его использовать)
+        """Регистрирует меш."""
         mesh.name = name
-
-        keeper = self.get_or_create_mesh_keeper(name)
-        keeper.set_mesh(mesh, source_path)
-
-        # Для обратной совместимости сохраняем и в старый dict
+        asset = mesh.asset
+        if asset is not None:
+            asset.name = name
+            if source_path:
+                asset.source_path = source_path
+            self._mesh_assets[name] = asset
+        # Для обратной совместимости
         self.meshes[name] = mesh
 
     def get_mesh(self, name: str) -> Optional["MeshDrawable"]:
         """Получить меш по имени."""
-        keeper = self._mesh_keepers.get(name)
-        if keeper is not None:
-            return keeper.mesh
         return self.meshes.get(name)
 
     def list_mesh_names(self) -> list[str]:
@@ -457,11 +424,9 @@ class ResourceManager:
         return None
 
     def unregister_mesh(self, name: str) -> None:
-        """Удаляет меш и очищает keeper."""
-        keeper = self._mesh_keepers.get(name)
-        if keeper is not None:
-            keeper.clear()
-            del self._mesh_keepers[name]
+        """Удаляет меш."""
+        if name in self._mesh_assets:
+            del self._mesh_assets[name]
         if name in self.meshes:
             del self.meshes[name]
 
@@ -650,70 +615,47 @@ class ResourceManager:
         if name in self.animation_clips:
             del self.animation_clips[name]
 
-    # --------- TextureKeeper'ы ---------
-    def get_or_create_texture_keeper(self, name: str) -> "TextureKeeper":
-        """
-        Получить или создать TextureKeeper по имени.
+    # --------- Текстуры (Asset-based) ---------
+    def get_texture_asset(self, name: str) -> Optional["TextureAsset"]:
+        """Получить TextureAsset по имени."""
+        asset = self._texture_assets.get(name)
+        if asset is not None:
+            return asset
+        # Fallback: извлечь из Texture
+        texture = self.textures.get(name)
+        if texture is not None:
+            return texture.asset
+        return None
 
-        Используется TextureHandle для получения keeper'а.
-        """
-        from termin.visualization.core.texture_handle import TextureKeeper
-
-        if name not in self._texture_keepers:
-            self._texture_keepers[name] = TextureKeeper(name)
-        return self._texture_keepers[name]
-
-    def get_texture_keeper(self, name: str) -> Optional["TextureKeeper"]:
-        """Получить TextureKeeper по имени или None."""
-        return self._texture_keepers.get(name)
-
-    # --------- Текстуры ---------
     def register_texture(self, name: str, texture: "Texture", source_path: str | None = None):
-        """
-        Регистрирует текстуру через keeper.
-
-        Args:
-            name: Имя текстуры
-            texture: Текстура
-            source_path: Путь к файлу-источнику
-        """
-        if source_path and texture.source_path is None:
-            texture.source_path = source_path
-
-        keeper = self.get_or_create_texture_keeper(name)
-        keeper.set_texture(texture, source_path)
-
-        # Для обратной совместимости сохраняем и в старый dict
+        """Регистрирует текстуру."""
+        asset = texture.asset
+        if asset is not None:
+            asset.name = name
+            if source_path:
+                asset.source_path = source_path
+            self._texture_assets[name] = asset
+        # Для обратной совместимости
         self.textures[name] = texture
 
     def get_texture(self, name: str) -> Optional["Texture"]:
         """Получить текстуру по имени."""
-        keeper = self._texture_keepers.get(name)
-        if keeper is not None:
-            return keeper.texture
         return self.textures.get(name)
 
     def list_texture_names(self) -> list[str]:
-        """Список имён всех текстур."""
-        names = set(self._texture_keepers.keys()) | set(self.textures.keys())
+        names = set(self._texture_assets.keys()) | set(self.textures.keys())
         return sorted(names)
 
     def find_texture_name(self, texture: "Texture") -> Optional[str]:
-        """Найти имя зарегистрированной текстуры."""
-        for name, keeper in self._texture_keepers.items():
-            if keeper.texture is texture:
-                return name
         for n, t in self.textures.items():
             if t is texture:
                 return n
         return None
 
     def unregister_texture(self, name: str) -> None:
-        """Удаляет текстуру и очищает keeper."""
-        keeper = self._texture_keepers.get(name)
-        if keeper is not None:
-            keeper.clear()
-            del self._texture_keepers[name]
+        """Удаляет текстуру."""
+        if name in self._texture_assets:
+            del self._texture_assets[name]
         if name in self.textures:
             del self.textures[name]
 

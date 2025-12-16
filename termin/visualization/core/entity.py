@@ -9,6 +9,7 @@ import numpy as np
 from termin.geombase.pose3 import Pose3
 from termin.geombase.general_pose3 import GeneralPose3
 from termin.kinematic.general_transform import GeneralTransform3
+from termin.visualization.core.identifiable import Identifiable
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.render.render_context import RenderContext
@@ -23,7 +24,7 @@ from termin.visualization.core.serialization import COMPONENT_REGISTRY
 C = TypeVar("C", bound=Component)
 
 
-class Entity:
+class Entity(Identifiable):
     """Container of components with transform data."""
 
     _next_pick_id: int = 1
@@ -39,8 +40,10 @@ class Entity:
         selectable: bool = True,
         serializable: bool = True,
         layer: int = 0,
-        flags: int = 0
+        flags: int = 0,
+        uuid: str | None = None,
     ):
+        super().__init__(uuid=uuid)
         # Convert scale to numpy array
         if scale is None:
             scale_arr = np.array([1.0, 1.0, 1.0], dtype=np.float64)
@@ -216,6 +219,7 @@ class Entity:
 
         pose = self.transform.local_pose()
         data = {
+            "uuid": self.uuid,
             "name": self.name,
             "priority": self.priority,
             "scale": list(pose.scale),
@@ -264,6 +268,7 @@ class Entity:
             selectable=data.get("selectable", True),
             layer=data.get("layer", 0),
             flags=data.get("flags", 0),
+            uuid=data.get("uuid"),
         )
 
         # Восстанавливаем дополнительные поля

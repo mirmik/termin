@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, TYPE_CHECKING
 
+from termin.visualization.core.identifiable import Identifiable
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.camera import CameraComponent
 
@@ -10,7 +11,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class Viewport:
+class Viewport(Identifiable):
     """
     Viewport — "что рендерим и куда" в рамках дисплея.
 
@@ -34,6 +35,10 @@ class Viewport:
     display: Optional["Display"] = None
     canvas: Optional["Canvas"] = None
     depth: int = 0  # Render priority: lower values render first
+    _init_uuid: str | None = field(default=None, repr=False)
+
+    def __post_init__(self):
+        Identifiable.__init__(self, uuid=self._init_uuid)
 
     def screen_point_to_ray(self, x: float, y: float):
         """
@@ -78,6 +83,7 @@ class Viewport:
             camera_entity_name = self.camera.entity.name
 
         return {
+            "uuid": self._uuid,
             "camera_entity": camera_entity_name,
             "rect": list(self.rect),
             "depth": self.depth,

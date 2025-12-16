@@ -7,6 +7,7 @@ from typing import List, Sequence, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.core.entity import Component, Entity, InputComponent
+from termin.visualization.core.identifiable import Identifiable
 from termin.visualization.core.lighting.light import Light
 from termin.visualization.render.components.light_component import LightComponent
 from termin.visualization.platform.backends.base import GraphicsBackend
@@ -28,10 +29,15 @@ def is_overrides_method(obj, method_name, base_class):
     return getattr(obj.__class__, method_name) is not getattr(base_class, method_name)
 
 
-class Scene:
+class Scene(Identifiable):
     """Container for renderable entities and lighting data."""
 
-    def __init__(self, background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0)):
+    def __init__(
+        self,
+        background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0),
+        uuid: str | None = None,
+    ):
+        super().__init__(uuid=uuid)
         self.entities: List[Entity] = []
         self.background_color = np.array(background_color, dtype=np.float32)
         self._shaders_set = set()
@@ -346,6 +352,7 @@ class Scene:
                 serialized_entities.append(data)
 
         result = {
+            "uuid": self.uuid,
             "background_color": list(self.background_color),
             "entities": serialized_entities,
             "layer_names": {str(k): v for k, v in self.layer_names.items()},
@@ -358,7 +365,10 @@ class Scene:
     @classmethod
     def deserialize(cls, data: dict, context=None) -> "Scene":
         """Deserialize a scene."""
-        scene = cls(background_color=data.get("background_color", (0.05, 0.05, 0.08, 1.0)))
+        scene = cls(
+            background_color=data.get("background_color", (0.05, 0.05, 0.08, 1.0)),
+            uuid=data.get("uuid"),
+        )
         scene.load_from_data(data, context, update_settings=True)
         return scene
 

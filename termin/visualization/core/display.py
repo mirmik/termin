@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import List, Optional, Tuple, TYPE_CHECKING
 
+from termin.visualization.core.identifiable import Identifiable
+
 if TYPE_CHECKING:
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.scene import Scene
@@ -22,7 +24,7 @@ if TYPE_CHECKING:
     from termin.visualization.ui.canvas import Canvas
 
 
-class Display:
+class Display(Identifiable):
     """
     Display — что и куда рендерим.
 
@@ -34,14 +36,21 @@ class Display:
         engine.render_views(display.surface, views)
     """
 
-    def __init__(self, surface: "RenderSurface", editor_only: bool = False):
+    def __init__(
+        self,
+        surface: "RenderSurface",
+        editor_only: bool = False,
+        uuid: str | None = None,
+    ):
         """
         Создаёт Display с указанной поверхностью.
 
         Параметры:
             surface: Поверхность рендеринга (WindowRenderSurface или OffscreenRenderSurface).
             editor_only: Если True, дисплей создаётся и рендерится только в редакторе.
+            uuid: UUID дисплея (генерируется если не указан).
         """
+        super().__init__(uuid=uuid)
         self._surface = surface
         self._viewports: List["Viewport"] = []
         self._editor_only = editor_only

@@ -1,8 +1,8 @@
 """
-ResourceKeeper и ResourceHandle — базовые классы для управления ресурсами.
+ResourceHandle — базовый класс для умных ссылок на ресурсы.
 
-ResourceKeeper[T] — владелец ресурса по имени, управляет жизненным циклом.
-ResourceHandle[T] — легковесная ссылка на ресурс (прямая или по имени).
+Handle указывает на Asset напрямую или по имени через ResourceManager.
+ResourceKeeper оставлен для обратной совместимости (VoxelGrid, NavMesh, AnimationClip).
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ class ResourceKeeper(Generic[T]):
     """
     Базовый владелец ресурса по имени.
 
-    Создаётся ResourceManager'ом при первом обращении к имени.
-    Хранит ресурс, знает источник (файл), контролирует жизненный цикл.
+    DEPRECATED: Используется только для VoxelGrid, NavMesh, AnimationClip.
+    Новые ресурсы используют Handle → Asset напрямую.
     """
 
     def __init__(self, name: str):
@@ -44,61 +44,38 @@ class ResourceKeeper(Generic[T]):
         return self._resource is not None
 
     def _on_cleanup(self, resource: T) -> None:
-        """
-        Вызывается перед заменой/удалением ресурса.
-
-        Override для очистки GPU памяти и т.д.
-        По умолчанию вызывает resource.delete() если метод существует.
-        """
-        if hasattr(resource, "delete"):
-            resource.delete()  # type: ignore
+        """Override для очистки."""
+        pass
 
     def set_resource(self, resource: T, source_path: str | None = None) -> None:
-        """
-        Установить ресурс.
-
-        Args:
-            resource: Ресурс
-            source_path: Путь к файлу-источнику
-        """
+        """Установить ресурс."""
         if self._resource is not None:
             self._on_cleanup(self._resource)
-
         self._resource = resource
         if source_path is not None:
             self._source_path = source_path
 
     def update_resource(self, resource: T) -> None:
-        """
-        Обновить ресурс (hot-reload).
-
-        По умолчанию просто заменяет ресурс.
-        Override для сохранения identity (например, update_from).
-        """
+        """Обновить ресурс (hot-reload)."""
         if self._resource is not None:
             self._on_cleanup(self._resource)
         self._resource = resource
 
-    def clear(self) -> None:
-        """Удалить ресурс из keeper'а."""
-        if self._resource is not None:
-            self._on_cleanup(self._resource)
-        self._resource = None
-        self._source_path = None
-
 
 class ResourceHandle(Generic[T]):
     """
-    Базовая умная ссылка на ресурс.
+    Базовая умная ссылка на ресурс (Asset).
 
     Два режима работы:
-    1. Direct — хранит прямую ссылку на ресурс (создан из кода)
-    2. Named — хранит ссылку на ResourceKeeper (по имени из ResourceManager)
+    1. Direct — хранит прямую ссылку на Asset
+    2. Named — хранит имя, ищет Asset в ResourceManager при get()
     """
+
+    # Subclasses должны переопределить для lookup по имени
+    _resource_getter: Callable[[str], T | None] | None = None
 
     def __init__(self):
         self._direct: T | None = None
-        self._keeper: ResourceKeeper[T] | None = None
         self._name: str | None = None
 
     @property
@@ -109,7 +86,7 @@ class ResourceHandle(Generic[T]):
     @property
     def is_named(self) -> bool:
         """True если это ссылка по имени."""
-        return self._keeper is not None
+        return self._name is not None and self._direct is None
 
     @property
     def name(self) -> str | None:
@@ -128,8 +105,8 @@ class ResourceHandle(Generic[T]):
         if self._direct is not None:
             return self._direct
 
-        if self._keeper is not None and self._keeper.has_resource:
-            return self._keeper.resource
+        if self._name is not None and self._resource_getter is not None:
+            return self._resource_getter(self._name)
 
         return None
 
@@ -140,13 +117,11 @@ class ResourceHandle(Generic[T]):
     def _init_direct(self, resource: T) -> None:
         """Инициализировать как прямую ссылку."""
         self._direct = resource
-        self._keeper = None
         self._name = None
 
-    def _init_named(self, name: str, keeper: ResourceKeeper[T]) -> None:
+    def _init_named(self, name: str) -> None:
         """Инициализировать как ссылку по имени."""
         self._direct = None
-        self._keeper = keeper
         self._name = name
 
     def serialize(self) -> dict:
