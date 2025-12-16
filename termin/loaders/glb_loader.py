@@ -373,7 +373,9 @@ def _parse_skins(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             ibm_accessor_idx = skin["inverseBindMatrices"]
             ibm_data = _read_accessor(gltf, bin_data, ibm_accessor_idx)
             # Reshape to (N, 4, 4) matrices
+            # glTF stores matrices in column-major order, so transpose each one
             inverse_bind_matrices = ibm_data.reshape(-1, 4, 4).astype(np.float32)
+            inverse_bind_matrices = np.ascontiguousarray(inverse_bind_matrices.transpose(0, 2, 1))
         else:
             # Default to identity matrices
             n_joints = len(joint_node_indices)

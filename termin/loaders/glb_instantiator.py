@@ -32,6 +32,44 @@ from termin.loaders.glb_loader import (
 )
 
 
+def _compute_trs_matrix(
+    translation: np.ndarray,
+    rotation: np.ndarray,
+    scale: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute 4x4 transform matrix from Translation, Rotation, Scale.
+
+    Args:
+        translation: (3,) position
+        rotation: (4,) quaternion [x, y, z, w]
+        scale: (3,) scale factors
+
+    Returns:
+        4x4 transformation matrix = T * R * S
+    """
+    # Build rotation matrix from quaternion
+    x, y, z, w = rotation
+    r = np.array([
+        [1 - 2*(y*y + z*z),     2*(x*y - z*w),     2*(x*z + y*w), 0],
+        [    2*(x*y + z*w), 1 - 2*(x*x + z*z),     2*(y*z - x*w), 0],
+        [    2*(x*z - y*w),     2*(y*z + x*w), 1 - 2*(x*x + y*y), 0],
+        [                0,                 0,                 0, 1],
+    ], dtype=np.float32)
+
+    # Apply scale
+    r[0, :3] *= scale[0]
+    r[1, :3] *= scale[1]
+    r[2, :3] *= scale[2]
+
+    # Apply translation
+    r[0, 3] = translation[0]
+    r[1, 3] = translation[1]
+    r[2, 3] = translation[2]
+
+    return r
+
+
 def _glb_mesh_to_mesh3(glb_mesh: GLBMeshData) -> Mesh3 | SkinnedMesh3:
     """Convert GLBMeshData to Mesh3 or SkinnedMesh3."""
     vertices = glb_mesh.vertices
@@ -98,6 +136,9 @@ def _create_skeleton_from_skin(
             index=bone_idx,
             parent_index=parent_bone_idx,
             inverse_bind_matrix=skin.inverse_bind_matrices[bone_idx],
+            bind_translation=node.translation.copy(),
+            bind_rotation=node.rotation.copy(),
+            bind_scale=node.scale.copy(),
         )
         bones.append(bone)
         node_to_bone[node_idx] = bone_idx
@@ -267,7 +308,22 @@ def instantiate_glb(
     if scene_data.skins:
         skin = scene_data.skins[0]  # Use first skin
         skeleton_data = _create_skeleton_from_skin(skin, scene_data.nodes)
-        skeleton_instance = SkeletonInstance(skeleton_data)
+
+        # Find skeleton root transform (Armature node that contains the skeleton)
+        # This is the parent of the first joint, which contains the export scale
+        skeleton_root_transform = None
+        first_joint_idx = skin.joint_node_indices[0] if skin.joint_node_indices else None
+        if first_joint_idx is not None:
+            # Find parent of first joint
+            for node_idx, node in enumerate(scene_data.nodes):
+                if first_joint_idx in node.children:
+                    # Compute root transform matrix from TRS
+                    skeleton_root_transform = _compute_trs_matrix(
+                        node.translation, node.rotation, node.scale
+                    )
+                    break
+
+        skeleton_instance = SkeletonInstance(skeleton_data, root_transform=skeleton_root_transform)
 
     if scene_data.root_nodes:
         if len(scene_data.root_nodes) == 1:

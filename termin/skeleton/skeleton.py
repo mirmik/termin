@@ -87,15 +87,27 @@ class SkeletonInstance:
 
     MAX_BONES = 128  # Matches shader uniform array size
 
-    def __init__(self, skeleton_data: SkeletonData):
+    def __init__(
+        self,
+        skeleton_data: SkeletonData,
+        root_transform: np.ndarray | None = None,
+    ):
         """
         Initialize skeleton instance.
 
         Args:
             skeleton_data: The skeleton template
+            root_transform: Optional 4x4 transform of skeleton root (e.g., Armature node)
+                           This is applied to all root bones before computing world matrices.
         """
         self._data = skeleton_data
         n = skeleton_data.get_bone_count()
+
+        # Root transform (from parent node like Armature)
+        if root_transform is not None:
+            self._root_transform = np.asarray(root_transform, dtype=np.float32).reshape(4, 4)
+        else:
+            self._root_transform = np.eye(4, dtype=np.float32)
 
         # Current local transforms per bone (set by animation)
         self._local_translations = np.zeros((n, 3), dtype=np.float32)
@@ -115,6 +127,9 @@ class SkeletonInstance:
             self._bone_matrices[i] = np.eye(4, dtype=np.float32)
 
         self._dirty = True
+
+        # Initialize to bind pose from skeleton data
+        self.reset_to_bind_pose()
 
     @property
     def skeleton_data(self) -> SkeletonData:
@@ -175,12 +190,12 @@ class SkeletonInstance:
             self.set_bone_transform(bone_index, translation, rotation, scale)
 
     def reset_to_bind_pose(self) -> None:
-        """Reset all bones to bind pose (identity local transforms)."""
-        n = len(self._data.bones)
-        self._local_translations.fill(0)
-        self._local_rotations.fill(0)
-        self._local_rotations[:, 3] = 1.0
-        self._local_scales.fill(1)
+        """Reset all bones to bind pose from skeleton data."""
+        for bone in self._data.bones:
+            i = bone.index
+            self._local_translations[i] = bone.bind_translation.copy()
+            self._local_rotations[i] = bone.bind_rotation.copy()
+            self._local_scales[i] = bone.bind_scale.copy()
         self._dirty = True
 
     def update(self) -> None:
@@ -191,7 +206,7 @@ class SkeletonInstance:
 
         Algorithm:
         1. Compute local matrix from T * R * S for each bone
-        2. Compute world matrix: parent_world * local (or just local for roots)
+        2. Compute world matrix: root_transform * parent_world * local (root_transform for roots)
         3. Compute bone matrix: world * inverse_bind_matrix
         """
         if not self._dirty:
@@ -209,8 +224,8 @@ class SkeletonInstance:
         # Bones are assumed ordered so parents come before children
         for bone in self._data.bones:
             if bone.parent_index < 0:
-                # Root bone: world = local
-                self._world_matrices[bone.index] = self._local_matrices[bone.index].copy()
+                # Root bone: world = root_transform * local
+                self._world_matrices[bone.index] = self._root_transform @ self._local_matrices[bone.index]
             else:
                 # Child bone: world = parent_world * local
                 parent_world = self._world_matrices[bone.parent_index]
