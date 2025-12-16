@@ -8,6 +8,7 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.core.material_asset import MaterialAsset
     from termin.visualization.core.mesh import MeshDrawable
     from termin.visualization.core.mesh_asset import MeshAsset
+    from termin.visualization.core.glb_asset import GLBAsset
     from termin.visualization.core.entity import Component
     from termin.visualization.render.texture import Texture
     from termin.visualization.render.texture_asset import TextureAsset
@@ -133,6 +134,7 @@ class ResourceManager:
         self._navmesh_assets: Dict[str, "NavMeshAsset"] = {}
         self._animation_clip_assets: Dict[str, "AnimationClipAsset"] = {}
         self._skeleton_assets: Dict[str, "SkeletonAsset"] = {}
+        self._glb_assets: Dict[str, "GLBAsset"] = {}
 
         # Asset'ы по UUID (для поиска существующих при загрузке)
         from termin.visualization.core.asset import Asset
@@ -181,6 +183,8 @@ class ResourceManager:
             self._register_voxel_grid_file(name, result)
         elif result.resource_type == "navmesh":
             self._register_navmesh_file(name, result)
+        elif result.resource_type == "glb":
+            self._register_glb_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type: {result.resource_type}")
 
@@ -206,6 +210,8 @@ class ResourceManager:
             self._reload_voxel_grid_file(name, result)
         elif result.resource_type == "navmesh":
             self._reload_navmesh_file(name, result)
+        elif result.resource_type == "glb":
+            self._reload_glb_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
 
@@ -577,6 +583,60 @@ class ResourceManager:
             self.navmeshes[name] = asset.navmesh
 
         print(f"[ResourceManager] Reloaded navmesh: {name}")
+
+    def _register_glb_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register GLB from PreLoadResult."""
+        from termin.visualization.core.glb_asset import GLBAsset
+
+        # Check if already registered by name
+        if name in self._glb_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, GLBAsset):
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = GLBAsset(
+                scene_data=None,
+                name=name,
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+            self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name
+        self._glb_assets[name] = asset
+
+        # Load content (Asset parses it)
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, spec_data=result.spec_data, has_uuid_in_spec=has_uuid)
+
+        print(f"[ResourceManager] Registered GLB: {name}")
+
+    def _reload_glb_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload GLB from PreLoadResult."""
+        asset = self._glb_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload content
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, spec_data=result.spec_data, has_uuid_in_spec=has_uuid)
+
+        print(f"[ResourceManager] Reloaded GLB: {name}")
+
+    def get_glb_asset(self, name: str) -> Optional["GLBAsset"]:
+        """Get GLBAsset by name."""
+        return self._glb_assets.get(name)
 
     def get_asset_by_uuid(self, uuid: str) -> Optional["Asset"]:
         """Get any Asset by UUID."""

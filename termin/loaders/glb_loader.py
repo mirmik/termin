@@ -622,3 +622,69 @@ def load_glb_file_normalized(path: str | Path, normalize_scale: bool = False) ->
         normalize_glb_scale(scene_data)
 
     return scene_data
+
+
+def load_glb_file_from_buffer(data: bytes, normalize_scale: bool = False) -> GLBSceneData:
+    """
+    Load GLB from binary buffer with optional scale normalization.
+
+    Args:
+        data: Binary GLB data
+        normalize_scale: If True, normalize root scale to 1.0
+
+    Returns:
+        GLBSceneData (possibly normalized)
+    """
+    # Parse header
+    if len(data) < 12:
+        raise ValueError("Data too small to be valid GLB")
+
+    magic = data[0:4]
+    if magic != b"glTF":
+        raise ValueError(f"Invalid GLB magic: {magic}")
+
+    version, length = struct.unpack("<II", data[4:12])
+    if version != 2:
+        raise ValueError(f"Unsupported glTF version: {version}")
+
+    # Parse chunks
+    offset = 12
+    json_data = None
+    bin_data = None
+
+    while offset < len(data):
+        if offset + 8 > len(data):
+            break
+
+        chunk_length, chunk_type = struct.unpack("<II", data[offset:offset + 8])
+        chunk_data = data[offset + 8:offset + 8 + chunk_length]
+
+        if chunk_type == 0x4E4F534A:  # JSON
+            json_data = chunk_data.decode("utf-8")
+        elif chunk_type == 0x004E4942:  # BIN
+            bin_data = chunk_data
+
+        # Align to 4 bytes
+        offset += 8 + chunk_length
+        offset = (offset + 3) & ~3
+
+    if json_data is None:
+        raise ValueError("No JSON chunk found in GLB")
+
+    gltf = json.loads(json_data)
+    bin_data = bin_data or b""
+
+    # Parse scene
+    scene_data = GLBSceneData()
+
+    _parse_nodes(gltf, scene_data)
+    _parse_materials(gltf, scene_data)
+    _parse_textures(gltf, bin_data, scene_data)
+    _parse_meshes(gltf, bin_data, scene_data)
+    _parse_skins(gltf, bin_data, scene_data)
+    _parse_animations(gltf, bin_data, scene_data)
+
+    if normalize_scale:
+        normalize_glb_scale(scene_data)
+
+    return scene_data

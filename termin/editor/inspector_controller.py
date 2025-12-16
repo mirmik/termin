@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from termin.editor.pipeline_inspector import PipelineInspector
     from termin.editor.texture_inspector import TextureInspector
     from termin.editor.mesh_inspector import MeshInspector
+    from termin.editor.glb_inspector import GLBInspector
 
 
 class InspectorController:
@@ -46,6 +47,7 @@ class InspectorController:
     PIPELINE_INSPECTOR_INDEX = 4
     TEXTURE_INSPECTOR_INDEX = 5
     MESH_INSPECTOR_INDEX = 6
+    GLB_INSPECTOR_INDEX = 7
 
     def __init__(
         self,
@@ -120,6 +122,12 @@ class InspectorController:
         self._mesh_inspector = MeshInspector()
         self._stack.addWidget(self._mesh_inspector)
 
+        # Create GLBInspector
+        from termin.editor.glb_inspector import GLBInspector
+
+        self._glb_inspector = GLBInspector()
+        self._stack.addWidget(self._glb_inspector)
+
         # Add to container
         self._init_in_container(container)
 
@@ -166,6 +174,11 @@ class InspectorController:
     def mesh_inspector(self) -> "MeshInspector":
         """Access to MeshInspector widget."""
         return self._mesh_inspector
+
+    @property
+    def glb_inspector(self) -> "GLBInspector":
+        """Access to GLBInspector widget."""
+        return self._glb_inspector
 
     @property
     def stack(self) -> QStackedWidget:
@@ -261,6 +274,11 @@ class InspectorController:
         """Show MeshInspector and load mesh from file."""
         self._stack.setCurrentIndex(self.MESH_INSPECTOR_INDEX)
         self._mesh_inspector.set_mesh_by_path(file_path)
+
+    def show_glb_inspector_for_file(self, file_path: str) -> None:
+        """Show GLBInspector and load GLB from file."""
+        self._stack.setCurrentIndex(self.GLB_INSPECTOR_INDEX)
+        self._glb_inspector.set_glb_by_path(file_path)
 
     def set_entity_target(self, target) -> None:
         """Set target for EntityInspector (can be Entity or other object)."""

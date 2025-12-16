@@ -36,6 +36,7 @@ from termin.editor.file_processors import (
     PipelineFileProcessor,
     VoxelGridProcessor,
     NavMeshProcessor,
+    GLBPreLoader,
 )
 from termin.editor.spacemouse_controller import SpaceMouseController
 
@@ -170,6 +171,12 @@ class EditorWindow(QMainWindow):
         )
         self._project_file_watcher.register_processor(
             NavMeshProcessor(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            GLBPreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
@@ -704,6 +711,9 @@ class EditorWindow(QMainWindow):
         elif suffix in (".stl", ".obj"):
             # Меш — открываем в инспекторе мешей
             self._inspector_controller.show_mesh_inspector_for_file(str(path))
+        elif suffix in (".glb", ".gltf"):
+            # GLB — открываем в инспекторе GLB
+            self._inspector_controller.show_glb_inspector_for_file(str(path))
 
     def _on_project_file_double_clicked(self, file_path) -> None:
         """Обработчик двойного клика на файл в Project Browser."""
