@@ -86,7 +86,6 @@ class FilePreLoader(ABC):
         """
         ...
 
-    @abstractmethod
     def preload(self, path: str) -> PreLoadResult | None:
         """
         Pre-load a file: read content, extract UUID if possible.
@@ -95,9 +94,14 @@ class FilePreLoader(ABC):
             path: Path to the file
 
         Returns:
-            PreLoadResult with file data, or None if file cannot be processed.
+            PreLoadResult with file data, or None if not implemented.
+
+        Note:
+            Default returns None. Subclasses that use new PreLoadResult-based
+            registration should override this. Legacy processors can override
+            on_file_added/on_file_changed directly.
         """
-        ...
+        return None
 
     def on_file_added(self, path: str) -> None:
         """
