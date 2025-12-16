@@ -148,7 +148,16 @@ class ResourceManager:
         # Dispatch by resource type
         if result.resource_type == "material":
             self._register_material_file(name, result)
-        # TODO: add other resource types
+        elif result.resource_type == "shader":
+            self._register_shader_file(name, result)
+        elif result.resource_type == "texture":
+            self._register_texture_file(name, result)
+        elif result.resource_type == "mesh":
+            self._register_mesh_file(name, result)
+        elif result.resource_type == "voxel_grid":
+            self._register_voxel_grid_file(name, result)
+        elif result.resource_type == "navmesh":
+            self._register_navmesh_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type: {result.resource_type}")
 
@@ -164,7 +173,16 @@ class ResourceManager:
 
         if result.resource_type == "material":
             self._reload_material_file(name, result)
-        # TODO: add other resource types
+        elif result.resource_type == "shader":
+            self._reload_shader_file(name, result)
+        elif result.resource_type == "texture":
+            self._reload_texture_file(name, result)
+        elif result.resource_type == "mesh":
+            self._reload_mesh_file(name, result)
+        elif result.resource_type == "voxel_grid":
+            self._reload_voxel_grid_file(name, result)
+        elif result.resource_type == "navmesh":
+            self._reload_navmesh_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
 
@@ -225,6 +243,317 @@ class ResourceManager:
             self.materials[name] = asset.material
 
         print(f"[ResourceManager] Reloaded material: {name}")
+
+    def _register_shader_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register shader from PreLoadResult."""
+        from termin.visualization.render.shader_asset import ShaderAsset
+
+        # Check if already registered by name
+        if name in self._shader_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, ShaderAsset):
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = ShaderAsset(
+                program=None,
+                name=name,
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+            self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name
+        self._shader_assets[name] = asset
+
+        # Load content (Asset parses it)
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, has_uuid_in_spec=has_uuid)
+
+        # Update legacy dict
+        if asset.program is not None:
+            self.shaders[name] = asset.program
+
+        print(f"[ResourceManager] Registered shader: {name}")
+
+    def _reload_shader_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload shader from PreLoadResult."""
+        asset = self._shader_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload content
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, has_uuid_in_spec=has_uuid)
+
+        # Update legacy dict
+        if asset.program is not None:
+            self.shaders[name] = asset.program
+
+        print(f"[ResourceManager] Reloaded shader: {name}")
+
+    def _register_texture_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register texture from PreLoadResult."""
+        from termin.visualization.render.texture import Texture
+        from termin.visualization.render.texture_asset import TextureAsset
+
+        # Check if already registered by name
+        if name in self._texture_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, TextureAsset):
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = TextureAsset(
+                texture_data=None,
+                name=name,
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+            self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name
+        self._texture_assets[name] = asset
+
+        # Load content (Asset parses it)
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, spec_data=result.spec_data, has_uuid_in_spec=has_uuid)
+
+        # Create Texture wrapper and register in legacy dict
+        texture = Texture.from_asset(asset)
+        self.textures[name] = texture
+
+        print(f"[ResourceManager] Registered texture: {name}")
+
+    def _reload_texture_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload texture from PreLoadResult."""
+        asset = self._texture_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload content
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, spec_data=result.spec_data, has_uuid_in_spec=has_uuid)
+
+        # Invalidate GPU texture to force re-upload
+        texture = self.textures.get(name)
+        if texture is not None:
+            texture._gpu.delete()
+            texture._preview_pixmap = None
+
+        print(f"[ResourceManager] Reloaded texture: {name}")
+
+    def _register_mesh_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register mesh from PreLoadResult."""
+        from termin.visualization.core.mesh import MeshDrawable
+        from termin.visualization.core.mesh_asset import MeshAsset
+
+        # Check if already registered by name
+        if name in self._mesh_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, MeshAsset):
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = MeshAsset(
+                mesh_data=None,
+                name=name,
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+            self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name
+        self._mesh_assets[name] = asset
+
+        # Load content (Asset parses it)
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, spec_data=result.spec_data, has_uuid_in_spec=has_uuid)
+
+        # Create MeshDrawable wrapper and register in legacy dict
+        drawable = MeshDrawable(asset, source_id=result.path, name=name)
+        self.meshes[name] = drawable
+
+        print(f"[ResourceManager] Registered mesh: {name}")
+
+    def _reload_mesh_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload mesh from PreLoadResult."""
+        asset = self._mesh_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload content
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, spec_data=result.spec_data, has_uuid_in_spec=has_uuid)
+
+        # Invalidate GPU mesh to force re-upload
+        drawable = self.meshes.get(name)
+        if drawable is not None:
+            drawable._gpu.invalidate()
+
+        print(f"[ResourceManager] Reloaded mesh: {name}")
+
+    def _register_voxel_grid_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register voxel grid from PreLoadResult."""
+        from termin.voxels.voxel_grid_asset import VoxelGridAsset
+
+        # Check if already registered by name
+        if name in self._voxel_grid_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, VoxelGridAsset):
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = VoxelGridAsset(
+                grid=None,
+                name=name,
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+            self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name
+        self._voxel_grid_assets[name] = asset
+
+        # Load content (Asset parses it)
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, has_uuid_in_spec=has_uuid)
+
+        # Update legacy dict
+        if asset.grid is not None:
+            # Use grid's stored name if available
+            actual_name = asset.grid.name if asset.grid.name else name
+            if actual_name != name:
+                # Re-register with correct name
+                del self._voxel_grid_assets[name]
+                self._voxel_grid_assets[actual_name] = asset
+                name = actual_name
+
+            self.voxel_grids[name] = asset.grid
+
+        print(f"[ResourceManager] Registered voxel grid: {name}")
+
+    def _reload_voxel_grid_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload voxel grid from PreLoadResult."""
+        asset = self._voxel_grid_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload content
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, has_uuid_in_spec=has_uuid)
+
+        # Update legacy dict
+        if asset.grid is not None:
+            self.voxel_grids[name] = asset.grid
+
+        print(f"[ResourceManager] Reloaded voxel grid: {name}")
+
+    def _register_navmesh_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register navmesh from PreLoadResult."""
+        from termin.navmesh.navmesh_asset import NavMeshAsset
+
+        # Check if already registered by name
+        if name in self._navmesh_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, NavMeshAsset):
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = NavMeshAsset(
+                navmesh=None,
+                name=name,
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+            self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name
+        self._navmesh_assets[name] = asset
+
+        # Load content (Asset parses it)
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, has_uuid_in_spec=has_uuid)
+
+        # Update legacy dict
+        if asset.navmesh is not None:
+            # Use navmesh's stored name if available
+            actual_name = asset.navmesh.name if asset.navmesh.name else name
+            if actual_name != name:
+                # Re-register with correct name
+                del self._navmesh_assets[name]
+                self._navmesh_assets[actual_name] = asset
+                name = actual_name
+
+            self.navmeshes[name] = asset.navmesh
+
+        print(f"[ResourceManager] Registered navmesh: {name}")
+
+    def _reload_navmesh_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload navmesh from PreLoadResult."""
+        asset = self._navmesh_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload content
+        has_uuid = result.uuid is not None
+        asset.load_from_content(result.content, has_uuid_in_spec=has_uuid)
+
+        # Update legacy dict
+        if asset.navmesh is not None:
+            self.navmeshes[name] = asset.navmesh
+
+        print(f"[ResourceManager] Reloaded navmesh: {name}")
 
     def get_asset_by_uuid(self, uuid: str) -> Optional["Asset"]:
         """Get any Asset by UUID."""

@@ -158,6 +158,13 @@ class Texture:
         return tex
 
     @classmethod
+    def from_asset(cls, asset: TextureAsset) -> "Texture":
+        """Create texture from existing TextureAsset."""
+        tex = cls()
+        tex._handle = TextureHandle.from_asset(asset)
+        return tex
+
+    @classmethod
     def from_data(
         cls,
         data: np.ndarray,

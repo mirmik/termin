@@ -1,15 +1,14 @@
-"""Voxel grid file processor for .voxels files."""
+"""Voxel grid file pre-loader for .voxels files."""
 
 from __future__ import annotations
 
-import os
 from typing import Set
 
-from termin.editor.project_file_watcher import FileTypeProcessor
+from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
 
 
-class VoxelGridProcessor(FileTypeProcessor):
-    """Handles voxel grid files (.voxels)."""
+class VoxelGridPreLoader(FilePreLoader):
+    """Pre-loads voxel grid files - reads content and UUID from spec."""
 
     @property
     def priority(self) -> int:
@@ -23,63 +22,30 @@ class VoxelGridProcessor(FileTypeProcessor):
     def resource_type(self) -> str:
         return "voxel_grid"
 
-    def on_file_added(self, path: str) -> None:
-        """Load new voxel grid file."""
-        from termin.voxels.persistence import VoxelPersistence
-
-        name = os.path.splitext(os.path.basename(path))[0]
-
-        if name in self._resource_manager.voxel_grids:
-            return
-
+    def preload(self, path: str) -> PreLoadResult | None:
+        """
+        Pre-load voxel grid file: read JSON content and UUID from spec.
+        """
         try:
-            grid = VoxelPersistence.load(path)
-            # Use grid's stored name if available, otherwise use filename
-            if grid.name:
-                name = grid.name
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
 
-            self._resource_manager.register_voxel_grid(name, grid)
+            # Read spec file (may contain uuid)
+            spec_data = self.read_spec_file(path)
+            uuid = spec_data.get("uuid") if spec_data else None
 
-            if path not in self._file_to_resources:
-                self._file_to_resources[path] = set()
-            self._file_to_resources[path].add(name)
-
-            print(f"[VoxelGridProcessor] Loaded: {name} ({grid.voxel_count} voxels)")
-            self._notify_reloaded(name)
+            return PreLoadResult(
+                resource_type=self.resource_type,
+                path=path,
+                content=content,
+                uuid=uuid,
+                spec_data=spec_data,
+            )
 
         except Exception as e:
-            print(f"[VoxelGridProcessor] Failed to load {path}: {e}")
+            print(f"[VoxelGridPreLoader] Failed to read {path}: {e}")
+            return None
 
-    def on_file_changed(self, path: str) -> None:
-        """Reload modified voxel grid."""
-        from termin.voxels.persistence import VoxelPersistence
 
-        # Get previously registered name from this file
-        old_names = self._file_to_resources.get(path, set())
-
-        try:
-            grid = VoxelPersistence.load(path)
-            name = grid.name if grid.name else os.path.splitext(os.path.basename(path))[0]
-
-            # Remove old name if different
-            for old_name in old_names:
-                if old_name != name and old_name in self._resource_manager.voxel_grids:
-                    self._resource_manager.unregister_voxel_grid(old_name)
-
-            self._resource_manager.register_voxel_grid(name, grid)
-
-            self._file_to_resources[path] = {name}
-
-            print(f"[VoxelGridProcessor] Reloaded: {name} ({grid.voxel_count} voxels)")
-            self._notify_reloaded(name)
-
-        except Exception as e:
-            print(f"[VoxelGridProcessor] Failed to reload {path}: {e}")
-
-    def on_file_removed(self, path: str) -> None:
-        """Handle voxel grid file deletion."""
-        if path in self._file_to_resources:
-            for name in self._file_to_resources[path]:
-                self._resource_manager.unregister_voxel_grid(name)
-                print(f"[VoxelGridProcessor] Removed: {name}")
-            del self._file_to_resources[path]
+# Backward compatibility alias
+VoxelGridProcessor = VoxelGridPreLoader

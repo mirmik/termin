@@ -78,7 +78,25 @@ class NavMeshPersistence:
         path = Path(path)
 
         with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            content = f.read()
+
+        return NavMeshPersistence.load_from_content(content)
+
+    @staticmethod
+    def load_from_content(content: str) -> NavMesh:
+        """
+        Загрузить NavMesh из JSON содержимого.
+
+        Args:
+            content: JSON строка с данными NavMesh.
+
+        Returns:
+            Загруженный NavMesh.
+
+        Raises:
+            ValueError: Если формат файла неверный.
+        """
+        data = json.loads(content)
 
         version = data.get("version", "")
         if not version.startswith("1."):

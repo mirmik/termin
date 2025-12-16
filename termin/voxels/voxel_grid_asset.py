@@ -72,6 +72,55 @@ class VoxelGridAsset(Asset):
             pass
         return False
 
+    def load_from_content(
+        self,
+        content: str | None,
+        has_uuid_in_spec: bool = False,
+    ) -> bool:
+        """
+        Load voxel grid from JSON content.
+
+        Args:
+            content: JSON content string
+            has_uuid_in_spec: If True, spec file already has UUID (don't save)
+
+        Returns:
+            True if loaded successfully.
+        """
+        if content is None:
+            return False
+
+        try:
+            from termin.voxels.persistence import VoxelPersistence
+
+            self._grid = VoxelPersistence.load_from_content(content)
+            if self._grid is not None:
+                self._grid.name = self._name
+                self._loaded = True
+
+                # Save spec file if no UUID was in spec
+                if not has_uuid_in_spec and self._source_path:
+                    self._save_spec_file()
+
+                return True
+        except Exception as e:
+            print(f"[VoxelGridAsset] Failed to load content: {e}")
+        return False
+
+    def _save_spec_file(self) -> bool:
+        """Save UUID to spec file."""
+        if self._source_path is None:
+            return False
+
+        from termin.editor.project_file_watcher import FilePreLoader
+
+        spec_data = {"uuid": self.uuid}
+        if FilePreLoader.write_spec_file(str(self._source_path), spec_data):
+            self.mark_just_saved()
+            print(f"[VoxelGridAsset] Added UUID to spec: {self._name}")
+            return True
+        return False
+
     def unload(self) -> None:
         """Unload grid to free memory."""
         self._grid = None

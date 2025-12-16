@@ -29,6 +29,15 @@ class OBJSceneData:
 def load_obj_file(path, spec: "MeshSpec | None" = None) -> OBJSceneData:
     """Load OBJ file."""
     path = Path(path)
+
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        text = f.read()
+
+    return parse_obj_text(text, name=path.stem, spec=spec)
+
+
+def parse_obj_text(text: str, name: str = "mesh", spec: "MeshSpec | None" = None) -> OBJSceneData:
+    """Parse OBJ from text content."""
     scene_data = OBJSceneData()
 
     # Raw data from file
@@ -37,54 +46,53 @@ def load_obj_file(path, spec: "MeshSpec | None" = None) -> OBJSceneData:
     normals_raw = []  # vn
     faces = []  # f
 
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
 
-            parts = line.split()
-            if not parts:
-                continue
+        parts = line.split()
+        if not parts:
+            continue
 
-            cmd = parts[0]
+        cmd = parts[0]
 
-            if cmd == "v" and len(parts) >= 4:
-                positions.append((float(parts[1]), float(parts[2]), float(parts[3])))
+        if cmd == "v" and len(parts) >= 4:
+            positions.append((float(parts[1]), float(parts[2]), float(parts[3])))
 
-            elif cmd == "vt" and len(parts) >= 3:
-                tex_coords.append((float(parts[1]), float(parts[2])))
+        elif cmd == "vt" and len(parts) >= 3:
+            tex_coords.append((float(parts[1]), float(parts[2])))
 
-            elif cmd == "vn" and len(parts) >= 4:
-                normals_raw.append((float(parts[1]), float(parts[2]), float(parts[3])))
+        elif cmd == "vn" and len(parts) >= 4:
+            normals_raw.append((float(parts[1]), float(parts[2]), float(parts[3])))
 
-            elif cmd == "f" and len(parts) >= 4:
-                # Parse face vertices (can be triangles or quads)
-                face_verts = []
-                for vert in parts[1:]:
-                    # Format: v, v/vt, v/vt/vn, v//vn
-                    indices_str = vert.split("/")
-                    v_idx = int(indices_str[0]) - 1  # OBJ is 1-indexed
+        elif cmd == "f" and len(parts) >= 4:
+            # Parse face vertices (can be triangles or quads)
+            face_verts = []
+            for vert in parts[1:]:
+                # Format: v, v/vt, v/vt/vn, v//vn
+                indices_str = vert.split("/")
+                v_idx = int(indices_str[0]) - 1  # OBJ is 1-indexed
 
-                    vt_idx = None
-                    if len(indices_str) > 1 and indices_str[1]:
-                        vt_idx = int(indices_str[1]) - 1
+                vt_idx = None
+                if len(indices_str) > 1 and indices_str[1]:
+                    vt_idx = int(indices_str[1]) - 1
 
-                    vn_idx = None
-                    if len(indices_str) > 2 and indices_str[2]:
-                        vn_idx = int(indices_str[2]) - 1
+                vn_idx = None
+                if len(indices_str) > 2 and indices_str[2]:
+                    vn_idx = int(indices_str[2]) - 1
 
-                    face_verts.append((v_idx, vt_idx, vn_idx))
+                face_verts.append((v_idx, vt_idx, vn_idx))
 
-                # Triangulate (fan triangulation for convex polygons)
-                for i in range(1, len(face_verts) - 1):
-                    faces.append(face_verts[0])
-                    faces.append(face_verts[i])
-                    faces.append(face_verts[i + 1])
+            # Triangulate (fan triangulation for convex polygons)
+            for i in range(1, len(face_verts) - 1):
+                faces.append(face_verts[0])
+                faces.append(face_verts[i])
+                faces.append(face_verts[i + 1])
 
     if not positions:
         scene_data.meshes.append(OBJMeshData(
-            name=path.stem,
+            name=name,
             vertices=np.array([], dtype=np.float32).reshape(0, 3),
             normals=None,
             uvs=None,
@@ -115,7 +123,7 @@ def load_obj_file(path, spec: "MeshSpec | None" = None) -> OBJSceneData:
     indices_np = np.arange(len(out_vertices), dtype=np.uint32)
 
     mesh = OBJMeshData(
-        name=path.stem,
+        name=name,
         vertices=vertices_np,
         normals=normals_np,
         uvs=uvs_np,

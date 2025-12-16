@@ -1,15 +1,14 @@
-"""Shader file processor for .shader files."""
+"""Shader file pre-loader for .shader files."""
 
 from __future__ import annotations
 
-import os
 from typing import Set
 
-from termin.editor.project_file_watcher import FileTypeProcessor
+from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
 
 
-class ShaderFileProcessor(FileTypeProcessor):
-    """Handles .shader files."""
+class ShaderPreLoader(FilePreLoader):
+    """Pre-loads .shader files - reads content and UUID from spec."""
 
     @property
     def priority(self) -> int:
@@ -23,63 +22,30 @@ class ShaderFileProcessor(FileTypeProcessor):
     def resource_type(self) -> str:
         return "shader"
 
-    def on_file_added(self, path: str) -> None:
-        """Load new shader file."""
-        name = os.path.splitext(os.path.basename(path))[0]
-
-        if name in self._resource_manager.shaders:
-            return
-
+    def preload(self, path: str) -> PreLoadResult | None:
+        """
+        Pre-load shader file: read content and UUID from spec.
+        """
         try:
-            from termin.visualization.render.shader_parser import (
-                ShaderMultyPhaseProgramm,
-                parse_shader_text,
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Read UUID from .spec file
+            spec_data = self.read_spec_file(path)
+            uuid = spec_data.get("uuid") if spec_data else None
+
+            return PreLoadResult(
+                resource_type=self.resource_type,
+                path=path,
+                content=content,
+                uuid=uuid,
+                spec_data=spec_data,
             )
 
-            with open(path, "r", encoding="utf-8") as f:
-                shader_text = f.read()
-
-            tree = parse_shader_text(shader_text)
-            program = ShaderMultyPhaseProgramm.from_tree(tree)
-            self._resource_manager.register_shader(name, program, source_path=path)
-
-            if path not in self._file_to_resources:
-                self._file_to_resources[path] = set()
-            self._file_to_resources[path].add(name)
-
-            print(f"[ShaderProcessor] Loaded: {name}")
-            self._notify_reloaded(name)
-
         except Exception as e:
-            print(f"[ShaderProcessor] Failed to load {path}: {e}")
+            print(f"[ShaderPreLoader] Failed to read {path}: {e}")
+            return None
 
-    def on_file_changed(self, path: str) -> None:
-        """Reload modified shader."""
-        name = os.path.splitext(os.path.basename(path))[0]
 
-        if name not in self._resource_manager.shaders:
-            return
-
-        try:
-            from termin.visualization.render.shader_parser import (
-                ShaderMultyPhaseProgramm,
-                parse_shader_text,
-            )
-
-            with open(path, "r", encoding="utf-8") as f:
-                shader_text = f.read()
-
-            tree = parse_shader_text(shader_text)
-            program = ShaderMultyPhaseProgramm.from_tree(tree)
-            self._resource_manager.register_shader(name, program, source_path=path)
-
-            print(f"[ShaderProcessor] Reloaded: {name}")
-            self._notify_reloaded(name)
-
-        except Exception as e:
-            print(f"[ShaderProcessor] Failed to reload {name}: {e}")
-
-    def on_file_removed(self, path: str) -> None:
-        """Handle shader file deletion."""
-        if path in self._file_to_resources:
-            del self._file_to_resources[path]
+# Backward compatibility alias
+ShaderFileProcessor = ShaderPreLoader

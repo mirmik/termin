@@ -103,6 +103,69 @@ class FilePreLoader(ABC):
         """
         return None
 
+    # --- Spec file helpers ---
+
+    @staticmethod
+    def read_spec_file(path: str) -> dict | None:
+        """
+        Read .spec file for a resource.
+
+        Args:
+            path: Path to main resource file (e.g., "texture.png")
+
+        Returns:
+            Spec data dict or None if spec file doesn't exist.
+        """
+        import json
+
+        spec_path = path + ".spec"
+        if not os.path.exists(spec_path):
+            return None
+
+        try:
+            with open(spec_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+
+    @staticmethod
+    def write_spec_file(path: str, data: dict) -> bool:
+        """
+        Write .spec file for a resource.
+
+        Args:
+            path: Path to main resource file (e.g., "texture.png")
+            data: Spec data dict (must include "uuid")
+
+        Returns:
+            True if written successfully.
+        """
+        import json
+
+        spec_path = path + ".spec"
+        try:
+            with open(spec_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def get_uuid_from_spec(path: str) -> str | None:
+        """
+        Get UUID from spec file.
+
+        Args:
+            path: Path to main resource file
+
+        Returns:
+            UUID string or None.
+        """
+        spec_data = FilePreLoader.read_spec_file(path)
+        if spec_data:
+            return spec_data.get("uuid")
+        return None
+
     def on_file_added(self, path: str) -> None:
         """
         Called when a new file is detected.

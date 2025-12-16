@@ -1,15 +1,14 @@
-"""Texture file processor for image files."""
+"""Texture file pre-loader for image files."""
 
 from __future__ import annotations
 
-import os
 from typing import Set
 
-from termin.editor.project_file_watcher import FileTypeProcessor
+from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
 
 
-class TextureFileProcessor(FileTypeProcessor):
-    """Handles texture files (.png, .jpg, .jpeg, .tga, .bmp)."""
+class TexturePreLoader(FilePreLoader):
+    """Pre-loads texture files - reads content and UUID from spec."""
 
     @property
     def priority(self) -> int:
@@ -23,65 +22,30 @@ class TextureFileProcessor(FileTypeProcessor):
     def resource_type(self) -> str:
         return "texture"
 
-    def on_file_added(self, path: str) -> None:
-        """Load new texture file."""
-        name = os.path.splitext(os.path.basename(path))[0]
-
-        if name in self._resource_manager.textures:
-            return
-
+    def preload(self, path: str) -> PreLoadResult | None:
+        """
+        Pre-load texture file: read binary content and UUID from spec.
+        """
         try:
-            from termin.visualization.render.texture import Texture
+            with open(path, "rb") as f:
+                content = f.read()
 
-            texture = Texture.from_file(path)
-            self._resource_manager.register_texture(name, texture, source_path=path)
+            # Read spec file (may contain uuid, flip_x, flip_y, transpose)
+            spec_data = self.read_spec_file(path)
+            uuid = spec_data.get("uuid") if spec_data else None
 
-            if path not in self._file_to_resources:
-                self._file_to_resources[path] = set()
-            self._file_to_resources[path].add(name)
-
-            print(f"[TextureProcessor] Loaded: {name}")
-            self._notify_reloaded(name)
+            return PreLoadResult(
+                resource_type=self.resource_type,
+                path=path,
+                content=content,
+                uuid=uuid,
+                spec_data=spec_data,
+            )
 
         except Exception as e:
-            print(f"[TextureProcessor] Failed to load {path}: {e}")
+            print(f"[TexturePreLoader] Failed to read {path}: {e}")
+            return None
 
-    def on_file_changed(self, path: str) -> None:
-        """Reload modified texture."""
-        name = os.path.splitext(os.path.basename(path))[0]
 
-        # Find texture by source_path or name
-        texture = None
-        found_name = name
-        for tex_name, tex in self._resource_manager.textures.items():
-            if tex.source_path == path:
-                texture = tex
-                found_name = tex_name
-                break
-
-        if texture is None:
-            texture = self._resource_manager.get_texture(name)
-
-        if texture is None:
-            return
-
-        try:
-            # Invalidate forces texture reload on next use
-            texture.invalidate()
-            print(f"[TextureProcessor] Reloaded: {found_name}")
-            self._notify_reloaded(found_name)
-        except Exception as e:
-            print(f"[TextureProcessor] Failed to reload {found_name}: {e}")
-
-    def on_file_removed(self, path: str) -> None:
-        """Handle texture file deletion."""
-        if path in self._file_to_resources:
-            for name in self._file_to_resources[path]:
-                self._resource_manager.unregister_texture(name)
-                print(f"[TextureProcessor] Removed: {name}")
-            del self._file_to_resources[path]
-
-    def _notify_reloaded(self, name: str) -> None:
-        """Notify listeners about resource reload."""
-        if self._on_resource_reloaded is not None:
-            self._on_resource_reloaded(self.resource_type, name)
+# Backward compatibility alias
+TextureFileProcessor = TexturePreLoader

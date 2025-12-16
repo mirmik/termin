@@ -73,12 +73,30 @@ class VoxelPersistence:
             ValueError: Если формат файла неверный.
             FileNotFoundError: Если файл не найден.
         """
-        import numpy as np
-
         path = Path(path)
 
         with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            content = f.read()
+
+        return VoxelPersistence.load_from_content(content)
+
+    @staticmethod
+    def load_from_content(content: str) -> VoxelGrid:
+        """
+        Загрузить воксельную сетку из JSON содержимого.
+
+        Args:
+            content: JSON строка с данными сетки.
+
+        Returns:
+            Загруженная VoxelGrid.
+
+        Raises:
+            ValueError: Если формат файла неверный.
+        """
+        import numpy as np
+
+        data = json.loads(content)
 
         version = data.get("version", "")
         if not version.startswith("1."):

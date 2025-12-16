@@ -9,7 +9,7 @@ from termin.mesh.mesh import Mesh3
 from termin.visualization.core.asset import Asset
 
 if TYPE_CHECKING:
-    pass
+    from termin.loaders.mesh_spec import MeshSpec
 
 
 class MeshAsset(Asset):
@@ -78,6 +78,144 @@ class MeshAsset(Asset):
             if self._mesh_data.vertex_normals is None:
                 self._mesh_data.compute_vertex_normals()
             self._loaded = True
+            return True
+        return False
+
+    def load_from_content(
+        self,
+        content: bytes | None,
+        spec_data: dict | None = None,
+        has_uuid_in_spec: bool = False,
+    ) -> bool:
+        """
+        Load mesh from binary content.
+
+        Args:
+            content: Binary mesh data (STL or OBJ format)
+            spec_data: Spec file data with scale, axis mappings
+            has_uuid_in_spec: If True, spec file already has UUID (don't save)
+
+        Returns:
+            True if loaded successfully.
+        """
+        if content is None or self._source_path is None:
+            return False
+
+        try:
+            import io
+            import os
+
+            from termin.loaders.mesh_spec import MeshSpec
+
+            ext = os.path.splitext(str(self._source_path))[1].lower()
+
+            # Create MeshSpec from spec_data
+            spec = MeshSpec(
+                scale=spec_data.get("scale", 1.0) if spec_data else 1.0,
+                axis_x=spec_data.get("axis_x", "x") if spec_data else "x",
+                axis_y=spec_data.get("axis_y", "y") if spec_data else "y",
+                axis_z=spec_data.get("axis_z", "z") if spec_data else "z",
+                flip_uv_v=spec_data.get("flip_uv_v", False) if spec_data else False,
+            )
+
+            # Parse mesh based on format
+            mesh_data = None
+            if ext == ".stl":
+                mesh_data = self._parse_stl_content(content, spec)
+            elif ext == ".obj":
+                mesh_data = self._parse_obj_content(content, spec)
+            else:
+                print(f"[MeshAsset] Unsupported format: {ext}")
+                return False
+
+            if mesh_data is None:
+                return False
+
+            self._mesh_data = mesh_data
+            if self._mesh_data.vertex_normals is None:
+                self._mesh_data.compute_vertex_normals()
+            self._loaded = True
+
+            # Save spec file if no UUID was in spec
+            if not has_uuid_in_spec:
+                self._save_spec_file(spec_data)
+
+            return True
+        except Exception as e:
+            print(f"[MeshAsset] Failed to load content: {e}")
+            return False
+
+    def _parse_stl_content(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:
+        """Parse STL content from bytes."""
+        import io
+
+        from termin.loaders.stl_loader import _load_binary_stl, _load_ascii_stl
+
+        f = io.BytesIO(content)
+
+        # Detect ASCII vs binary
+        first_bytes = content[:80]
+        is_ascii = (
+            first_bytes.strip().lower().startswith(b"solid")
+            and b"\x00" not in first_bytes
+        )
+
+        if is_ascii:
+            try:
+                mesh_data = _load_ascii_stl(f, self._name)
+            except Exception:
+                f.seek(0)
+                mesh_data = _load_binary_stl(f, self._name)
+        else:
+            mesh_data = _load_binary_stl(f, self._name)
+
+        # Apply spec transformations
+        mesh_data.vertices = spec.apply_to_vertices(mesh_data.vertices)
+        if mesh_data.normals is not None:
+            mesh_data.normals = spec.apply_to_normals(mesh_data.normals)
+
+        return Mesh3(
+            vertices=mesh_data.vertices,
+            triangles=mesh_data.indices.reshape(-1, 3),
+            vertex_normals=mesh_data.normals,
+        )
+
+    def _parse_obj_content(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:
+        """Parse OBJ content from bytes."""
+        from termin.loaders.obj_loader import parse_obj_text
+
+        text = content.decode("utf-8", errors="ignore")
+
+        scene_data = parse_obj_text(text, name=self._name, spec=spec)
+        if not scene_data.meshes:
+            return None
+
+        mesh_data = scene_data.meshes[0]
+        mesh3 = Mesh3(
+            vertices=mesh_data.vertices,
+            triangles=mesh_data.indices.reshape(-1, 3),
+        )
+        if mesh_data.normals is not None:
+            mesh3.vertex_normals = mesh_data.normals
+        if mesh_data.uvs is not None:
+            mesh3.uvs = mesh_data.uvs
+
+        return mesh3
+
+    def _save_spec_file(self, existing_spec_data: dict | None = None) -> bool:
+        """Save UUID to spec file, preserving existing settings."""
+        if self._source_path is None:
+            return False
+
+        from termin.editor.project_file_watcher import FilePreLoader
+
+        # Merge existing spec data with UUID
+        spec_data = dict(existing_spec_data) if existing_spec_data else {}
+        spec_data["uuid"] = self.uuid
+
+        if FilePreLoader.write_spec_file(str(self._source_path), spec_data):
+            self.mark_just_saved()
+            print(f"[MeshAsset] Added UUID to spec: {self._name}")
             return True
         return False
 
