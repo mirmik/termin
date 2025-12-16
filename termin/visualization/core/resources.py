@@ -75,6 +75,24 @@ _BUILTIN_POST_EFFECTS: List[Tuple[str, str]] = [
     ("termin.visualization.render.posteffects.gray", "GrayscaleEffect"),
 ]
 
+# Фиксированные UUID для встроенных ресурсов.
+# Гарантируют стабильные ссылки между сессиями.
+_BUILTIN_UUIDS: Dict[str, str] = {
+    # Шейдеры
+    "DefaultShader": "00000000-0000-0000-0001-000000000001",
+    "PBRShader": "00000000-0000-0000-0001-000000000002",
+    "AdvancedPBRShader": "00000000-0000-0000-0001-000000000003",
+    # Материалы
+    "DefaultMaterial": "00000000-0000-0000-0002-000000000001",
+    "PBRMaterial": "00000000-0000-0000-0002-000000000002",
+    "AdvancedPBRMaterial": "00000000-0000-0000-0002-000000000003",
+    # Меши
+    "Cube": "00000000-0000-0000-0003-000000000001",
+    "Sphere": "00000000-0000-0000-0003-000000000002",
+    "Plane": "00000000-0000-0000-0003-000000000003",
+    "Cylinder": "00000000-0000-0000-0003-000000000004",
+}
+
 
 class ResourceManager:
     """
@@ -573,6 +591,7 @@ class ResourceManager:
 
         asset = MaterialAsset.from_material(mat, name=name, source_path=source_path, uuid=uuid)
         self._material_assets[name] = asset
+        self._assets_by_uuid[asset.uuid] = asset
         # Для обратной совместимости
         self.materials[name] = mat
 
@@ -626,12 +645,15 @@ class ResourceManager:
         """Получить ShaderAsset по имени."""
         return self._shader_assets.get(name)
 
-    def register_shader(self, name: str, shader: "ShaderMultyPhaseProgramm", source_path: str | None = None):
+    def register_shader(
+        self, name: str, shader: "ShaderMultyPhaseProgramm", source_path: str | None = None, uuid: str | None = None
+    ):
         """Регистрирует шейдер."""
         from termin.visualization.render.shader_asset import ShaderAsset
 
-        asset = ShaderAsset.from_program(shader, name=name, source_path=source_path)
+        asset = ShaderAsset.from_program(shader, name=name, source_path=source_path, uuid=uuid)
         self._shader_assets[name] = asset
+        self._assets_by_uuid[asset.uuid] = asset
         # Для обратной совместимости
         self.shaders[name] = shader
         if source_path:
@@ -684,7 +706,7 @@ class ResourceManager:
         )
 
         program = ShaderMultyPhaseProgramm(program="DefaultShader", phases=[phase])
-        self.shaders["DefaultShader"] = program
+        self.register_shader("DefaultShader", program, uuid=_BUILTIN_UUIDS["DefaultShader"])
 
     def register_pbr_shader(self) -> None:
         """Регистрирует встроенный PBR шейдер."""
@@ -722,7 +744,7 @@ class ResourceManager:
         )
 
         program = ShaderMultyPhaseProgramm(program="PBRShader", phases=[phase])
-        self.shaders["PBRShader"] = program
+        self.register_shader("PBRShader", program, uuid=_BUILTIN_UUIDS["PBRShader"])
 
     def register_advanced_pbr_shader(self) -> None:
         """Регистрирует встроенный Advanced PBR шейдер с SSS и ACES."""
@@ -761,7 +783,7 @@ class ResourceManager:
         )
 
         program = ShaderMultyPhaseProgramm(program="AdvancedPBRShader", phases=[phase])
-        self.shaders["AdvancedPBRShader"] = program
+        self.register_shader("AdvancedPBRShader", program, uuid=_BUILTIN_UUIDS["AdvancedPBRShader"])
 
     def register_builtin_materials(self) -> None:
         """Регистрирует встроенные материалы."""
@@ -782,7 +804,7 @@ class ResourceManager:
                 mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
                 mat.name = "DefaultMaterial"
                 mat.color = (0.3, 0.85, 0.9, 1.0)
-                self.register_material("DefaultMaterial", mat)
+                self.register_material("DefaultMaterial", mat, uuid=_BUILTIN_UUIDS["DefaultMaterial"])
 
         # PBRMaterial
         if "PBRMaterial" not in self.materials:
@@ -791,7 +813,7 @@ class ResourceManager:
                 mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
                 mat.name = "PBRMaterial"
                 mat.color = (0.8, 0.8, 0.8, 1.0)
-                self.register_material("PBRMaterial", mat)
+                self.register_material("PBRMaterial", mat, uuid=_BUILTIN_UUIDS["PBRMaterial"])
 
         # AdvancedPBRMaterial (SSS + ACES)
         if "AdvancedPBRMaterial" not in self.materials:
@@ -800,7 +822,7 @@ class ResourceManager:
                 mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
                 mat.name = "AdvancedPBRMaterial"
                 mat.color = (0.8, 0.8, 0.8, 1.0)
-                self.register_material("AdvancedPBRMaterial", mat)
+                self.register_material("AdvancedPBRMaterial", mat, uuid=_BUILTIN_UUIDS["AdvancedPBRMaterial"])
 
     def register_builtin_meshes(self) -> List[str]:
         """
@@ -822,25 +844,25 @@ class ResourceManager:
         # Куб с корректными UV (текстура на каждой грани)
         if "Cube" not in self.meshes:
             cube = MeshDrawable(TexturedCubeMesh(size=1.0))
-            self.register_mesh("Cube", cube)
+            self.register_mesh("Cube", cube, uuid=_BUILTIN_UUIDS["Cube"])
             registered.append("Cube")
 
         # Сфера
         if "Sphere" not in self.meshes:
             sphere = MeshDrawable(UVSphereMesh(radius=0.5, n_meridians=32, n_parallels=16))
-            self.register_mesh("Sphere", sphere)
+            self.register_mesh("Sphere", sphere, uuid=_BUILTIN_UUIDS["Sphere"])
             registered.append("Sphere")
 
         # Плоскость
         if "Plane" not in self.meshes:
             plane = MeshDrawable(PlaneMesh(width=1.0, depth=1.0))
-            self.register_mesh("Plane", plane)
+            self.register_mesh("Plane", plane, uuid=_BUILTIN_UUIDS["Plane"])
             registered.append("Plane")
 
         # Цилиндр
         if "Cylinder" not in self.meshes:
             cylinder = MeshDrawable(CylinderMesh(radius=0.5, height=1.0))
-            self.register_mesh("Cylinder", cylinder)
+            self.register_mesh("Cylinder", cylinder, uuid=_BUILTIN_UUIDS["Cylinder"])
             registered.append("Cylinder")
 
         return registered
@@ -857,7 +879,9 @@ class ResourceManager:
             return drawable.asset
         return None
 
-    def register_mesh(self, name: str, mesh: "MeshDrawable", source_path: str | None = None):
+    def register_mesh(
+        self, name: str, mesh: "MeshDrawable", source_path: str | None = None, uuid: str | None = None
+    ):
         """Регистрирует меш."""
         mesh.name = name
         asset = mesh.asset
@@ -865,7 +889,11 @@ class ResourceManager:
             asset.name = name
             if source_path:
                 asset.source_path = source_path
+            if uuid is not None:
+                asset._uuid = uuid
+                asset._runtime_id = hash(uuid) & 0xFFFFFFFFFFFFFFFF
             self._mesh_assets[name] = asset
+            self._assets_by_uuid[asset.uuid] = asset
         # Для обратной совместимости
         self.meshes[name] = mesh
 

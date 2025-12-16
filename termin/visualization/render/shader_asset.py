@@ -149,10 +149,12 @@ class ShaderAsset(Asset):
         program: "ShaderMultyPhaseProgramm",
         name: str | None = None,
         source_path: str | Path | None = None,
+        uuid: str | None = None,
     ) -> "ShaderAsset":
         """Create ShaderAsset from existing ShaderMultyPhaseProgramm."""
         return cls(
             program=program,
             name=name or program.program or "shader",
             source_path=source_path,
+            uuid=uuid,
         )
