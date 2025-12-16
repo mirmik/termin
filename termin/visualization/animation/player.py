@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Optional, TYPE_CHECKING
 
 import numpy as np
 
@@ -8,11 +8,16 @@ from termin.visualization.core.entity import Component
 from termin.geombase.pose3 import Pose3
 from .clip import AnimationClip
 
+if TYPE_CHECKING:
+    from termin.skeleton.skeleton import SkeletonInstance
+
 
 class AnimationPlayer(Component):
     """
     Компонент-плеер: хранит набор клипов и проигрывает один из них,
     обновляя локальный Pose3 сущности (и её scale).
+
+    Может также обновлять SkeletonInstance для скелетной анимации.
     """
 
     def __init__(self, enabled: bool = True):
@@ -21,6 +26,17 @@ class AnimationPlayer(Component):
         self.current: Optional[AnimationClip] = None
         self.time: float = 0.0
         self.playing: bool = False
+        self._target_skeleton: "SkeletonInstance | None" = None
+
+    @property
+    def target_skeleton(self) -> "SkeletonInstance | None":
+        """Get target skeleton for bone animation."""
+        return self._target_skeleton
+
+    @target_skeleton.setter
+    def target_skeleton(self, value: "SkeletonInstance | None"):
+        """Set target skeleton for bone animation."""
+        self._target_skeleton = value
 
     def add_clip(self, clip: AnimationClip) -> AnimationClip:
         self.clips[clip.name] = clip
@@ -41,34 +57,58 @@ class AnimationPlayer(Component):
         self.playing = False
 
     def update(self, dt: float):
-        if not (self.enabled and self.playing and self.current and self.entity):
+        if not (self.enabled and self.playing and self.current):
             return
 
         self.time += dt
 
         sample = self.current.sample(self.time)
 
+        # If we have a target skeleton, apply bone transforms
+        if self._target_skeleton is not None:
+            self._update_skeleton(sample)
+
+        # Also update entity transform if entity is set (for root motion, etc.)
+        if self.entity is not None:
+            self._update_entity(sample)
+
+    def _update_skeleton(self, sample: Dict):
+        """Update skeleton bone transforms from animation sample."""
+        for channel_name, channel_data in sample.items():
+            tr = channel_data[0]  # translation
+            rot = channel_data[1]  # rotation (quaternion xyzw)
+            sc = channel_data[2]  # scale
+
+            # Set bone transform
+            self._target_skeleton.set_bone_transform_by_name(
+                channel_name,
+                translation=tr,
+                rotation=rot,
+                scale=sc[0] if sc is not None else None,  # Use X component for uniform scale
+            )
+
+    def _update_entity(self, sample: Dict):
+        """Update entity transform from animation sample (legacy mode)."""
+        # Look for "clip" channel (legacy single-channel mode)
+        if "clip" not in sample:
+            return
+
+        channel_data = sample["clip"]
+
         pose: Pose3 = self.entity.transform.local_pose()
 
-        
-        sample = self.current.sample(self.time)
-        
-        # TODO: Разобраться с тем, как передать в плеер несколько каналов и к чему они должны применяться.
-        sample = sample["clip"]
-
-        tr = sample[0]
-        rot = sample[1]
-        sc = sample[2]
+        tr = channel_data[0]
+        rot = channel_data[1]
+        sc = channel_data[2]
 
         if tr is not None:
             pose = pose.with_translation(tr)
         if rot is not None:
             pose = pose.with_rotation(rot)
-        sc = sample[2]
 
-        # сначала обновляем позу
+        # Update pose
         self.entity.transform.relocate(pose)
 
-        # scale — отдельное поле у Entity, используем uniform-скейл
+        # Scale is a separate field on Entity
         if sc is not None:
-            self.entity.scale = float(sc)
+            self.entity.scale = float(sc[0]) if hasattr(sc, '__len__') else float(sc)

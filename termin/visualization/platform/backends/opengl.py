@@ -158,6 +158,17 @@ class OpenGLShaderHandle(ShaderHandle):
         self._ensure_compiled()
         gl.glUniform1i(self._uniform_location(name), int(value))
 
+    def set_uniform_matrix4_array(self, name: str, matrices, count: int):
+        """Upload an array of 4x4 matrices to shader uniform."""
+        self._ensure_compiled()
+        mat = np.asarray(matrices, dtype=np.float32).reshape(count, 4, 4)
+        gl.glUniformMatrix4fv(
+            self._uniform_location(name),
+            count,
+            True,  # transpose (row-major to column-major)
+            mat.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+        )
+
 
 GL_TYPE_MAP = {
     VertexAttribType.FLOAT32: gl.GL_FLOAT,

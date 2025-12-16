@@ -97,6 +97,10 @@ class ShaderProgram:
     def set_uniform_int(self, name: str, value: int):
         self._require_handle().set_uniform_int(name, value)
 
+    def set_uniform_matrix4_array(self, name: str, matrices: np.ndarray, count: int):
+        """Upload an array of 4x4 matrices to uniform ``name``."""
+        self._require_handle().set_uniform_matrix4_array(name, matrices, count)
+
     def set_uniform_auto(self, name: str, value: Any):
         """Best-effort setter that infers uniform type based on ``value``."""
         if isinstance(value, (list, tuple, np.ndarray)):

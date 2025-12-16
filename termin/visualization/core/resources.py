@@ -19,6 +19,8 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.navmesh.navmesh_asset import NavMeshAsset
     from termin.visualization.animation.clip import AnimationClip
     from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+    from termin.skeleton.skeleton import SkeletonData
+    from termin.skeleton.skeleton_asset import SkeletonAsset
 
 
 # Список стандартных компонентов для предрегистрации.
@@ -26,6 +28,7 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
 _BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     # Рендеринг
     ("termin.visualization.render.components.mesh_renderer", "MeshRenderer"),
+    ("termin.visualization.render.components.skinned_mesh_renderer", "SkinnedMeshRenderer"),
     ("termin.visualization.render.components.line_renderer", "LineRenderer"),
     ("termin.visualization.render.components.light_component", "LightComponent"),
     # Камера
@@ -115,6 +118,7 @@ class ResourceManager:
         self.voxel_grids: Dict[str, "VoxelGrid"] = {}  # VoxelGrid instances by name
         self.navmeshes: Dict[str, "NavMesh"] = {}  # NavMesh instances by name
         self.animation_clips: Dict[str, "AnimationClip"] = {}  # AnimationClip instances by name
+        self.skeletons: Dict[str, "SkeletonData"] = {}  # SkeletonData instances by name
         self.components: Dict[str, type["Component"]] = {}
         self.frame_passes: Dict[str, type] = {}  # FramePass classes by name
         self.post_effects: Dict[str, type] = {}  # PostEffect classes by name
@@ -128,6 +132,7 @@ class ResourceManager:
         self._voxel_grid_assets: Dict[str, "VoxelGridAsset"] = {}
         self._navmesh_assets: Dict[str, "NavMeshAsset"] = {}
         self._animation_clip_assets: Dict[str, "AnimationClipAsset"] = {}
+        self._skeleton_assets: Dict[str, "SkeletonAsset"] = {}
 
         # Asset'ы по UUID (для поиска существующих при загрузке)
         from termin.visualization.core.asset import Asset
@@ -1154,6 +1159,85 @@ class ResourceManager:
             del self._animation_clip_assets[name]
         if name in self.animation_clips:
             del self.animation_clips[name]
+
+    # --------- Скелеты (Asset-based) ---------
+    def get_skeleton_asset(self, name: str) -> Optional["SkeletonAsset"]:
+        """Получить SkeletonAsset по имени."""
+        return self._skeleton_assets.get(name)
+
+    def register_skeleton(
+        self, name: str, skeleton: "SkeletonData", source_path: str | None = None, uuid: str | None = None
+    ) -> None:
+        """
+        Регистрирует скелет.
+
+        Args:
+            name: Имя скелета
+            skeleton: SkeletonData
+            source_path: Путь к файлу-источнику (GLB)
+            uuid: UUID скелета (если известен)
+        """
+        from termin.skeleton.skeleton_asset import SkeletonAsset
+
+        asset = SkeletonAsset.from_skeleton_data(skeleton, name=name, source_path=source_path, uuid=uuid)
+        self._skeleton_assets[name] = asset
+        self._assets_by_uuid[asset.uuid] = asset
+        # Для обратной совместимости
+        self.skeletons[name] = skeleton
+
+    def get_skeleton(self, name: str) -> Optional["SkeletonData"]:
+        """Получить SkeletonData по имени."""
+        asset = self._skeleton_assets.get(name)
+        if asset is not None:
+            return asset.skeleton_data
+        return self.skeletons.get(name)
+
+    def list_skeleton_names(self) -> list[str]:
+        """Список имён всех скелетов."""
+        names = set(self._skeleton_assets.keys()) | set(self.skeletons.keys())
+        return sorted(names)
+
+    def find_skeleton_name(self, skeleton: "SkeletonData") -> Optional[str]:
+        """Найти имя скелета."""
+        for n, asset in self._skeleton_assets.items():
+            if asset.skeleton_data is skeleton:
+                return n
+        for n, s in self.skeletons.items():
+            if s is skeleton:
+                return n
+        return None
+
+    def find_skeleton_uuid(self, skeleton: "SkeletonData") -> Optional[str]:
+        """Find UUID of a SkeletonData by looking up its asset."""
+        for asset in self._skeleton_assets.values():
+            if asset.skeleton_data is skeleton:
+                return asset.uuid
+        return None
+
+    def get_skeleton_by_uuid(self, uuid: str) -> Optional["SkeletonData"]:
+        """Get SkeletonData by UUID."""
+        from termin.skeleton.skeleton_asset import SkeletonAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, SkeletonAsset):
+            return asset.skeleton_data
+        return None
+
+    def get_skeleton_asset_by_uuid(self, uuid: str) -> Optional["SkeletonAsset"]:
+        """Get SkeletonAsset by UUID."""
+        from termin.skeleton.skeleton_asset import SkeletonAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, SkeletonAsset):
+            return asset
+        return None
+
+    def unregister_skeleton(self, name: str) -> None:
+        """Удаляет скелет."""
+        if name in self._skeleton_assets:
+            del self._skeleton_assets[name]
+        if name in self.skeletons:
+            del self.skeletons[name]
 
     # --------- Текстуры (Asset-based) ---------
     def get_texture_asset(self, name: str) -> Optional["TextureAsset"]:

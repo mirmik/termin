@@ -317,6 +317,9 @@ class ShadowPass(RenderFramePass):
                         context_key=context_key,
                     )
 
+                    # Set current shader for skinned mesh support
+                    render_ctx.current_shader = shadow_material.shader
+
                     drawable.draw_geometry(render_ctx)
             
             # Добавляем в массив

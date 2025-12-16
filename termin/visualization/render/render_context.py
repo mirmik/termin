@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.camera import Camera
     from termin.visualization.core.scene import Scene
     from termin.visualization.platform.backends.base import GraphicsBackend
+    from termin.visualization.render.shader import ShaderProgram
 
 
 @dataclass
@@ -30,3 +31,6 @@ class RenderContext:
 
     # Shadow mapping данные (опционально, заполняется ColorPass)
     shadow_data: "ShadowMapArray | None" = None
+
+    # Currently bound shader program (for skinned mesh uniforms, etc.)
+    current_shader: "ShaderProgram | None" = None

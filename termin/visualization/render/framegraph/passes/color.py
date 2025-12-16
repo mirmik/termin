@@ -397,6 +397,9 @@ class ColorPass(RenderFramePass):
                 if shadow_array is not None:
                     upload_shadow_maps_to_shader(shader, shadow_array)
 
+                # Set current shader in context for SkinnedMeshRenderer
+                render_context.current_shader = shader
+
                 # Рисуем геометрию через Drawable
                 dc.drawable.draw_geometry(render_context, dc.geometry_id)
 

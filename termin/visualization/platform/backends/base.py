@@ -60,6 +60,18 @@ class ShaderHandle(ABC):
     def set_uniform_int(self, name: str, value: int):
         ...
 
+    @abstractmethod
+    def set_uniform_matrix4_array(self, name: str, matrices, count: int):
+        """
+        Set an array of 4x4 matrices as uniform.
+
+        Args:
+            name: Uniform name (e.g., "u_bone_matrices")
+            matrices: Array of shape (count, 4, 4) or flattened
+            count: Number of matrices
+        """
+        ...
+
 
 class MeshHandle(ABC):
     """Backend mesh buffers ready for drawing."""

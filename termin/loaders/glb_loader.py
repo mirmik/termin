@@ -19,13 +19,23 @@ import numpy as np
 class GLBMeshData:
     """Mesh data extracted from GLB."""
     def __init__(self, name: str, vertices: np.ndarray, normals: Optional[np.ndarray],
-                 uvs: Optional[np.ndarray], indices: np.ndarray, material_index: int):
+                 uvs: Optional[np.ndarray], indices: np.ndarray, material_index: int,
+                 joint_indices: Optional[np.ndarray] = None,
+                 joint_weights: Optional[np.ndarray] = None):
         self.name = name
         self.vertices = vertices
         self.normals = normals
         self.uvs = uvs
         self.indices = indices
         self.material_index = material_index
+        # Skinning data (N, 4) arrays
+        self.joint_indices = joint_indices  # Bone indices per vertex
+        self.joint_weights = joint_weights  # Blend weights per vertex
+
+    @property
+    def is_skinned(self) -> bool:
+        """True if this mesh has skinning data."""
+        return self.joint_indices is not None and self.joint_weights is not None
 
 
 class GLBMaterialData:
@@ -67,13 +77,44 @@ class GLBAnimationClip:
 class GLBNodeData:
     """Node in scene hierarchy."""
     def __init__(self, name: str, children: List[int], mesh_index: Optional[int],
-                 translation: np.ndarray, rotation: np.ndarray, scale: np.ndarray):
+                 translation: np.ndarray, rotation: np.ndarray, scale: np.ndarray,
+                 skin_index: Optional[int] = None):
         self.name = name
         self.children = children
         self.mesh_index = mesh_index
+        self.skin_index = skin_index  # Index into skins array
         self.translation = translation  # [x, y, z]
         self.rotation = rotation        # [x, y, z, w] quaternion
         self.scale = scale              # [x, y, z]
+
+
+class GLBSkinData:
+    """Skin (skeleton) data extracted from GLB."""
+    def __init__(
+        self,
+        name: str,
+        joint_node_indices: List[int],
+        inverse_bind_matrices: np.ndarray,
+        skeleton_root: Optional[int] = None,
+    ):
+        """
+        Initialize skin data.
+
+        Args:
+            name: Skin name
+            joint_node_indices: List of node indices that are joints (bones)
+            inverse_bind_matrices: (N, 4, 4) inverse bind matrices for each joint
+            skeleton_root: Node index of skeleton root (optional)
+        """
+        self.name = name
+        self.joint_node_indices = joint_node_indices
+        self.inverse_bind_matrices = inverse_bind_matrices
+        self.skeleton_root = skeleton_root
+
+    @property
+    def joint_count(self) -> int:
+        """Number of joints in this skin."""
+        return len(self.joint_node_indices)
 
 
 class GLBSceneData:
@@ -84,6 +125,7 @@ class GLBSceneData:
         self.textures: List[GLBTextureData] = []
         self.animations: List[GLBAnimationClip] = []
         self.nodes: List[GLBNodeData] = []
+        self.skins: List[GLBSkinData] = []
         self.root_nodes: List[int] = []
         # Map from glTF mesh index to list of our internal mesh indices
         # (one glTF mesh can have multiple primitives)
@@ -186,6 +228,14 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             if "TEXCOORD_0" in attributes:
                 uvs = _read_accessor(gltf, bin_data, attributes["TEXCOORD_0"])
 
+            # Skinning data (optional)
+            joint_indices = None
+            joint_weights = None
+            if "JOINTS_0" in attributes:
+                joint_indices = _read_accessor(gltf, bin_data, attributes["JOINTS_0"])
+            if "WEIGHTS_0" in attributes:
+                joint_weights = _read_accessor(gltf, bin_data, attributes["WEIGHTS_0"])
+
             # Indices
             if "indices" in primitive:
                 indices = _read_accessor(gltf, bin_data, primitive["indices"]).astype(np.uint32)
@@ -202,6 +252,8 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             expanded_verts = vertices[indices]
             expanded_normals = normals[indices] if normals is not None else None
             expanded_uvs = uvs[indices] if uvs is not None else None
+            expanded_joints = joint_indices[indices] if joint_indices is not None else None
+            expanded_weights = joint_weights[indices] if joint_weights is not None else None
 
             prim_name = mesh_name if prim_idx == 0 else f"{mesh_name}_{prim_idx}"
 
@@ -215,6 +267,8 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
                 uvs=expanded_uvs.astype(np.float32) if expanded_uvs is not None else None,
                 indices=np.arange(len(expanded_verts), dtype=np.uint32),
                 material_index=material_index,
+                joint_indices=expanded_joints.astype(np.float32) if expanded_joints is not None else None,
+                joint_weights=expanded_weights.astype(np.float32) if expanded_weights is not None else None,
             ))
 
 
@@ -277,6 +331,7 @@ def _parse_nodes(gltf: dict, scene_data: GLBSceneData):
         name = node.get("name", f"Node_{node_idx}")
         children = node.get("children", [])
         mesh_index = node.get("mesh")
+        skin_index = node.get("skin")
 
         # Transform
         translation = np.array(node.get("translation", [0, 0, 0]), dtype=np.float32)
@@ -292,6 +347,7 @@ def _parse_nodes(gltf: dict, scene_data: GLBSceneData):
             name=name,
             children=children,
             mesh_index=mesh_index,
+            skin_index=skin_index,
             translation=translation,
             rotation=rotation,
             scale=scale,
@@ -302,6 +358,35 @@ def _parse_nodes(gltf: dict, scene_data: GLBSceneData):
     default_scene = gltf.get("scene", 0)
     if scenes and default_scene < len(scenes):
         scene_data.root_nodes = scenes[default_scene].get("nodes", [])
+
+
+def _parse_skins(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
+    """Parse skins (skeletons) from glTF."""
+    for skin_idx, skin in enumerate(gltf.get("skins", [])):
+        name = skin.get("name", f"Skin_{skin_idx}")
+        joint_node_indices = skin.get("joints", [])
+        skeleton_root = skin.get("skeleton")
+
+        # Read inverse bind matrices
+        inverse_bind_matrices = None
+        if "inverseBindMatrices" in skin:
+            ibm_accessor_idx = skin["inverseBindMatrices"]
+            ibm_data = _read_accessor(gltf, bin_data, ibm_accessor_idx)
+            # Reshape to (N, 4, 4) matrices
+            inverse_bind_matrices = ibm_data.reshape(-1, 4, 4).astype(np.float32)
+        else:
+            # Default to identity matrices
+            n_joints = len(joint_node_indices)
+            inverse_bind_matrices = np.zeros((n_joints, 4, 4), dtype=np.float32)
+            for i in range(n_joints):
+                inverse_bind_matrices[i] = np.eye(4, dtype=np.float32)
+
+        scene_data.skins.append(GLBSkinData(
+            name=name,
+            joint_node_indices=joint_node_indices,
+            inverse_bind_matrices=inverse_bind_matrices,
+            skeleton_root=skeleton_root,
+        ))
 
 
 def _parse_animations(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
@@ -445,6 +530,7 @@ def load_glb_file(path: str | Path) -> GLBSceneData:
     _parse_materials(gltf, scene_data)
     _parse_textures(gltf, bin_data, scene_data)
     _parse_meshes(gltf, bin_data, scene_data)
+    _parse_skins(gltf, bin_data, scene_data)
     _parse_animations(gltf, bin_data, scene_data)
 
     return scene_data
