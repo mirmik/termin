@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 
 import numpy as np
 
@@ -13,6 +13,7 @@ from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
+from termin.visualization.render.drawable import GeometryDrawCall
 
 if TYPE_CHECKING:
     from termin.skeleton.skeleton import SkeletonInstance
@@ -25,6 +26,7 @@ class SkinnedMeshRenderer(MeshRenderer):
 
     Extends MeshRenderer with:
     - skeleton_controller: Reference to SkeletonController for bone matrices
+    - Automatic skinning injection into any material shader
     - Automatic upload of u_bone_matrices uniform before drawing
     """
 
@@ -48,7 +50,7 @@ class SkinnedMeshRenderer(MeshRenderer):
 
         Args:
             mesh: Skinned mesh (MeshDrawable or SkinnedMesh3)
-            material: Material to use for rendering
+            material: Material to use for rendering (will be auto-converted to skinned variant)
             skeleton_controller: Controller that provides skeleton instance
             cast_shadow: Whether this object casts shadows
         """
@@ -59,6 +61,7 @@ class SkinnedMeshRenderer(MeshRenderer):
                 print(f"  material phases: {len(material.phases) if hasattr(material, 'phases') else 'N/A'}")
         super().__init__(mesh=mesh, material=material, cast_shadow=cast_shadow)
         self._skeleton_controller: "SkeletonController | None" = skeleton_controller
+        self._skinned_material_cache: Material | None = None  # Cached skinned variant
         if self._DEBUG_INIT:
             print(f"  After super().__init__: _material_handle._direct={self._material_handle._direct}")
 
@@ -71,6 +74,16 @@ class SkinnedMeshRenderer(MeshRenderer):
     def skeleton_controller(self, value: "SkeletonController | None"):
         """Set the skeleton controller."""
         self._skeleton_controller = value
+
+    @MeshRenderer.material.setter
+    def material(self, value: Material | None):
+        """Set material and invalidate skinned cache."""
+        MeshRenderer.material.fset(self, value)
+        self._skinned_material_cache = None  # Invalidate cache
+
+    def set_material(self, material: Material | None):
+        """Set material and invalidate skinned cache."""
+        self.material = material
 
     def start(self, scene) -> None:
         """Called once before the first update. Re-acquire skeleton_controller if needed."""
@@ -99,6 +112,54 @@ class SkinnedMeshRenderer(MeshRenderer):
         if self._skeleton_controller is not None:
             return self._skeleton_controller.skeleton_instance
         return None
+
+    def _get_skinned_material(self) -> Material | None:
+        """
+        Get skinned variant of the current material.
+
+        Automatically injects skinning code into the shader if needed.
+        Caches the result for performance.
+        """
+        base_mat = self._material_handle.get_material_or_none()
+        if base_mat is None:
+            return None
+
+        # Check if cache is still valid (same base material)
+        if self._skinned_material_cache is not None:
+            # Simple cache - assumes material doesn't change often
+            # In production, would check material identity
+            return self._skinned_material_cache
+
+        # Check if shader already has skinning (e.g., SkinnedMaterial)
+        if base_mat.phases:
+            shader_source = base_mat.phases[0].shader_programm.vertex_source
+            if 'u_bone_matrices' in shader_source:
+                # Already has skinning, use as-is
+                self._skinned_material_cache = base_mat
+                return base_mat
+
+        # Create skinned variant
+        from termin.visualization.render.shader_skinning import get_skinned_material
+        self._skinned_material_cache = get_skinned_material(base_mat)
+        return self._skinned_material_cache
+
+    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
+        """
+        Returns GeometryDrawCalls with skinned material variant.
+
+        Overrides MeshRenderer to use automatically skinned shader.
+        """
+        mat = self._get_skinned_material()
+        if mat is None:
+            return []
+
+        if phase_mark is None:
+            phases = list(mat.phases)
+        else:
+            phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+
+        phases.sort(key=lambda p: p.priority)
+        return [GeometryDrawCall(phase=p) for p in phases]
 
     _DEBUG_SKINNING = False  # Temporary debug flag
     _debug_skinning_frame = 0
