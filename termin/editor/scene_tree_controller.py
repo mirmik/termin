@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt, QPoint
-from PyQt6.QtWidgets import QTreeView, QMenu, QInputDialog
+from PyQt6.QtWidgets import QTreeView, QMenu, QInputDialog, QMessageBox
 from PyQt6.QtGui import QAction
 
 from termin.editor.undo_stack import UndoCommand
@@ -166,6 +166,36 @@ class SceneTreeController:
         if not isinstance(ent, Entity):
             return
 
+        children = list(ent.transform.children)
+
+        if children:
+            # Entity has children - ask user what to do
+            msg_box = QMessageBox(self._tree)
+            msg_box.setWindowTitle("Delete Entity")
+            msg_box.setText(f"Entity '{ent.name}' has {len(children)} child(ren).")
+            msg_box.setInformativeText("What do you want to do?")
+
+            btn_hierarchy = msg_box.addButton("Delete All", QMessageBox.ButtonRole.DestructiveRole)
+            btn_only_this = msg_box.addButton("Delete Only This", QMessageBox.ButtonRole.AcceptRole)
+            btn_cancel = msg_box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+
+            msg_box.setDefaultButton(btn_cancel)
+            msg_box.exec()
+
+            clicked = msg_box.clickedButton()
+            if clicked == btn_cancel:
+                return
+
+            if clicked == btn_only_this:
+                # Move children to parent, then delete entity
+                parent_transform = ent.transform.parent
+                for child_transform in children:
+                    child_entity = child_transform.entity
+                    if child_entity is not None:
+                        cmd = ReparentEntityCommand(child_entity, ent.transform, parent_transform)
+                        self._undo_handler(cmd, merge=False)
+
+        # Delete the entity
         cmd = DeleteEntityCommand(self._scene, ent)
         self._undo_handler(cmd, merge=False)
 
