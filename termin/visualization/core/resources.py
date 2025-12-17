@@ -86,6 +86,7 @@ _BUILTIN_UUIDS: Dict[str, str] = {
     "DefaultShader": "00000000-0000-0000-0001-000000000001",
     "PBRShader": "00000000-0000-0000-0001-000000000002",
     "AdvancedPBRShader": "00000000-0000-0000-0001-000000000003",
+    "SkinnedShader": "00000000-0000-0000-0001-000000000004",
     # Материалы
     "DefaultMaterial": "00000000-0000-0000-0002-000000000001",
     "PBRMaterial": "00000000-0000-0000-0002-000000000002",
@@ -852,6 +853,43 @@ class ResourceManager:
         program = ShaderMultyPhaseProgramm(program="AdvancedPBRShader", phases=[phase])
         self.register_shader("AdvancedPBRShader", program, uuid=_BUILTIN_UUIDS["AdvancedPBRShader"])
 
+    def register_skinned_shader(self) -> None:
+        """Регистрирует встроенный SkinnedShader для скелетной анимации."""
+        if "SkinnedShader" in self.shaders:
+            return
+
+        from termin.visualization.render.materials.skinned_material import (
+            SKINNED_VERT,
+            SKINNED_FRAG,
+        )
+        from termin.visualization.render.shader_parser import (
+            ShaderMultyPhaseProgramm,
+            ShaderPhase,
+            ShasderStage,
+            MaterialProperty,
+        )
+
+        vertex_stage = ShasderStage("vertex", SKINNED_VERT)
+        fragment_stage = ShasderStage("fragment", SKINNED_FRAG)
+
+        phase = ShaderPhase(
+            phase_mark="opaque",
+            priority=0,
+            gl_depth_mask=True,
+            gl_depth_test=True,
+            gl_blend=False,
+            gl_cull=True,
+            stages={"vertex": vertex_stage, "fragment": fragment_stage},
+            uniforms=[
+                MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
+                MaterialProperty("u_albedo_texture", "Texture", None),
+                MaterialProperty("u_shininess", "Float", 32.0, 1.0, 2048.0),
+            ],
+        )
+
+        program = ShaderMultyPhaseProgramm(program="SkinnedShader", phases=[phase])
+        self.register_shader("SkinnedShader", program, uuid=_BUILTIN_UUIDS["SkinnedShader"])
+
     def register_builtin_materials(self) -> None:
         """Регистрирует встроенные материалы."""
         from termin.visualization.core.material import Material
@@ -861,6 +899,7 @@ class ResourceManager:
         self.register_default_shader()
         self.register_pbr_shader()
         self.register_advanced_pbr_shader()
+        self.register_skinned_shader()
 
         white_tex = get_white_texture()
 
@@ -900,10 +939,12 @@ class ResourceManager:
 
         # SkinnedMaterial (skeletal animation)
         if "SkinnedMaterial" not in self.materials:
-            from termin.visualization.render.materials.skinned_material import SkinnedMaterial
-            mat = SkinnedMaterial(color=(0.8, 0.8, 0.8, 1.0))
-            mat.name = "SkinnedMaterial"
-            self.register_material("SkinnedMaterial", mat, uuid=_BUILTIN_UUIDS["SkinnedMaterial"])
+            shader = self.shaders.get("SkinnedShader")
+            if shader is not None:
+                mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
+                mat.name = "SkinnedMaterial"
+                mat.color = (0.8, 0.8, 0.8, 1.0)
+                self.register_material("SkinnedMaterial", mat, uuid=_BUILTIN_UUIDS["SkinnedMaterial"])
 
     def register_builtin_meshes(self) -> List[str]:
         """
