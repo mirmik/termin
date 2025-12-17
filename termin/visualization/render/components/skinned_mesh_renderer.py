@@ -103,8 +103,6 @@ class SkinnedMeshRenderer(MeshRenderer):
             if shader is not None:
                 shader.set_uniform_matrix4_array("u_bone_matrices", bone_matrices, bone_count)
                 shader.set_uniform_int("u_bone_count", bone_count)
-            elif self._DEBUG_SKINNING:
-                print("  WARNING: context.current_shader is None!")
 
         # Draw the mesh
         self.mesh.draw(context)

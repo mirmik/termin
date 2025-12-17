@@ -170,6 +170,10 @@ class IdPass(RenderFramePass):
                 context_key=key,
             )
 
+            # Set current shader for skinned mesh (pick shader doesn't have bone uniforms,
+            # but this prevents errors - skinned meshes will render in bind pose for picking)
+            render_ctx.current_shader = pick_material.shader
+
             # Рисуем все Drawable компоненты с одним pick_id
             for drawable in drawables:
                 drawable.draw_geometry(render_ctx)
