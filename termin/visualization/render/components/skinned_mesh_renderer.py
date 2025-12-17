@@ -107,6 +107,16 @@ class SkinnedMeshRenderer(MeshRenderer):
         # Draw the mesh
         self.mesh.draw(context)
 
+    def get_model_matrix(self) -> np.ndarray:
+        """
+        Возвращает identity matrix для skinned mesh.
+
+        Глобальный трансформ уже включён в bone_matrices,
+        поэтому u_model должен быть identity чтобы избежать
+        двойного применения трансформа.
+        """
+        return np.eye(4, dtype=np.float32)
+
     def serialize_data(self) -> dict:
         """Serialize SkinnedMeshRenderer."""
         data = super().serialize_data()

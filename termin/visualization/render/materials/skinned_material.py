@@ -14,7 +14,6 @@ layout(location = 2) in vec2 a_uv;
 layout(location = 3) in vec4 a_joints;
 layout(location = 4) in vec4 a_weights;
 
-uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
 
@@ -50,12 +49,11 @@ void main() {
         skinned_normal = a_normal;
     }
 
-    // Apply model transform
-    vec4 world = u_model * skinned_pos;
-    v_world_pos = world.xyz;
-    v_normal = mat3(transpose(inverse(u_model))) * skinned_normal;
+    // bone_matrices already include the global transform, so no u_model needed
+    v_world_pos = skinned_pos.xyz;
+    v_normal = skinned_normal;
     v_uv = a_uv;
-    gl_Position = u_projection * u_view * world;
+    gl_Position = u_projection * u_view * skinned_pos;
 }
 """
 
