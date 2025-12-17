@@ -90,6 +90,7 @@ _BUILTIN_UUIDS: Dict[str, str] = {
     "DefaultMaterial": "00000000-0000-0000-0002-000000000001",
     "PBRMaterial": "00000000-0000-0000-0002-000000000002",
     "AdvancedPBRMaterial": "00000000-0000-0000-0002-000000000003",
+    "GridMaterial": "00000000-0000-0000-0002-000000000004",
     # Меши
     "Cube": "00000000-0000-0000-0003-000000000001",
     "Sphere": "00000000-0000-0000-0003-000000000002",
@@ -888,6 +889,13 @@ class ResourceManager:
                 mat.name = "AdvancedPBRMaterial"
                 mat.color = (0.8, 0.8, 0.8, 1.0)
                 self.register_material("AdvancedPBRMaterial", mat, uuid=_BUILTIN_UUIDS["AdvancedPBRMaterial"])
+
+        # GridMaterial (calibration grid)
+        if "GridMaterial" not in self.materials:
+            from termin.visualization.render.materials.grid_material import GridMaterial
+            mat = GridMaterial(color=(0.8, 0.8, 0.8, 1.0), grid_spacing=1.0, line_width=0.02)
+            mat.name = "GridMaterial"
+            self.register_material("GridMaterial", mat, uuid=_BUILTIN_UUIDS["GridMaterial"])
 
     def register_builtin_meshes(self) -> List[str]:
         """
