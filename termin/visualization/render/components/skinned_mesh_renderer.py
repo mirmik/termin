@@ -37,6 +37,7 @@ class SkinnedMeshRenderer(MeshRenderer):
 
     _DEBUG_INIT = False
     _DEBUG_LIFECYCLE = False
+    _DEBUG_SHADER_INJECTION = False
 
     def __init__(
         self,
@@ -135,12 +136,38 @@ class SkinnedMeshRenderer(MeshRenderer):
             shader_source = base_mat.phases[0].shader_programm.vertex_source
             if 'u_bone_matrices' in shader_source:
                 # Already has skinning, use as-is
+                if self._DEBUG_SHADER_INJECTION:
+                    print(f"[SkinnedMeshRenderer] Material '{base_mat.name}' already has skinning")
                 self._skinned_material_cache = base_mat
                 return base_mat
 
         # Create skinned variant
+        if self._DEBUG_SHADER_INJECTION:
+            print(f"[SkinnedMeshRenderer] Injecting skinning into material '{base_mat.name}'")
+            if base_mat.phases:
+                original_vert = base_mat.phases[0].shader_programm.vertex_source
+                print(f"  Original vertex shader ({len(original_vert)} chars):")
+                for i, line in enumerate(original_vert.split('\n')[:15]):
+                    print(f"    {i+1}: {line}")
+                if len(original_vert.split('\n')) > 15:
+                    print(f"    ... ({len(original_vert.split(chr(10)))} lines total)")
+
         from termin.visualization.render.shader_skinning import get_skinned_material
         self._skinned_material_cache = get_skinned_material(base_mat)
+
+        if self._DEBUG_SHADER_INJECTION:
+            if self._skinned_material_cache and self._skinned_material_cache.phases:
+                skinned_vert = self._skinned_material_cache.phases[0].shader_programm.vertex_source
+                print(f"  Skinned vertex shader ({len(skinned_vert)} chars):")
+                for i, line in enumerate(skinned_vert.split('\n')[:30]):
+                    print(f"    {i+1}: {line}")
+                if len(skinned_vert.split('\n')) > 30:
+                    print(f"    ... ({len(skinned_vert.split(chr(10)))} lines total)")
+                # Check compilation
+                shader = self._skinned_material_cache.phases[0].shader_programm
+                print(f"  Shader program: {shader}")
+                print(f"  Shader compiled: {shader.program_id if hasattr(shader, 'program_id') else 'unknown'}")
+
         return self._skinned_material_cache
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
