@@ -149,16 +149,31 @@ def _create_skeleton_from_skin(
 _DEBUG_ENTITY_CREATION = True
 _debug_entity_count = 0
 
+
+class _PendingSkinnedMesh:
+    """Placeholder for skinned mesh that needs skeleton instance set later."""
+    def __init__(self, entity: Entity, drawable: MeshDrawable, material):
+        self.entity = entity
+        self.drawable = drawable
+        self.material = material
+
+
 def _create_entity_from_node(
     node_index: int,
     scene_data: GLBSceneData,
     mesh_drawables: Dict[int, MeshDrawable],
     default_material: DefaultMaterial,
     skinned_material,
-    skeleton_instance: Optional[SkeletonInstance] = None,
     glb_name: str = "",
+    node_to_entity: Optional[Dict[int, Entity]] = None,
+    pending_skinned: Optional[List[_PendingSkinnedMesh]] = None,
 ) -> Entity:
-    """Recursively create Entity hierarchy from GLBNodeData."""
+    """Recursively create Entity hierarchy from GLBNodeData.
+
+    Args:
+        node_to_entity: Dict to collect node_index -> Entity mapping
+        pending_skinned: List to collect skinned meshes that need skeleton set later
+    """
     global _debug_entity_count
     node = scene_data.nodes[node_index]
 
@@ -177,14 +192,9 @@ def _create_entity_from_node(
 
     entity = Entity(pose=pose, name=node.name, scale=scale)
 
-    # Determine if this node has a skin (skeleton)
-    node_skeleton = skeleton_instance
-    if node.skin_index is not None and node.skin_index < len(scene_data.skins):
-        # This node has a skin - create skeleton if not already done
-        if skeleton_instance is None:
-            skin = scene_data.skins[node.skin_index]
-            skeleton_data = _create_skeleton_from_skin(skin, scene_data.nodes)
-            node_skeleton = SkeletonInstance(skeleton_data)
+    # Track node -> entity mapping
+    if node_to_entity is not None:
+        node_to_entity[node_index] = entity
 
     # Add renderer for each primitive in the referenced mesh
     if node.mesh_index is not None and node.mesh_index in scene_data.mesh_index_map:
@@ -211,22 +221,18 @@ def _create_entity_from_node(
 
             drawable = mesh_drawables[mesh_idx]
 
-            # Use SkinnedMeshRenderer with SkinnedMaterial for skinned meshes
-            if glb_mesh.is_skinned and node_skeleton is not None:
-                renderer = SkinnedMeshRenderer(
-                    mesh=drawable,
-                    material=skinned_material,
-                    skeleton_instance=node_skeleton,
-                )
+            # Defer skinned mesh setup - skeleton not ready yet
+            if glb_mesh.is_skinned and pending_skinned is not None:
+                pending_skinned.append(_PendingSkinnedMesh(entity, drawable, skinned_material))
             else:
                 renderer = MeshRenderer(mesh=drawable, material=default_material)
-
-            entity.add_component(renderer)
+                entity.add_component(renderer)
 
     # Recursively create children
     for child_index in node.children:
         child_entity = _create_entity_from_node(
-            child_index, scene_data, mesh_drawables, default_material, skinned_material, node_skeleton, glb_name
+            child_index, scene_data, mesh_drawables, default_material, skinned_material,
+            glb_name, node_to_entity, pending_skinned
         )
         entity.transform.add_child(child_entity.transform)
 
@@ -316,28 +322,14 @@ def instantiate_glb(
     # Cache for MeshDrawables (shared between nodes referencing same mesh)
     mesh_drawables: Dict[int, MeshDrawable] = {}
 
-    # Track skeleton instances created
-    skeleton_instance: Optional[SkeletonInstance] = None
+    # Collect node_index -> Entity mapping for bone lookup
+    node_to_entity: Dict[int, Entity] = {}
 
-    # Create skeleton if we have skins
-    if scene_data.skins:
-        skin = scene_data.skins[0]  # Use first skin
-        skeleton_data = _create_skeleton_from_skin(skin, scene_data.nodes)
+    # Collect skinned meshes that need skeleton set later
+    pending_skinned: List[_PendingSkinnedMesh] = []
 
-        # Debug: print first few inverse bind matrices
-        print(f"[GLB] Skeleton: {len(skeleton_data.bones)} bones")
-        for i, bone in enumerate(skeleton_data.bones[:3]):
-            print(f"  Bone[{i}] {bone.name}:")
-            print(f"    bind_translation: {bone.bind_translation}")
-            print(f"    bind_rotation: {bone.bind_rotation}")
-            print(f"    inverse_bind_matrix:\n{bone.inverse_bind_matrix}")
-
-        # Note: skeleton_root_transform is NOT needed!
-        # The inverse_bind_matrix already includes the Armature's scale,
-        # and by glTF spec: jointMatrix = inv(mesh_global) × joint_global × IBM
-        # Since mesh and joints share the same parent (Armature), it cancels out.
-        skeleton_instance = SkeletonInstance(skeleton_data, root_transform=None)
-
+    # Step 1: Create Entity hierarchy first (before skeleton)
+    root_entity = None
     if scene_data.root_nodes:
         if len(scene_data.root_nodes) == 1:
             # Single root - use it directly
@@ -347,8 +339,9 @@ def instantiate_glb(
                 mesh_drawables,
                 default_material,
                 skinned_material,
-                skeleton_instance,
                 glb_name=name,
+                node_to_entity=node_to_entity,
+                pending_skinned=pending_skinned,
             )
             root_entity.name = name
         else:
@@ -361,11 +354,11 @@ def instantiate_glb(
                     mesh_drawables,
                     default_material,
                     skinned_material,
-                    skeleton_instance,
                     glb_name=name,
+                    node_to_entity=node_to_entity,
+                    pending_skinned=pending_skinned,
                 )
                 root_entity.transform.add_child(child_entity.transform)
-
     else:
         # No hierarchy - create flat structure from meshes
         root_entity = Entity(pose=Pose3.identity(), name=name)
@@ -380,17 +373,47 @@ def instantiate_glb(
             rm.meshes[mesh_name] = drawable
 
             mesh_entity = Entity(pose=Pose3.identity(), name=glb_mesh.name)
-            if glb_mesh.is_skinned and skeleton_instance is not None:
-                renderer = SkinnedMeshRenderer(
-                    mesh=drawable,
-                    material=skinned_material,
-                    skeleton_instance=skeleton_instance,
-                )
-            else:
-                renderer = MeshRenderer(mesh=drawable, material=default_material)
+            renderer = MeshRenderer(mesh=drawable, material=default_material)
             mesh_entity.add_component(renderer)
-
             root_entity.transform.add_child(mesh_entity.transform)
+
+    # Step 2: Create skeleton with bone entities
+    skeleton_instance: Optional[SkeletonInstance] = None
+    if scene_data.skins:
+        skin = scene_data.skins[0]  # Use first skin
+        skeleton_data = _create_skeleton_from_skin(skin, scene_data.nodes)
+
+        # Debug: print first few bones
+        print(f"[GLB] Skeleton: {len(skeleton_data.bones)} bones")
+        for i, bone in enumerate(skeleton_data.bones[:3]):
+            print(f"  Bone[{i}] {bone.name}:")
+            print(f"    bind_translation: {bone.bind_translation}")
+            print(f"    bind_rotation: {bone.bind_rotation}")
+
+        # Collect bone entities from node_to_entity mapping
+        bone_entities: List[Entity] = []
+        for node_idx in skin.joint_node_indices:
+            entity = node_to_entity.get(node_idx)
+            if entity is None:
+                print(f"[GLB] WARNING: No entity for bone node {node_idx}")
+                # Create dummy entity as fallback
+                entity = Entity(pose=Pose3.identity(), name=f"missing_bone_{node_idx}")
+            bone_entities.append(entity)
+
+        print(f"[GLB] Collected {len(bone_entities)} bone entities")
+
+        # Create SkeletonInstance with bone entities
+        skeleton_instance = SkeletonInstance(skeleton_data, bone_entities=bone_entities)
+
+    # Step 3: Setup SkinnedMeshRenderers now that skeleton is ready
+    for pending in pending_skinned:
+        if skeleton_instance is not None:
+            renderer = SkinnedMeshRenderer(
+                mesh=pending.drawable,
+                material=pending.material,
+                skeleton_instance=skeleton_instance,
+            )
+            pending.entity.add_component(renderer)
 
     # Fix coordinate conversion rotation artifact
     # Armature has -90°X rotation from Blender export, we remove it and compensate in children

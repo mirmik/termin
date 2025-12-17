@@ -73,15 +73,15 @@ class SkeletonData:
 
 class SkeletonInstance:
     """
-    Runtime skeleton state for a specific entity.
+    Runtime skeleton state that references Entity transforms.
 
-    Holds current bone transforms (from animation) and computes
-    final bone matrices for GPU upload.
+    Instead of storing its own bone transforms, reads world transforms
+    directly from Entity hierarchy. Animation updates Entity transforms,
+    and this class computes bone matrices for GPU.
 
     Usage:
-        instance = skeleton_data.create_instance()
-        instance.set_bone_transform_by_name("LeftArm", translation, rotation, scale)
-        instance.update()
+        instance = SkeletonInstance(skeleton_data, bone_entities)
+        # Animation updates Entity transforms...
         bone_matrices = instance.get_bone_matrices()  # Upload to GPU
     """
 
@@ -90,84 +90,42 @@ class SkeletonInstance:
     def __init__(
         self,
         skeleton_data: SkeletonData,
-        root_transform: np.ndarray | None = None,
+        bone_entities: List = None,
     ):
         """
         Initialize skeleton instance.
 
         Args:
             skeleton_data: The skeleton template
-            root_transform: Optional 4x4 transform of skeleton root (e.g., Armature node)
-                           This is applied to all root bones before computing world matrices.
+            bone_entities: List of Entity objects for each bone (same order as bones in skeleton_data).
+                          If None, skeleton works in legacy mode with internal transforms.
         """
         self._data = skeleton_data
+        self._bone_entities = bone_entities  # List[Entity] or None
         n = skeleton_data.get_bone_count()
 
-        # Root transform (from parent node like Armature)
-        if root_transform is not None:
-            self._root_transform = np.asarray(root_transform, dtype=np.float32).reshape(4, 4)
-        else:
-            self._root_transform = np.eye(4, dtype=np.float32)
-
-        # Current local transforms per bone (set by animation)
-        self._local_translations = np.zeros((n, 3), dtype=np.float32)
-        self._local_rotations = np.zeros((n, 4), dtype=np.float32)
-        self._local_rotations[:, 3] = 1.0  # Identity quaternion (0, 0, 0, 1)
-        self._local_scales = np.ones((n, 3), dtype=np.float32)
-
         # Computed matrices
-        self._local_matrices = np.zeros((n, 4, 4), dtype=np.float32)
-        self._world_matrices = np.zeros((n, 4, 4), dtype=np.float32)
         self._bone_matrices = np.zeros((n, 4, 4), dtype=np.float32)
 
         # Initialize to identity
         for i in range(n):
-            self._local_matrices[i] = np.eye(4, dtype=np.float32)
-            self._world_matrices[i] = np.eye(4, dtype=np.float32)
             self._bone_matrices[i] = np.eye(4, dtype=np.float32)
-
-        self._dirty = True
-
-        # Initialize to bind pose from skeleton data
-        self.reset_to_bind_pose()
 
     @property
     def skeleton_data(self) -> SkeletonData:
         """Get the skeleton template."""
         return self._data
 
-    def set_bone_transform(
-        self,
-        bone_index: int,
-        translation: np.ndarray | None = None,
-        rotation: np.ndarray | None = None,
-        scale: np.ndarray | float | None = None,
-    ) -> None:
-        """
-        Set local transform for a bone.
+    def get_bone_entity(self, bone_index: int):
+        """Get Entity for a bone by index."""
+        if self._bone_entities and 0 <= bone_index < len(self._bone_entities):
+            return self._bone_entities[bone_index]
+        return None
 
-        Args:
-            bone_index: Index of the bone
-            translation: Position (3,) or None to keep current
-            rotation: Quaternion (4,) as [x, y, z, w] or None
-            scale: Scale (3,) or uniform float, or None
-        """
-        if bone_index < 0 or bone_index >= len(self._data.bones):
-            return
-
-        if translation is not None:
-            self._local_translations[bone_index] = np.asarray(translation, dtype=np.float32)
-
-        if rotation is not None:
-            self._local_rotations[bone_index] = np.asarray(rotation, dtype=np.float32)
-
-        if scale is not None:
-            if isinstance(scale, (int, float)):
-                self._local_scales[bone_index] = np.array([scale, scale, scale], dtype=np.float32)
-            else:
-                self._local_scales[bone_index] = np.asarray(scale, dtype=np.float32)
-
-        self._dirty = True
+    def get_bone_entity_by_name(self, bone_name: str):
+        """Get Entity for a bone by name."""
+        bone_index = self._data.get_bone_index(bone_name)
+        return self.get_bone_entity(bone_index)
 
     def set_bone_transform_by_name(
         self,
@@ -179,65 +137,51 @@ class SkeletonInstance:
         """
         Set local transform for a bone by name.
 
+        Updates the Entity transform directly.
+
         Args:
             bone_name: Name of the bone
             translation: Position (3,) or None
             rotation: Quaternion (4,) as [x, y, z, w] or None
             scale: Scale (3,) or uniform float, or None
         """
-        bone_index = self._data.get_bone_index(bone_name)
-        if bone_index >= 0:
-            self.set_bone_transform(bone_index, translation, rotation, scale)
+        from termin.geombase.pose3 import Pose3
 
-    def reset_to_bind_pose(self) -> None:
-        """Reset all bones to bind pose from skeleton data."""
-        for bone in self._data.bones:
-            i = bone.index
-            self._local_translations[i] = bone.bind_translation.copy()
-            self._local_rotations[i] = bone.bind_rotation.copy()
-            self._local_scales[i] = bone.bind_scale.copy()
-        self._dirty = True
+        entity = self.get_bone_entity_by_name(bone_name)
+        if entity is None:
+            return
+
+        # Update Entity transform
+        pose = entity.transform.local_pose()
+
+        if translation is not None:
+            pose = Pose3(lin=np.asarray(translation, dtype=np.float64), ang=pose.ang)
+        if rotation is not None:
+            pose = Pose3(lin=pose.lin, ang=np.asarray(rotation, dtype=np.float64))
+
+        entity.transform.relocate(pose)
+
+        # Scale is separate on Entity
+        if scale is not None:
+            if isinstance(scale, (int, float)):
+                entity.scale = float(scale)
+            else:
+                entity.scale = np.asarray(scale, dtype=np.float64)
 
     def update(self) -> None:
         """
-        Recompute world matrices and final bone matrices.
+        Recompute bone matrices from Entity world transforms.
 
-        Call this after setting bone transforms, before get_bone_matrices().
-
-        Algorithm:
-        1. Compute local matrix from T * R * S for each bone
-        2. Compute world matrix: root_transform * parent_world * local (root_transform for roots)
-        3. Compute bone matrix: world * inverse_bind_matrix
+        Reads world matrix from each bone Entity and computes:
+        bone_matrix = entity.model_matrix() @ inverse_bind_matrix
         """
-        if not self._dirty:
+        if self._bone_entities is None:
             return
 
-        # Step 1: Compute local matrices
-        for i in range(len(self._data.bones)):
-            self._local_matrices[i] = self._compute_trs_matrix(
-                self._local_translations[i],
-                self._local_rotations[i],
-                self._local_scales[i],
-            )
-
-        # Step 2: Compute world matrices (parent * local)
-        # Bones are assumed ordered so parents come before children
         for bone in self._data.bones:
-            if bone.parent_index < 0:
-                # Root bone: world = root_transform * local
-                self._world_matrices[bone.index] = self._root_transform @ self._local_matrices[bone.index]
-            else:
-                # Child bone: world = parent_world * local
-                parent_world = self._world_matrices[bone.parent_index]
-                self._world_matrices[bone.index] = parent_world @ self._local_matrices[bone.index]
-
-        # Step 3: Compute final bone matrices (world * inverse_bind)
-        for bone in self._data.bones:
-            self._bone_matrices[bone.index] = (
-                self._world_matrices[bone.index] @ bone.inverse_bind_matrix
-            )
-
-        self._dirty = False
+            entity = self._bone_entities[bone.index]
+            world_matrix = entity.model_matrix()
+            self._bone_matrices[bone.index] = world_matrix @ bone.inverse_bind_matrix
 
     _DEBUG_MATRICES = False
     _debug_matrix_frame = 0
@@ -248,78 +192,17 @@ class SkeletonInstance:
 
         Returns:
             Array of shape (N, 4, 4) containing final bone matrices.
-            These are: CurrentWorldTransform * InverseBindMatrix
-
-        Note: Call update() first if transforms have changed.
+            These are: EntityWorldTransform * InverseBindMatrix
         """
-        was_dirty = self._dirty
         self.update()
-
-        if self._DEBUG_MATRICES and SkeletonInstance._debug_matrix_frame < 3:
-            SkeletonInstance._debug_matrix_frame += 1
-            # Check if local transforms differ from bind pose
-            bones = self._data.bones
-            diff_count = 0
-            # Always show first bone for comparison
-            if bones:
-                bone = bones[0]
-                bind_rot = bone.bind_rotation
-                curr_rot = self._local_rotations[0]
-                print(f"[SkeletonInstance] bone[0] {bone.name}:")
-                print(f"  bind_rot={bind_rot}")
-                print(f"  curr_rot={curr_rot}")
-                print(f"  equal={np.allclose(bind_rot, curr_rot, atol=1e-4)}")
-            for i, bone in enumerate(bones[:5]):
-                bind_rot = bone.bind_rotation
-                curr_rot = self._local_rotations[i]
-                if not np.allclose(bind_rot, curr_rot, atol=1e-4):
-                    diff_count += 1
-            print(f"[SkeletonInstance.get_bone_matrices] was_dirty={was_dirty}, bones with diff rotation: {diff_count}/5")
-
         return self._bone_matrices
 
     def get_bone_world_matrix(self, bone_index: int) -> np.ndarray:
         """Get world matrix for a specific bone."""
-        self.update()
-        return self._world_matrices[bone_index]
-
-    def _compute_trs_matrix(
-        self,
-        translation: np.ndarray,
-        rotation: np.ndarray,
-        scale: np.ndarray,
-    ) -> np.ndarray:
-        """
-        Compute 4x4 transform matrix from Translation, Rotation, Scale.
-
-        Args:
-            translation: (3,) position
-            rotation: (4,) quaternion [x, y, z, w]
-            scale: (3,) scale factors
-
-        Returns:
-            4x4 transformation matrix = T * R * S
-        """
-        # Build rotation matrix from quaternion
-        x, y, z, w = rotation
-        r = np.array([
-            [1 - 2*(y*y + z*z),     2*(x*y - z*w),     2*(x*z + y*w), 0],
-            [    2*(x*y + z*w), 1 - 2*(x*x + z*z),     2*(y*z - x*w), 0],
-            [    2*(x*z - y*w),     2*(y*z + x*w), 1 - 2*(x*x + y*y), 0],
-            [                0,                 0,                 0, 1],
-        ], dtype=np.float32)
-
-        # Apply scale
-        r[0, :3] *= scale[0]
-        r[1, :3] *= scale[1]
-        r[2, :3] *= scale[2]
-
-        # Apply translation
-        r[0, 3] = translation[0]
-        r[1, 3] = translation[1]
-        r[2, 3] = translation[2]
-
-        return r
+        if self._bone_entities and 0 <= bone_index < len(self._bone_entities):
+            return self._bone_entities[bone_index].model_matrix()
+        return np.eye(4, dtype=np.float32)
 
     def __repr__(self) -> str:
-        return f"<SkeletonInstance bones={len(self._data.bones)} dirty={self._dirty}>"
+        has_entities = self._bone_entities is not None
+        return f"<SkeletonInstance bones={len(self._data.bones)} has_entities={has_entities}>"
