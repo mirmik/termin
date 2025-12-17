@@ -166,9 +166,14 @@ def _create_entity_from_node(
     pose = Pose3(lin=node.translation, ang=node.rotation)
     scale = node.scale
 
-    if _DEBUG_ENTITY_CREATION and _debug_entity_count < 5:
+    if _DEBUG_ENTITY_CREATION and ("Hips" in node.name or _debug_entity_count < 3):
         _debug_entity_count += 1
-        print(f"[GLB] Creating entity {node.name!r}: rot={node.rotation}, scale={scale}")
+        print(f"[GLB] Creating entity {node.name!r}:")
+        print(f"  node.translation: {node.translation}")
+        print(f"  node.rotation: {node.rotation}")
+        print(f"  node.scale: {node.scale}")
+        print(f"  pose.ang (quaternion): {pose.ang}")
+        print(f"  pose.lin: {pose.lin}")
 
     entity = Entity(pose=pose, name=node.name, scale=scale)
 
@@ -327,25 +332,11 @@ def instantiate_glb(
             print(f"    bind_rotation: {bone.bind_rotation}")
             print(f"    inverse_bind_matrix:\n{bone.inverse_bind_matrix}")
 
-        # Find skeleton root transform (Armature node that contains the skeleton)
-        # This is the parent of the first joint, which contains the export scale
-        skeleton_root_transform = None
-        first_joint_idx = skin.joint_node_indices[0] if skin.joint_node_indices else None
-        if first_joint_idx is not None:
-            # Find parent of first joint (Armature node)
-            for node_idx, node in enumerate(scene_data.nodes):
-                if first_joint_idx in node.children:
-                    print(f"[GLB] Armature node: {node.name!r}")
-                    print(f"  translation: {node.translation}")
-                    print(f"  rotation: {node.rotation}")
-                    print(f"  scale: {node.scale}")
-                    # Use Armature's transform as skeleton root
-                    skeleton_root_transform = _compute_trs_matrix(
-                        node.translation, node.rotation, node.scale
-                    )
-                    break
-
-        skeleton_instance = SkeletonInstance(skeleton_data, root_transform=skeleton_root_transform)
+        # Note: skeleton_root_transform is NOT needed!
+        # The inverse_bind_matrix already includes the Armature's scale,
+        # and by glTF spec: jointMatrix = inv(mesh_global) × joint_global × IBM
+        # Since mesh and joints share the same parent (Armature), it cancels out.
+        skeleton_instance = SkeletonInstance(skeleton_data, root_transform=None)
 
     if scene_data.root_nodes:
         if len(scene_data.root_nodes) == 1:
