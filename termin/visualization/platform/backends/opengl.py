@@ -154,7 +154,7 @@ class OpenGLShaderHandle(ShaderHandle):
         self._ensure_compiled()
         gl.glUniform1f(self._uniform_location(name), float(value))
 
-    _DEBUG_UNIFORM_INT = True
+    _DEBUG_UNIFORM_INT = False
 
     def set_uniform_int(self, name: str, value: int):
         self._ensure_compiled()
@@ -165,7 +165,7 @@ class OpenGLShaderHandle(ShaderHandle):
             return
         gl.glUniform1i(location, int(value))
 
-    _DEBUG_UNIFORM_ARRAY = True
+    _DEBUG_UNIFORM_ARRAY = False
 
     def set_uniform_matrix4_array(self, name: str, matrices, count: int):
         """Upload an array of 4x4 matrices to shader uniform."""

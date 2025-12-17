@@ -71,6 +71,7 @@ class SkinnedMeshRenderer(MeshRenderer):
         self._skeleton_instance = value
 
     _DEBUG_SKINNING = True  # Temporary debug flag
+    _debug_skinning_frame = 0
 
     def draw_geometry(self, context: RenderContext, geometry_id: str = "") -> None:
         """
@@ -89,7 +90,8 @@ class SkinnedMeshRenderer(MeshRenderer):
 
             # Get current shader from context and upload bone matrices
             shader = context.current_shader
-            if self._DEBUG_SKINNING:
+            if self._DEBUG_SKINNING and SkinnedMeshRenderer._debug_skinning_frame < 5:
+                SkinnedMeshRenderer._debug_skinning_frame += 1
                 print(f"[SkinnedMeshRenderer] bone_count={bone_count}, shader={shader}")
                 if bone_count > 0:
                     # Check if any bone matrix is non-identity

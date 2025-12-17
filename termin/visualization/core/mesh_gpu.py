@@ -73,7 +73,7 @@ class MeshGPU:
         # Draw
         self._handles[ctx_key].draw()
 
-    _DEBUG_UPLOAD = True
+    _DEBUG_UPLOAD = False
 
     def _upload(self, context: "RenderContext", mesh_data: "Mesh3") -> None:
         """Upload mesh data to GPU for this context."""
