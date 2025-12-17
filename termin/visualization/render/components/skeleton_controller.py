@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, List, Optional
 
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component
-from termin.skeleton.skeleton import SkeletonData, SkeletonInstance
 
 if TYPE_CHECKING:
+    from termin.skeleton.skeleton import SkeletonData, SkeletonInstance
+    from termin.skeleton.skeleton_asset import SkeletonAsset
     from termin.visualization.core.entity import Entity
 
 
@@ -16,29 +17,35 @@ class SkeletonController(Component):
     """
     Component that manages skeleton data and bone entity references.
 
-    Holds SkeletonData and creates SkeletonInstance on demand.
+    References SkeletonAsset and creates SkeletonInstance on demand.
     SkinnedMeshRenderer components reference this to get bone matrices.
 
-    Serialization:
-        - SkeletonData is serialized inline
-        - Bone entities are stored as names and resolved on load
+    Serialization uses standard InspectFields:
+        - skeleton: SkeletonAsset reference (stored as UUID)
+        - bone_entities: List of Entity UUIDs
     """
 
     inspect_fields = {
         **Component.inspect_fields,
+        "skeleton": InspectField(
+            label="Skeleton",
+            kind="skeleton",
+            getter=lambda self: self._skeleton_data,
+            setter=lambda self, v: self._set_skeleton_data(v),
+        ),
         "bone_entities": InspectField(
             label="Bone Entities",
             kind="entity_list",
             read_only=True,
-            getter=lambda self: self._bone_entity_names or [],
-            non_serializable=True,  # Serialized separately via serialize_data
+            getter=lambda self: self._bone_entity_uuids or [],
+            setter=lambda self, v: self._set_bone_entity_uuids(v),
         ),
     }
 
     def __init__(
         self,
-        skeleton_data: SkeletonData | None = None,
-        bone_entities: List["Entity"] | None = None,
+        skeleton_data: "SkeletonData | None" = None,
+        bone_entities: "List[Entity] | None" = None,
     ):
         """
         Initialize SkeletonController.
@@ -48,22 +55,33 @@ class SkeletonController(Component):
             bone_entities: List of Entity objects for each bone (same order as skeleton_data.bones)
         """
         super().__init__(enabled=True)
-        self._skeleton_data = skeleton_data
-        self._bone_entities: List["Entity"] | None = bone_entities
-        self._skeleton_instance: SkeletonInstance | None = None
+        self._skeleton_data: "SkeletonData | None" = skeleton_data
+        self._bone_entities: "List[Entity] | None" = bone_entities
+        self._skeleton_instance: "SkeletonInstance | None" = None
 
-        # For serialization - store bone entity names
-        self._bone_entity_names: List[str] | None = None
+        # For serialization - store bone entity UUIDs
+        self._bone_entity_uuids: List[str] | None = None
         if bone_entities is not None:
-            self._bone_entity_names = [e.name for e in bone_entities]
+            self._bone_entity_uuids = [e.uuid for e in bone_entities]
+
+    def _set_skeleton_data(self, value: "SkeletonData | None") -> None:
+        """Setter for skeleton_data InspectField."""
+        self._skeleton_data = value
+        self._skeleton_instance = None  # Invalidate cached instance
+
+    def _set_bone_entity_uuids(self, value: List[str] | None) -> None:
+        """Setter for bone_entities InspectField."""
+        self._bone_entity_uuids = value
+        self._bone_entities = None  # Need to re-resolve
+        self._skeleton_instance = None  # Invalidate cached instance
 
     @property
-    def skeleton_data(self) -> SkeletonData | None:
+    def skeleton_data(self) -> "SkeletonData | None":
         """Get the skeleton template."""
         return self._skeleton_data
 
     @property
-    def skeleton_instance(self) -> SkeletonInstance | None:
+    def skeleton_instance(self) -> "SkeletonInstance | None":
         """
         Get or create the SkeletonInstance.
 
@@ -71,14 +89,16 @@ class SkeletonController(Component):
         """
         if self._skeleton_instance is None and self._skeleton_data is not None:
             if self._bone_entities is not None:
+                from termin.skeleton.skeleton import SkeletonInstance
                 self._skeleton_instance = SkeletonInstance(
                     self._skeleton_data,
                     bone_entities=self._bone_entities,
                 )
             else:
-                # Try to resolve bone entities from names
+                # Try to resolve bone entities from UUIDs
                 self._resolve_bone_entities()
                 if self._bone_entities is not None:
+                    from termin.skeleton.skeleton import SkeletonInstance
                     self._skeleton_instance = SkeletonInstance(
                         self._skeleton_data,
                         bone_entities=self._bone_entities,
@@ -86,71 +106,28 @@ class SkeletonController(Component):
         return self._skeleton_instance
 
     def _resolve_bone_entities(self) -> None:
-        """Resolve bone entities from stored names by searching entity hierarchy."""
-        if self._bone_entity_names is None or self.entity is None:
+        """Resolve bone entities from stored UUIDs via scene."""
+        if self._bone_entity_uuids is None or self.entity is None:
             return
 
-        # Find root of hierarchy
-        root = self.entity
-        while root.transform.parent is not None:
-            parent_entity = root.transform.parent.entity
-            if parent_entity is not None:
-                root = parent_entity
-            else:
-                break
+        scene = self.entity.scene
+        if scene is None:
+            return
 
-        # Build name -> entity map from hierarchy
-        entity_map: dict[str, "Entity"] = {}
-        self._collect_entities(root, entity_map)
-
-        # Resolve bone entities
-        bone_entities: List["Entity"] = []
-        for name in self._bone_entity_names:
-            entity = entity_map.get(name)
+        # Resolve each UUID to Entity
+        bone_entities: "List[Entity]" = []
+        for uuid in self._bone_entity_uuids:
+            entity = scene.find_entity_by_uuid(uuid)
             if entity is not None:
                 bone_entities.append(entity)
             else:
-                print(f"[SkeletonController] WARNING: Could not find bone entity {name!r}")
+                print(f"[SkeletonController] WARNING: Could not find bone entity with UUID {uuid}")
                 return  # Abort if any bone not found
 
         self._bone_entities = bone_entities
 
-    def _collect_entities(self, entity: "Entity", entity_map: dict[str, "Entity"]) -> None:
-        """Recursively collect all entities into name map."""
-        entity_map[entity.name] = entity
-        for child_transform in entity.transform.children:
-            if child_transform.entity is not None:
-                self._collect_entities(child_transform.entity, entity_map)
-
-    def set_bone_entities(self, bone_entities: List["Entity"]) -> None:
+    def set_bone_entities(self, bone_entities: "List[Entity]") -> None:
         """Set bone entities and invalidate cached instance."""
         self._bone_entities = bone_entities
-        self._bone_entity_names = [e.name for e in bone_entities]
+        self._bone_entity_uuids = [e.uuid for e in bone_entities]
         self._skeleton_instance = None
-
-    # --- Serialization ---
-
-    def serialize_data(self) -> dict:
-        """Serialize SkeletonController."""
-        data: dict = {"enabled": self.enabled}
-
-        if self._skeleton_data is not None:
-            data["skeleton_data"] = self._skeleton_data.serialize()
-
-        if self._bone_entity_names is not None:
-            data["bone_entity_names"] = self._bone_entity_names
-
-        return data
-
-    @classmethod
-    def deserialize(cls, data: dict, context=None) -> "SkeletonController":
-        """Deserialize SkeletonController."""
-        skeleton_data = None
-        if "skeleton_data" in data:
-            skeleton_data = SkeletonData.deserialize(data["skeleton_data"])
-
-        controller = cls(skeleton_data=skeleton_data, bone_entities=None)
-        controller._bone_entity_names = data.get("bone_entity_names")
-        controller.enabled = data.get("enabled", True)
-
-        return controller

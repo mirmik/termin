@@ -417,6 +417,10 @@ def instantiate_glb(
 
         print(f"[GLB] Collected {len(bone_entities)} bone entities")
 
+        # Register skeleton in ResourceManager for serialization
+        skeleton_name = f"{name}_skeleton"
+        rm.register_skeleton(skeleton_name, skeleton_data, source_path=str(path))
+
         # Create SkeletonController and add to root entity
         skeleton_controller = SkeletonController(
             skeleton_data=skeleton_data,

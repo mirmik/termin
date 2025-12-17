@@ -459,6 +459,8 @@ class ResourceComboWidget(FieldWidget):
             return self._resources.list_voxel_grid_names()
         if self._resource_kind == "navmesh":
             return self._resources.list_navmesh_names()
+        if self._resource_kind == "skeleton":
+            return self._resources.list_skeleton_names()
         return []
 
     def _find_resource_name(self, resource: Any) -> Optional[str]:
@@ -473,6 +475,8 @@ class ResourceComboWidget(FieldWidget):
         if self._resource_kind == "navmesh":
             # navmesh is stored by name directly
             return resource if isinstance(resource, str) else None
+        if self._resource_kind == "skeleton":
+            return self._resources.find_skeleton_name(resource)
         return None
 
     def _get_resource(self, name: str) -> Any:
@@ -486,6 +490,8 @@ class ResourceComboWidget(FieldWidget):
             return self._resources.get_voxel_grid(name)
         if self._resource_kind == "navmesh":
             return self._resources.get_navmesh(name)
+        if self._resource_kind == "skeleton":
+            return self._resources.get_skeleton(name)
         return None
 
     def get_value(self) -> Any:
@@ -572,7 +578,7 @@ class FieldWidgetFactory:
         if kind == "enum":
             return ComboFieldWidget(choices=field.choices)
 
-        if kind in ("material", "mesh", "voxel_grid", "navmesh"):
+        if kind in ("material", "mesh", "voxel_grid", "navmesh", "skeleton"):
             return ResourceComboWidget(
                 resource_kind=kind,
                 resources=self._resources,

@@ -256,6 +256,36 @@ class Scene(Identifiable):
         self.entities.remove(entity)
         entity.on_removed()
 
+    def find_entity_by_uuid(self, uuid: str) -> Entity | None:
+        """
+        Find entity by UUID in the scene hierarchy.
+
+        Searches through all entities and their children recursively.
+
+        Args:
+            uuid: The UUID to search for
+
+        Returns:
+            Entity with matching UUID or None if not found
+        """
+        for entity in self.entities:
+            result = self._find_entity_by_uuid_recursive(entity, uuid)
+            if result is not None:
+                return result
+        return None
+
+    def _find_entity_by_uuid_recursive(self, entity: Entity, uuid: str) -> Entity | None:
+        """Recursive helper for find_entity_by_uuid."""
+        if entity.uuid == uuid:
+            return entity
+        for child_transform in entity.transform.children:
+            child = child_transform.entity
+            if child is not None:
+                result = self._find_entity_by_uuid_recursive(child, uuid)
+                if result is not None:
+                    return result
+        return None
+
     # --- Component registration ---
 
     def register_component(self, component: Component):

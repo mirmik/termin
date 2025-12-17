@@ -101,7 +101,7 @@ class Component:
                 kind = field.kind
 
                 # Конвертация ресурсов в uuid (с fallback на имя для совместимости)
-                if kind in ("mesh", "material", "voxel_grid", "navmesh"):
+                if kind in ("mesh", "material", "voxel_grid", "navmesh", "skeleton"):
                     if value is not None:
                         from termin.visualization.core.resources import ResourceManager
                         rm = ResourceManager.instance()
@@ -115,6 +115,8 @@ class Component:
                             uuid = rm.find_voxel_grid_uuid(value)
                         elif kind == "navmesh":
                             uuid = rm.find_navmesh_uuid(value)
+                        elif kind == "skeleton":
+                            uuid = rm.find_skeleton_uuid(value)
 
                         if uuid:
                             value = {"uuid": uuid}
@@ -130,6 +132,9 @@ class Component:
                     value = list(value)
                 elif kind == "vec3_list" and isinstance(value, (tuple, list)):
                     value = [list(v) for v in value]
+                # entity_list stores UUIDs as list of strings - save as-is
+                elif kind == "entity_list" and isinstance(value, (tuple, list)):
+                    value = list(value) if value else []
 
                 if value is not None:
                     result[key] = value
@@ -219,10 +224,21 @@ class Component:
                     if resource is not None and field.setter:
                         field.setter(obj, resource)
                     continue
+                elif kind == "skeleton":
+                    resource = None
+                    if isinstance(value, dict) and "uuid" in value:
+                        resource = rm.get_skeleton_by_uuid(value["uuid"])
+                    elif isinstance(value, str):
+                        resource = rm.get_skeleton(value)
+                    if resource is not None and field.setter:
+                        field.setter(obj, resource)
+                    continue
                 elif kind in ("color", "vec3", "vec4") and isinstance(value, list):
                     value = tuple(value)
                 elif kind == "vec3_list" and isinstance(value, list):
                     value = [tuple(v) for v in value]
+                # entity_list: value is list of UUID strings, pass through as-is
+                # Component resolves UUIDs to Entities when needed via scene.find_entity_by_uuid()
 
                 # Устанавливаем значение через setter или напрямую
                 if field.setter:
