@@ -215,18 +215,12 @@ def _create_entity_from_node(
     glb_name: str = "",
     node_to_entity: Optional[Dict[int, Entity]] = None,
     pending_skinned: Optional[List[_PendingSkinnedMesh]] = None,
-    mesh_uuids: Optional[Dict[str, str]] = None,
-    source_path: Optional[str] = None,
-    new_mesh_uuids: Optional[Dict[str, str]] = None,
 ) -> Entity:
     """Recursively create Entity hierarchy from GLBNodeData.
 
     Args:
         node_to_entity: Dict to collect node_index -> Entity mapping
         pending_skinned: List to collect skinned meshes that need skeleton set later
-        mesh_uuids: Dict mapping mesh name -> UUID (from spec file)
-        source_path: Path to source GLB file
-        new_mesh_uuids: Dict to collect newly generated UUIDs (for saving to spec)
     """
     global _debug_entity_count
     node = scene_data.nodes[node_index]
@@ -256,23 +250,15 @@ def _create_entity_from_node(
         for mesh_idx in our_mesh_indices:
             glb_mesh = scene_data.meshes[mesh_idx]
 
-            # Get or create MeshDrawable
+            # Get MeshDrawable from cache or ResourceManager
             if mesh_idx not in mesh_drawables:
-                # Try to get from ResourceManager first (registered by GLBAsset)
                 mesh_name = f"{glb_name}_{glb_mesh.name}" if glb_name else glb_mesh.name
                 from termin.visualization.core.resources import ResourceManager
                 rm = ResourceManager.instance()
                 drawable = rm.meshes.get(mesh_name)
 
                 if drawable is None:
-                    # Create new MeshDrawable with UUID from spec
-                    mesh3 = _glb_mesh_to_mesh3(glb_mesh)
-                    drawable = MeshDrawable(mesh3, name=mesh_name)
-                    mesh_uuid = mesh_uuids.get(glb_mesh.name) if mesh_uuids else None
-                    rm.register_mesh(mesh_name, drawable, source_path=source_path, uuid=mesh_uuid)
-                    # Track new UUID if it wasn't in spec
-                    if mesh_uuid is None and new_mesh_uuids is not None and drawable.asset:
-                        new_mesh_uuids[glb_mesh.name] = drawable.asset.uuid
+                    raise RuntimeError(f"[glb_instantiator] Mesh '{mesh_name}' not found in ResourceManager")
 
                 mesh_drawables[mesh_idx] = drawable
 
@@ -289,7 +275,7 @@ def _create_entity_from_node(
     for child_index in node.children:
         child_entity = _create_entity_from_node(
             child_index, scene_data, mesh_drawables, default_material, skinned_material,
-            glb_name, node_to_entity, pending_skinned, mesh_uuids, source_path, new_mesh_uuids
+            glb_name, node_to_entity, pending_skinned
         )
         entity.transform.add_child(child_entity.transform)
 
@@ -392,22 +378,15 @@ def instantiate_glb(
             blender_z_up_fix=blender_z_up_fix,
         )
 
-    # Get materials from ResourceManager
-    from termin.visualization.render.materials.skinned_material import SkinnedMaterial
+    # Get materials from ResourceManager (must be registered as builtins)
     default_material = rm.get_material("DefaultMaterial")
-    if default_material is None:
-        # Fallback if not registered yet - register it
-        default_material = DefaultMaterial(color=(0.8, 0.8, 0.8, 1.0))
-        default_material.name = "DefaultMaterial"
-        rm.register_material("DefaultMaterial", default_material)
-
-    # Get or create skinned material for skeletal animation
     skinned_material = rm.get_material("SkinnedMaterial")
-    if skinned_material is None:
-        # Fallback if not registered yet - register it
-        skinned_material = SkinnedMaterial(color=(0.8, 0.8, 0.8, 1.0))
-        skinned_material.name = "SkinnedMaterial"
-        rm.register_material("SkinnedMaterial", skinned_material)
+
+    if default_material is None or skinned_material is None:
+        raise RuntimeError(
+            f"[glb_instantiator] Builtin materials not registered: "
+            f"DefaultMaterial={default_material is not None}, SkinnedMaterial={skinned_material is not None}"
+        )
 
     # Cache for MeshDrawables (shared between nodes referencing same mesh)
     mesh_drawables: Dict[int, MeshDrawable] = {}
