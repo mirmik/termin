@@ -101,19 +101,29 @@ class SkeletonController(Component):
         if not self._bone_handles:
             return None
 
-        if self.entity is None or self.entity.scene is None:
-            return None
+        # Get scene if available (for handles that need resolution)
+        scene = None
+        if self.entity is not None and self.entity.scene is not None:
+            scene = self.entity.scene
 
-        scene = self.entity.scene
         bone_entities: "List[Entity]" = []
 
         for handle in self._bone_handles:
-            entity = handle.resolve(scene)
-            if entity is not None:
-                bone_entities.append(entity)
+            # If handle already has entity resolved, use it directly
+            if handle.is_resolved:
+                bone_entities.append(handle.entity)
+            elif scene is not None:
+                # Try to resolve via scene
+                entity = handle.resolve(scene)
+                if entity is not None:
+                    bone_entities.append(entity)
+                else:
+                    print(f"[SkeletonController] WARNING: Could not resolve bone entity {handle.uuid}")
+                    return None
             else:
-                print(f"[SkeletonController] WARNING: Could not resolve bone entity {handle.uuid}")
-                return None  # Abort if any bone not found
+                # No entity and no scene - can't resolve
+                print(f"[SkeletonController] WARNING: Cannot resolve bone entity {handle.uuid} (no scene)")
+                return None
 
         return bone_entities
 

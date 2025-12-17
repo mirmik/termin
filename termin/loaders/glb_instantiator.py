@@ -446,9 +446,7 @@ def instantiate_glb(
 
     if clips:
         animation_player = AnimationPlayer()
-        # Get skeleton instance from controller for animation
-        skeleton_instance = skeleton_controller.skeleton_instance if skeleton_controller else None
-        animation_player.target_skeleton = skeleton_instance
+        # AnimationPlayer will acquire skeleton from SkeletonController in start()
 
         for clip in clips:
             animation_player.add_clip(clip)

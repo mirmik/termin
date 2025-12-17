@@ -11,6 +11,7 @@ from .clip import AnimationClip
 
 if TYPE_CHECKING:
     from termin.skeleton.skeleton import SkeletonInstance
+    from termin.visualization.core.scene import Scene
 
 
 class AnimationPlayer(Component):
@@ -30,6 +31,21 @@ class AnimationPlayer(Component):
         self.time: float = 0.0
         self.playing: bool = False
         self._target_skeleton: "SkeletonInstance | None" = None
+
+    def start(self, scene: "Scene") -> None:
+        """Called once before the first update. Find SkeletonController on entity."""
+        super().start(scene)
+        self._acquire_skeleton()
+
+    def _acquire_skeleton(self) -> None:
+        """Find SkeletonController on entity and get skeleton_instance."""
+        if self.entity is None:
+            return
+
+        from termin.visualization.render.components.skeleton_controller import SkeletonController
+        skeleton_controller = self.entity.get_component(SkeletonController)
+        if skeleton_controller is not None:
+            self._target_skeleton = skeleton_controller.skeleton_instance
 
     @property
     def target_skeleton(self) -> "SkeletonInstance | None":
