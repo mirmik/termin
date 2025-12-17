@@ -95,7 +95,6 @@ class GLBSkinData:
         name: str,
         joint_node_indices: List[int],
         inverse_bind_matrices: np.ndarray,
-        skeleton_root: Optional[int] = None,
     ):
         """
         Initialize skin data.
@@ -104,12 +103,10 @@ class GLBSkinData:
             name: Skin name
             joint_node_indices: List of node indices that are joints (bones)
             inverse_bind_matrices: (N, 4, 4) inverse bind matrices for each joint
-            skeleton_root: Node index of skeleton root (optional)
         """
         self.name = name
         self.joint_node_indices = joint_node_indices
         self.inverse_bind_matrices = inverse_bind_matrices
-        self.skeleton_root = skeleton_root
 
     @property
     def joint_count(self) -> int:
@@ -365,7 +362,6 @@ def _parse_skins(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
     for skin_idx, skin in enumerate(gltf.get("skins", [])):
         name = skin.get("name", f"Skin_{skin_idx}")
         joint_node_indices = skin.get("joints", [])
-        skeleton_root = skin.get("skeleton")
 
         # Read inverse bind matrices
         inverse_bind_matrices = None
@@ -387,7 +383,6 @@ def _parse_skins(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             name=name,
             joint_node_indices=joint_node_indices,
             inverse_bind_matrices=inverse_bind_matrices,
-            skeleton_root=skeleton_root,
         ))
 
 

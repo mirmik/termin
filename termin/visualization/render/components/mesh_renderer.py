@@ -165,18 +165,6 @@ class MeshRenderer(Component):
             return
         self.mesh.draw(context)
 
-    def get_model_matrix(self) -> np.ndarray:
-        """
-        Возвращает матрицу модели для рендеринга.
-
-        По умолчанию возвращает entity.model_matrix().
-        SkinnedMeshRenderer переопределяет это для возврата identity,
-        т.к. трансформ уже включён в bone matrices.
-        """
-        if self.entity is not None:
-            return self.entity.model_matrix()
-        return np.eye(4, dtype=np.float32)
-
     _DEBUG_DRAWS = False  # DEBUG: отладка get_geometry_draws
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:

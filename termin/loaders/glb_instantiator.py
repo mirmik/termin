@@ -264,6 +264,57 @@ def _create_animation_clips(scene_data: GLBSceneData) -> List[AnimationClip]:
     return clips
 
 
+def _apply_z_up_rotation_fix(root_entity: Entity, clips: List[AnimationClip]) -> None:
+    """
+    Fix coordinate conversion by rotating Armature and root_entity.
+
+    Blender exports with -90°X rotation on Armature. To compensate:
+    - Rotate Armature entity by +90° around X
+    - Rotate all Armature animation keyframes by +90° around X
+    - Rotate root_entity by -90° around X
+    """
+    from termin.util import qmul
+
+    # +90° around X: quaternion [sin(45°), 0, 0, cos(45°)]
+    rot_pos_90_x = np.array([0.70710678, 0.0, 0.0, 0.70710678], dtype=np.float64)
+    # -90° around X: quaternion [-sin(45°), 0, 0, cos(45°)]
+    rot_neg_90_x = np.array([-0.70710678, 0.0, 0.0, 0.70710678], dtype=np.float64)
+
+    # Find Armature entity (direct child of root named "Armature")
+    armature_entity: Optional[Entity] = None
+    for child_transform in root_entity.transform.children:
+        if child_transform.entity is not None and child_transform.entity.name == "Armature":
+            armature_entity = child_transform.entity
+            break
+
+    # Rotate Armature entity by +90° X
+    if armature_entity is not None:
+        armature_pose = armature_entity.transform.local_pose()
+        new_armature_rot = qmul(rot_pos_90_x, armature_pose.ang)
+        armature_entity.transform.relocate(GeneralPose3(
+            lin=armature_pose.lin,
+            ang=new_armature_rot,
+            scale=armature_pose.scale,
+        ))
+
+        # Rotate Armature animation keyframes by +90° X
+        for clip in clips:
+            if "Armature" in clip.channels:
+                channel = clip.channels["Armature"]
+                for keyframe in channel.rotation_keys:
+                    if keyframe.rotation is not None:
+                        keyframe.rotation = qmul(rot_pos_90_x, keyframe.rotation)
+
+    # Rotate root_entity by -90° X
+    root_pose = root_entity.transform.local_pose()
+    new_root_rot = qmul(rot_neg_90_x, root_pose.ang)
+    root_entity.transform.relocate(GeneralPose3(
+        lin=root_pose.lin,
+        ang=new_root_rot,
+        scale=root_pose.scale,
+    ))
+
+
 def instantiate_glb(
     path: Path,
     name: str = None,
@@ -415,47 +466,20 @@ def instantiate_glb(
             )
             pending.entity.add_component(renderer)
 
-    # # Fix coordinate conversion rotation artifact
-    # # Armature has -90°X rotation from Blender export, we remove it and compensate in children
-    # if convert_to_z_up and root_entity is not None:
-    #     from termin.util import qmul
-    #
-    #     # -90°X quaternion to remove from root
-    #     neg_90_x = np.array([-0.70710678, 0, 0, 0.70710678], dtype=np.float32)
-    #     # +90°X quaternion to add to children
-    #     pos_90_x = np.array([0.70710678, 0, 0, 0.70710678], dtype=np.float32)
-    #
-    #     # Rotate root by -90°X (effectively removing the export artifact)
-    #     root_pose = root_entity.transform.local_pose()
-    #     new_root_rot = qmul(neg_90_x, root_pose.ang)
-    #     root_entity.transform.relocate(Pose3(lin=root_pose.lin, ang=new_root_rot))
-    #
-    #     # Compensate in direct children by rotating +90°X and swapping Y/Z in translation/scale
-    #     for child_transform in root_entity.transform.children:
-    #         if child_transform.entity is not None:
-    #             child_pose = child_transform.local_pose()
-    #
-    #             # Swap Y and Z in translation
-    #             old_lin = child_pose.lin
-    #             new_lin = np.array([old_lin[0], old_lin[2], old_lin[1]], dtype=old_lin.dtype)
-    #
-    #             # Rotate orientation by +90°X
-    #             new_child_rot = qmul(pos_90_x, child_pose.ang)
-    #
-    #             # Swap Y and Z in scale
-    #             child_pose = child_transform.local_pose()
-    #             old_scale = child_pose.scale
-    #             new_scale = np.array([old_scale[0], old_scale[2], old_scale[1]], dtype=np.float64)
-    #
-    #             child_transform.relocate(GeneralPose3(lin=new_lin, ang=new_child_rot, scale=new_scale))
-
     # Setup animations
     animation_player: Optional[AnimationPlayer] = None
+    clips: List[AnimationClip] = []
     if scene_data.animations:
+        clips = _create_animation_clips(scene_data)
+
+    # Fix coordinate conversion: compensate for Blender's -90°X rotation on Armature
+    if convert_to_z_up and root_entity is not None:
+        _apply_z_up_rotation_fix(root_entity, clips)
+
+    if clips:
         animation_player = AnimationPlayer()
         animation_player.target_skeleton = skeleton_instance
 
-        clips = _create_animation_clips(scene_data)
         for clip in clips:
             animation_player.add_clip(clip)
 
@@ -463,12 +487,11 @@ def instantiate_glb(
         root_entity.add_component(animation_player)
 
         # Auto-play longest animation (skip short T-pose clips)
-        if clips:
-            # Find clip with longest duration (likely actual animation, not T-pose)
-            best_clip = max(clips, key=lambda c: c.duration)
-            print(f"[GLB] Available animations: {[(c.name, f'{c.duration:.2f}s') for c in clips]}")
-            print(f"[GLB] Auto-playing: {best_clip.name!r} (duration={best_clip.duration:.2f}s)")
-            animation_player.play(best_clip.name)
+        # Find clip with longest duration (likely actual animation, not T-pose)
+        best_clip = max(clips, key=lambda c: c.duration)
+        print(f"[GLB] Available animations: {[(c.name, f'{c.duration:.2f}s') for c in clips]}")
+        print(f"[GLB] Auto-playing: {best_clip.name!r} (duration={best_clip.duration:.2f}s)")
+        animation_player.play(best_clip.name)
 
     return GLBInstantiateResult(
         entity=root_entity,
