@@ -264,62 +264,12 @@ def _create_animation_clips(scene_data: GLBSceneData) -> List[AnimationClip]:
     return clips
 
 
-def _apply_z_up_rotation_fix(root_entity: Entity, clips: List[AnimationClip]) -> None:
-    """
-    Fix coordinate conversion by rotating Armature and root_entity.
-
-    Blender exports with -90°X rotation on Armature. To compensate:
-    - Rotate Armature entity by +90° around X
-    - Rotate all Armature animation keyframes by +90° around X
-    - Rotate root_entity by -90° around X
-    """
-    from termin.util import qmul
-
-    # +90° around X: quaternion [sin(45°), 0, 0, cos(45°)]
-    rot_pos_90_x = np.array([0.70710678, 0.0, 0.0, 0.70710678], dtype=np.float64)
-    # -90° around X: quaternion [-sin(45°), 0, 0, cos(45°)]
-    rot_neg_90_x = np.array([-0.70710678, 0.0, 0.0, 0.70710678], dtype=np.float64)
-
-    # Find Armature entity (direct child of root named "Armature")
-    armature_entity: Optional[Entity] = None
-    for child_transform in root_entity.transform.children:
-        if child_transform.entity is not None and child_transform.entity.name == "Armature":
-            armature_entity = child_transform.entity
-            break
-
-    # Rotate Armature entity by +90° X
-    if armature_entity is not None:
-        armature_pose = armature_entity.transform.local_pose()
-        new_armature_rot = qmul(rot_pos_90_x, armature_pose.ang)
-        armature_entity.transform.relocate(GeneralPose3(
-            lin=armature_pose.lin,
-            ang=new_armature_rot,
-            scale=armature_pose.scale,
-        ))
-
-        # Rotate Armature animation keyframes by +90° X
-        for clip in clips:
-            if "Armature" in clip.channels:
-                channel = clip.channels["Armature"]
-                for keyframe in channel.rotation_keys:
-                    if keyframe.rotation is not None:
-                        keyframe.rotation = qmul(rot_pos_90_x, keyframe.rotation)
-
-    # Rotate root_entity by -90° X
-    root_pose = root_entity.transform.local_pose()
-    new_root_rot = qmul(rot_neg_90_x, root_pose.ang)
-    root_entity.transform.relocate(GeneralPose3(
-        lin=root_pose.lin,
-        ang=new_root_rot,
-        scale=root_pose.scale,
-    ))
-
-
 def instantiate_glb(
     path: Path,
     name: str = None,
     normalize_scale: bool | None = None,
     convert_to_z_up: bool | None = None,
+    blender_z_up_fix: bool | None = None,
 ) -> GLBInstantiateResult:
     """
     Load GLB file and create Entity hierarchy.
@@ -331,6 +281,8 @@ def instantiate_glb(
                         If None, reads from .glb.spec file.
         convert_to_z_up: If True, convert from glTF Y-up to engine Z-up.
                         If None, reads from .glb.spec file (default True).
+        blender_z_up_fix: If True, compensate for Blender's -90°X rotation on Armature.
+                         If None, reads from .glb.spec file (default False).
 
     Returns:
         GLBInstantiateResult containing root Entity, SkeletonInstance, and AnimationPlayer.
@@ -345,12 +297,16 @@ def instantiate_glb(
     if convert_to_z_up is None:
         convert_to_z_up = spec_data.get("convert_to_z_up", True) if spec_data else True
 
-    print(f"[GLB] Loading: {path.name}, normalize_scale={normalize_scale}, convert_to_z_up={convert_to_z_up}")
+    if blender_z_up_fix is None:
+        blender_z_up_fix = spec_data.get("blender_z_up_fix", False) if spec_data else False
+
+    print(f"[GLB] Loading: {path.name}, normalize_scale={normalize_scale}, convert_to_z_up={convert_to_z_up}, blender_z_up_fix={blender_z_up_fix}")
 
     scene_data = load_glb_file_normalized(
         str(path),
         normalize_scale=normalize_scale,
         convert_to_z_up=convert_to_z_up,
+        blender_z_up_fix=blender_z_up_fix,
     )
 
     if name is None:
@@ -471,10 +427,6 @@ def instantiate_glb(
     clips: List[AnimationClip] = []
     if scene_data.animations:
         clips = _create_animation_clips(scene_data)
-
-    # Fix coordinate conversion: compensate for Blender's -90°X rotation on Armature
-    if convert_to_z_up and root_entity is not None:
-        _apply_z_up_rotation_fix(root_entity, clips)
 
     if clips:
         animation_player = AnimationPlayer()

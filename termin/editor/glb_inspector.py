@@ -180,6 +180,15 @@ class GLBInspector(QWidget):
         )
         settings_form.addRow("Normalize Scale:", self._normalize_scale_checkbox)
 
+        # Blender Z-Up Fix checkbox
+        self._blender_z_up_fix_checkbox = QCheckBox()
+        self._blender_z_up_fix_checkbox.setToolTip(
+            "Compensate for Blender's -90°X rotation on Armature.\n"
+            "Enable if character appears rotated after export from Blender.\n"
+            "Rotates Armature by +90°X and root by -90°X."
+        )
+        settings_form.addRow("Blender Z-Up Fix:", self._blender_z_up_fix_checkbox)
+
         layout.addLayout(settings_form)
 
         # Apply button
@@ -292,9 +301,12 @@ class GLBInspector(QWidget):
             self._convert_z_up_checkbox.setChecked(convert_z_up)
             normalize = spec_data.get("normalize_scale", False)
             self._normalize_scale_checkbox.setChecked(normalize)
+            blender_fix = spec_data.get("blender_z_up_fix", False)
+            self._blender_z_up_fix_checkbox.setChecked(blender_fix)
         else:
             self._convert_z_up_checkbox.setChecked(True)  # Default enabled
             self._normalize_scale_checkbox.setChecked(False)
+            self._blender_z_up_fix_checkbox.setChecked(False)
 
     def _on_apply_clicked(self) -> None:
         """Save spec and notify for GLB reimport."""
@@ -311,6 +323,7 @@ class GLBInspector(QWidget):
             **existing,
             "convert_to_z_up": self._convert_z_up_checkbox.isChecked(),
             "normalize_scale": self._normalize_scale_checkbox.isChecked(),
+            "blender_z_up_fix": self._blender_z_up_fix_checkbox.isChecked(),
         }
 
         # Save spec
@@ -343,6 +356,7 @@ class GLBInspector(QWidget):
         self._clear_content()
         self._convert_z_up_checkbox.setChecked(True)  # Default enabled
         self._normalize_scale_checkbox.setChecked(False)
+        self._blender_z_up_fix_checkbox.setChecked(False)
 
     def _format_size(self, size: int) -> str:
         """Format file size in human-readable format."""

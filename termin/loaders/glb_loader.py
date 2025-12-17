@@ -95,6 +95,7 @@ class GLBSkinData:
         name: str,
         joint_node_indices: List[int],
         inverse_bind_matrices: np.ndarray,
+        armature_node_index: Optional[int] = None,
     ):
         """
         Initialize skin data.
@@ -103,10 +104,12 @@ class GLBSkinData:
             name: Skin name
             joint_node_indices: List of node indices that are joints (bones)
             inverse_bind_matrices: (N, 4, 4) inverse bind matrices for each joint
+            armature_node_index: Node index of skeleton root (Armature in Blender)
         """
         self.name = name
         self.joint_node_indices = joint_node_indices
         self.inverse_bind_matrices = inverse_bind_matrices
+        self.armature_node_index = armature_node_index
 
     @property
     def joint_count(self) -> int:
@@ -362,6 +365,7 @@ def _parse_skins(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
     for skin_idx, skin in enumerate(gltf.get("skins", [])):
         name = skin.get("name", f"Skin_{skin_idx}")
         joint_node_indices = skin.get("joints", [])
+        armature_node_index = skin.get("skeleton")  # Armature node in Blender
 
         # Read inverse bind matrices
         inverse_bind_matrices = None
@@ -383,6 +387,7 @@ def _parse_skins(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             name=name,
             joint_node_indices=joint_node_indices,
             inverse_bind_matrices=inverse_bind_matrices,
+            armature_node_index=armature_node_index,
         ))
 
 
@@ -707,10 +712,67 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     return True
 
 
+def _qmul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Multiply two quaternions (x, y, z, w)."""
+    x1, y1, z1, w1 = q1
+    x2, y2, z2, w2 = q2
+    return np.array([
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2,
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
+    ], dtype=np.float32)
+
+
+def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
+    """
+    Fix Blender's -90°X rotation on Armature when exporting to glTF.
+
+    Blender applies -90°X rotation to the Armature node during export.
+    This function compensates by:
+    - Rotating Armature node by +90° around X
+    - Rotating Armature animation keyframes by +90° around X
+    - Rotating root nodes by -90° around X
+
+    Args:
+        scene_data: GLBSceneData to fix (modified in place)
+    """
+    # +90° around X: quaternion [sin(45°), 0, 0, cos(45°)]
+    rot_pos_90_x = np.array([0.70710678, 0.0, 0.0, 0.70710678], dtype=np.float32)
+    # -90° around X: quaternion [-sin(45°), 0, 0, cos(45°)]
+    rot_neg_90_x = np.array([-0.70710678, 0.0, 0.0, 0.70710678], dtype=np.float32)
+
+    # Find armature node index from skin
+    armature_node_idx: Optional[int] = None
+    if scene_data.skins:
+        armature_node_idx = scene_data.skins[0].armature_node_index
+
+    # Rotate armature node by +90° X
+    armature_node_name: Optional[str] = None
+    if armature_node_idx is not None and armature_node_idx < len(scene_data.nodes):
+        armature_node = scene_data.nodes[armature_node_idx]
+        armature_node_name = armature_node.name
+        armature_node.rotation = _qmul(rot_pos_90_x, armature_node.rotation)
+
+        # Rotate armature animation keyframes by +90° X
+        for anim in scene_data.animations:
+            for channel in anim.channels:
+                if channel.node_name == armature_node_name:
+                    for key in channel.rot_keys:
+                        key[1] = _qmul(rot_pos_90_x, key[1])
+
+    # Rotate root nodes by -90° X
+    for root_idx in scene_data.root_nodes:
+        if root_idx < len(scene_data.nodes):
+            root_node = scene_data.nodes[root_idx]
+            root_node.rotation = _qmul(rot_neg_90_x, root_node.rotation)
+
+
 def load_glb_file_normalized(
     path: str | Path,
     normalize_scale: bool = False,
     convert_to_z_up: bool = True,
+    blender_z_up_fix: bool = False,
 ) -> GLBSceneData:
     """
     Load GLB file with optional transformations.
@@ -719,6 +781,7 @@ def load_glb_file_normalized(
         path: Path to .glb file
         normalize_scale: If True, normalize root scale to 1.0
         convert_to_z_up: If True, convert from glTF Y-up to engine Z-up (default True)
+        blender_z_up_fix: If True, compensate for Blender's -90°X rotation on Armature
 
     Returns:
         GLBSceneData (possibly transformed)
@@ -728,6 +791,10 @@ def load_glb_file_normalized(
     # Coordinate conversion first (before scale normalization)
     if convert_to_z_up:
         convert_y_up_to_z_up(scene_data)
+
+    # Blender-specific fix (after coordinate conversion)
+    if blender_z_up_fix:
+        apply_blender_z_up_fix(scene_data)
 
     if normalize_scale:
         normalize_glb_scale(scene_data)
@@ -739,6 +806,7 @@ def load_glb_file_from_buffer(
     data: bytes,
     normalize_scale: bool = False,
     convert_to_z_up: bool = True,
+    blender_z_up_fix: bool = False,
 ) -> GLBSceneData:
     """
     Load GLB from binary buffer with optional transformations.
@@ -747,6 +815,7 @@ def load_glb_file_from_buffer(
         data: Binary GLB data
         normalize_scale: If True, normalize root scale to 1.0
         convert_to_z_up: If True, convert from glTF Y-up to engine Z-up (default True)
+        blender_z_up_fix: If True, compensate for Blender's -90°X rotation on Armature
 
     Returns:
         GLBSceneData (possibly transformed)
@@ -803,6 +872,10 @@ def load_glb_file_from_buffer(
     # Coordinate conversion first (before scale normalization)
     if convert_to_z_up:
         convert_y_up_to_z_up(scene_data)
+
+    # Blender-specific fix (after coordinate conversion)
+    if blender_z_up_fix:
+        apply_blender_z_up_fix(scene_data)
 
     if normalize_scale:
         normalize_glb_scale(scene_data)
