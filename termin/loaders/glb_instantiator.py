@@ -482,7 +482,16 @@ def instantiate_glb(
     skeleton_controller: Optional[SkeletonController] = None
     if scene_data.skins:
         skin = scene_data.skins[0]  # Use first skin
-        skeleton_data = _create_skeleton_from_skin(skin, scene_data.nodes)
+
+        # Get skeleton from ResourceManager (registered by GLBAsset)
+        skeleton_name = f"{name}_skeleton"
+        skeleton_data = rm.get_skeleton(skeleton_name)
+
+        if skeleton_data is None:
+            # Fallback: create and register if not found (shouldn't happen normally)
+            print(f"[GLB] WARNING: Skeleton '{skeleton_name}' not found in ResourceManager, creating...")
+            skeleton_data = _create_skeleton_from_skin(skin, scene_data.nodes)
+            rm.register_skeleton(skeleton_name, skeleton_data, source_path=str(path))
 
         # Debug: print first few bones
         print(f"[GLB] Skeleton: {len(skeleton_data.bones)} bones")
@@ -503,10 +512,6 @@ def instantiate_glb(
 
         print(f"[GLB] Collected {len(bone_entities)} bone entities")
 
-        # Register skeleton in ResourceManager for serialization
-        skeleton_name = f"{name}_skeleton"
-        rm.register_skeleton(skeleton_name, skeleton_data, source_path=str(path))
-
         # Create SkeletonController and add to root entity
         skeleton_controller = SkeletonController(
             skeleton_data=skeleton_data,
@@ -524,55 +529,37 @@ def instantiate_glb(
             )
             pending.entity.add_component(renderer)
 
-    # Setup animations
+    # Setup animations - get clips from ResourceManager (registered by GLBAsset)
     animation_player: Optional[AnimationPlayer] = None
     clips: List[AnimationClip] = []
+
     if scene_data.animations:
-        clips = _create_animation_clips(scene_data)
-
-    # Extract animation UUIDs from spec file
-    clip_uuids: Dict[str, str] = {}
-    if spec_data and "resources" in spec_data and "animations" in spec_data["resources"]:
-        clip_uuids = spec_data["resources"]["animations"]
-    new_clip_uuids: Dict[str, str] = {}
-
-    if clips:
         animation_player = AnimationPlayer()
-        # AnimationPlayer will acquire skeleton from SkeletonController in start()
 
-        for clip in clips:
-            # Register clip as asset with stable UUID
-            original_clip_name = clip.name
-            clip_name = f"{name}_{original_clip_name}" if name else original_clip_name
-            existing_asset = rm.get_animation_clip_asset(clip_name)
+        for glb_anim in scene_data.animations:
+            clip_name = f"{name}_{glb_anim.name}"
+            asset = rm.get_animation_clip_asset(clip_name)
 
-            if existing_asset is None:
-                clip_uuid = clip_uuids.get(original_clip_name)
-                rm.register_animation_clip(clip_name, clip, source_path=source_path_str, uuid=clip_uuid)
-                # Track new UUID if it wasn't in spec
-                asset = rm.get_animation_clip_asset(clip_name)
-                if clip_uuid is None and asset is not None:
-                    new_clip_uuids[original_clip_name] = asset.uuid
-                animation_player.add_clip(clip)
+            if asset is not None and asset.clip is not None:
+                clips.append(asset.clip)
+                animation_player.add_clip(asset.clip)
             else:
-                # Use clip from existing asset
-                existing_clip = existing_asset.clip
-                if existing_clip is not None:
-                    animation_player.add_clip(existing_clip)
+                # Fallback: create clip directly if not found (shouldn't happen normally)
+                print(f"[GLB] WARNING: Animation clip '{clip_name}' not found in ResourceManager, creating...")
+                clip = AnimationClip.from_glb_clip(glb_anim)
+                rm.register_animation_clip(clip_name, clip, source_path=source_path_str)
+                animation_player.add_clip(clip)
+                clips.append(clip)
 
-        # Add player to root entity
-        root_entity.add_component(animation_player)
+        if clips:
+            # Add player to root entity
+            root_entity.add_component(animation_player)
 
-        # Auto-play longest animation (skip short T-pose clips)
-        # Find clip with longest duration (likely actual animation, not T-pose)
-        best_clip = max(clips, key=lambda c: c.duration)
-        print(f"[GLB] Available animations: {[(c.name, f'{c.duration:.2f}s') for c in clips]}")
-        print(f"[GLB] Auto-playing: {best_clip.name!r} (duration={best_clip.duration:.2f}s)")
-        animation_player.play(best_clip.name)
-
-    # Save new animation UUIDs to spec file if any were generated
-    if new_clip_uuids:
-        _save_animation_uuids_to_spec(path, spec_data, new_clip_uuids)
+            # Auto-play longest animation (skip short T-pose clips)
+            best_clip = max(clips, key=lambda c: c.duration)
+            print(f"[GLB] Available animations: {[(c.name, f'{c.duration:.2f}s') for c in clips]}")
+            print(f"[GLB] Auto-playing: {best_clip.name!r} (duration={best_clip.duration:.2f}s)")
+            animation_player.play(best_clip.name)
 
     return GLBInstantiateResult(
         entity=root_entity,

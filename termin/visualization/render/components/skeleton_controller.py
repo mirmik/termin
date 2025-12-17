@@ -57,6 +57,7 @@ class SkeletonController(Component):
         super().__init__(enabled=True)
         self._skeleton_data: "SkeletonData | None" = skeleton_data
         self._skeleton_instance: "SkeletonInstance | None" = None
+        self._pending_skeleton_uuid: str | None = None  # For lazy resolution after deserialization
 
         # Store bone references as EntityHandles
         self._bone_handles: List[EntityHandle] = []

@@ -100,13 +100,16 @@ class GLBAsset(Asset):
             )
             self._loaded = True
 
-            # Register meshes in ResourceManager (may generate new UUIDs)
+            # Register all resources in ResourceManager (may generate new UUIDs)
             updated_spec, meshes_updated = self._register_meshes(spec_data)
+            updated_spec, skeletons_updated = self._register_skeletons(updated_spec)
+            updated_spec, animations_updated = self._register_animations(updated_spec)
 
             # Save spec file if:
             # - No UUID was in spec (need to save GLB's own UUID)
             # - Resources were updated with new UUIDs
-            if not has_uuid_in_spec or meshes_updated:
+            resources_updated = meshes_updated or skeletons_updated or animations_updated
+            if not has_uuid_in_spec or resources_updated:
                 self._save_spec_file(updated_spec)
 
             return True
@@ -193,6 +196,119 @@ class GLBAsset(Asset):
             # Create MeshDrawable wrapper
             drawable = MeshDrawable(asset, name=mesh_name)
             rm.meshes[mesh_name] = drawable
+
+        return spec_data, updated
+
+    def _register_skeletons(self, spec_data: dict | None) -> tuple[dict, bool]:
+        """
+        Register all skeletons from GLB in ResourceManager.
+
+        Returns:
+            (spec_data, updated) - spec_data with skeleton UUIDs, and whether new UUIDs were added.
+        """
+        import copy
+        spec_data = copy.deepcopy(spec_data) if spec_data else {}
+
+        if self._scene_data is None or not self._scene_data.skins:
+            return spec_data, False
+
+        import uuid as uuid_module
+        from termin.visualization.core.resources import ResourceManager
+        from termin.loaders.glb_instantiator import _create_skeleton_from_skin
+
+        rm = ResourceManager.instance()
+
+        # Get or create resources section in spec
+        if "resources" not in spec_data or not isinstance(spec_data["resources"], dict):
+            spec_data["resources"] = {}
+        if "skeletons" not in spec_data["resources"] or not isinstance(spec_data["resources"]["skeletons"], dict):
+            spec_data["resources"]["skeletons"] = {}
+
+        skeleton_uuids = spec_data["resources"]["skeletons"]
+        updated = False
+
+        for i, skin in enumerate(self._scene_data.skins):
+            # Create unique name: glb_name + skeleton suffix
+            skeleton_name = f"{self._name}_skeleton" if i == 0 else f"{self._name}_skeleton_{i}"
+
+            # Get or generate UUID for this skeleton
+            skeleton_key = f"skeleton_{i}" if i > 0 else "skeleton"
+            skeleton_uuid = skeleton_uuids.get(skeleton_key)
+            if skeleton_uuid is None:
+                skeleton_uuid = str(uuid_module.uuid4())
+                skeleton_uuids[skeleton_key] = skeleton_uuid
+                updated = True
+
+            # Skip if already registered
+            if rm.get_skeleton(skeleton_name) is not None:
+                continue
+
+            # Create SkeletonData from GLB skin
+            skeleton_data = _create_skeleton_from_skin(skin, self._scene_data.nodes)
+
+            # Register in ResourceManager
+            rm.register_skeleton(
+                skeleton_name,
+                skeleton_data,
+                source_path=str(self._source_path) if self._source_path else None,
+                uuid=skeleton_uuid,
+            )
+
+        return spec_data, updated
+
+    def _register_animations(self, spec_data: dict | None) -> tuple[dict, bool]:
+        """
+        Register all animation clips from GLB in ResourceManager.
+
+        Returns:
+            (spec_data, updated) - spec_data with animation UUIDs, and whether new UUIDs were added.
+        """
+        import copy
+        spec_data = copy.deepcopy(spec_data) if spec_data else {}
+
+        if self._scene_data is None or not self._scene_data.animations:
+            return spec_data, False
+
+        import uuid as uuid_module
+        from termin.visualization.core.resources import ResourceManager
+        from termin.visualization.animation.clip import AnimationClip
+
+        rm = ResourceManager.instance()
+
+        # Get or create resources section in spec
+        if "resources" not in spec_data or not isinstance(spec_data["resources"], dict):
+            spec_data["resources"] = {}
+        if "animations" not in spec_data["resources"] or not isinstance(spec_data["resources"]["animations"], dict):
+            spec_data["resources"]["animations"] = {}
+
+        animation_uuids = spec_data["resources"]["animations"]
+        updated = False
+
+        for glb_anim in self._scene_data.animations:
+            # Create unique name: glb_name + animation_name
+            clip_name = f"{self._name}_{glb_anim.name}"
+
+            # Get or generate UUID for this animation
+            clip_uuid = animation_uuids.get(glb_anim.name)
+            if clip_uuid is None:
+                clip_uuid = str(uuid_module.uuid4())
+                animation_uuids[glb_anim.name] = clip_uuid
+                updated = True
+
+            # Skip if already registered
+            if rm.get_animation_clip_asset(clip_name) is not None:
+                continue
+
+            # Create AnimationClip from GLB animation
+            clip = AnimationClip.from_glb_clip(glb_anim)
+
+            # Register in ResourceManager
+            rm.register_animation_clip(
+                clip_name,
+                clip,
+                source_path=str(self._source_path) if self._source_path else None,
+                uuid=clip_uuid,
+            )
 
         return spec_data, updated
 

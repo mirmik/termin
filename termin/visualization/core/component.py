@@ -245,12 +245,17 @@ class Component:
                     continue
                 elif kind == "skeleton":
                     resource = None
+                    skeleton_uuid = None
                     if isinstance(value, dict) and "uuid" in value:
-                        resource = rm.get_skeleton_by_uuid(value["uuid"])
+                        skeleton_uuid = value["uuid"]
+                        resource = rm.get_skeleton_by_uuid(skeleton_uuid)
                     elif isinstance(value, str):
                         resource = rm.get_skeleton(value)
                     if resource is not None and field.setter:
                         field.setter(obj, resource)
+                    elif skeleton_uuid is not None:
+                        # Store pending UUID for lazy resolution
+                        obj._pending_skeleton_uuid = skeleton_uuid
                     continue
                 elif kind in ("color", "vec3", "vec4") and isinstance(value, list):
                     value = tuple(value)
@@ -262,13 +267,9 @@ class Component:
                     value = [EntityHandle(uuid=uuid_str) for uuid_str in value]
                 elif kind == "animation_clip_list" and isinstance(value, list):
                     # Convert list of UUIDs to List[AnimationClipHandle]
+                    # Keep all handles - they will resolve lazily when clip is available
                     from termin.visualization.core.animation_clip_handle import AnimationClipHandle
-                    handles = []
-                    for clip_uuid in value:
-                        handle = AnimationClipHandle.from_uuid(clip_uuid)
-                        if handle.clip is not None:
-                            handles.append(handle)
-                    value = handles
+                    value = [AnimationClipHandle.from_uuid(clip_uuid) for clip_uuid in value]
 
                 # Устанавливаем значение через setter или напрямую
                 if field.setter:
