@@ -85,8 +85,8 @@ _grid_shader: ShaderProgram | None = None
 def grid_shader() -> ShaderProgram:
     """Returns cached grid shader."""
     global _grid_shader
-    if _grid_shader is None:
-        _grid_shader = ShaderProgram(GRID_VERT, GRID_FRAG)
+    # Always recreate for now (remove cache to pick up shader changes)
+    _grid_shader = ShaderProgram(GRID_VERT, GRID_FRAG)
     return _grid_shader
 
 
