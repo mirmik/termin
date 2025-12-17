@@ -34,7 +34,7 @@ class SkinnedMeshRenderer(MeshRenderer):
     }
 
     _DEBUG_INIT = False
-    _DEBUG_LIFECYCLE = True
+    _DEBUG_LIFECYCLE = False
 
     def __init__(
         self,

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -24,52 +24,12 @@ from termin.visualization.animation.player import AnimationPlayer
 from termin.visualization.animation.clip import AnimationClip
 
 from termin.loaders.glb_loader import (
-    load_glb_file,
     load_glb_file_normalized,
-    normalize_glb_scale,
     GLBSceneData,
     GLBNodeData,
     GLBMeshData,
     GLBSkinData,
 )
-
-
-def _compute_trs_matrix(
-    translation: np.ndarray,
-    rotation: np.ndarray,
-    scale: np.ndarray,
-) -> np.ndarray:
-    """
-    Compute 4x4 transform matrix from Translation, Rotation, Scale.
-
-    Args:
-        translation: (3,) position
-        rotation: (4,) quaternion [x, y, z, w]
-        scale: (3,) scale factors
-
-    Returns:
-        4x4 transformation matrix = T * R * S
-    """
-    # Build rotation matrix from quaternion
-    x, y, z, w = rotation
-    r = np.array([
-        [1 - 2*(y*y + z*z),     2*(x*y - z*w),     2*(x*z + y*w), 0],
-        [    2*(x*y + z*w), 1 - 2*(x*x + z*z),     2*(y*z - x*w), 0],
-        [    2*(x*z - y*w),     2*(y*z + x*w), 1 - 2*(x*x + y*y), 0],
-        [                0,                 0,                 0, 1],
-    ], dtype=np.float32)
-
-    # Apply scale
-    r[0, :3] *= scale[0]
-    r[1, :3] *= scale[1]
-    r[2, :3] *= scale[2]
-
-    # Apply translation
-    r[0, 3] = translation[0]
-    r[1, 3] = translation[1]
-    r[2, 3] = translation[2]
-
-    return r
 
 
 def _glb_mesh_to_mesh3(glb_mesh: GLBMeshData) -> Mesh3 | SkinnedMesh3:
@@ -148,7 +108,7 @@ def _create_skeleton_from_skin(
     return SkeletonData(bones=bones)
 
 
-_DEBUG_ENTITY_CREATION = True
+_DEBUG_ENTITY_CREATION = False
 _debug_entity_count = 0
 
 
@@ -255,17 +215,6 @@ class GLBInstantiateResult:
         if self.skeleton_controller is not None:
             return self.skeleton_controller.skeleton_instance
         return None
-
-
-def _create_animation_clips(scene_data: GLBSceneData) -> List[AnimationClip]:
-    """Convert GLB animations to AnimationClips."""
-    clips = []
-
-    for glb_anim in scene_data.animations:
-        clip = AnimationClip.from_glb_clip(glb_anim)
-        clips.append(clip)
-
-    return clips
 
 
 def instantiate_glb(
