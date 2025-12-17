@@ -8,6 +8,7 @@ from typing import Dict, List
 import numpy as np
 
 from termin.geombase.pose3 import Pose3
+from termin.geombase.general_pose3 import GeneralPose3
 from termin.mesh.mesh import Mesh3
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.mesh import MeshDrawable
@@ -87,7 +88,9 @@ def _create_entity_from_node(
     pose = _matrix_to_pose(node.transform) if node.transform is not None else Pose3.identity()
     scale = _extract_scale(node.transform) if node.transform is not None else np.array([1.0, 1.0, 1.0])
 
-    entity = Entity(pose=pose, name=node.name, scale=scale)
+    # Create GeneralPose3 with scale
+    general_pose = GeneralPose3(lin=pose.lin, ang=pose.ang, scale=scale)
+    entity = Entity(pose=general_pose, name=node.name)
 
     # Add MeshRenderer for each mesh attached to this node
     for mesh_idx in node.mesh_indices:

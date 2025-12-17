@@ -178,9 +178,8 @@ def _create_entity_from_node(
     global _debug_entity_count
     node = scene_data.nodes[node_index]
 
-    # Create pose from translation and rotation
-    pose = Pose3(lin=node.translation, ang=node.rotation)
-    scale = node.scale
+    # Create pose from translation, rotation, and scale
+    pose = GeneralPose3(lin=node.translation, ang=node.rotation, scale=node.scale)
 
     if _DEBUG_ENTITY_CREATION and ("Hips" in node.name or _debug_entity_count < 3):
         _debug_entity_count += 1
@@ -191,7 +190,7 @@ def _create_entity_from_node(
         print(f"  pose.ang (quaternion): {pose.ang}")
         print(f"  pose.lin: {pose.lin}")
 
-    entity = Entity(pose=pose, name=node.name, scale=scale)
+    entity = Entity(pose=pose, name=node.name)
 
     # Track node -> entity mapping
     if node_to_entity is not None:
