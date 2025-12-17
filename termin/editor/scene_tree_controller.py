@@ -168,6 +168,7 @@ class SceneTreeController:
 
         children = list(ent.transform.children)
 
+        delete_children = False
         if children:
             # Entity has children - ask user what to do
             msg_box = QMessageBox(self._tree)
@@ -175,7 +176,7 @@ class SceneTreeController:
             msg_box.setText(f"Entity '{ent.name}' has {len(children)} child(ren).")
             msg_box.setInformativeText("What do you want to do?")
 
-            btn_hierarchy = msg_box.addButton("Delete All", QMessageBox.ButtonRole.DestructiveRole)
+            btn_with_children = msg_box.addButton("Delete With Children", QMessageBox.ButtonRole.DestructiveRole)
             btn_only_this = msg_box.addButton("Delete Only This", QMessageBox.ButtonRole.AcceptRole)
             btn_cancel = msg_box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
 
@@ -194,16 +195,36 @@ class SceneTreeController:
                     if child_entity is not None:
                         cmd = ReparentEntityCommand(child_entity, ent.transform, parent_transform)
                         self._undo_handler(cmd, merge=False)
+            else:
+                # Delete with children
+                delete_children = True
 
-        # Delete the entity
-        cmd = DeleteEntityCommand(self._scene, ent)
-        self._undo_handler(cmd, merge=False)
+        parent_ent_for_select = ent.transform.parent.entity if ent.transform.parent else None
 
-        parent_ent = cmd.parent_entity
-        self.rebuild(select_obj=parent_ent)
+        if delete_children:
+            # Delete children first (bottom-up to handle nested hierarchies)
+            self._delete_entity_recursive(ent)
+        else:
+            # Delete only this entity
+            cmd = DeleteEntityCommand(self._scene, ent)
+            self._undo_handler(cmd, merge=False)
+
+        self.rebuild(select_obj=parent_ent_for_select)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()
+
+    def _delete_entity_recursive(self, ent: Entity) -> None:
+        """Delete entity and all its children recursively (children first)."""
+        # First delete all children
+        for child_transform in list(ent.transform.children):
+            child_entity = child_transform.entity
+            if child_entity is not None:
+                self._delete_entity_recursive(child_entity)
+
+        # Then delete this entity
+        cmd = DeleteEntityCommand(self._scene, ent)
+        self._undo_handler(cmd, merge=False)
 
     def _rename_entity_from_context(self, ent: Entity | None) -> None:
         if not isinstance(ent, Entity):
