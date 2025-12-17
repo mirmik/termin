@@ -283,6 +283,8 @@ def instantiate_glb(
     if convert_to_z_up is None:
         convert_to_z_up = spec_data.get("convert_to_z_up", True) if spec_data else True
 
+    print(f"[GLB] Loading: {path.name}, normalize_scale={normalize_scale}, convert_to_z_up={convert_to_z_up}")
+
     scene_data = load_glb_file_normalized(
         str(path),
         normalize_scale=normalize_scale,
@@ -320,31 +322,19 @@ def instantiate_glb(
         # Find skeleton root transform (Armature node that contains the skeleton)
         # This is the parent of the first joint, which contains the export scale
         skeleton_root_transform = None
-        armature_node_idx = None
         first_joint_idx = skin.joint_node_indices[0] if skin.joint_node_indices else None
         if first_joint_idx is not None:
             # Find parent of first joint (Armature node)
             for node_idx, node in enumerate(scene_data.nodes):
                 if first_joint_idx in node.children:
-                    armature_node_idx = node_idx
                     print(f"[GLB] Armature node: {node.name!r}")
                     print(f"  translation: {node.translation}")
-                    print(f"  rotation: {node.rotation} (will be removed - coordinate conversion artifact)")
+                    print(f"  rotation: {node.rotation}")
                     print(f"  scale: {node.scale}")
-
-                    # The Armature has two roles:
-                    # 1. Parent of skeleton bones - needs the rotation for correct bone transforms
-                    # 2. Parent of mesh entities - rotation should be identity (mesh vertices already converted)
-                    #
-                    # Keep original rotation in skeleton_root_transform for bones,
-                    # but set Entity rotation to identity.
+                    # Use Armature's transform as skeleton root
                     skeleton_root_transform = _compute_trs_matrix(
                         node.translation, node.rotation, node.scale
                     )
-
-                    # Fix the node's rotation so Entity hierarchy doesn't get double-transformed
-                    # (mesh vertices are already converted to Z-up)
-                    node.rotation = np.array([0, 0, 0, 1], dtype=np.float32)
                     break
 
         skeleton_instance = SkeletonInstance(skeleton_data, root_transform=skeleton_root_transform)
