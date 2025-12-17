@@ -239,6 +239,9 @@ class SkeletonInstance:
 
         self._dirty = False
 
+    _DEBUG_MATRICES = True
+    _debug_matrix_frame = 0
+
     def get_bone_matrices(self) -> np.ndarray:
         """
         Get bone matrices array for GPU upload.
@@ -249,7 +252,22 @@ class SkeletonInstance:
 
         Note: Call update() first if transforms have changed.
         """
+        was_dirty = self._dirty
         self.update()
+
+        if self._DEBUG_MATRICES and SkeletonInstance._debug_matrix_frame < 3:
+            SkeletonInstance._debug_matrix_frame += 1
+            # Check if local transforms differ from bind pose
+            bones = self._data.bones
+            diff_count = 0
+            for i, bone in enumerate(bones[:5]):
+                bind_rot = bone.bind_rotation
+                curr_rot = self._local_rotations[i]
+                if not np.allclose(bind_rot, curr_rot, atol=1e-4):
+                    diff_count += 1
+                    print(f"[SkeletonInstance] bone[{i}] {bone.name}: bind_rot={bind_rot}, curr_rot={curr_rot}")
+            print(f"[SkeletonInstance.get_bone_matrices] was_dirty={was_dirty}, bones with diff rotation: {diff_count}/5")
+
         return self._bone_matrices
 
     def get_bone_world_matrix(self, bone_index: int) -> np.ndarray:

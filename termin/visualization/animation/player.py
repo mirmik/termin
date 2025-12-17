@@ -70,7 +70,8 @@ class AnimationPlayer(Component):
 
         if self._DEBUG_UPDATE and AnimationPlayer._debug_frame_count < 3:
             AnimationPlayer._debug_frame_count += 1
-            print(f"[AnimationPlayer.update] time={self.time:.3f}, channels={len(sample)}")
+            print(f"[AnimationPlayer.update] clip={self.current.name!r}, duration={self.current.duration:.3f}s, time={self.time:.3f}")
+            print(f"  channels={len(sample)}, target_skeleton={self._target_skeleton is not None}")
             for name, data in list(sample.items())[:3]:
                 tr, rot, sc = data
                 print(f"  {name}: tr={tr}, rot={rot}")
