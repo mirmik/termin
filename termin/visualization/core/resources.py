@@ -91,6 +91,7 @@ _BUILTIN_UUIDS: Dict[str, str] = {
     "PBRMaterial": "00000000-0000-0000-0002-000000000002",
     "AdvancedPBRMaterial": "00000000-0000-0000-0002-000000000003",
     "GridMaterial": "00000000-0000-0000-0002-000000000004",
+    "SkinnedMaterial": "00000000-0000-0000-0002-000000000005",
     # Меши
     "Cube": "00000000-0000-0000-0003-000000000001",
     "Sphere": "00000000-0000-0000-0003-000000000002",
@@ -896,6 +897,13 @@ class ResourceManager:
             mat = GridMaterial(color=(0.8, 0.8, 0.8, 1.0), grid_spacing=1.0, line_width=0.02)
             mat.name = "GridMaterial"
             self.register_material("GridMaterial", mat, uuid=_BUILTIN_UUIDS["GridMaterial"])
+
+        # SkinnedMaterial (skeletal animation)
+        if "SkinnedMaterial" not in self.materials:
+            from termin.visualization.render.materials.skinned_material import SkinnedMaterial
+            mat = SkinnedMaterial(color=(0.8, 0.8, 0.8, 1.0))
+            mat.name = "SkinnedMaterial"
+            self.register_material("SkinnedMaterial", mat, uuid=_BUILTIN_UUIDS["SkinnedMaterial"])
 
     def register_builtin_meshes(self) -> List[str]:
         """

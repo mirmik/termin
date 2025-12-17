@@ -359,13 +359,18 @@ def instantiate_glb(
     rm = ResourceManager.instance()
     default_material = rm.get_material("DefaultMaterial")
     if default_material is None:
-        # Fallback if not registered yet
+        # Fallback if not registered yet - register it
         default_material = DefaultMaterial(color=(0.8, 0.8, 0.8, 1.0))
+        default_material.name = "DefaultMaterial"
+        rm.register_material("DefaultMaterial", default_material)
 
     # Get or create skinned material for skeletal animation
     skinned_material = rm.get_material("SkinnedMaterial")
     if skinned_material is None:
+        # Fallback if not registered yet - register it
         skinned_material = SkinnedMaterial(color=(0.8, 0.8, 0.8, 1.0))
+        skinned_material.name = "SkinnedMaterial"
+        rm.register_material("SkinnedMaterial", skinned_material)
 
     # Cache for MeshDrawables (shared between nodes referencing same mesh)
     mesh_drawables: Dict[int, MeshDrawable] = {}
@@ -425,17 +430,21 @@ def instantiate_glb(
         root_entity = Entity(pose=Pose3.identity(), name=name)
 
         for i, glb_mesh in enumerate(scene_data.meshes):
-            mesh3 = _glb_mesh_to_mesh3(glb_mesh)
             mesh_name = f"{name}_{glb_mesh.name}" if name else glb_mesh.name
-            drawable = MeshDrawable(mesh3, name=mesh_name)
-            mesh_drawables[i] = drawable
 
-            # Register mesh in ResourceManager with UUID from spec
-            mesh_uuid = mesh_uuids.get(glb_mesh.name)
-            rm.register_mesh(mesh_name, drawable, source_path=source_path_str, uuid=mesh_uuid)
-            # Track new UUID if it wasn't in spec
-            if mesh_uuid is None and drawable.asset:
-                new_mesh_uuids[glb_mesh.name] = drawable.asset.uuid
+            # Check if already registered
+            drawable = rm.meshes.get(mesh_name)
+            if drawable is None:
+                # Create new MeshDrawable with UUID from spec
+                mesh3 = _glb_mesh_to_mesh3(glb_mesh)
+                drawable = MeshDrawable(mesh3, name=mesh_name)
+                mesh_uuid = mesh_uuids.get(glb_mesh.name)
+                rm.register_mesh(mesh_name, drawable, source_path=source_path_str, uuid=mesh_uuid)
+                # Track new UUID if it wasn't in spec
+                if mesh_uuid is None and drawable.asset:
+                    new_mesh_uuids[glb_mesh.name] = drawable.asset.uuid
+
+            mesh_drawables[i] = drawable
 
             mesh_entity = Entity(pose=Pose3.identity(), name=glb_mesh.name)
             renderer = MeshRenderer(mesh=drawable, material=default_material)
