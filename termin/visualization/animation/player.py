@@ -63,7 +63,10 @@ class AnimationPlayer(Component):
             print(f"[AnimationPlayer._set_clip_handles] handles={len(handles) if handles else 0}")
             if handles:
                 for i, h in enumerate(handles):
-                    print(f"  [{i}] uuid={h.uuid[:8] if h.uuid else 'None'}..., clip={h.clip.name if h.clip else 'None'}")
+                    asset = h.asset
+                    asset_uuid = asset.uuid[:8] if asset and asset.uuid else 'None'
+                    clip_name = h.clip.name if h.clip else 'None'
+                    print(f"  [{i}] asset_uuid={asset_uuid}..., clip={clip_name}")
         self._clip_handles = handles if handles else []
         self._rebuild_clips_cache()
 
