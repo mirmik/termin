@@ -407,12 +407,25 @@ def instantiate_glb(
         new_root_rot = qmul(neg_90_x, root_pose.ang)
         root_entity.transform.relocate(Pose3(lin=root_pose.lin, ang=new_root_rot))
 
-        # Compensate in direct children by rotating +90°X
+        # Compensate in direct children by rotating +90°X and swapping Y/Z in translation/scale
         for child_transform in root_entity.transform.children:
             if child_transform.entity is not None:
                 child_pose = child_transform.local_pose()
+
+                # Swap Y and Z in translation
+                old_lin = child_pose.lin
+                new_lin = np.array([old_lin[0], old_lin[2], old_lin[1]], dtype=old_lin.dtype)
+
+                # Rotate orientation by +90°X
                 new_child_rot = qmul(pos_90_x, child_pose.ang)
-                child_transform.relocate(Pose3(lin=child_pose.lin, ang=new_child_rot))
+
+                child_transform.relocate(Pose3(lin=new_lin, ang=new_child_rot))
+
+                # Swap Y and Z in scale
+                child_entity = child_transform.entity
+                old_scale = child_entity.scale
+                if hasattr(old_scale, '__len__') and len(old_scale) == 3:
+                    child_entity.scale = np.array([old_scale[0], old_scale[2], old_scale[1]], dtype=np.float32)
 
     # Setup animations
     animation_player: Optional[AnimationPlayer] = None
