@@ -607,10 +607,11 @@ def convert_y_up_to_z_up(scene_data: GLBSceneData) -> None:
         return c @ m @ c_inv
 
     # 1. Convert vertex positions and normals in all meshes
-    for mesh in scene_data.meshes:
-        mesh.vertices = convert_positions_batch(mesh.vertices)
-        if mesh.normals is not None:
-            mesh.normals = convert_positions_batch(mesh.normals)
+    # DISABLED: Testing without mesh conversion
+    # for mesh in scene_data.meshes:
+    #     mesh.vertices = convert_positions_batch(mesh.vertices)
+    #     if mesh.normals is not None:
+    #         mesh.normals = convert_positions_batch(mesh.normals)
 
     # 2. Convert node transforms
     for node in scene_data.nodes:
