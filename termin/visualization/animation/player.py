@@ -25,6 +25,7 @@ class AnimationPlayer(Component):
     """
 
     _DEBUG_UPDATE = False
+    _DEBUG_LIFECYCLE = True  # Debug deserialization/start issues
 
     inspect_fields = {
         **Component.inspect_fields,
@@ -58,6 +59,11 @@ class AnimationPlayer(Component):
 
     def _set_clip_handles(self, handles: List[AnimationClipHandle] | None) -> None:
         """Setter for clips InspectField."""
+        if self._DEBUG_LIFECYCLE:
+            print(f"[AnimationPlayer._set_clip_handles] handles={len(handles) if handles else 0}")
+            if handles:
+                for i, h in enumerate(handles):
+                    print(f"  [{i}] uuid={h.uuid[:8] if h.uuid else 'None'}..., clip={h.clip.name if h.clip else 'None'}")
         self._clip_handles = handles if handles else []
         self._rebuild_clips_cache()
 
@@ -68,15 +74,27 @@ class AnimationPlayer(Component):
             clip = handle.clip
             if clip is not None:
                 self.clips[clip.name] = clip
+        if self._DEBUG_LIFECYCLE:
+            print(f"[AnimationPlayer._rebuild_clips_cache] clips={list(self.clips.keys())}")
 
     def start(self, scene: "Scene") -> None:
         """Called once before the first update. Find SkeletonController on entity."""
+        if self._DEBUG_LIFECYCLE:
+            print(f"[AnimationPlayer.start] entity={self.entity.name if self.entity else 'None'}")
+            print(f"  _clip_handles={len(self._clip_handles)}, _current_clip_name={self._current_clip_name!r}, playing={self.playing}")
         super().start(scene)
         self._acquire_skeleton()
         self._rebuild_clips_cache()
         # Resume playing if we have a current clip name
         if self._current_clip_name and self._current_clip_name in self.clips:
             self.current = self.clips[self._current_clip_name]
+            if self._DEBUG_LIFECYCLE:
+                print(f"  Restored current clip: {self._current_clip_name}")
+        elif self._current_clip_name:
+            if self._DEBUG_LIFECYCLE:
+                print(f"  WARNING: current clip '{self._current_clip_name}' not found in clips!")
+        if self._DEBUG_LIFECYCLE:
+            print(f"  After start: current={self.current.name if self.current else 'None'}, playing={self.playing}, skeleton={self._target_skeleton is not None}")
 
     def _acquire_skeleton(self) -> None:
         """Find SkeletonController on entity and get skeleton_instance."""
@@ -85,8 +103,12 @@ class AnimationPlayer(Component):
 
         from termin.visualization.render.components.skeleton_controller import SkeletonController
         skeleton_controller = self.entity.get_component(SkeletonController)
+        if self._DEBUG_LIFECYCLE:
+            print(f"  [_acquire_skeleton] skeleton_controller={skeleton_controller is not None}")
         if skeleton_controller is not None:
             self._target_skeleton = skeleton_controller.skeleton_instance
+            if self._DEBUG_LIFECYCLE:
+                print(f"  [_acquire_skeleton] skeleton_instance={self._target_skeleton is not None}")
 
     @property
     def target_skeleton(self) -> "SkeletonInstance | None":
@@ -128,9 +150,13 @@ class AnimationPlayer(Component):
         self.playing = False
 
     _debug_frame_count = 0
+    _debug_update_logged = False
 
     def update(self, dt: float):
         if not (self.enabled and self.playing and self.current):
+            if self._DEBUG_LIFECYCLE and not AnimationPlayer._debug_update_logged:
+                AnimationPlayer._debug_update_logged = True
+                print(f"[AnimationPlayer.update] SKIPPED: enabled={self.enabled}, playing={self.playing}, current={self.current is not None}")
             return
 
         self.time += dt
