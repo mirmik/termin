@@ -20,7 +20,7 @@ class AnimationPlayer(Component):
     Может также обновлять SkeletonInstance для скелетной анимации.
     """
 
-    _DEBUG_UPDATE = True
+    _DEBUG_UPDATE = False
 
     def __init__(self, enabled: bool = True):
         super().__init__(enabled=enabled)

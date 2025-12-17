@@ -146,6 +146,9 @@ def _create_skeleton_from_skin(
     return SkeletonData(bones=bones)
 
 
+_DEBUG_ENTITY_CREATION = True
+_debug_entity_count = 0
+
 def _create_entity_from_node(
     node_index: int,
     scene_data: GLBSceneData,
@@ -156,11 +159,16 @@ def _create_entity_from_node(
     glb_name: str = "",
 ) -> Entity:
     """Recursively create Entity hierarchy from GLBNodeData."""
+    global _debug_entity_count
     node = scene_data.nodes[node_index]
 
     # Create pose from translation and rotation
     pose = Pose3(lin=node.translation, ang=node.rotation)
     scale = node.scale
+
+    if _DEBUG_ENTITY_CREATION and _debug_entity_count < 5:
+        _debug_entity_count += 1
+        print(f"[GLB] Creating entity {node.name!r}: rot={node.rotation}, scale={scale}")
 
     entity = Entity(pose=pose, name=node.name, scale=scale)
 
@@ -317,6 +325,10 @@ def instantiate_glb(
             # Find parent of first joint
             for node_idx, node in enumerate(scene_data.nodes):
                 if first_joint_idx in node.children:
+                    print(f"[GLB] Armature node: {node.name!r}")
+                    print(f"  translation: {node.translation}")
+                    print(f"  rotation: {node.rotation}")
+                    print(f"  scale: {node.scale}")
                     # Compute root transform matrix from TRS
                     skeleton_root_transform = _compute_trs_matrix(
                         node.translation, node.rotation, node.scale

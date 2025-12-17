@@ -239,7 +239,7 @@ class SkeletonInstance:
 
         self._dirty = False
 
-    _DEBUG_MATRICES = True
+    _DEBUG_MATRICES = False
     _debug_matrix_frame = 0
 
     def get_bone_matrices(self) -> np.ndarray:

@@ -70,7 +70,7 @@ class SkinnedMeshRenderer(MeshRenderer):
         """Set the skeleton instance for animation."""
         self._skeleton_instance = value
 
-    _DEBUG_SKINNING = True  # Temporary debug flag
+    _DEBUG_SKINNING = False  # Temporary debug flag
     _debug_skinning_frame = 0
 
     def draw_geometry(self, context: RenderContext, geometry_id: str = "") -> None:
