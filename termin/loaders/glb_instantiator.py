@@ -319,6 +319,14 @@ def instantiate_glb(
         skin = scene_data.skins[0]  # Use first skin
         skeleton_data = _create_skeleton_from_skin(skin, scene_data.nodes)
 
+        # Debug: print first few inverse bind matrices
+        print(f"[GLB] Skeleton: {len(skeleton_data.bones)} bones")
+        for i, bone in enumerate(skeleton_data.bones[:3]):
+            print(f"  Bone[{i}] {bone.name}:")
+            print(f"    bind_translation: {bone.bind_translation}")
+            print(f"    bind_rotation: {bone.bind_rotation}")
+            print(f"    inverse_bind_matrix:\n{bone.inverse_bind_matrix}")
+
         # Find skeleton root transform (Armature node that contains the skeleton)
         # This is the parent of the first joint, which contains the export scale
         skeleton_root_transform = None
