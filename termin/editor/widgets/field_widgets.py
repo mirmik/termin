@@ -594,5 +594,20 @@ class FieldWidgetFactory:
 
             return EntityListWidget(read_only=field.read_only)
 
+        if kind == "animation_clip_list":
+            from termin.editor.widgets.generic_list_widget import GenericListWidget
+
+            def get_clip_name(handle):
+                clip = handle.clip
+                if clip:
+                    return f"{clip.name} ({clip.duration:.2f}s)"
+                return "<unresolved>"
+
+            return GenericListWidget(
+                get_item_name=get_clip_name,
+                item_type_label="clip",
+                read_only=field.read_only,
+            )
+
         # Fallback: read-only string
         return StringFieldWidget(read_only=True)
