@@ -18,6 +18,7 @@ from termin.visualization.core.entity import Entity
 from termin.visualization.core.mesh import MeshDrawable
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.components.skinned_mesh_renderer import SkinnedMeshRenderer
+from termin.visualization.render.components.skeleton_controller import SkeletonController
 from termin.visualization.render.materials.default_material import DefaultMaterial
 from termin.visualization.animation.player import AnimationPlayer
 from termin.visualization.animation.clip import AnimationClip
@@ -245,12 +246,19 @@ class GLBInstantiateResult:
     def __init__(
         self,
         entity: Entity,
-        skeleton_instance: Optional[SkeletonInstance] = None,
+        skeleton_controller: Optional[SkeletonController] = None,
         animation_player: Optional[AnimationPlayer] = None,
     ):
         self.entity = entity
-        self.skeleton_instance = skeleton_instance
+        self.skeleton_controller = skeleton_controller
         self.animation_player = animation_player
+
+    @property
+    def skeleton_instance(self) -> Optional[SkeletonInstance]:
+        """Get skeleton instance from controller (for backwards compatibility)."""
+        if self.skeleton_controller is not None:
+            return self.skeleton_controller.skeleton_instance
+        return None
 
 
 def _create_animation_clips(scene_data: GLBSceneData) -> List[AnimationClip]:
@@ -384,8 +392,8 @@ def instantiate_glb(
             mesh_entity.add_component(renderer)
             root_entity.transform.add_child(mesh_entity.transform)
 
-    # Step 2: Create skeleton with bone entities
-    skeleton_instance: Optional[SkeletonInstance] = None
+    # Step 2: Create skeleton controller with bone entities
+    skeleton_controller: Optional[SkeletonController] = None
     if scene_data.skins:
         skin = scene_data.skins[0]  # Use first skin
         skeleton_data = _create_skeleton_from_skin(skin, scene_data.nodes)
@@ -409,16 +417,20 @@ def instantiate_glb(
 
         print(f"[GLB] Collected {len(bone_entities)} bone entities")
 
-        # Create SkeletonInstance with bone entities
-        skeleton_instance = SkeletonInstance(skeleton_data, bone_entities=bone_entities)
+        # Create SkeletonController and add to root entity
+        skeleton_controller = SkeletonController(
+            skeleton_data=skeleton_data,
+            bone_entities=bone_entities,
+        )
+        root_entity.add_component(skeleton_controller)
 
     # Step 3: Setup SkinnedMeshRenderers now that skeleton is ready
     for pending in pending_skinned:
-        if skeleton_instance is not None:
+        if skeleton_controller is not None:
             renderer = SkinnedMeshRenderer(
                 mesh=pending.drawable,
                 material=pending.material,
-                skeleton_instance=skeleton_instance,
+                skeleton_controller=skeleton_controller,
             )
             pending.entity.add_component(renderer)
 
@@ -430,6 +442,8 @@ def instantiate_glb(
 
     if clips:
         animation_player = AnimationPlayer()
+        # Get skeleton instance from controller for animation
+        skeleton_instance = skeleton_controller.skeleton_instance if skeleton_controller else None
         animation_player.target_skeleton = skeleton_instance
 
         for clip in clips:
@@ -447,6 +461,6 @@ def instantiate_glb(
 
     return GLBInstantiateResult(
         entity=root_entity,
-        skeleton_instance=skeleton_instance,
+        skeleton_controller=skeleton_controller,
         animation_player=animation_player,
     )

@@ -3,6 +3,7 @@ from .skinned_mesh_renderer import SkinnedMeshRenderer
 from .skybox_renderer import SkyboxRenderer
 from .line_renderer import LineRenderer
 from .light_component import LightComponent
+from .skeleton_controller import SkeletonController
 
 __all__ = [
     "MeshRenderer",
@@ -10,4 +11,5 @@ __all__ = [
     "SkyboxRenderer",
     "LineRenderer",
     "LightComponent",
+    "SkeletonController",
 ]

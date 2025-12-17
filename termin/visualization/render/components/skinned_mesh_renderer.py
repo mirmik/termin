@@ -16,6 +16,7 @@ from termin.visualization.render.components.mesh_renderer import MeshRenderer
 
 if TYPE_CHECKING:
     from termin.skeleton.skeleton import SkeletonInstance
+    from termin.visualization.render.components.skeleton_controller import SkeletonController
 
 
 class SkinnedMeshRenderer(MeshRenderer):
@@ -23,13 +24,13 @@ class SkinnedMeshRenderer(MeshRenderer):
     Renderer component for skinned meshes with skeletal animation.
 
     Extends MeshRenderer with:
-    - skeleton_instance: Runtime skeleton state for bone matrices
+    - skeleton_controller: Reference to SkeletonController for bone matrices
     - Automatic upload of u_bone_matrices uniform before drawing
     """
 
     inspect_fields = {
         **MeshRenderer.inspect_fields,
-        # skeleton_instance is typically set programmatically, not in inspector
+        # skeleton_controller is typically set programmatically, not in inspector
     }
 
     _DEBUG_INIT = False
@@ -38,7 +39,7 @@ class SkinnedMeshRenderer(MeshRenderer):
         self,
         mesh: MeshDrawable | SkinnedMesh3 | None = None,
         material: Material | None = None,
-        skeleton_instance: "SkeletonInstance | None" = None,
+        skeleton_controller: "SkeletonController | None" = None,
         cast_shadow: bool = True,
     ):
         """
@@ -47,7 +48,7 @@ class SkinnedMeshRenderer(MeshRenderer):
         Args:
             mesh: Skinned mesh (MeshDrawable or SkinnedMesh3)
             material: Material to use for rendering
-            skeleton_instance: Runtime skeleton for bone animation
+            skeleton_controller: Controller that provides skeleton instance
             cast_shadow: Whether this object casts shadows
         """
         if self._DEBUG_INIT:
@@ -56,19 +57,26 @@ class SkinnedMeshRenderer(MeshRenderer):
                 print(f"  material type: {type(material).__name__}")
                 print(f"  material phases: {len(material.phases) if hasattr(material, 'phases') else 'N/A'}")
         super().__init__(mesh=mesh, material=material, cast_shadow=cast_shadow)
-        self._skeleton_instance: "SkeletonInstance | None" = skeleton_instance
+        self._skeleton_controller: "SkeletonController | None" = skeleton_controller
         if self._DEBUG_INIT:
             print(f"  After super().__init__: _material_handle._direct={self._material_handle._direct}")
 
     @property
-    def skeleton_instance(self) -> "SkeletonInstance | None":
-        """Get the skeleton instance for animation."""
-        return self._skeleton_instance
+    def skeleton_controller(self) -> "SkeletonController | None":
+        """Get the skeleton controller."""
+        return self._skeleton_controller
 
-    @skeleton_instance.setter
-    def skeleton_instance(self, value: "SkeletonInstance | None"):
-        """Set the skeleton instance for animation."""
-        self._skeleton_instance = value
+    @skeleton_controller.setter
+    def skeleton_controller(self, value: "SkeletonController | None"):
+        """Set the skeleton controller."""
+        self._skeleton_controller = value
+
+    @property
+    def skeleton_instance(self) -> "SkeletonInstance | None":
+        """Get the skeleton instance from controller."""
+        if self._skeleton_controller is not None:
+            return self._skeleton_controller.skeleton_instance
+        return None
 
     _DEBUG_SKINNING = False  # Temporary debug flag
     _debug_skinning_frame = 0
@@ -84,8 +92,9 @@ class SkinnedMeshRenderer(MeshRenderer):
             return
 
         # Upload bone matrices if we have a skeleton
-        if self._skeleton_instance is not None:
-            bone_matrices = self._skeleton_instance.get_bone_matrices()
+        skeleton_instance = self.skeleton_instance
+        if skeleton_instance is not None:
+            bone_matrices = skeleton_instance.get_bone_matrices()
             bone_count = len(bone_matrices)
 
             # Get current shader from context and upload bone matrices
