@@ -15,12 +15,12 @@ uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
 
-out vec3 v_local_pos;
+out vec3 v_world_pos;
 out vec3 v_normal;
 
 void main() {
-    // Pass local position for grid calculation
-    v_local_pos = a_position;
+    // Pass world position for grid calculation
+    v_world_pos = (u_model * vec4(a_position, 1.0)).xyz;
     v_normal = mat3(transpose(inverse(u_model))) * a_normal;
     gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
 }
@@ -29,12 +29,12 @@ void main() {
 
 GRID_FRAG = """
 #version 330 core
-in vec3 v_local_pos;
+in vec3 v_world_pos;
 in vec3 v_normal;
 
 uniform vec4 u_color;
-uniform float u_grid_spacing;  // Grid cell size (default 1.0)
-uniform float u_line_width;    // Line width in units (default 0.02)
+uniform float u_grid_spacing;  // Grid cell size in world units (default 1.0)
+uniform float u_line_width;    // Line width in world units (default 0.02)
 
 out vec4 FragColor;
 
@@ -50,15 +50,15 @@ void main() {
     float spacing = u_grid_spacing > 0.0 ? u_grid_spacing : 1.0;
     float line_width = u_line_width > 0.0 ? u_line_width : 0.02;
 
-    // Scale position by grid spacing
-    vec3 p = v_local_pos / spacing;
+    // Use world position scaled by grid spacing
+    vec3 p = v_world_pos / spacing;
 
-    // Calculate grid lines for each axis
-    // Lines parallel to X axis (in YZ plane)
+    // Calculate grid lines for each axis (in world space)
+    // Lines parallel to X axis (in YZ plane at integer X)
     float line_x = max(grid_line(p.y, line_width), grid_line(p.z, line_width));
-    // Lines parallel to Y axis (in XZ plane)
+    // Lines parallel to Y axis (in XZ plane at integer Y)
     float line_y = max(grid_line(p.x, line_width), grid_line(p.z, line_width));
-    // Lines parallel to Z axis (in XY plane)
+    // Lines parallel to Z axis (in XY plane at integer Z)
     float line_z = max(grid_line(p.x, line_width), grid_line(p.y, line_width));
 
     // Combine all grid lines
