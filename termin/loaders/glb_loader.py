@@ -607,11 +607,10 @@ def convert_y_up_to_z_up(scene_data: GLBSceneData) -> None:
         return c @ m @ c_inv
 
     # 1. Convert vertex positions and normals in all meshes
-    # DISABLED: Testing without mesh conversion
-    # for mesh in scene_data.meshes:
-    #     mesh.vertices = convert_positions_batch(mesh.vertices)
-    #     if mesh.normals is not None:
-    #         mesh.normals = convert_positions_batch(mesh.normals)
+    for mesh in scene_data.meshes:
+        mesh.vertices = convert_positions_batch(mesh.vertices)
+        if mesh.normals is not None:
+            mesh.normals = convert_positions_batch(mesh.normals)
 
     # 2. Convert node transforms
     for node in scene_data.nodes:
@@ -622,9 +621,10 @@ def convert_y_up_to_z_up(scene_data: GLBSceneData) -> None:
         node.scale = np.array([node.scale[0], node.scale[2], node.scale[1]], dtype=np.float32)
 
     # 3. Convert inverse bind matrices
-    for skin in scene_data.skins:
-        for i in range(len(skin.inverse_bind_matrices)):
-            skin.inverse_bind_matrices[i] = convert_matrix(skin.inverse_bind_matrices[i])
+    # DISABLED: Testing without IBM conversion
+    # for skin in scene_data.skins:
+    #     for i in range(len(skin.inverse_bind_matrices)):
+    #         skin.inverse_bind_matrices[i] = convert_matrix(skin.inverse_bind_matrices[i])
 
     # 4. Convert animation keyframes
     for anim in scene_data.animations:
