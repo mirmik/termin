@@ -392,18 +392,6 @@ def instantiate_glb(
 
             root_entity.transform.add_child(mesh_entity.transform)
 
-    # Apply Z-up rotation to root entity if coordinate conversion is enabled
-    if convert_to_z_up:
-        # Rotate +90° around X axis to convert from Y-up to Z-up orientation
-        # Quaternion for +90° X rotation: [sin(45°), 0, 0, cos(45°)] = [0.707, 0, 0, 0.707]
-        z_up_rotation = np.array([0.70710678, 0, 0, 0.70710678], dtype=np.float32)
-        current_pose = root_entity.transform.local_pose()
-        # Compose rotations: new_rot = z_up_rot * current_rot
-        from termin.util import qmul
-        new_rotation = qmul(z_up_rotation, current_pose.ang)
-        new_pose = Pose3(lin=current_pose.lin, ang=new_rotation)
-        root_entity.transform.relocate(new_pose)
-
     # Setup animations
     animation_player: Optional[AnimationPlayer] = None
     if scene_data.animations:
