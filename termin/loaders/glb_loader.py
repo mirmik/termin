@@ -621,10 +621,9 @@ def convert_y_up_to_z_up(scene_data: GLBSceneData) -> None:
         node.scale = np.array([node.scale[0], node.scale[2], node.scale[1]], dtype=np.float32)
 
     # 3. Convert inverse bind matrices
-    # DISABLED: Testing without IBM conversion
-    # for skin in scene_data.skins:
-    #     for i in range(len(skin.inverse_bind_matrices)):
-    #         skin.inverse_bind_matrices[i] = convert_matrix(skin.inverse_bind_matrices[i])
+    for skin in scene_data.skins:
+        for i in range(len(skin.inverse_bind_matrices)):
+            skin.inverse_bind_matrices[i] = convert_matrix(skin.inverse_bind_matrices[i])
 
     # 4. Convert animation keyframes
     for anim in scene_data.animations:
