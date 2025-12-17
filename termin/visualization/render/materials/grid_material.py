@@ -113,6 +113,8 @@ class GridMaterial(Material):
         super().__init__(
             shader=grid_shader(),
             color=color,
-            u_grid_spacing=grid_spacing,
-            u_line_width=line_width,
+            uniforms={
+                "u_grid_spacing": grid_spacing,
+                "u_line_width": line_width,
+            },
         )
