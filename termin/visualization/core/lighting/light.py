@@ -74,8 +74,11 @@ class Light:
 
     def __post_init__(self):
         self.color = np.asarray(self.color, dtype=np.float32)
-        if self.color.shape != (3,):
-            raise ValueError("Light color must be an RGB triplet.")
+        # Accept RGBA, extract RGB
+        if self.color.shape == (4,):
+            self.color = self.color[:3]
+        elif self.color.shape != (3,):
+            raise ValueError(f"Light color must be RGB or RGBA, got shape {self.color.shape}")
 
         if self.direction is None:
             self.direction = np.array([0.0, -1.0, 0.0], dtype=np.float32)
