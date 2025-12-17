@@ -25,8 +25,7 @@ from termin.editor.drag_drop import EditorMimeTypes, parse_entity_mime_data
 from termin.visualization.core.entity_handle import EntityHandle
 
 if TYPE_CHECKING:
-    from termin.visualization.core.entity import Entity
-    from termin.visualization.core.scene import Scene
+    pass
 
 
 class EntityListWidget(QWidget):
@@ -59,7 +58,6 @@ class EntityListWidget(QWidget):
         self._handles: List[EntityHandle] = []
         self._read_only = read_only
         self._updating = False
-        self._scene: "Scene | None" = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -116,14 +114,6 @@ class EntityListWidget(QWidget):
             self._move_down_btn = None
             self._remove_btn = None
 
-    def set_scene(self, scene: "Scene | None") -> None:
-        """Set scene for resolving EntityHandles."""
-        self._scene = scene
-        # Re-resolve handles with new scene
-        for handle in self._handles:
-            handle.scene = scene
-        self._rebuild_list()
-
     def get_value(self) -> List[EntityHandle]:
         """Return current list of EntityHandles."""
         return list(self._handles)
@@ -133,10 +123,6 @@ class EntityListWidget(QWidget):
         self._updating = True
         try:
             self._handles = list(handles) if handles else []
-            # Set scene on new handles
-            if self._scene is not None:
-                for handle in self._handles:
-                    handle.scene = self._scene
             self._rebuild_list()
             self._update_buttons()
         finally:
@@ -189,11 +175,8 @@ class EntityListWidget(QWidget):
             if handle.uuid == entity_uuid:
                 return
 
-        # Create new handle
+        # Create new handle (resolves via EntityRegistry)
         handle = EntityHandle(uuid=entity_uuid)
-        if self._scene is not None:
-            handle.scene = self._scene
-
         self._handles.append(handle)
         self._rebuild_list()
         self._list.setCurrentRow(len(self._handles) - 1)

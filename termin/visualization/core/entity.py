@@ -70,6 +70,9 @@ class Entity(Identifiable):
         self.layer: int = max(0, min(63, layer))  # 0-63
         self.flags: int = flags & 0xFFFFFFFFFFFFFFFF  # 64-bit mask
 
+        # Register in global registry for EntityHandle resolution
+        from termin.visualization.core.entity_registry import EntityRegistry
+        EntityRegistry.instance().register(self)
 
     def __post_init__(self):
         self.scene: Optional["Scene"] = None
