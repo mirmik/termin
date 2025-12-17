@@ -34,6 +34,7 @@ class SkinnedMeshRenderer(MeshRenderer):
     }
 
     _DEBUG_INIT = False
+    _DEBUG_LIFECYCLE = True
 
     def __init__(
         self,
@@ -70,6 +71,27 @@ class SkinnedMeshRenderer(MeshRenderer):
     def skeleton_controller(self, value: "SkeletonController | None"):
         """Set the skeleton controller."""
         self._skeleton_controller = value
+
+    def start(self, scene) -> None:
+        """Called once before the first update. Re-acquire skeleton_controller if needed."""
+        super().start(scene)
+
+        # After deserialization, skeleton_controller may be None - try to find it
+        if self._skeleton_controller is None and self.entity is not None:
+            from termin.visualization.render.components.skeleton_controller import SkeletonController
+            # Look for SkeletonController on parent entity (typical for GLB structure)
+            parent = self.entity.transform.parent
+            if parent is not None and parent.entity is not None:
+                self._skeleton_controller = parent.entity.get_component(SkeletonController)
+            # Also check current entity
+            if self._skeleton_controller is None:
+                self._skeleton_controller = self.entity.get_component(SkeletonController)
+
+        if self._DEBUG_LIFECYCLE:
+            print(f"[SkinnedMeshRenderer.start] entity={self.entity.name if self.entity else 'None'}")
+            print(f"  skeleton_controller={self._skeleton_controller is not None}")
+            if self._skeleton_controller:
+                print(f"  skeleton_instance={self._skeleton_controller.skeleton_instance is not None}")
 
     @property
     def skeleton_instance(self) -> "SkeletonInstance | None":

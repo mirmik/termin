@@ -25,7 +25,7 @@ class AnimationPlayer(Component):
     """
 
     _DEBUG_UPDATE = False
-    _DEBUG_LIFECYCLE = True  # Debug deserialization/start issues
+    _DEBUG_LIFECYCLE = False
 
     inspect_fields = {
         **Component.inspect_fields,
