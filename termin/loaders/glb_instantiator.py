@@ -160,52 +160,6 @@ class _PendingSkinnedMesh:
         self.material = material
 
 
-def _save_mesh_uuids_to_spec(
-    path: Path,
-    existing_spec: dict | None,
-    new_mesh_uuids: Dict[str, str],
-) -> None:
-    """Save newly generated mesh UUIDs to spec file."""
-    from termin.editor.project_file_watcher import FilePreLoader
-
-    spec_data = dict(existing_spec) if existing_spec else {}
-
-    # Ensure resources.meshes structure exists
-    if "resources" not in spec_data:
-        spec_data["resources"] = {}
-    if "meshes" not in spec_data["resources"]:
-        spec_data["resources"]["meshes"] = {}
-
-    # Add new UUIDs
-    spec_data["resources"]["meshes"].update(new_mesh_uuids)
-
-    if FilePreLoader.write_spec_file(str(path), spec_data):
-        print(f"[GLB] Saved {len(new_mesh_uuids)} new mesh UUIDs to spec")
-
-
-def _save_animation_uuids_to_spec(
-    path: Path,
-    existing_spec: dict | None,
-    new_clip_uuids: Dict[str, str],
-) -> None:
-    """Save newly generated animation clip UUIDs to spec file."""
-    from termin.editor.project_file_watcher import FilePreLoader
-
-    spec_data = dict(existing_spec) if existing_spec else {}
-
-    # Ensure resources.animations structure exists
-    if "resources" not in spec_data:
-        spec_data["resources"] = {}
-    if "animations" not in spec_data["resources"]:
-        spec_data["resources"]["animations"] = {}
-
-    # Add new UUIDs
-    spec_data["resources"]["animations"].update(new_clip_uuids)
-
-    if FilePreLoader.write_spec_file(str(path), spec_data):
-        print(f"[GLB] Saved {len(new_clip_uuids)} new animation UUIDs to spec")
-
-
 def _create_entity_from_node(
     node_index: int,
     scene_data: GLBSceneData,
@@ -397,13 +351,6 @@ def instantiate_glb(
     # Collect skinned meshes that need skeleton set later
     pending_skinned: List[_PendingSkinnedMesh] = []
 
-    # Extract mesh UUIDs from spec file (for stable serialization)
-    mesh_uuids: Dict[str, str] = {}
-    if spec_data and "resources" in spec_data and "meshes" in spec_data["resources"]:
-        mesh_uuids = spec_data["resources"]["meshes"]
-    source_path_str = str(path)
-    new_mesh_uuids: Dict[str, str] = {}  # Track newly generated UUIDs
-
     # Step 1: Create Entity hierarchy first (before skeleton)
     root_entity = None
     if scene_data.root_nodes:
@@ -418,9 +365,6 @@ def instantiate_glb(
                 glb_name=name,
                 node_to_entity=node_to_entity,
                 pending_skinned=pending_skinned,
-                mesh_uuids=mesh_uuids,
-                source_path=source_path_str,
-                new_mesh_uuids=new_mesh_uuids,
             )
             root_entity.name = name
         else:
@@ -436,9 +380,6 @@ def instantiate_glb(
                     glb_name=name,
                     node_to_entity=node_to_entity,
                     pending_skinned=pending_skinned,
-                    mesh_uuids=mesh_uuids,
-                    source_path=source_path_str,
-                    new_mesh_uuids=new_mesh_uuids,
                 )
                 root_entity.transform.add_child(child_entity.transform)
     else:
@@ -448,17 +389,9 @@ def instantiate_glb(
         for i, glb_mesh in enumerate(scene_data.meshes):
             mesh_name = f"{name}_{glb_mesh.name}" if name else glb_mesh.name
 
-            # Check if already registered
             drawable = rm.meshes.get(mesh_name)
             if drawable is None:
-                # Create new MeshDrawable with UUID from spec
-                mesh3 = _glb_mesh_to_mesh3(glb_mesh)
-                drawable = MeshDrawable(mesh3, name=mesh_name)
-                mesh_uuid = mesh_uuids.get(glb_mesh.name)
-                rm.register_mesh(mesh_name, drawable, source_path=source_path_str, uuid=mesh_uuid)
-                # Track new UUID if it wasn't in spec
-                if mesh_uuid is None and drawable.asset:
-                    new_mesh_uuids[glb_mesh.name] = drawable.asset.uuid
+                raise RuntimeError(f"[glb_instantiator] Mesh '{mesh_name}' not found in ResourceManager")
 
             mesh_drawables[i] = drawable
 
@@ -466,10 +399,6 @@ def instantiate_glb(
             renderer = MeshRenderer(mesh=drawable, material=default_material)
             mesh_entity.add_component(renderer)
             root_entity.transform.add_child(mesh_entity.transform)
-
-    # Save new mesh UUIDs to spec file if any were generated
-    if new_mesh_uuids:
-        _save_mesh_uuids_to_spec(path, spec_data, new_mesh_uuids)
 
     # Step 2: Create skeleton controller with bone entities
     skeleton_controller: Optional[SkeletonController] = None
@@ -481,10 +410,7 @@ def instantiate_glb(
         skeleton_data = rm.get_skeleton(skeleton_name)
 
         if skeleton_data is None:
-            # Fallback: create and register if not found (shouldn't happen normally)
-            print(f"[GLB] WARNING: Skeleton '{skeleton_name}' not found in ResourceManager, creating...")
-            skeleton_data = _create_skeleton_from_skin(skin, scene_data.nodes)
-            rm.register_skeleton(skeleton_name, skeleton_data, source_path=str(path))
+            raise RuntimeError(f"[glb_instantiator] Skeleton '{skeleton_name}' not found in ResourceManager")
 
         # Debug: print first few bones
         print(f"[GLB] Skeleton: {len(skeleton_data.bones)} bones")
@@ -533,16 +459,11 @@ def instantiate_glb(
             clip_name = f"{name}_{glb_anim.name}"
             asset = rm.get_animation_clip_asset(clip_name)
 
-            if asset is not None and asset.clip is not None:
-                clips.append(asset.clip)
-                animation_player.add_clip(asset.clip)
-            else:
-                # Fallback: create clip directly if not found (shouldn't happen normally)
-                print(f"[GLB] WARNING: Animation clip '{clip_name}' not found in ResourceManager, creating...")
-                clip = AnimationClip.from_glb_clip(glb_anim)
-                rm.register_animation_clip(clip_name, clip, source_path=source_path_str)
-                animation_player.add_clip(clip)
-                clips.append(clip)
+            if asset is None or asset.clip is None:
+                raise RuntimeError(f"[glb_instantiator] Animation clip '{clip_name}' not found in ResourceManager")
+
+            clips.append(asset.clip)
+            animation_player.add_clip(asset.clip)
 
         if clips:
             # Add player to root entity
