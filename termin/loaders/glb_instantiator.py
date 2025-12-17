@@ -399,7 +399,7 @@ def instantiate_glb(
         z_up_rotation = np.array([0.70710678, 0, 0, 0.70710678], dtype=np.float32)
         current_pose = root_entity.transform.local_pose()
         # Compose rotations: new_rot = z_up_rot * current_rot
-        from termin.geombase.quat import qmul
+        from termin.util import qmul
         new_rotation = qmul(z_up_rotation, current_pose.ang)
         new_pose = Pose3(lin=current_pose.lin, ang=new_rotation)
         root_entity.transform.relocate(new_pose)
