@@ -353,33 +353,47 @@ def instantiate_glb(
     """
     # Read settings from spec if not explicitly provided
     from termin.editor.project_file_watcher import FilePreLoader
+    from termin.visualization.core.resources import ResourceManager
+
     spec_data = FilePreLoader.read_spec_file(str(path))
-
-    if normalize_scale is None:
-        normalize_scale = spec_data.get("normalize_scale", False) if spec_data else False
-
-    if convert_to_z_up is None:
-        convert_to_z_up = spec_data.get("convert_to_z_up", True) if spec_data else True
-
-    if blender_z_up_fix is None:
-        blender_z_up_fix = spec_data.get("blender_z_up_fix", False) if spec_data else False
-
-    print(f"[GLB] Loading: {path.name}, normalize_scale={normalize_scale}, convert_to_z_up={convert_to_z_up}, blender_z_up_fix={blender_z_up_fix}")
-
-    scene_data = load_glb_file_normalized(
-        str(path),
-        normalize_scale=normalize_scale,
-        convert_to_z_up=convert_to_z_up,
-        blender_z_up_fix=blender_z_up_fix,
-    )
 
     if name is None:
         name = path.stem
 
-    # Get materials from ResourceManager
-    from termin.visualization.core.resources import ResourceManager
-    from termin.visualization.render.materials.skinned_material import SkinnedMaterial
     rm = ResourceManager.instance()
+
+    # Try to get GLBAsset from ResourceManager by UUID (already loaded by GLBPreLoader)
+    glb_asset = None
+    glb_uuid = spec_data.get("uuid") if spec_data else None
+    if glb_uuid:
+        from termin.visualization.core.glb_asset import GLBAsset
+        asset = rm.get_asset_by_uuid(glb_uuid)
+        if isinstance(asset, GLBAsset):
+            glb_asset = asset
+
+    if glb_asset is not None and glb_asset.scene_data is not None:
+        print(f"[GLB] Using cached GLBAsset: {name} (uuid={glb_uuid})")
+        scene_data = glb_asset.scene_data
+    else:
+        # Fallback: load directly (for programmatic use without PreLoader)
+        if normalize_scale is None:
+            normalize_scale = spec_data.get("normalize_scale", False) if spec_data else False
+        if convert_to_z_up is None:
+            convert_to_z_up = spec_data.get("convert_to_z_up", True) if spec_data else True
+        if blender_z_up_fix is None:
+            blender_z_up_fix = spec_data.get("blender_z_up_fix", False) if spec_data else False
+
+        print(f"[GLB] Loading: {path.name}, normalize_scale={normalize_scale}, convert_to_z_up={convert_to_z_up}, blender_z_up_fix={blender_z_up_fix}")
+
+        scene_data = load_glb_file_normalized(
+            str(path),
+            normalize_scale=normalize_scale,
+            convert_to_z_up=convert_to_z_up,
+            blender_z_up_fix=blender_z_up_fix,
+        )
+
+    # Get materials from ResourceManager
+    from termin.visualization.render.materials.skinned_material import SkinnedMaterial
     default_material = rm.get_material("DefaultMaterial")
     if default_material is None:
         # Fallback if not registered yet - register it
