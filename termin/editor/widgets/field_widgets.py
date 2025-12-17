@@ -583,5 +583,10 @@ class FieldWidgetFactory:
 
             return Vec3ListWidget()
 
+        if kind == "entity_list":
+            from termin.editor.widgets.entity_list_widget import EntityListWidget
+
+            return EntityListWidget(read_only=field.read_only)
+
         # Fallback: read-only string
         return StringFieldWidget(read_only=True)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, List, Optional
 
+from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component
 from termin.skeleton.skeleton import SkeletonData, SkeletonInstance
 
@@ -22,6 +23,17 @@ class SkeletonController(Component):
         - SkeletonData is serialized inline
         - Bone entities are stored as names and resolved on load
     """
+
+    inspect_fields = {
+        **Component.inspect_fields,
+        "bone_entities": InspectField(
+            label="Bone Entities",
+            kind="entity_list",
+            read_only=True,
+            getter=lambda self: self._bone_entity_names or [],
+            non_serializable=True,  # Serialized separately via serialize_data
+        ),
+    }
 
     def __init__(
         self,

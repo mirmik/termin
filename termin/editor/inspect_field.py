@@ -20,6 +20,7 @@ class InspectField:
     getter, setter – если нужно обращаться к полю вручную.
     non_serializable – при True поле не попадает в сохранённые данные
     action    – для kind='button': callable, вызывается при нажатии (принимает объект)
+    read_only – виджет будет только для чтения
     """
     path: str | None = None
     label: str | None = None
@@ -32,6 +33,7 @@ class InspectField:
     setter: Optional[Callable[[Any, Any], None]] = None
     non_serializable: bool = False
     action: Optional[Callable[[Any], None]] = None
+    read_only: bool = False
 
     def get_value(self, obj):
         if self.getter:
@@ -100,6 +102,7 @@ class InspectAttr:
         setter: Optional[Callable[[Any, Any], None]] = None,
         non_serializable: bool = False,
         action: Optional[Callable[[Any], None]] = None,
+        read_only: bool = False,
     ):
         self.default = default
         self._field = InspectField(
@@ -114,6 +117,7 @@ class InspectAttr:
             setter=setter,
             non_serializable=non_serializable,
             action=action,
+            read_only=read_only,
         )
         self._name: str | None = None
 
