@@ -145,7 +145,7 @@ class SkeletonInstance:
             rotation: Quaternion (4,) as [x, y, z, w] or None
             scale: Scale (3,) or uniform float, or None
         """
-        from termin.geombase.pose3 import Pose3
+        from termin.geombase.general_pose3 import GeneralPose3
 
         entity = self.get_bone_entity_by_name(bone_name)
         if entity is None:
@@ -153,20 +153,19 @@ class SkeletonInstance:
 
         # Update Entity transform
         pose = entity.transform.local_pose()
+        new_lin = np.asarray(translation, dtype=np.float64) if translation is not None else pose.lin
+        new_ang = np.asarray(rotation, dtype=np.float64) if rotation is not None else pose.ang
 
-        if translation is not None:
-            pose = Pose3(lin=np.asarray(translation, dtype=np.float64), ang=pose.ang)
-        if rotation is not None:
-            pose = Pose3(lin=pose.lin, ang=np.asarray(rotation, dtype=np.float64))
-
-        entity.transform.relocate(pose)
-
-        # Scale is separate on Entity
         if scale is not None:
             if isinstance(scale, (int, float)):
-                entity.scale = float(scale)
+                new_scale = np.full(3, float(scale), dtype=np.float64)
             else:
-                entity.scale = np.asarray(scale, dtype=np.float64)
+                new_scale = np.asarray(scale, dtype=np.float64)
+        else:
+            new_scale = pose.scale
+
+        new_pose = GeneralPose3(lin=new_lin, ang=new_ang, scale=new_scale)
+        entity.transform.relocate(new_pose)
 
     def update(self) -> None:
         """

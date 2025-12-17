@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6 import QtCore
 
 from termin.geombase.pose3 import Pose3
+from termin.geombase.general_pose3 import GeneralPose3
 from termin.mesh.mesh import CubeMesh
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.core.entity import Entity
@@ -45,8 +46,10 @@ def build_physics_scene(world):
     # Ground plane (visual only - physics uses world.ground_height)
     ground = Entity(pose=Pose3.identity(), name="ground")
     ground.add_component(MeshRenderer(cube_drawable, gray_material))
-    ground.transform.relocate(Pose3.identity().with_translation(np.array([0, 0, -0.05])))
-    ground.scale = np.array([10.0, 10.0, 0.1])
+    ground.transform.relocate(GeneralPose3(
+        lin=np.array([0, 0, -0.05]),
+        scale=np.array([10.0, 10.0, 0.1])
+    ))
     scene.add(ground)
 
     # Falling cube 1

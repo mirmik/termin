@@ -25,7 +25,6 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
 from termin.geombase.general_pose3 import GeneralPose3
-from termin.geombase.pose3 import Pose3
 from termin.visualization.core.resources import ResourceManager
 from termin.editor.inspect_field import InspectField
 from termin.editor.undo_stack import UndoCommand
@@ -123,7 +122,7 @@ class TransformInspector(QWidget):
                 return
 
             self._set_enabled(True)
-            pose: GeneralPose3 = self._transform.global_pose()
+            pose: GeneralPose3 = self._transform.local_pose()
 
             px, py, pz = pose.lin
             x, y, z, w = pose.ang
@@ -136,8 +135,8 @@ class TransformInspector(QWidget):
             self._rot[1].setValue(float(ay))
             self._rot[2].setValue(float(az))
 
-            # Scale is now in the local pose
-            s = self._transform.local_pose().scale
+            # Scale
+            s = pose.scale
             self._scale[0].setValue(float(s[0]))
             self._scale[1].setValue(float(s[1]))
             self._scale[2].setValue(float(s[2]))
@@ -207,11 +206,10 @@ class TransformInspector(QWidget):
         if self._transform is None:
             return
 
-        # Снимок старого состояния до применения правки из UI
-        old_pose: GeneralPose3 = self._transform.global_pose()
-        old_scale = self._transform.local_pose().scale.copy()
+        # Снимок старого состояния до применения правки из UI (локальная поза)
+        old_pose: GeneralPose3 = self._transform.local_pose()
 
-        # Новые значения из спинбоксов
+        # Новые значения из спинбоксов (локальные координаты)
         px = self._pos[0].value()
         py = self._pos[1].value()
         pz = self._pos[2].value()
@@ -234,15 +232,13 @@ class TransformInspector(QWidget):
             cmd = TransformEditCommand(
                 transform=self._transform,
                 old_pose=old_pose,
-                old_scale=old_scale,
                 new_pose=new_pose,
-                new_scale=new_scale,
             )
             # В инспекторе удобно склеивать серию мелких правок
             # (пока пользователь крутит спинбоксы) в одну команду.
             self._push_undo_command(cmd, True)
         else:
             # Режим без undo-стека — применяем напрямую.
-            self._transform.relocate_global(new_pose)
+            self._transform.relocate(new_pose)
 
         self.transform_changed.emit()

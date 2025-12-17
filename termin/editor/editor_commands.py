@@ -6,22 +6,19 @@ import numpy as np
 
 from termin.editor.undo_stack import UndoCommand
 from termin.geombase.general_pose3 import GeneralPose3
-from termin.geombase.pose3 import Pose3
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
 from termin.editor.inspect_field import InspectField
 
 
-def _clone_pose(pose: GeneralPose3 | Pose3) -> GeneralPose3 | Pose3:
+def _clone_pose(pose: GeneralPose3) -> GeneralPose3:
     """
     Создаёт независимую копию позы.
 
     Массивы угла и смещения копируются, чтобы последующие
     изменения позы не портили снимок для undo/redo.
     """
-    if isinstance(pose, GeneralPose3):
-        return GeneralPose3(ang=pose.ang.copy(), lin=pose.lin.copy(), scale=pose.scale.copy())
-    return Pose3(ang=pose.ang.copy(), lin=pose.lin.copy())
+    return GeneralPose3(ang=pose.ang.copy(), lin=pose.lin.copy(), scale=pose.scale.copy())
 
 
 def _clone_value(value: Any) -> Any:
@@ -49,25 +46,19 @@ class TransformEditCommand(UndoCommand):
         self,
         transform: GeneralTransform3,
         old_pose: GeneralPose3,
-        old_scale: np.ndarray,
         new_pose: GeneralPose3,
-        new_scale: np.ndarray,
         text: str = "Transform change",
     ) -> None:
         super().__init__(text)
         self._transform = transform
         self._old_pose = _clone_pose(old_pose)
-        self._old_scale = np.asarray(old_scale, dtype=float).copy()
         self._new_pose = _clone_pose(new_pose)
-        self._new_scale = np.asarray(new_scale, dtype=float).copy()
 
     def do(self) -> None:
-        # Scale is part of GeneralPose3
-        self._transform.relocate_global(self._new_pose)
+        self._transform.relocate(self._new_pose)
 
     def undo(self) -> None:
-        # _old_pose is already GeneralPose3 with correct global scale
-        self._transform.relocate_global(self._old_pose)
+        self._transform.relocate(self._old_pose)
 
     def merge_with(self, other: UndoCommand) -> bool:
         """
@@ -82,7 +73,6 @@ class TransformEditCommand(UndoCommand):
             return False
 
         self._new_pose = _clone_pose(other._new_pose)
-        self._new_scale = np.asarray(other._new_scale, dtype=float).copy()
         return True
 
 

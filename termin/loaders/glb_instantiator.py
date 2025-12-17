@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from termin.geombase.pose3 import Pose3
+from termin.geombase.general_pose3 import GeneralPose3
 from termin.mesh.mesh import Mesh3
 from termin.mesh.skinned_mesh import SkinnedMesh3
 from termin.skeleton.bone import Bone
@@ -442,13 +443,12 @@ def instantiate_glb(
                 # Rotate orientation by +90°X
                 new_child_rot = qmul(pos_90_x, child_pose.ang)
 
-                child_transform.relocate(Pose3(lin=new_lin, ang=new_child_rot))
-
                 # Swap Y and Z in scale
-                child_entity = child_transform.entity
-                old_scale = child_entity.scale
-                if hasattr(old_scale, '__len__') and len(old_scale) == 3:
-                    child_entity.scale = np.array([old_scale[0], old_scale[2], old_scale[1]], dtype=np.float32)
+                child_pose = child_transform.local_pose()
+                old_scale = child_pose.scale
+                new_scale = np.array([old_scale[0], old_scale[2], old_scale[1]], dtype=np.float64)
+
+                child_transform.relocate(GeneralPose3(lin=new_lin, ang=new_child_rot, scale=new_scale))
 
     # Setup animations
     animation_player: Optional[AnimationPlayer] = None

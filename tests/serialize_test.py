@@ -10,10 +10,8 @@ from termin.visualization.core.entity import Component
 import numpy as np
 from termin.visualization.core.entity import Entity, Component
 from termin.geombase.pose3 import Pose3
+from termin.geombase.general_pose3 import GeneralPose3
 from termin.visualization.core.scene import Scene
-from termin.visualization.core.entity import Entity
-from termin.geombase.pose3 import Pose3
-from termin.visualization.core.entity import Component
 
 
 @serializable(fields=["x"])
@@ -77,7 +75,7 @@ def test_component_roundtrip():
 
 
 def test_entity_serialize_deserialize():
-    e = Entity(pose=Pose3.identity(), name="test", scale=2.0, priority=3)
+    e = Entity(pose=GeneralPose3(scale=np.array([2.0, 2.0, 2.0])), name="test", priority=3)
     e.add_component(C(x=123))
 
     data = e.serialize()
@@ -87,8 +85,9 @@ def test_entity_serialize_deserialize():
     e2 = Entity.deserialize(data, DummyContext())
 
     assert e2.name == "test"
-    assert isinstance(e2.scale, np.ndarray)
-    np.testing.assert_array_almost_equal(e2.scale, np.array([2.0, 2.0, 2.0]))
+    scale = e2.transform.local_pose().scale
+    assert isinstance(scale, np.ndarray)
+    np.testing.assert_array_almost_equal(scale, np.array([2.0, 2.0, 2.0]))
     assert e2.priority == 3
     assert len(e2.components) == 1
     assert e2.components[0].x == 123

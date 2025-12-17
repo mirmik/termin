@@ -8,6 +8,7 @@ from PyQt6 import QtCore
 
 from termin.editor.editor_window import EditorWindow
 from termin.geombase.pose3 import Pose3
+from termin.geombase.general_pose3 import GeneralPose3
 from termin.mesh.mesh import CubeMesh, CylinderMesh, Mesh3
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.core.entity import Entity
@@ -54,8 +55,11 @@ def build_scene(world):
 
     panel = Entity(pose=Pose3.identity(), name="cube2")
     panel.add_component(MeshRenderer(drawable, blue_material))
-    panel.transform.relocate(Pose3(lin=np.array([0.0, 0.0, -3.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
-    panel.scale = np.array([10.0, 10.0, 0.1])
+    panel.transform.relocate(GeneralPose3(
+        lin=np.array([0.0, 0.0, -3.0]),
+        ang=np.array([0.0, 0.0, 0.0, 1.0]),
+        scale=np.array([10.0, 10.0, 0.1])
+    ))
     scene.add(panel)
 
 

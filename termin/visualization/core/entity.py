@@ -34,7 +34,6 @@ class Entity(Identifiable):
         self,
         pose: Pose3 | GeneralPose3 = None,
         name: str = "entity",
-        scale: float | np.ndarray = 1.0,
         priority: int = 0,
         pickable: bool = True,
         selectable: bool = True,
@@ -44,33 +43,16 @@ class Entity(Identifiable):
         uuid: str | None = None,
     ):
         super().__init__(uuid=uuid)
-        # Convert scale to numpy array
-        if scale is None:
-            scale_arr = np.array([1.0, 1.0, 1.0], dtype=np.float64)
-        elif isinstance(scale, (int, float)):
-            scale_arr = np.full(3, float(scale), dtype=np.float64)
-        else:
-            scale_arr = np.array(scale, dtype=np.float64)
-            if scale_arr.shape == ():
-                scale_arr = np.full(3, float(scale_arr), dtype=np.float64)
-            elif scale_arr.shape != (3,):
-                raise ValueError(f"Entity.scale must be scalar or length-3, got shape {scale_arr.shape}")
-
         # Convert pose to GeneralPose3
         if pose is None:
-            general_pose = GeneralPose3(scale=scale_arr)
+            general_pose = GeneralPose3()
         elif isinstance(pose, GeneralPose3):
-            general_pose = GeneralPose3(
-                ang=pose.ang.copy(),
-                lin=pose.lin.copy(),
-                scale=scale_arr
-            )
+            general_pose = pose.copy()
         else:
-            # Pose3
+            # Pose3 -> GeneralPose3
             general_pose = GeneralPose3(
                 ang=pose.ang.copy(),
                 lin=pose.lin.copy(),
-                scale=scale_arr
             )
 
         self.transform = GeneralTransform3(general_pose)
@@ -88,27 +70,6 @@ class Entity(Identifiable):
         self.layer: int = max(0, min(63, layer))  # 0-63
         self.flags: int = flags & 0xFFFFFFFFFFFFFFFF  # 64-bit mask
 
-    @property
-    def scale(self) -> np.ndarray:
-        """Get scale from local pose."""
-        return self.transform.local_pose().scale
-
-    @scale.setter
-    def scale(self, value):
-        """Set scale in local pose."""
-        if isinstance(value, (int, float)):
-            arr = np.full(3, float(value), dtype=np.float64)
-        else:
-            arr = np.array(value, dtype=np.float64)
-            if arr.shape == ():
-                arr = np.full(3, float(arr), dtype=np.float64)
-            elif arr.shape != (3,):
-                raise ValueError(f"Entity.scale must be scalar or length-3, got shape {arr.shape}")
-
-        local_pose = self.transform.local_pose()
-        local_pose.scale = arr
-        local_pose.invalidate_cache()
-        self.transform._mark_dirty()
 
     def __post_init__(self):
         self.scene: Optional["Scene"] = None
@@ -257,12 +218,12 @@ class Entity(Identifiable):
         import numpy as np
 
         ent = cls(
-            pose=Pose3(
+            pose=GeneralPose3(
                 lin=np.array(data["pose"]["position"]),
                 ang=np.array(data["pose"]["rotation"]),
+                scale=np.array(data.get("scale", [1.0, 1.0, 1.0])),
             ),
             name=data["name"],
-            scale=np.array(data.get("scale", [1.0, 1.0, 1.0])),
             priority=data.get("priority", 0),
             pickable=data.get("pickable", True),
             selectable=data.get("selectable", True),

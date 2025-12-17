@@ -501,13 +501,7 @@ class GizmoMoveController(InputComponent):
         tf = self._drag_transform
         end_pose = tf.global_pose()
 
-        ent = tf.entity
-        end_scale = None
-        if ent is not None:
-            try:
-                end_scale = np.asarray(ent.scale, dtype=float)
-            except Exception:
-                end_scale = None
+        end_scale = tf.local_pose().scale.copy()
 
         start_scale = self._start_scale
         if start_scale is None and end_scale is not None:
@@ -576,11 +570,7 @@ class GizmoMoveController(InputComponent):
 
         self._drag_transform = self.target.transform
         self._start_pose = pose
-        ent = self.target
-        try:
-            self._start_scale = np.asarray(ent.scale, dtype=float).copy()
-        except Exception:
-            self._start_scale = None
+        self._start_scale = self.target.transform.local_pose().scale.copy()
 
         self.axis_vec = self._get_axis_vector(axis)
         self.axis_point = self.start_target_pos.copy()
@@ -671,11 +661,7 @@ class GizmoMoveController(InputComponent):
 
         self._drag_transform = self.target.transform
         self._start_pose = pose
-        ent = self.target
-        try:
-            self._start_scale = np.asarray(ent.scale, dtype=float).copy()
-        except Exception:
-            self._start_scale = None
+        self._start_scale = self.target.transform.local_pose().scale.copy()
 
         # мировая ось вращения – та же, что и направление стрелки/кольца
         self.rot_axis = self._get_axis_vector(axis)

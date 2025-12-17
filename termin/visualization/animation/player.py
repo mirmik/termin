@@ -6,6 +6,7 @@ import numpy as np
 
 from termin.visualization.core.entity import Component
 from termin.geombase.pose3 import Pose3
+from termin.geombase.general_pose3 import GeneralPose3
 from .clip import AnimationClip
 
 if TYPE_CHECKING:
@@ -123,20 +124,25 @@ class AnimationPlayer(Component):
 
         channel_data = sample["clip"]
 
-        pose: Pose3 = self.entity.transform.local_pose()
+        pose: GeneralPose3 = self.entity.transform.local_pose()
 
         tr = channel_data[0]
         rot = channel_data[1]
         sc = channel_data[2]
 
-        if tr is not None:
-            pose = pose.with_translation(tr)
-        if rot is not None:
-            pose = pose.with_rotation(rot)
+        new_lin = np.asarray(tr, dtype=np.float64) if tr is not None else pose.lin
+        new_ang = np.asarray(rot, dtype=np.float64) if rot is not None else pose.ang
 
-        # Update pose
-        self.entity.transform.relocate(pose)
-
-        # Scale is a separate field on Entity
         if sc is not None:
-            self.entity.scale = float(sc[0]) if hasattr(sc, '__len__') else float(sc)
+            # sc can be scalar or array
+            if isinstance(sc, (int, float)):
+                new_scale = np.full(3, float(sc), dtype=np.float64)
+            elif len(sc) == 1:
+                new_scale = np.full(3, float(sc[0]), dtype=np.float64)
+            else:
+                new_scale = np.asarray(sc, dtype=np.float64)
+        else:
+            new_scale = pose.scale
+
+        new_pose = GeneralPose3(lin=new_lin, ang=new_ang, scale=new_scale)
+        self.entity.transform.relocate(new_pose)
