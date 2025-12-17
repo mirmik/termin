@@ -320,19 +320,29 @@ def instantiate_glb(
         # Find skeleton root transform (Armature node that contains the skeleton)
         # This is the parent of the first joint, which contains the export scale
         skeleton_root_transform = None
+        armature_node_idx = None
         first_joint_idx = skin.joint_node_indices[0] if skin.joint_node_indices else None
         if first_joint_idx is not None:
-            # Find parent of first joint
+            # Find parent of first joint (Armature node)
             for node_idx, node in enumerate(scene_data.nodes):
                 if first_joint_idx in node.children:
+                    armature_node_idx = node_idx
                     print(f"[GLB] Armature node: {node.name!r}")
                     print(f"  translation: {node.translation}")
-                    print(f"  rotation: {node.rotation}")
+                    print(f"  rotation: {node.rotation} (will be removed - coordinate conversion artifact)")
                     print(f"  scale: {node.scale}")
-                    # Compute root transform matrix from TRS
+
+                    # The Armature's rotation is a coordinate conversion artifact from Blender
+                    # (converts from Blender Z-up to glTF Y-up). Since we already convert
+                    # mesh vertices and skeleton data to Z-up, this rotation should be identity.
+                    # Keep only scale (export scale from Blender).
+                    identity_rotation = np.array([0, 0, 0, 1], dtype=np.float32)
                     skeleton_root_transform = _compute_trs_matrix(
-                        node.translation, node.rotation, node.scale
+                        node.translation, identity_rotation, node.scale
                     )
+
+                    # Also fix the node's rotation so Entity doesn't get the artifact
+                    node.rotation = identity_rotation
                     break
 
         skeleton_instance = SkeletonInstance(skeleton_data, root_transform=skeleton_root_transform)
