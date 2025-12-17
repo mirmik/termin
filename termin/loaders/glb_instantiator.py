@@ -392,6 +392,28 @@ def instantiate_glb(
 
             root_entity.transform.add_child(mesh_entity.transform)
 
+    # Fix coordinate conversion rotation artifact
+    # Armature has -90°X rotation from Blender export, we remove it and compensate in children
+    if convert_to_z_up and root_entity is not None:
+        from termin.util import qmul
+
+        # -90°X quaternion to remove from root
+        neg_90_x = np.array([-0.70710678, 0, 0, 0.70710678], dtype=np.float32)
+        # +90°X quaternion to add to children
+        pos_90_x = np.array([0.70710678, 0, 0, 0.70710678], dtype=np.float32)
+
+        # Rotate root by -90°X (effectively removing the export artifact)
+        root_pose = root_entity.transform.local_pose()
+        new_root_rot = qmul(neg_90_x, root_pose.ang)
+        root_entity.transform.relocate(Pose3(lin=root_pose.lin, ang=new_root_rot))
+
+        # Compensate in direct children by rotating +90°X
+        for child_transform in root_entity.transform.children:
+            if child_transform.entity is not None:
+                child_pose = child_transform.local_pose()
+                new_child_rot = qmul(pos_90_x, child_pose.ang)
+                child_transform.relocate(Pose3(lin=child_pose.lin, ang=new_child_rot))
+
     # Setup animations
     animation_player: Optional[AnimationPlayer] = None
     if scene_data.animations:
