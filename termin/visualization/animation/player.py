@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np
 
 from termin.visualization.core.entity import Component
+from termin.visualization.core.animation_clip_handle import AnimationClipHandle
+from termin.editor.inspect_field import InspectField
 from termin.geombase.pose3 import Pose3
 from termin.geombase.general_pose3 import GeneralPose3
 from .clip import AnimationClip
@@ -24,18 +26,57 @@ class AnimationPlayer(Component):
 
     _DEBUG_UPDATE = False
 
+    inspect_fields = {
+        **Component.inspect_fields,
+        "clips": InspectField(
+            label="Animation Clips",
+            kind="animation_clip_list",
+            getter=lambda self: self._clip_handles,
+            setter=lambda self, v: self._set_clip_handles(v),
+        ),
+        "_current_clip_name": InspectField(
+            path="_current_clip_name",
+            label="Current Clip",
+            kind="str",
+        ),
+        "playing": InspectField(
+            path="playing",
+            label="Playing",
+            kind="bool",
+        ),
+    }
+
     def __init__(self, enabled: bool = True):
         super().__init__(enabled=enabled)
-        self.clips: Dict[str, AnimationClip] = {}
+        self._clip_handles: List[AnimationClipHandle] = []
+        self.clips: Dict[str, AnimationClip] = {}  # Cache for quick lookup
         self.current: Optional[AnimationClip] = None
+        self._current_clip_name: str = ""  # For serialization
         self.time: float = 0.0
         self.playing: bool = False
         self._target_skeleton: "SkeletonInstance | None" = None
+
+    def _set_clip_handles(self, handles: List[AnimationClipHandle] | None) -> None:
+        """Setter for clips InspectField."""
+        self._clip_handles = handles if handles else []
+        self._rebuild_clips_cache()
+
+    def _rebuild_clips_cache(self) -> None:
+        """Rebuild clips dict from handles."""
+        self.clips.clear()
+        for handle in self._clip_handles:
+            clip = handle.clip
+            if clip is not None:
+                self.clips[clip.name] = clip
 
     def start(self, scene: "Scene") -> None:
         """Called once before the first update. Find SkeletonController on entity."""
         super().start(scene)
         self._acquire_skeleton()
+        self._rebuild_clips_cache()
+        # Resume playing if we have a current clip name
+        if self._current_clip_name and self._current_clip_name in self.clips:
+            self.current = self.clips[self._current_clip_name]
 
     def _acquire_skeleton(self) -> None:
         """Find SkeletonController on entity and get skeleton_instance."""
@@ -58,7 +99,17 @@ class AnimationPlayer(Component):
         self._target_skeleton = value
 
     def add_clip(self, clip: AnimationClip) -> AnimationClip:
+        """Add animation clip to the player."""
         self.clips[clip.name] = clip
+        # Create handle from asset if registered, otherwise direct
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
+        asset = rm.get_animation_clip_asset(clip.name)
+        if asset is not None:
+            handle = AnimationClipHandle.from_asset(asset)
+        else:
+            handle = AnimationClipHandle.from_direct(clip)
+        self._clip_handles.append(handle)
         return clip
 
     def play(self, name: str, restart: bool = True):
@@ -70,6 +121,7 @@ class AnimationPlayer(Component):
             self.time = 0.0
 
         self.current = clip
+        self._current_clip_name = name  # Store for serialization
         self.playing = True
 
     def stop(self):

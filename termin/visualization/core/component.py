@@ -142,6 +142,18 @@ class Component:
                         elif isinstance(item, str):
                             uuids.append(item)
                     value = uuids
+                # animation_clip_list: List[AnimationClipHandle] → list of UUIDs
+                elif kind == "animation_clip_list" and isinstance(value, (tuple, list)):
+                    from termin.visualization.core.animation_clip_handle import AnimationClipHandle
+                    uuids = []
+                    for item in value:
+                        if isinstance(item, AnimationClipHandle):
+                            asset = item.asset
+                            if asset is not None:
+                                uuids.append(asset.uuid)
+                        elif isinstance(item, str):
+                            uuids.append(item)
+                    value = uuids
 
                 if value is not None:
                     result[key] = value
@@ -248,6 +260,15 @@ class Component:
                     # Convert list of UUID strings to List[EntityHandle]
                     from termin.visualization.core.entity_handle import EntityHandle
                     value = [EntityHandle(uuid=uuid_str) for uuid_str in value]
+                elif kind == "animation_clip_list" and isinstance(value, list):
+                    # Convert list of UUIDs to List[AnimationClipHandle]
+                    from termin.visualization.core.animation_clip_handle import AnimationClipHandle
+                    handles = []
+                    for clip_uuid in value:
+                        handle = AnimationClipHandle.from_uuid(clip_uuid)
+                        if handle.clip is not None:
+                            handles.append(handle)
+                    value = handles
 
                 # Устанавливаем значение через setter или напрямую
                 if field.setter:

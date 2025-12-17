@@ -183,6 +183,29 @@ def _save_mesh_uuids_to_spec(
         print(f"[GLB] Saved {len(new_mesh_uuids)} new mesh UUIDs to spec")
 
 
+def _save_animation_uuids_to_spec(
+    path: Path,
+    existing_spec: dict | None,
+    new_clip_uuids: Dict[str, str],
+) -> None:
+    """Save newly generated animation clip UUIDs to spec file."""
+    from termin.editor.project_file_watcher import FilePreLoader
+
+    spec_data = dict(existing_spec) if existing_spec else {}
+
+    # Ensure resources.animations structure exists
+    if "resources" not in spec_data:
+        spec_data["resources"] = {}
+    if "animations" not in spec_data["resources"]:
+        spec_data["resources"]["animations"] = {}
+
+    # Add new UUIDs
+    spec_data["resources"]["animations"].update(new_clip_uuids)
+
+    if FilePreLoader.write_spec_file(str(path), spec_data):
+        print(f"[GLB] Saved {len(new_clip_uuids)} new animation UUIDs to spec")
+
+
 def _create_entity_from_node(
     node_index: int,
     scene_data: GLBSceneData,
@@ -507,12 +530,35 @@ def instantiate_glb(
     if scene_data.animations:
         clips = _create_animation_clips(scene_data)
 
+    # Extract animation UUIDs from spec file
+    clip_uuids: Dict[str, str] = {}
+    if spec_data and "resources" in spec_data and "animations" in spec_data["resources"]:
+        clip_uuids = spec_data["resources"]["animations"]
+    new_clip_uuids: Dict[str, str] = {}
+
     if clips:
         animation_player = AnimationPlayer()
         # AnimationPlayer will acquire skeleton from SkeletonController in start()
 
         for clip in clips:
-            animation_player.add_clip(clip)
+            # Register clip as asset with stable UUID
+            original_clip_name = clip.name
+            clip_name = f"{name}_{original_clip_name}" if name else original_clip_name
+            existing_asset = rm.get_animation_clip_asset(clip_name)
+
+            if existing_asset is None:
+                clip_uuid = clip_uuids.get(original_clip_name)
+                rm.register_animation_clip(clip_name, clip, source_path=source_path_str, uuid=clip_uuid)
+                # Track new UUID if it wasn't in spec
+                asset = rm.get_animation_clip_asset(clip_name)
+                if clip_uuid is None and asset is not None:
+                    new_clip_uuids[original_clip_name] = asset.uuid
+                animation_player.add_clip(clip)
+            else:
+                # Use clip from existing asset
+                existing_clip = existing_asset.clip
+                if existing_clip is not None:
+                    animation_player.add_clip(existing_clip)
 
         # Add player to root entity
         root_entity.add_component(animation_player)
@@ -523,6 +569,10 @@ def instantiate_glb(
         print(f"[GLB] Available animations: {[(c.name, f'{c.duration:.2f}s') for c in clips]}")
         print(f"[GLB] Auto-playing: {best_clip.name!r} (duration={best_clip.duration:.2f}s)")
         animation_player.play(best_clip.name)
+
+    # Save new animation UUIDs to spec file if any were generated
+    if new_clip_uuids:
+        _save_animation_uuids_to_spec(path, spec_data, new_clip_uuids)
 
     return GLBInstantiateResult(
         entity=root_entity,

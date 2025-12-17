@@ -54,6 +54,16 @@ class AnimationClipHandle(ResourceHandle["AnimationClip", "AnimationClipAsset"])
             return cls.from_asset(asset)
         return cls()
 
+    @classmethod
+    def from_uuid(cls, uuid: str) -> "AnimationClipHandle":
+        """Создать handle по UUID (lookup в ResourceManager)."""
+        from termin.visualization.core.resources import ResourceManager
+
+        asset = ResourceManager.instance().get_animation_clip_asset_by_uuid(uuid)
+        if asset is not None:
+            return cls.from_asset(asset)
+        return cls()
+
     # --- Resource extraction ---
 
     def _get_resource_from_asset(self, asset: "AnimationClipAsset") -> "AnimationClip | None":

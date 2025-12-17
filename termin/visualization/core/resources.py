@@ -1189,7 +1189,7 @@ class ResourceManager:
         return self._animation_clip_assets.get(name)
 
     def register_animation_clip(
-        self, name: str, clip: "AnimationClip", source_path: str | None = None
+        self, name: str, clip: "AnimationClip", source_path: str | None = None, uuid: str | None = None
     ) -> None:
         """
         Регистрирует AnimationClip.
@@ -1198,12 +1198,14 @@ class ResourceManager:
             name: Имя клипа
             clip: AnimationClip
             source_path: Путь к файлу-источнику (.tanim)
+            uuid: UUID для ассета (если None, генерируется автоматически)
         """
         from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
 
         clip.name = name
-        asset = AnimationClipAsset.from_clip(clip, name=name, source_path=source_path)
+        asset = AnimationClipAsset(clip=clip, name=name, source_path=source_path, uuid=uuid)
         self._animation_clip_assets[name] = asset
+        self._assets_by_uuid[asset.uuid] = asset
         # Для обратной совместимости
         self.animation_clips[name] = clip
 
@@ -1213,6 +1215,15 @@ class ResourceManager:
         if asset is not None:
             return asset.clip
         return self.animation_clips.get(name)
+
+    def get_animation_clip_asset_by_uuid(self, uuid: str) -> Optional["AnimationClipAsset"]:
+        """Получить AnimationClipAsset по UUID."""
+        from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, AnimationClipAsset):
+            return asset
+        return None
 
     def list_animation_clip_names(self) -> list[str]:
         """Список имён всех AnimationClip."""
