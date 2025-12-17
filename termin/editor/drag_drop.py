@@ -34,10 +34,11 @@ def create_entity_mime_data(entity: "Entity") -> QMimeData:
     """
     Create QMimeData for dragging an Entity.
 
-    Stores entity name as JSON for lookup on drop.
+    Stores entity UUID and name as JSON for lookup on drop.
     """
     mime = QMimeData()
     data = {
+        "entity_uuid": entity.uuid,
         "entity_name": entity.name,
     }
     mime.setData(EditorMimeTypes.ENTITY, json.dumps(data).encode("utf-8"))
@@ -48,7 +49,7 @@ def parse_entity_mime_data(mime: QMimeData) -> dict | None:
     """
     Parse entity data from QMimeData.
 
-    Returns dict with 'entity_name' or None if not valid.
+    Returns dict with 'entity_uuid' and 'entity_name' or None if not valid.
     """
     if not mime.hasFormat(EditorMimeTypes.ENTITY):
         return None

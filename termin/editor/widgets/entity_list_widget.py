@@ -19,27 +19,29 @@ from PyQt6.QtWidgets import (
     QLabel,
     QAbstractItemView,
 )
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtCore import pyqtSignal
 
 from termin.editor.drag_drop import EditorMimeTypes, parse_entity_mime_data
+from termin.visualization.core.entity_handle import EntityHandle
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
+    from termin.visualization.core.scene import Scene
 
 
 class EntityListWidget(QWidget):
     """
-    Widget for editing a list of Entity references.
+    Widget for editing a list of Entity references via EntityHandle.
 
     Features:
-    - Displays entity names in a list
+    - Displays entity names in a list (resolved from EntityHandle)
     - Drag-drop from SceneTree to add entities
     - Reorder buttons (up/down)
     - Remove button
     - Read-only mode
 
-    The widget stores entity names (strings), not Entity objects directly.
-    Resolution to actual Entity objects happens via a resolver callback.
+    The widget stores EntityHandle objects internally.
+    Serialization converts to/from UUID strings.
 
     Signals:
         value_changed: Emitted when the list changes.
@@ -54,12 +56,10 @@ class EntityListWidget(QWidget):
     ):
         super().__init__(parent)
 
-        self._entity_names: List[str] = []
+        self._handles: List[EntityHandle] = []
         self._read_only = read_only
         self._updating = False
-
-        # Callback to resolve entity name to Entity object
-        self._entity_resolver: Optional[Callable[[str], Optional["Entity"]]] = None
+        self._scene: "Scene | None" = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -116,53 +116,51 @@ class EntityListWidget(QWidget):
             self._move_down_btn = None
             self._remove_btn = None
 
-    def set_entity_resolver(
-        self, resolver: Optional[Callable[[str], Optional["Entity"]]]
-    ) -> None:
-        """Set callback to resolve entity name to Entity object."""
-        self._entity_resolver = resolver
+    def set_scene(self, scene: "Scene | None") -> None:
+        """Set scene for resolving EntityHandles."""
+        self._scene = scene
+        # Re-resolve handles with new scene
+        for handle in self._handles:
+            handle.scene = scene
+        self._rebuild_list()
 
-    def get_value(self) -> List[str]:
-        """Return current list of entity names."""
-        return list(self._entity_names)
+    def get_value(self) -> List[EntityHandle]:
+        """Return current list of EntityHandles."""
+        return list(self._handles)
 
-    def set_value(self, names: Optional[List[str]]) -> None:
-        """Set list of entity names."""
+    def set_value(self, handles: Optional[List[EntityHandle]]) -> None:
+        """Set list of EntityHandles."""
         self._updating = True
         try:
-            self._entity_names = list(names) if names else []
+            self._handles = list(handles) if handles else []
+            # Set scene on new handles
+            if self._scene is not None:
+                for handle in self._handles:
+                    handle.scene = self._scene
             self._rebuild_list()
             self._update_buttons()
         finally:
             self._updating = False
 
-    def get_entities(self) -> List[Optional["Entity"]]:
-        """
-        Return list of resolved Entity objects.
-
-        Uses the entity_resolver callback. Returns None for unresolved names.
-        """
-        if self._entity_resolver is None:
-            return [None] * len(self._entity_names)
-        return [self._entity_resolver(name) for name in self._entity_names]
-
     def _rebuild_list(self) -> None:
-        """Rebuild QListWidget from current entity names."""
+        """Rebuild QListWidget from current handles."""
         current_row = self._list.currentRow()
         self._list.clear()
 
-        for i, name in enumerate(self._entity_names):
+        for i, handle in enumerate(self._handles):
+            # Display entity name (or UUID prefix if not resolved)
+            name = handle.name
             item = QListWidgetItem(f"{i}: {name}")
             self._list.addItem(item)
 
         # Restore selection
-        if 0 <= current_row < len(self._entity_names):
+        if 0 <= current_row < len(self._handles):
             self._list.setCurrentRow(current_row)
-        elif self._entity_names:
-            self._list.setCurrentRow(len(self._entity_names) - 1)
+        elif self._handles:
+            self._list.setCurrentRow(len(self._handles) - 1)
 
         # Update count label
-        count = len(self._entity_names)
+        count = len(self._handles)
         self._count_label.setText(f"{count} {'entity' if count == 1 else 'entities'}")
 
     def _update_buttons(self) -> None:
@@ -174,35 +172,41 @@ class EntityListWidget(QWidget):
         self._remove_btn.setEnabled(has_selection)
         self._move_up_btn.setEnabled(has_selection and self._list.currentRow() > 0)
         self._move_down_btn.setEnabled(
-            has_selection and self._list.currentRow() < len(self._entity_names) - 1
+            has_selection and self._list.currentRow() < len(self._handles) - 1
         )
 
     def _on_selection_changed(self, row: int) -> None:
         """Handle selection change."""
         self._update_buttons()
 
-    def _on_entity_dropped(self, entity_name: str) -> None:
+    def _on_entity_dropped(self, entity_uuid: str, entity_name: str) -> None:
         """Handle entity dropped from SceneTree."""
         if self._read_only:
             return
 
-        # Avoid duplicates
-        if entity_name in self._entity_names:
-            return
+        # Avoid duplicates by UUID
+        for handle in self._handles:
+            if handle.uuid == entity_uuid:
+                return
 
-        self._entity_names.append(entity_name)
+        # Create new handle
+        handle = EntityHandle(uuid=entity_uuid)
+        if self._scene is not None:
+            handle.scene = self._scene
+
+        self._handles.append(handle)
         self._rebuild_list()
-        self._list.setCurrentRow(len(self._entity_names) - 1)
+        self._list.setCurrentRow(len(self._handles) - 1)
         self._update_buttons()
         self.value_changed.emit()
 
     def _remove_selected(self) -> None:
         """Remove selected entity from list."""
         row = self._list.currentRow()
-        if row < 0 or row >= len(self._entity_names):
+        if row < 0 or row >= len(self._handles):
             return
 
-        del self._entity_names[row]
+        del self._handles[row]
         self._rebuild_list()
         self._update_buttons()
         self.value_changed.emit()
@@ -210,12 +214,12 @@ class EntityListWidget(QWidget):
     def _move_up(self) -> None:
         """Move selected entity up in the list."""
         row = self._list.currentRow()
-        if row <= 0 or row >= len(self._entity_names):
+        if row <= 0 or row >= len(self._handles):
             return
 
-        self._entity_names[row], self._entity_names[row - 1] = (
-            self._entity_names[row - 1],
-            self._entity_names[row],
+        self._handles[row], self._handles[row - 1] = (
+            self._handles[row - 1],
+            self._handles[row],
         )
         self._rebuild_list()
         self._list.setCurrentRow(row - 1)
@@ -225,12 +229,12 @@ class EntityListWidget(QWidget):
     def _move_down(self) -> None:
         """Move selected entity down in the list."""
         row = self._list.currentRow()
-        if row < 0 or row >= len(self._entity_names) - 1:
+        if row < 0 or row >= len(self._handles) - 1:
             return
 
-        self._entity_names[row], self._entity_names[row + 1] = (
-            self._entity_names[row + 1],
-            self._entity_names[row],
+        self._handles[row], self._handles[row + 1] = (
+            self._handles[row + 1],
+            self._handles[row],
         )
         self._rebuild_list()
         self._list.setCurrentRow(row + 1)
@@ -241,7 +245,7 @@ class EntityListWidget(QWidget):
 class _DropListWidget(QListWidget):
     """QListWidget subclass that accepts entity drops."""
 
-    def __init__(self, on_drop_callback: Callable[[str], None], parent=None):
+    def __init__(self, on_drop_callback: Callable[[str, str], None], parent=None):
         super().__init__(parent)
         self._on_drop = on_drop_callback
         self.setAcceptDrops(True)
@@ -261,9 +265,10 @@ class _DropListWidget(QListWidget):
     def dropEvent(self, event) -> None:
         data = parse_entity_mime_data(event.mimeData())
         if data is not None:
-            entity_name = data.get("entity_name")
-            if entity_name:
-                self._on_drop(entity_name)
+            entity_uuid = data.get("entity_uuid")
+            entity_name = data.get("entity_name", "")
+            if entity_uuid:
+                self._on_drop(entity_uuid, entity_name)
                 event.acceptProposedAction()
                 return
         event.ignore()

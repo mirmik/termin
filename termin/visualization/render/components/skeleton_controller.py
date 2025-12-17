@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component
+from termin.visualization.core.entity_handle import EntityHandle
 
 if TYPE_CHECKING:
     from termin.skeleton.skeleton import SkeletonData, SkeletonInstance
-    from termin.skeleton.skeleton_asset import SkeletonAsset
     from termin.visualization.core.entity import Entity
 
 
@@ -17,12 +17,12 @@ class SkeletonController(Component):
     """
     Component that manages skeleton data and bone entity references.
 
-    References SkeletonAsset and creates SkeletonInstance on demand.
+    References SkeletonData and creates SkeletonInstance on demand.
     SkinnedMeshRenderer components reference this to get bone matrices.
 
     Serialization uses standard InspectFields:
-        - skeleton: SkeletonAsset reference (stored as UUID)
-        - bone_entities: List of Entity UUIDs
+        - skeleton: SkeletonData reference (stored as UUID)
+        - bone_entities: List[EntityHandle] (stored as list of UUIDs)
     """
 
     inspect_fields = {
@@ -37,8 +37,8 @@ class SkeletonController(Component):
             label="Bone Entities",
             kind="entity_list",
             read_only=True,
-            getter=lambda self: self._bone_entity_uuids or [],
-            setter=lambda self, v: self._set_bone_entity_uuids(v),
+            getter=lambda self: self._bone_handles,
+            setter=lambda self, v: self._set_bone_handles(v),
         ),
     }
 
@@ -56,23 +56,21 @@ class SkeletonController(Component):
         """
         super().__init__(enabled=True)
         self._skeleton_data: "SkeletonData | None" = skeleton_data
-        self._bone_entities: "List[Entity] | None" = bone_entities
         self._skeleton_instance: "SkeletonInstance | None" = None
 
-        # For serialization - store bone entity UUIDs
-        self._bone_entity_uuids: List[str] | None = None
+        # Store bone references as EntityHandles
+        self._bone_handles: List[EntityHandle] = []
         if bone_entities is not None:
-            self._bone_entity_uuids = [e.uuid for e in bone_entities]
+            self._bone_handles = [EntityHandle.from_entity(e) for e in bone_entities]
 
     def _set_skeleton_data(self, value: "SkeletonData | None") -> None:
         """Setter for skeleton_data InspectField."""
         self._skeleton_data = value
         self._skeleton_instance = None  # Invalidate cached instance
 
-    def _set_bone_entity_uuids(self, value: List[str] | None) -> None:
+    def _set_bone_handles(self, value: List[EntityHandle] | None) -> None:
         """Setter for bone_entities InspectField."""
-        self._bone_entity_uuids = value
-        self._bone_entities = None  # Need to re-resolve
+        self._bone_handles = value if value else []
         self._skeleton_instance = None  # Invalidate cached instance
 
     @property
@@ -86,48 +84,40 @@ class SkeletonController(Component):
         Get or create the SkeletonInstance.
 
         Creates instance lazily on first access.
+        Resolves EntityHandles to actual Entities via scene.
         """
         if self._skeleton_instance is None and self._skeleton_data is not None:
-            if self._bone_entities is not None:
+            bone_entities = self._resolve_bone_entities()
+            if bone_entities is not None:
                 from termin.skeleton.skeleton import SkeletonInstance
                 self._skeleton_instance = SkeletonInstance(
                     self._skeleton_data,
-                    bone_entities=self._bone_entities,
+                    bone_entities=bone_entities,
                 )
-            else:
-                # Try to resolve bone entities from UUIDs
-                self._resolve_bone_entities()
-                if self._bone_entities is not None:
-                    from termin.skeleton.skeleton import SkeletonInstance
-                    self._skeleton_instance = SkeletonInstance(
-                        self._skeleton_data,
-                        bone_entities=self._bone_entities,
-                    )
         return self._skeleton_instance
 
-    def _resolve_bone_entities(self) -> None:
-        """Resolve bone entities from stored UUIDs via scene."""
-        if self._bone_entity_uuids is None or self.entity is None:
-            return
+    def _resolve_bone_entities(self) -> "List[Entity] | None":
+        """Resolve EntityHandles to actual Entities via scene."""
+        if not self._bone_handles:
+            return None
+
+        if self.entity is None or self.entity.scene is None:
+            return None
 
         scene = self.entity.scene
-        if scene is None:
-            return
-
-        # Resolve each UUID to Entity
         bone_entities: "List[Entity]" = []
-        for uuid in self._bone_entity_uuids:
-            entity = scene.find_entity_by_uuid(uuid)
+
+        for handle in self._bone_handles:
+            entity = handle.resolve(scene)
             if entity is not None:
                 bone_entities.append(entity)
             else:
-                print(f"[SkeletonController] WARNING: Could not find bone entity with UUID {uuid}")
-                return  # Abort if any bone not found
+                print(f"[SkeletonController] WARNING: Could not resolve bone entity {handle.uuid}")
+                return None  # Abort if any bone not found
 
-        self._bone_entities = bone_entities
+        return bone_entities
 
     def set_bone_entities(self, bone_entities: "List[Entity]") -> None:
         """Set bone entities and invalidate cached instance."""
-        self._bone_entities = bone_entities
-        self._bone_entity_uuids = [e.uuid for e in bone_entities]
+        self._bone_handles = [EntityHandle.from_entity(e) for e in bone_entities]
         self._skeleton_instance = None

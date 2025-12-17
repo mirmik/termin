@@ -132,9 +132,16 @@ class Component:
                     value = list(value)
                 elif kind == "vec3_list" and isinstance(value, (tuple, list)):
                     value = [list(v) for v in value]
-                # entity_list stores UUIDs as list of strings - save as-is
+                # entity_list: List[EntityHandle] → list of UUID strings
                 elif kind == "entity_list" and isinstance(value, (tuple, list)):
-                    value = list(value) if value else []
+                    from termin.visualization.core.entity_handle import EntityHandle
+                    uuids = []
+                    for item in value:
+                        if isinstance(item, EntityHandle):
+                            uuids.append(item.uuid)
+                        elif isinstance(item, str):
+                            uuids.append(item)
+                    value = uuids
 
                 if value is not None:
                     result[key] = value
@@ -237,8 +244,10 @@ class Component:
                     value = tuple(value)
                 elif kind == "vec3_list" and isinstance(value, list):
                     value = [tuple(v) for v in value]
-                # entity_list: value is list of UUID strings, pass through as-is
-                # Component resolves UUIDs to Entities when needed via scene.find_entity_by_uuid()
+                elif kind == "entity_list" and isinstance(value, list):
+                    # Convert list of UUID strings to List[EntityHandle]
+                    from termin.visualization.core.entity_handle import EntityHandle
+                    value = [EntityHandle(uuid=uuid_str) for uuid_str in value]
 
                 # Устанавливаем значение через setter или напрямую
                 if field.setter:
