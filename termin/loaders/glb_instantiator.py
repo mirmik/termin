@@ -332,17 +332,19 @@ def instantiate_glb(
                     print(f"  rotation: {node.rotation} (will be removed - coordinate conversion artifact)")
                     print(f"  scale: {node.scale}")
 
-                    # The Armature's rotation is a coordinate conversion artifact from Blender
-                    # (converts from Blender Z-up to glTF Y-up). Since we already convert
-                    # mesh vertices and skeleton data to Z-up, this rotation should be identity.
-                    # Keep only scale (export scale from Blender).
-                    identity_rotation = np.array([0, 0, 0, 1], dtype=np.float32)
+                    # The Armature has two roles:
+                    # 1. Parent of skeleton bones - needs the rotation for correct bone transforms
+                    # 2. Parent of mesh entities - rotation should be identity (mesh vertices already converted)
+                    #
+                    # Keep original rotation in skeleton_root_transform for bones,
+                    # but set Entity rotation to identity.
                     skeleton_root_transform = _compute_trs_matrix(
-                        node.translation, identity_rotation, node.scale
+                        node.translation, node.rotation, node.scale
                     )
 
-                    # Also fix the node's rotation so Entity doesn't get the artifact
-                    node.rotation = identity_rotation
+                    # Fix the node's rotation so Entity hierarchy doesn't get double-transformed
+                    # (mesh vertices are already converted to Z-up)
+                    node.rotation = np.array([0, 0, 0, 1], dtype=np.float32)
                     break
 
         skeleton_instance = SkeletonInstance(skeleton_data, root_transform=skeleton_root_transform)
