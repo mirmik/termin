@@ -92,11 +92,13 @@ class GLBAsset(Asset):
             # Get settings from spec
             normalize_scale = spec_data.get("normalize_scale", False) if spec_data else False
             convert_to_z_up = spec_data.get("convert_to_z_up", True) if spec_data else True
+            blender_z_up_fix = spec_data.get("blender_z_up_fix", False) if spec_data else False
 
             self._scene_data = load_glb_file_from_buffer(
                 content,
                 normalize_scale=normalize_scale,
                 convert_to_z_up=convert_to_z_up,
+                blender_z_up_fix=blender_z_up_fix,
             )
             self._loaded = True
 
