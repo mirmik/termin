@@ -753,8 +753,8 @@ def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
     # Transform root bone (first joint, e.g. Hips) by +90° X
     # This is a full transform: rotation, translation, and scale
     def transform_pos_90_x(pos: np.ndarray) -> np.ndarray:
-        """Apply +90° X rotation to position: (x, y, z) -> (x, z, -y)"""
-        return np.array([pos[0], pos[2], -pos[1]], dtype=pos.dtype)
+        """Apply +90° X rotation to position: (x, y, z) -> (x, -z, y)"""
+        return np.array([pos[0], -pos[2], pos[1]], dtype=pos.dtype)
 
     def transform_scale_90_x(scale: np.ndarray) -> np.ndarray:
         """Apply +90° X rotation to scale: (sx, sy, sz) -> (sx, sz, sy)"""
