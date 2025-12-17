@@ -260,12 +260,20 @@ class SkeletonInstance:
             # Check if local transforms differ from bind pose
             bones = self._data.bones
             diff_count = 0
+            # Always show first bone for comparison
+            if bones:
+                bone = bones[0]
+                bind_rot = bone.bind_rotation
+                curr_rot = self._local_rotations[0]
+                print(f"[SkeletonInstance] bone[0] {bone.name}:")
+                print(f"  bind_rot={bind_rot}")
+                print(f"  curr_rot={curr_rot}")
+                print(f"  equal={np.allclose(bind_rot, curr_rot, atol=1e-4)}")
             for i, bone in enumerate(bones[:5]):
                 bind_rot = bone.bind_rotation
                 curr_rot = self._local_rotations[i]
                 if not np.allclose(bind_rot, curr_rot, atol=1e-4):
                     diff_count += 1
-                    print(f"[SkeletonInstance] bone[{i}] {bone.name}: bind_rot={bind_rot}, curr_rot={curr_rot}")
             print(f"[SkeletonInstance.get_bone_matrices] was_dirty={was_dirty}, bones with diff rotation: {diff_count}/5")
 
         return self._bone_matrices

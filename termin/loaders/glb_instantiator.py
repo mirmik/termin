@@ -391,9 +391,13 @@ def instantiate_glb(
         # Add player to root entity
         root_entity.add_component(animation_player)
 
-        # Auto-play first animation
+        # Auto-play longest animation (skip short T-pose clips)
         if clips:
-            animation_player.play(clips[0].name)
+            # Find clip with longest duration (likely actual animation, not T-pose)
+            best_clip = max(clips, key=lambda c: c.duration)
+            print(f"[GLB] Available animations: {[(c.name, f'{c.duration:.2f}s') for c in clips]}")
+            print(f"[GLB] Auto-playing: {best_clip.name!r} (duration={best_clip.duration:.2f}s)")
+            animation_player.play(best_clip.name)
 
     return GLBInstantiateResult(
         entity=root_entity,
