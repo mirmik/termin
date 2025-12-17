@@ -730,9 +730,8 @@ def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
 
     Blender applies -90°X rotation to the Armature node during export.
     This function compensates by:
-    - Rotating Armature node by +90° around X
-    - Rotating Armature animation keyframes by +90° around X
-    - Rotating root nodes by -90° around X
+    - Rotating root bone (Hips) by +90° around X (and its keyframes)
+    - Rotating Armature node by -90° around X
 
     Args:
         scene_data: GLBSceneData to fix (modified in place)
@@ -742,38 +741,41 @@ def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
     # -90° around X: quaternion [-sin(45°), 0, 0, cos(45°)]
     rot_neg_90_x = np.array([-0.70710678, 0.0, 0.0, 0.70710678], dtype=np.float32)
 
-    # Find armature node index from skin
-    armature_node_idx: Optional[int] = None
-    if scene_data.skins:
-        armature_node_idx = scene_data.skins[0].armature_node_index
-        print(f"[blender_z_up_fix] armature_node_idx = {armature_node_idx}")
+    if not scene_data.skins:
+        print("[blender_z_up_fix] No skins found, skipping")
+        return
 
-    # Rotate armature node by +90° X
-    armature_node_name: Optional[str] = None
+    skin = scene_data.skins[0]
+
+    # Rotate Armature node by -90° X
+    armature_node_idx = skin.armature_node_index
     if armature_node_idx is not None and armature_node_idx < len(scene_data.nodes):
         armature_node = scene_data.nodes[armature_node_idx]
-        armature_node_name = armature_node.name
-        print(f"[blender_z_up_fix] Armature node: {armature_node_name!r}")
-        print(f"[blender_z_up_fix] Before: rotation = {armature_node.rotation}")
-        armature_node.rotation = _qmul(rot_pos_90_x, armature_node.rotation)
-        print(f"[blender_z_up_fix] After:  rotation = {armature_node.rotation}")
-
-        # Rotate armature animation keyframes by +90° X
-        for anim in scene_data.animations:
-            for channel in anim.channels:
-                if channel.node_name == armature_node_name:
-                    print(f"[blender_z_up_fix] Rotating {len(channel.rot_keys)} keyframes for {armature_node_name}")
-                    for key in channel.rot_keys:
-                        key[1] = _qmul(rot_pos_90_x, key[1])
+        print(f"[blender_z_up_fix] Armature node: {armature_node.name!r}, rotating by -90° X")
+        print(f"[blender_z_up_fix]   Before: {armature_node.rotation}")
+        armature_node.rotation = _qmul(rot_neg_90_x, armature_node.rotation)
+        print(f"[blender_z_up_fix]   After:  {armature_node.rotation}")
     else:
         print(f"[blender_z_up_fix] WARNING: No armature node found! armature_node_idx={armature_node_idx}")
 
-    # Rotate root nodes by -90° X
-    for root_idx in scene_data.root_nodes:
-        if root_idx < len(scene_data.nodes):
-            root_node = scene_data.nodes[root_idx]
-            print(f"[blender_z_up_fix] Rotating root node {root_node.name!r} by -90° X")
-            root_node.rotation = _qmul(rot_neg_90_x, root_node.rotation)
+    # Rotate root bone (first joint, e.g. Hips) by +90° X
+    if skin.joint_node_indices:
+        root_bone_idx = skin.joint_node_indices[0]
+        if root_bone_idx < len(scene_data.nodes):
+            root_bone_node = scene_data.nodes[root_bone_idx]
+            root_bone_name = root_bone_node.name
+            print(f"[blender_z_up_fix] Root bone: {root_bone_name!r}, rotating by +90° X")
+            print(f"[blender_z_up_fix]   Before: {root_bone_node.rotation}")
+            root_bone_node.rotation = _qmul(rot_pos_90_x, root_bone_node.rotation)
+            print(f"[blender_z_up_fix]   After:  {root_bone_node.rotation}")
+
+            # Rotate root bone animation keyframes by +90° X
+            for anim in scene_data.animations:
+                for channel in anim.channels:
+                    if channel.node_name == root_bone_name:
+                        print(f"[blender_z_up_fix] Rotating {len(channel.rot_keys)} keyframes for {root_bone_name}")
+                        for key in channel.rot_keys:
+                            key[1] = _qmul(rot_pos_90_x, key[1])
 
 
 def load_glb_file_normalized(
