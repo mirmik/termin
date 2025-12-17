@@ -5,6 +5,7 @@ from termin.visualization.render.materials.pbr_material import PBRMaterial, pbr_
 from termin.visualization.render.materials.advanced_pbr_material import AdvancedPBRMaterial, advanced_pbr_shader
 from termin.visualization.render.materials.pick_material import PickMaterial
 from termin.visualization.render.materials.simple import ColorMaterial
+from termin.visualization.render.materials.grid_material import GridMaterial, grid_shader
 
 __all__ = [
     "DefaultMaterial",
@@ -15,4 +16,6 @@ __all__ = [
     "advanced_pbr_shader",
     "PickMaterial",
     "ColorMaterial",
+    "GridMaterial",
+    "grid_shader",
 ]

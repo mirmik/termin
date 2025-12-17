@@ -499,37 +499,20 @@ class GizmoMoveController(InputComponent):
             return
 
         tf = self._drag_transform
-        end_pose = tf.global_pose()
-
-        end_scale = tf.local_pose().scale.copy()
-
-        start_scale = self._start_scale
-        if start_scale is None and end_scale is not None:
-            start_scale = end_scale.copy()
+        end_pose = tf.local_pose()
 
         # если вообще ничего не поменялось — команду не создаём
         if (
             np.allclose(end_pose.lin, self._start_pose.lin)
             and np.allclose(end_pose.ang, self._start_pose.ang)
-            and (
-                start_scale is None
-                or end_scale is None
-                or np.allclose(end_scale, start_scale)
-            )
+            and np.allclose(end_pose.scale, self._start_pose.scale)
         ):
             return
-
-        if start_scale is None:
-            start_scale = np.ones(3, dtype=float)
-        if end_scale is None:
-            end_scale = start_scale.copy()
 
         cmd = TransformEditCommand(
             transform=tf,
             old_pose=self._start_pose,
-            old_scale=start_scale,
             new_pose=end_pose,
-            new_scale=end_scale,
         )
         self._undo_handler(cmd, False)
 
@@ -565,12 +548,11 @@ class GizmoMoveController(InputComponent):
         self.drag_mode = "move"
         self.active_axis = axis
 
-        pose = self.target.transform.global_pose()
-        self.start_target_pos = pose.lin.copy()
+        global_pose = self.target.transform.global_pose()
+        self.start_target_pos = global_pose.lin.copy()
 
         self._drag_transform = self.target.transform
-        self._start_pose = pose
-        self._start_scale = self.target.transform.local_pose().scale.copy()
+        self._start_pose = self.target.transform.local_pose()
 
         self.axis_vec = self._get_axis_vector(axis)
         self.axis_point = self.start_target_pos.copy()
@@ -655,13 +637,12 @@ class GizmoMoveController(InputComponent):
         self.start_mouse_x = x
         self.start_mouse_y = y
 
-        pose = self.target.transform.global_pose()
-        self.start_target_pos = pose.lin.copy()
-        self.start_target_ang = pose.ang.copy()
+        global_pose = self.target.transform.global_pose()
+        self.start_target_pos = global_pose.lin.copy()
+        self.start_target_ang = global_pose.ang.copy()
 
         self._drag_transform = self.target.transform
-        self._start_pose = pose
-        self._start_scale = self.target.transform.local_pose().scale.copy()
+        self._start_pose = self.target.transform.local_pose()
 
         # мировая ось вращения – та же, что и направление стрелки/кольца
         self.rot_axis = self._get_axis_vector(axis)
