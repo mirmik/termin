@@ -160,6 +160,29 @@ class _PendingSkinnedMesh:
         self.material = material
 
 
+def _save_mesh_uuids_to_spec(
+    path: Path,
+    existing_spec: dict | None,
+    new_mesh_uuids: Dict[str, str],
+) -> None:
+    """Save newly generated mesh UUIDs to spec file."""
+    from termin.editor.project_file_watcher import FilePreLoader
+
+    spec_data = dict(existing_spec) if existing_spec else {}
+
+    # Ensure resources.meshes structure exists
+    if "resources" not in spec_data:
+        spec_data["resources"] = {}
+    if "meshes" not in spec_data["resources"]:
+        spec_data["resources"]["meshes"] = {}
+
+    # Add new UUIDs
+    spec_data["resources"]["meshes"].update(new_mesh_uuids)
+
+    if FilePreLoader.write_spec_file(str(path), spec_data):
+        print(f"[GLB] Saved {len(new_mesh_uuids)} new mesh UUIDs to spec")
+
+
 def _create_entity_from_node(
     node_index: int,
     scene_data: GLBSceneData,
@@ -169,12 +192,18 @@ def _create_entity_from_node(
     glb_name: str = "",
     node_to_entity: Optional[Dict[int, Entity]] = None,
     pending_skinned: Optional[List[_PendingSkinnedMesh]] = None,
+    mesh_uuids: Optional[Dict[str, str]] = None,
+    source_path: Optional[str] = None,
+    new_mesh_uuids: Optional[Dict[str, str]] = None,
 ) -> Entity:
     """Recursively create Entity hierarchy from GLBNodeData.
 
     Args:
         node_to_entity: Dict to collect node_index -> Entity mapping
         pending_skinned: List to collect skinned meshes that need skeleton set later
+        mesh_uuids: Dict mapping mesh name -> UUID (from spec file)
+        source_path: Path to source GLB file
+        new_mesh_uuids: Dict to collect newly generated UUIDs (for saving to spec)
     """
     global _debug_entity_count
     node = scene_data.nodes[node_index]
@@ -213,10 +242,14 @@ def _create_entity_from_node(
                 drawable = rm.meshes.get(mesh_name)
 
                 if drawable is None:
-                    # Fallback: create new MeshDrawable
+                    # Create new MeshDrawable with UUID from spec
                     mesh3 = _glb_mesh_to_mesh3(glb_mesh)
                     drawable = MeshDrawable(mesh3, name=mesh_name)
-                    rm.meshes[mesh_name] = drawable
+                    mesh_uuid = mesh_uuids.get(glb_mesh.name) if mesh_uuids else None
+                    rm.register_mesh(mesh_name, drawable, source_path=source_path, uuid=mesh_uuid)
+                    # Track new UUID if it wasn't in spec
+                    if mesh_uuid is None and new_mesh_uuids is not None and drawable.asset:
+                        new_mesh_uuids[glb_mesh.name] = drawable.asset.uuid
 
                 mesh_drawables[mesh_idx] = drawable
 
@@ -233,7 +266,7 @@ def _create_entity_from_node(
     for child_index in node.children:
         child_entity = _create_entity_from_node(
             child_index, scene_data, mesh_drawables, default_material, skinned_material,
-            glb_name, node_to_entity, pending_skinned
+            glb_name, node_to_entity, pending_skinned, mesh_uuids, source_path, new_mesh_uuids
         )
         entity.transform.add_child(child_entity.transform)
 
@@ -343,6 +376,13 @@ def instantiate_glb(
     # Collect skinned meshes that need skeleton set later
     pending_skinned: List[_PendingSkinnedMesh] = []
 
+    # Extract mesh UUIDs from spec file (for stable serialization)
+    mesh_uuids: Dict[str, str] = {}
+    if spec_data and "resources" in spec_data and "meshes" in spec_data["resources"]:
+        mesh_uuids = spec_data["resources"]["meshes"]
+    source_path_str = str(path)
+    new_mesh_uuids: Dict[str, str] = {}  # Track newly generated UUIDs
+
     # Step 1: Create Entity hierarchy first (before skeleton)
     root_entity = None
     if scene_data.root_nodes:
@@ -357,6 +397,9 @@ def instantiate_glb(
                 glb_name=name,
                 node_to_entity=node_to_entity,
                 pending_skinned=pending_skinned,
+                mesh_uuids=mesh_uuids,
+                source_path=source_path_str,
+                new_mesh_uuids=new_mesh_uuids,
             )
             root_entity.name = name
         else:
@@ -372,6 +415,9 @@ def instantiate_glb(
                     glb_name=name,
                     node_to_entity=node_to_entity,
                     pending_skinned=pending_skinned,
+                    mesh_uuids=mesh_uuids,
+                    source_path=source_path_str,
+                    new_mesh_uuids=new_mesh_uuids,
                 )
                 root_entity.transform.add_child(child_entity.transform)
     else:
@@ -384,13 +430,21 @@ def instantiate_glb(
             drawable = MeshDrawable(mesh3, name=mesh_name)
             mesh_drawables[i] = drawable
 
-            # Register mesh in ResourceManager
-            rm.meshes[mesh_name] = drawable
+            # Register mesh in ResourceManager with UUID from spec
+            mesh_uuid = mesh_uuids.get(glb_mesh.name)
+            rm.register_mesh(mesh_name, drawable, source_path=source_path_str, uuid=mesh_uuid)
+            # Track new UUID if it wasn't in spec
+            if mesh_uuid is None and drawable.asset:
+                new_mesh_uuids[glb_mesh.name] = drawable.asset.uuid
 
             mesh_entity = Entity(pose=Pose3.identity(), name=glb_mesh.name)
             renderer = MeshRenderer(mesh=drawable, material=default_material)
             mesh_entity.add_component(renderer)
             root_entity.transform.add_child(mesh_entity.transform)
+
+    # Save new mesh UUIDs to spec file if any were generated
+    if new_mesh_uuids:
+        _save_mesh_uuids_to_spec(path, spec_data, new_mesh_uuids)
 
     # Step 2: Create skeleton controller with bone entities
     skeleton_controller: Optional[SkeletonController] = None
