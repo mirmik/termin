@@ -647,13 +647,12 @@ def convert_y_up_to_z_up(scene_data: GLBSceneData) -> None:
 
 def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     """
-    Normalize root scale to 1.0 by baking into geometry.
+    Normalize root scale to 1.0 by applying inverse scale.
 
     If the root node has scale != 1.0, this function:
-    1. Scales all vertex positions
-    2. Scales inverse bind matrices for skinning
-    3. Scales animation translations
-    4. Resets root scale to 1.0
+    1. Computes inv_root_scale = 1 / root_scale
+    2. Scales root node by inv_root_scale (making it 1.0)
+    3. Multiplies all IBM by scale matrix
 
     Args:
         scene_data: GLBSceneData to normalize (modified in place)
@@ -675,39 +674,26 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     if np.allclose(root_scale, [1.0, 1.0, 1.0]):
         return False
 
-    # Use uniform scale (average or X component)
-    # Most exports use uniform scale
-    if np.allclose(root_scale[0], root_scale[1]) and np.allclose(root_scale[1], root_scale[2]):
-        scale_factor = float(root_scale[0])
-    else:
-        # Non-uniform scale - use average (best effort)
-        scale_factor = float(np.mean(root_scale))
-        print(f"[normalize_glb_scale] Warning: non-uniform scale {root_scale}, using average {scale_factor}")
+    print(f"[normalize_glb_scale] Root scale: {root_scale}")
 
-    # 1. Scale vertex positions in all meshes
-    for mesh in scene_data.meshes:
-        mesh.vertices *= scale_factor
+    # Compute inverse scale
+    inv_root_scale = 1.0 / root_scale
+    print(f"[normalize_glb_scale] Inverse scale: {inv_root_scale}")
 
-    # 2. DO NOT scale inverse bind matrices!
-    # IBM already contains inverse scale from Blender export.
-    # When vertices are scaled, IBM compensates automatically.
-    # Example: root_scale=0.1, IBM has 10x baked in
-    #   vertices *= 0.1 → vertices become 0.1x
-    #   skinned_pos = bone @ IBM @ vertex = bone @ (10x matrix) @ (0.1x vertex) = 1x result
-
-    # 3. Scale animation translations
-    for anim in scene_data.animations:
-        for channel in anim.channels:
-            if channel.pos_keys:
-                for key in channel.pos_keys:
-                    # key is (time, [x, y, z])
-                    key[1] = key[1] * scale_factor
-
-    # 4. Reset root scale to 1.0
+    # 1. Scale root node by inv_root_scale (root scale becomes 1.0)
     root_node.scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
+    # 2. Build scale matrix from root_scale (not inverse!)
+    scale_matrix = np.diag([root_scale[0], root_scale[1], root_scale[2], 1.0]).astype(np.float32)
+    print(f"[normalize_glb_scale] Scale matrix diagonal: {np.diag(scale_matrix)}")
+
+    # 3. Multiply all IBM by scale matrix
+    for skin in scene_data.skins:
+        for i in range(len(skin.inverse_bind_matrices)):
+            skin.inverse_bind_matrices[i] = skin.inverse_bind_matrices[i] @ scale_matrix
+
     # Store original scale for reference
-    scene_data.skin_scale = scale_factor
+    scene_data.skin_scale = float(root_scale[0])
 
     return True
 
