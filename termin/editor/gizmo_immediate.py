@@ -219,15 +219,27 @@ class ImmediateGizmoRenderer:
         return PLANE_COLORS[plane]
 
     def begin(self) -> None:
-        """Start accumulating gizmo geometry."""
-        self._renderer.begin()
+        """Start accumulating gizmo geometry (no-op, drawing done in flush)."""
+        pass
 
     def draw(self) -> None:
-        """Draw the gizmo geometry."""
+        """Draw the gizmo geometry (no-op, drawing done in flush)."""
+        pass
+
+    def flush(
+        self,
+        graphics: "GraphicsBackend",
+        view_matrix: np.ndarray,
+        proj_matrix: np.ndarray,
+    ) -> None:
+        """Render gizmo geometry in two passes: opaque then transparent."""
         if not self.visible:
             return
 
         origin = self._position
+
+        # === Pass 1: Opaque geometry (arrows, rings) ===
+        self._renderer.begin()
 
         # Draw translation arrows
         for axis, element in [
@@ -266,7 +278,17 @@ class ImmediateGizmoRenderer:
                 minor_segments=8,
             )
 
-        # Draw plane handles (small quads)
+        self._renderer.flush(
+            graphics=graphics,
+            view_matrix=view_matrix,
+            proj_matrix=proj_matrix,
+            depth_test=True,
+            blend=False,  # Opaque pass
+        )
+
+        # === Pass 2: Transparent geometry (plane quads) ===
+        self._renderer.begin()
+
         axis_x = self._get_world_axis("x")
         axis_y = self._get_world_axis("y")
         axis_z = self._get_world_axis("z")
@@ -286,19 +308,12 @@ class ImmediateGizmoRenderer:
             p3 = origin + a1 * off + a2 * (off + sz)
             self._renderer.quad(p0, p1, p2, p3, color)
 
-    def flush(
-        self,
-        graphics: "GraphicsBackend",
-        view_matrix: np.ndarray,
-        proj_matrix: np.ndarray,
-    ) -> None:
-        """Render all accumulated gizmo geometry."""
         self._renderer.flush(
             graphics=graphics,
             view_matrix=view_matrix,
             proj_matrix=proj_matrix,
-            depth_test=True,  # Need depth test for proper triangle occlusion
-            blend=True,  # Enable for transparent plane handles
+            depth_test=True,
+            blend=True,  # Transparent pass
         )
 
     # ============================================================
