@@ -968,6 +968,23 @@ class ResourceManager:
         """Get MeshAsset by UUID."""
         return self._mesh_registry.get_asset_by_uuid(uuid)
 
+    def get_or_create_mesh_asset(
+        self,
+        name: str,
+        source_path: str | None = None,
+        uuid: str | None = None,
+        parent: "Asset | None" = None,
+        parent_key: str | None = None,
+    ) -> "MeshAsset":
+        """Get MeshAsset by name, creating it if it doesn't exist."""
+        return self._mesh_registry.get_or_create_asset(
+            name=name,
+            source_path=source_path,
+            uuid=uuid,
+            parent=parent,
+            parent_key=parent_key,
+        )
+
     def unregister_mesh(self, name: str) -> None:
         """Удаляет меш."""
         self._mesh_registry.unregister(name)
@@ -1109,6 +1126,23 @@ class ResourceManager:
         """Получить AnimationClipAsset по UUID."""
         return self._animation_clip_registry.get_asset_by_uuid(uuid)
 
+    def get_or_create_animation_clip_asset(
+        self,
+        name: str,
+        source_path: str | None = None,
+        uuid: str | None = None,
+        parent: "Asset | None" = None,
+        parent_key: str | None = None,
+    ) -> "AnimationClipAsset":
+        """Get AnimationClipAsset by name, creating it if it doesn't exist."""
+        return self._animation_clip_registry.get_or_create_asset(
+            name=name,
+            source_path=source_path,
+            uuid=uuid,
+            parent=parent,
+            parent_key=parent_key,
+        )
+
     def list_animation_clip_names(self) -> list[str]:
         """Список имён всех AnimationClip."""
         return self._animation_clip_registry.list_names()
@@ -1172,6 +1206,23 @@ class ResourceManager:
     def get_skeleton_asset_by_uuid(self, uuid: str) -> Optional["SkeletonAsset"]:
         """Get SkeletonAsset by UUID."""
         return self._skeleton_registry.get_asset_by_uuid(uuid)
+
+    def get_or_create_skeleton_asset(
+        self,
+        name: str,
+        source_path: str | None = None,
+        uuid: str | None = None,
+        parent: "Asset | None" = None,
+        parent_key: str | None = None,
+    ) -> "SkeletonAsset":
+        """Get SkeletonAsset by name, creating it if it doesn't exist."""
+        return self._skeleton_registry.get_or_create_asset(
+            name=name,
+            source_path=source_path,
+            uuid=uuid,
+            parent=parent,
+            parent_key=parent_key,
+        )
 
     def unregister_skeleton(self, name: str) -> None:
         """Удаляет скелет."""

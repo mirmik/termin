@@ -82,6 +82,43 @@ class AssetRegistry(Generic[AssetT, DataT]):
         """Get asset by name."""
         return self._assets.get(name)
 
+    def get_or_create_asset(
+        self,
+        name: str,
+        source_path: str | None = None,
+        uuid: str | None = None,
+        parent: "Asset | None" = None,
+        parent_key: str | None = None,
+    ) -> AssetT:
+        """
+        Get asset by name, creating it if it doesn't exist.
+
+        This is the primary way to get assets - ensures single instance per name.
+
+        Args:
+            name: Resource name
+            source_path: Source file path (for new assets)
+            uuid: UUID (for new assets, from spec)
+            parent: Parent asset (for embedded assets like mesh from GLB)
+            parent_key: Key within parent (e.g., mesh name in GLB)
+        """
+        asset = self._assets.get(name)
+        if asset is not None:
+            return asset
+
+        # Create new asset
+        asset = self._asset_class(name=name, source_path=source_path, uuid=uuid)
+
+        # Set parent for embedded assets
+        if parent is not None and parent_key is not None:
+            from termin.visualization.core.data_asset import DataAsset
+            if isinstance(asset, DataAsset):
+                asset.set_parent(parent, parent_key)
+
+        self._assets[name] = asset
+        self._uuid_registry[asset.uuid] = asset
+        return asset
+
     def register(
         self,
         name: str,

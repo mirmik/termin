@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid as uuid_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
 
@@ -73,51 +72,54 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         self._create_animation_assets(resources.get("animations", {}))
 
     def _create_mesh_assets(self, mesh_uuids: Dict[str, str]) -> None:
-        """Create child MeshAssets with UUIDs from spec."""
-        from termin.visualization.core.mesh_asset import MeshAsset
+        """Get or create child MeshAssets with UUIDs from spec via ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
 
+        rm = ResourceManager.instance()
         for mesh_name, mesh_uuid in mesh_uuids.items():
             full_name = f"{self._name}_{mesh_name}"
-            asset = MeshAsset(
-                mesh_data=None,
+            asset = rm.get_or_create_mesh_asset(
                 name=full_name,
-                source_path=self._source_path,
+                source_path=str(self._source_path) if self._source_path else None,
                 uuid=mesh_uuid,
+                parent=self,
+                parent_key=mesh_name,
             )
-            asset.set_parent(self, mesh_name)
             self._mesh_assets[mesh_name] = asset
 
     def _create_skeleton_assets(self, skeleton_uuids: Dict[str, str]) -> None:
-        """Create child SkeletonAssets with UUIDs from spec."""
-        from termin.skeleton.skeleton_asset import SkeletonAsset
+        """Get or create child SkeletonAssets with UUIDs from spec via ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
 
+        rm = ResourceManager.instance()
         for skeleton_key, skeleton_uuid in skeleton_uuids.items():
             # skeleton_key is "skeleton" or "skeleton_N"
             idx = 0 if skeleton_key == "skeleton" else int(skeleton_key.split("_")[1])
             skeleton_name = f"{self._name}_skeleton" if idx == 0 else f"{self._name}_skeleton_{idx}"
 
-            asset = SkeletonAsset(
-                skeleton_data=None,
+            asset = rm.get_or_create_skeleton_asset(
                 name=skeleton_name,
-                source_path=self._source_path,
+                source_path=str(self._source_path) if self._source_path else None,
                 uuid=skeleton_uuid,
+                parent=self,
+                parent_key=skeleton_key,
             )
-            asset.set_parent(self, skeleton_key)
             self._skeleton_assets[skeleton_key] = asset
 
     def _create_animation_assets(self, animation_uuids: Dict[str, str]) -> None:
-        """Create child AnimationClipAssets with UUIDs from spec."""
-        from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+        """Get or create child AnimationClipAssets with UUIDs from spec via ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
 
+        rm = ResourceManager.instance()
         for anim_name, anim_uuid in animation_uuids.items():
             full_name = f"{self._name}_{anim_name}"
-            asset = AnimationClipAsset(
-                clip=None,
+            asset = rm.get_or_create_animation_clip_asset(
                 name=full_name,
-                source_path=self._source_path,
+                source_path=str(self._source_path) if self._source_path else None,
                 uuid=anim_uuid,
+                parent=self,
+                parent_key=anim_name,
             )
-            asset.set_parent(self, anim_name)
             self._animation_assets[anim_name] = asset
 
     def _build_spec_data(self) -> dict:
@@ -168,7 +170,6 @@ class GLBAsset(DataAsset["GLBSceneData"]):
 
     def _on_loaded(self) -> None:
         """After loading, create any missing child assets and populate all with data."""
-        print(f"[GLBAsset._on_loaded] {self._name}, _data={self._data is not None}")
         if self._data is None:
             return
 
@@ -194,9 +195,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                 spec_changed = True
 
         # Populate all child assets with data
-        print(f"[GLBAsset._on_loaded] skeleton_assets before populate: {list(self._skeleton_assets.keys())}")
         self._populate_child_assets()
-        print(f"[GLBAsset._on_loaded] skeleton_assets after populate: {[(k, v._loaded) for k, v in self._skeleton_assets.items()]}")
 
         # Save spec if new child assets were created
         if spec_changed and self._source_path:
@@ -242,47 +241,50 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                         break
 
     def _create_new_mesh_asset(self, mesh_name: str) -> "MeshAsset":
-        """Create a new MeshAsset for a mesh discovered during load."""
-        from termin.visualization.core.mesh_asset import MeshAsset
+        """Get or create a MeshAsset for a mesh discovered during load via ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
 
+        rm = ResourceManager.instance()
         full_name = f"{self._name}_{mesh_name}"
-        asset = MeshAsset(
-            mesh_data=None,
+        asset = rm.get_or_create_mesh_asset(
             name=full_name,
-            source_path=self._source_path,
-            uuid=str(uuid_module.uuid4()),
+            source_path=str(self._source_path) if self._source_path else None,
+            uuid=None,  # Will auto-generate
+            parent=self,
+            parent_key=mesh_name,
         )
-        asset.set_parent(self, mesh_name)
         self._mesh_assets[mesh_name] = asset
         return asset
 
     def _create_new_skeleton_asset(self, skeleton_key: str, index: int) -> "SkeletonAsset":
-        """Create a new SkeletonAsset for a skeleton discovered during load."""
-        from termin.skeleton.skeleton_asset import SkeletonAsset
+        """Get or create a SkeletonAsset for a skeleton discovered during load via ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
 
+        rm = ResourceManager.instance()
         skeleton_name = f"{self._name}_skeleton" if index == 0 else f"{self._name}_skeleton_{index}"
-        asset = SkeletonAsset(
-            skeleton_data=None,
+        asset = rm.get_or_create_skeleton_asset(
             name=skeleton_name,
-            source_path=self._source_path,
-            uuid=str(uuid_module.uuid4()),
+            source_path=str(self._source_path) if self._source_path else None,
+            uuid=None,  # Will auto-generate
+            parent=self,
+            parent_key=skeleton_key,
         )
-        asset.set_parent(self, skeleton_key)
         self._skeleton_assets[skeleton_key] = asset
         return asset
 
     def _create_new_animation_asset(self, anim_name: str) -> "AnimationClipAsset":
-        """Create a new AnimationClipAsset for an animation discovered during load."""
-        from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+        """Get or create an AnimationClipAsset for an animation discovered during load via ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
 
+        rm = ResourceManager.instance()
         full_name = f"{self._name}_{anim_name}"
-        asset = AnimationClipAsset(
-            clip=None,
+        asset = rm.get_or_create_animation_clip_asset(
             name=full_name,
-            source_path=self._source_path,
-            uuid=str(uuid_module.uuid4()),
+            source_path=str(self._source_path) if self._source_path else None,
+            uuid=None,  # Will auto-generate
+            parent=self,
+            parent_key=anim_name,
         )
-        asset.set_parent(self, anim_name)
         self._animation_assets[anim_name] = asset
         return asset
 
