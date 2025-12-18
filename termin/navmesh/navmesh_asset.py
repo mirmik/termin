@@ -33,8 +33,8 @@ class NavMeshAsset(DataAsset["NavMesh"]):
 
     @property
     def navmesh(self) -> "NavMesh | None":
-        """NavMesh data."""
-        return self._data
+        """NavMesh data (lazy-loaded)."""
+        return self.data
 
     @navmesh.setter
     def navmesh(self, value: "NavMesh | None") -> None:

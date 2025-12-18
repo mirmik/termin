@@ -39,8 +39,8 @@ class MaterialAsset(DataAsset["Material"]):
 
     @property
     def material(self) -> "Material | None":
-        """Material configuration."""
-        return self._data
+        """Material configuration (lazy-loaded)."""
+        return self.data
 
     @material.setter
     def material(self, value: "Material | None") -> None:

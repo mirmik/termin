@@ -189,27 +189,27 @@ class MeshAsset(DataAsset[Mesh3]):
 
     def get_vertex_count(self) -> int:
         """Get number of vertices."""
-        if self._data is None or self._data.vertices is None:
+        data = self.data
+        if data is None or data.vertices is None:
             return 0
-        return len(self._data.vertices)
+        return len(data.vertices)
 
     def get_triangle_count(self) -> int:
         """Get number of triangles."""
-        if self._data is None or self._data.triangles is None:
+        data = self.data
+        if data is None or data.triangles is None:
             return 0
-        return len(self._data.triangles)
+        return len(data.triangles)
 
     def interleaved_buffer(self):
         """Get interleaved vertex buffer for GPU upload."""
-        if self._data is None:
-            return None
-        return self._data.interleaved_buffer()
+        data = self.data
+        return data.interleaved_buffer() if data else None
 
     def get_vertex_layout(self):
         """Get vertex layout for shader binding."""
-        if self._data is None:
-            return None
-        return self._data.get_vertex_layout()
+        data = self.data
+        return data.get_vertex_layout() if data else None
 
     # --- Factory methods ---
 

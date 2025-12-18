@@ -48,7 +48,8 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
     @property
     def duration(self) -> float:
         """Animation duration in seconds."""
-        return self._data.duration if self._data else 0.0
+        data = self.data
+        return data.duration if data else 0.0
 
     # --- Content parsing ---
 

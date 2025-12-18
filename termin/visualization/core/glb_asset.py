@@ -54,8 +54,8 @@ class GLBAsset(DataAsset["GLBSceneData"]):
 
     @property
     def scene_data(self) -> "GLBSceneData | None":
-        """GLB scene data."""
-        return self._data
+        """GLB scene data (lazy-loaded)."""
+        return self.data
 
     # --- Spec parsing ---
 

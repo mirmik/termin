@@ -33,8 +33,8 @@ class VoxelGridAsset(DataAsset["VoxelGrid"]):
 
     @property
     def grid(self) -> "VoxelGrid | None":
-        """VoxelGrid data."""
-        return self._data
+        """VoxelGrid data (lazy-loaded)."""
+        return self.data
 
     @grid.setter
     def grid(self, value: "VoxelGrid | None") -> None:

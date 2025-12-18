@@ -42,8 +42,8 @@ class TextureAsset(DataAsset[TextureData]):
 
     @property
     def texture_data(self) -> TextureData | None:
-        """Texture data."""
-        return self._data
+        """Texture data (lazy-loaded)."""
+        return self.data
 
     @texture_data.setter
     def texture_data(self, value: TextureData | None) -> None:
@@ -53,17 +53,20 @@ class TextureAsset(DataAsset[TextureData]):
     @property
     def width(self) -> int:
         """Texture width in pixels."""
-        return self._data.width if self._data else 0
+        data = self.data
+        return data.width if data else 0
 
     @property
     def height(self) -> int:
         """Texture height in pixels."""
-        return self._data.height if self._data else 0
+        data = self.data
+        return data.height if data else 0
 
     @property
     def channels(self) -> int:
         """Number of color channels."""
-        return self._data.channels if self._data else 0
+        data = self.data
+        return data.channels if data else 0
 
     # --- GPU resources ---
 

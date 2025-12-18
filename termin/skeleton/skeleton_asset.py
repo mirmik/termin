@@ -59,9 +59,8 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
 
     def get_bone_count(self) -> int:
         """Get number of bones in skeleton."""
-        if self._data is None:
-            return 0
-        return self._data.get_bone_count()
+        data = self.data
+        return data.get_bone_count() if data else 0
 
     # --- Serialization ---
 

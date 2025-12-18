@@ -34,8 +34,8 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
 
     @property
     def program(self) -> "ShaderMultyPhaseProgramm | None":
-        """Shader program definition."""
-        return self._data
+        """Shader program definition (lazy-loaded)."""
+        return self.data
 
     @program.setter
     def program(self, value: "ShaderMultyPhaseProgramm | None") -> None:
