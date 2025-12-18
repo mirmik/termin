@@ -128,6 +128,7 @@ class DataAsset(Asset, Generic[T]):
             return False
 
         try:
+            print(f"[LazyLoad] {self.__class__.__name__}: {self._name}")
             content = self._read_file()
             return self._load_content(content)
         except Exception as e:
@@ -194,6 +195,8 @@ class DataAsset(Asset, Generic[T]):
         """
         if self._parent_asset is None:
             return False
+
+        print(f"[LazyLoad] {self.__class__.__name__}: {self._name} (from {self._parent_asset._name})")
 
         # Ensure parent is loaded
         if not self._parent_asset.is_loaded:

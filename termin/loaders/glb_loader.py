@@ -731,10 +731,7 @@ def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
     for root_idx in scene_data.root_nodes:
         if root_idx < len(scene_data.nodes):
             root_node = scene_data.nodes[root_idx]
-            print(f"[blender_z_up_fix] Root node: {root_node.name!r}, rotating by -90° X")
-            print(f"[blender_z_up_fix]   Before: {root_node.rotation}")
             root_node.rotation = _qmul(rot_neg_90_x, root_node.rotation)
-            print(f"[blender_z_up_fix]   After:  {root_node.rotation}")
 
     # Transform root bone (first joint, e.g. Hips) by +90° X
     # This is a full transform: rotation, translation, and scale
@@ -753,20 +750,14 @@ def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
             if root_bone_idx < len(scene_data.nodes):
                 root_bone_node = scene_data.nodes[root_bone_idx]
                 root_bone_name = root_bone_node.name
-                print(f"[blender_z_up_fix] Root bone: {root_bone_name!r}, transforming by +90° X")
-                print(f"[blender_z_up_fix]   Before: t={root_bone_node.translation}, r={root_bone_node.rotation}, s={root_bone_node.scale}")
-
                 root_bone_node.translation = transform_pos_90_x(root_bone_node.translation)
                 root_bone_node.rotation = _qmul(rot_pos_90_x, root_bone_node.rotation)
                 root_bone_node.scale = transform_scale_90_x(root_bone_node.scale)
-
-                print(f"[blender_z_up_fix]   After:  t={root_bone_node.translation}, r={root_bone_node.rotation}, s={root_bone_node.scale}")
 
                 # Transform root bone animation keyframes by +90° X
                 for anim in scene_data.animations:
                     for channel in anim.channels:
                         if channel.node_name == root_bone_name:
-                            print(f"[blender_z_up_fix] Transforming keyframes for {root_bone_name}: {len(channel.pos_keys)} pos, {len(channel.rot_keys)} rot, {len(channel.scale_keys)} scale")
                             for key in channel.pos_keys:
                                 key[1] = transform_pos_90_x(key[1])
                             for key in channel.rot_keys:

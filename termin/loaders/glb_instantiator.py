@@ -272,8 +272,6 @@ def instantiate_glb(
         if blender_z_up_fix is None:
             blender_z_up_fix = spec_data.get("blender_z_up_fix", False) if spec_data else False
 
-        print(f"[GLB] Loading: {path.name}, normalize_scale={normalize_scale}, convert_to_z_up={convert_to_z_up}, blender_z_up_fix={blender_z_up_fix}")
-
         scene_data = load_glb_file_normalized(
             str(path),
             normalize_scale=normalize_scale,

@@ -66,10 +66,8 @@ class SpaceMouseController:
                 return True
             return False
         except ImportError:
-            print("[SpaceMouse] pyspacemouse not installed. Run: pip install pyspacemouse")
             return False
-        except Exception as e:
-            print(f"[SpaceMouse] Failed to open device: {e}")
+        except Exception:
             return False
 
     def close(self) -> None:

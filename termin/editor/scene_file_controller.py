@@ -198,7 +198,6 @@ class SceneFileController:
                 return False
 
             wp.load(str(last_scene_path))
-            self._log(f"Restored last scene: {last_scene_path}")
             self._on_after_load()
             return True
 

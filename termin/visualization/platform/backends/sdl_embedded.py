@@ -124,15 +124,13 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         if share_context is not None:
             video.SDL_GL_SetAttribute(video.SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0)
 
-        result = video.SDL_GL_MakeCurrent(self._window, self._gl_context)
-        print(f"SDL: Window created, GL context: {self._gl_context}, make_current result: {result}")
+        video.SDL_GL_MakeCurrent(self._window, self._gl_context)
 
         # Disable VSync - we control frame rate ourselves
         video.SDL_GL_SetSwapInterval(0)
 
         # Get native handle for Qt embedding
         self._native_handle = _get_native_window_handle(self._window)
-        print(f"SDL: Native handle: {self._native_handle}")
 
         # Callbacks
         self._framebuffer_size_callback: Optional[Callable] = None
