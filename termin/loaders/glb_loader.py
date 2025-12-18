@@ -650,9 +650,9 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     Normalize root scale to 1.0 by applying inverse scale.
 
     If the root node has scale != 1.0, this function:
-    1. Computes inv_root_scale = 1 / root_scale
-    2. Scales root node by inv_root_scale (making it 1.0)
-    3. Multiplies all IBM by scale matrix
+    1. Sets root node scale to 1.0
+    2. Multiplies all IBM by scale matrix (compensates mesh)
+    3. Multiplies translation of all child nodes by root_scale (compensates transforms)
 
     Args:
         scene_data: GLBSceneData to normalize (modified in place)
@@ -676,24 +676,32 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
 
     print(f"[normalize_glb_scale] Root scale: {root_scale}")
 
-    # Compute inverse scale
-    inv_root_scale = 1.0 / root_scale
-    print(f"[normalize_glb_scale] Inverse scale: {inv_root_scale}")
+    # Use uniform scale factor (assumes x == y == z)
+    scale_factor = float(root_scale[0])
 
-    # 1. Scale root node by inv_root_scale (root scale becomes 1.0)
+    # 1. Set root node scale to 1.0
     root_node.scale = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
-    # 2. Build scale matrix from root_scale (not inverse!)
+    # 2. Build scale matrix from root_scale for IBM compensation
     scale_matrix = np.diag([root_scale[0], root_scale[1], root_scale[2], 1.0]).astype(np.float32)
-    print(f"[normalize_glb_scale] Scale matrix diagonal: {np.diag(scale_matrix)}")
 
     # 3. Multiply all IBM by scale matrix
     for skin in scene_data.skins:
         for i in range(len(skin.inverse_bind_matrices)):
             skin.inverse_bind_matrices[i] = skin.inverse_bind_matrices[i] @ scale_matrix
 
+    # 4. Scale translation of all child nodes (recursive from root)
+    def scale_children_translation(node_idx: int) -> None:
+        node = scene_data.nodes[node_idx]
+        for child_idx in node.children:
+            child_node = scene_data.nodes[child_idx]
+            child_node.translation = child_node.translation / scale_factor
+            scale_children_translation(child_idx)
+
+    scale_children_translation(root_idx)
+
     # Store original scale for reference
-    scene_data.skin_scale = float(root_scale[0])
+    scene_data.skin_scale = scale_factor
 
     return True
 
