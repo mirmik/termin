@@ -279,7 +279,6 @@ class DataAsset(Asset, Generic[T]):
         self,
         content: bytes | str | None,
         spec_data: dict | None = None,
-        has_uuid_in_spec: bool = False,
     ) -> bool:
         """
         Legacy method for loading from content.
@@ -293,10 +292,5 @@ class DataAsset(Asset, Generic[T]):
         if spec_data is not None:
             self.parse_spec(spec_data)
 
-        result = self._load_content(content)
-
-        # Save spec if UUID was not in spec
-        if result and not has_uuid_in_spec and self._source_path:
-            self.save_spec_file()
-
-        return result
+        # _load_content handles spec file saving if needed
+        return self._load_content(content)
