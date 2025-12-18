@@ -37,7 +37,9 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
 
     @property
     def clip(self) -> "AnimationClip | None":
-        """AnimationClip data."""
+        """AnimationClip data (lazy-loaded)."""
+        if self._data is None and not self._loaded:
+            self.ensure_loaded()
         return self._data
 
     @clip.setter
@@ -61,7 +63,7 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
     # --- Embedded asset support (from GLB) ---
 
     def _extract_from_parent(self) -> bool:
-        """Extract animation data from parent GLBAsset."""
+        """Extract animation data from parent GLBAsset (parent already loaded by base class)."""
         if self._parent_asset is None or self._parent_key is None:
             return False
 
