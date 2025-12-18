@@ -18,6 +18,10 @@ class DataAsset(Asset, Generic[T]):
     """
     Generic base class for assets that store typed data.
 
+    IMPORTANT: Assets should be created through ResourceManager, not directly.
+    Use ResourceManager.get_or_create_*_asset() methods to ensure proper
+    registration and avoid duplicate instances.
+
     Provides:
     - Immediate spec parsing (UUID, type-specific settings)
     - Lazy content loading

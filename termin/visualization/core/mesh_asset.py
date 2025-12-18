@@ -18,6 +18,9 @@ class MeshAsset(DataAsset[Mesh3]):
     """
     Asset for 3D mesh geometry.
 
+    IMPORTANT: Create through ResourceManager.get_or_create_mesh_asset(),
+    not directly. This ensures proper registration and avoids duplicates.
+
     Stores Mesh3 (CPU data: vertices, triangles, normals, UVs).
     Does NOT handle GPU upload - that's MeshGPU's responsibility.
 

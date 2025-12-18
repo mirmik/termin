@@ -18,6 +18,9 @@ class MaterialAsset(DataAsset["Material"]):
     """
     Asset for material configuration.
 
+    IMPORTANT: Create through ResourceManager, not directly.
+    This ensures proper registration and avoids duplicates.
+
     Stores Material (shader reference, uniforms, textures).
 
     Note: Materials store UUID in the file itself, not in a .spec file.

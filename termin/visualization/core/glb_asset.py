@@ -18,14 +18,18 @@ class GLBAsset(DataAsset["GLBSceneData"]):
     """
     Asset for GLB model files.
 
+    IMPORTANT: Create through ResourceManager, not directly.
+    This ensures proper registration and avoids duplicates.
+
     GLBAsset is a container that holds:
     - GLBSceneData (raw loaded data)
     - Child MeshAssets for each mesh in the GLB
     - Child SkeletonAssets for each skin
     - Child AnimationClipAssets for each animation
 
-    Child assets are created during spec parsing (before content loading).
-    This allows lazy loading while maintaining consistent UUIDs.
+    Child assets are requested from ResourceManager during spec parsing
+    (via get_or_create_*_asset methods). GLBAsset never creates assets
+    directly - only ResourceManager is allowed to create assets.
     """
 
     _uses_binary = True  # GLB is binary format

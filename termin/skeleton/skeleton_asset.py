@@ -15,6 +15,9 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
     """
     Asset wrapper for SkeletonData with UUID tracking.
 
+    IMPORTANT: Create through ResourceManager.get_or_create_skeleton_asset(),
+    not directly. This ensures proper registration and avoids duplicates.
+
     Used by ResourceManager for skeleton registration and lookup.
 
     Note: Skeletons are typically loaded from GLB files (embedded),

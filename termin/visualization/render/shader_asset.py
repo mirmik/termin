@@ -15,6 +15,9 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
     """
     Asset for shader program definition.
 
+    IMPORTANT: Create through ResourceManager, not directly.
+    This ensures proper registration and avoids duplicates.
+
     Stores ShaderMultyPhaseProgramm (parsed shader with phases, uniforms).
     GPU compilation is handled by ShaderProgram inside MaterialPhase.
     """

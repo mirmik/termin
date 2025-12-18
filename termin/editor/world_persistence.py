@@ -233,17 +233,8 @@ class WorldPersistence:
     def reset(self) -> None:
         """
         Полная очистка мира.
-        Создаёт НОВУЮ пустую сцену и перезагружает файловые ресурсы.
+        Создаёт НОВУЮ пустую сцену.
         """
-        # Очищаем ресурсы
-        self._resource_manager.materials.clear()
-        self._resource_manager._mesh_assets.clear()
-        self._resource_manager._texture_assets.clear()
-
-        # Пересканируем файловые ресурсы проекта
-        if self._rescan_file_resources is not None:
-            self._rescan_file_resources()
-
         # Сбрасываем путь к сцене
         self._current_scene_path = None
 
@@ -317,21 +308,6 @@ class WorldPersistence:
             "resources": {...}
         }
         """
-        from termin.visualization.core.resources import ResourceManager
-
-        # Очищаем все ресурсы
-        self._resource_manager.materials.clear()
-        self._resource_manager._mesh_assets.clear()
-        self._resource_manager._texture_assets.clear()
-
-        # Пересканируем файловые ресурсы проекта
-        if self._rescan_file_resources is not None:
-            self._rescan_file_resources()
-
-        # Десериализуем ресурсы из сцены (поверх файловых)
-        resources_data = data.get("resources", {})
-        if resources_data:
-            ResourceManager.deserialize(resources_data)
 
         # Создаём новую сцену
         new_scene = self._create_new_scene()

@@ -15,6 +15,9 @@ class VoxelGridAsset(DataAsset["VoxelGrid"]):
     """
     Asset for voxel grid data.
 
+    IMPORTANT: Create through ResourceManager, not directly.
+    This ensures proper registration and avoids duplicates.
+
     Stores VoxelGrid (sparse voxel structure).
     """
 

@@ -15,6 +15,9 @@ class NavMeshAsset(DataAsset["NavMesh"]):
     """
     Asset for navigation mesh data.
 
+    IMPORTANT: Create through ResourceManager, not directly.
+    This ensures proper registration and avoids duplicates.
+
     Stores NavMesh (polygons for pathfinding).
     """
 

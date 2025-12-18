@@ -15,6 +15,10 @@ class Asset(Identifiable):
     """
     Base class for all loadable resources.
 
+    IMPORTANT: Assets should be created through ResourceManager, not directly.
+    Use ResourceManager.get_or_create_*_asset() methods to ensure proper
+    registration and avoid duplicate instances.
+
     Asset combines:
     - Identifiable (uuid, runtime_id)
     - Resource data management

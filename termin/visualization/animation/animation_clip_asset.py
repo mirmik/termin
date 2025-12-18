@@ -15,6 +15,9 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
     """
     Asset for animation clip data.
 
+    IMPORTANT: Create through ResourceManager.get_or_create_animation_clip_asset(),
+    not directly. This ensures proper registration and avoids duplicates.
+
     Stores AnimationClip (channels, duration, etc).
 
     Can be loaded from:

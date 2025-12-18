@@ -17,6 +17,9 @@ class TextureAsset(DataAsset[TextureData]):
     """
     Asset for texture image data.
 
+    IMPORTANT: Create through ResourceManager, not directly.
+    This ensures proper registration and avoids duplicates.
+
     Stores TextureData (CPU data: pixels, size, format) and TextureGPU (GPU resources).
     GPU resources are created on demand when .gpu property is accessed.
     """
