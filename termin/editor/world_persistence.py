@@ -86,6 +86,19 @@ class WorldPersistence:
         self._set_displays_data = set_displays_data
         self._rescan_file_resources = rescan_file_resources
         self._current_scene_path: str | None = None
+        self._resources_initialized: bool = False
+
+    def initialize_resources(self) -> None:
+        """
+        Initialize file resources once on startup.
+        Should be called once after editor is ready.
+        """
+        if self._resources_initialized:
+            return
+        self._resources_initialized = True
+
+        if self._rescan_file_resources is not None:
+            self._rescan_file_resources()
 
     @property
     def scene(self) -> "Scene":

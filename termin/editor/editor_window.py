@@ -367,8 +367,10 @@ class EditorWindow(QMainWindow):
         # --- Инициализация настроек (поиск VS Code и т.п.) ---
         EditorSettings.instance().init_text_editor_if_empty()
 
+        # --- Инициализируем ресурсы один раз при старте ---
+        self.world_persistence.initialize_resources()
+
         # --- Загружаем последнюю открытую сцену ---
-        # Загрузка сцены автоматически триггерит _rescan_file_resources через WorldPersistence
         self._scene_file_controller.load_last_scene()
 
     @property
