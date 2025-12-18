@@ -45,6 +45,14 @@ class LightComponent(Component):
             label="Cast Shadows",
             kind="bool",
         ),
+        "shadows_map_resolution": InspectField(
+            path="shadows.map_resolution",
+            label="Shadow Resolution",
+            kind="int",
+            min=256,
+            max=4096,
+            step=256,
+        ),
     }
 
     def __init__(
