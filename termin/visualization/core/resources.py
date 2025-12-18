@@ -322,8 +322,6 @@ class ResourceManager:
         if asset.program is not None:
             self.shaders[name] = asset.program
 
-        print(f"[ResourceManager] Reloaded shader: {name}")
-
     def _register_texture_file(self, name: str, result: "PreLoadResult") -> None:
         """Register texture from PreLoadResult (lazy loading)."""
         from termin.visualization.render.texture_asset import TextureAsset
@@ -374,8 +372,6 @@ class ResourceManager:
             texture._gpu.delete()
             texture._preview_pixmap = None
 
-        print(f"[ResourceManager] Reloaded texture: {name}")
-
     def _register_mesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Register mesh from PreLoadResult."""
         from termin.visualization.core.mesh_asset import MeshAsset
@@ -425,8 +421,6 @@ class ResourceManager:
         if drawable is not None:
             drawable._gpu.delete()
 
-        print(f"[ResourceManager] Reloaded mesh: {name}")
-
     def _register_voxel_grid_file(self, name: str, result: "PreLoadResult") -> None:
         """Register voxel grid from PreLoadResult."""
         from termin.voxels.voxel_grid_asset import VoxelGridAsset
@@ -475,8 +469,6 @@ class ResourceManager:
         if asset.grid is not None:
             self.voxel_grids[name] = asset.grid
 
-        print(f"[ResourceManager] Reloaded voxel grid: {name}")
-
     def _register_navmesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Register navmesh from PreLoadResult."""
         from termin.navmesh.navmesh_asset import NavMeshAsset
@@ -524,8 +516,6 @@ class ResourceManager:
         # Update legacy dict
         if asset.navmesh is not None:
             self.navmeshes[name] = asset.navmesh
-
-        print(f"[ResourceManager] Reloaded navmesh: {name}")
 
     def _register_glb_file(self, name: str, result: "PreLoadResult") -> None:
         """Register GLB from PreLoadResult."""
@@ -601,8 +591,6 @@ class ResourceManager:
 
         # Re-register child assets (may have new ones after reload)
         self._register_glb_child_assets(asset)
-
-        print(f"[ResourceManager] Reloaded GLB: {name}")
 
     def get_glb_asset(self, name: str) -> Optional["GLBAsset"]:
         """Get GLBAsset by name."""
