@@ -173,7 +173,9 @@ class DialogManager:
         from termin.editor.shadow_settings_dialog import ShadowSettingsDialog
 
         scene = self._get_scene()
-        dialog = ShadowSettingsDialog(scene, self._parent)
-        if dialog.exec():
-            # Settings saved, request viewport update
-            self._request_viewport_update()
+        dialog = ShadowSettingsDialog(
+            scene,
+            self._parent,
+            on_changed=self._request_viewport_update,
+        )
+        dialog.exec()
