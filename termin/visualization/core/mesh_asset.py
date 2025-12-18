@@ -6,19 +6,25 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin.mesh.mesh import Mesh3
-from termin.visualization.core.asset import Asset
+from termin.visualization.core.data_asset import DataAsset
 
 if TYPE_CHECKING:
     from termin.loaders.mesh_spec import MeshSpec
 
 
-class MeshAsset(Asset):
+class MeshAsset(DataAsset[Mesh3]):
     """
     Asset for 3D mesh geometry.
 
     Stores Mesh3 (CPU data: vertices, triangles, normals, UVs).
     Does NOT handle GPU upload - that's MeshGPU's responsibility.
+
+    Can be loaded from:
+    - STL/OBJ files (standalone)
+    - GLB files (embedded, via parent asset)
     """
+
+    _uses_binary = True  # STL/OBJ are read as binary
 
     def __init__(
         self,
@@ -27,130 +33,90 @@ class MeshAsset(Asset):
         source_path: Path | str | None = None,
         uuid: str | None = None,
     ):
-        """
-        Initialize MeshAsset.
+        super().__init__(data=mesh_data, name=name, source_path=source_path, uuid=uuid)
 
-        Args:
-            mesh_data: Mesh3 geometry data (can be None for lazy loading)
-            name: Human-readable name
-            source_path: Path to source file for loading/reloading
-            uuid: Existing UUID or None to generate new one
-        """
-        super().__init__(name=name, source_path=source_path, uuid=uuid)
-        self._mesh_data: Mesh3 | None = mesh_data
+        # Spec settings (parsed from spec file)
+        self._scale: float = 1.0
+        self._axis_x: str = "x"
+        self._axis_y: str = "y"
+        self._axis_z: str = "z"
+        self._flip_uv_v: bool = False
 
         # Compute normals if mesh data provided and normals missing
-        if self._mesh_data is not None and self._mesh_data.vertex_normals is None:
-            self._mesh_data.compute_vertex_normals()
+        if self._data is not None and self._data.vertex_normals is None:
+            self._data.compute_vertex_normals()
 
-        self._loaded = mesh_data is not None
+    # --- Convenience property ---
 
     @property
     def mesh_data(self) -> Mesh3 | None:
         """Mesh geometry data."""
-        return self._mesh_data
+        return self._data
 
     @mesh_data.setter
     def mesh_data(self, value: Mesh3 | None) -> None:
         """Set mesh data and bump version."""
-        self._mesh_data = value
-        if self._mesh_data is not None and self._mesh_data.vertex_normals is None:
-            self._mesh_data.compute_vertex_normals()
-        self._loaded = value is not None
-        self._bump_version()
+        if value is not None and value.vertex_normals is None:
+            value.compute_vertex_normals()
+        self.data = value
 
-    def load(self) -> bool:
-        """
-        Load mesh data from source_path.
+    # --- Spec parsing ---
 
-        Returns:
-            True if loaded successfully.
-        """
+    def _parse_spec_fields(self, spec_data: dict) -> None:
+        """Parse mesh-specific spec fields."""
+        self._scale = spec_data.get("scale", 1.0)
+        self._axis_x = spec_data.get("axis_x", "x")
+        self._axis_y = spec_data.get("axis_y", "y")
+        self._axis_z = spec_data.get("axis_z", "z")
+        self._flip_uv_v = spec_data.get("flip_uv_v", False)
+
+    def _build_spec_data(self) -> dict:
+        """Build spec data with mesh settings."""
+        spec = super()._build_spec_data()
+        # Only save non-default values
+        if self._scale != 1.0:
+            spec["scale"] = self._scale
+        if self._axis_x != "x":
+            spec["axis_x"] = self._axis_x
+        if self._axis_y != "y":
+            spec["axis_y"] = self._axis_y
+        if self._axis_z != "z":
+            spec["axis_z"] = self._axis_z
+        if self._flip_uv_v:
+            spec["flip_uv_v"] = True
+        return spec
+
+    def _get_mesh_spec(self) -> "MeshSpec":
+        """Create MeshSpec from current settings."""
+        from termin.loaders.mesh_spec import MeshSpec
+
+        return MeshSpec(
+            scale=self._scale,
+            axis_x=self._axis_x,
+            axis_y=self._axis_y,
+            axis_z=self._axis_z,
+            flip_uv_v=self._flip_uv_v,
+        )
+
+    # --- Content parsing ---
+
+    def _parse_content(self, content: bytes) -> Mesh3 | None:
+        """Parse mesh content (STL or OBJ based on file extension)."""
         if self._source_path is None:
-            return False
+            return None
 
-        try:
-            # Read file content
-            with open(self._source_path, "rb") as f:
-                content = f.read()
+        import os
 
-            # Get spec_data from pending or read from file
-            spec_data = getattr(self, "_pending_spec_data", None)
-            if spec_data is None:
-                from termin.editor.project_file_watcher import FilePreLoader
-                spec_data = FilePreLoader.read_spec_file(str(self._source_path))
+        ext = os.path.splitext(str(self._source_path))[1].lower()
+        spec = self._get_mesh_spec()
 
-            # Check if UUID already in spec
-            has_uuid = spec_data.get("uuid") is not None if spec_data else False
-
-            return self.load_from_content(content, spec_data=spec_data, has_uuid_in_spec=has_uuid)
-        except Exception as e:
-            print(f"[MeshAsset] Failed to load from {self._source_path}: {e}")
-            return False
-
-    def load_from_content(
-        self,
-        content: bytes | None,
-        spec_data: dict | None = None,
-        has_uuid_in_spec: bool = False,
-    ) -> bool:
-        """
-        Load mesh from binary content.
-
-        Args:
-            content: Binary mesh data (STL or OBJ format)
-            spec_data: Spec file data with scale, axis mappings
-            has_uuid_in_spec: If True, spec file already has UUID (don't save)
-
-        Returns:
-            True if loaded successfully.
-        """
-        if content is None or self._source_path is None:
-            return False
-
-        try:
-            import io
-            import os
-
-            from termin.loaders.mesh_spec import MeshSpec
-
-            ext = os.path.splitext(str(self._source_path))[1].lower()
-
-            # Create MeshSpec from spec_data
-            spec = MeshSpec(
-                scale=spec_data.get("scale", 1.0) if spec_data else 1.0,
-                axis_x=spec_data.get("axis_x", "x") if spec_data else "x",
-                axis_y=spec_data.get("axis_y", "y") if spec_data else "y",
-                axis_z=spec_data.get("axis_z", "z") if spec_data else "z",
-                flip_uv_v=spec_data.get("flip_uv_v", False) if spec_data else False,
-            )
-
-            # Parse mesh based on format
-            mesh_data = None
-            if ext == ".stl":
-                mesh_data = self._parse_stl_content(content, spec)
-            elif ext == ".obj":
-                mesh_data = self._parse_obj_content(content, spec)
-            else:
-                print(f"[MeshAsset] Unsupported format: {ext}")
-                return False
-
-            if mesh_data is None:
-                return False
-
-            self._mesh_data = mesh_data
-            if self._mesh_data.vertex_normals is None:
-                self._mesh_data.compute_vertex_normals()
-            self._loaded = True
-
-            # Save spec file if no UUID was in spec
-            if not has_uuid_in_spec:
-                self._save_spec_file(spec_data)
-
-            return True
-        except Exception as e:
-            print(f"[MeshAsset] Failed to load content: {e}")
-            return False
+        if ext == ".stl":
+            return self._parse_stl_content(content, spec)
+        elif ext == ".obj":
+            return self._parse_obj_content(content, spec)
+        else:
+            print(f"[MeshAsset] Unsupported format: {ext}")
+            return None
 
     def _parse_stl_content(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:
         """Parse STL content from bytes."""
@@ -181,11 +147,14 @@ class MeshAsset(Asset):
         if mesh_data.normals is not None:
             mesh_data.normals = spec.apply_to_normals(mesh_data.normals)
 
-        return Mesh3(
+        mesh3 = Mesh3(
             vertices=mesh_data.vertices,
             triangles=mesh_data.indices.reshape(-1, 3),
             vertex_normals=mesh_data.normals,
         )
+        if mesh3.vertex_normals is None:
+            mesh3.compute_vertex_normals()
+        return mesh3
 
     def _parse_obj_content(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:
         """Parse OBJ content from bytes."""
@@ -207,55 +176,62 @@ class MeshAsset(Asset):
         if mesh_data.uvs is not None:
             mesh3.uvs = mesh_data.uvs
 
+        if mesh3.vertex_normals is None:
+            mesh3.compute_vertex_normals()
         return mesh3
 
-    def _save_spec_file(self, existing_spec_data: dict | None = None) -> bool:
-        """Save UUID to spec file, preserving existing settings."""
-        if self._source_path is None:
+    # --- Embedded asset support (from GLB) ---
+
+    def _extract_from_parent(self) -> bool:
+        """Extract mesh data from parent GLBAsset."""
+        if self._parent_asset is None or self._parent_key is None:
             return False
 
-        from termin.editor.project_file_watcher import FilePreLoader
+        from termin.visualization.core.glb_asset import GLBAsset
 
-        # Merge existing spec data with UUID
-        spec_data = dict(existing_spec_data) if existing_spec_data else {}
-        spec_data["uuid"] = self.uuid
+        if not isinstance(self._parent_asset, GLBAsset):
+            return False
 
-        if FilePreLoader.write_spec_file(str(self._source_path), spec_data):
-            self.mark_just_saved()
-            print(f"[MeshAsset] Added UUID to spec: {self._name}")
-            return True
+        glb = self._parent_asset
+        if glb.scene_data is None:
+            return False
+
+        # Find mesh by name in parent's GLB data
+        from termin.loaders.glb_instantiator import _glb_mesh_to_mesh3
+
+        for glb_mesh in glb.scene_data.meshes:
+            if glb_mesh.name == self._parent_key:
+                self._data = _glb_mesh_to_mesh3(glb_mesh)
+                if self._data is not None:
+                    self._loaded = True
+                    return True
         return False
-
-    def unload(self) -> None:
-        """Unload mesh data to free memory."""
-        self._mesh_data = None
-        self._loaded = False
 
     # --- Convenience methods for mesh manipulation ---
 
     def get_vertex_count(self) -> int:
         """Get number of vertices."""
-        if self._mesh_data is None or self._mesh_data.vertices is None:
+        if self._data is None or self._data.vertices is None:
             return 0
-        return len(self._mesh_data.vertices)
+        return len(self._data.vertices)
 
     def get_triangle_count(self) -> int:
         """Get number of triangles."""
-        if self._mesh_data is None or self._mesh_data.triangles is None:
+        if self._data is None or self._data.triangles is None:
             return 0
-        return len(self._mesh_data.triangles)
+        return len(self._data.triangles)
 
     def interleaved_buffer(self):
         """Get interleaved vertex buffer for GPU upload."""
-        if self._mesh_data is None:
+        if self._data is None:
             return None
-        return self._mesh_data.interleaved_buffer()
+        return self._data.interleaved_buffer()
 
     def get_vertex_layout(self):
         """Get vertex layout for shader binding."""
-        if self._mesh_data is None:
+        if self._data is None:
             return None
-        return self._mesh_data.get_vertex_layout()
+        return self._data.get_vertex_layout()
 
     # --- Factory methods ---
 

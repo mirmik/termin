@@ -2,22 +2,34 @@
 
 from __future__ import annotations
 
+import uuid as uuid_module
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List
 
-from termin.visualization.core.asset import Asset
+from termin.visualization.core.data_asset import DataAsset
 
 if TYPE_CHECKING:
     from termin.loaders.glb_loader import GLBSceneData
+    from termin.visualization.core.mesh_asset import MeshAsset
+    from termin.skeleton.skeleton_asset import SkeletonAsset
+    from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
 
 
-class GLBAsset(Asset):
+class GLBAsset(DataAsset["GLBSceneData"]):
     """
     Asset for GLB model files.
 
-    Stores GLBSceneData which contains meshes, textures, animations, skeleton.
-    When instantiated into scene, creates Entity hierarchy via glb_instantiator.
+    GLBAsset is a container that holds:
+    - GLBSceneData (raw loaded data)
+    - Child MeshAssets for each mesh in the GLB
+    - Child SkeletonAssets for each skin
+    - Child AnimationClipAssets for each animation
+
+    Child assets are created during spec parsing (before content loading).
+    This allows lazy loading while maintaining consistent UUIDs.
     """
+
+    _uses_binary = True  # GLB is binary format
 
     def __init__(
         self,
@@ -26,330 +38,245 @@ class GLBAsset(Asset):
         source_path: Path | str | None = None,
         uuid: str | None = None,
     ):
-        """
-        Initialize GLBAsset.
+        super().__init__(data=scene_data, name=name, source_path=source_path, uuid=uuid)
 
-        Args:
-            scene_data: GLBSceneData (can be None for lazy loading)
-            name: Human-readable name
-            source_path: Path to source GLB file
-            uuid: Existing UUID or None to generate new one
-        """
-        super().__init__(name=name, source_path=source_path, uuid=uuid)
-        self._scene_data: "GLBSceneData | None" = scene_data
-        self._loaded = scene_data is not None
+        # Spec settings
+        self._normalize_scale: bool = False
+        self._convert_to_z_up: bool = True
+        self._blender_z_up_fix: bool = False
+
+        # Child assets (created during spec parsing)
+        self._mesh_assets: Dict[str, "MeshAsset"] = {}
+        self._skeleton_assets: Dict[str, "SkeletonAsset"] = {}
+        self._animation_assets: Dict[str, "AnimationClipAsset"] = {}
+
+    # --- Convenience property ---
 
     @property
     def scene_data(self) -> "GLBSceneData | None":
         """GLB scene data."""
-        return self._scene_data
+        return self._data
 
-    def load(self) -> bool:
-        """
-        Load GLB data from source_path.
+    # --- Spec parsing ---
 
-        Returns:
-            True if loaded successfully.
-        """
-        if self._source_path is None:
-            return False
+    def _parse_spec_fields(self, spec_data: dict) -> None:
+        """Parse GLB-specific spec fields and create child assets."""
+        # Parse settings
+        self._normalize_scale = spec_data.get("normalize_scale", False)
+        self._convert_to_z_up = spec_data.get("convert_to_z_up", True)
+        self._blender_z_up_fix = spec_data.get("blender_z_up_fix", False)
 
-        try:
-            # Read file content
-            with open(self._source_path, "rb") as f:
-                content = f.read()
+        # Create child assets from resources section
+        resources = spec_data.get("resources", {})
+        self._create_mesh_assets(resources.get("meshes", {}))
+        self._create_skeleton_assets(resources.get("skeletons", {}))
+        self._create_animation_assets(resources.get("animations", {}))
 
-            # Get spec_data from pending or read from file
-            spec_data = getattr(self, "_pending_spec_data", None)
-            if spec_data is None:
-                from termin.editor.project_file_watcher import FilePreLoader
-                spec_data = FilePreLoader.read_spec_file(str(self._source_path))
-
-            # Check if UUID already in spec
-            has_uuid = spec_data.get("uuid") is not None if spec_data else False
-
-            return self.load_from_content(content, spec_data=spec_data, has_uuid_in_spec=has_uuid)
-        except Exception as e:
-            print(f"[GLBAsset] Failed to load {self._source_path}: {e}")
-            return False
-
-    def load_from_content(
-        self,
-        content: bytes | None,
-        spec_data: dict | None = None,
-        has_uuid_in_spec: bool = False,
-    ) -> bool:
-        """
-        Load GLB from binary content.
-
-        Args:
-            content: Binary GLB data
-            spec_data: Spec file data with normalize_scale, etc.
-            has_uuid_in_spec: If True, spec file already has UUID (don't save)
-
-        Returns:
-            True if loaded successfully.
-        """
-        if content is None:
-            return False
-
-        try:
-            import io
-
-            from termin.loaders.glb_loader import load_glb_file_from_buffer
-
-            # Get settings from spec
-            normalize_scale = spec_data.get("normalize_scale", False) if spec_data else False
-            convert_to_z_up = spec_data.get("convert_to_z_up", True) if spec_data else True
-            blender_z_up_fix = spec_data.get("blender_z_up_fix", False) if spec_data else False
-
-            self._scene_data = load_glb_file_from_buffer(
-                content,
-                normalize_scale=normalize_scale,
-                convert_to_z_up=convert_to_z_up,
-                blender_z_up_fix=blender_z_up_fix,
-            )
-            self._loaded = True
-
-            # Register all resources in ResourceManager (may generate new UUIDs)
-            updated_spec, meshes_updated = self._register_meshes(spec_data)
-            updated_spec, skeletons_updated = self._register_skeletons(updated_spec)
-            updated_spec, animations_updated = self._register_animations(updated_spec)
-
-            # Save spec file if:
-            # - No UUID was in spec (need to save GLB's own UUID)
-            # - Resources were updated with new UUIDs
-            resources_updated = meshes_updated or skeletons_updated or animations_updated
-            if not has_uuid_in_spec or resources_updated:
-                self._save_spec_file(updated_spec)
-
-            return True
-        except Exception as e:
-            import traceback
-            print(f"[GLBAsset] Failed to load content: {e}")
-            traceback.print_exc()
-            return False
-
-    def _save_spec_file(self, existing_spec_data: dict | None = None) -> bool:
-        """Save UUID to spec file, preserving existing settings."""
-        if self._source_path is None:
-            return False
-
-        from termin.editor.project_file_watcher import FilePreLoader
-
-        # Merge existing spec data with UUID
-        spec_data = dict(existing_spec_data) if existing_spec_data else {}
-        spec_data["uuid"] = self.uuid
-
-        if FilePreLoader.write_spec_file(str(self._source_path), spec_data):
-            self.mark_just_saved()
-            print(f"[GLBAsset] Added UUID to spec: {self._name}")
-            return True
-        return False
-
-    def _register_meshes(self, spec_data: dict | None) -> tuple[dict, bool]:
-        """
-        Register all meshes from GLB in ResourceManager.
-
-        Returns:
-            (spec_data, updated) - spec_data with mesh UUIDs, and whether new UUIDs were added.
-        """
-        import copy
-        spec_data = copy.deepcopy(spec_data) if spec_data else {}
-
-        if self._scene_data is None:
-            return spec_data, False
-
-        import uuid as uuid_module
-        from termin.visualization.core.resources import ResourceManager
-        from termin.visualization.core.mesh import MeshDrawable
+    def _create_mesh_assets(self, mesh_uuids: Dict[str, str]) -> None:
+        """Create child MeshAssets with UUIDs from spec."""
         from termin.visualization.core.mesh_asset import MeshAsset
-        from termin.loaders.glb_instantiator import _glb_mesh_to_mesh3
 
-        rm = ResourceManager.instance()
-
-        # Get or create resources section in spec
-        if "resources" not in spec_data or not isinstance(spec_data["resources"], dict):
-            spec_data["resources"] = {}
-        if "meshes" not in spec_data["resources"] or not isinstance(spec_data["resources"]["meshes"], dict):
-            spec_data["resources"]["meshes"] = {}
-
-        mesh_uuids = spec_data["resources"]["meshes"]
-        updated = False
-
-        for i, glb_mesh in enumerate(self._scene_data.meshes):
-            # Create unique name: glb_name + mesh_name
-            mesh_name = f"{self._name}_{glb_mesh.name}"
-
-            # Get or generate UUID for this mesh
-            mesh_uuid = mesh_uuids.get(glb_mesh.name)
-            if mesh_uuid is None:
-                mesh_uuid = str(uuid_module.uuid4())
-                mesh_uuids[glb_mesh.name] = mesh_uuid
-                updated = True
-
-            # Skip if already registered
-            if mesh_name in rm.meshes:
-                continue
-
-            mesh3 = _glb_mesh_to_mesh3(glb_mesh)
-
-            # Create MeshAsset with UUID
+        for mesh_name, mesh_uuid in mesh_uuids.items():
+            full_name = f"{self._name}_{mesh_name}"
             asset = MeshAsset(
-                mesh_data=mesh3,
-                name=mesh_name,
-                source_path=str(self._source_path) if self._source_path else None,
+                mesh_data=None,
+                name=full_name,
+                source_path=self._source_path,
                 uuid=mesh_uuid,
             )
-            rm._mesh_assets[mesh_name] = asset
-            rm._assets_by_uuid[mesh_uuid] = asset
+            asset.set_parent(self, mesh_name)
+            self._mesh_assets[mesh_name] = asset
 
-            # Create MeshDrawable wrapper
-            drawable = MeshDrawable(asset, name=mesh_name)
-            rm.meshes[mesh_name] = drawable
+    def _create_skeleton_assets(self, skeleton_uuids: Dict[str, str]) -> None:
+        """Create child SkeletonAssets with UUIDs from spec."""
+        from termin.skeleton.skeleton_asset import SkeletonAsset
 
-        return spec_data, updated
+        for skeleton_key, skeleton_uuid in skeleton_uuids.items():
+            # skeleton_key is "skeleton" or "skeleton_N"
+            idx = 0 if skeleton_key == "skeleton" else int(skeleton_key.split("_")[1])
+            skeleton_name = f"{self._name}_skeleton" if idx == 0 else f"{self._name}_skeleton_{idx}"
 
-    def _register_skeletons(self, spec_data: dict | None) -> tuple[dict, bool]:
-        """
-        Register all skeletons from GLB in ResourceManager.
-
-        Returns:
-            (spec_data, updated) - spec_data with skeleton UUIDs, and whether new UUIDs were added.
-        """
-        import copy
-        spec_data = copy.deepcopy(spec_data) if spec_data else {}
-
-        if self._scene_data is None or not self._scene_data.skins:
-            return spec_data, False
-
-        import uuid as uuid_module
-        from termin.visualization.core.resources import ResourceManager
-        from termin.loaders.glb_instantiator import _create_skeleton_from_skin
-
-        rm = ResourceManager.instance()
-
-        # Get or create resources section in spec
-        if "resources" not in spec_data or not isinstance(spec_data["resources"], dict):
-            spec_data["resources"] = {}
-        if "skeletons" not in spec_data["resources"] or not isinstance(spec_data["resources"]["skeletons"], dict):
-            spec_data["resources"]["skeletons"] = {}
-
-        skeleton_uuids = spec_data["resources"]["skeletons"]
-        updated = False
-
-        for i, skin in enumerate(self._scene_data.skins):
-            # Create unique name: glb_name + skeleton suffix
-            skeleton_name = f"{self._name}_skeleton" if i == 0 else f"{self._name}_skeleton_{i}"
-
-            # Get or generate UUID for this skeleton
-            skeleton_key = f"skeleton_{i}" if i > 0 else "skeleton"
-            skeleton_uuid = skeleton_uuids.get(skeleton_key)
-            if skeleton_uuid is None:
-                skeleton_uuid = str(uuid_module.uuid4())
-                skeleton_uuids[skeleton_key] = skeleton_uuid
-                updated = True
-
-            # Skip if already registered
-            if rm.get_skeleton(skeleton_name) is not None:
-                continue
-
-            # Create SkeletonData from GLB skin
-            skeleton_data = _create_skeleton_from_skin(skin, self._scene_data.nodes)
-
-            # Register in ResourceManager
-            rm.register_skeleton(
-                skeleton_name,
-                skeleton_data,
-                source_path=str(self._source_path) if self._source_path else None,
+            asset = SkeletonAsset(
+                skeleton_data=None,
+                name=skeleton_name,
+                source_path=self._source_path,
                 uuid=skeleton_uuid,
             )
+            asset.set_parent(self, skeleton_key)
+            self._skeleton_assets[skeleton_key] = asset
 
-        return spec_data, updated
+    def _create_animation_assets(self, animation_uuids: Dict[str, str]) -> None:
+        """Create child AnimationClipAssets with UUIDs from spec."""
+        from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
 
-    def _register_animations(self, spec_data: dict | None) -> tuple[dict, bool]:
-        """
-        Register all animation clips from GLB in ResourceManager.
-
-        Returns:
-            (spec_data, updated) - spec_data with animation UUIDs, and whether new UUIDs were added.
-        """
-        import copy
-        spec_data = copy.deepcopy(spec_data) if spec_data else {}
-
-        if self._scene_data is None or not self._scene_data.animations:
-            return spec_data, False
-
-        import uuid as uuid_module
-        from termin.visualization.core.resources import ResourceManager
-        from termin.visualization.animation.clip import AnimationClip
-
-        rm = ResourceManager.instance()
-
-        # Get or create resources section in spec
-        if "resources" not in spec_data or not isinstance(spec_data["resources"], dict):
-            spec_data["resources"] = {}
-        if "animations" not in spec_data["resources"] or not isinstance(spec_data["resources"]["animations"], dict):
-            spec_data["resources"]["animations"] = {}
-
-        animation_uuids = spec_data["resources"]["animations"]
-        updated = False
-
-        for glb_anim in self._scene_data.animations:
-            # Create unique name: glb_name + animation_name
-            clip_name = f"{self._name}_{glb_anim.name}"
-
-            # Get or generate UUID for this animation
-            clip_uuid = animation_uuids.get(glb_anim.name)
-            if clip_uuid is None:
-                clip_uuid = str(uuid_module.uuid4())
-                animation_uuids[glb_anim.name] = clip_uuid
-                updated = True
-
-            # Skip if already registered
-            if rm.get_animation_clip_asset(clip_name) is not None:
-                continue
-
-            # Create AnimationClip from GLB animation
-            clip = AnimationClip.from_glb_clip(glb_anim)
-
-            # Register in ResourceManager
-            rm.register_animation_clip(
-                clip_name,
-                clip,
-                source_path=str(self._source_path) if self._source_path else None,
-                uuid=clip_uuid,
+        for anim_name, anim_uuid in animation_uuids.items():
+            full_name = f"{self._name}_{anim_name}"
+            asset = AnimationClipAsset(
+                clip=None,
+                name=full_name,
+                source_path=self._source_path,
+                uuid=anim_uuid,
             )
+            asset.set_parent(self, anim_name)
+            self._animation_assets[anim_name] = asset
 
-        return spec_data, updated
+    def _build_spec_data(self) -> dict:
+        """Build spec data with GLB settings and child UUIDs."""
+        spec = super()._build_spec_data()
 
-    def unload(self) -> None:
-        """Unload GLB data to free memory."""
-        self._scene_data = None
-        self._loaded = False
+        # Settings (only non-defaults)
+        if self._normalize_scale:
+            spec["normalize_scale"] = True
+        if not self._convert_to_z_up:
+            spec["convert_to_z_up"] = False
+        if self._blender_z_up_fix:
+            spec["blender_z_up_fix"] = True
+
+        # Child asset UUIDs
+        resources: Dict[str, Dict[str, str]] = {}
+
+        if self._mesh_assets:
+            resources["meshes"] = {
+                name: asset.uuid for name, asset in self._mesh_assets.items()
+            }
+        if self._skeleton_assets:
+            resources["skeletons"] = {
+                key: asset.uuid for key, asset in self._skeleton_assets.items()
+            }
+        if self._animation_assets:
+            resources["animations"] = {
+                name: asset.uuid for name, asset in self._animation_assets.items()
+            }
+
+        if resources:
+            spec["resources"] = resources
+
+        return spec
+
+    # --- Content parsing ---
+
+    def _parse_content(self, content: bytes) -> "GLBSceneData | None":
+        """Parse GLB binary content."""
+        from termin.loaders.glb_loader import load_glb_file_from_buffer
+
+        return load_glb_file_from_buffer(
+            content,
+            normalize_scale=self._normalize_scale,
+            convert_to_z_up=self._convert_to_z_up,
+            blender_z_up_fix=self._blender_z_up_fix,
+        )
+
+    def _on_loaded(self) -> None:
+        """After loading, create any missing child assets and update spec."""
+        if self._data is None:
+            return
+
+        spec_changed = False
+
+        # Create mesh assets for any meshes not in spec
+        for glb_mesh in self._data.meshes:
+            if glb_mesh.name not in self._mesh_assets:
+                self._create_new_mesh_asset(glb_mesh.name)
+                spec_changed = True
+
+        # Create skeleton assets for any skins not in spec
+        for i, skin in enumerate(self._data.skins):
+            skeleton_key = "skeleton" if i == 0 else f"skeleton_{i}"
+            if skeleton_key not in self._skeleton_assets:
+                self._create_new_skeleton_asset(skeleton_key, i)
+                spec_changed = True
+
+        # Create animation assets for any animations not in spec
+        for glb_anim in self._data.animations:
+            if glb_anim.name not in self._animation_assets:
+                self._create_new_animation_asset(glb_anim.name)
+                spec_changed = True
+
+        # Save spec if new child assets were created
+        if spec_changed and self._source_path:
+            self.save_spec_file()
+
+    def _create_new_mesh_asset(self, mesh_name: str) -> "MeshAsset":
+        """Create a new MeshAsset for a mesh discovered during load."""
+        from termin.visualization.core.mesh_asset import MeshAsset
+
+        full_name = f"{self._name}_{mesh_name}"
+        asset = MeshAsset(
+            mesh_data=None,
+            name=full_name,
+            source_path=self._source_path,
+            uuid=str(uuid_module.uuid4()),
+        )
+        asset.set_parent(self, mesh_name)
+        self._mesh_assets[mesh_name] = asset
+        return asset
+
+    def _create_new_skeleton_asset(self, skeleton_key: str, index: int) -> "SkeletonAsset":
+        """Create a new SkeletonAsset for a skeleton discovered during load."""
+        from termin.skeleton.skeleton_asset import SkeletonAsset
+
+        skeleton_name = f"{self._name}_skeleton" if index == 0 else f"{self._name}_skeleton_{index}"
+        asset = SkeletonAsset(
+            skeleton_data=None,
+            name=skeleton_name,
+            source_path=self._source_path,
+            uuid=str(uuid_module.uuid4()),
+        )
+        asset.set_parent(self, skeleton_key)
+        self._skeleton_assets[skeleton_key] = asset
+        return asset
+
+    def _create_new_animation_asset(self, anim_name: str) -> "AnimationClipAsset":
+        """Create a new AnimationClipAsset for an animation discovered during load."""
+        from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+
+        full_name = f"{self._name}_{anim_name}"
+        asset = AnimationClipAsset(
+            clip=None,
+            name=full_name,
+            source_path=self._source_path,
+            uuid=str(uuid_module.uuid4()),
+        )
+        asset.set_parent(self, anim_name)
+        self._animation_assets[anim_name] = asset
+        return asset
+
+    # --- Child asset access ---
+
+    def get_mesh_assets(self) -> Dict[str, "MeshAsset"]:
+        """Get all child mesh assets."""
+        return self._mesh_assets
+
+    def get_skeleton_assets(self) -> Dict[str, "SkeletonAsset"]:
+        """Get all child skeleton assets."""
+        return self._skeleton_assets
+
+    def get_animation_assets(self) -> Dict[str, "AnimationClipAsset"]:
+        """Get all child animation clip assets."""
+        return self._animation_assets
 
     # --- Content info methods ---
 
     def get_mesh_count(self) -> int:
         """Get number of meshes in the GLB."""
-        if self._scene_data is None:
-            return 0
-        return len(self._scene_data.meshes)
+        if self._data is None:
+            return len(self._mesh_assets)  # Return spec count if not loaded
+        return len(self._data.meshes)
 
     def get_animation_count(self) -> int:
         """Get number of animations in the GLB."""
-        if self._scene_data is None:
-            return 0
-        return len(self._scene_data.animations)
+        if self._data is None:
+            return len(self._animation_assets)
+        return len(self._data.animations)
 
     def has_skeleton(self) -> bool:
         """Check if GLB has skeleton data."""
-        if self._scene_data is None:
-            return False
-        return len(self._scene_data.skins) > 0
+        if self._data is None:
+            return len(self._skeleton_assets) > 0
+        return len(self._data.skins) > 0
 
     def get_bone_count(self) -> int:
         """Get total bone count from all skins."""
-        if self._scene_data is None:
+        if self._data is None:
             return 0
-        return sum(s.joint_count for s in self._scene_data.skins)
+        return sum(s.joint_count for s in self._data.skins)

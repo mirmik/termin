@@ -41,4 +41,20 @@ def load_animation_clip(path: str | Path) -> "AnimationClip":
     return AnimationClip.deserialize(data)
 
 
-__all__ = ["save_animation_clip", "load_animation_clip"]
+def parse_animation_content(content: str) -> "AnimationClip":
+    """
+    Parse AnimationClip from JSON content string.
+
+    Args:
+        content: JSON content of .tanim file
+
+    Returns:
+        Parsed AnimationClip
+    """
+    from .clip import AnimationClip
+
+    data = json.loads(content)
+    return AnimationClip.deserialize(data)
+
+
+__all__ = ["save_animation_clip", "load_animation_clip", "parse_animation_content"]

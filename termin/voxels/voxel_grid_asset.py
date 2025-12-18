@@ -5,18 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.asset import Asset
+from termin.visualization.core.data_asset import DataAsset
 
 if TYPE_CHECKING:
     from termin.voxels.grid import VoxelGrid
 
 
-class VoxelGridAsset(Asset):
+class VoxelGridAsset(DataAsset["VoxelGrid"]):
     """
     Asset for voxel grid data.
 
     Stores VoxelGrid (sparse voxel structure).
     """
+
+    _uses_binary = False  # JSON text format
 
     def __init__(
         self,
@@ -25,106 +27,30 @@ class VoxelGridAsset(Asset):
         source_path: Path | str | None = None,
         uuid: str | None = None,
     ):
-        """
-        Initialize VoxelGridAsset.
+        super().__init__(data=grid, name=name, source_path=source_path, uuid=uuid)
 
-        Args:
-            grid: VoxelGrid data (can be None for lazy loading)
-            name: Human-readable name
-            source_path: Path to source file for loading/reloading
-            uuid: Existing UUID or None to generate new one
-        """
-        super().__init__(name=name, source_path=source_path, uuid=uuid)
-        self._grid: "VoxelGrid | None" = grid
-        self._loaded = grid is not None
+    # --- Convenience property ---
 
     @property
     def grid(self) -> "VoxelGrid | None":
         """VoxelGrid data."""
-        return self._grid
+        return self._data
 
     @grid.setter
     def grid(self, value: "VoxelGrid | None") -> None:
         """Set grid and bump version."""
-        self._grid = value
-        self._loaded = value is not None
-        self._bump_version()
+        self.data = value
 
-    def load(self) -> bool:
-        """
-        Load voxel grid from source_path.
+    # --- Content parsing ---
 
-        Returns:
-            True if loaded successfully.
-        """
-        if self._source_path is None:
-            return False
+    def _parse_content(self, content: str) -> "VoxelGrid | None":
+        """Parse JSON content into VoxelGrid."""
+        from termin.voxels.persistence import VoxelPersistence
 
-        try:
-            from termin.voxels.io import load_voxel_grid
-
-            self._grid = load_voxel_grid(str(self._source_path))
-            if self._grid is not None:
-                self._grid.name = self._name
-                self._loaded = True
-                return True
-        except Exception:
-            pass
-        return False
-
-    def load_from_content(
-        self,
-        content: str | None,
-        has_uuid_in_spec: bool = False,
-    ) -> bool:
-        """
-        Load voxel grid from JSON content.
-
-        Args:
-            content: JSON content string
-            has_uuid_in_spec: If True, spec file already has UUID (don't save)
-
-        Returns:
-            True if loaded successfully.
-        """
-        if content is None:
-            return False
-
-        try:
-            from termin.voxels.persistence import VoxelPersistence
-
-            self._grid = VoxelPersistence.load_from_content(content)
-            if self._grid is not None:
-                self._grid.name = self._name
-                self._loaded = True
-
-                # Save spec file if no UUID was in spec
-                if not has_uuid_in_spec and self._source_path:
-                    self._save_spec_file()
-
-                return True
-        except Exception as e:
-            print(f"[VoxelGridAsset] Failed to load content: {e}")
-        return False
-
-    def _save_spec_file(self) -> bool:
-        """Save UUID to spec file."""
-        if self._source_path is None:
-            return False
-
-        from termin.editor.project_file_watcher import FilePreLoader
-
-        spec_data = {"uuid": self.uuid}
-        if FilePreLoader.write_spec_file(str(self._source_path), spec_data):
-            self.mark_just_saved()
-            print(f"[VoxelGridAsset] Added UUID to spec: {self._name}")
-            return True
-        return False
-
-    def unload(self) -> None:
-        """Unload grid to free memory."""
-        self._grid = None
-        self._loaded = False
+        grid = VoxelPersistence.load_from_content(content)
+        if grid is not None:
+            grid.name = self._name
+        return grid
 
     # --- Factory methods ---
 

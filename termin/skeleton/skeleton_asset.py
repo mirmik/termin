@@ -5,18 +5,23 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.asset import Asset
+from termin.visualization.core.data_asset import DataAsset
 
 if TYPE_CHECKING:
     from .skeleton import SkeletonData
 
 
-class SkeletonAsset(Asset):
+class SkeletonAsset(DataAsset["SkeletonData"]):
     """
     Asset wrapper for SkeletonData with UUID tracking.
 
     Used by ResourceManager for skeleton registration and lookup.
+
+    Note: Skeletons are typically loaded from GLB files (embedded),
+    not as standalone files.
     """
+
+    _uses_binary = False  # Not used for standalone loading
 
     def __init__(
         self,
@@ -25,50 +30,73 @@ class SkeletonAsset(Asset):
         source_path: Path | str | None = None,
         uuid: str | None = None,
     ):
-        """
-        Initialize SkeletonAsset.
+        super().__init__(data=skeleton_data, name=name, source_path=source_path, uuid=uuid)
 
-        Args:
-            skeleton_data: The skeleton data (can be None for lazy loading)
-            name: Human-readable name
-            source_path: Path to source file (GLB)
-            uuid: Existing UUID or None to generate new one
-        """
-        super().__init__(name=name, source_path=source_path, uuid=uuid)
-        self._skeleton_data: "SkeletonData | None" = skeleton_data
-        self._loaded = skeleton_data is not None
+    # --- Convenience property ---
 
     @property
     def skeleton_data(self) -> "SkeletonData | None":
         """Get skeleton data."""
-        return self._skeleton_data
+        return self._data
 
     @skeleton_data.setter
     def skeleton_data(self, value: "SkeletonData | None") -> None:
         """Set skeleton data and bump version."""
-        self._skeleton_data = value
-        self._loaded = value is not None
-        self._bump_version()
+        self.data = value
 
-    def load(self) -> bool:
+    # --- Content parsing ---
+
+    def _parse_content(self, content: str) -> "SkeletonData | None":
         """
-        Load skeleton from source.
+        Parse skeleton from content.
 
-        Note: Skeletons are typically loaded as part of GLB files,
-        not standalone. This is a placeholder for future use.
+        Note: Skeletons are typically loaded from GLB, not standalone files.
+        This method exists for potential future standalone skeleton format.
         """
-        return self._loaded
+        return None
 
-    def unload(self) -> None:
-        """Unload skeleton data to free memory."""
-        self._skeleton_data = None
-        self._loaded = False
+    # --- Embedded asset support (from GLB) ---
+
+    def _extract_from_parent(self) -> bool:
+        """Extract skeleton data from parent GLBAsset."""
+        if self._parent_asset is None or self._parent_key is None:
+            return False
+
+        from termin.visualization.core.glb_asset import GLBAsset
+        from termin.loaders.glb_instantiator import _create_skeleton_from_skin
+
+        if not isinstance(self._parent_asset, GLBAsset):
+            return False
+
+        glb = self._parent_asset
+        if glb.scene_data is None:
+            return False
+
+        # skeleton_key is "skeleton" or "skeleton_N"
+        if self._parent_key == "skeleton":
+            skin_index = 0
+        else:
+            skin_index = int(self._parent_key.split("_")[1])
+
+        if skin_index >= len(glb.scene_data.skins):
+            return False
+
+        skin = glb.scene_data.skins[skin_index]
+        self._data = _create_skeleton_from_skin(skin, glb.scene_data.nodes)
+        if self._data is not None:
+            self._loaded = True
+            return True
+        return False
+
+    # --- Convenience methods ---
 
     def get_bone_count(self) -> int:
         """Get number of bones in skeleton."""
-        if self._skeleton_data is None:
+        if self._data is None:
             return 0
-        return self._skeleton_data.get_bone_count()
+        return self._data.get_bone_count()
+
+    # --- Serialization ---
 
     def serialize(self) -> dict:
         """Serialize skeleton asset to dict."""
@@ -76,8 +104,8 @@ class SkeletonAsset(Asset):
             "uuid": self.uuid,
             "name": self._name,
         }
-        if self._skeleton_data is not None:
-            data["skeleton_data"] = self._skeleton_data.serialize()
+        if self._data is not None:
+            data["skeleton_data"] = self._data.serialize()
         return data
 
     @classmethod
@@ -94,6 +122,8 @@ class SkeletonAsset(Asset):
             name=data.get("name", "skeleton"),
             uuid=data.get("uuid"),
         )
+
+    # --- Factory methods ---
 
     @classmethod
     def from_skeleton_data(
