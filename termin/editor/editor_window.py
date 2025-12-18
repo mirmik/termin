@@ -104,6 +104,7 @@ class EditorWindow(QMainWindow):
         self._prefab_menu: QMenu | None = None
         self._viewport_list_widget: ViewportListWidget | None = None
         self._rendering_controller: RenderingController | None = None
+        self._viewport_toolbar: QWidget | None = None
         self._is_fullscreen: bool = False
         self._pre_fullscreen_state: dict | None = None  # Store widget visibility before fullscreen
 
@@ -929,6 +930,7 @@ class EditorWindow(QMainWindow):
         play_btn.clicked.connect(self._toggle_game_mode)
         layout.addWidget(play_btn)
         self._play_button = play_btn
+        self._viewport_toolbar = toolbar
 
         # Правый спейсер для центрирования кнопки
         layout.addStretch(1)
@@ -1283,6 +1285,8 @@ class EditorWindow(QMainWindow):
             "left_visible": self.leftTabWidget.isVisible() if self.leftTabWidget else True,
             "inspector_visible": self.inspectorContainer.isVisible() if self.inspectorContainer else True,
             "bottom_visible": self._get_bottom_widget_visible(),
+            "toolbar_visible": self._viewport_toolbar.isVisible() if self._viewport_toolbar else True,
+            "tabbar_visible": self._center_tab_widget.tabBar().isVisible() if self._center_tab_widget else True,
             "menubar_visible": self.menuBar().isVisible(),
             "statusbar_visible": self.statusBar().isVisible(),
             "window_state": self.windowState(),
@@ -1296,6 +1300,14 @@ class EditorWindow(QMainWindow):
 
         # Hide bottom panel (project browser area)
         self._set_bottom_widget_visible(False)
+
+        # Hide viewport toolbar (with Play button)
+        if self._viewport_toolbar:
+            self._viewport_toolbar.hide()
+
+        # Hide tab bar of center tab widget
+        if self._center_tab_widget:
+            self._center_tab_widget.tabBar().hide()
 
         # Hide menu and status bars
         self.menuBar().hide()
@@ -1354,6 +1366,14 @@ class EditorWindow(QMainWindow):
             # Restore bottom panel
             if state.get("bottom_visible", True):
                 self._set_bottom_widget_visible(True)
+
+            # Restore viewport toolbar
+            if self._viewport_toolbar and state.get("toolbar_visible", True):
+                self._viewport_toolbar.show()
+
+            # Restore tab bar
+            if self._center_tab_widget and state.get("tabbar_visible", True):
+                self._center_tab_widget.tabBar().show()
 
             self._pre_fullscreen_state = None
 
