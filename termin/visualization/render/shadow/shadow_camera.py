@@ -291,6 +291,7 @@ def fit_shadow_frustum_to_camera(
     max_shadow_distance: float | None = None,
     shadow_map_resolution: int = 1024,
     stabilize: bool = True,
+    caster_offset: float = 50.0,
 ) -> ShadowCameraParams:
     """
     Вычисляет параметры shadow camera, покрывающие view frustum основной камеры.
@@ -305,10 +306,11 @@ def fit_shadow_frustum_to_camera(
     Параметры:
         camera: Основная камера сцены
         light_direction: Направление directional light
-        padding: Дополнительный отступ для shadow casters за камерой
+        padding: Дополнительный отступ вокруг frustum
         max_shadow_distance: Максимальная дистанция теней (None = использовать far plane камеры)
         shadow_map_resolution: Разрешение shadow map (для стабилизации)
         stabilize: Включить texel snapping для устранения дрожания теней
+        caster_offset: Расстояние за камерой для захвата shadow casters
 
     Возвращает:
         ShadowCameraParams с fitted frustum
@@ -381,8 +383,8 @@ def fit_shadow_frustum_to_camera(
         center = light_rotation_inv @ center_light
 
     # Z в light space: min — ближе к свету, max — дальше
-    # Добавляем padding назад для shadow casters за камерой
-    z_near = min_bounds[2] - padding * 10.0  # больше padding для casters
+    # caster_offset — расстояние за камерой для захвата shadow casters
+    z_near = min_bounds[2] - caster_offset
     z_far = max_bounds[2] + padding
 
     # near/far должны быть положительными для ортографической проекции

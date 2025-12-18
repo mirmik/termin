@@ -70,6 +70,10 @@ class ShadowPass(RenderFramePass):
         ),
         "near": InspectField(path="near", label="Near (fallback)", kind="float", min=0.01, step=0.1),
         "far": InspectField(path="far", label="Far (fallback)", kind="float", min=1.0, step=1.0),
+        "caster_offset": InspectField(
+            path="caster_offset", label="Caster Offset", kind="float",
+            min=0.0, max=200.0, step=5.0,
+        ),
     }
 
     def __init__(
@@ -81,6 +85,7 @@ class ShadowPass(RenderFramePass):
         ortho_size: float = 20.0,
         near: float = 0.1,
         far: float = 100.0,
+        caster_offset: float = 50.0,
     ):
         super().__init__(
             pass_name=pass_name,
@@ -93,6 +98,7 @@ class ShadowPass(RenderFramePass):
         self.ortho_size = ortho_size
         self.near = near
         self.far = far
+        self.caster_offset = caster_offset
         
         # Материал для shadow pass (общий для всех источников)
         self._material: ShadowMaterial | None = None
@@ -115,6 +121,7 @@ class ShadowPass(RenderFramePass):
             "ortho_size": self.ortho_size,
             "near": self.near,
             "far": self.far,
+            "caster_offset": self.caster_offset,
         }
 
     @classmethod
@@ -128,6 +135,7 @@ class ShadowPass(RenderFramePass):
             ortho_size=data.get("ortho_size", 20.0),
             near=data.get("near", 0.1),
             far=data.get("far", 100.0),
+            caster_offset=data.get("caster_offset", 50.0),
         )
 
     def _get_material(self) -> ShadowMaterial:
@@ -184,6 +192,7 @@ class ShadowPass(RenderFramePass):
                 max_shadow_distance=self.max_shadow_distance,
                 shadow_map_resolution=light.shadows.map_resolution,
                 stabilize=True,  # Texel snapping для устранения дрожания
+                caster_offset=self.caster_offset,
             )
 
         # Fallback: фиксированные параметры
