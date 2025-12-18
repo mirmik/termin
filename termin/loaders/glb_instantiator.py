@@ -266,7 +266,7 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
             clip = anim_asset.clip
             if clip is not None:
                 clips.append(clip)
-                animation_player.add_clip(clip)
+                animation_player.add_clip(clip, asset=anim_asset)
 
         if clips:
             root_entity.add_component(animation_player)

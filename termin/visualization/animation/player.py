@@ -123,13 +123,17 @@ class AnimationPlayer(Component):
         """Set target skeleton for bone animation."""
         self._target_skeleton = value
 
-    def add_clip(self, clip: AnimationClip) -> AnimationClip:
-        """Add animation clip to the player."""
+    def add_clip(self, clip: AnimationClip, asset: "AnimationClipAsset | None" = None) -> AnimationClip:
+        """Add animation clip to the player.
+
+        Args:
+            clip: AnimationClip to add
+            asset: Optional AnimationClipAsset (for proper UUID serialization)
+        """
+        from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+
         self.clips[clip.name] = clip
-        # Create handle from asset if registered, otherwise direct
-        from termin.visualization.core.resources import ResourceManager
-        rm = ResourceManager.instance()
-        asset = rm.get_animation_clip_asset(clip.name)
+
         if asset is not None:
             handle = AnimationClipHandle.from_asset(asset)
         else:
