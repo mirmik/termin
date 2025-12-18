@@ -68,6 +68,10 @@ class Component:
         """Called when component is removed from its entity."""
         return
 
+    def on_editor_start(self):
+        """Called when scene starts in editor mode."""
+        return
+
     def serialize_data(self):
         fields = self.serializable_fields
 

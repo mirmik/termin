@@ -107,6 +107,21 @@ class SkinnedMeshRenderer(MeshRenderer):
             if self._skeleton_controller:
                 print(f"  skeleton_instance={self._skeleton_controller.skeleton_instance is not None}")
 
+    def on_editor_start(self):
+        """Called when scene starts in editor mode. Refresh bone matrices from skeleton."""
+        # Re-acquire skeleton_controller if needed (may not be set after deserialization)
+        if self._skeleton_controller is None and self.entity is not None:
+            from termin.visualization.render.components.skeleton_controller import SkeletonController
+            parent = self.entity.transform.parent
+            if parent is not None and parent.entity is not None:
+                self._skeleton_controller = parent.entity.get_component(SkeletonController)
+            if self._skeleton_controller is None:
+                self._skeleton_controller = self.entity.get_component(SkeletonController)
+
+        skeleton_instance = self.skeleton_instance
+        if skeleton_instance is not None:
+            skeleton_instance.update()
+
     @property
     def skeleton_instance(self) -> "SkeletonInstance | None":
         """Get the skeleton instance from controller."""

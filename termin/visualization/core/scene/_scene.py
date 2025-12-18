@@ -336,6 +336,12 @@ class Scene(Identifiable):
         for component in self.update_list:
             component.update(dt)
 
+    def notify_editor_start(self):
+        """Notify all components that scene started in editor mode."""
+        for entity in self.entities:
+            for component in entity.components:
+                component.on_editor_start()
+
     # --- Graphics initialization ---
 
     def ensure_ready(self, graphics: GraphicsBackend):

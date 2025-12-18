@@ -350,6 +350,9 @@ class WorldPersistence:
         # Заменяем текущую сцену
         self._replace_scene(new_scene)
 
+        # Уведомляем компоненты о старте в режиме редактора
+        new_scene.notify_editor_start()
+
         # Восстанавливаем состояние редактора
         # Новый формат: data["editor"]["camera"], data["editor"]["selected_entity"]
         # Старый формат: scene_data["editor_camera"], data["editor_state"]["selected_entity_name"]
