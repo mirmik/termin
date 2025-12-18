@@ -42,7 +42,6 @@ class PipelineFileProcessor(FileTypeProcessor):
                 self._file_to_resources[path] = set()
             self._file_to_resources[path].add(name)
 
-            print(f"[PipelineProcessor] Loaded: {name}")
             self._notify_reloaded(name)
 
         except Exception as e:
@@ -69,7 +68,6 @@ class PipelineFileProcessor(FileTypeProcessor):
             pipeline = RenderPipeline.deserialize(data, self._resource_manager)
             self._resource_manager.pipelines[name] = pipeline
 
-            print(f"[PipelineProcessor] Reloaded: {name}")
             self._notify_reloaded(name)
 
         except Exception as e:

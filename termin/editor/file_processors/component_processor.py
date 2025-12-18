@@ -35,7 +35,6 @@ class ComponentFileProcessor(FileTypeProcessor):
                 self._file_to_resources[path].update(loaded)
 
                 for name in loaded:
-                    print(f"[ComponentProcessor] Loaded: {name}")
                     self._notify_reloaded(name)
 
         except Exception as e:
@@ -61,7 +60,6 @@ class ComponentFileProcessor(FileTypeProcessor):
 
             # Notify about reloaded components
             for name in loaded:
-                print(f"[ComponentProcessor] Reloaded: {name}")
                 self._notify_reloaded(name)
 
         except Exception as e:
