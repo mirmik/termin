@@ -318,9 +318,9 @@ class VoxelDisplayComponent(Component):
     def _rebuild_mesh(self) -> None:
         """Перестроить меш из воксельной сетки (без фильтрации, вся сетка)."""
         # Очищаем старый меш
-        if self._mesh_drawable is not None:
-            self._mesh_drawable.delete()
-            self._mesh_drawable = None
+        if self._mesh_handle is not None:
+            self._mesh_handle.delete()
+            self._mesh_handle = None
 
         grid = self._grid_handle.get_grid()
         self._last_grid = grid
@@ -420,9 +420,9 @@ class VoxelDisplayComponent(Component):
 
     def on_removed(self) -> None:
         """Очистить меш при удалении."""
-        if self._mesh_drawable is not None:
-            self._mesh_drawable.delete()
-            self._mesh_drawable = None
+        if self._mesh_handle is not None:
+            self._mesh_handle.delete()
+            self._mesh_handle = None
 
     def update(self, dt: float) -> None:
         """Обновить меш если нужно."""

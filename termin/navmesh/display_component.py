@@ -301,8 +301,8 @@ void main() {
         for phase in phases:
             result.append(GeometryDrawCall(phase=phase, geometry_id=self.GEOMETRY_MESH))
 
-        # Контуры (если включены и есть контурный drawable)
-        if self.show_contours and self._contour_drawable is not None:
+        # Контуры (если включены и есть контурный handle)
+        if self.show_contours and self._contour_handle is not None:
             contour_material = self._get_or_create_contour_material()
             if phase_mark is None:
                 contour_phases = list(contour_material.phases)
@@ -320,13 +320,13 @@ void main() {
     def _rebuild_mesh(self) -> None:
         """Перестроить меш из NavMesh."""
         # Очищаем старый меш
-        if self._mesh_drawable is not None:
-            self._mesh_drawable.delete()
-            self._mesh_drawable = None
+        if self._mesh_handle is not None:
+            self._mesh_handle.delete()
+            self._mesh_handle = None
 
-        if self._contour_drawable is not None:
-            self._contour_drawable.delete()
-            self._contour_drawable = None
+        if self._contour_handle is not None:
+            self._contour_handle.delete()
+            self._contour_handle = None
 
         navmesh = self._navmesh_handle.get_navmesh()
         self._last_navmesh = navmesh
@@ -371,9 +371,9 @@ void main() {
             self._mesh_handle = MeshHandle.from_mesh3(mesh, name="navmesh_display")
 
         # Строим контуры (независимо от меша)
-        self._build_contour_drawable(navmesh)
+        self._build_contour_handle(navmesh)
 
-    def _build_contour_drawable(self, navmesh: "NavMesh") -> None:
+    def _build_contour_handle(self, navmesh: "NavMesh") -> None:
         """Построить drawable для контуров как ribbon (толстые линии)."""
         all_vertices = []
         all_triangles = []
