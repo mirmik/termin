@@ -78,10 +78,22 @@ class TextureAsset(Asset):
             return False
 
         try:
-            self._texture_data = TextureData.from_file(self._source_path)
-            self._loaded = True
-            return True
-        except Exception:
+            # Read file content
+            with open(self._source_path, "rb") as f:
+                content = f.read()
+
+            # Get spec_data from pending or read from file
+            spec_data = getattr(self, "_pending_spec_data", None)
+            if spec_data is None:
+                from termin.editor.project_file_watcher import FilePreLoader
+                spec_data = FilePreLoader.read_spec_file(str(self._source_path))
+
+            # Check if UUID already in spec
+            has_uuid = spec_data.get("uuid") is not None if spec_data else False
+
+            return self.load_from_content(content, spec_data=spec_data, has_uuid_in_spec=has_uuid)
+        except Exception as e:
+            print(f"[TextureAsset] Failed to load from {self._source_path}: {e}")
             return False
 
     def load_from_content(
