@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import weakref
 from typing import Dict, Tuple
 
 from termin.visualization.core.material import Material, MaterialPhase
@@ -206,8 +207,9 @@ def inject_skinning_into_vertex_shader(vertex_source: str) -> str:
     return '\n'.join(new_lines)
 
 
-# Cache for skinned shader variants
-_skinned_shader_cache: Dict[int, ShaderProgram] = {}
+# Cache for skinned shader variants using WeakKeyDictionary
+# When original shader is GC'd, cache entry is automatically removed
+_skinned_shader_cache: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
 def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
@@ -220,11 +222,8 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     Returns:
         Shader with skinning support injected
     """
-    # Use id() as cache key since ShaderProgram isn't hashable
-    cache_key = id(shader)
-
-    if cache_key in _skinned_shader_cache:
-        return _skinned_shader_cache[cache_key]
+    if shader in _skinned_shader_cache:
+        return _skinned_shader_cache[shader]
 
     # Inject skinning into vertex shader
     skinned_vert = inject_skinning_into_vertex_shader(shader.vertex_source)
@@ -236,12 +235,13 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
         geometry_source=shader.geometry_source,
     )
 
-    _skinned_shader_cache[cache_key] = skinned_shader
+    _skinned_shader_cache[shader] = skinned_shader
     return skinned_shader
 
 
-# Cache for skinned material variants
-_skinned_material_cache: Dict[int, Material] = {}
+# Cache for skinned material variants using WeakKeyDictionary
+# When original material is GC'd, cache entry is automatically removed
+_skinned_material_cache: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
 def get_skinned_material(material: Material) -> Material:
@@ -256,10 +256,8 @@ def get_skinned_material(material: Material) -> Material:
     Returns:
         Material with skinning support
     """
-    cache_key = id(material)
-
-    if cache_key in _skinned_material_cache:
-        return _skinned_material_cache[cache_key]
+    if material in _skinned_material_cache:
+        return _skinned_material_cache[material]
 
     # Create new material with skinned phases
     skinned_mat = Material.__new__(Material)
@@ -282,7 +280,7 @@ def get_skinned_material(material: Material) -> Material:
         )
         skinned_mat.phases.append(skinned_phase)
 
-    _skinned_material_cache[cache_key] = skinned_mat
+    _skinned_material_cache[material] = skinned_mat
     return skinned_mat
 
 

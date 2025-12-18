@@ -63,6 +63,7 @@ class SkinnedMeshRenderer(MeshRenderer):
         super().__init__(mesh=mesh, material=material, cast_shadow=cast_shadow)
         self._skeleton_controller: "SkeletonController | None" = skeleton_controller
         self._skinned_material_cache: Material | None = None  # Cached skinned variant
+        self._cached_base_material_id: int | None = None  # Track which base material was cached
         if self._DEBUG_INIT:
             print(f"  After super().__init__: _material_handle._direct={self._material_handle._direct}")
 
@@ -81,6 +82,7 @@ class SkinnedMeshRenderer(MeshRenderer):
         """Set material and invalidate skinned cache."""
         MeshRenderer.material.fset(self, value)
         self._skinned_material_cache = None  # Invalidate cache
+        self._cached_base_material_id = None
 
     def set_material(self, material: Material | None):
         """Set material and invalidate skinned cache."""
@@ -145,10 +147,9 @@ class SkinnedMeshRenderer(MeshRenderer):
                 print(f"  base_mat is None")
             return None
 
-        # Check if cache is still valid (same base material)
-        if self._skinned_material_cache is not None:
-            # Simple cache - assumes material doesn't change often
-            # In production, would check material identity
+        # Check if cache is still valid (same base material object)
+        base_mat_id = id(base_mat)
+        if self._skinned_material_cache is not None and self._cached_base_material_id == base_mat_id:
             return self._skinned_material_cache
 
         # Check if shader already has skinning (e.g., SkinnedMaterial)
@@ -159,6 +160,7 @@ class SkinnedMeshRenderer(MeshRenderer):
                 if self._DEBUG_SHADER_INJECTION:
                     print(f"[SkinnedMeshRenderer] Material '{base_mat.name}' already has skinning")
                 self._skinned_material_cache = base_mat
+                self._cached_base_material_id = base_mat_id
                 return base_mat
 
         # Create skinned variant
@@ -172,6 +174,7 @@ class SkinnedMeshRenderer(MeshRenderer):
 
         from termin.visualization.render.shader_skinning import get_skinned_material
         self._skinned_material_cache = get_skinned_material(base_mat)
+        self._cached_base_material_id = base_mat_id
 
         if self._DEBUG_SHADER_INJECTION:
             if self._skinned_material_cache and self._skinned_material_cache.phases:
