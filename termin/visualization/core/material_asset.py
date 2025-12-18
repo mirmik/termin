@@ -197,9 +197,9 @@ def _parse_material_content(
     textures_data = data.get("textures", {})
     textures = {}
     for uniform_name, tex_name in textures_data.items():
-        tex = rm.get_texture(tex_name)
-        if tex is not None:
-            textures[uniform_name] = tex
+        tex_handle = rm.get_texture_handle(tex_name)
+        if tex_handle is not None:
+            textures[uniform_name] = tex_handle
 
     # Create material
     mat = Material.from_parsed(

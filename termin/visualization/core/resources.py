@@ -1449,6 +1449,15 @@ class ResourceManager:
             return TextureHandle.from_asset(asset)
         return None
 
+    def get_texture(self, name: str) -> Optional["Texture"]:
+        """Получить Texture по имени (для inspector UI)."""
+        from termin.visualization.render.texture import Texture
+
+        asset = self._texture_assets.get(name)
+        if asset is not None:
+            return Texture.from_asset(asset)
+        return None
+
     def register_texture_asset(
         self,
         name: str,
