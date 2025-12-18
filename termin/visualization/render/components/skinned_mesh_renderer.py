@@ -210,35 +210,62 @@ class SkinnedMeshRenderer(MeshRenderer):
         """
         Draw skinned geometry with bone matrices.
 
-        Uploads u_bone_matrices uniform to the currently bound shader
-        before drawing the mesh.
+        If skeleton is present and context has a shader:
+        1. Gets skinned variant of current shader via registry
+        2. Activates skinned shader and sets MVP uniforms
+        3. Uploads bone matrices
+        4. Draws the mesh
         """
         mesh_data = self._mesh_handle.mesh
         gpu = self._mesh_handle.gpu
         if mesh_data is None or gpu is None:
             return
 
-        # Upload bone matrices if we have a skeleton
         skeleton_instance = self.skeleton_instance
-        if skeleton_instance is not None:
+        base_shader = context.current_shader
+
+        # If we have a skeleton and a shader, switch to skinned variant
+        if skeleton_instance is not None and base_shader is not None:
             bone_matrices = skeleton_instance.get_bone_matrices()
             bone_count = len(bone_matrices)
 
-            # Get current shader from context and upload bone matrices
-            shader = context.current_shader
             if self._DEBUG_SKINNING and SkinnedMeshRenderer._debug_skinning_frame < 5:
                 SkinnedMeshRenderer._debug_skinning_frame += 1
-                print(f"[SkinnedMeshRenderer] bone_count={bone_count}, shader={shader}")
+                print(f"[SkinnedMeshRenderer] bone_count={bone_count}, base_shader={base_shader}")
                 if bone_count > 0:
-                    # Check if any bone matrix is non-identity
                     identity = np.eye(4, dtype=np.float32)
                     non_identity_count = sum(1 for m in bone_matrices if not np.allclose(m, identity, atol=1e-4))
                     print(f"  non_identity_matrices: {non_identity_count}/{bone_count}")
-                    print(f"  bone_matrix[0] diagonal: {bone_matrices[0].diagonal()}")
 
-            if shader is not None:
-                shader.set_uniform_matrix4_array("u_bone_matrices", bone_matrices, bone_count)
-                shader.set_uniform_int("u_bone_count", bone_count)
+            # Get skinned variant via registry (cached by shader source hash)
+            from termin.visualization.render.shader_skinning import get_skinned_shader
+            skinned_shader = get_skinned_shader(base_shader)
+
+            # Activate skinned shader and set uniforms
+            skinned_shader.ensure_ready(context.graphics)
+            skinned_shader.use()
+
+            # Set MVP uniforms from context
+            if context.model is not None:
+                skinned_shader.set_uniform_matrix4("u_model", context.model)
+            skinned_shader.set_uniform_matrix4("u_view", context.view)
+            skinned_shader.set_uniform_matrix4("u_projection", context.projection)
+
+            # Upload bone matrices
+            skinned_shader.set_uniform_matrix4_array("u_bone_matrices", bone_matrices, bone_count)
+            skinned_shader.set_uniform_int("u_bone_count", bone_count)
+
+            # Apply extra uniforms from context (e.g., u_pickColor for id pass)
+            if context.extra_uniforms:
+                for name, (utype, value) in context.extra_uniforms.items():
+                    if utype == "vec3":
+                        skinned_shader.set_uniform_vec3(name, value)
+                    elif utype == "float":
+                        skinned_shader.set_uniform_float(name, value)
+                    elif utype == "int":
+                        skinned_shader.set_uniform_int(name, value)
+                    elif utype == "mat4":
+                        skinned_shader.set_uniform_matrix4(name, value)
 
         # Draw the mesh via GPU
         gpu.draw(context, mesh_data, self._mesh_handle.version)

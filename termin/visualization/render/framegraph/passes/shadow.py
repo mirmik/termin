@@ -102,7 +102,7 @@ class ShadowPass(RenderFramePass):
         
         # Материал для shadow pass (общий для всех источников)
         self._material: ShadowMaterial | None = None
-        
+
         # Пул FBO для shadow maps (переиспользуются между кадрами)
         self._fbo_pool: Dict[int, "FramebufferHandle"] = {}
         
@@ -353,8 +353,6 @@ class ShadowPass(RenderFramePass):
                         graphics=graphics,
                         context_key=context_key,
                     )
-
-                    # Set current shader for skinned mesh support
                     render_ctx.current_shader = shadow_material.shader
 
                     drawable.draw_geometry(render_ctx)

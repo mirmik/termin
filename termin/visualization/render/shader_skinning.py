@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import weakref
-from typing import Dict, Tuple
 
 from termin.visualization.core.material import Material, MaterialPhase
 from termin.visualization.render.shader import ShaderProgram
@@ -207,14 +206,13 @@ def inject_skinning_into_vertex_shader(vertex_source: str) -> str:
     return '\n'.join(new_lines)
 
 
-# Cache for skinned shader variants using WeakKeyDictionary
-# When original shader is GC'd, cache entry is automatically removed
-_skinned_shader_cache: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
-
-
 def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     """
     Get or create a skinned variant of a shader.
+
+    Uses the global ShaderVariantRegistry for caching by source hash.
+    This allows sharing skinned variants across different shader instances
+    with the same source code.
 
     Args:
         shader: Original shader program
@@ -222,22 +220,17 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     Returns:
         Shader with skinning support injected
     """
-    if shader in _skinned_shader_cache:
-        return _skinned_shader_cache[shader]
+    # Check if already has skinning (avoid double-injection)
+    if 'u_bone_matrices' in shader.vertex_source:
+        return shader
 
-    # Inject skinning into vertex shader
-    skinned_vert = inject_skinning_into_vertex_shader(shader.vertex_source)
-
-    # Create new shader program
-    skinned_shader = ShaderProgram(
-        vertex_source=skinned_vert,
-        fragment_source=shader.fragment_source,
-        geometry_source=shader.geometry_source,
-        source_path=f"{shader.source_path}:skinned" if shader.source_path else None,
+    from termin.visualization.render.shader_variants import (
+        get_variant_registry,
+        ShaderVariantOp,
     )
 
-    _skinned_shader_cache[shader] = skinned_shader
-    return skinned_shader
+    registry = get_variant_registry()
+    return registry.get_variant(shader, ShaderVariantOp.SKINNING)
 
 
 # Cache for skinned material variants using WeakKeyDictionary
@@ -287,5 +280,14 @@ def get_skinned_material(material: Material) -> Material:
 
 def clear_skinning_cache() -> None:
     """Clear all cached skinned variants. Call when shaders are reloaded."""
-    _skinned_shader_cache.clear()
+    from termin.visualization.render.shader_variants import (
+        get_variant_registry,
+        ShaderVariantOp,
+    )
+
+    # Clear shader variants from registry
+    registry = get_variant_registry()
+    registry.clear_operation(ShaderVariantOp.SKINNING)
+
+    # Clear material cache
     _skinned_material_cache.clear()

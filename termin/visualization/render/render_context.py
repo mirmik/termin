@@ -34,3 +34,8 @@ class RenderContext:
 
     # Currently bound shader program (for skinned mesh uniforms, etc.)
     current_shader: "ShaderProgram | None" = None
+
+    # Extra uniforms to copy when switching to skinned shader variant
+    # Keys are uniform names, values are (type, value) tuples
+    # Types: "vec3", "float", "int", "mat4"
+    extra_uniforms: dict | None = None

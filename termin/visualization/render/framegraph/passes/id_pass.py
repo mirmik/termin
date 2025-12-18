@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
@@ -10,6 +10,9 @@ from termin.visualization.render.renderpass import RenderState
 from termin.visualization.render.framegraph.passes.present import blit_fbo_to_fbo
 from termin.visualization.render.drawable import Drawable
 from termin.editor.inspect_field import InspectField
+
+if TYPE_CHECKING:
+    from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
 
 
 class IdPass(RenderFramePass):
@@ -170,9 +173,8 @@ class IdPass(RenderFramePass):
                 context_key=key,
             )
 
-            # Set current shader for skinned mesh (pick shader doesn't have bone uniforms,
-            # but this prevents errors - skinned meshes will render in bind pose for picking)
             render_ctx.current_shader = pick_material.shader
+            render_ctx.extra_uniforms = {"u_pickColor": ("vec3", color)}
 
             # Рисуем все Drawable компоненты с одним pick_id
             for drawable in drawables:
