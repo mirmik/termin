@@ -255,7 +255,6 @@ class ResourceManager:
         if asset.material is not None:
             self.materials[name] = asset.material
 
-        print(f"[ResourceManager] Registered material: {name}")
 
     def _reload_material_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload material from PreLoadResult."""
@@ -274,7 +273,6 @@ class ResourceManager:
         if asset.material is not None:
             self.materials[name] = asset.material
 
-        print(f"[ResourceManager] Reloaded material: {name}")
 
     def _register_shader_file(self, name: str, result: "PreLoadResult") -> None:
         """Register shader from PreLoadResult (lazy loading)."""
