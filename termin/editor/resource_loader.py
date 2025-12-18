@@ -75,7 +75,8 @@ class ResourceLoader:
                         base = f"{ent.name}_mesh" if ent.name else "Mesh"
                         name = base
                         i = 1
-                        while name in self._resource_manager.meshes:
+                        existing_names = set(self._resource_manager.list_mesh_names())
+                        while name in existing_names:
                             i += 1
                             name = f"{base}_{i}"
                     mesh.name = name

@@ -205,7 +205,7 @@ class WorldPersistence:
         return {
             "entities": sum(1 for e in self._scene.entities if e.transform.parent is None and e.serializable),
             "materials": len(self._resource_manager.materials),
-            "meshes": len(self._resource_manager.meshes),
+            "meshes": len(self._resource_manager._mesh_assets),
         }
 
     def load(self, file_path: str) -> dict:
@@ -237,7 +237,7 @@ class WorldPersistence:
         """
         # Очищаем ресурсы
         self._resource_manager.materials.clear()
-        self._resource_manager.meshes.clear()
+        self._resource_manager._mesh_assets.clear()
         self._resource_manager.textures.clear()
 
         # Пересканируем файловые ресурсы проекта
@@ -321,7 +321,7 @@ class WorldPersistence:
 
         # Очищаем все ресурсы
         self._resource_manager.materials.clear()
-        self._resource_manager.meshes.clear()
+        self._resource_manager._mesh_assets.clear()
         self._resource_manager.textures.clear()
 
         # Пересканируем файловые ресурсы проекта
@@ -383,5 +383,5 @@ class WorldPersistence:
         return {
             "loaded_entities": loaded_count,
             "materials": len(self._resource_manager.materials),
-            "meshes": len(self._resource_manager.meshes),
+            "meshes": len(self._resource_manager._mesh_assets),
         }

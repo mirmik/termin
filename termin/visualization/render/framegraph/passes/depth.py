@@ -174,7 +174,11 @@ class DepthPass(RenderFramePass):
             depth_material.apply(model, view, proj, graphics=graphics, context_key=key)
 
             if mr.mesh is not None:
-                mr.mesh.draw(render_ctx)
+                mesh_handle = mr.mesh
+                mesh_data = mesh_handle.mesh
+                gpu = mesh_handle.gpu
+                if mesh_data is not None and gpu is not None:
+                    gpu.draw(render_ctx, mesh_data, mesh_handle.version)
 
             # TODO: реализовать дебаг через debugger_window
 

@@ -143,20 +143,17 @@ class ResourceManagerViewer(QDialog):
         """Обновляет список мешей."""
         self._meshes_tree.clear()
 
-        for name, mesh in sorted(self._resource_manager.meshes.items()):
+        for name, asset in sorted(self._resource_manager._mesh_assets.items()):
             vertices = "?"
             indices = "?"
 
-            # Пытаемся получить информацию о меше
-            if hasattr(mesh, 'vertex_count'):
-                vertices = str(mesh.vertex_count)
-            elif hasattr(mesh, 'vertices') and mesh.vertices is not None:
-                vertices = str(len(mesh.vertices))
-
-            if hasattr(mesh, 'index_count'):
-                indices = str(mesh.index_count)
-            elif hasattr(mesh, 'indices') and mesh.indices is not None:
-                indices = str(len(mesh.indices))
+            # Пытаемся получить информацию о меше из asset
+            mesh = asset.data
+            if mesh is not None:
+                if hasattr(mesh, 'vertices') and mesh.vertices is not None:
+                    vertices = str(len(mesh.vertices))
+                if hasattr(mesh, 'triangles') and mesh.triangles is not None:
+                    indices = str(len(mesh.triangles) * 3)
 
             item = QTreeWidgetItem([name, vertices, indices])
             self._meshes_tree.addTopLevelItem(item)
