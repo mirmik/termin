@@ -192,24 +192,4 @@ class MeshRenderer(Component):
         phases.sort(key=lambda p: p.priority)
         return [GeometryDrawCall(phase=p) for p in phases]
 
-    # --- сериализация ---
-
-    def serialize_data(self) -> dict:
-        """Сериализует MeshRenderer."""
-        data = {
-            "enabled": self.enabled,
-            "cast_shadow": self.cast_shadow,
-        }
-
-        # Serialize mesh via handle
-        mesh_serial = self._mesh_handle.serialize()
-        if mesh_serial.get("type") != "none":
-            data["mesh"] = mesh_serial
-
-        # Serialize material via handle
-        mat_serial = self._material_handle.serialize()
-        if mat_serial.get("type") != "none":
-            data["material"] = mat_serial
-
-        return data
 

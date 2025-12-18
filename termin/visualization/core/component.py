@@ -14,7 +14,13 @@ from termin.editor.inspect_field import InspectField
 
 
 class Component:
-    """Base class for all entity components."""
+    """
+    Base class for all entity components.
+
+    IMPORTANT: Do NOT override serialize_data() or deserialize() methods!
+    Serialization is handled automatically via inspect_fields.
+    Define inspect_fields in your component class to control serialization.
+    """
 
     # Если None → компонент не сериализуется
     serializable_fields = None
@@ -215,8 +221,10 @@ class Component:
                     resource = None
                     if isinstance(value, dict) and "uuid" in value:
                         resource = rm.get_mesh_by_uuid(value["uuid"])
+                        print(f"[Component.deserialize] mesh uuid={value['uuid']} -> {resource}")
                     elif isinstance(value, str):
                         resource = rm.get_mesh(value)
+                        print(f"[Component.deserialize] mesh name={value} -> {resource}")
                     if resource is not None and field.setter:
                         field.setter(obj, resource)
                     continue
@@ -224,8 +232,10 @@ class Component:
                     resource = None
                     if isinstance(value, dict) and "uuid" in value:
                         resource = rm.get_material_by_uuid(value["uuid"])
+                        print(f"[Component.deserialize] material uuid={value['uuid']} -> {resource}")
                     elif isinstance(value, str):
                         resource = rm.get_material(value)
+                        print(f"[Component.deserialize] material name={value} -> {resource}")
                     if resource is not None and field.setter:
                         field.setter(obj, resource)
                     continue
