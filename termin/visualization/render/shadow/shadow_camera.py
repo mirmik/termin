@@ -289,6 +289,8 @@ def fit_shadow_frustum_to_camera(
     light_direction: np.ndarray,
     padding: float = 1.0,
     max_shadow_distance: float | None = None,
+    shadow_map_resolution: int = 1024,
+    stabilize: bool = True,
 ) -> ShadowCameraParams:
     """
     Вычисляет параметры shadow camera, покрывающие view frustum основной камеры.
@@ -298,12 +300,15 @@ def fit_shadow_frustum_to_camera(
     2. Трансформировать их в light space (ориентация света)
     3. Найти AABB в light space
     4. Использовать AABB как границы ортографической проекции
+    5. (Опционально) Стабилизировать границы для устранения дрожания теней
 
     Параметры:
         camera: Основная камера сцены
         light_direction: Направление directional light
         padding: Дополнительный отступ для shadow casters за камерой
         max_shadow_distance: Максимальная дистанция теней (None = использовать far plane камеры)
+        shadow_map_resolution: Разрешение shadow map (для стабилизации)
+        stabilize: Включить texel snapping для устранения дрожания теней
 
     Возвращает:
         ShadowCameraParams с fitted frustum
@@ -348,6 +353,33 @@ def fit_shadow_frustum_to_camera(
     bottom = min_bounds[1] - padding
     top = max_bounds[1] + padding
 
+    # 6. Стабилизация (Texel Snapping) для устранения дрожания теней
+    if stabilize and shadow_map_resolution > 0:
+        # Размер ortho-бокса
+        world_units_per_texel_x = (right - left) / shadow_map_resolution
+        world_units_per_texel_y = (top - bottom) / shadow_map_resolution
+
+        # Округляем границы до размера текселя
+        # Это предотвращает субпиксельное смещение при движении камеры
+        left = np.floor(left / world_units_per_texel_x) * world_units_per_texel_x
+        right = np.ceil(right / world_units_per_texel_x) * world_units_per_texel_x
+        bottom = np.floor(bottom / world_units_per_texel_y) * world_units_per_texel_y
+        top = np.ceil(top / world_units_per_texel_y) * world_units_per_texel_y
+
+        # Также стабилизируем центр в light space
+        # Трансформируем центр в light space
+        center_h = np.array([center[0], center[1], center[2], 1.0], dtype=np.float32)
+        center_light = (light_rotation @ center_h)[:3]
+
+        # Snap center в light space к текселям
+        center_light[0] = np.floor(center_light[0] / world_units_per_texel_x) * world_units_per_texel_x
+        center_light[1] = np.floor(center_light[1] / world_units_per_texel_y) * world_units_per_texel_y
+
+        # Трансформируем обратно в world space
+        # Inverse of rotation-only matrix is its transpose
+        light_rotation_inv = light_rotation[:3, :3].T
+        center = light_rotation_inv @ center_light
+
     # Z в light space: min — ближе к свету, max — дальше
     # Добавляем padding назад для shadow casters за камерой
     z_near = min_bounds[2] - padding * 10.0  # больше padding для casters
@@ -364,7 +396,7 @@ def fit_shadow_frustum_to_camera(
     if far <= near:
         far = near + 100.0
 
-    # center уже вычислен выше (шаг 2)
+    # center уже вычислен/стабилизирован выше
     return ShadowCameraParams(
         light_direction=light_direction,
         ortho_bounds=(left, right, bottom, top),

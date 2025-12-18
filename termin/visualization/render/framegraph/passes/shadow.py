@@ -182,6 +182,8 @@ class ShadowPass(RenderFramePass):
                 light_direction=light.direction,
                 padding=1.0,
                 max_shadow_distance=self.max_shadow_distance,
+                shadow_map_resolution=light.shadows.map_resolution,
+                stabilize=True,  # Texel snapping для устранения дрожания
             )
 
         # Fallback: фиксированные параметры
