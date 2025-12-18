@@ -167,3 +167,13 @@ class DialogManager:
         scene = self._get_scene()
         dialog = LayersDialog(scene, self._parent)
         dialog.exec()
+
+    def show_shadow_settings_dialog(self) -> None:
+        """Opens shadow settings dialog."""
+        from termin.editor.shadow_settings_dialog import ShadowSettingsDialog
+
+        scene = self._get_scene()
+        dialog = ShadowSettingsDialog(scene, self._parent)
+        if dialog.exec():
+            # Settings saved, request viewport update
+            self._request_viewport_update()

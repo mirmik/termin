@@ -396,6 +396,8 @@ class ColorPass(RenderFramePass):
                 upload_ambient_to_shader(shader, scene.ambient_color, scene.ambient_intensity)
                 if shadow_array is not None:
                     upload_shadow_maps_to_shader(shader, shadow_array)
+                    from termin.visualization.render.lighting.shadow_upload import upload_shadow_settings_to_shader
+                    upload_shadow_settings_to_shader(shader, scene.shadow_settings)
 
                 # Set current shader in context for SkinnedMeshRenderer
                 render_context.current_shader = shader

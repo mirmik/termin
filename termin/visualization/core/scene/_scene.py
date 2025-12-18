@@ -150,6 +150,12 @@ class Scene(Identifiable):
     def light_components(self) -> List[LightComponent]:
         return self._lighting.light_components
 
+    @property
+    def shadow_settings(self):
+        """Shadow rendering settings."""
+        from .lighting import ShadowSettings
+        return self._lighting.shadow_settings
+
     def build_lights(self) -> List[Light]:
         """Build world-space light parameters from all light components."""
         return self._lighting.build_lights()

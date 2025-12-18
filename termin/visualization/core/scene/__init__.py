@@ -2,6 +2,6 @@
 
 from ._scene import Scene
 from .skybox import SkyboxManager
-from .lighting import LightingManager
+from .lighting import LightingManager, ShadowSettings
 
-__all__ = ["Scene", "SkyboxManager", "LightingManager"]
+__all__ = ["Scene", "SkyboxManager", "LightingManager", "ShadowSettings"]

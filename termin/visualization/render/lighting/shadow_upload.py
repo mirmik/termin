@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from termin.visualization.render.shader import ShaderProgram
     from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
+    from termin.visualization.core.scene.lighting import ShadowSettings
 
 
 # Максимальное число shadow maps, поддерживаемых шейдером
@@ -14,6 +15,27 @@ MAX_SHADOW_MAPS = 4
 
 # Начальный texture unit для shadow maps
 SHADOW_MAP_TEXTURE_UNIT_START = 8
+
+
+def upload_shadow_settings_to_shader(
+    shader: "ShaderProgram",
+    shadow_settings: "ShadowSettings",
+) -> None:
+    """
+    Загружает настройки теней в uniform'ы шейдера.
+
+    Uniform'ы:
+        u_shadow_method — int, метод (0=hard, 1=pcf, 2=poisson)
+        u_shadow_softness — float, множитель радиуса сэмплирования
+        u_shadow_bias — float, смещение глубины
+
+    Параметры:
+        shader: Активный шейдер (после use())
+        shadow_settings: Настройки теней из Scene
+    """
+    shader.set_uniform_int("u_shadow_method", shadow_settings.method)
+    shader.set_uniform_float("u_shadow_softness", shadow_settings.softness)
+    shader.set_uniform_float("u_shadow_bias", shadow_settings.bias)
 
 
 def upload_shadow_maps_to_shader(
@@ -42,20 +64,20 @@ def upload_shadow_maps_to_shader(
     if shadow_array is None:
         shader.set_uniform_int("u_shadow_map_count", 0)
         return
-    
+
     count = min(len(shadow_array), MAX_SHADOW_MAPS)
     shader.set_uniform_int("u_shadow_map_count", count)
-    
+
     for i in range(count):
         entry = shadow_array[i]
         unit = SHADOW_MAP_TEXTURE_UNIT_START + i
-        
+
         # Texture unit для sampler2D
         shader.set_uniform_int(f"u_shadow_map[{i}]", unit)
-        
+
         # Матрица light-space: P_light * V_light
         # Преобразует мировые координаты в clip-пространство источника
         shader.set_uniform_matrix4(f"u_light_space_matrix[{i}]", entry.light_space_matrix)
-        
+
         # Индекс источника света (для соответствия с u_light_* массивами)
         shader.set_uniform_int(f"u_shadow_light_index[{i}]", entry.light_index)

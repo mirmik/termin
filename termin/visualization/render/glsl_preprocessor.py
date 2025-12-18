@@ -66,8 +66,13 @@ def preprocess_glsl(
     def replace_include(match: re.Match) -> str:
         include_name = match.group(1)
 
+        # Strip .glsl suffix for registry lookup (files are registered without extension)
+        lookup_name = include_name
+        if lookup_name.endswith(".glsl"):
+            lookup_name = lookup_name[:-5]
+
         # Check for circular include
-        if include_name in included:
+        if lookup_name in included:
             raise GlslPreprocessorError(
                 f"Circular include detected: '{include_name}' "
                 f"(included from '{source_name}')"
@@ -77,17 +82,17 @@ def preprocess_glsl(
         from termin.visualization.core.resources import ResourceManager
         rm = ResourceManager.instance()
 
-        include_source = rm.get_glsl(include_name)
+        include_source = rm.get_glsl(lookup_name)
         if include_source is None:
             raise GlslPreprocessorError(
                 f"GLSL include not found: '{include_name}' "
                 f"(included from '{source_name}')\n"
-                f"Make sure '{include_name}.glsl' is in your project "
+                f"Make sure the file is in your project's stdlib/glsl/ "
                 f"or standard library is deployed."
             )
 
         # Recursively preprocess the included source
-        new_included = included | {include_name}
+        new_included = included | {lookup_name}
         processed = preprocess_glsl(
             include_source,
             source_name=include_name,

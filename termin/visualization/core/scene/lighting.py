@@ -11,6 +11,41 @@ if TYPE_CHECKING:
     from termin.visualization.render.components.light_component import LightComponent
 
 
+class ShadowSettings:
+    """
+    Shadow rendering settings.
+
+    Attributes:
+        method: Shadow sampling method (0=hard, 1=pcf, 2=poisson)
+        softness: Sampling radius multiplier (0=sharp, 1=default, >1=softer)
+        bias: Depth bias to prevent shadow acne
+    """
+
+    # Method constants
+    METHOD_HARD = 0
+    METHOD_PCF = 1
+    METHOD_POISSON = 2
+
+    METHOD_NAMES = ["Hard", "PCF 5x5", "Poisson"]
+
+    def __init__(self):
+        self.method: int = self.METHOD_PCF
+        self.softness: float = 1.0
+        self.bias: float = 0.005
+
+    def serialize(self) -> dict:
+        return {
+            "method": self.method,
+            "softness": self.softness,
+            "bias": self.bias,
+        }
+
+    def load_from_data(self, data: dict) -> None:
+        self.method = data.get("method", self.METHOD_PCF)
+        self.softness = data.get("softness", 1.0)
+        self.bias = data.get("bias", 0.005)
+
+
 class LightingManager:
     """
     Manages scene lighting including directional light and ambient settings.
@@ -19,6 +54,7 @@ class LightingManager:
     - Global directional light (direction + color)
     - Ambient light (color + intensity)
     - Collection of dynamic LightComponents
+    - Shadow settings
     """
 
     def __init__(self):
@@ -29,6 +65,8 @@ class LightingManager:
 
         self.light_components: List["LightComponent"] = []
         self.lights: List["Light"] = []
+
+        self.shadow_settings = ShadowSettings()
 
     def register_light_component(self, component: "LightComponent") -> None:
         """Register a light component."""
@@ -77,6 +115,7 @@ class LightingManager:
             "light_color": list(self.light_color),
             "ambient_color": list(self.ambient_color),
             "ambient_intensity": self.ambient_intensity,
+            "shadow_settings": self.shadow_settings.serialize(),
         }
 
     def load_from_data(self, data: dict) -> None:
@@ -94,3 +133,5 @@ class LightingManager:
             dtype=np.float32
         )
         self.ambient_intensity = data.get("ambient_intensity", 0.1)
+        if "shadow_settings" in data:
+            self.shadow_settings.load_from_data(data["shadow_settings"])

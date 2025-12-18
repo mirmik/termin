@@ -2,7 +2,7 @@
  * Lighting utilities for Termin engine.
  *
  * Usage in your shader:
- *   #include "lighting"
+ *   #include "lighting.glsl"
  *
  * Provides:
  *   - Light type constants
