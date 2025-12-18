@@ -1346,8 +1346,26 @@ class ResourceManager:
         self.textures[name] = texture
 
     def get_texture(self, name: str) -> Optional["Texture"]:
-        """Получить текстуру по имени."""
-        return self.textures.get(name)
+        """Получить текстуру по имени (lazy loading)."""
+        # Check if already loaded
+        texture = self.textures.get(name)
+        if texture is not None:
+            return texture
+
+        # Try lazy loading from asset
+        asset = self._texture_assets.get(name)
+        if asset is None:
+            return None
+
+        # Trigger lazy load
+        if not asset.load():
+            return None
+
+        # Create Texture wrapper and cache it
+        from termin.visualization.render.texture import Texture
+        texture = Texture.from_asset(asset)
+        self.textures[name] = texture
+        return texture
 
     def list_texture_names(self) -> list[str]:
         names = set(self._texture_assets.keys()) | set(self.textures.keys())
