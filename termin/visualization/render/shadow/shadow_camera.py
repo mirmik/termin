@@ -215,6 +215,33 @@ def compute_frustum_corners(
     return world_corners
 
 
+def _limit_projection_far(
+    proj: np.ndarray,
+    camera: "Camera",
+    max_distance: float,
+) -> np.ndarray:
+    """
+    Создаёт копию projection matrix с ограниченным far plane.
+
+    Для perspective projection пересчитывает элементы [2,2] и [2,3].
+    """
+    proj = proj.copy()
+
+    near = camera.near
+    far = min(camera.far, max_distance)
+
+    if far <= near:
+        far = near + 1.0
+
+    # Для perspective projection:
+    # proj[2,2] = -(far + near) / (far - near)
+    # proj[2,3] = -2 * far * near / (far - near)
+    proj[2, 2] = -(far + near) / (far - near)
+    proj[2, 3] = -2.0 * far * near / (far - near)
+
+    return proj
+
+
 def _build_light_view_matrix(light_direction: np.ndarray) -> np.ndarray:
     """
     Строит view matrix для света (без позиции, только ориентация).
@@ -248,6 +275,7 @@ def fit_shadow_frustum_to_camera(
     camera: "Camera",
     light_direction: np.ndarray,
     padding: float = 1.0,
+    max_shadow_distance: float | None = None,
 ) -> ShadowCameraParams:
     """
     Вычисляет параметры shadow camera, покрывающие view frustum основной камеры.
@@ -262,6 +290,7 @@ def fit_shadow_frustum_to_camera(
         camera: Основная камера сцены
         light_direction: Направление directional light
         padding: Дополнительный отступ для shadow casters за камерой
+        max_shadow_distance: Максимальная дистанция теней (None = использовать far plane камеры)
 
     Возвращает:
         ShadowCameraParams с fitted frustum
@@ -272,6 +301,11 @@ def fit_shadow_frustum_to_camera(
     # 1. Get camera frustum corners in world space
     view = camera.get_view_matrix()
     proj = camera.get_projection_matrix()
+
+    # Если задана max_shadow_distance, модифицируем projection чтобы ограничить far plane
+    if max_shadow_distance is not None:
+        proj = _limit_projection_far(proj, camera, max_shadow_distance)
+
     frustum_corners = compute_frustum_corners(view, proj)
 
     # 2. Build light-space rotation matrix

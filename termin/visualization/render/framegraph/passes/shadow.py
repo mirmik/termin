@@ -60,12 +60,16 @@ class ShadowPass(RenderFramePass):
             path="default_resolution", label="Resolution", kind="int",
             min=128, max=4096, step=128,
         ),
+        "max_shadow_distance": InspectField(
+            path="max_shadow_distance", label="Max Shadow Distance", kind="float",
+            min=1.0, max=500.0, step=5.0,
+        ),
         "ortho_size": InspectField(
-            path="ortho_size", label="Ortho Size", kind="float",
+            path="ortho_size", label="Ortho Size (fallback)", kind="float",
             min=1.0, max=200.0, step=1.0,
         ),
-        "near": InspectField(path="near", label="Near", kind="float", min=0.01, step=0.1),
-        "far": InspectField(path="far", label="Far", kind="float", min=1.0, step=1.0),
+        "near": InspectField(path="near", label="Near (fallback)", kind="float", min=0.01, step=0.1),
+        "far": InspectField(path="far", label="Far (fallback)", kind="float", min=1.0, step=1.0),
     }
 
     def __init__(
@@ -73,6 +77,7 @@ class ShadowPass(RenderFramePass):
         output_res: str = "shadow_maps",
         pass_name: str = "Shadow",
         default_resolution: int = 1024,
+        max_shadow_distance: float = 50.0,
         ortho_size: float = 20.0,
         near: float = 0.1,
         far: float = 100.0,
@@ -84,6 +89,7 @@ class ShadowPass(RenderFramePass):
         )
         self.output_res = output_res
         self.default_resolution = default_resolution
+        self.max_shadow_distance = max_shadow_distance
         self.ortho_size = ortho_size
         self.near = near
         self.far = far
@@ -105,6 +111,7 @@ class ShadowPass(RenderFramePass):
         return {
             "output_res": self.output_res,
             "default_resolution": self.default_resolution,
+            "max_shadow_distance": self.max_shadow_distance,
             "ortho_size": self.ortho_size,
             "near": self.near,
             "far": self.far,
@@ -117,6 +124,7 @@ class ShadowPass(RenderFramePass):
             output_res=data.get("output_res", "shadow_maps"),
             pass_name=data.get("pass_name", "Shadow"),
             default_resolution=data.get("default_resolution", 1024),
+            max_shadow_distance=data.get("max_shadow_distance", 50.0),
             ortho_size=data.get("ortho_size", 20.0),
             near=data.get("near", 0.1),
             far=data.get("far", 100.0),
@@ -173,6 +181,7 @@ class ShadowPass(RenderFramePass):
                 camera=camera,
                 light_direction=light.direction,
                 padding=1.0,
+                max_shadow_distance=self.max_shadow_distance,
             )
 
         # Fallback: фиксированные параметры
