@@ -24,6 +24,9 @@ class GizmoElement(Enum):
     TRANSLATE_X = auto()
     TRANSLATE_Y = auto()
     TRANSLATE_Z = auto()
+    TRANSLATE_XY = auto()  # Plane handles
+    TRANSLATE_XZ = auto()
+    TRANSLATE_YZ = auto()
     ROTATE_X = auto()
     ROTATE_Y = auto()
     ROTATE_Z = auto()
@@ -41,6 +44,19 @@ AXIS_COLORS_HIGHLIGHT = {
     "x": (1.0, 0.6, 0.6, 1.0),
     "y": (0.6, 1.0, 0.6, 1.0),
     "z": (0.6, 0.7, 1.0, 1.0),
+}
+
+# Colors for plane handles (blend of two axes)
+PLANE_COLORS = {
+    "xy": (0.8, 0.8, 0.2, 1.0),
+    "xz": (0.8, 0.4, 0.6, 1.0),
+    "yz": (0.2, 0.8, 0.8, 1.0),
+}
+
+PLANE_COLORS_HIGHLIGHT = {
+    "xy": (1.0, 1.0, 0.4, 1.0),
+    "xz": (1.0, 0.6, 0.8, 1.0),
+    "yz": (0.4, 1.0, 1.0, 1.0),
 }
 
 
@@ -73,6 +89,8 @@ class ImmediateGizmoRenderer:
         self._base_ring_minor_radius = ring_minor_radius
         self._base_head_length_ratio = 0.25
         self._base_pick_tolerance = 0.08
+        self._base_plane_offset = 0.25  # Distance from origin to plane quad
+        self._base_plane_size = 0.2     # Size of the plane quad
 
         # Current screen scale (updated each frame)
         self._screen_scale = 1.0
@@ -100,6 +118,8 @@ class ImmediateGizmoRenderer:
         self.arrow_length = self.size
         self.head_length_ratio = self._base_head_length_ratio
         self.pick_tolerance = self._base_pick_tolerance * self.size
+        self.plane_offset = self._base_plane_offset * self.size
+        self.plane_size = self._base_plane_size * self.size
 
     def set_screen_scale(self, scale: float) -> None:
         """Set screen-space scale factor."""
@@ -190,6 +210,14 @@ class ImmediateGizmoRenderer:
             return AXIS_COLORS_HIGHLIGHT[axis]
         return AXIS_COLORS[axis]
 
+    def _get_plane_color(self, plane: str, element: GizmoElement) -> tuple:
+        """Get color for a plane handle, considering hover/active state."""
+        is_active = self.active_element == element
+        is_hovered = self.hovered_element == element and not is_active
+        if is_active or is_hovered:
+            return PLANE_COLORS_HIGHLIGHT[plane]
+        return PLANE_COLORS[plane]
+
     def begin(self) -> None:
         """Start accumulating gizmo geometry."""
         self._renderer.begin()
@@ -237,6 +265,26 @@ class ImmediateGizmoRenderer:
                 major_segments=48,
                 minor_segments=8,
             )
+
+        # Draw plane handles (small quads)
+        axis_x = self._get_world_axis("x")
+        axis_y = self._get_world_axis("y")
+        axis_z = self._get_world_axis("z")
+        off = self.plane_offset
+        sz = self.plane_size
+
+        for plane, element, a1, a2 in [
+            ("xy", GizmoElement.TRANSLATE_XY, axis_x, axis_y),
+            ("xz", GizmoElement.TRANSLATE_XZ, axis_x, axis_z),
+            ("yz", GizmoElement.TRANSLATE_YZ, axis_y, axis_z),
+        ]:
+            color = self._get_plane_color(plane, element)
+            # Quad corners
+            p0 = origin + a1 * off + a2 * off
+            p1 = origin + a1 * (off + sz) + a2 * off
+            p2 = origin + a1 * (off + sz) + a2 * (off + sz)
+            p3 = origin + a1 * off + a2 * (off + sz)
+            self._renderer.quad(p0, p1, p2, p3, color)
 
     def flush(
         self,
@@ -322,6 +370,29 @@ class ImmediateGizmoRenderer:
                 self.ring_major_radius,
                 self.ring_minor_radius + self.pick_tolerance
             )
+            if t is not None and t < best_t:
+                best_t = t
+                best_element = element
+
+        # Test plane handles (quads)
+        axis_x = self._get_world_axis("x")
+        axis_y = self._get_world_axis("y")
+        axis_z = self._get_world_axis("z")
+        off = self.plane_offset
+        sz = self.plane_size
+
+        for plane, element, a1, a2, normal in [
+            ("xy", GizmoElement.TRANSLATE_XY, axis_x, axis_y, axis_z),
+            ("xz", GizmoElement.TRANSLATE_XZ, axis_x, axis_z, axis_y),
+            ("yz", GizmoElement.TRANSLATE_YZ, axis_y, axis_z, axis_x),
+        ]:
+            # Quad corners
+            p0 = center + a1 * off + a2 * off
+            p1 = center + a1 * (off + sz) + a2 * off
+            p2 = center + a1 * (off + sz) + a2 * (off + sz)
+            p3 = center + a1 * off + a2 * (off + sz)
+
+            t = self._ray_quad_intersect(ray_origin, ray_direction, p0, p1, p2, p3, normal)
             if t is not None and t < best_t:
                 best_t = t
                 best_element = element
@@ -447,6 +518,50 @@ class ImmediateGizmoRenderer:
 
         return None
 
+    def _ray_quad_intersect(
+        self,
+        ray_origin: np.ndarray,
+        ray_dir: np.ndarray,
+        p0: np.ndarray,
+        p1: np.ndarray,
+        p2: np.ndarray,
+        p3: np.ndarray,
+        normal: np.ndarray,
+    ) -> float | None:
+        """
+        Ray-quad intersection.
+
+        Tests if ray hits the quad defined by p0, p1, p2, p3.
+        Returns distance t along ray, or None if no hit.
+        """
+        # Intersect ray with plane
+        denom = np.dot(ray_dir, normal)
+        if abs(denom) < 1e-6:
+            return None
+
+        t = np.dot(p0 - ray_origin, normal) / denom
+        if t < 0:
+            return None
+
+        # Hit point on plane
+        hit = ray_origin + ray_dir * t
+
+        # Check if hit point is inside quad using cross products
+        # All cross products should point in the same direction as normal
+        def same_side(edge_start, edge_end, point, n):
+            edge = edge_end - edge_start
+            to_point = point - edge_start
+            cross = np.cross(edge, to_point)
+            return np.dot(cross, n) >= 0
+
+        if (same_side(p0, p1, hit, normal) and
+            same_side(p1, p2, hit, normal) and
+            same_side(p2, p3, hit, normal) and
+            same_side(p3, p0, hit, normal)):
+            return t
+
+        return None
+
     # ============================================================
     # Utility
     # ============================================================
@@ -464,8 +579,12 @@ class ImmediateGizmoRenderer:
         return axis_map.get(element)
 
     def is_translate_element(self, element: GizmoElement) -> bool:
-        """Check if element is a translation arrow."""
+        """Check if element is a translation arrow (single axis)."""
         return element in (GizmoElement.TRANSLATE_X, GizmoElement.TRANSLATE_Y, GizmoElement.TRANSLATE_Z)
+
+    def is_plane_translate_element(self, element: GizmoElement) -> bool:
+        """Check if element is a plane translation handle."""
+        return element in (GizmoElement.TRANSLATE_XY, GizmoElement.TRANSLATE_XZ, GizmoElement.TRANSLATE_YZ)
 
     def is_rotate_element(self, element: GizmoElement) -> bool:
         """Check if element is a rotation ring."""
@@ -477,6 +596,16 @@ class ImmediateGizmoRenderer:
         if axis is None:
             return None
         return self._get_world_axis(axis)
+
+    def get_plane_axes(self, element: GizmoElement) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+        """Get world-space axes for a plane element (axis1, axis2, normal)."""
+        if element == GizmoElement.TRANSLATE_XY:
+            return self._get_world_axis("x"), self._get_world_axis("y"), self._get_world_axis("z")
+        elif element == GizmoElement.TRANSLATE_XZ:
+            return self._get_world_axis("x"), self._get_world_axis("z"), self._get_world_axis("y")
+        elif element == GizmoElement.TRANSLATE_YZ:
+            return self._get_world_axis("y"), self._get_world_axis("z"), self._get_world_axis("x")
+        return None
 
 
 # ============================================================
@@ -530,6 +659,11 @@ class ImmediateGizmoController:
         self.rot_axis: np.ndarray | None = None
         self.rot_plane_origin: np.ndarray | None = None
         self.rot_vec0: np.ndarray | None = None
+
+        # Plane drag state
+        self.plane_normal: np.ndarray | None = None
+        self.plane_origin: np.ndarray | None = None
+        self.plane_grab_offset: np.ndarray | None = None
 
         # Callbacks
         self._on_transform_dragging: "Callable[[], None] | None" = None
@@ -636,14 +770,15 @@ class ImmediateGizmoController:
         if element == GizmoElement.NONE:
             return False
 
-        axis = self.gizmo_renderer.get_axis_for_element(element)
-        if axis is None:
-            return False
-
         if self.gizmo_renderer.is_translate_element(element):
+            axis = self.gizmo_renderer.get_axis_for_element(element)
             self._start_translate(axis, viewport, x, y)
             return True
+        elif self.gizmo_renderer.is_plane_translate_element(element):
+            self._start_plane_translate(element, viewport, x, y)
+            return True
         elif self.gizmo_renderer.is_rotate_element(element):
+            axis = self.gizmo_renderer.get_axis_for_element(element)
             self._start_rotate(axis, viewport, x, y)
             return True
 
@@ -718,6 +853,41 @@ class ImmediateGizmoController:
         )
         self.grab_offset = self.start_target_pos - axis_hit_point
 
+    def _start_plane_translate(self, element: GizmoElement, viewport, x: float, y: float) -> None:
+        """Start plane translation drag."""
+        from termin.geombase.pose3 import Pose3
+
+        self.dragging = True
+        self.drag_mode = "plane_move"
+        self.gizmo_renderer.active_element = element
+
+        global_pose = self.target.transform.global_pose()
+        self.start_target_pos = global_pose.lin.copy()
+
+        self._drag_transform = self.target.transform
+        self._start_pose = Pose3(lin=global_pose.lin.copy(), ang=global_pose.ang.copy())
+
+        # Get plane axes and normal
+        plane_axes = self.gizmo_renderer.get_plane_axes(element)
+        if plane_axes is None:
+            self._end_drag()
+            return
+        _, _, self.plane_normal = plane_axes
+        self.plane_origin = self.start_target_pos.copy()
+
+        # Find initial hit point on plane
+        ray = viewport.screen_point_to_ray(x, y)
+        if ray is None:
+            self._end_drag()
+            return
+
+        hit = self._ray_plane_hit(ray, self.plane_origin, self.plane_normal)
+        if hit is None:
+            self._end_drag()
+            return
+
+        self.plane_grab_offset = self.start_target_pos - hit
+
     def _start_rotate(self, axis: str, viewport, x: float, y: float) -> None:
         """Start rotation drag."""
         from termin.geombase.pose3 import Pose3
@@ -768,6 +938,8 @@ class ImmediateGizmoController:
 
         if self.drag_mode == "move":
             self._update_translate(viewport, x, y)
+        elif self.drag_mode == "plane_move":
+            self._update_plane_translate(viewport, x, y)
         elif self.drag_mode == "rotate":
             self._update_rotate(viewport, x, y)
 
@@ -805,6 +977,42 @@ class ImmediateGizmoController:
 
         if self._on_transform_dragging is not None:
             self._on_transform_dragging()
+
+    def _update_plane_translate(self, viewport, x: float, y: float) -> None:
+        """Update plane translation during drag."""
+        from termin.geombase.pose3 import Pose3
+
+        if self.plane_normal is None or self.plane_origin is None or self.plane_grab_offset is None:
+            return
+
+        ray = viewport.screen_point_to_ray(x, y)
+        if ray is None:
+            return
+
+        hit = self._ray_plane_hit(ray, self.plane_origin, self.plane_normal)
+        if hit is None:
+            return
+
+        new_pos = hit + self.plane_grab_offset
+
+        old_pose = self.target.transform.global_pose()
+        new_pose = Pose3(lin=new_pos, ang=old_pose.ang)
+        self.target.transform.relocate_global(new_pose)
+
+        self._update_gizmo_transform()
+
+        if self._on_transform_dragging is not None:
+            self._on_transform_dragging()
+
+    def _ray_plane_hit(self, ray, plane_origin: np.ndarray, plane_normal: np.ndarray) -> np.ndarray | None:
+        """Intersect ray with plane, return hit point or None."""
+        denom = np.dot(ray.direction, plane_normal)
+        if abs(denom) < 1e-6:
+            return None
+        t = np.dot(plane_origin - ray.origin, plane_normal) / denom
+        if t < 0:
+            return None
+        return ray.origin + ray.direction * t
 
     def _update_rotate(self, viewport, x: float, y: float) -> None:
         """Update rotation during drag."""
@@ -883,6 +1091,10 @@ class ImmediateGizmoController:
         self.rot_axis = None
         self.rot_plane_origin = None
         self.rot_vec0 = None
+
+        self.plane_normal = None
+        self.plane_origin = None
+        self.plane_grab_offset = None
 
         self._drag_transform = None
         self._start_pose = None
