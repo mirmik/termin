@@ -96,8 +96,8 @@ class World:
         if resources_data:
             restored_rm = ResourceManager.deserialize(resources_data)
             rm.materials.update(restored_rm.materials)
-            rm.meshes.update(restored_rm.meshes)
-            rm.textures.update(restored_rm.textures)
+            rm._mesh_assets.update(restored_rm._mesh_assets)
+            rm._texture_assets.update(restored_rm._texture_assets)
 
         # Восстанавливаем сцены
         for scene_data in data.get("scenes", []):

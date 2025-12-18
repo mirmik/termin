@@ -10,14 +10,15 @@ from termin.visualization.render.texture_data import TextureData
 
 if TYPE_CHECKING:
     import numpy as np
+    from termin.visualization.render.texture_gpu import TextureGPU
 
 
 class TextureAsset(DataAsset[TextureData]):
     """
     Asset for texture image data.
 
-    Stores TextureData (CPU data: pixels, size, format).
-    Does NOT handle GPU upload - that's TextureGPU's responsibility.
+    Stores TextureData (CPU data: pixels, size, format) and TextureGPU (GPU resources).
+    GPU resources are created on demand when .gpu property is accessed.
     """
 
     _uses_binary = True  # PNG/JPG binary format
@@ -34,6 +35,8 @@ class TextureAsset(DataAsset[TextureData]):
         self._flip_x: bool = False
         self._flip_y: bool = True  # Default: flip Y for OpenGL
         self._transpose: bool = False
+        # GPU resources (created on demand)
+        self._gpu: "TextureGPU | None" = None
 
     # --- Convenience property ---
 
@@ -61,6 +64,22 @@ class TextureAsset(DataAsset[TextureData]):
     def channels(self) -> int:
         """Number of color channels."""
         return self._data.channels if self._data else 0
+
+    # --- GPU resources ---
+
+    @property
+    def gpu(self) -> "TextureGPU":
+        """Get or create TextureGPU for rendering."""
+        if self._gpu is None:
+            from termin.visualization.render.texture_gpu import TextureGPU
+            self._gpu = TextureGPU()
+        return self._gpu
+
+    def delete_gpu(self) -> None:
+        """Delete GPU resources."""
+        if self._gpu is not None:
+            self._gpu.delete()
+            self._gpu = None
 
     # --- Spec parsing ---
 

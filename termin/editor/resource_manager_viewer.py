@@ -164,12 +164,9 @@ class ResourceManagerViewer(QDialog):
         """Обновляет список текстур."""
         self._textures_tree.clear()
 
-        for name, tex in sorted(self._resource_manager.textures.items()):
-            source = getattr(tex, 'source_path', None) or "(generated)"
-            size = "?"
-
-            if hasattr(tex, 'width') and hasattr(tex, 'height'):
-                size = f"{tex.width}x{tex.height}"
+        for name, asset in sorted(self._resource_manager._texture_assets.items()):
+            source = str(asset.source_path) if asset.source_path else "(generated)"
+            size = f"{asset.width}x{asset.height}"
 
             item = QTreeWidgetItem([name, source, size])
             self._textures_tree.addTopLevelItem(item)
@@ -248,8 +245,8 @@ class ResourceManagerViewer(QDialog):
 
         self._status_label.setText(
             f"Materials: {len(rm.materials)} | "
-            f"Meshes: {len(rm.meshes)} | "
-            f"Textures: {len(rm.textures)} | "
+            f"Meshes: {len(rm._mesh_assets)} | "
+            f"Textures: {len(rm._texture_assets)} | "
             f"Components: {len(rm.components)} | "
             f"Watching: {watching} ({watched_dirs} dirs, {watched_files} files)"
         )

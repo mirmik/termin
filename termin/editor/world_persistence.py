@@ -238,7 +238,7 @@ class WorldPersistence:
         # Очищаем ресурсы
         self._resource_manager.materials.clear()
         self._resource_manager._mesh_assets.clear()
-        self._resource_manager.textures.clear()
+        self._resource_manager._texture_assets.clear()
 
         # Пересканируем файловые ресурсы проекта
         if self._rescan_file_resources is not None:
@@ -322,7 +322,7 @@ class WorldPersistence:
         # Очищаем все ресурсы
         self._resource_manager.materials.clear()
         self._resource_manager._mesh_assets.clear()
-        self._resource_manager.textures.clear()
+        self._resource_manager._texture_assets.clear()
 
         # Пересканируем файловые ресурсы проекта
         if self._rescan_file_resources is not None:

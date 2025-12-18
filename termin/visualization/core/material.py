@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING, Union
 import numpy as np
 
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.render.texture import Texture
+from termin.visualization.core.texture_handle import TextureHandle
 from termin.visualization.platform.backends.base import GraphicsBackend
 
 if TYPE_CHECKING:
@@ -38,7 +38,7 @@ class MaterialPhase:
         phase_mark: str = "opaque",
         priority: int = 0,
         color: np.ndarray | None = None,
-        textures: Dict[str, Texture] | None = None,
+        textures: Dict[str, TextureHandle] | None = None,
         uniforms: Dict[str, Any] | None = None,
     ):
         if render_state is None:
@@ -165,7 +165,7 @@ class MaterialPhase:
         cls,
         shader_phase: "ParsedShaderPhase",
         color: np.ndarray | None = None,
-        textures: Dict[str, Texture] | None = None,
+        textures: Dict[str, TextureHandle] | None = None,
         extra_uniforms: Dict[str, Any] | None = None,
     ) -> "MaterialPhase":
         """
@@ -225,14 +225,14 @@ class MaterialPhase:
                     uniforms[prop.name] = prop.default
 
         # 3.5. Собираем текстуры: для Texture properties без заданной текстуры — белая 1x1
-        from termin.visualization.render.texture import get_white_texture
+        from termin.visualization.core.texture_handle import get_white_texture_handle
 
-        final_textures: Dict[str, Texture] = {}
+        final_textures: Dict[str, TextureHandle] = {}
         for prop in shader_phase.uniforms:
             if prop.property_type == "Texture":
                 # Если текстура не задана явно — используем белую
                 if textures is None or prop.name not in textures:
-                    final_textures[prop.name] = get_white_texture()
+                    final_textures[prop.name] = get_white_texture_handle()
 
         # Добавляем явно заданные текстуры (перезаписывают белые)
         if textures is not None:
@@ -272,7 +272,7 @@ class Material:
         self,
         shader: ShaderProgram = None,
         color: np.ndarray | None = None,
-        textures: Dict[str, Texture] | None = None,
+        textures: Dict[str, TextureHandle] | None = None,
         uniforms: Dict[str, Any] | None = None,
         name: str | None = None,
         render_state: Optional["RenderState"] = None,
@@ -338,13 +338,13 @@ class Material:
             self._default_phase.uniforms["u_color"] = self._default_phase.color
 
     @property
-    def textures(self) -> Dict[str, Texture]:
+    def textures(self) -> Dict[str, TextureHandle]:
         if "phases" not in self.__dict__:
             return self.__dict__.get("_pre_textures", {})  # type: ignore[return-value]
         return self._default_phase.textures
 
     @textures.setter
-    def textures(self, value: Dict[str, Texture]):
+    def textures(self, value: Dict[str, TextureHandle]):
         if "phases" not in self.__dict__:
             self.__dict__["_pre_textures"] = value
             return
@@ -482,7 +482,7 @@ class Material:
         cls,
         program: "ShaderMultyPhaseProgramm",
         color: np.ndarray | None = None,
-        textures: Dict[str, Texture] | None = None,
+        textures: Dict[str, TextureHandle] | None = None,
         uniforms: Dict[str, Any] | None = None,
         name: str | None = None,
         source_path: str | None = None,

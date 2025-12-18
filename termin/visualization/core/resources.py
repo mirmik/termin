@@ -8,6 +8,7 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.core.material_asset import MaterialAsset
     from termin.visualization.core.mesh_asset import MeshAsset
     from termin.visualization.core.mesh_handle import MeshHandle
+    from termin.visualization.core.texture_handle import TextureHandle
     from termin.mesh.mesh import Mesh3
     from termin.visualization.core.glb_asset import GLBAsset
     from termin.visualization.core.entity import Component
@@ -118,7 +119,6 @@ class ResourceManager:
 
         self.materials: Dict[str, "Material"] = {}
         self.shaders: Dict[str, "ShaderMultyPhaseProgramm"] = {}
-        self.textures: Dict[str, "Texture"] = {}
         self.voxel_grids: Dict[str, "VoxelGrid"] = {}  # VoxelGrid instances by name
         self.navmeshes: Dict[str, "NavMesh"] = {}  # NavMesh instances by name
         self.animation_clips: Dict[str, "AnimationClip"] = {}  # AnimationClip instances by name
@@ -367,10 +367,7 @@ class ResourceManager:
         asset.load()
 
         # Invalidate GPU texture to force re-upload
-        texture = self.textures.get(name)
-        if texture is not None:
-            texture._gpu.delete()
-            texture._preview_pixmap = None
+        asset.delete_gpu()
 
     def _register_mesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Register mesh from PreLoadResult."""
@@ -1441,63 +1438,63 @@ class ResourceManager:
     def get_texture_asset(self, name: str) -> Optional["TextureAsset"]:
         """Получить TextureAsset по имени."""
         asset = self._texture_assets.get(name)
+        return asset
+
+    def get_texture_handle(self, name: str) -> Optional["TextureHandle"]:
+        """Получить TextureHandle по имени."""
+        from termin.visualization.core.texture_handle import TextureHandle
+
+        asset = self._texture_assets.get(name)
         if asset is not None:
-            return asset
-        # Fallback: извлечь из Texture
-        texture = self.textures.get(name)
-        if texture is not None:
-            return texture.asset
+            return TextureHandle.from_asset(asset)
         return None
 
-    def register_texture(self, name: str, texture: "Texture", source_path: str | None = None):
-        """Регистрирует текстуру."""
-        asset = texture.asset
-        if asset is not None:
-            asset.name = name
-            if source_path:
-                asset.source_path = source_path
-            self._texture_assets[name] = asset
-        # Для обратной совместимости
-        self.textures[name] = texture
+    def register_texture_asset(
+        self,
+        name: str,
+        asset: "TextureAsset",
+        source_path: str | None = None,
+        uuid: str | None = None,
+    ) -> None:
+        """Register TextureAsset."""
+        asset._name = name
+        if source_path:
+            asset._source_path = source_path
+        if uuid is not None:
+            asset._uuid = uuid
+            asset._runtime_id = hash(uuid) & 0xFFFFFFFFFFFFFFFF
+        self._texture_assets[name] = asset
+        self._assets_by_uuid[asset.uuid] = asset
 
-    def get_texture(self, name: str) -> Optional["Texture"]:
-        """Получить текстуру по имени."""
-        # Check if already loaded
-        texture = self.textures.get(name)
-        if texture is not None:
-            return texture
+    def list_texture_names(self) -> list[str]:
+        """List all registered texture names."""
+        return sorted(self._texture_assets.keys())
 
-        # Try from asset (lazy loading happens inside asset.data)
-        asset = self._texture_assets.get(name)
+    def find_texture_name(self, texture: "TextureAsset | TextureHandle") -> Optional[str]:
+        """Find name for a TextureAsset or TextureHandle."""
+        from termin.visualization.core.texture_handle import TextureHandle
+
+        # Extract asset if given TextureHandle
+        if isinstance(texture, TextureHandle):
+            asset = texture.asset
+        else:
+            asset = texture
+
         if asset is None:
             return None
 
-        # Access data triggers lazy load inside asset
-        if asset.data is None:
-            return None
-
-        # Create Texture wrapper and cache it
-        from termin.visualization.render.texture import Texture
-        texture = Texture.from_asset(asset)
-        self.textures[name] = texture
-        return texture
-
-    def list_texture_names(self) -> list[str]:
-        names = set(self._texture_assets.keys()) | set(self.textures.keys())
-        return sorted(names)
-
-    def find_texture_name(self, texture: "Texture") -> Optional[str]:
-        for n, t in self.textures.items():
-            if t is texture:
+        for n, a in self._texture_assets.items():
+            if a is asset:
                 return n
         return None
 
     def unregister_texture(self, name: str) -> None:
-        """Удаляет текстуру."""
-        if name in self._texture_assets:
+        """Remove texture by name."""
+        asset = self._texture_assets.get(name)
+        if asset is not None:
+            if asset.uuid in self._assets_by_uuid:
+                del self._assets_by_uuid[asset.uuid]
             del self._texture_assets[name]
-        if name in self.textures:
-            del self.textures[name]
 
     # --------- Компоненты ---------
     def register_component(self, name: str, cls: type["Component"]):
@@ -1908,12 +1905,12 @@ class ResourceManager:
         Материалы и меши не сериализуются — они загружаются из файлов проекта.
         """
         return {
-            "textures": {name: self._serialize_texture(tex) for name, tex in self.textures.items()},
+            "textures": {name: self._serialize_texture_asset(asset) for name, asset in self._texture_assets.items()},
         }
 
-    def _serialize_texture(self, tex: "Texture") -> dict:
-        """Сериализует текстуру."""
-        source_path = tex.source_path if tex.source_path else None
+    def _serialize_texture_asset(self, asset: "TextureAsset") -> dict:
+        """Сериализует TextureAsset."""
+        source_path = str(asset.source_path) if asset.source_path else None
         if source_path:
             return {"type": "file", "source_path": source_path}
         return {"type": "unknown"}

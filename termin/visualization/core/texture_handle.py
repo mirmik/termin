@@ -15,6 +15,8 @@ from termin.visualization.core.resource_handle import ResourceHandle
 if TYPE_CHECKING:
     from termin.visualization.render.texture_data import TextureData
     from termin.visualization.render.texture_asset import TextureAsset
+    from termin.visualization.render.texture_gpu import TextureGPU
+    from termin.visualization.platform.backends.base import GraphicsBackend
 
 
 class TextureHandle(ResourceHandle["TextureData", "TextureAsset"]):
@@ -51,6 +53,20 @@ class TextureHandle(ResourceHandle["TextureData", "TextureAsset"]):
             return cls.from_asset(asset)
         return cls()
 
+    @classmethod
+    def from_texture_data(cls, texture_data: "TextureData", name: str = "texture") -> "TextureHandle":
+        """Create handle from TextureData."""
+        from termin.visualization.render.texture_asset import TextureAsset
+        asset = TextureAsset(texture_data=texture_data, name=name)
+        return cls.from_asset(asset)
+
+    @classmethod
+    def from_file(cls, path: str, name: str | None = None) -> "TextureHandle":
+        """Create handle from image file."""
+        from termin.visualization.render.texture_asset import TextureAsset
+        asset = TextureAsset.from_file(path, name=name)
+        return cls.from_asset(asset)
+
     # --- Resource extraction ---
 
     def _get_resource_from_asset(self, asset: "TextureAsset") -> "TextureData | None":
@@ -74,6 +90,53 @@ class TextureHandle(ResourceHandle["TextureData", "TextureAsset"]):
     def get_texture_data(self) -> "TextureData | None":
         """Получить TextureData."""
         return self.get()
+
+    @property
+    def gpu(self) -> "TextureGPU | None":
+        """Get TextureGPU for rendering."""
+        if self._asset is not None:
+            return self._asset.gpu
+        return None
+
+    @property
+    def version(self) -> int:
+        """Version of texture data for tracking changes."""
+        if self._asset is not None:
+            return self._asset.version
+        return 0
+
+    @property
+    def source_path(self) -> str | None:
+        """Source path of the texture."""
+        if self._asset is not None and self._asset.source_path is not None:
+            return str(self._asset.source_path)
+        return None
+
+    def bind(
+        self,
+        graphics: "GraphicsBackend",
+        unit: int = 0,
+        context_key: int | None = None,
+    ) -> None:
+        """Bind texture to specified unit (convenience method)."""
+        texture_data = self.get()
+        if texture_data is None:
+            return
+        gpu = self.gpu
+        if gpu is None:
+            return
+        gpu.bind(
+            graphics=graphics,
+            texture_data=texture_data,
+            version=self.version,
+            unit=unit,
+            context_key=context_key,
+        )
+
+    def delete(self) -> None:
+        """Delete GPU resources."""
+        if self._asset is not None:
+            self._asset.delete_gpu()
 
     # --- Serialization ---
 
@@ -101,3 +164,25 @@ class TextureHandle(ResourceHandle["TextureData", "TextureAsset"]):
                 return cls.from_asset(asset)
 
         return cls()
+
+
+# --- White 1x1 Texture Handle Singleton ---
+
+_white_texture_handle: TextureHandle | None = None
+
+
+def get_white_texture_handle() -> TextureHandle:
+    """
+    Returns a white 1x1 texture handle.
+
+    Used as default for optional texture slots.
+    Singleton — created once.
+    """
+    global _white_texture_handle
+
+    if _white_texture_handle is None:
+        from termin.visualization.render.texture_asset import TextureAsset
+        asset = TextureAsset.white_1x1()
+        _white_texture_handle = TextureHandle.from_asset(asset)
+
+    return _white_texture_handle

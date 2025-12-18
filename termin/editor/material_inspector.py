@@ -806,21 +806,21 @@ class MaterialInspector(QWidget):
             return
 
         from termin.visualization.core.resources import ResourceManager
-        from termin.visualization.render.texture import get_white_texture
+        from termin.visualization.core.texture_handle import get_white_texture_handle
 
         rm = ResourceManager.instance()
 
         if texture_name:
             # Получаем текстуру по имени
-            texture = rm.get_texture(texture_name)
+            texture_handle = rm.get_texture_handle(texture_name)
         else:
             # None - используем белую текстуру
-            texture = get_white_texture()
+            texture_handle = get_white_texture_handle()
 
-        if texture is not None:
+        if texture_handle is not None:
             # Обновляем текстуру во всех фазах материала
             for phase in self._material.phases:
-                phase.textures[uniform_name] = texture
+                phase.textures[uniform_name] = texture_handle
 
         self.material_changed.emit()
         self.save_material_file()
