@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "dc3b097d-1877-447f-b3e2-4e059c32ee3f",
+    "uuid": "35c476ae-7ca8-4aed-a3fc-7c3eeefa8a25",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -216,7 +216,7 @@
                 "uuid": "00000000-0000-0000-0003-000000000001"
               },
               "material": {
-                "uuid": "00000000-0000-0000-0002-000000000001"
+                "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
               },
               "cast_shadow": true
             },
@@ -1079,9 +1079,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            0.0,
-            -0.0,
-            0.0
+            -1.6395319700241089,
+            2.088759742946422e-06,
+            -2.920297861099243
           ],
           "rotation": [
             3.5762786865234375e-07,
@@ -4839,15 +4839,15 @@
   "editor": {
     "camera": {
       "target": [
-        -1.4852921962738037,
-        -0.33051708340644836,
-        0.7415220737457275
+        -1.6395319700241089,
+        2.0887596292595845e-06,
+        -2.920297861099243
       ],
-      "radius": 6.5,
-      "azimuth": 50.13632809279396,
-      "elevation": 0.44680428851054155
+      "radius": 5.5,
+      "azimuth": 49.56386009813976,
+      "elevation": 0.6911503837897474
     },
-    "selected_entity": "Glitch",
+    "selected_entity": "cube2",
     "displays": [
       {
         "name": "Editor",
@@ -4856,7 +4856,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "3e2868cb-5f9f-4988-96a0-1ce8a7d5efce",
+            "uuid": "5e3d16d7-1b8b-406b-b816-6d690326fcc2",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -4875,7 +4875,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "d65d1a4b-c5f4-45fe-89e0-bc81a0535fc1",
+            "uuid": "0f51a599-e10a-4826-97b3-31366d959802",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
