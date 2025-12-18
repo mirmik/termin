@@ -55,10 +55,8 @@ class MeshAsset(DataAsset[Mesh3]):
 
     @property
     def mesh_data(self) -> Mesh3 | None:
-        """Mesh geometry data (lazy-loaded)."""
-        if self._data is None and not self._loaded:
-            self.ensure_loaded()
-        return self._data
+        """Mesh geometry data (lazy-loaded via parent's data property)."""
+        return self.data
 
     @mesh_data.setter
     def mesh_data(self, value: Mesh3 | None) -> None:

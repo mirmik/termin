@@ -37,10 +37,8 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
 
     @property
     def clip(self) -> "AnimationClip | None":
-        """AnimationClip data (lazy-loaded)."""
-        if self._data is None and not self._loaded:
-            self.ensure_loaded()
-        return self._data
+        """AnimationClip data (lazy-loaded via parent's data property)."""
+        return self.data
 
     @clip.setter
     def clip(self, value: "AnimationClip | None") -> None:

@@ -36,10 +36,8 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
 
     @property
     def skeleton_data(self) -> "SkeletonData | None":
-        """Get skeleton data (lazy-loaded)."""
-        if self._data is None and not self._loaded:
-            self.ensure_loaded()
-        return self._data
+        """Get skeleton data (lazy-loaded via parent's data property)."""
+        return self.data
 
     @skeleton_data.setter
     def skeleton_data(self, value: "SkeletonData | None") -> None:
