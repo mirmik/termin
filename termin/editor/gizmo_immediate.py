@@ -859,6 +859,7 @@ class ImmediateGizmoController:
             return
 
         from termin.editor.editor_commands import TransformEditCommand
+        from termin.geombase.general_pose3 import GeneralPose3
 
         tf = self._drag_transform
         end_pose = tf.local_pose()
@@ -870,9 +871,17 @@ class ImmediateGizmoController:
         ):
             return
 
+        # Convert Pose3 to GeneralPose3 with scale from current transform
+        scale = end_pose.scale
+        old_general_pose = GeneralPose3(
+            lin=self._start_pose.lin,
+            ang=self._start_pose.ang,
+            scale=scale,
+        )
+
         cmd = TransformEditCommand(
             transform=tf,
-            old_pose=self._start_pose,
+            old_pose=old_general_pose,
             new_pose=end_pose,
         )
         self._undo_handler(cmd, False)
