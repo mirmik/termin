@@ -86,11 +86,7 @@ uniform vec3  u_light_attenuation[MAX_LIGHTS];
 uniform float u_light_inner_angle[MAX_LIGHTS];
 uniform float u_light_outer_angle[MAX_LIGHTS];
 
-// Shadow maps
-uniform int u_shadow_map_count;
-uniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];
-uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
-uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
+// Shadow uniforms are declared in shadows.glsl
 
 out vec4 FragColor;
 
@@ -141,14 +137,7 @@ void main() {
         // Shadow for directional lights
         float shadow = 1.0;
         if (type == LIGHT_TYPE_DIRECTIONAL) {
-            shadow = compute_shadow_pcf(
-                i,
-                v_world_pos,
-                u_shadow_map_count,
-                u_shadow_map,
-                u_light_space_matrix,
-                u_shadow_light_index
-            );
+            shadow = compute_shadow_pcf(i);
         }
 
         // Diffuse (Lambert)

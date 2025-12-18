@@ -84,7 +84,11 @@ class ShaderProgram:
         return self._handle
 
     def use(self):
-        self._require_handle().use()
+        try:
+            self._require_handle().use()
+        except RuntimeError as e:
+            source_name = self.source_path or "<inline>"
+            raise RuntimeError(f"Shader '{source_name}': {e}") from e
 
     def stop(self):
         if self._handle:

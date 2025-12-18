@@ -4,19 +4,16 @@
  * Usage in your shader:
  *   #include "shadows"
  *
- * Required uniforms (define BEFORE including this file):
- *   uniform int u_shadow_map_count;
- *   uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
- *   uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
- *   uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
- *
- * Required varying:
- *   in vec3 v_world_pos;
+ * This file declares all required uniforms automatically.
+ * The engine sets these uniforms via upload_shadow_maps_to_shader().
  *
  * Functions:
  *   float compute_shadow(int light_index) - hard shadow with hardware PCF
  *   float compute_shadow_pcf(int light_index) - 5x5 PCF soft shadow
  *   float compute_shadow_poisson(int light_index) - Poisson disk (best quality)
+ *
+ * Required varying (must be defined in your shader):
+ *   in vec3 v_world_pos;
  */
 
 #ifndef SHADOWS_GLSL
@@ -29,6 +26,12 @@
 #ifndef SHADOW_BIAS
 #define SHADOW_BIAS 0.005
 #endif
+
+// Shadow map uniforms (set by engine)
+uniform int u_shadow_map_count;
+uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
+uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
+uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
 
 // 16-sample Poisson disk for high-quality shadow sampling
 const int POISSON_SAMPLES = 16;
