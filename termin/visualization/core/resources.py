@@ -728,8 +728,11 @@ class ResourceManager:
                 self._assets_by_uuid[skeleton_asset.uuid] = skeleton_asset
 
         # Register animation clip assets
-        for anim_name, anim_asset in glb_asset.get_animation_assets().items():
+        anim_assets = glb_asset.get_animation_assets()
+        print(f"[_register_glb_child_assets] GLB={glb_asset.name}, animation_assets={list(anim_assets.keys())}")
+        for anim_name, anim_asset in anim_assets.items():
             full_name = anim_asset.name
+            print(f"  - anim_name={anim_name!r}, full_name={full_name!r}, already_registered={full_name in self._animation_clip_assets}")
             if full_name not in self._animation_clip_assets:
                 self._animation_clip_assets[full_name] = anim_asset
                 self._assets_by_uuid[anim_asset.uuid] = anim_asset
