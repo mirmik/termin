@@ -383,7 +383,7 @@ class ImmediateGizmoRenderer:
 
         for plane, element, a1, a2, normal in [
             ("xy", GizmoElement.TRANSLATE_XY, axis_x, axis_y, axis_z),
-            ("xz", GizmoElement.TRANSLATE_XZ, axis_x, axis_z, axis_y),
+            ("xz", GizmoElement.TRANSLATE_XZ, axis_z, axis_x, axis_y),  # Swapped to fix winding
             ("yz", GizmoElement.TRANSLATE_YZ, axis_y, axis_z, axis_x),
         ]:
             # Quad corners
