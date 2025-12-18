@@ -316,6 +316,9 @@ class ImmediateGizmoRenderer:
             blend=True,  # Transparent pass
         )
 
+        # Restore default state
+        graphics.set_blend(False)
+
     # ============================================================
     # Raycast picking
     # ============================================================
