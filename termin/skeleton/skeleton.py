@@ -67,6 +67,40 @@ class SkeletonData:
             root_bone_indices=data.get("root_bone_indices"),
         )
 
+    @classmethod
+    def from_glb_skin(cls, skin, nodes: List) -> "SkeletonData":
+        """
+        Create SkeletonData from GLB skin data.
+
+        Args:
+            skin: GLBSkinData with joint indices and inverse bind matrices
+            nodes: List of GLBNodeData for all nodes in the scene
+        """
+        bones = []
+
+        for bone_idx, node_idx in enumerate(skin.joint_node_indices):
+            node = nodes[node_idx]
+
+            # Find parent bone by checking which bone contains this node as child
+            parent_bone_idx = -1
+            for other_bone_idx, other_node_idx in enumerate(skin.joint_node_indices):
+                if node_idx in nodes[other_node_idx].children:
+                    parent_bone_idx = other_bone_idx
+                    break
+
+            bone = Bone(
+                name=node.name,
+                index=bone_idx,
+                parent_index=parent_bone_idx,
+                inverse_bind_matrix=skin.inverse_bind_matrices[bone_idx],
+                bind_translation=node.translation.copy(),
+                bind_rotation=node.rotation.copy(),
+                bind_scale=node.scale.copy(),
+            )
+            bones.append(bone)
+
+        return cls(bones=bones)
+
     def __repr__(self) -> str:
         return f"<SkeletonData bones={len(self.bones)} roots={len(self.root_bone_indices)}>"
 
