@@ -12,7 +12,7 @@ from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
 from termin.editor.editor_viewport_features import EditorViewportFeatures
-from termin.editor.gizmo import GizmoController
+from termin.editor.gizmo_immediate import ImmediateGizmoController
 from termin.editor.game_mode_controller import GameModeController
 from termin.editor.prefab_edit_controller import PrefabEditController
 from termin.editor.world_persistence import WorldPersistence
@@ -250,8 +250,8 @@ class EditorWindow(QMainWindow):
         # --- SpaceMouse support (initialized later after console is ready) ---
         self._spacemouse: SpaceMouseController | None = None
 
-        # --- гизмо-контроллер ---
-        self.gizmo_controller = GizmoController(
+        # --- гизмо-контроллер (immediate mode) ---
+        self.gizmo_controller = ImmediateGizmoController(
             scene=self.scene,
             editor_entities=self._camera_manager.editor_entities,
             undo_handler=self.push_undo_command,

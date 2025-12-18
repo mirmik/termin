@@ -23,7 +23,7 @@ from termin.visualization.core.viewport import Viewport
 from termin.visualization.platform.backends.base import Action, MouseButton
 from termin.visualization.render.framegraph import RenderPipeline
 
-from termin.editor.gizmo import GizmoController
+from termin.editor.gizmo_immediate import ImmediateGizmoController
 from termin.editor.editor_display_input_manager import EditorDisplayInputManager
 
 if TYPE_CHECKING:
@@ -46,7 +46,7 @@ class EditorViewportFeatures:
         display: "Display",
         backend_window: "BackendWindow",
         graphics: "GraphicsBackend",
-        gizmo_controller: GizmoController,
+        gizmo_controller: ImmediateGizmoController,
         on_entity_picked: Callable[[Entity | None], None],
         on_hover_entity: Callable[[Entity | None], None],
         get_fbo_pool: Callable[[], dict],
@@ -351,16 +351,16 @@ class EditorViewportFeatures:
             IdPass,
             CanvasPass,
             PresentToScreenPass,
-            GizmoPass,
         )
+        from termin.visualization.render.framegraph.passes.gizmo_immediate import ImmediateGizmoPass
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.highlight import HighlightEffect
         from termin.visualization.render.framegraph.passes.depth import DepthPass
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
 
-        def get_gizmo_entities():
-            return self._gizmo_controller.helper_geometry_entities()
+        def get_gizmo_renderer():
+            return self._gizmo_controller.gizmo_renderer
 
         postprocess = PostProcessPass(
             effects=[],
@@ -396,13 +396,12 @@ class EditorViewportFeatures:
             phase_mark="editor",
         )
 
-        gizmo_color_pass = ColorPass(
+        # Immediate gizmo pass (renders directly, no entities)
+        gizmo_pass = ImmediateGizmoPass(
+            gizmo_renderer=get_gizmo_renderer,
             input_res="color_editor",
             output_res="color",
-            shadow_res=None,
-            pass_name="GizmoColor",
-            phase_mark="gizmo",
-            clear_depth=True,
+            pass_name="Gizmo",
         )
 
         skybox_pass = SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox")
@@ -422,15 +421,9 @@ class EditorViewportFeatures:
             color_pass,
             transparent_pass,
             editor_color_pass,
-            gizmo_color_pass,
+            gizmo_pass,
             depth_pass,
-            IdPass(input_res="empty_id", output_res="preid", pass_name="Id"),
-            GizmoPass(
-                input_res="preid",
-                output_res="id",
-                pass_name="Gizmo",
-                gizmo_entities=get_gizmo_entities,
-            ),
+            IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
             postprocess,
             CanvasPass(
                 src="color_pp",
