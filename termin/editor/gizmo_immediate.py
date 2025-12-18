@@ -46,17 +46,17 @@ AXIS_COLORS_HIGHLIGHT = {
     "z": (0.6, 0.7, 1.0, 1.0),
 }
 
-# Colors for plane handles (blend of two axes)
+# Colors for plane handles (blend of two axes, semi-transparent)
 PLANE_COLORS = {
-    "xy": (0.8, 0.8, 0.2, 1.0),
-    "xz": (0.8, 0.4, 0.6, 1.0),
-    "yz": (0.2, 0.8, 0.8, 1.0),
+    "xy": (0.8, 0.8, 0.2, 0.5),
+    "xz": (0.8, 0.4, 0.6, 0.5),
+    "yz": (0.2, 0.8, 0.8, 0.5),
 }
 
 PLANE_COLORS_HIGHLIGHT = {
-    "xy": (1.0, 1.0, 0.4, 1.0),
-    "xz": (1.0, 0.6, 0.8, 1.0),
-    "yz": (0.4, 1.0, 1.0, 1.0),
+    "xy": (1.0, 1.0, 0.4, 0.7),
+    "xz": (1.0, 0.6, 0.8, 0.7),
+    "yz": (0.4, 1.0, 1.0, 0.7),
 }
 
 
@@ -89,8 +89,8 @@ class ImmediateGizmoRenderer:
         self._base_ring_minor_radius = ring_minor_radius
         self._base_head_length_ratio = 0.25
         self._base_pick_tolerance = 0.08
-        self._base_plane_offset = 0.25  # Distance from origin to plane quad
-        self._base_plane_size = 0.2     # Size of the plane quad
+        self._base_plane_offset = 0.1   # Distance from origin to plane quad
+        self._base_plane_size = 0.25    # Size of the plane quad
 
         # Current screen scale (updated each frame)
         self._screen_scale = 1.0
@@ -298,7 +298,7 @@ class ImmediateGizmoRenderer:
             view_matrix=view_matrix,
             proj_matrix=proj_matrix,
             depth_test=True,  # Need depth test for proper triangle occlusion
-            blend=False,  # Solid geometry, no blending needed
+            blend=True,  # Enable for transparent plane handles
         )
 
     # ============================================================
