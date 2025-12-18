@@ -975,11 +975,30 @@ class ResourceManager:
         self.meshes[name] = mesh
 
     def get_mesh(self, name: str) -> Optional["MeshDrawable"]:
-        """Получить меш по имени."""
-        return self.meshes.get(name)
+        """Получить меш по имени (lazy loading)."""
+        # Check if already loaded
+        drawable = self.meshes.get(name)
+        if drawable is not None:
+            return drawable
+
+        # Try lazy loading from asset
+        asset = self._mesh_assets.get(name)
+        if asset is None:
+            return None
+
+        # Trigger lazy load
+        if not asset.load():
+            return None
+
+        # Create MeshDrawable wrapper and cache it
+        from termin.visualization.core.mesh import MeshDrawable
+        drawable = MeshDrawable(asset)
+        self.meshes[name] = drawable
+        return drawable
 
     def list_mesh_names(self) -> list[str]:
-        return sorted(self.meshes.keys())
+        names = set(self._mesh_assets.keys()) | set(self.meshes.keys())
+        return sorted(names)
 
     def find_mesh_name(self, mesh: "MeshDrawable") -> Optional[str]:
         # Try identity check first (fast path)
