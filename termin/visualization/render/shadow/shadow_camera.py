@@ -223,7 +223,7 @@ def _limit_projection_far(
     """
     Создаёт копию projection matrix с ограниченным far plane.
 
-    Для perspective projection пересчитывает элементы [2,2] и [2,3].
+    Для Y-forward perspective projection пересчитывает элементы [2,1] и [2,3].
     """
     proj = proj.copy()
 
@@ -233,10 +233,10 @@ def _limit_projection_far(
     if far <= near:
         far = near + 1.0
 
-    # Для perspective projection:
-    # proj[2,2] = -(far + near) / (far - near)
+    # Для Y-forward perspective projection:
+    # proj[2,1] = (far + near) / (far - near)
     # proj[2,3] = -2 * far * near / (far - near)
-    proj[2, 2] = -(far + near) / (far - near)
+    proj[2, 1] = (far + near) / (far - near)
     proj[2, 3] = -2.0 * far * near / (far - near)
 
     return proj
