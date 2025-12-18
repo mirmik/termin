@@ -4,23 +4,31 @@
  * Usage in your shader:
  *   #include "shadows"
  *
- * Required uniforms (automatically set by engine):
+ * Required uniforms (define BEFORE including this file):
  *   uniform int u_shadow_map_count;
  *   uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
  *   uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
  *   uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
  *
+ * Required varying:
+ *   in vec3 v_world_pos;
+ *
  * Functions:
- *   float compute_shadow(int light_index, vec3 world_pos) - hard shadow
- *   float compute_shadow_pcf(int light_index, vec3 world_pos) - 5x5 PCF
- *   float compute_shadow_poisson(int light_index, vec3 world_pos) - Poisson disk (best quality)
+ *   float compute_shadow(int light_index) - hard shadow with hardware PCF
+ *   float compute_shadow_pcf(int light_index) - 5x5 PCF soft shadow
+ *   float compute_shadow_poisson(int light_index) - Poisson disk (best quality)
  */
 
 #ifndef SHADOWS_GLSL
 #define SHADOWS_GLSL
 
-const int MAX_SHADOW_MAPS = 4;
-const float SHADOW_BIAS = 0.005;
+#ifndef MAX_SHADOW_MAPS
+#define MAX_SHADOW_MAPS 4
+#endif
+
+#ifndef SHADOW_BIAS
+#define SHADOW_BIAS 0.005
+#endif
 
 // 16-sample Poisson disk for high-quality shadow sampling
 const int POISSON_SAMPLES = 16;
@@ -45,27 +53,18 @@ const vec2 poissonDisk[16] = vec2[](
 
 /**
  * Compute hard shadow using hardware PCF (sampler2DShadow).
- * Single sample with automatic depth comparison.
+ * Single sample with automatic depth comparison + bilinear filtering.
  */
-float compute_shadow(
-    int light_index,
-    vec3 world_pos,
-    int shadow_map_count,
-    sampler2DShadow shadow_maps[MAX_SHADOW_MAPS],
-    mat4 light_space_matrices[MAX_SHADOW_MAPS],
-    int shadow_light_indices[MAX_SHADOW_MAPS]
-) {
-    for (int sm = 0; sm < shadow_map_count; ++sm) {
-        if (shadow_light_indices[sm] != light_index) {
+float compute_shadow(int light_index) {
+    for (int sm = 0; sm < u_shadow_map_count; ++sm) {
+        if (u_shadow_light_index[sm] != light_index) {
             continue;
         }
 
-        // Transform to light space
-        vec4 light_space_pos = light_space_matrices[sm] * vec4(world_pos, 1.0);
+        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
         vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
         proj_coords = proj_coords * 0.5 + 0.5;
 
-        // Check if outside shadow map frustum
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
             proj_coords.z < 0.0 || proj_coords.z > 1.0) {
@@ -73,9 +72,7 @@ float compute_shadow(
         }
 
         // Hardware PCF: texture() on sampler2DShadow does depth comparison
-        // and returns 0.0 or 1.0 (with bilinear interpolation of results)
-        float shadow = texture(shadow_maps[sm], vec3(proj_coords.xy, proj_coords.z - SHADOW_BIAS));
-        return shadow;
+        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - SHADOW_BIAS));
     }
 
     return 1.0;
@@ -85,40 +82,30 @@ float compute_shadow(
  * Compute soft shadow with 5x5 PCF grid.
  * 25 samples using hardware depth comparison.
  */
-float compute_shadow_pcf(
-    int light_index,
-    vec3 world_pos,
-    int shadow_map_count,
-    sampler2DShadow shadow_maps[MAX_SHADOW_MAPS],
-    mat4 light_space_matrices[MAX_SHADOW_MAPS],
-    int shadow_light_indices[MAX_SHADOW_MAPS]
-) {
-    for (int sm = 0; sm < shadow_map_count; ++sm) {
-        if (shadow_light_indices[sm] != light_index) {
+float compute_shadow_pcf(int light_index) {
+    for (int sm = 0; sm < u_shadow_map_count; ++sm) {
+        if (u_shadow_light_index[sm] != light_index) {
             continue;
         }
 
-        // Transform to light space
-        vec4 light_space_pos = light_space_matrices[sm] * vec4(world_pos, 1.0);
+        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
         vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
         proj_coords = proj_coords * 0.5 + 0.5;
 
-        // Check bounds
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
             proj_coords.z < 0.0 || proj_coords.z > 1.0) {
             return 1.0;
         }
 
-        vec2 texel_size = 1.0 / vec2(textureSize(shadow_maps[sm], 0));
+        vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));
         float compare_depth = proj_coords.z - SHADOW_BIAS;
 
-        // 5x5 PCF sampling with hardware depth comparison
         float shadow = 0.0;
         for (int x = -2; x <= 2; ++x) {
             for (int y = -2; y <= 2; ++y) {
                 vec2 offset = vec2(float(x), float(y)) * texel_size;
-                shadow += texture(shadow_maps[sm], vec3(proj_coords.xy + offset, compare_depth));
+                shadow += texture(u_shadow_map[sm], vec3(proj_coords.xy + offset, compare_depth));
             }
         }
 
@@ -132,42 +119,30 @@ float compute_shadow_pcf(
  * Compute high-quality soft shadow with Poisson disk sampling.
  * 16 samples with better distribution than grid, reduces banding artifacts.
  */
-float compute_shadow_poisson(
-    int light_index,
-    vec3 world_pos,
-    int shadow_map_count,
-    sampler2DShadow shadow_maps[MAX_SHADOW_MAPS],
-    mat4 light_space_matrices[MAX_SHADOW_MAPS],
-    int shadow_light_indices[MAX_SHADOW_MAPS]
-) {
-    for (int sm = 0; sm < shadow_map_count; ++sm) {
-        if (shadow_light_indices[sm] != light_index) {
+float compute_shadow_poisson(int light_index) {
+    for (int sm = 0; sm < u_shadow_map_count; ++sm) {
+        if (u_shadow_light_index[sm] != light_index) {
             continue;
         }
 
-        // Transform to light space
-        vec4 light_space_pos = light_space_matrices[sm] * vec4(world_pos, 1.0);
+        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
         vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
         proj_coords = proj_coords * 0.5 + 0.5;
 
-        // Check bounds
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
             proj_coords.z < 0.0 || proj_coords.z > 1.0) {
             return 1.0;
         }
 
-        vec2 texel_size = 1.0 / vec2(textureSize(shadow_maps[sm], 0));
+        vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));
         float compare_depth = proj_coords.z - SHADOW_BIAS;
-
-        // Poisson disk radius in texels (adjust for shadow softness)
         float radius = 2.5;
 
-        // 16-sample Poisson disk with hardware depth comparison
         float shadow = 0.0;
         for (int i = 0; i < POISSON_SAMPLES; ++i) {
             vec2 offset = poissonDisk[i] * texel_size * radius;
-            shadow += texture(shadow_maps[sm], vec3(proj_coords.xy + offset, compare_depth));
+            shadow += texture(u_shadow_map[sm], vec3(proj_coords.xy + offset, compare_depth));
         }
 
         return shadow / float(POISSON_SAMPLES);
