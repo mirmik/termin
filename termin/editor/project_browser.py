@@ -32,8 +32,8 @@ def _sync_stdlib(project_root: Path) -> None:
     """
     Синхронизирует stdlib в проекте с встроенной версией.
 
-    Если директория stdlib существует в корне проекта, обновляет файлы,
-    размер которых отличается от оригинала. Это дешёвая проверка консистентности.
+    Создаёт директорию stdlib если её нет, обновляет файлы с отличающимся
+    размером. Это дешёвая проверка консистентности.
     """
     import shutil
     import termin
@@ -44,10 +44,7 @@ def _sync_stdlib(project_root: Path) -> None:
     if not stdlib_src.exists():
         return
 
-    if not stdlib_dst.exists():
-        # Stdlib не развёрнут в проекте — ничего не делаем
-        return
-
+    created = not stdlib_dst.exists()
     updated_count = 0
 
     for src_file in stdlib_src.rglob("*"):
@@ -71,7 +68,9 @@ def _sync_stdlib(project_root: Path) -> None:
             shutil.copy2(src_file, dst_file)
             updated_count += 1
 
-    if updated_count > 0:
+    if created:
+        print(f"[ProjectBrowser] stdlib deployed: {updated_count} file(s)")
+    elif updated_count > 0:
         print(f"[ProjectBrowser] stdlib synced: {updated_count} file(s) updated")
 
 
