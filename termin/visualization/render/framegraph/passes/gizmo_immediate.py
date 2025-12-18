@@ -88,8 +88,9 @@ class ImmediateGizmoPass(RenderFramePass):
         graphics.bind_framebuffer(fb)
         graphics.set_viewport(0, 0, pw, ph)
 
-        # No depth clear - we want to render on top
-        # Depth test disabled in gizmo flush()
+        # Clear depth so gizmo renders on top of scene
+        # Depth test is enabled in gizmo.flush() for proper triangle occlusion
+        graphics.clear_depth()
 
         view = camera.get_view_matrix()
         proj = camera.get_projection_matrix()

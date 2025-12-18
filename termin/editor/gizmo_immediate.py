@@ -230,8 +230,8 @@ class ImmediateGizmoRenderer:
             graphics=graphics,
             view_matrix=view_matrix,
             proj_matrix=proj_matrix,
-            depth_test=False,  # Gizmo always on top
-            blend=True,
+            depth_test=True,  # Need depth test for proper triangle occlusion
+            blend=False,  # Solid geometry, no blending needed
         )
 
     # ============================================================
