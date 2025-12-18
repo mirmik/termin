@@ -37,6 +37,7 @@ from termin.editor.file_processors import (
     VoxelGridProcessor,
     NavMeshProcessor,
     GLBPreLoader,
+    GlslPreLoader,
 )
 from termin.editor.spacemouse_controller import SpaceMouseController
 
@@ -129,6 +130,12 @@ class EditorWindow(QMainWindow):
         )
         self._project_file_watcher.register_processor(
             MaterialFileProcessor(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            GlslPreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
@@ -392,6 +399,7 @@ class EditorWindow(QMainWindow):
             on_load_scene=self._load_scene,
             on_load_material=self._load_material_from_file,
             on_load_components=self._load_components_from_file,
+            on_deploy_stdlib=self._deploy_stdlib,
             on_exit=self.close,
             on_undo=self.undo,
             on_redo=self.redo,
@@ -1256,6 +1264,67 @@ class EditorWindow(QMainWindow):
     def _load_components_from_file(self) -> None:
         """Load components from Python file."""
         self._resource_loader.load_components_from_file()
+
+    def _deploy_stdlib(self) -> None:
+        """Deploy standard library to user's project directory."""
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        import shutil
+        from pathlib import Path
+
+        # Get stdlib source directory
+        import termin
+        stdlib_src = Path(termin.__file__).parent / "resources" / "stdlib"
+
+        if not stdlib_src.exists():
+            QMessageBox.warning(
+                self,
+                "Standard Library Not Found",
+                f"Standard library not found at:\n{stdlib_src}\n\n"
+                "Please ensure termin package is properly installed.",
+            )
+            return
+
+        # Ask user where to deploy
+        target_dir = QFileDialog.getExistingDirectory(
+            self,
+            "Select Directory for Standard Library",
+            str(self._project_path) if self._project_path else "",
+        )
+
+        if not target_dir:
+            return
+
+        target_path = Path(target_dir) / "stdlib"
+
+        # Confirm if exists
+        if target_path.exists():
+            reply = QMessageBox.question(
+                self,
+                "Directory Exists",
+                f"Directory '{target_path}' already exists.\n\n"
+                "Overwrite existing files?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        # Copy files
+        try:
+            shutil.copytree(stdlib_src, target_path, dirs_exist_ok=True)
+            QMessageBox.information(
+                self,
+                "Standard Library Deployed",
+                f"Standard library deployed to:\n{target_path}\n\n"
+                "GLSL files can now be used with #include directive.",
+            )
+            print(f"[Editor] Standard library deployed to {target_path}")
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Deployment Failed",
+                f"Failed to deploy standard library:\n{e}",
+            )
 
     # ----------- WorldPersistence колбэки -----------
 

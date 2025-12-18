@@ -122,6 +122,7 @@ class ResourceManager:
         self._navmesh_registry = self._create_navmesh_registry()
         self._animation_clip_registry = self._create_animation_clip_registry()
         self._skeleton_registry = self._create_skeleton_registry()
+        self._glsl_registry = self._create_glsl_registry()
 
         # Legacy dicts (для обратной совместимости и типов без registry)
         self._material_assets: Dict[str, "MaterialAsset"] = {}
@@ -279,6 +280,35 @@ class ResourceManager:
             data_to_asset=data_to_asset,
         )
 
+    def _create_glsl_registry(self):
+        """Create AssetRegistry for GLSL include files."""
+        from termin.visualization.core.asset_registry import AssetRegistry
+
+        def data_from_asset(asset):
+            # Lazy load if not loaded
+            if asset.source is None:
+                asset.load()
+            return asset.source
+
+        def data_to_asset(data):
+            # Search through assets
+            for asset in self._glsl_registry.assets.values():
+                if asset.source is data:
+                    return asset
+            return None
+
+        # Import asset class lazily to avoid circular imports
+        def get_asset_class():
+            from termin.visualization.render.glsl_asset import GlslAsset
+            return GlslAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
     @property
     def _mesh_assets(self) -> Dict[str, "MeshAsset"]:
         """Legacy access to mesh assets dict."""
@@ -308,6 +338,11 @@ class ResourceManager:
     def _skeleton_assets(self) -> Dict[str, "SkeletonAsset"]:
         """Legacy access to skeleton assets dict."""
         return self._skeleton_registry.assets
+
+    @property
+    def glsl(self):
+        """Access to GLSL include files registry."""
+        return self._glsl_registry
 
     @classmethod
     def instance(cls) -> "ResourceManager":
@@ -354,6 +389,8 @@ class ResourceManager:
             self._register_navmesh_file(name, result)
         elif result.resource_type == "glb":
             self._register_glb_file(name, result)
+        elif result.resource_type == "glsl":
+            self._register_glsl_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type: {result.resource_type}")
 
@@ -381,6 +418,8 @@ class ResourceManager:
             self._reload_navmesh_file(name, result)
         elif result.resource_type == "glb":
             self._reload_glb_file(name, result)
+        elif result.resource_type == "glsl":
+            self._reload_glsl_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
 
@@ -750,6 +789,46 @@ class ResourceManager:
 
         # Re-register child assets (may have new ones after reload)
         self._register_glb_child_assets(asset)
+
+    def _register_glsl_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register GLSL include file from PreLoadResult."""
+        from termin.visualization.render.glsl_asset import GlslAsset
+
+        # Check if UUID already registered
+        uuid = result.spec_data.get("uuid") if result.spec_data else None
+        if uuid and uuid in self._assets_by_uuid:
+            asset = self._assets_by_uuid[uuid]
+            if isinstance(asset, GlslAsset):
+                # Update name registration
+                self._glsl_registry.assets[name] = asset
+                asset.parse_spec(result.spec_data)
+                return
+
+        # Create new asset
+        asset = self._glsl_registry.get_or_create_asset(
+            name=name,
+            source_path=result.path,
+            uuid=uuid,
+        )
+        asset.parse_spec(result.spec_data)
+
+    def _reload_glsl_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload GLSL include file from PreLoadResult."""
+        asset = self._glsl_registry.get_asset(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload content
+        asset.parse_spec(result.spec_data)
+        asset.reload()
+
+    def get_glsl(self, name: str) -> Optional[str]:
+        """Get GLSL source by include name."""
+        return self._glsl_registry.get(name)
 
     def get_glb_asset(self, name: str) -> Optional["GLBAsset"]:
         """Get GLBAsset by name."""

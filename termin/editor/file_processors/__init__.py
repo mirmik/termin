@@ -9,6 +9,7 @@ from termin.editor.file_processors.pipeline_processor import PipelineFileProcess
 from termin.editor.file_processors.voxel_grid_processor import VoxelGridProcessor
 from termin.editor.file_processors.navmesh_processor import NavMeshProcessor
 from termin.editor.file_processors.glb_processor import GLBPreLoader
+from termin.editor.file_processors.glsl_processor import GlslPreLoader
 
 # Backward compatibility aliases
 MaterialFileProcessor = MaterialPreLoader
@@ -24,4 +25,5 @@ __all__ = [
     "VoxelGridProcessor",
     "NavMeshProcessor",
     "GLBPreLoader",
+    "GlslPreLoader",
 ]

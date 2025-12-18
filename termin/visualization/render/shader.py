@@ -58,7 +58,24 @@ class ShaderProgram:
         if backend is None:
             raise RuntimeError("Graphics backend is not available for shader compilation.")
         self._backend = backend
-        self._handle = backend.create_shader(self.vertex_source, self.fragment_source, self.geometry_source)
+
+        # Preprocess #include directives
+        from termin.visualization.render.glsl_preprocessor import preprocess_glsl, has_includes
+
+        vs = self.vertex_source
+        fs = self.fragment_source
+        gs = self.geometry_source
+
+        source_name = self.source_path or "<inline>"
+
+        if has_includes(vs):
+            vs = preprocess_glsl(vs, f"{source_name}:vertex")
+        if has_includes(fs):
+            fs = preprocess_glsl(fs, f"{source_name}:fragment")
+        if gs is not None and has_includes(gs):
+            gs = preprocess_glsl(gs, f"{source_name}:geometry")
+
+        self._handle = backend.create_shader(vs, fs, gs)
         self._compiled = True
 
     def _require_handle(self) -> ShaderHandle:

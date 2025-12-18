@@ -36,6 +36,7 @@ class MenuBarController:
         on_load_scene: Callable,
         on_load_material: Callable,
         on_load_components: Callable,
+        on_deploy_stdlib: Callable,
         on_exit: Callable,
         on_undo: Callable,
         on_redo: Callable,
@@ -67,6 +68,7 @@ class MenuBarController:
             on_load_scene=on_load_scene,
             on_load_material=on_load_material,
             on_load_components=on_load_components,
+            on_deploy_stdlib=on_deploy_stdlib,
             on_exit=on_exit,
             on_undo=on_undo,
             on_redo=on_redo,
@@ -90,6 +92,7 @@ class MenuBarController:
         on_load_scene: Callable,
         on_load_material: Callable,
         on_load_components: Callable,
+        on_deploy_stdlib: Callable,
         on_exit: Callable,
         on_undo: Callable,
         on_redo: Callable,
@@ -142,6 +145,11 @@ class MenuBarController:
 
         load_components_action = file_menu.addAction("Load Components...")
         load_components_action.triggered.connect(on_load_components)
+
+        file_menu.addSeparator()
+
+        deploy_stdlib_action = file_menu.addAction("Deploy Standard Library...")
+        deploy_stdlib_action.triggered.connect(on_deploy_stdlib)
 
         file_menu.addSeparator()
 
