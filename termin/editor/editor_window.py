@@ -1278,31 +1278,24 @@ class EditorWindow(QMainWindow):
 
     def _enter_fullscreen(self) -> None:
         """Enter fullscreen mode."""
-        # Save current state
+        # Save current state - which widgets were visible
         self._pre_fullscreen_state = {
-            "top_splitter_sizes": self.topSplitter.sizes() if self.topSplitter else None,
-            "vertical_splitter_sizes": self.verticalSplitter.sizes() if self.verticalSplitter else None,
+            "left_visible": self.leftTabWidget.isVisible() if self.leftTabWidget else True,
+            "inspector_visible": self.inspectorContainer.isVisible() if self.inspectorContainer else True,
+            "bottom_visible": self._get_bottom_widget_visible(),
             "menubar_visible": self.menuBar().isVisible(),
             "statusbar_visible": self.statusBar().isVisible(),
             "window_state": self.windowState(),
         }
 
-        # Hide panels by setting splitter sizes
-        if self.topSplitter:
-            sizes = self.topSplitter.sizes()
-            total = sum(sizes)
-            # Give all space to center (index 1 typically)
-            if len(sizes) >= 3:
-                self.topSplitter.setSizes([0, total, 0])
-            elif len(sizes) >= 2:
-                self.topSplitter.setSizes([0, total])
+        # Hide side panels directly
+        if self.leftTabWidget:
+            self.leftTabWidget.hide()
+        if self.inspectorContainer:
+            self.inspectorContainer.hide()
 
-        if self.verticalSplitter:
-            sizes = self.verticalSplitter.sizes()
-            total = sum(sizes)
-            # Give all space to top part (viewport)
-            if len(sizes) >= 2:
-                self.verticalSplitter.setSizes([total, 0])
+        # Hide bottom panel (project browser area)
+        self._set_bottom_widget_visible(False)
 
         # Hide menu and status bars
         self.menuBar().hide()
@@ -1315,6 +1308,23 @@ class EditorWindow(QMainWindow):
         # Update menu checkbox
         if self._menu_bar_controller:
             self._menu_bar_controller.update_fullscreen_action()
+
+    def _get_bottom_widget_visible(self) -> bool:
+        """Get visibility of bottom area in vertical splitter."""
+        if self.verticalSplitter and self.verticalSplitter.count() > 1:
+            widget = self.verticalSplitter.widget(1)
+            return widget.isVisible() if widget else True
+        return True
+
+    def _set_bottom_widget_visible(self, visible: bool) -> None:
+        """Set visibility of bottom area in vertical splitter."""
+        if self.verticalSplitter and self.verticalSplitter.count() > 1:
+            widget = self.verticalSplitter.widget(1)
+            if widget:
+                if visible:
+                    widget.show()
+                else:
+                    widget.hide()
 
     def _exit_fullscreen(self) -> None:
         """Exit fullscreen mode."""
@@ -1335,11 +1345,15 @@ class EditorWindow(QMainWindow):
             if state.get("statusbar_visible", True):
                 self.statusBar().show()
 
-            # Restore splitter sizes
-            if self.topSplitter and state.get("top_splitter_sizes"):
-                self.topSplitter.setSizes(state["top_splitter_sizes"])
-            if self.verticalSplitter and state.get("vertical_splitter_sizes"):
-                self.verticalSplitter.setSizes(state["vertical_splitter_sizes"])
+            # Restore side panels
+            if self.leftTabWidget and state.get("left_visible", True):
+                self.leftTabWidget.show()
+            if self.inspectorContainer and state.get("inspector_visible", True):
+                self.inspectorContainer.show()
+
+            # Restore bottom panel
+            if state.get("bottom_visible", True):
+                self._set_bottom_widget_visible(True)
 
             self._pre_fullscreen_state = None
 
