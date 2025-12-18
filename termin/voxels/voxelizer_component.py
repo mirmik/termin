@@ -14,7 +14,8 @@ import numpy as np
 
 from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh import Mesh3, MeshDrawable
+from termin.visualization.core.mesh_handle import MeshHandle
+from termin.mesh.mesh import Mesh3
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
 
@@ -246,10 +247,10 @@ class VoxelizerComponent(Component):
         self._debug_regions: list[tuple[list[tuple[int, int, int]], np.ndarray]] = []
         self._debug_boundary_voxels: set[tuple[int, int, int]] = set()
         self._debug_grid: Optional["VoxelGrid"] = None
-        self._debug_mesh_drawable: Optional[MeshDrawable] = None
-        self._debug_contours_drawable: Optional[MeshDrawable] = None
-        self._debug_multi_normal_drawable: Optional[MeshDrawable] = None
-        self._debug_boundary_drawable: Optional[MeshDrawable] = None
+        self._debug_mesh_handle: Optional[MeshHandle] = None
+        self._debug_contours_handle: Optional[MeshHandle] = None
+        self._debug_multi_normal_handle: Optional[MeshHandle] = None
+        self._debug_boundary_handle: Optional[MeshHandle] = None
         self._debug_material: Optional[Material] = None
         self._debug_contour_material: Optional[Material] = None
         self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
@@ -284,24 +285,36 @@ class VoxelizerComponent(Component):
     def draw_geometry(self, context: "RenderContext", geometry_id: str = "") -> None:
         """Рисует отладочную геометрию."""
         if geometry_id == "" or geometry_id == self.GEOMETRY_VOXELS:
-            if self.show_debug_voxels and self._debug_mesh_drawable is not None:
-                self._debug_mesh_drawable.draw(context)
+            if self.show_debug_voxels and self._debug_mesh_handle is not None:
+                mesh_data = self._debug_mesh_handle.mesh
+                gpu = self._debug_mesh_handle.gpu
+                if mesh_data is not None and gpu is not None:
+                    gpu.draw(context, mesh_data, self._debug_mesh_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_CONTOURS:
-            if self.show_debug_contours and self._debug_contours_drawable is not None:
-                self._debug_contours_drawable.draw(context)
+            if self.show_debug_contours and self._debug_contours_handle is not None:
+                mesh_data = self._debug_contours_handle.mesh
+                gpu = self._debug_contours_handle.gpu
+                if mesh_data is not None and gpu is not None:
+                    gpu.draw(context, mesh_data, self._debug_contours_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_MULTI_NORMAL:
-            if self.show_multi_normal_voxels and self._debug_multi_normal_drawable is not None:
-                self._debug_multi_normal_drawable.draw(context)
+            if self.show_multi_normal_voxels and self._debug_multi_normal_handle is not None:
+                mesh_data = self._debug_multi_normal_handle.mesh
+                gpu = self._debug_multi_normal_handle.gpu
+                if mesh_data is not None and gpu is not None:
+                    gpu.draw(context, mesh_data, self._debug_multi_normal_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_BOUNDARY:
-            if self.show_boundary_voxels and self._debug_boundary_drawable is not None:
-                self._debug_boundary_drawable.draw(context)
+            if self.show_boundary_voxels and self._debug_boundary_handle is not None:
+                mesh_data = self._debug_boundary_handle.mesh
+                gpu = self._debug_boundary_handle.gpu
+                if mesh_data is not None and gpu is not None:
+                    gpu.draw(context, mesh_data, self._debug_boundary_handle.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
         result: List[GeometryDrawCall] = []
 
         # Воксели
-        if self.show_debug_voxels and self._debug_mesh_drawable is not None:
+        if self.show_debug_voxels and self._debug_mesh_handle is not None:
             mat = self._get_or_create_debug_material()
             if phase_mark is None:
                 phases = list(mat.phases)
@@ -325,7 +338,7 @@ class VoxelizerComponent(Component):
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_VOXELS) for p in phases)
 
         # Контуры
-        if self.show_debug_contours and self._debug_contours_drawable is not None:
+        if self.show_debug_contours and self._debug_contours_handle is not None:
             mat = self._get_or_create_contour_material()
             if phase_mark is None:
                 phases = list(mat.phases)
@@ -349,7 +362,7 @@ class VoxelizerComponent(Component):
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_CONTOURS) for p in phases)
 
         # Multi-normal воксели
-        if self.show_multi_normal_voxels and self._debug_multi_normal_drawable is not None:
+        if self.show_multi_normal_voxels and self._debug_multi_normal_handle is not None:
             mat = self._get_or_create_debug_material()
             if phase_mark is None:
                 phases = list(mat.phases)
@@ -373,7 +386,7 @@ class VoxelizerComponent(Component):
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_MULTI_NORMAL) for p in phases)
 
         # Boundary воксели
-        if self.show_boundary_voxels and self._debug_boundary_drawable is not None:
+        if self.show_boundary_voxels and self._debug_boundary_handle is not None:
             mat = self._get_or_create_debug_material()
             if phase_mark is None:
                 phases = list(mat.phases)
@@ -784,19 +797,19 @@ class VoxelizerComponent(Component):
         from termin.voxels.voxel_mesh import VoxelMesh
         import random
 
-        # Очищаем старые drawable
-        if self._debug_mesh_drawable is not None:
-            self._debug_mesh_drawable.delete()
-            self._debug_mesh_drawable = None
-        if self._debug_contours_drawable is not None:
-            self._debug_contours_drawable.delete()
-            self._debug_contours_drawable = None
-        if self._debug_multi_normal_drawable is not None:
-            self._debug_multi_normal_drawable.delete()
-            self._debug_multi_normal_drawable = None
-        if self._debug_boundary_drawable is not None:
-            self._debug_boundary_drawable.delete()
-            self._debug_boundary_drawable = None
+        # Очищаем старые handles
+        if self._debug_mesh_handle is not None:
+            self._debug_mesh_handle.delete()
+            self._debug_mesh_handle = None
+        if self._debug_contours_handle is not None:
+            self._debug_contours_handle.delete()
+            self._debug_contours_handle = None
+        if self._debug_multi_normal_handle is not None:
+            self._debug_multi_normal_handle.delete()
+            self._debug_multi_normal_handle = None
+        if self._debug_boundary_handle is not None:
+            self._debug_boundary_handle.delete()
+            self._debug_boundary_handle = None
 
         if not self._debug_regions or self._debug_grid is None:
             return
@@ -865,7 +878,7 @@ class VoxelizerComponent(Component):
 
         mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
         mesh.vertex_normals = normals
-        self._debug_mesh_drawable = MeshDrawable(mesh)
+        self._debug_mesh_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_mesh")
 
         # Строим контуры для всех регионов
         self._build_debug_contours(grid, region_colors)
@@ -973,7 +986,7 @@ class VoxelizerComponent(Component):
 
         mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
         mesh.vertex_normals = normals
-        self._debug_contours_drawable = MeshDrawable(mesh)
+        self._debug_contours_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_contours")
 
     def _build_debug_multi_normal(
         self,
@@ -1021,7 +1034,7 @@ class VoxelizerComponent(Component):
 
         mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
         mesh.vertex_normals = normals
-        self._debug_multi_normal_drawable = MeshDrawable(mesh)
+        self._debug_multi_normal_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_multi_normal")
 
         print(f"VoxelizerComponent: {count} voxels with multiple normals")
 
@@ -1065,7 +1078,7 @@ class VoxelizerComponent(Component):
 
         mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
         mesh.vertex_normals = normals
-        self._debug_boundary_drawable = MeshDrawable(mesh)
+        self._debug_boundary_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_boundary")
 
         print(f"VoxelizerComponent: {count} boundary voxels")
 

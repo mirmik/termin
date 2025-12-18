@@ -1,4 +1,4 @@
-"""MeshAsset - Asset for 3D mesh data."""
+"""MeshAsset - Asset for 3D mesh data with GPU rendering support."""
 
 from __future__ import annotations
 
@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING
 
 from termin.mesh.mesh import Mesh3
 from termin.visualization.core.data_asset import DataAsset
+from termin.visualization.core.mesh_gpu import MeshGPU
 
 if TYPE_CHECKING:
     from termin.loaders.mesh_spec import MeshSpec
+    from termin.visualization.render.render_context import RenderContext
 
 
 class MeshAsset(DataAsset[Mesh3]):
@@ -34,6 +36,9 @@ class MeshAsset(DataAsset[Mesh3]):
         uuid: str | None = None,
     ):
         super().__init__(data=mesh_data, name=name, source_path=source_path, uuid=uuid)
+
+        # GPU resources (created on demand)
+        self._gpu: MeshGPU | None = None
 
         # Spec settings (parsed from spec file)
         self._scale: float = 1.0
@@ -255,3 +260,18 @@ class MeshAsset(DataAsset[Mesh3]):
         """Create MeshAsset from vertices and triangles arrays."""
         mesh3 = Mesh3(vertices=vertices, triangles=triangles)
         return cls(mesh_data=mesh3, name=name)
+
+    # --- GPU access ---
+
+    @property
+    def gpu(self) -> MeshGPU:
+        """Get MeshGPU for rendering (created on demand)."""
+        if self._gpu is None:
+            self._gpu = MeshGPU()
+        return self._gpu
+
+    def delete_gpu(self) -> None:
+        """Delete GPU resources."""
+        if self._gpu is not None:
+            self._gpu.delete()
+            self._gpu = None

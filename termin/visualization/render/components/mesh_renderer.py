@@ -6,7 +6,7 @@ from termin.editor.inspect_field import InspectField
 from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.material_handle import MaterialHandle
-from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.render.drawable import GeometryDrawCall
 
@@ -16,10 +16,10 @@ if TYPE_CHECKING:
 
 class MeshRenderer(Component):
     """
-    Renderer component that draws MeshDrawable.
+    Renderer component that draws a mesh.
 
     Атрибуты:
-        mesh: Геометрия для отрисовки.
+        mesh: Геометрия для отрисовки (через MeshHandle).
         material: Материал для рендеринга.
         cast_shadow: Отбрасывает ли объект тень (добавляет "shadow" в phase_marks).
 
@@ -52,7 +52,7 @@ class MeshRenderer(Component):
 
     def __init__(
         self,
-        mesh: MeshDrawable | Mesh3 | None = None,
+        mesh: MeshHandle | Mesh3 | None = None,
         material: Material | None = None,
         cast_shadow: bool = True,
     ):
@@ -61,12 +61,12 @@ class MeshRenderer(Component):
         if self._DEBUG_INIT:
             print(f"[MeshRenderer.__init__] mesh={mesh}, material={material}")
 
-        self._mesh: MeshDrawable | None = None
+        self._mesh_handle: MeshHandle = MeshHandle()
         if mesh is not None:
             if isinstance(mesh, Mesh3):
-                self._mesh = MeshDrawable(mesh)
-            else:
-                self._mesh = mesh
+                self._mesh_handle = MeshHandle.from_mesh3(mesh)
+            elif isinstance(mesh, MeshHandle):
+                self._mesh_handle = mesh
 
         self.cast_shadow = cast_shadow
 
@@ -111,37 +111,29 @@ class MeshRenderer(Component):
             self._material_handle = MaterialHandle.from_material(value)
 
     @property
-    def mesh(self) -> MeshDrawable | None:
-        """Возвращает текущий меш."""
-        return self._mesh
+    def mesh(self) -> MeshHandle:
+        """Возвращает MeshHandle."""
+        return self._mesh_handle
 
     @mesh.setter
-    def mesh(self, value: MeshDrawable | Mesh3 | None):
+    def mesh(self, value: MeshHandle | Mesh3 | None):
         """Устанавливает меш."""
         if value is None:
-            self._mesh = None
+            self._mesh_handle = MeshHandle()
         elif isinstance(value, Mesh3):
-            self._mesh = MeshDrawable(value)
-        else:
-            self._mesh = value
+            self._mesh_handle = MeshHandle.from_mesh3(value)
+        elif isinstance(value, MeshHandle):
+            self._mesh_handle = value
 
-    def set_mesh(self, mesh: MeshDrawable | Mesh3 | None):
+    def set_mesh(self, mesh: MeshHandle | Mesh3 | None):
         """Устанавливает меш напрямую."""
         self.mesh = mesh
 
     def set_mesh_by_name(self, name: str):
-        """
-        Устанавливает меш по имени из ResourceManager.
-        Меш загружается из ResourceManager и оборачивается в MeshDrawable.
-        """
-        rm = ResourceManager.instance()
-        asset = rm.get_mesh_asset(name)
-        if asset is not None:
-            self._mesh = MeshDrawable(asset)
-        else:
-            self._mesh = None
+        """Устанавливает меш по имени из ResourceManager."""
+        self._mesh_handle = MeshHandle.from_name(name)
 
-    def update_mesh(self, mesh: MeshDrawable | Mesh3 | None):
+    def update_mesh(self, mesh: MeshHandle | Mesh3 | None):
         """Устанавливает меш (legacy alias)."""
         self.mesh = mesh
 
@@ -161,9 +153,11 @@ class MeshRenderer(Component):
     def draw_geometry(self, context: RenderContext, geometry_id: str = "") -> None:
         """Рисует геометрию (шейдер уже привязан пассом)."""
         # geometry_id игнорируется — у MeshRenderer одна геометрия
-        if self.mesh is None:
+        mesh_data = self._mesh_handle.mesh
+        gpu = self._mesh_handle.gpu
+        if mesh_data is None or gpu is None:
             return
-        self.mesh.draw(context)
+        gpu.draw(context, mesh_data, self._mesh_handle.version)
 
     _DEBUG_DRAWS = False  # DEBUG: отладка get_geometry_draws
 
@@ -202,37 +196,20 @@ class MeshRenderer(Component):
 
     def serialize_data(self) -> dict:
         """Сериализует MeshRenderer."""
-        rm = ResourceManager.instance()
-
         data = {
             "enabled": self.enabled,
             "cast_shadow": self.cast_shadow,
         }
 
-        if self.mesh is not None:
-            # Try to save UUID, fallback to name
-            mesh_uuid = rm.find_mesh_uuid(self.mesh)
-            if mesh_uuid:
-                data["mesh"] = {"uuid": mesh_uuid}
-            else:
-                mesh_name = rm.find_mesh_name(self.mesh)
-                if mesh_name:
-                    data["mesh"] = mesh_name
-                elif self.mesh.name:
-                    data["mesh"] = self.mesh.name
+        # Serialize mesh via handle
+        mesh_serial = self._mesh_handle.serialize()
+        if mesh_serial.get("type") != "none":
+            data["mesh"] = mesh_serial
 
-        mat = self._material_handle.get_material_or_none()
-        if mat is not None:
-            # Try to save UUID, fallback to name
-            mat_uuid = rm.find_material_uuid(mat)
-            if mat_uuid:
-                data["material"] = {"uuid": mat_uuid}
-            else:
-                mat_name = rm.find_material_name(mat)
-                if mat_name:
-                    data["material"] = mat_name
-                elif mat.name:
-                    data["material"] = mat.name
+        # Serialize material via handle
+        mat_serial = self._material_handle.serialize()
+        if mat_serial.get("type") != "none":
+            data["material"] = mat_serial
 
         return data
 

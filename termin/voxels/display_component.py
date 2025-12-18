@@ -15,7 +15,7 @@ import numpy as np
 
 from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.voxels.voxel_mesh import VoxelMesh
@@ -149,7 +149,7 @@ class VoxelDisplayComponent(Component):
         self._voxel_grid_name = grid_name or voxel_grid_name
         self._grid_handle: VoxelGridHandle = VoxelGridHandle()
         self._last_grid: Optional["VoxelGrid"] = None  # Для отслеживания изменений
-        self._mesh_drawable: Optional[MeshDrawable] = None
+        self._mesh_handle: Optional[MeshHandle] = None
         self._material: Optional[Material] = None
         self._needs_rebuild = True
 
@@ -268,10 +268,13 @@ class VoxelDisplayComponent(Component):
         # Проверяем hot-reload перед отрисовкой
         self._check_hot_reload()
 
-        if self._mesh_drawable is None:
+        if self._mesh_handle is None:
             return
 
-        self._mesh_drawable.draw(context)
+        mesh_data = self._mesh_handle.mesh
+        gpu = self._mesh_handle.gpu
+        if mesh_data is not None and gpu is not None:
+            gpu.draw(context, mesh_data, self._mesh_handle.version)
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
@@ -401,7 +404,7 @@ class VoxelDisplayComponent(Component):
             vertex_colors=colors,
         )
         mesh.vertex_normals = normals
-        self._mesh_drawable = MeshDrawable(mesh, name="voxel_display")
+        self._mesh_handle = MeshHandle.from_mesh3(mesh, name="voxel_display")
 
     # --- Lifecycle ---
 

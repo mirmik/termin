@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Optional
 import numpy as np
 
 from termin.mesh.mesh import Mesh3
-from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.material import Material
 from termin.visualization.render.components import MeshRenderer
 from termin.geombase.pose3 import Pose3
@@ -100,7 +100,7 @@ class VoxelVisualizer:
     def __init__(self, grid: "VoxelGrid", parent_entity: "Entity") -> None:
         self._grid = grid
         self._parent = parent_entity
-        self._mesh_drawable: Optional[MeshDrawable] = None
+        self._mesh_handle: Optional[MeshHandle] = None
         self._renderer: Optional[MeshRenderer] = None
         self._material = Material(
             color=(0.2, 0.6, 1.0, 0.7),
@@ -160,9 +160,9 @@ class VoxelVisualizer:
             triangles=triangles,
         )
         mesh.vertex_normals = normals
-        self._mesh_drawable = MeshDrawable(mesh, name="voxel_grid_vis")
+        self._mesh_handle = MeshHandle.from_mesh3(mesh, name="voxel_grid_vis")
         self._renderer = MeshRenderer(
-            self._mesh_drawable,
+            self._mesh_handle,
             self._material,
             cast_shadow=False,
         )
@@ -177,9 +177,9 @@ class VoxelVisualizer:
         if self._renderer is not None:
             self._parent.remove_component(self._renderer)
             self._renderer = None
-        if self._mesh_drawable is not None:
-            self._mesh_drawable.delete()
-            self._mesh_drawable = None
+        if self._mesh_handle is not None:
+            self._mesh_handle.delete()
+            self._mesh_handle = None
 
     def set_color(self, color: tuple[float, float, float, float]) -> None:
         """Установить цвет визуализации."""

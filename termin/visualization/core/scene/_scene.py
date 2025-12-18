@@ -21,7 +21,7 @@ from .lighting import LightingManager
 
 if TYPE_CHECKING:  # pragma: no cover
     from termin.visualization.render.shader import ShaderProgram
-    from termin.visualization.core.mesh import MeshDrawable
+    from termin.visualization.core.mesh_handle import MeshHandle
     from termin.visualization.core.material import Material
 
 
@@ -92,7 +92,7 @@ class Scene(Identifiable):
     def skybox_bottom_color(self, value):
         self._skybox.skybox_bottom_color = np.asarray(value, dtype=np.float32)
 
-    def skybox_mesh(self) -> "MeshDrawable":
+    def skybox_mesh(self) -> "MeshHandle":
         """Get skybox cube mesh."""
         return self._skybox.mesh
 

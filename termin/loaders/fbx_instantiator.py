@@ -11,7 +11,7 @@ from termin.geombase.pose3 import Pose3
 from termin.geombase.general_pose3 import GeneralPose3
 from termin.mesh.mesh import Mesh3
 from termin.visualization.core.entity import Entity
-from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.materials.default_material import DefaultMaterial
 
@@ -80,7 +80,7 @@ def _fbx_mesh_to_mesh3(fbx_mesh: FBXMeshData) -> Mesh3:
 def _create_entity_from_node(
     node: FBXNodeData,
     meshes: List[FBXMeshData],
-    mesh_drawables: Dict[int, MeshDrawable],
+    mesh_handles: Dict[int, MeshHandle],
     default_material: DefaultMaterial,
 ) -> Entity:
     """Recursively create Entity hierarchy from FBXNodeData."""
@@ -95,19 +95,19 @@ def _create_entity_from_node(
     # Add MeshRenderer for each mesh attached to this node
     for mesh_idx in node.mesh_indices:
         if mesh_idx < len(meshes):
-            # Get or create MeshDrawable
-            if mesh_idx not in mesh_drawables:
+            # Get or create MeshHandle
+            if mesh_idx not in mesh_handles:
                 mesh3 = _fbx_mesh_to_mesh3(meshes[mesh_idx])
-                mesh_drawables[mesh_idx] = MeshDrawable(mesh3, name=meshes[mesh_idx].name)
+                mesh_handles[mesh_idx] = MeshHandle.from_mesh3(mesh3, name=meshes[mesh_idx].name)
 
-            drawable = mesh_drawables[mesh_idx]
-            renderer = MeshRenderer(mesh=drawable, material=default_material)
+            mesh_handle = mesh_handles[mesh_idx]
+            renderer = MeshRenderer(mesh=mesh_handle, material=default_material)
             entity.add_component(renderer)
 
     # Recursively create children
     for child_node in node.children:
         child_entity = _create_entity_from_node(
-            child_node, meshes, mesh_drawables, default_material
+            child_node, meshes, mesh_handles, default_material
         )
         entity.transform.add_child(child_entity.transform)
 
@@ -143,15 +143,15 @@ def instantiate_fbx(path: Path, name: str = None) -> Entity:
     # Shared material for all meshes
     default_material = DefaultMaterial(color=(0.8, 0.8, 0.8, 1.0))
 
-    # Cache for MeshDrawables (shared between nodes referencing same mesh)
-    mesh_drawables: Dict[int, MeshDrawable] = {}
+    # Cache for MeshHandles (shared between nodes referencing same mesh)
+    mesh_handles: Dict[int, MeshHandle] = {}
 
     if scene_data.root is not None:
         # Create hierarchy from FBX node tree
         root_entity = _create_entity_from_node(
             scene_data.root,
             scene_data.meshes,
-            mesh_drawables,
+            mesh_handles,
             default_material,
         )
         root_entity.name = name
@@ -161,11 +161,11 @@ def instantiate_fbx(path: Path, name: str = None) -> Entity:
 
         for i, fbx_mesh in enumerate(scene_data.meshes):
             mesh3 = _fbx_mesh_to_mesh3(fbx_mesh)
-            drawable = MeshDrawable(mesh3, name=fbx_mesh.name)
-            mesh_drawables[i] = drawable
+            mesh_handle = MeshHandle.from_mesh3(mesh3, name=fbx_mesh.name)
+            mesh_handles[i] = mesh_handle
 
             mesh_entity = Entity(pose=Pose3.identity(), name=fbx_mesh.name)
-            renderer = MeshRenderer(mesh=drawable, material=default_material)
+            renderer = MeshRenderer(mesh=mesh_handle, material=default_material)
             mesh_entity.add_component(renderer)
 
             root_entity.transform.add_child(mesh_entity.transform)

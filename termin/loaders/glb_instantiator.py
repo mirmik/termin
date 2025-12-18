@@ -15,7 +15,7 @@ from termin.mesh.skinned_mesh import SkinnedMesh3
 from termin.skeleton.bone import Bone
 from termin.skeleton.skeleton import SkeletonData, SkeletonInstance
 from termin.visualization.core.entity import Entity
-from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.components.skinned_mesh_renderer import SkinnedMeshRenderer
 from termin.visualization.render.components.skeleton_controller import SkeletonController
@@ -114,16 +114,16 @@ _debug_entity_count = 0
 
 class _PendingSkinnedMesh:
     """Placeholder for skinned mesh that needs skeleton instance set later."""
-    def __init__(self, entity: Entity, drawable: MeshDrawable, material):
+    def __init__(self, entity: Entity, mesh_handle: MeshHandle, material):
         self.entity = entity
-        self.drawable = drawable
+        self.mesh_handle = mesh_handle
         self.material = material
 
 
 def _create_entity_from_node(
     node_index: int,
     scene_data: GLBSceneData,
-    mesh_drawables: Dict[int, MeshDrawable],
+    mesh_handles: Dict[int, MeshHandle],
     default_material: DefaultMaterial,
     skinned_material,
     glb_name: str = "",
@@ -164,31 +164,31 @@ def _create_entity_from_node(
         for mesh_idx in our_mesh_indices:
             glb_mesh = scene_data.meshes[mesh_idx]
 
-            # Get MeshDrawable from cache or ResourceManager
-            if mesh_idx not in mesh_drawables:
+            # Get MeshHandle from cache or ResourceManager
+            if mesh_idx not in mesh_handles:
                 mesh_name = f"{glb_name}_{glb_mesh.name}" if glb_name else glb_mesh.name
                 from termin.visualization.core.resources import ResourceManager
                 rm = ResourceManager.instance()
-                drawable = rm.meshes.get(mesh_name)
+                mesh_handle = rm.get_mesh(mesh_name)
 
-                if drawable is None:
+                if mesh_handle is None:
                     raise RuntimeError(f"[glb_instantiator] Mesh '{mesh_name}' not found in ResourceManager")
 
-                mesh_drawables[mesh_idx] = drawable
+                mesh_handles[mesh_idx] = mesh_handle
 
-            drawable = mesh_drawables[mesh_idx]
+            mesh_handle = mesh_handles[mesh_idx]
 
             # Defer skinned mesh setup - skeleton not ready yet
             if glb_mesh.is_skinned and pending_skinned is not None:
-                pending_skinned.append(_PendingSkinnedMesh(entity, drawable, skinned_material))
+                pending_skinned.append(_PendingSkinnedMesh(entity, mesh_handle, skinned_material))
             else:
-                renderer = MeshRenderer(mesh=drawable, material=default_material)
+                renderer = MeshRenderer(mesh=mesh_handle, material=default_material)
                 entity.add_component(renderer)
 
     # Recursively create children
     for child_index in node.children:
         child_entity = _create_entity_from_node(
-            child_index, scene_data, mesh_drawables, default_material, skinned_material,
+            child_index, scene_data, mesh_handles, default_material, skinned_material,
             glb_name, node_to_entity, pending_skinned
         )
         entity.transform.add_child(child_entity.transform)
@@ -289,8 +289,8 @@ def instantiate_glb(
             f"DefaultMaterial={default_material is not None}, SkinnedMaterial={skinned_material is not None}"
         )
 
-    # Cache for MeshDrawables (shared between nodes referencing same mesh)
-    mesh_drawables: Dict[int, MeshDrawable] = {}
+    # Cache for MeshHandles (shared between nodes referencing same mesh)
+    mesh_handles: Dict[int, MeshHandle] = {}
 
     # Collect node_index -> Entity mapping for bone lookup
     node_to_entity: Dict[int, Entity] = {}
@@ -306,7 +306,7 @@ def instantiate_glb(
             root_entity = _create_entity_from_node(
                 scene_data.root_nodes[0],
                 scene_data,
-                mesh_drawables,
+                mesh_handles,
                 default_material,
                 skinned_material,
                 glb_name=name,
@@ -321,7 +321,7 @@ def instantiate_glb(
                 child_entity = _create_entity_from_node(
                     root_index,
                     scene_data,
-                    mesh_drawables,
+                    mesh_handles,
                     default_material,
                     skinned_material,
                     glb_name=name,
@@ -336,14 +336,14 @@ def instantiate_glb(
         for i, glb_mesh in enumerate(scene_data.meshes):
             mesh_name = f"{name}_{glb_mesh.name}" if name else glb_mesh.name
 
-            drawable = rm.meshes.get(mesh_name)
-            if drawable is None:
+            mesh_handle = rm.get_mesh(mesh_name)
+            if mesh_handle is None:
                 raise RuntimeError(f"[glb_instantiator] Mesh '{mesh_name}' not found in ResourceManager")
 
-            mesh_drawables[i] = drawable
+            mesh_handles[i] = mesh_handle
 
             mesh_entity = Entity(pose=Pose3.identity(), name=glb_mesh.name)
-            renderer = MeshRenderer(mesh=drawable, material=default_material)
+            renderer = MeshRenderer(mesh=mesh_handle, material=default_material)
             mesh_entity.add_component(renderer)
             root_entity.transform.add_child(mesh_entity.transform)
 
@@ -389,7 +389,7 @@ def instantiate_glb(
     for pending in pending_skinned:
         if skeleton_controller is not None:
             renderer = SkinnedMeshRenderer(
-                mesh=pending.drawable,
+                mesh=pending.mesh_handle,
                 material=pending.material,
                 skeleton_controller=skeleton_controller,
             )

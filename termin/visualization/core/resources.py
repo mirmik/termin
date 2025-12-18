@@ -6,8 +6,9 @@ from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:  # только для типов, чтобы не ловить циклы импортов
     from termin.visualization.core.material import Material
     from termin.visualization.core.material_asset import MaterialAsset
-    from termin.visualization.core.mesh import MeshDrawable
     from termin.visualization.core.mesh_asset import MeshAsset
+    from termin.visualization.core.mesh_handle import MeshHandle
+    from termin.mesh.mesh import Mesh3
     from termin.visualization.core.glb_asset import GLBAsset
     from termin.visualization.core.entity import Component
     from termin.visualization.render.texture import Texture
@@ -117,7 +118,6 @@ class ResourceManager:
 
         self.materials: Dict[str, "Material"] = {}
         self.shaders: Dict[str, "ShaderMultyPhaseProgramm"] = {}
-        self.meshes: Dict[str, "MeshDrawable"] = {}
         self.textures: Dict[str, "Texture"] = {}
         self.voxel_grids: Dict[str, "VoxelGrid"] = {}  # VoxelGrid instances by name
         self.navmeshes: Dict[str, "NavMesh"] = {}  # NavMesh instances by name
@@ -417,9 +417,7 @@ class ResourceManager:
         asset.load()
 
         # Invalidate GPU mesh to force re-upload
-        drawable = self.meshes.get(name)
-        if drawable is not None:
-            drawable._gpu.delete()
+        asset.delete_gpu()
 
     def _register_voxel_grid_file(self, name: str, result: "PreLoadResult") -> None:
         """Register voxel grid from PreLoadResult."""
@@ -552,8 +550,6 @@ class ResourceManager:
 
     def _register_glb_child_assets(self, glb_asset: "GLBAsset") -> None:
         """Register child assets from GLBAsset (meshes, skeletons, animations)."""
-        from termin.visualization.core.mesh import MeshDrawable
-
         # Register mesh assets
         for mesh_name, mesh_asset in glb_asset.get_mesh_assets().items():
             full_name = mesh_asset.name
@@ -619,11 +615,27 @@ class ResourceManager:
         self.materials[name] = mat
 
     def get_material(self, name: str) -> Optional["Material"]:
-        """Получить материал по имени."""
+        """Получить материал по имени (lazy loading)."""
+        # Check legacy dict first
+        mat = self.materials.get(name)
+        if mat is not None:
+            return mat
+
+        # Try lazy loading from asset
         asset = self._material_assets.get(name)
-        if asset is not None:
-            return asset.material
-        return self.materials.get(name)
+        if asset is None:
+            return None
+
+        # Trigger lazy load if not loaded
+        if asset.material is None:
+            if not asset.load():
+                return None
+
+        # Cache in legacy dict
+        if asset.material is not None:
+            self.materials[name] = asset.material
+
+        return asset.material
 
     def list_material_names(self) -> list[str]:
         names = set(self._material_assets.keys()) | set(self.materials.keys())
@@ -646,13 +658,23 @@ class ResourceManager:
         return None
 
     def get_material_by_uuid(self, uuid: str) -> Optional["Material"]:
-        """Get Material by UUID."""
+        """Get Material by UUID (lazy loading)."""
         from termin.visualization.core.material_asset import MaterialAsset
 
         asset = self._assets_by_uuid.get(uuid)
-        if asset is not None and isinstance(asset, MaterialAsset):
-            return asset.material
-        return None
+        if asset is None or not isinstance(asset, MaterialAsset):
+            return None
+
+        # Trigger lazy load if not loaded
+        if asset.material is None:
+            if not asset.load():
+                return None
+
+        # Cache in legacy dict
+        if asset.material is not None and asset.name:
+            self.materials[asset.name] = asset.material
+
+        return asset.material
 
     def get_material_asset_by_uuid(self, uuid: str) -> Optional["MaterialAsset"]:
         """Get MaterialAsset by UUID."""
@@ -683,11 +705,27 @@ class ResourceManager:
             shader.source_path = source_path
 
     def get_shader(self, name: str) -> Optional["ShaderMultyPhaseProgramm"]:
-        """Получить шейдер по имени."""
+        """Получить шейдер по имени (lazy loading)."""
+        # Check legacy dict first
+        shader = self.shaders.get(name)
+        if shader is not None:
+            return shader
+
+        # Try lazy loading from asset
         asset = self._shader_assets.get(name)
-        if asset is not None:
-            return asset.program
-        return self.shaders.get(name)
+        if asset is None:
+            return None
+
+        # Trigger lazy load if not loaded
+        if asset.program is None:
+            if not asset.load():
+                return None
+
+        # Cache in legacy dict
+        if asset.program is not None:
+            self.shaders[name] = asset.program
+
+        return asset.program
 
     def list_shader_names(self) -> list[str]:
         names = set(self._shader_assets.keys()) | set(self.shaders.keys())
@@ -908,7 +946,7 @@ class ResourceManager:
         Returns:
             Список имён зарегистрированных мешей.
         """
-        from termin.visualization.core.mesh import MeshDrawable
+        from termin.visualization.core.mesh_asset import MeshAsset
         from termin.mesh.mesh import (
             TexturedCubeMesh,
             UVSphereMesh,
@@ -919,27 +957,27 @@ class ResourceManager:
         registered = []
 
         # Куб с корректными UV (текстура на каждой грани)
-        if "Cube" not in self.meshes:
-            cube = MeshDrawable(TexturedCubeMesh(size=1.0))
-            self.register_mesh("Cube", cube, uuid=_BUILTIN_UUIDS["Cube"])
+        if "Cube" not in self._mesh_assets:
+            cube = MeshAsset.from_mesh3(TexturedCubeMesh(size=1.0), name="Cube")
+            self.register_mesh_asset("Cube", cube, uuid=_BUILTIN_UUIDS["Cube"])
             registered.append("Cube")
 
         # Сфера
-        if "Sphere" not in self.meshes:
-            sphere = MeshDrawable(UVSphereMesh(radius=0.5, n_meridians=32, n_parallels=16))
-            self.register_mesh("Sphere", sphere, uuid=_BUILTIN_UUIDS["Sphere"])
+        if "Sphere" not in self._mesh_assets:
+            sphere = MeshAsset.from_mesh3(UVSphereMesh(radius=0.5, n_meridians=32, n_parallels=16), name="Sphere")
+            self.register_mesh_asset("Sphere", sphere, uuid=_BUILTIN_UUIDS["Sphere"])
             registered.append("Sphere")
 
         # Плоскость
-        if "Plane" not in self.meshes:
-            plane = MeshDrawable(PlaneMesh(width=1.0, depth=1.0))
-            self.register_mesh("Plane", plane, uuid=_BUILTIN_UUIDS["Plane"])
+        if "Plane" not in self._mesh_assets:
+            plane = MeshAsset.from_mesh3(PlaneMesh(width=1.0, depth=1.0), name="Plane")
+            self.register_mesh_asset("Plane", plane, uuid=_BUILTIN_UUIDS["Plane"])
             registered.append("Plane")
 
         # Цилиндр
-        if "Cylinder" not in self.meshes:
-            cylinder = MeshDrawable(CylinderMesh(radius=0.5, height=1.0))
-            self.register_mesh("Cylinder", cylinder, uuid=_BUILTIN_UUIDS["Cylinder"])
+        if "Cylinder" not in self._mesh_assets:
+            cylinder = MeshAsset.from_mesh3(CylinderMesh(radius=0.5, height=1.0), name="Cylinder")
+            self.register_mesh_asset("Cylinder", cylinder, uuid=_BUILTIN_UUIDS["Cylinder"])
             registered.append("Cylinder")
 
         return registered
@@ -947,88 +985,69 @@ class ResourceManager:
     # --------- Меши (Asset-based) ---------
     def get_mesh_asset(self, name: str) -> Optional["MeshAsset"]:
         """Получить MeshAsset по имени."""
-        asset = self._mesh_assets.get(name)
-        if asset is not None:
-            return asset
-        # Fallback: извлечь из MeshDrawable
-        drawable = self.meshes.get(name)
-        if drawable is not None:
-            return drawable.asset
-        return None
+        return self._mesh_assets.get(name)
 
-    def register_mesh(
-        self, name: str, mesh: "MeshDrawable", source_path: str | None = None, uuid: str | None = None
-    ):
-        """Регистрирует меш."""
-        mesh.name = name
-        asset = mesh.asset
-        if asset is not None:
-            asset.name = name
-            if source_path:
-                asset.source_path = source_path
-            if uuid is not None:
-                asset._uuid = uuid
-                asset._runtime_id = hash(uuid) & 0xFFFFFFFFFFFFFFFF
-            self._mesh_assets[name] = asset
-            self._assets_by_uuid[asset.uuid] = asset
-        # Для обратной совместимости
-        self.meshes[name] = mesh
+    def register_mesh_asset(
+        self, name: str, asset: "MeshAsset", source_path: str | None = None, uuid: str | None = None
+    ) -> None:
+        """Регистрирует MeshAsset."""
+        asset._name = name
+        if source_path:
+            asset._source_path = source_path
+        if uuid is not None:
+            asset._uuid = uuid
+            asset._runtime_id = hash(uuid) & 0xFFFFFFFFFFFFFFFF
+        self._mesh_assets[name] = asset
+        self._assets_by_uuid[asset.uuid] = asset
 
-    def get_mesh(self, name: str) -> Optional["MeshDrawable"]:
-        """Получить меш по имени (lazy loading)."""
-        # Check if already loaded
-        drawable = self.meshes.get(name)
-        if drawable is not None:
-            return drawable
+    def get_mesh(self, name: str) -> Optional["MeshHandle"]:
+        """Получить MeshHandle по имени."""
+        from termin.visualization.core.mesh_handle import MeshHandle
 
-        # Try lazy loading from asset
         asset = self._mesh_assets.get(name)
         if asset is None:
             return None
 
-        # Trigger lazy load
-        if not asset.load():
-            return None
-
-        # Create MeshDrawable wrapper and cache it
-        from termin.visualization.core.mesh import MeshDrawable
-        drawable = MeshDrawable(asset)
-        self.meshes[name] = drawable
-        return drawable
+        return MeshHandle.from_asset(asset)
 
     def list_mesh_names(self) -> list[str]:
-        names = set(self._mesh_assets.keys()) | set(self.meshes.keys())
-        return sorted(names)
+        return sorted(self._mesh_assets.keys())
 
-    def find_mesh_name(self, mesh: "MeshDrawable") -> Optional[str]:
-        # Try identity check first (fast path)
-        for n, m in self.meshes.items():
-            if m is mesh:
-                return n
-        # Try asset comparison (for MeshDrawables created separately)
-        if mesh.asset is not None:
-            for n, asset in self._mesh_assets.items():
-                if asset is mesh.asset:
+    def find_mesh_name(self, handle: "MeshHandle") -> Optional[str]:
+        """Найти имя меша по MeshHandle."""
+        if handle is None:
+            return None
+        # Get asset from handle and find it in registry
+        asset = handle.get_asset()
+        if asset is not None:
+            for n, a in self._mesh_assets.items():
+                if a is asset:
                     return n
+        # Fallback: try by name
+        if handle.name:
+            if handle.name in self._mesh_assets:
+                return handle.name
         return None
 
-    def find_mesh_uuid(self, mesh: "MeshDrawable") -> Optional[str]:
-        """Find UUID of a MeshDrawable by looking up its asset."""
-        if mesh.asset is not None:
-            return mesh.asset.uuid
+    def find_mesh_uuid(self, handle: "MeshHandle") -> Optional[str]:
+        """Найти UUID меша по MeshHandle."""
+        if handle is None:
+            return None
+        asset = handle.get_asset()
+        if asset is not None:
+            return asset.uuid
         return None
 
-    def get_mesh_by_uuid(self, uuid: str) -> Optional["MeshDrawable"]:
-        """Get MeshDrawable by UUID."""
+    def get_mesh_by_uuid(self, uuid: str) -> Optional["MeshHandle"]:
+        """Получить MeshHandle по UUID."""
         from termin.visualization.core.mesh_asset import MeshAsset
+        from termin.visualization.core.mesh_handle import MeshHandle
 
         asset = self._assets_by_uuid.get(uuid)
-        if asset is not None and isinstance(asset, MeshAsset):
-            # Find MeshDrawable that wraps this asset
-            for drawable in self.meshes.values():
-                if drawable.asset is asset:
-                    return drawable
-        return None
+        if asset is None or not isinstance(asset, MeshAsset):
+            return None
+
+        return MeshHandle.from_asset(asset)
 
     def get_mesh_asset_by_uuid(self, uuid: str) -> Optional["MeshAsset"]:
         """Get MeshAsset by UUID."""
@@ -1041,10 +1060,9 @@ class ResourceManager:
 
     def unregister_mesh(self, name: str) -> None:
         """Удаляет меш."""
-        if name in self._mesh_assets:
-            del self._mesh_assets[name]
-        if name in self.meshes:
-            del self.meshes[name]
+        asset = self._mesh_assets.pop(name, None)
+        if asset is not None:
+            self._assets_by_uuid.pop(asset.uuid, None)
 
     # --------- Воксельные сетки (Asset-based) ---------
     def get_voxel_grid_asset(self, name: str) -> Optional["VoxelGridAsset"]:
@@ -1069,11 +1087,27 @@ class ResourceManager:
         self.voxel_grids[name] = grid
 
     def get_voxel_grid(self, name: str) -> Optional["VoxelGrid"]:
-        """Получить воксельную сетку по имени."""
+        """Получить воксельную сетку по имени (lazy loading)."""
+        # Check legacy dict first
+        grid = self.voxel_grids.get(name)
+        if grid is not None:
+            return grid
+
+        # Try lazy loading from asset
         asset = self._voxel_grid_assets.get(name)
-        if asset is not None:
-            return asset.grid
-        return self.voxel_grids.get(name)
+        if asset is None:
+            return None
+
+        # Trigger lazy load if not loaded
+        if asset.grid is None:
+            if not asset.load():
+                return None
+
+        # Cache in legacy dict
+        if asset.grid is not None:
+            self.voxel_grids[name] = asset.grid
+
+        return asset.grid
 
     def list_voxel_grid_names(self) -> list[str]:
         """Список имён всех воксельных сеток."""
@@ -1098,13 +1132,23 @@ class ResourceManager:
         return None
 
     def get_voxel_grid_by_uuid(self, uuid: str) -> Optional["VoxelGrid"]:
-        """Get VoxelGrid by UUID."""
+        """Get VoxelGrid by UUID (lazy loading)."""
         from termin.voxels.voxel_grid_asset import VoxelGridAsset
 
         asset = self._assets_by_uuid.get(uuid)
-        if asset is not None and isinstance(asset, VoxelGridAsset):
-            return asset.grid
-        return None
+        if asset is None or not isinstance(asset, VoxelGridAsset):
+            return None
+
+        # Trigger lazy load if not loaded
+        if asset.grid is None:
+            if not asset.load():
+                return None
+
+        # Cache in legacy dict
+        if asset.grid is not None and asset.name:
+            self.voxel_grids[asset.name] = asset.grid
+
+        return asset.grid
 
     def get_voxel_grid_asset_by_uuid(self, uuid: str) -> Optional["VoxelGridAsset"]:
         """Get VoxelGridAsset by UUID."""
@@ -1145,11 +1189,27 @@ class ResourceManager:
         self.navmeshes[name] = navmesh
 
     def get_navmesh(self, name: str) -> Optional["NavMesh"]:
-        """Получить NavMesh по имени."""
+        """Получить NavMesh по имени (lazy loading)."""
+        # Check legacy dict first
+        navmesh = self.navmeshes.get(name)
+        if navmesh is not None:
+            return navmesh
+
+        # Try lazy loading from asset
         asset = self._navmesh_assets.get(name)
-        if asset is not None:
-            return asset.navmesh
-        return self.navmeshes.get(name)
+        if asset is None:
+            return None
+
+        # Trigger lazy load if not loaded
+        if asset.navmesh is None:
+            if not asset.load():
+                return None
+
+        # Cache in legacy dict
+        if asset.navmesh is not None:
+            self.navmeshes[name] = asset.navmesh
+
+        return asset.navmesh
 
     def list_navmesh_names(self) -> list[str]:
         """Список имён всех NavMesh."""
@@ -1174,13 +1234,23 @@ class ResourceManager:
         return None
 
     def get_navmesh_by_uuid(self, uuid: str) -> Optional["NavMesh"]:
-        """Get NavMesh by UUID."""
+        """Get NavMesh by UUID (lazy loading)."""
         from termin.navmesh.navmesh_asset import NavMeshAsset
 
         asset = self._assets_by_uuid.get(uuid)
-        if asset is not None and isinstance(asset, NavMeshAsset):
-            return asset.navmesh
-        return None
+        if asset is None or not isinstance(asset, NavMeshAsset):
+            return None
+
+        # Trigger lazy load if not loaded
+        if asset.navmesh is None:
+            if not asset.load():
+                return None
+
+        # Cache in legacy dict
+        if asset.navmesh is not None and asset.name:
+            self.navmeshes[asset.name] = asset.navmesh
+
+        return asset.navmesh
 
     def get_navmesh_asset_by_uuid(self, uuid: str) -> Optional["NavMeshAsset"]:
         """Get NavMeshAsset by UUID."""
@@ -1288,11 +1358,27 @@ class ResourceManager:
         self.skeletons[name] = skeleton
 
     def get_skeleton(self, name: str) -> Optional["SkeletonData"]:
-        """Получить SkeletonData по имени."""
+        """Получить SkeletonData по имени (lazy loading)."""
+        # Check legacy dict first
+        skeleton = self.skeletons.get(name)
+        if skeleton is not None:
+            return skeleton
+
+        # Try lazy loading from asset
         asset = self._skeleton_assets.get(name)
-        if asset is not None:
-            return asset.skeleton_data
-        return self.skeletons.get(name)
+        if asset is None:
+            return None
+
+        # Trigger lazy load if not loaded
+        if asset.skeleton_data is None:
+            if not asset.load():
+                return None
+
+        # Cache in legacy dict
+        if asset.skeleton_data is not None:
+            self.skeletons[name] = asset.skeleton_data
+
+        return asset.skeleton_data
 
     def list_skeleton_names(self) -> list[str]:
         """Список имён всех скелетов."""
@@ -1317,13 +1403,23 @@ class ResourceManager:
         return None
 
     def get_skeleton_by_uuid(self, uuid: str) -> Optional["SkeletonData"]:
-        """Get SkeletonData by UUID."""
+        """Get SkeletonData by UUID (lazy loading)."""
         from termin.skeleton.skeleton_asset import SkeletonAsset
 
         asset = self._assets_by_uuid.get(uuid)
-        if asset is not None and isinstance(asset, SkeletonAsset):
-            return asset.skeleton_data
-        return None
+        if asset is None or not isinstance(asset, SkeletonAsset):
+            return None
+
+        # Trigger lazy load if not loaded
+        if asset.skeleton_data is None:
+            if not asset.load():
+                return None
+
+        # Cache in legacy dict
+        if asset.skeleton_data is not None and asset.name:
+            self.skeletons[asset.name] = asset.skeleton_data
+
+        return asset.skeleton_data
 
     def get_skeleton_asset_by_uuid(self, uuid: str) -> Optional["SkeletonAsset"]:
         """Get SkeletonAsset by UUID."""
@@ -1365,19 +1461,19 @@ class ResourceManager:
         self.textures[name] = texture
 
     def get_texture(self, name: str) -> Optional["Texture"]:
-        """Получить текстуру по имени (lazy loading)."""
+        """Получить текстуру по имени."""
         # Check if already loaded
         texture = self.textures.get(name)
         if texture is not None:
             return texture
 
-        # Try lazy loading from asset
+        # Try from asset (lazy loading happens inside asset.data)
         asset = self._texture_assets.get(name)
         if asset is None:
             return None
 
-        # Trigger lazy load
-        if not asset.load():
+        # Access data triggers lazy load inside asset
+        if asset.data is None:
             return None
 
         # Create Texture wrapper and cache it
@@ -1809,10 +1905,9 @@ class ResourceManager:
         """
         Сериализует все ресурсы ResourceManager.
 
-        Материалы не сериализуются — они загружаются из .material файлов.
+        Материалы и меши не сериализуются — они загружаются из файлов проекта.
         """
         return {
-            "meshes": {name: mesh.serialize() for name, mesh in self.meshes.items()},
             "textures": {name: self._serialize_texture(tex) for name, tex in self.textures.items()},
         }
 
@@ -1828,27 +1923,7 @@ class ResourceManager:
         """
         Восстанавливает ресурсы из сериализованных данных в синглтон.
 
-        Добавляет десериализованные ресурсы к существующему синглтону,
-        не перезаписывая уже загруженные ресурсы (например, из файлов проекта).
-
-        Материалы не загружаются — они загружаются из .material файлов.
+        Добавляет десериализованные ресурсы к существующему синглтону.
+        Меши и материалы загружаются из файлов проекта, не из сцены.
         """
-        from termin.visualization.core.mesh import MeshDrawable
-
-        rm = cls.instance()
-
-        # Меши - добавляем только если ещё нет
-        for name, mesh_data in data.get("meshes", {}).items():
-            if name not in rm.meshes:
-                drawable = MeshDrawable.deserialize(mesh_data, context)
-                if drawable is not None:
-                    rm.register_mesh(name, drawable)
-
-        # Текстуры - TODO: добавить Texture.deserialize()
-        # for name, tex_data in data.get("textures", {}).items():
-        #     if name not in rm.textures:
-        #         tex = Texture.deserialize(tex_data, context)
-        #         if tex is not None:
-        #             rm.register_texture(name, tex)
-
-        return rm
+        return cls.instance()

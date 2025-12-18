@@ -63,7 +63,9 @@ class DataAsset(Asset, Generic[T]):
 
     @property
     def data(self) -> T | None:
-        """Get the stored data."""
+        """Get the stored data (lazy loading)."""
+        if not self._loaded:
+            self.load()
         return self._data
 
     @data.setter

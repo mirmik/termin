@@ -19,7 +19,8 @@ import numpy as np
 from termin.mesh.mesh import Mesh2, Mesh3
 from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh import Mesh2Drawable, MeshDrawable
+from termin.visualization.core.mesh import Mesh2Drawable
+from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.render.renderpass import RenderState
@@ -225,7 +226,7 @@ class LineRenderer(Component):
             self._material_handle = MaterialHandle.from_material(material)
 
         # Drawables для двух режимов
-        self._ribbon_drawable: MeshDrawable | None = None  # для quad режима
+        self._ribbon_handle: MeshHandle | None = None  # для quad режима
         self._lines_drawable: Mesh2Drawable | None = None   # для raw_lines режима
 
         # Флаг необходимости перестроения
@@ -353,7 +354,7 @@ class LineRenderer(Component):
             vertices, triangles = _build_line_ribbon(self._points, self._width)
             if len(triangles) > 0:
                 mesh3 = Mesh3(vertices=vertices, triangles=triangles)
-                self._ribbon_drawable = MeshDrawable(mesh3)
+                self._ribbon_handle = MeshHandle.from_mesh3(mesh3, name="line_ribbon")
 
         self._dirty = False
 
@@ -362,12 +363,15 @@ class LineRenderer(Component):
         if self._dirty:
             self._rebuild_geometry()
 
-    def _get_drawable(self):
-        """Возвращает текущий drawable."""
+    def _get_lines_drawable(self) -> Mesh2Drawable | None:
+        """Возвращает drawable для GL_LINES режима."""
         self._ensure_geometry()
-        if self._raw_lines:
-            return self._lines_drawable
-        return self._ribbon_drawable
+        return self._lines_drawable
+
+    def _get_ribbon_handle(self) -> MeshHandle | None:
+        """Возвращает MeshHandle для ribbon режима."""
+        self._ensure_geometry()
+        return self._ribbon_handle
 
     def _get_material_or_default(self) -> Material:
         """Возвращает материал или создаёт дефолтный."""
@@ -408,9 +412,17 @@ class LineRenderer(Component):
             context: Контекст рендеринга.
             geometry_id: Идентификатор геометрии (игнорируется — одна геометрия).
         """
-        drawable = self._get_drawable()
-        if drawable is not None:
-            drawable.draw(context)
+        if self._raw_lines:
+            drawable = self._get_lines_drawable()
+            if drawable is not None:
+                drawable.draw(context)
+        else:
+            handle = self._get_ribbon_handle()
+            if handle is not None:
+                mesh_data = handle.mesh
+                gpu = handle.gpu
+                if mesh_data is not None and gpu is not None:
+                    gpu.draw(context, mesh_data, handle.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """

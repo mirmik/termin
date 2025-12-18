@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from termin.visualization.core.mesh import MeshDrawable
+    from termin.visualization.core.mesh_handle import MeshHandle
     from termin.visualization.core.material import Material
 
 
@@ -22,20 +22,20 @@ class SkyboxManager:
     """
 
     def __init__(self):
-        self._skybox_mesh: "MeshDrawable | None" = None
+        self._skybox_mesh: "MeshHandle | None" = None
         self._skybox_material: "Material | None" = None
         self.skybox_type: str = "gradient"
         self.skybox_color = np.array([0.5, 0.7, 0.9], dtype=np.float32)
         self.skybox_top_color = np.array([0.4, 0.6, 0.9], dtype=np.float32)
         self.skybox_bottom_color = np.array([0.6, 0.5, 0.4], dtype=np.float32)
 
-    def _ensure_skybox_mesh(self) -> "MeshDrawable":
+    def _ensure_skybox_mesh(self) -> "MeshHandle":
         """Lazily create skybox cube mesh."""
         if self._skybox_mesh is None:
-            from termin.visualization.core.mesh import MeshDrawable
+            from termin.visualization.core.mesh_handle import MeshHandle
             from termin.visualization.render.skybox import _skybox_cube
             vertices, triangles = _skybox_cube()
-            self._skybox_mesh = MeshDrawable.from_vertices_indices(vertices, triangles)
+            self._skybox_mesh = MeshHandle.from_vertices_indices(vertices, triangles, name="skybox_cube")
         return self._skybox_mesh
 
     def _create_gradient_skybox_material(self) -> "Material":
@@ -65,7 +65,7 @@ class SkyboxManager:
         return material
 
     @property
-    def mesh(self) -> "MeshDrawable":
+    def mesh(self) -> "MeshHandle":
         """Get skybox cube mesh."""
         return self._ensure_skybox_mesh()
 

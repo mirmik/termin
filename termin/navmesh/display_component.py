@@ -14,7 +14,7 @@ import numpy as np
 
 from termin.visualization.core.component import Component
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.navmesh_handle import NavMeshHandle
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.visualization.render.components.line_renderer import _build_line_ribbon
@@ -90,8 +90,8 @@ class NavMeshDisplayComponent(Component):
         self._navmesh_name = navmesh_name
         self._navmesh_handle: NavMeshHandle = NavMeshHandle()
         self._last_navmesh: Optional["NavMesh"] = None
-        self._mesh_drawable: Optional[MeshDrawable] = None
-        self._contour_drawable: Optional[MeshDrawable] = None
+        self._mesh_handle: Optional[MeshHandle] = None
+        self._contour_handle: Optional[MeshHandle] = None
         self._material: Optional[Material] = None
         self._contour_material: Optional[Material] = None
         self._needs_rebuild = True
@@ -259,12 +259,18 @@ void main() {
         self._check_hot_reload()
 
         if geometry_id == "" or geometry_id == self.GEOMETRY_MESH:
-            if self._mesh_drawable is not None:
-                self._mesh_drawable.draw(context)
+            if self._mesh_handle is not None:
+                mesh_data = self._mesh_handle.mesh
+                gpu = self._mesh_handle.gpu
+                if mesh_data is not None and gpu is not None:
+                    gpu.draw(context, mesh_data, self._mesh_handle.version)
 
         if geometry_id == self.GEOMETRY_CONTOURS:
-            if self._contour_drawable is not None:
-                self._contour_drawable.draw(context)
+            if self._contour_handle is not None:
+                mesh_data = self._contour_handle.mesh
+                gpu = self._contour_handle.gpu
+                if mesh_data is not None and gpu is not None:
+                    gpu.draw(context, mesh_data, self._contour_handle.version)
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
@@ -362,7 +368,7 @@ void main() {
             triangles = np.vstack(all_triangles).astype(np.int32)
 
             mesh = Mesh3(vertices=vertices, triangles=triangles, normals=normals)
-            self._mesh_drawable = MeshDrawable(mesh)
+            self._mesh_handle = MeshHandle.from_mesh3(mesh, name="navmesh_display")
 
         # Строим контуры (независимо от меша)
         self._build_contour_drawable(navmesh)
@@ -419,4 +425,4 @@ void main() {
         triangles = np.vstack(all_triangles).astype(np.int32)
 
         mesh = Mesh3(vertices=vertices, triangles=triangles)
-        self._contour_drawable = MeshDrawable(mesh)
+        self._contour_handle = MeshHandle.from_mesh3(mesh, name="navmesh_contours")

@@ -10,7 +10,7 @@ from termin.editor.inspect_field import InspectField
 from termin.mesh.skinned_mesh import SkinnedMesh3
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh import MeshDrawable
+from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.drawable import GeometryDrawCall
@@ -41,7 +41,7 @@ class SkinnedMeshRenderer(MeshRenderer):
 
     def __init__(
         self,
-        mesh: MeshDrawable | SkinnedMesh3 | None = None,
+        mesh: MeshHandle | SkinnedMesh3 | None = None,
         material: Material | None = None,
         skeleton_controller: "SkeletonController | None" = None,
         cast_shadow: bool = True,
@@ -50,7 +50,7 @@ class SkinnedMeshRenderer(MeshRenderer):
         Initialize SkinnedMeshRenderer.
 
         Args:
-            mesh: Skinned mesh (MeshDrawable or SkinnedMesh3)
+            mesh: Skinned mesh (MeshHandle or SkinnedMesh3)
             material: Material to use for rendering (will be auto-converted to skinned variant)
             skeleton_controller: Controller that provides skeleton instance
             cast_shadow: Whether this object casts shadows
@@ -210,7 +210,9 @@ class SkinnedMeshRenderer(MeshRenderer):
         Uploads u_bone_matrices uniform to the currently bound shader
         before drawing the mesh.
         """
-        if self.mesh is None:
+        mesh_data = self._mesh_handle.mesh
+        gpu = self._mesh_handle.gpu
+        if mesh_data is None or gpu is None:
             return
 
         # Upload bone matrices if we have a skeleton
@@ -235,8 +237,8 @@ class SkinnedMeshRenderer(MeshRenderer):
                 shader.set_uniform_matrix4_array("u_bone_matrices", bone_matrices, bone_count)
                 shader.set_uniform_int("u_bone_count", bone_count)
 
-        # Draw the mesh
-        self.mesh.draw(context)
+        # Draw the mesh via GPU
+        gpu.draw(context, mesh_data, self._mesh_handle.version)
 
     def serialize_data(self) -> dict:
         """Serialize SkinnedMeshRenderer."""
