@@ -1007,6 +1007,11 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         else:
             names = list(self._get_fbos().keys())
 
+        # Check if list changed - avoid clearing ComboBox while user interacts with it
+        current_items = [self._resource_combo.itemText(i) for i in range(self._resource_combo.count())]
+        if current_items == names:
+            return
+
         current = self._resource_combo.currentText()
         self._resource_combo.blockSignals(True)
         self._resource_combo.clear()
@@ -1022,9 +1027,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         """Обновляет список пассов для режима «Внутри пасса»."""
         previous_pass = self._selected_pass
 
-        self._pass_combo.blockSignals(True)
-        self._pass_combo.clear()
-
         passes_info: List[Tuple[str, bool]] = []
 
         # Get passes info from current pipeline
@@ -1039,11 +1041,22 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                     has_symbols = len(symbols) > 0
                 passes_info.append((p.pass_name, has_symbols))
 
+        # Build new items list
+        new_items = [(f"{name} ●" if has_sym else name, name) for name, has_sym in passes_info]
+
+        # Check if list changed - avoid clearing ComboBox while user interacts with it
+        current_items = [(self._pass_combo.itemText(i), self._pass_combo.itemData(i))
+                         for i in range(self._pass_combo.count())]
+        if current_items == new_items:
+            return
+
+        self._pass_combo.blockSignals(True)
+        self._pass_combo.clear()
+
         selected_index = -1
 
-        for index, (pass_name, has_symbols) in enumerate(passes_info):
-            suffix = " ●" if has_symbols else ""
-            self._pass_combo.addItem(pass_name + suffix, pass_name)
+        for index, (display_name, pass_name) in enumerate(new_items):
+            self._pass_combo.addItem(display_name, pass_name)
             if previous_pass is not None and pass_name == previous_pass:
                 selected_index = index
 
@@ -1078,9 +1091,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         """Обновляет список символов для выбранного пасса."""
         previous_symbol = self._selected_symbol
 
-        self._symbol_combo.blockSignals(True)
-        self._symbol_combo.clear()
-
         symbols: List[str] = []
 
         # Get symbols from current pipeline
@@ -1091,6 +1101,14 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                     if p.pass_name == self._selected_pass:
                         symbols = p.get_internal_symbols()
                         break
+
+        # Check if list changed - avoid clearing ComboBox while user interacts with it
+        current_items = [self._symbol_combo.itemText(i) for i in range(self._symbol_combo.count())]
+        if current_items == symbols:
+            return
+
+        self._symbol_combo.blockSignals(True)
+        self._symbol_combo.clear()
 
         selected_index = -1
 
