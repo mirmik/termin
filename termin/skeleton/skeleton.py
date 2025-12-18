@@ -224,8 +224,6 @@ class SkeletonInstance:
 
         return None
 
-    _DEBUG_NORMALIZE = True
-
     def update(self) -> None:
         """
         Recompute bone matrices from Entity world transforms.
@@ -238,15 +236,10 @@ class SkeletonInstance:
         if self._bone_entities is None:
             return
 
-        # Get inverse of skeleton root world matrix
+        # Get inverse of skeleton root world matrix (cached in GeneralPose3)
         skeleton_root = self._get_skeleton_root()
         if skeleton_root is not None:
-            skeleton_world = skeleton_root.model_matrix()
-            skeleton_world_inv = np.linalg.inv(skeleton_world)
-            if self._DEBUG_NORMALIZE:
-                print(f"[SkeletonInstance] skeleton_root={skeleton_root.name}")
-                print(f"[SkeletonInstance] skeleton_world diagonal: {np.diag(skeleton_world)}")
-                self._DEBUG_NORMALIZE = False
+            skeleton_world_inv = skeleton_root.inverse_model_matrix()
         else:
             skeleton_world_inv = np.eye(4, dtype=np.float32)
 

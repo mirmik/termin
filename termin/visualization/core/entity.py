@@ -82,6 +82,10 @@ class Entity(Identifiable):
         """Construct homogeneous model matrix with scale baked in."""
         return self.transform.global_pose().as_matrix()
 
+    def inverse_model_matrix(self) -> np.ndarray:
+        """Construct inverse model matrix (cached in GeneralPose3)."""
+        return self.transform.global_pose().inverse_matrix()
+
     def set_visible(self, flag: bool):
         self.visible = flag
         for child in self.transform.children:

@@ -686,11 +686,9 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     scale_matrix = np.diag([root_scale[0], root_scale[1], root_scale[2], 1.0]).astype(np.float32)
     inverse_scale_matrix = np.diag([1.0 / root_scale[0], 1.0 / root_scale[1], 1.0 / root_scale[2], 1.0]).astype(np.float32)
 
-    # 3. Compensate IBM for scaled bone positions
-    # Bones positions were multiplied by scale_factor, so IBM needs inverse adjustment
+    # 3. Compensate IBM: scale applies to input vertex coordinates
     for skin in scene_data.skins:
         for i in range(len(skin.inverse_bind_matrices)):
-            print(f"IBM before:\n{skin.inverse_bind_matrices[i]}")
             skin.inverse_bind_matrices[i] = scale_matrix @ skin.inverse_bind_matrices[i]
 
     # 4. Scale translation of all child nodes (recursive from root)

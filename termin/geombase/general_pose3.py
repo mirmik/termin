@@ -19,7 +19,7 @@ from termin.util import qmul, qrot, qslerp, qinv
 class GeneralPose3:
     """A 3D Pose with scale, represented by rotation quaternion, translation vector, and scale."""
 
-    __slots__ = ('ang', 'lin', 'scale', '_rot_matrix', '_mat', '_mat34')
+    __slots__ = ('ang', 'lin', 'scale', '_rot_matrix', '_mat', '_mat34', '_inv_mat')
 
     def __init__(
         self,
@@ -39,6 +39,7 @@ class GeneralPose3:
         self._rot_matrix = None
         self._mat = None
         self._mat34 = None
+        self._inv_mat = None
 
     def copy(self) -> 'GeneralPose3':
         """Create a copy of the GeneralPose3."""
@@ -91,6 +92,25 @@ class GeneralPose3:
             self._mat34[:, :3] = RS
             self._mat34[:, 3] = self.lin
         return self._mat34
+
+    def inverse_matrix(self) -> numpy.ndarray:
+        """Get the 4x4 inverse transformation matrix.
+
+        Computed directly without np.linalg.inv:
+        For M = T @ R @ S, inverse is S^-1 @ R^T @ T^-1
+        """
+        if self._inv_mat is None:
+            inv_scale = 1.0 / self.scale
+            R = self.rotation_matrix()
+            R_T = R.T  # Transpose = inverse for rotation
+            # S^-1 @ R^T
+            inv_SR = numpy.diag(inv_scale) @ R_T
+            # Translation in inverse: -S^-1 @ R^T @ t
+            inv_t = -inv_SR @ self.lin
+            self._inv_mat = numpy.eye(4)
+            self._inv_mat[:3, :3] = inv_SR
+            self._inv_mat[:3, 3] = inv_t
+        return self._inv_mat
 
     def inverse(self) -> 'GeneralPose3':
         """Compute the inverse of the pose.
@@ -462,6 +482,7 @@ class GeneralPose3:
         self.lin[0] = value
         self._mat = None
         self._mat34 = None
+        self._inv_mat = None
 
     @y.setter
     def y(self, value: float):
@@ -469,6 +490,7 @@ class GeneralPose3:
         self.lin[1] = value
         self._mat = None
         self._mat34 = None
+        self._inv_mat = None
 
     @z.setter
     def z(self, value: float):
@@ -476,6 +498,7 @@ class GeneralPose3:
         self.lin[2] = value
         self._mat = None
         self._mat34 = None
+        self._inv_mat = None
 
     def rotate_vector(self, vec: numpy.ndarray) -> numpy.ndarray:
         """Rotate a 3D vector using the pose's rotation (with scale)."""
@@ -486,3 +509,4 @@ class GeneralPose3:
         self._rot_matrix = None
         self._mat = None
         self._mat34 = None
+        self._inv_mat = None
