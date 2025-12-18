@@ -94,6 +94,7 @@ class SkeletonController(Component):
                 self._skeleton_instance = SkeletonInstance(
                     self._skeleton_data,
                     bone_entities=bone_entities,
+                    skeleton_root_entity=self.entity,  # Use controller's entity as root
                 )
         return self._skeleton_instance
 
