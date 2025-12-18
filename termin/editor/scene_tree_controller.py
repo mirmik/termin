@@ -331,10 +331,20 @@ class SceneTreeController:
         parent_entity: Entity | None,
     ) -> None:
         """Handle GLB drop from Project Browser."""
+        from pathlib import Path
         from termin.loaders.glb_instantiator import instantiate_glb
+        from termin.visualization.core.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        glb_name = Path(glb_path).stem
+        glb_asset = rm.get_glb_asset(glb_name)
+
+        if glb_asset is None:
+            print(f"Failed to load GLB: GLBAsset '{glb_name}' not found in ResourceManager")
+            return
 
         try:
-            result = instantiate_glb(Path(glb_path))
+            result = instantiate_glb(glb_asset)
         except Exception as e:
             print(f"Failed to load GLB: {e}")
             return
