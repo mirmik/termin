@@ -263,6 +263,8 @@ def instantiate_glb(
     if glb_asset is not None and glb_asset.scene_data is not None:
         print(f"[GLB] Using cached GLBAsset: {name} (uuid={glb_uuid})")
         scene_data = glb_asset.scene_data
+        # Ensure child assets (meshes, skeletons, animations) are registered
+        rm._register_glb_child_assets(glb_asset)
     else:
         # Fallback: load directly (for programmatic use without PreLoader)
         if normalize_scale is None:
