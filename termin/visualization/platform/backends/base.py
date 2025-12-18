@@ -240,6 +240,18 @@ class GraphicsBackend(ABC):
         ...
 
     @abstractmethod
+    def create_shadow_framebuffer(self, size: Tuple[int, int]) -> "FramebufferHandle":
+        """
+        Создаёт framebuffer для shadow mapping.
+
+        В отличие от обычного framebuffer:
+        - Depth texture вместо renderbuffer
+        - GL_TEXTURE_COMPARE_MODE для hardware PCF (sampler2DShadow)
+        - Нет color attachment
+        """
+        ...
+
+    @abstractmethod
     def bind_framebuffer(self, framebuffer: "FramebufferHandle | None"):
         """
         Bind custom framebuffer or default (if None).

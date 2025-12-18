@@ -22,16 +22,19 @@ def upload_shadow_maps_to_shader(
 ) -> None:
     """
     Загружает данные shadow maps в uniform'ы шейдера.
-    
+
     Uniform'ы, ожидаемые шейдером:
         u_shadow_map_count — int, количество активных shadow maps
-        u_shadow_map[i] — sampler2D, текстура i-го shadow map
+        u_shadow_map[i] — sampler2DShadow, depth texture с hardware PCF
         u_light_space_matrix[i] — mat4, матрица преобразования в light-space
         u_shadow_light_index[i] — int, индекс источника света в массиве lights
-    
+
+    Shadow maps — depth текстуры с GL_TEXTURE_COMPARE_MODE для hardware PCF.
+    texture() возвращает 0.0 (в тени) или 1.0 (освещено).
+
     Shadow maps биндятся на texture units начиная с SHADOW_MAP_TEXTURE_UNIT_START.
     ColorPass биндит текстуры, этот метод только устанавливает uniform'ы.
-    
+
     Параметры:
         shader: Активный шейдер (после use())
         shadow_array: Массив shadow maps из ShadowPass

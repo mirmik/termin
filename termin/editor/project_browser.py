@@ -28,6 +28,53 @@ from termin.editor.settings import EditorSettings
 from termin.editor.drag_drop import EditorMimeTypes, create_asset_path_mime_data
 
 
+def _sync_stdlib(project_root: Path) -> None:
+    """
+    Синхронизирует stdlib в проекте с встроенной версией.
+
+    Если директория stdlib существует в корне проекта, обновляет файлы,
+    размер которых отличается от оригинала. Это дешёвая проверка консистентности.
+    """
+    import shutil
+    import termin
+
+    stdlib_src = Path(termin.__file__).parent / "resources" / "stdlib"
+    stdlib_dst = project_root / "stdlib"
+
+    if not stdlib_src.exists():
+        return
+
+    if not stdlib_dst.exists():
+        # Stdlib не развёрнут в проекте — ничего не делаем
+        return
+
+    updated_count = 0
+
+    for src_file in stdlib_src.rglob("*"):
+        if src_file.is_dir():
+            continue
+
+        rel_path = src_file.relative_to(stdlib_src)
+        dst_file = stdlib_dst / rel_path
+
+        # Создаём директорию если нужно
+        dst_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Проверяем нужно ли обновить
+        need_update = False
+        if not dst_file.exists():
+            need_update = True
+        elif dst_file.stat().st_size != src_file.stat().st_size:
+            need_update = True
+
+        if need_update:
+            shutil.copy2(src_file, dst_file)
+            updated_count += 1
+
+    if updated_count > 0:
+        print(f"[ProjectBrowser] stdlib synced: {updated_count} file(s) updated")
+
+
 def _create_material_icon() -> QIcon:
     """Создаёт иконку материала — сфера с градиентом."""
     size = 32
@@ -529,6 +576,9 @@ class ProjectBrowser:
         # Устанавливаем корневой индекс для списка файлов
         file_root_index = self._file_model.index(path_str)
         self._file_list.setRootIndex(file_root_index)
+
+        # Синхронизируем stdlib если он развёрнут в проекте
+        _sync_stdlib(path)
 
     @property
     def root_path(self) -> Path | None:

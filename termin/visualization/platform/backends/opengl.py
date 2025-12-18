@@ -546,11 +546,15 @@ class OpenGLGraphicsBackend(GraphicsBackend):
     def create_framebuffer(self, size: Tuple[int, int]) -> FramebufferHandle:
         return OpenGLFramebufferHandle(size)
 
+    def create_shadow_framebuffer(self, size: Tuple[int, int]) -> FramebufferHandle:
+        """Создаёт framebuffer для shadow mapping с depth texture и hardware PCF."""
+        return OpenGLShadowFramebufferHandle(size)
+
     def bind_framebuffer(self, framebuffer: FramebufferHandle | None):
         if framebuffer is None:
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         else:
-            assert isinstance(framebuffer, OpenGLFramebufferHandle)
+            assert isinstance(framebuffer, (OpenGLFramebufferHandle, OpenGLShadowFramebufferHandle))
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, framebuffer._fbo or 0)
 
 class _OpenGLColorTextureHandle(TextureHandle):
@@ -670,3 +674,119 @@ class OpenGLFramebufferHandle(FramebufferHandle):
         if self._depth_rb is not None:
             gl.glDeleteRenderbuffers(1, [self._depth_rb])
             self._depth_rb = None
+
+
+class _OpenGLDepthTextureHandle(TextureHandle):
+    """
+    Обёртка над depth texture для shadow mapping.
+    Настроена для hardware PCF (sampler2DShadow).
+    """
+    def __init__(self, tex_id: int):
+        self._tex_id = tex_id
+
+    def bind(self, unit: int = 0):
+        gl.glActiveTexture(gl.GL_TEXTURE0 + unit)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self._tex_id or 0)
+
+    def delete(self):
+        # Удаление через владельца FBO
+        pass
+
+    def _set_tex_id(self, tex_id: int):
+        self._tex_id = tex_id
+
+
+class OpenGLShadowFramebufferHandle(FramebufferHandle):
+    """
+    Framebuffer для shadow mapping с depth texture.
+
+    Особенности:
+    - Depth texture вместо renderbuffer
+    - GL_TEXTURE_COMPARE_MODE для hardware PCF
+    - Нет color attachment (depth-only)
+    """
+
+    def __init__(self, size: Tuple[int, int]):
+        self._size = size
+        self._fbo: int | None = None
+        self._depth_tex: int | None = None
+        self._depth_handle = _OpenGLDepthTextureHandle(0)
+        self._create()
+
+    def get_size(self) -> Tuple[int, int]:
+        return self._size
+
+    def _create(self):
+        w, h = self._size
+
+        # Создаём FBO
+        self._fbo = gl.glGenFramebuffers(1)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self._fbo)
+
+        # Depth texture (не renderbuffer!)
+        self._depth_tex = gl.glGenTextures(1)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self._depth_tex)
+        gl.glTexImage2D(
+            gl.GL_TEXTURE_2D, 0, gl.GL_DEPTH_COMPONENT24,
+            w, h, 0,
+            gl.GL_DEPTH_COMPONENT, gl.GL_FLOAT, None
+        )
+
+        # Фильтрация для PCF
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_BORDER)
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_BORDER)
+
+        # Border color = 1.0 (максимальная глубина = нет тени)
+        border_color = (1.0, 1.0, 1.0, 1.0)
+        gl.glTexParameterfv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_BORDER_COLOR, border_color)
+
+        # Hardware PCF: sampler2DShadow автоматически делает depth comparison
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_COMPARE_MODE, gl.GL_COMPARE_REF_TO_TEXTURE)
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_COMPARE_FUNC, gl.GL_LEQUAL)
+
+        # Привязываем depth texture к FBO
+        gl.glFramebufferTexture2D(
+            gl.GL_FRAMEBUFFER,
+            gl.GL_DEPTH_ATTACHMENT,
+            gl.GL_TEXTURE_2D,
+            self._depth_tex,
+            0,
+        )
+
+        # Нет color attachment - отключаем draw/read buffer
+        gl.glDrawBuffer(gl.GL_NONE)
+        gl.glReadBuffer(gl.GL_NONE)
+
+        status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
+        if status != gl.GL_FRAMEBUFFER_COMPLETE:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+            raise RuntimeError(f"Shadow framebuffer is incomplete: 0x{status:X}")
+
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+
+        self._depth_handle._set_tex_id(self._depth_tex)
+
+    def resize(self, size: Tuple[int, int]):
+        if size == self._size and self._fbo is not None:
+            return
+        self.delete()
+        self._size = size
+        self._create()
+
+    def color_texture(self) -> TextureHandle:
+        """Для shadow FBO возвращаем depth texture."""
+        return self._depth_handle
+
+    def depth_texture(self) -> TextureHandle:
+        """Возвращает depth texture для shadow sampling."""
+        return self._depth_handle
+
+    def delete(self):
+        if self._fbo is not None:
+            gl.glDeleteFramebuffers(1, [self._fbo])
+            self._fbo = None
+        if self._depth_tex is not None:
+            gl.glDeleteTextures(1, [self._depth_tex])
+            self._depth_tex = None

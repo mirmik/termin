@@ -65,13 +65,13 @@ uniform vec3  u_light_attenuation[MAX_LIGHTS];
 uniform float u_light_inner_angle[MAX_LIGHTS];
 uniform float u_light_outer_angle[MAX_LIGHTS];
 
-// Shadow Mapping
+// Shadow Mapping (hardware PCF)
 const int MAX_SHADOW_MAPS = 4;
+const float SHADOW_BIAS = 0.005;
 uniform int u_shadow_map_count;
-uniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];
+uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
 uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
 uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
-const float SHADOW_BIAS = 0.005;
 
 out vec4 FragColor;
 
@@ -133,9 +133,8 @@ float compute_shadow(int light_index) {
             return 1.0;
         }
 
-        float closest_depth = texture(u_shadow_map[sm], proj_coords.xy).r;
-        float current_depth = proj_coords.z;
-        return current_depth - SHADOW_BIAS > closest_depth ? 0.0 : 1.0;
+        // Hardware PCF: texture() делает depth comparison автоматически
+        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - SHADOW_BIAS));
     }
     return 1.0;
 }

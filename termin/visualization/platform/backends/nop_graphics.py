@@ -193,6 +193,9 @@ class NOPGraphicsBackend(GraphicsBackend):
     def create_framebuffer(self, size: Tuple[int, int]) -> FramebufferHandle:
         return NOPFramebufferHandle(size)
 
+    def create_shadow_framebuffer(self, size: Tuple[int, int]) -> FramebufferHandle:
+        return NOPFramebufferHandle(size)
+
     def bind_framebuffer(self, framebuffer: FramebufferHandle | None):
         # Можно сохранить ссылку, если нужно для отладки
         self._state["bound_fbo"] = framebuffer

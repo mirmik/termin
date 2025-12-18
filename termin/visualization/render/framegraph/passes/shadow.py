@@ -140,15 +140,16 @@ class ShadowPass(RenderFramePass):
         При изменении разрешения FBO пересоздаётся.
         """
         fbo = self._fbo_pool.get(index)
-        
+
         if fbo is None:
-            fbo = graphics.create_framebuffer((resolution, resolution))
+            # Используем shadow framebuffer с depth texture и hardware PCF
+            fbo = graphics.create_shadow_framebuffer((resolution, resolution))
             self._fbo_pool[index] = fbo
         else:
             current_size = fbo.get_size()
             if current_size != (resolution, resolution):
                 fbo.resize((resolution, resolution))
-        
+
         return fbo
 
     def _build_shadow_params_for_light(self, light: Light) -> ShadowCameraParams:
