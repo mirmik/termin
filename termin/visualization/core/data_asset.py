@@ -56,6 +56,9 @@ class DataAsset(Asset, Generic[T]):
         self._parent_asset: "DataAsset | None" = None
         self._parent_key: str | None = None  # Key to identify this asset within parent
 
+        # Track if UUID was in spec (to know if we need to save spec after loading)
+        self._has_uuid_in_spec: bool = False
+
     # --- Data property ---
 
     @property
@@ -85,11 +88,12 @@ class DataAsset(Asset, Generic[T]):
         if spec_data is None:
             return
 
-        # Extract UUID from spec (if present and we don't have one yet)
+        # Extract UUID from spec (if present)
         spec_uuid = spec_data.get("uuid")
         if spec_uuid is not None:
             self._uuid = spec_uuid
             self._runtime_id = hash(self._uuid) & 0xFFFFFFFFFFFFFFFF
+            self._has_uuid_in_spec = True
 
         # Let subclass handle type-specific fields
         self._parse_spec_fields(spec_data)
@@ -159,6 +163,9 @@ class DataAsset(Asset, Generic[T]):
             if self._data is not None:
                 self._loaded = True
                 self._on_loaded()
+                # Save spec file if UUID wasn't in spec (new asset)
+                if not self._has_uuid_in_spec and self._source_path:
+                    self.save_spec_file()
                 return True
         except Exception as e:
             print(f"[{self.__class__.__name__}] Failed to parse content: {e}")
