@@ -229,6 +229,9 @@ class EditorViewportFeatures:
     def _on_mouse_button_event(self, button_type, action, x, y, viewport) -> None:
         if button_type == MouseButton.LEFT and action == Action.RELEASE:
             self._pending_pick_release = (x, y, viewport)
+            # End gizmo drag on release
+            if self._gizmo_controller.is_dragging():
+                self._gizmo_controller.on_mouse_button(viewport, 0, 0, 0)  # button=0, action=0 (release)
         if button_type == MouseButton.LEFT and action == Action.PRESS:
             self._pending_pick_press = (x, y, viewport)
 
@@ -237,6 +240,10 @@ class EditorViewportFeatures:
             self._pending_hover = None
             return
         self._pending_hover = (x, y, viewport)
+
+        # Forward to gizmo controller for drag updates
+        if self._gizmo_controller.is_dragging() and viewport is not None:
+            self._gizmo_controller.on_mouse_move(viewport, x, y, 0, 0)
 
     def after_render(self) -> None:
         """
@@ -259,6 +266,12 @@ class EditorViewportFeatures:
     def _process_pending_hover(self, pending_hover) -> None:
         x, y, viewport = pending_hover
         self._pending_hover = None
+
+        # Update gizmo hover state (raycast-based)
+        if not self._gizmo_controller.is_dragging() and viewport is not None:
+            ray = viewport.screen_point_to_ray(x, y)
+            if ray is not None:
+                self._gizmo_controller.update_hover(ray.origin, ray.direction)
 
         ent = self.pick_entity_at(x, y, viewport)
         if ent is not None and not ent.selectable:
