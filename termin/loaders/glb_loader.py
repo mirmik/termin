@@ -701,6 +701,13 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
 
     scale_children_translation(root_idx)
 
+    # 5. Scale animation translation keyframes
+    for anim in scene_data.animations:
+        for channel in anim.channels:
+            for key in channel.pos_keys:
+                # key = [time, [x, y, z]]
+                key[1] = key[1] * scale_factor
+
     # Store original scale for reference
     scene_data.skin_scale = scale_factor
 
