@@ -2,6 +2,11 @@
 Editor camera management.
 
 Handles creation and serialization of the editor's camera entity.
+
+Coordinate convention: Y-forward, Z-up
+  - X: right
+  - Y: forward (depth, camera looks along +Y)
+  - Z: up
 """
 
 from __future__ import annotations

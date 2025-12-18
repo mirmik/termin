@@ -1,4 +1,14 @@
-"""Camera components and controllers."""
+"""
+Camera components and controllers.
+
+Coordinate convention: Y-forward, Z-up
+  - X: right
+  - Y: forward (depth, camera looks along +Y)
+  - Z: up
+
+This differs from standard OpenGL (Z-forward, Y-up).
+Projection matrices are adapted accordingly.
+"""
 
 from __future__ import annotations
 

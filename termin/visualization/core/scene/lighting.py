@@ -1,4 +1,14 @@
-"""Lighting configuration and management for Scene."""
+"""
+Lighting configuration and management for Scene.
+
+Coordinate convention: Y-forward, Z-up
+  - X: right
+  - Y: forward (depth)
+  - Z: up
+
+Light direction: направление из источника в сцену.
+По умолчанию свет направлен в +Y (вперёд).
+"""
 
 from __future__ import annotations
 
@@ -58,7 +68,9 @@ class LightingManager:
     """
 
     def __init__(self):
-        self.light_direction = np.array([-0.5, -1.0, -0.3], dtype=np.float32)
+        # Default light direction: slightly tilted forward (+Y) and down (-Z)
+        # In Y-forward Z-up: [0.3, 1.0, -0.5] means tilted right, forward, and down
+        self.light_direction = np.array([0.3, 1.0, -0.5], dtype=np.float32)
         self.light_color = np.array([1.0, 1.0, 1.0], dtype=np.float32)
         self.ambient_color = np.array([1.0, 1.0, 1.0], dtype=np.float32)
         self.ambient_intensity = 0.1
@@ -81,11 +93,14 @@ class LightingManager:
         """
         Build world-space light parameters from all light components.
 
-        Transforms local -Z axis to world space through entity rotation:
-        dir_world = R * (0, 0, -1)
+        Transforms local +Y axis to world space through entity rotation:
+        dir_world = R * (0, 1, 0)
+
+        Convention: Y-forward, Z-up. Light points along local +Y.
         """
         lights: List[Light] = []
-        forward_local = np.array([0.0, 0.0, -1.0], dtype=np.float32)
+        # Local forward direction: +Y in Y-forward Z-up convention
+        forward_local = np.array([0.0, 1.0, 0.0], dtype=np.float32)
 
         for comp in self.light_components:
             if not comp.enabled:
@@ -120,8 +135,9 @@ class LightingManager:
 
     def load_from_data(self, data: dict) -> None:
         """Load lighting settings from serialized data."""
+        # Default: +Y forward, slightly tilted right and down
         self.light_direction = np.asarray(
-            data.get("light_direction", [-0.5, -1.0, -0.3]),
+            data.get("light_direction", [0.3, 1.0, -0.5]),
             dtype=np.float32
         )
         self.light_color = np.asarray(

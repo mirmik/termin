@@ -1,4 +1,14 @@
-"""Примитивы источников света для forward-рендеринга."""
+"""
+Примитивы источников света для forward-рендеринга.
+
+Coordinate convention: Y-forward, Z-up
+  - X: right
+  - Y: forward (depth)
+  - Z: up
+
+Light direction: направление из источника в сцену.
+Для directional light по умолчанию направлен в +Y (вперёд/вниз в сцену).
+"""
 
 from __future__ import annotations
 
@@ -81,7 +91,8 @@ class Light:
             raise ValueError(f"Light color must be RGB or RGBA, got shape {self.color.shape}")
 
         if self.direction is None:
-            self.direction = np.array([0.0, -1.0, 0.0], dtype=np.float32)
+            # Default: pointing forward (+Y) in Y-forward Z-up convention
+            self.direction = np.array([0.0, 1.0, 0.0], dtype=np.float32)
         else:
             self.direction = _normalize(np.asarray(self.direction, dtype=np.float32))
 

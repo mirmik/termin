@@ -3,6 +3,14 @@
 
 Для directional light используется ортографическая проекция,
 охватывающая view frustum основной камеры (frustum fitting).
+
+Coordinate convention: Y-forward, Z-up (same as main engine)
+  - X: right
+  - Y: forward (depth)
+  - Z: up
+
+Shadow camera смотрит вдоль направления света.
+Light direction по умолчанию: +Y (вперёд).
 """
 
 from __future__ import annotations
@@ -43,7 +51,8 @@ class ShadowCameraParams:
         if norm > 1e-6:
             self.light_direction = self.light_direction / norm
         else:
-            self.light_direction = np.array([0.0, -1.0, 0.0], dtype=np.float32)
+            # Default: +Y (forward) in Y-forward Z-up convention
+            self.light_direction = np.array([0.0, 1.0, 0.0], dtype=np.float32)
 
         if self.center is None:
             self.center = np.zeros(3, dtype=np.float32)
@@ -312,17 +321,24 @@ def fit_shadow_frustum_to_camera(
 
     frustum_corners = compute_frustum_corners(view, proj)
 
-    # 2. Build light-space rotation matrix
-    light_view = _build_light_view_matrix(light_direction)
+    # 2. Compute frustum center (will be used for positioning shadow camera)
+    center = frustum_corners.mean(axis=0)
 
-    # 3. Transform frustum corners to light space
+    # 3. Build light-space rotation matrix
+    light_rotation = _build_light_view_matrix(light_direction)
+
+    # 4. Transform CENTERED frustum corners to light space
+    # We center the corners first so that the AABB is relative to the center.
+    # This matches the view matrix which also centers on 'center'.
     light_space_corners = np.zeros((8, 3), dtype=np.float32)
     for i, corner in enumerate(frustum_corners):
-        h = np.array([corner[0], corner[1], corner[2], 1.0], dtype=np.float32)
-        transformed = light_view @ h
+        # Center the corner relative to frustum center
+        centered = corner - center
+        h = np.array([centered[0], centered[1], centered[2], 1.0], dtype=np.float32)
+        transformed = light_rotation @ h
         light_space_corners[i] = transformed[:3]
 
-    # 4. Compute AABB in light space
+    # 5. Compute AABB in light space (now centered at origin)
     min_bounds = light_space_corners.min(axis=0)
     max_bounds = light_space_corners.max(axis=0)
 
@@ -348,9 +364,7 @@ def fit_shadow_frustum_to_camera(
     if far <= near:
         far = near + 100.0
 
-    # 5. Центр frustum в world space (для позиционирования shadow camera)
-    center = frustum_corners.mean(axis=0)
-
+    # center уже вычислен выше (шаг 2)
     return ShadowCameraParams(
         light_direction=light_direction,
         ortho_bounds=(left, right, bottom, top),
