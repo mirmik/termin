@@ -1284,11 +1284,16 @@ class EditorWindow(QMainWindow):
             )
             return
 
+        # Get current project path
+        current_project = ""
+        if self.project_browser is not None and self.project_browser._root_path:
+            current_project = str(self.project_browser._root_path)
+
         # Ask user where to deploy
         target_dir = QFileDialog.getExistingDirectory(
             self,
             "Select Directory for Standard Library",
-            str(self._project_path) if self._project_path else "",
+            current_project,
         )
 
         if not target_dir:
