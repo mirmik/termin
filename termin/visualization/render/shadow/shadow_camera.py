@@ -74,10 +74,11 @@ def build_shadow_view_matrix(params: ShadowCameraParams) -> np.ndarray:
     eye = center - direction * camera_distance
     
     # Выбираем up-вектор, ортогональный направлению
-    # Если свет смотрит вдоль Y, берём Z как временный
-    world_up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    # Система координат: X-right, Y-forward, Z-up
+    world_up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
     if abs(np.dot(direction, world_up)) > 0.99:
-        world_up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+        # Свет смотрит вдоль Z — используем Y как временный up
+        world_up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
     
     # Правый вектор
     right = np.cross(direction, world_up)
@@ -248,13 +249,16 @@ def _build_light_view_matrix(light_direction: np.ndarray) -> np.ndarray:
 
     Используется для трансформации frustum corners в light space
     перед вычислением AABB.
+
+    Система координат движка: X-right, Y-forward, Z-up.
     """
     direction = light_direction / np.linalg.norm(light_direction)
 
-    # Up vector
-    world_up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    # Up vector (Z-up в этом движке)
+    world_up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
     if abs(np.dot(direction, world_up)) > 0.99:
-        world_up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+        # Свет смотрит вдоль Z — используем Y как временный up
+        world_up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
 
     right = np.cross(direction, world_up)
     right = right / np.linalg.norm(right)
