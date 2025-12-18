@@ -55,12 +55,12 @@ void main() {
 @stage fragment
 #version 330 core
 
-#include "lighting"
-#include "shadows"
-
 in vec3 v_world_pos;
 in vec3 v_normal;
 in vec2 v_uv;
+
+#include "lighting"
+#include "shadows"
 
 // Material properties
 uniform vec4 u_color;

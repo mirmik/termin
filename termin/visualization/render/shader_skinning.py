@@ -233,6 +233,7 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
         vertex_source=skinned_vert,
         fragment_source=shader.fragment_source,
         geometry_source=shader.geometry_source,
+        source_path=f"{shader.source_path}:skinned" if shader.source_path else None,
     )
 
     _skinned_shader_cache[shader] = skinned_shader
