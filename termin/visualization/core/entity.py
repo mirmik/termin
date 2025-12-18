@@ -27,7 +27,6 @@ C = TypeVar("C", bound=Component)
 class Entity(Identifiable):
     """Container of components with transform data."""
 
-    _next_pick_id: int = 1
     _entities_by_pick_id: dict[int, "Entity"] = {}
 
     def __init__(
@@ -98,13 +97,15 @@ class Entity(Identifiable):
 
     @property
     def pick_id(self) -> int:
-        """Уникальный идентификатор сущности для pick-проходов."""
-
+        """Уникальный идентификатор сущности для pick-проходов (hash от uuid)."""
         if self._pick_id is None:
-            pid = Entity._next_pick_id
-            Entity._next_pick_id += 1
-            self._pick_id = pid
-            Entity._entities_by_pick_id[pid] = self
+            # Stable hash from uuid (take lower 31 bits of uuid int value)
+            uuid_int = int(self.uuid.replace("-", ""), 16)
+            h = uuid_int & 0x7FFFFFFF  # 31-bit positive int
+            if h == 0:
+                h = 1  # 0 means "nothing hit"
+            self._pick_id = h
+            Entity._entities_by_pick_id[h] = self
         return self._pick_id
 
     @classmethod
