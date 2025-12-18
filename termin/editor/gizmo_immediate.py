@@ -65,16 +65,20 @@ class ImmediateGizmoRenderer:
     ):
         self._renderer = ImmediateRenderer()
 
-        # Gizmo dimensions (relative to size)
-        self.size = size
-        self.shaft_radius = shaft_radius * size
-        self.head_radius = head_radius * size
-        self.ring_major_radius = ring_major_radius * size
-        self.ring_minor_radius = ring_minor_radius * size
+        # Base gizmo dimensions (before screen scale)
+        self._base_size = size
+        self._base_shaft_radius = shaft_radius
+        self._base_head_radius = head_radius
+        self._base_ring_major_radius = ring_major_radius
+        self._base_ring_minor_radius = ring_minor_radius
+        self._base_head_length_ratio = 0.25
+        self._base_pick_tolerance = 0.08
 
-        # Arrow parameters
-        self.arrow_length = size
-        self.head_length_ratio = 0.25
+        # Current screen scale (updated each frame)
+        self._screen_scale = 1.0
+
+        # Effective dimensions (computed from base * screen_scale)
+        self._update_dimensions()
 
         # Transform
         self._position = np.zeros(3, dtype=np.float32)
@@ -85,8 +89,23 @@ class ImmediateGizmoRenderer:
         self.hovered_element: GizmoElement = GizmoElement.NONE
         self.active_element: GizmoElement = GizmoElement.NONE
 
-        # Pick tolerance (in world units, extended radius for easier picking)
-        self.pick_tolerance = 0.08 * size
+    def _update_dimensions(self) -> None:
+        """Update effective dimensions based on screen scale."""
+        s = self._screen_scale
+        self.size = self._base_size * s
+        self.shaft_radius = self._base_shaft_radius * self.size
+        self.head_radius = self._base_head_radius * self.size
+        self.ring_major_radius = self._base_ring_major_radius * self.size
+        self.ring_minor_radius = self._base_ring_minor_radius * self.size
+        self.arrow_length = self.size
+        self.head_length_ratio = self._base_head_length_ratio
+        self.pick_tolerance = self._base_pick_tolerance * self.size
+
+    def set_screen_scale(self, scale: float) -> None:
+        """Set screen-space scale factor."""
+        if abs(self._screen_scale - scale) > 1e-6:
+            self._screen_scale = scale
+            self._update_dimensions()
 
     @property
     def position(self) -> np.ndarray:
@@ -568,6 +587,16 @@ class ImmediateGizmoController:
         global_pose = self.target.transform.global_pose()
         self.gizmo_renderer.position = global_pose.lin
         self.gizmo_renderer.rotation = global_pose.ang
+
+    def update_screen_scale(self, viewport) -> None:
+        """Update gizmo screen scale based on camera distance."""
+        if viewport is None or viewport.camera is None:
+            return
+        camera_pos = viewport.camera.get_position()
+        gizmo_pos = self.gizmo_renderer.position
+        distance = np.linalg.norm(camera_pos - gizmo_pos)
+        screen_scale = max(0.1, distance * 0.1)
+        self.gizmo_renderer.set_screen_scale(screen_scale)
 
     # ============================================================
     # Picking (raycast-based)
