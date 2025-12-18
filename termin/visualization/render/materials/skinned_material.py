@@ -14,10 +14,11 @@ layout(location = 2) in vec2 a_uv;
 layout(location = 3) in vec4 a_joints;
 layout(location = 4) in vec4 a_weights;
 
+uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
 
-// Bone matrices for skeletal animation
+// Bone matrices for skeletal animation (in model-local space)
 const int MAX_BONES = 128;
 uniform mat4 u_bone_matrices[MAX_BONES];
 uniform int u_bone_count;
@@ -27,7 +28,7 @@ out vec3 v_normal;
 out vec2 v_uv;
 
 void main() {
-    // Compute skinned position and normal
+    // Compute skinned position and normal in model-local space
     vec4 skinned_pos = vec4(0.0);
     vec3 skinned_normal = vec3(0.0);
 
@@ -49,11 +50,12 @@ void main() {
         skinned_normal = a_normal;
     }
 
-    // bone_matrices already include the global transform, so no u_model needed
-    v_world_pos = skinned_pos.xyz;
-    v_normal = skinned_normal;
+    // Apply model transform (same as non-skinned shaders)
+    vec4 world_pos = u_model * skinned_pos;
+    v_world_pos = world_pos.xyz;
+    v_normal = mat3(transpose(inverse(u_model))) * skinned_normal;
     v_uv = a_uv;
-    gl_Position = u_projection * u_view * skinned_pos;
+    gl_Position = u_projection * u_view * world_pos;
 }
 """
 

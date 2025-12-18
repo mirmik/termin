@@ -113,8 +113,11 @@ class SkeletonInstance:
     directly from Entity hierarchy. Animation updates Entity transforms,
     and this class computes bone matrices for GPU.
 
+    Bone matrices are computed in skeleton-local space (not world space),
+    so that u_model can be applied uniformly as with non-skinned meshes.
+
     Usage:
-        instance = SkeletonInstance(skeleton_data, bone_entities)
+        instance = SkeletonInstance(skeleton_data, bone_entities, skeleton_root)
         # Animation updates Entity transforms...
         bone_matrices = instance.get_bone_matrices()  # Upload to GPU
     """
@@ -125,6 +128,7 @@ class SkeletonInstance:
         self,
         skeleton_data: SkeletonData,
         bone_entities: List = None,
+        skeleton_root_entity=None,
     ):
         """
         Initialize skeleton instance.
@@ -133,9 +137,13 @@ class SkeletonInstance:
             skeleton_data: The skeleton template
             bone_entities: List of Entity objects for each bone (same order as bones in skeleton_data).
                           If None, skeleton works in legacy mode with internal transforms.
+            skeleton_root_entity: Root entity of the skeleton hierarchy. Used to compute
+                                 bone matrices in local space. If None, will try to find
+                                 parent of root bones.
         """
         self._data = skeleton_data
         self._bone_entities = bone_entities  # List[Entity] or None
+        self._skeleton_root_entity = skeleton_root_entity
         n = skeleton_data.get_bone_count()
 
         # Computed matrices
@@ -201,20 +209,46 @@ class SkeletonInstance:
         new_pose = GeneralPose3(lin=new_lin, ang=new_ang, scale=new_scale)
         entity.transform.relocate(new_pose)
 
+    def _get_skeleton_root(self):
+        """Get skeleton root entity, finding it if not explicitly set."""
+        if self._skeleton_root_entity is not None:
+            return self._skeleton_root_entity
+
+        # Try to find root as parent of root bone entities
+        if self._bone_entities and self._data.root_bone_indices:
+            root_bone_idx = self._data.root_bone_indices[0]
+            root_bone_entity = self._bone_entities[root_bone_idx]
+            if root_bone_entity.transform.parent is not None:
+                self._skeleton_root_entity = root_bone_entity.transform.parent.entity
+                return self._skeleton_root_entity
+
+        return None
+
     def update(self) -> None:
         """
         Recompute bone matrices from Entity world transforms.
 
-        Reads world matrix from each bone Entity and computes:
-        bone_matrix = entity.model_matrix() @ inverse_bind_matrix
+        Computes bone matrices in skeleton-local space:
+        bone_matrix = inv(skeleton_world) @ bone_world @ inverse_bind_matrix
+
+        This allows u_model to be applied uniformly in shaders.
         """
         if self._bone_entities is None:
             return
 
+        # Get inverse of skeleton root world matrix
+        skeleton_root = self._get_skeleton_root()
+        if skeleton_root is not None:
+            skeleton_world = skeleton_root.model_matrix()
+            skeleton_world_inv = np.linalg.inv(skeleton_world)
+        else:
+            skeleton_world_inv = np.eye(4, dtype=np.float32)
+
         for bone in self._data.bones:
             entity = self._bone_entities[bone.index]
-            world_matrix = entity.model_matrix()
-            self._bone_matrices[bone.index] = world_matrix @ bone.inverse_bind_matrix
+            bone_world = entity.model_matrix()
+            # Transform to skeleton-local space, then apply inverse bind
+            self._bone_matrices[bone.index] = skeleton_world_inv @ bone_world @ bone.inverse_bind_matrix
 
     _DEBUG_MATRICES = False
     _debug_matrix_frame = 0
@@ -224,8 +258,10 @@ class SkeletonInstance:
         Get bone matrices array for GPU upload.
 
         Returns:
-            Array of shape (N, 4, 4) containing final bone matrices.
-            These are: EntityWorldTransform * InverseBindMatrix
+            Array of shape (N, 4, 4) containing bone matrices in skeleton-local space.
+            These are: inv(SkeletonWorld) @ BoneWorld @ InverseBindMatrix
+
+            Shader should apply u_model to transform to world space.
         """
         self.update()
         return self._bone_matrices
