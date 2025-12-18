@@ -222,8 +222,10 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
 
         # Get skeleton from GLBAsset's child assets
         skeleton_assets = glb_asset.get_skeleton_assets()
+        print(f"[instantiate_glb] skeleton_assets: {list(skeleton_assets.keys())}")
         skeleton_key = "skeleton"
         skeleton_asset = skeleton_assets.get(skeleton_key)
+        print(f"[instantiate_glb] skeleton_asset: {skeleton_asset}, _loaded={skeleton_asset._loaded if skeleton_asset else None}")
 
         if skeleton_asset is None or skeleton_asset.skeleton_data is None:
             raise RuntimeError(f"[glb_instantiator] Skeleton not found in GLBAsset '{glb_asset.name}'")

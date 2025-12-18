@@ -168,6 +168,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
 
     def _on_loaded(self) -> None:
         """After loading, create any missing child assets and populate all with data."""
+        print(f"[GLBAsset._on_loaded] {self._name}, _data={self._data is not None}")
         if self._data is None:
             return
 
@@ -193,7 +194,9 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                 spec_changed = True
 
         # Populate all child assets with data
+        print(f"[GLBAsset._on_loaded] skeleton_assets before populate: {list(self._skeleton_assets.keys())}")
         self._populate_child_assets()
+        print(f"[GLBAsset._on_loaded] skeleton_assets after populate: {[(k, v._loaded) for k, v in self._skeleton_assets.items()]}")
 
         # Save spec if new child assets were created
         if spec_changed and self._source_path:
