@@ -1250,9 +1250,10 @@ class EditorWindow(QMainWindow):
             for editor_features in self._editor_features.values():
                 editor_features.selected_entity_id = selected_id
 
-        # Обновляем гизмо
+        # Обновляем гизмо (передаём viewport для расчёта масштаба)
         if self.gizmo_controller is not None:
-            self.gizmo_controller.set_target(entity)
+            viewport = self.editor_viewport.viewport if self.editor_viewport else None
+            self.gizmo_controller.set_target(entity, viewport)
 
         self._request_viewport_update()
 

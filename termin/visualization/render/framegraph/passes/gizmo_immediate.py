@@ -95,18 +95,7 @@ class ImmediateGizmoPass(RenderFramePass):
         view = camera.get_view_matrix()
         proj = camera.get_projection_matrix()
 
-        # Calculate screen-space scale factor
-        import numpy as np
-        if camera.entity is not None:
-            camera_pos = camera.entity.transform.global_pose().lin
-            gizmo_pos = gizmo.position
-            distance = np.linalg.norm(camera_pos - gizmo_pos)
-            # Scale factor: gizmo appears same size at any distance
-            # Reference: at distance=10, use base size
-            screen_scale = max(0.1, distance * 0.1)
-            gizmo.set_screen_scale(screen_scale)
-
-        # Draw and flush gizmo
+        # Draw and flush gizmo (scale is set once in set_target)
         gizmo.begin()
         gizmo.draw()
         gizmo.flush(graphics, view, proj)

@@ -267,9 +267,8 @@ class EditorViewportFeatures:
         x, y, viewport = pending_hover
         self._pending_hover = None
 
-        # Update gizmo screen scale and hover state (raycast-based)
+        # Update gizmo hover state (raycast-based)
         if not self._gizmo_controller.is_dragging() and viewport is not None:
-            self._gizmo_controller.update_screen_scale(viewport)
             ray = viewport.screen_point_to_ray(x, y)
             if ray is not None:
                 self._gizmo_controller.update_hover(ray.origin, ray.direction)
@@ -324,10 +323,6 @@ class EditorViewportFeatures:
 
         self._press_position = (x, y)
         self._gizmo_handled_press = False
-
-        # Update gizmo scale before picking
-        if viewport is not None:
-            self._gizmo_controller.update_screen_scale(viewport)
 
         picked_color = self.pick_color_at(x, y, viewport, buffer_name="id")
         handled = self._gizmo_controller.handle_pick_press_with_color(

@@ -545,7 +545,7 @@ class ImmediateGizmoController:
         """Register callback for transform dragging."""
         self._on_transform_dragging = callback
 
-    def set_target(self, target_entity) -> None:
+    def set_target(self, target_entity, viewport=None) -> None:
         """Set target entity for gizmo."""
         from termin.visualization.core.entity import Entity
 
@@ -561,6 +561,10 @@ class ImmediateGizmoController:
 
         self.gizmo_renderer.visible = True
         self._update_gizmo_transform()
+
+        # Rescale gizmo once when target changes
+        if viewport is not None:
+            self.update_screen_scale(viewport)
 
     def set_visible(self, visible: bool) -> None:
         """Show or hide gizmo."""
