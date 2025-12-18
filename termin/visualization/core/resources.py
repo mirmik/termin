@@ -83,24 +83,7 @@ _BUILTIN_POST_EFFECTS: List[Tuple[str, str]] = [
 
 # Фиксированные UUID для встроенных ресурсов.
 # Гарантируют стабильные ссылки между сессиями.
-_BUILTIN_UUIDS: Dict[str, str] = {
-    # Шейдеры
-    "DefaultShader": "00000000-0000-0000-0001-000000000001",
-    "PBRShader": "00000000-0000-0000-0001-000000000002",
-    "AdvancedPBRShader": "00000000-0000-0000-0001-000000000003",
-    "SkinnedShader": "00000000-0000-0000-0001-000000000004",
-    # Материалы
-    "DefaultMaterial": "00000000-0000-0000-0002-000000000001",
-    "PBRMaterial": "00000000-0000-0000-0002-000000000002",
-    "AdvancedPBRMaterial": "00000000-0000-0000-0002-000000000003",
-    "GridMaterial": "00000000-0000-0000-0002-000000000004",
-    "SkinnedMaterial": "00000000-0000-0000-0002-000000000005",
-    # Меши
-    "Cube": "00000000-0000-0000-0003-000000000001",
-    "Sphere": "00000000-0000-0000-0003-000000000002",
-    "Plane": "00000000-0000-0000-0003-000000000003",
-    "Cylinder": "00000000-0000-0000-0003-000000000004",
-}
+from termin.visualization.core.builtin_resources import BUILTIN_UUIDS
 
 
 class ResourceManager:
@@ -730,254 +713,33 @@ class ResourceManager:
 
     def register_default_shader(self) -> None:
         """Регистрирует встроенный DefaultShader."""
-        if "DefaultShader" in self.shaders:
-            return
-
-        from termin.visualization.render.materials.default_material import (
-            DEFAULT_VERT,
-            DEFAULT_FRAG,
-        )
-        from termin.visualization.render.shader_parser import (
-            ShaderMultyPhaseProgramm,
-            ShaderPhase,
-            ShasderStage,
-            MaterialProperty,
-        )
-
-        # Создаём ShaderMultyPhaseProgramm для DefaultShader
-        vertex_stage = ShasderStage("vertex", DEFAULT_VERT)
-        fragment_stage = ShasderStage("fragment", DEFAULT_FRAG)
-
-        phase = ShaderPhase(
-            phase_mark="opaque",
-            priority=0,
-            gl_depth_mask=True,
-            gl_depth_test=True,
-            gl_blend=False,
-            gl_cull=True,
-            stages={"vertex": vertex_stage, "fragment": fragment_stage},
-            uniforms=[
-                MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
-                MaterialProperty("u_albedo_texture", "Texture", None),
-                MaterialProperty("u_shininess", "Float", 32.0, 1.0, 2048.0),
-            ],
-        )
-
-        program = ShaderMultyPhaseProgramm(program="DefaultShader", phases=[phase])
-        self.register_shader("DefaultShader", program, uuid=_BUILTIN_UUIDS["DefaultShader"])
+        from termin.visualization.core.builtin_resources import register_default_shader
+        register_default_shader(self)
 
     def register_pbr_shader(self) -> None:
         """Регистрирует встроенный PBR шейдер."""
-        if "PBRShader" in self.shaders:
-            return
-
-        from termin.visualization.render.materials.pbr_material import (
-            PBR_VERT,
-            PBR_FRAG,
-        )
-        from termin.visualization.render.shader_parser import (
-            ShaderMultyPhaseProgramm,
-            ShaderPhase,
-            ShasderStage,
-            MaterialProperty,
-        )
-
-        vertex_stage = ShasderStage("vertex", PBR_VERT)
-        fragment_stage = ShasderStage("fragment", PBR_FRAG)
-
-        phase = ShaderPhase(
-            phase_mark="opaque",
-            priority=0,
-            gl_depth_mask=True,
-            gl_depth_test=True,
-            gl_blend=False,
-            gl_cull=True,
-            stages={"vertex": vertex_stage, "fragment": fragment_stage},
-            uniforms=[
-                MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
-                MaterialProperty("u_albedo_texture", "Texture", None),
-                MaterialProperty("u_metallic", "Float", 0.0, 0.0, 1.0),
-                MaterialProperty("u_roughness", "Float", 0.5, 0.0, 1.0),
-            ],
-        )
-
-        program = ShaderMultyPhaseProgramm(program="PBRShader", phases=[phase])
-        self.register_shader("PBRShader", program, uuid=_BUILTIN_UUIDS["PBRShader"])
+        from termin.visualization.core.builtin_resources import register_pbr_shader
+        register_pbr_shader(self)
 
     def register_advanced_pbr_shader(self) -> None:
         """Регистрирует встроенный Advanced PBR шейдер с SSS и ACES."""
-        if "AdvancedPBRShader" in self.shaders:
-            return
-
-        from termin.visualization.render.materials.advanced_pbr_material import (
-            ADVANCED_PBR_VERT,
-            ADVANCED_PBR_FRAG,
-        )
-        from termin.visualization.render.shader_parser import (
-            ShaderMultyPhaseProgramm,
-            ShaderPhase,
-            ShasderStage,
-            MaterialProperty,
-        )
-
-        vertex_stage = ShasderStage("vertex", ADVANCED_PBR_VERT)
-        fragment_stage = ShasderStage("fragment", ADVANCED_PBR_FRAG)
-
-        phase = ShaderPhase(
-            phase_mark="opaque",
-            priority=0,
-            gl_depth_mask=True,
-            gl_depth_test=True,
-            gl_blend=False,
-            gl_cull=True,
-            stages={"vertex": vertex_stage, "fragment": fragment_stage},
-            uniforms=[
-                MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
-                MaterialProperty("u_albedo_texture", "Texture", None),
-                MaterialProperty("u_metallic", "Float", 0.0, 0.0, 1.0),
-                MaterialProperty("u_roughness", "Float", 0.5, 0.0, 1.0),
-                MaterialProperty("u_subsurface", "Float", 0.0, 0.0, 1.0),
-            ],
-        )
-
-        program = ShaderMultyPhaseProgramm(program="AdvancedPBRShader", phases=[phase])
-        self.register_shader("AdvancedPBRShader", program, uuid=_BUILTIN_UUIDS["AdvancedPBRShader"])
+        from termin.visualization.core.builtin_resources import register_advanced_pbr_shader
+        register_advanced_pbr_shader(self)
 
     def register_skinned_shader(self) -> None:
         """Регистрирует встроенный SkinnedShader для скелетной анимации."""
-        if "SkinnedShader" in self.shaders:
-            return
-
-        from termin.visualization.render.materials.skinned_material import (
-            SKINNED_VERT,
-            SKINNED_FRAG,
-        )
-        from termin.visualization.render.shader_parser import (
-            ShaderMultyPhaseProgramm,
-            ShaderPhase,
-            ShasderStage,
-            MaterialProperty,
-        )
-
-        vertex_stage = ShasderStage("vertex", SKINNED_VERT)
-        fragment_stage = ShasderStage("fragment", SKINNED_FRAG)
-
-        phase = ShaderPhase(
-            phase_mark="opaque",
-            priority=0,
-            gl_depth_mask=True,
-            gl_depth_test=True,
-            gl_blend=False,
-            gl_cull=True,
-            stages={"vertex": vertex_stage, "fragment": fragment_stage},
-            uniforms=[
-                MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
-                MaterialProperty("u_albedo_texture", "Texture", None),
-                MaterialProperty("u_shininess", "Float", 32.0, 1.0, 2048.0),
-            ],
-        )
-
-        program = ShaderMultyPhaseProgramm(program="SkinnedShader", phases=[phase])
-        self.register_shader("SkinnedShader", program, uuid=_BUILTIN_UUIDS["SkinnedShader"])
+        from termin.visualization.core.builtin_resources import register_skinned_shader
+        register_skinned_shader(self)
 
     def register_builtin_materials(self) -> None:
         """Регистрирует встроенные материалы."""
-        from termin.visualization.core.material import Material
-        from termin.visualization.render.texture import get_white_texture
-
-        # Убедимся что шейдеры зарегистрированы
-        self.register_default_shader()
-        self.register_pbr_shader()
-        self.register_advanced_pbr_shader()
-        self.register_skinned_shader()
-
-        white_tex = get_white_texture()
-
-        # DefaultMaterial (Blinn-Phong)
-        if "DefaultMaterial" not in self.materials:
-            shader = self.shaders.get("DefaultShader")
-            if shader is not None:
-                mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
-                mat.name = "DefaultMaterial"
-                mat.color = (0.3, 0.85, 0.9, 1.0)
-                self.register_material("DefaultMaterial", mat, uuid=_BUILTIN_UUIDS["DefaultMaterial"])
-
-        # PBRMaterial
-        if "PBRMaterial" not in self.materials:
-            shader = self.shaders.get("PBRShader")
-            if shader is not None:
-                mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
-                mat.name = "PBRMaterial"
-                mat.color = (0.8, 0.8, 0.8, 1.0)
-                self.register_material("PBRMaterial", mat, uuid=_BUILTIN_UUIDS["PBRMaterial"])
-
-        # AdvancedPBRMaterial (SSS + ACES)
-        if "AdvancedPBRMaterial" not in self.materials:
-            shader = self.shaders.get("AdvancedPBRShader")
-            if shader is not None:
-                mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
-                mat.name = "AdvancedPBRMaterial"
-                mat.color = (0.8, 0.8, 0.8, 1.0)
-                self.register_material("AdvancedPBRMaterial", mat, uuid=_BUILTIN_UUIDS["AdvancedPBRMaterial"])
-
-        # GridMaterial (calibration grid)
-        if "GridMaterial" not in self.materials:
-            from termin.visualization.render.materials.grid_material import GridMaterial
-            mat = GridMaterial(color=(0.8, 0.8, 0.8, 1.0), grid_spacing=1.0, line_width=0.02)
-            mat.name = "GridMaterial"
-            self.register_material("GridMaterial", mat, uuid=_BUILTIN_UUIDS["GridMaterial"])
-
-        # SkinnedMaterial (skeletal animation)
-        if "SkinnedMaterial" not in self.materials:
-            shader = self.shaders.get("SkinnedShader")
-            if shader is not None:
-                mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
-                mat.name = "SkinnedMaterial"
-                mat.color = (0.8, 0.8, 0.8, 1.0)
-                self.register_material("SkinnedMaterial", mat, uuid=_BUILTIN_UUIDS["SkinnedMaterial"])
+        from termin.visualization.core.builtin_resources import register_builtin_materials
+        register_builtin_materials(self)
 
     def register_builtin_meshes(self) -> List[str]:
-        """
-        Регистрирует встроенные примитивные меши.
-
-        Returns:
-            Список имён зарегистрированных мешей.
-        """
-        from termin.visualization.core.mesh_asset import MeshAsset
-        from termin.mesh.mesh import (
-            TexturedCubeMesh,
-            UVSphereMesh,
-            PlaneMesh,
-            CylinderMesh,
-        )
-
-        registered = []
-
-        # Куб с корректными UV (текстура на каждой грани)
-        if "Cube" not in self._mesh_assets:
-            cube = MeshAsset.from_mesh3(TexturedCubeMesh(size=1.0), name="Cube")
-            self.register_mesh_asset("Cube", cube, uuid=_BUILTIN_UUIDS["Cube"])
-            registered.append("Cube")
-
-        # Сфера
-        if "Sphere" not in self._mesh_assets:
-            sphere = MeshAsset.from_mesh3(UVSphereMesh(radius=0.5, n_meridians=32, n_parallels=16), name="Sphere")
-            self.register_mesh_asset("Sphere", sphere, uuid=_BUILTIN_UUIDS["Sphere"])
-            registered.append("Sphere")
-
-        # Плоскость
-        if "Plane" not in self._mesh_assets:
-            plane = MeshAsset.from_mesh3(PlaneMesh(width=1.0, depth=1.0), name="Plane")
-            self.register_mesh_asset("Plane", plane, uuid=_BUILTIN_UUIDS["Plane"])
-            registered.append("Plane")
-
-        # Цилиндр
-        if "Cylinder" not in self._mesh_assets:
-            cylinder = MeshAsset.from_mesh3(CylinderMesh(radius=0.5, height=1.0), name="Cylinder")
-            self.register_mesh_asset("Cylinder", cylinder, uuid=_BUILTIN_UUIDS["Cylinder"])
-            registered.append("Cylinder")
-
-        return registered
+        """Регистрирует встроенные примитивные меши."""
+        from termin.visualization.core.builtin_resources import register_builtin_meshes
+        return register_builtin_meshes(self)
 
     # --------- Меши (Asset-based) ---------
     def get_mesh_asset(self, name: str) -> Optional["MeshAsset"]:
@@ -1552,129 +1314,12 @@ class ResourceManager:
 
         Args:
             paths: Список путей к директориям, .py файлам или имён модулей.
-                   Примеры:
-                   - "termin.visualization.components" (модуль)
-                   - "/home/user/my_components" (директория)
-                   - "/home/user/rotator.py" (файл)
 
         Returns:
             Список имён загруженных компонентов.
         """
-        import importlib
-        import importlib.util
-        import os
-        import sys
-
-        loaded = []
-
-        for path in paths:
-            if os.path.isfile(path) and path.endswith(".py"):
-                # Загружаем отдельный .py файл
-                loaded.extend(self._scan_file(path))
-            elif os.path.isdir(path):
-                # Сканируем директорию
-                loaded.extend(self._scan_directory(path))
-            else:
-                # Пробуем как имя модуля
-                loaded.extend(self._scan_module(path))
-
-        return loaded
-
-    def _scan_file(self, filepath: str) -> list[str]:
-        """Загружает компоненты из одного .py файла."""
-        import importlib.util
-        import os
-        import sys
-
-        before = set(self.components.keys())
-        filename = os.path.basename(filepath)
-        module_name = f"_dynamic_components_.{os.path.splitext(filename)[0]}_{id(filepath)}"
-
-        try:
-            spec = importlib.util.spec_from_file_location(module_name, filepath)
-            if spec is None or spec.loader is None:
-                return []
-
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[module_name] = module
-            spec.loader.exec_module(module)
-
-        except Exception as e:
-            print(f"Warning: Failed to load {filepath}: {e}")
-            return []
-
-        after = set(self.components.keys())
-        return list(after - before)
-
-    def _scan_module(self, module_name: str) -> list[str]:
-        """Загружает модуль и все его подмодули."""
-        import importlib
-        import pkgutil
-
-        loaded = []
-        before = set(self.components.keys())
-
-        try:
-            module = importlib.import_module(module_name)
-
-            # Если это пакет, сканируем подмодули
-            if hasattr(module, "__path__"):
-                for importer, name, is_pkg in pkgutil.walk_packages(
-                    module.__path__, prefix=module_name + "."
-                ):
-                    try:
-                        importlib.import_module(name)
-                    except Exception as e:
-                        print(f"Warning: Failed to import {name}: {e}")
-
-            after = set(self.components.keys())
-            loaded = list(after - before)
-
-        except Exception as e:
-            print(f"Warning: Failed to import module {module_name}: {e}")
-
-        return loaded
-
-    def _scan_directory(self, directory: str) -> list[str]:
-        """Сканирует директорию и загружает все .py файлы как модули."""
-        import importlib.util
-        import os
-        import sys
-
-        loaded = []
-        before = set(self.components.keys())
-
-        for root, dirs, files in os.walk(directory):
-            # Пропускаем __pycache__ и скрытые директории
-            dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
-
-            for filename in files:
-                if not filename.endswith(".py") or filename.startswith("_"):
-                    continue
-
-                filepath = os.path.join(root, filename)
-                module_name = os.path.splitext(filename)[0]
-
-                # Создаём уникальное имя модуля
-                rel_path = os.path.relpath(filepath, directory)
-                unique_name = f"_dynamic_components_.{rel_path.replace(os.sep, '.')[:-3]}"
-
-                try:
-                    spec = importlib.util.spec_from_file_location(unique_name, filepath)
-                    if spec is None or spec.loader is None:
-                        continue
-
-                    module = importlib.util.module_from_spec(spec)
-                    sys.modules[unique_name] = module
-                    spec.loader.exec_module(module)
-
-                except Exception as e:
-                    print(f"Warning: Failed to load {filepath}: {e}")
-
-        after = set(self.components.keys())
-        loaded = list(after - before)
-
-        return loaded
+        from termin.visualization.core.plugin_loader import scan_paths
+        return scan_paths(paths, self.components, "_dynamic_components_")
 
     # --------- FramePass'ы ---------
     def register_frame_pass(self, name: str, cls: type):
@@ -1726,131 +1371,9 @@ class ResourceManager:
         Returns:
             Список имён загруженных FramePass'ов.
         """
-        import importlib
-        import importlib.util
-        import os
-        import sys
-
-        loaded = []
-
-        for path in paths:
-            if os.path.isfile(path) and path.endswith(".py"):
-                loaded.extend(self._scan_file_for_frame_passes(path))
-            elif os.path.isdir(path):
-                loaded.extend(self._scan_directory_for_frame_passes(path))
-            else:
-                loaded.extend(self._scan_module_for_frame_passes(path))
-
-        return loaded
-
-    def _scan_file_for_frame_passes(self, filepath: str) -> list[str]:
-        """Загружает FramePass'ы из одного .py файла."""
-        import importlib.util
-        import os
-        import sys
-
-        before = set(self.frame_passes.keys())
-
-        filename = os.path.basename(filepath)
-        module_name = f"_dynamic_frame_passes_.{os.path.splitext(filename)[0]}_{id(filepath)}"
-
-        try:
-            spec = importlib.util.spec_from_file_location(module_name, filepath)
-            if spec is None or spec.loader is None:
-                return []
-
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[module_name] = module
-            spec.loader.exec_module(module)
-
-            # Ищем классы, наследующиеся от FramePass
-            from termin.visualization.render.framegraph.core import FramePass
-
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if (
-                    isinstance(attr, type)
-                    and issubclass(attr, FramePass)
-                    and attr is not FramePass
-                    and attr_name not in self.frame_passes
-                ):
-                    self.frame_passes[attr_name] = attr
-
-        except Exception as e:
-            print(f"Warning: Failed to load frame passes from {filepath}: {e}")
-            return []
-
-        after = set(self.frame_passes.keys())
-        return list(after - before)
-
-    def _scan_directory_for_frame_passes(self, directory: str) -> list[str]:
-        """Сканирует директорию и загружает все FramePass'ы."""
-        import os
-
-        loaded = []
-
-        for root, dirs, files in os.walk(directory):
-            dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
-
-            for filename in files:
-                if not filename.endswith(".py") or filename.startswith("_"):
-                    continue
-
-                filepath = os.path.join(root, filename)
-                loaded.extend(self._scan_file_for_frame_passes(filepath))
-
-        return loaded
-
-    def _scan_module_for_frame_passes(self, module_name: str) -> list[str]:
-        """Загружает FramePass'ы из модуля."""
-        import importlib
-        import pkgutil
-
-        loaded = []
-        before = set(self.frame_passes.keys())
-
-        try:
-            module = importlib.import_module(module_name)
-
-            from termin.visualization.render.framegraph.core import FramePass
-
-            # Ищем классы в самом модуле
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if (
-                    isinstance(attr, type)
-                    and issubclass(attr, FramePass)
-                    and attr is not FramePass
-                    and attr_name not in self.frame_passes
-                ):
-                    self.frame_passes[attr_name] = attr
-
-            # Если это пакет, сканируем подмодули
-            if hasattr(module, "__path__"):
-                for importer, name, is_pkg in pkgutil.walk_packages(
-                    module.__path__, prefix=module_name + "."
-                ):
-                    try:
-                        submodule = importlib.import_module(name)
-                        for attr_name in dir(submodule):
-                            attr = getattr(submodule, attr_name)
-                            if (
-                                isinstance(attr, type)
-                                and issubclass(attr, FramePass)
-                                and attr is not FramePass
-                                and attr_name not in self.frame_passes
-                            ):
-                                self.frame_passes[attr_name] = attr
-                    except Exception as e:
-                        print(f"Warning: Failed to import {name}: {e}")
-
-            after = set(self.frame_passes.keys())
-            loaded = list(after - before)
-
-        except Exception as e:
-            print(f"Warning: Failed to import module {module_name}: {e}")
-
-        return loaded
+        from termin.visualization.core.plugin_loader import scan_for_subclasses
+        from termin.visualization.render.framegraph.core import FramePass
+        return scan_for_subclasses(paths, FramePass, self.frame_passes, "_dynamic_frame_passes_")
 
     # --------- PostEffect'ы ---------
     def register_post_effect(self, name: str, cls: type):
