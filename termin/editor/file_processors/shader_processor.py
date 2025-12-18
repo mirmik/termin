@@ -24,27 +24,19 @@ class ShaderPreLoader(FilePreLoader):
 
     def preload(self, path: str) -> PreLoadResult | None:
         """
-        Pre-load shader file: read content and UUID from spec.
+        Pre-load shader file: only read UUID from spec (lazy loading).
         """
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
+        # Read UUID from .spec file
+        spec_data = self.read_spec_file(path)
+        uuid = spec_data.get("uuid") if spec_data else None
 
-            # Read UUID from .spec file
-            spec_data = self.read_spec_file(path)
-            uuid = spec_data.get("uuid") if spec_data else None
-
-            return PreLoadResult(
-                resource_type=self.resource_type,
-                path=path,
-                content=content,
-                uuid=uuid,
-                spec_data=spec_data,
-            )
-
-        except Exception as e:
-            print(f"[ShaderPreLoader] Failed to read {path}: {e}")
-            return None
+        return PreLoadResult(
+            resource_type=self.resource_type,
+            path=path,
+            content=None,  # Lazy loading - don't read content
+            uuid=uuid,
+            spec_data=spec_data,
+        )
 
 
 # Backward compatibility alias

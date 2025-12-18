@@ -67,7 +67,9 @@ class AnimationClipHandle(ResourceHandle["AnimationClip", "AnimationClipAsset"])
     # --- Resource extraction ---
 
     def _get_resource_from_asset(self, asset: "AnimationClipAsset") -> "AnimationClip | None":
-        """Извлечь AnimationClip из AnimationClipAsset."""
+        """Извлечь AnimationClip из AnimationClipAsset (lazy loading)."""
+        if not asset.is_loaded:
+            asset.load()
         return asset.clip
 
     # --- Convenience accessors ---

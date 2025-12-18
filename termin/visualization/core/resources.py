@@ -277,7 +277,7 @@ class ResourceManager:
         print(f"[ResourceManager] Reloaded material: {name}")
 
     def _register_shader_file(self, name: str, result: "PreLoadResult") -> None:
-        """Register shader from PreLoadResult."""
+        """Register shader from PreLoadResult (lazy loading)."""
         from termin.visualization.render.shader_asset import ShaderAsset
 
         # Check if already registered by name
@@ -301,18 +301,8 @@ class ResourceManager:
             )
             self._assets_by_uuid[asset.uuid] = asset
 
-        # Register by name
+        # Register by name (lazy loading - don't load content yet)
         self._shader_assets[name] = asset
-
-        # Load content (Asset parses it)
-        has_uuid = result.uuid is not None
-        asset.load_from_content(result.content, has_uuid_in_spec=has_uuid)
-
-        # Update legacy dict
-        if asset.program is not None:
-            self.shaders[name] = asset.program
-
-        print(f"[ResourceManager] Registered shader: {name}")
 
     def _reload_shader_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload shader from PreLoadResult."""
@@ -335,8 +325,7 @@ class ResourceManager:
         print(f"[ResourceManager] Reloaded shader: {name}")
 
     def _register_texture_file(self, name: str, result: "PreLoadResult") -> None:
-        """Register texture from PreLoadResult."""
-        from termin.visualization.render.texture import Texture
+        """Register texture from PreLoadResult (lazy loading)."""
         from termin.visualization.render.texture_asset import TextureAsset
 
         # Check if already registered by name
@@ -358,20 +347,12 @@ class ResourceManager:
                 source_path=result.path,
                 uuid=result.uuid,
             )
+            # Store spec_data for lazy loading
+            asset._pending_spec_data = result.spec_data
             self._assets_by_uuid[asset.uuid] = asset
 
-        # Register by name
+        # Register by name (lazy loading - don't load content yet)
         self._texture_assets[name] = asset
-
-        # Load content (Asset parses it)
-        has_uuid = result.uuid is not None
-        asset.load_from_content(result.content, spec_data=result.spec_data, has_uuid_in_spec=has_uuid)
-
-        # Create Texture wrapper and register in legacy dict
-        texture = Texture.from_asset(asset)
-        self.textures[name] = texture
-
-        print(f"[ResourceManager] Registered texture: {name}")
 
     def _reload_texture_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload texture from PreLoadResult."""
@@ -421,18 +402,11 @@ class ResourceManager:
             )
             self._assets_by_uuid[asset.uuid] = asset
 
-        # Register by name
+        # Store spec_data for lazy loading
+        asset._pending_spec_data = result.spec_data
+
+        # Register by name (lazy loading - don't load content yet)
         self._mesh_assets[name] = asset
-
-        # Load content (Asset parses it)
-        has_uuid = result.uuid is not None
-        asset.load_from_content(result.content, spec_data=result.spec_data, has_uuid_in_spec=has_uuid)
-
-        # Create MeshDrawable wrapper and register in legacy dict
-        drawable = MeshDrawable(asset, source_id=result.path, name=name)
-        self.meshes[name] = drawable
-
-        print(f"[ResourceManager] Registered mesh: {name}")
 
     def _reload_mesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload mesh from PreLoadResult."""
@@ -480,26 +454,8 @@ class ResourceManager:
             )
             self._assets_by_uuid[asset.uuid] = asset
 
-        # Register by name
+        # Register by name (lazy loading - don't load content yet)
         self._voxel_grid_assets[name] = asset
-
-        # Load content (Asset parses it)
-        has_uuid = result.uuid is not None
-        asset.load_from_content(result.content, has_uuid_in_spec=has_uuid)
-
-        # Update legacy dict
-        if asset.grid is not None:
-            # Use grid's stored name if available
-            actual_name = asset.grid.name if asset.grid.name else name
-            if actual_name != name:
-                # Re-register with correct name
-                del self._voxel_grid_assets[name]
-                self._voxel_grid_assets[actual_name] = asset
-                name = actual_name
-
-            self.voxel_grids[name] = asset.grid
-
-        print(f"[ResourceManager] Registered voxel grid: {name}")
 
     def _reload_voxel_grid_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload voxel grid from PreLoadResult."""
@@ -546,26 +502,8 @@ class ResourceManager:
             )
             self._assets_by_uuid[asset.uuid] = asset
 
-        # Register by name
+        # Register by name (lazy loading - don't load content yet)
         self._navmesh_assets[name] = asset
-
-        # Load content (Asset parses it)
-        has_uuid = result.uuid is not None
-        asset.load_from_content(result.content, has_uuid_in_spec=has_uuid)
-
-        # Update legacy dict
-        if asset.navmesh is not None:
-            # Use navmesh's stored name if available
-            actual_name = asset.navmesh.name if asset.navmesh.name else name
-            if actual_name != name:
-                # Re-register with correct name
-                del self._navmesh_assets[name]
-                self._navmesh_assets[actual_name] = asset
-                name = actual_name
-
-            self.navmeshes[name] = asset.navmesh
-
-        print(f"[ResourceManager] Registered navmesh: {name}")
 
     def _reload_navmesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload navmesh from PreLoadResult."""
@@ -612,14 +550,11 @@ class ResourceManager:
             )
             self._assets_by_uuid[asset.uuid] = asset
 
-        # Register by name
+        # Store spec_data for lazy loading
+        asset._pending_spec_data = result.spec_data
+
+        # Register by name (lazy loading - don't load content yet)
         self._glb_assets[name] = asset
-
-        # Load content (Asset parses it)
-        has_uuid = result.uuid is not None
-        asset.load_from_content(result.content, spec_data=result.spec_data, has_uuid_in_spec=has_uuid)
-
-        print(f"[ResourceManager] Registered GLB: {name}")
 
     def _reload_glb_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload GLB from PreLoadResult."""

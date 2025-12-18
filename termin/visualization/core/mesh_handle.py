@@ -57,7 +57,9 @@ class MeshHandle(ResourceHandle["Mesh3", "MeshAsset"]):
     # --- Resource extraction ---
 
     def _get_resource_from_asset(self, asset: "MeshAsset") -> "Mesh3 | None":
-        """Извлечь Mesh3 из MeshAsset."""
+        """Извлечь Mesh3 из MeshAsset (lazy loading)."""
+        if not asset.is_loaded:
+            asset.load()
         return asset.mesh_data
 
     # --- Convenience accessors ---

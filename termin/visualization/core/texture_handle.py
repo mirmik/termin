@@ -54,7 +54,9 @@ class TextureHandle(ResourceHandle["TextureData", "TextureAsset"]):
     # --- Resource extraction ---
 
     def _get_resource_from_asset(self, asset: "TextureAsset") -> "TextureData | None":
-        """Извлечь TextureData из TextureAsset."""
+        """Извлечь TextureData из TextureAsset (lazy loading)."""
+        if not asset.is_loaded:
+            asset.load()
         return asset.texture_data
 
     # --- Convenience accessors ---
