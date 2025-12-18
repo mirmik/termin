@@ -592,7 +592,10 @@ class ImmediateGizmoController:
         """Update gizmo screen scale based on camera distance."""
         if viewport is None or viewport.camera is None:
             return
-        camera_pos = viewport.camera.get_position()
+        camera = viewport.camera
+        if camera.entity is None:
+            return
+        camera_pos = camera.entity.transform.global_pose().lin
         gizmo_pos = self.gizmo_renderer.position
         distance = np.linalg.norm(camera_pos - gizmo_pos)
         screen_scale = max(0.1, distance * 0.1)
