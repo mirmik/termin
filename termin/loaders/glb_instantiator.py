@@ -408,6 +408,9 @@ def instantiate_glb(
             clip_name = f"{name}_{glb_anim.name}"
             asset = rm.get_animation_clip_asset(clip_name)
 
+            print(f"[GLB] Looking for clip '{clip_name}': asset={asset}, clip={asset.clip if asset else None}")
+            print(f"[GLB] Available clips: {rm.list_animation_clip_names()}")
+
             if asset is None or asset.clip is None:
                 raise RuntimeError(f"[glb_instantiator] Animation clip '{clip_name}' not found in ResourceManager")
 

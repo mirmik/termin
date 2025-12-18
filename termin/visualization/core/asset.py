@@ -136,6 +136,17 @@ class Asset(Identifiable):
         # Subclasses implement actual loading
         return False
 
+    def ensure_loaded(self) -> bool:
+        """
+        Ensure asset is loaded. Call this for lazy loading.
+
+        Returns:
+            True if asset is loaded (or was just loaded), False if loading failed.
+        """
+        if self._loaded:
+            return True
+        return self.load()
+
     def reload(self) -> bool:
         """
         Reload asset data from source_path (hot-reload).
