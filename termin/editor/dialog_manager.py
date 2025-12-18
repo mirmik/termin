@@ -169,8 +169,14 @@ class DialogManager:
         dialog.exec()
 
     def show_shadow_settings_dialog(self) -> None:
-        """Opens shadow settings dialog."""
+        """Opens shadow settings dialog (non-modal for live preview)."""
         from termin.editor.shadow_settings_dialog import ShadowSettingsDialog
+
+        # Reuse existing dialog if open
+        if hasattr(self, '_shadow_settings_dialog') and self._shadow_settings_dialog is not None:
+            self._shadow_settings_dialog.raise_()
+            self._shadow_settings_dialog.activateWindow()
+            return
 
         scene = self._get_scene()
         dialog = ShadowSettingsDialog(
@@ -178,4 +184,7 @@ class DialogManager:
             self._parent,
             on_changed=self._request_viewport_update,
         )
-        dialog.exec()
+        dialog.setModal(False)
+        dialog.finished.connect(lambda: setattr(self, '_shadow_settings_dialog', None))
+        self._shadow_settings_dialog = dialog
+        dialog.show()
