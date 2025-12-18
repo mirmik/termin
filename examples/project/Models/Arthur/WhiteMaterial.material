@@ -1,7 +1,13 @@
 {
-    "shader": "DefaultShader",
-    "uniforms": {
-    },
-    "textures": {
-    }
+  "uuid": "021365f4-f0d4-4202-a795-7f9bd59da658",
+  "shader": "DefaultShader",
+  "uniforms": {
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_shininess": 32.0
+  }
 }

@@ -684,18 +684,19 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
 
     # 2. Build scale matrix from root_scale for IBM compensation
     scale_matrix = np.diag([root_scale[0], root_scale[1], root_scale[2], 1.0]).astype(np.float32)
+    inverse_scale_matrix = np.diag([1.0 / root_scale[0], 1.0 / root_scale[1], 1.0 / root_scale[2], 1.0]).astype(np.float32)
 
     # 3. Multiply all IBM by scale matrix
     for skin in scene_data.skins:
         for i in range(len(skin.inverse_bind_matrices)):
-            skin.inverse_bind_matrices[i] = skin.inverse_bind_matrices[i] @ scale_matrix
+            skin.inverse_bind_matrices[i] = skin.inverse_bind_matrices[i] #@ inverse_scale_matrix
 
     # 4. Scale translation of all child nodes (recursive from root)
     def scale_children_translation(node_idx: int) -> None:
         node = scene_data.nodes[node_idx]
         for child_idx in node.children:
             child_node = scene_data.nodes[child_idx]
-            child_node.translation = child_node.translation / scale_factor
+            child_node.translation = child_node.translation * scale_factor
             scale_children_translation(child_idx)
 
     scale_children_translation(root_idx)

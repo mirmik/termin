@@ -1,0 +1,19 @@
+{
+  "uuid": "bac6b899-71ad-443f-bc4b-ceeed449e11e",
+  "shader": "AdvancedPBRShader",
+  "uniforms": {
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_metallic": 0.0,
+    "u_roughness": 0.4,
+    "u_subsurface": 0.6,
+    "u_shininess": 32.0
+  },
+  "textures": {
+    "u_albedo_texture": "young_lightskinned_male_diffuse2_png.001"
+  }
+}

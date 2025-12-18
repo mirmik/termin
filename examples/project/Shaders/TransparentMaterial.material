@@ -1,4 +1,5 @@
 {
+  "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc",
   "shader": "TransparentShader",
   "uniforms": {
     "u_color": [

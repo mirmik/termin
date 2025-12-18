@@ -1,0 +1,1559 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "a916abe3-50cc-4b85-96e7-3ca6a430a498",
+    "background_color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.07999999821186066,
+      1.0
+    ],
+    "entities": [
+      {
+        "uuid": "c18ff226-5b8e-4916-b998-e7ae1c6e4d18",
+        "name": "cube1",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.04879804397933185,
+            -0.2305206060409546,
+            -0.6963190212845802
+          ],
+          "rotation": [
+            -0.677741409721475,
+            -0.025704242581240128,
+            -0.023718975315609455,
+            0.7344680276717633
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "cast_shadow": true,
+              "mesh": "Cube",
+              "material": "Kairon"
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "speed": 90.0,
+              "axis": [
+                1.0,
+                3.0,
+                0.0
+              ],
+              "enabled": true
+            },
+            "type": "RotatorComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "9124293b-07a5-4bbd-a28d-25ace4794d96",
+        "name": "cube2",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            1.286,
+            1.8578306641578672,
+            -0.10679727935791017
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "cast_shadow": true,
+              "mesh": "Cube",
+              "material": "Skin"
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "grid_name": "Cube",
+              "cell_size": 0.12,
+              "output_path": "Voxels/cube.voxels",
+              "voxelize_mode": 4,
+              "voxelize_source": 0,
+              "navmesh_output_path": "Voxels/cube.navmesh",
+              "normal_angle": 25.0,
+              "expand_regions": false,
+              "navmesh_stage": 3,
+              "contour_epsilon": 0.1,
+              "show_debug_voxels": false,
+              "show_debug_contours": true,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": false,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": false,
+              "enabled": true
+            },
+            "type": "VoxelizerComponent"
+          },
+          {
+            "data": {
+              "enabled": false,
+              "voxel_grid": "Cube",
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "fill_percent": 100.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ]
+            },
+            "type": "VoxelDisplayComponent"
+          },
+          {
+            "data": {
+              "enabled": false,
+              "navmesh": "Cube",
+              "color": [
+                0.2,
+                0.8,
+                0.3,
+                0.7
+              ],
+              "wireframe": false,
+              "show_normals": false,
+              "show_contours": true,
+              "contour_width": 0.05
+            },
+            "type": "NavMeshDisplayComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "485bcc5b-a948-4451-a4c9-4fb659391c93",
+        "name": "cube2",
+        "priority": 0,
+        "scale": [
+          10.0,
+          10.0,
+          0.1
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 1,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            -3.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "cast_shadow": true,
+              "mesh": "Cube",
+              "material": "DefaultMaterial"
+            },
+            "type": "MeshRenderer"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "899ac966-f244-40b5-99a8-921c052c9090",
+        "name": "GameCamera",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.6796140670776367,
+            -1.2781407833099365,
+            -0.05649435147643089
+          ],
+          "rotation": [
+            -0.239117604747039,
+            -0.0990457582490517,
+            0.3696438227025968,
+            0.8923990997366148
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "fov_deg": 59.99999999999999,
+              "near": 0.1,
+              "far": 100.0
+            },
+            "type": "PerspectiveCameraComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "radius": 2.0,
+              "target": [
+                2.4548690870459424,
+                -0.05339586204736793,
+                -1.0564943517034548
+              ]
+            },
+            "type": "OrbitCameraController"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "49ac959a-1a39-475b-bd3a-11a67f23e06f",
+        "name": "lines",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            5.678521990776062,
+            -1.4751958847045898,
+            -1.9108453942462802
+          ],
+          "rotation": [
+            0.0,
+            -0.005041636113061407,
+            0.0,
+            0.9999872908718908
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "points": [
+                [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  2.0,
+                  0.0,
+                  2.0
+                ],
+                [
+                  3.0,
+                  3.0,
+                  2.0
+                ]
+              ],
+              "width": 0.1,
+              "raw_lines": true,
+              "material": "LineMaterial"
+            },
+            "type": "LineRenderer"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "6f4f6307-150f-4f9b-967c-af7b980a1158",
+        "name": "TransparentCube",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -1.8909255862236023,
+            -3.264790177345276,
+            -1.0276350677013397
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "cast_shadow": true,
+              "mesh": "Cube",
+              "material": "TransparentMaterial"
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "grid_name": "",
+              "cell_size": 0.25,
+              "output_path": "Voxels/cube.voxels",
+              "voxelize_mode": 0,
+              "voxelize_source": 0,
+              "navmesh_output_path": "",
+              "normal_angle": 25.0,
+              "expand_regions": false,
+              "navmesh_stage": 0,
+              "contour_epsilon": 0.1,
+              "show_debug_voxels": true,
+              "show_debug_contours": true,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": false,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": false,
+              "enabled": true
+            },
+            "type": "VoxelizerComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "9cc6d2e1-33a4-44da-9d1c-852f292fe2e4",
+        "name": "Bulba",
+        "priority": 0,
+        "scale": [
+          7.0,
+          7.0,
+          7.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.389,
+            -6.906,
+            -1.3676974067687988
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": false,
+              "cast_shadow": true,
+              "mesh": "bulbasaur",
+              "material": "DefaultMaterial"
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "grid_name": "Bulba",
+              "cell_size": 0.02,
+              "output_path": "Voxels/bulbasaur.voxels",
+              "voxelize_mode": 4,
+              "voxelize_source": 0,
+              "navmesh_output_path": "Voxels/bulbasaur.navmesh",
+              "normal_angle": 9.0,
+              "expand_regions": false,
+              "navmesh_stage": 3,
+              "contour_epsilon": 0.006999999999999931,
+              "show_debug_voxels": false,
+              "show_debug_contours": false,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": true,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": true,
+              "enabled": true
+            },
+            "type": "VoxelizerComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "voxel_grid": "Bulba",
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "fill_percent": 100.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ]
+            },
+            "type": "VoxelDisplayComponent"
+          },
+          {
+            "data": {
+              "enabled": false,
+              "navmesh": "Bulba",
+              "color": [
+                0.2,
+                0.8,
+                0.3,
+                0.7
+              ],
+              "wireframe": false,
+              "show_normals": false,
+              "show_contours": true,
+              "contour_width": 0.005
+            },
+            "type": "NavMeshDisplayComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "9392b912-b1be-41fa-8f1f-3a2df710f3dc",
+        "name": "BulbaViz",
+        "priority": 0,
+        "scale": [
+          7.0,
+          7.0,
+          7.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -5.164,
+            -13.6,
+            -2.299
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "voxel_grid": "Bulba",
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3000076413154602,
+                0.20000000298023224,
+                0.46399635076522827
+              ],
+              "fill_percent": 100.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ]
+            },
+            "type": "VoxelDisplayComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "8686fe04-c9be-484d-a5cf-6fe55575cc23",
+        "name": "Platform",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            13.444427907466888,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "grid_name": "Platform",
+              "cell_size": 0.12,
+              "output_path": "Voxels/Platform.voxels",
+              "voxelize_mode": 4,
+              "voxelize_source": 0,
+              "navmesh_output_path": "Voxels/Platform.navmesh",
+              "normal_angle": 25.0,
+              "expand_regions": false,
+              "navmesh_stage": 0,
+              "contour_epsilon": 0.1,
+              "show_debug_voxels": false,
+              "show_debug_contours": false,
+              "project_contours": false,
+              "stitch_contours": false,
+              "share_boundary": true,
+              "show_multi_normal_voxels": false,
+              "show_boundary_voxels": true,
+              "enabled": true
+            },
+            "type": "VoxelizerComponent"
+          },
+          {
+            "data": {
+              "enabled": false,
+              "voxel_grid": "Platform",
+              "color_below": [
+                0.2,
+                0.6,
+                1.0,
+                0.8
+              ],
+              "color_above": [
+                1.0,
+                0.3,
+                0.2,
+                0.8
+              ],
+              "fill_percent": 100.0,
+              "slice_axis": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "color_surface": [
+                0.2,
+                1.0,
+                0.3,
+                0.9
+              ]
+            },
+            "type": "VoxelDisplayComponent"
+          }
+        ],
+        "children": [
+          {
+            "uuid": "5ce37be8-81ae-4d0c-ad1f-bf85548b772b",
+            "name": "A",
+            "priority": 0,
+            "scale": [
+              10.0,
+              10.0,
+              0.5
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                4.123572092533113,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": false,
+                  "cast_shadow": true,
+                  "mesh": "Cube",
+                  "material": "DefaultMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "64e5084a-1050-460f-a6fe-a5b04217174f",
+            "name": "B",
+            "priority": 0,
+            "scale": [
+              9.6,
+              10.0,
+              0.5
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                11.64624610376358,
+                0.0,
+                3.839945251464844
+              ],
+              "rotation": [
+                0.0,
+                -0.4601145585047737,
+                0.0,
+                0.8878595570539054
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": false,
+                  "cast_shadow": true,
+                  "mesh": "Cube",
+                  "material": "DefaultMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "uuid": "11344f96-2f99-401e-8b08-3ad1521480d8",
+        "name": "animcube",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [],
+        "children": [
+          {
+            "uuid": "34ef4888-bf7b-43f5-87ea-4b9f2daff2ee",
+            "name": "Cube",
+            "priority": 0,
+            "scale": [
+              100.0,
+              100.0,
+              100.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.7071067966408566,
+                0.0,
+                0.0,
+                -0.7071067657322382
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "Cube"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "uuid": "0ee0f955-29c5-43a8-bd02-9b256156ed45",
+        "name": "Arti",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            1.341,
+            -1.021,
+            -2.926
+          ],
+          "rotation": [
+            0.687064577312968,
+            0.15109686678711087,
+            0.17061183669700092,
+            0.6899301447449201
+          ]
+        },
+        "components": [],
+        "children": [
+          {
+            "uuid": "eadbe1c9-1f6b-4807-a515-1681129bf3a1",
+            "name": "entity1",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                1.7763568394002505e-15,
+                7.105427357601002e-15,
+                -1.7763568394002505e-15
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0000000000000002
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "male_muscle_13290_003",
+                  "material": "AdvancedSkin"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "5a392222-6543-4897-9d5e-9b1deb9a4202",
+            "name": "entity2",
+            "priority": 0,
+            "scale": [
+              1000.0,
+              1000.0,
+              1000.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.026683880352550204,
+                1.29233601597889e-09
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "jammers3",
+                  "material": "DefaultMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "39f13ec6-3df3-469d-b74a-5adb85da8a31",
+            "name": "entity3",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "spiky",
+                  "material": "AdvancedPBRMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "cb7094b0-6c39-4f97-9347-03c0d45f9392",
+            "name": "entity4",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": false,
+                  "cast_shadow": true,
+                  "mesh": "mens_tanks_elv1f",
+                  "material": "WhiteMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "daac8667-470b-45e8-b678-af9afbb64bc4",
+            "name": "entity2",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "jammers3",
+                  "material": "DefaultMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "15276e03-33ac-41b6-902b-71ed6e2aca20",
+            "name": "entity6",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "low-poly",
+                  "material": "AMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "uuid": "43819aaa-aca9-48ee-bc46-e888088ffcfb",
+        "name": "entity5",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            -1.5446622371673584,
+            -0.4468865394592285
+          ],
+          "rotation": [
+            0.14468039355396725,
+            0.0,
+            0.0,
+            0.9894784402507562
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "light_type": "directional",
+              "color": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "intensity": 1.0,
+              "shadows_enabled": true,
+              "shadows_map_resolution": 1024
+            },
+            "type": "LightComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "50287df6-af17-4159-a2f8-97fb1d360d2c",
+        "name": "Gkitch",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            -1.7687523337081075,
+            -2.952018141746521
+          ],
+          "rotation": [
+            0.7110260380052276,
+            0.0,
+            0.0,
+            0.7031656798213268
+          ]
+        },
+        "components": [],
+        "children": [
+          {
+            "uuid": "1f7538e1-27b0-47be-a452-90a4adbdfe9e",
+            "name": "entity8",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "male_muscle_13290",
+                  "material": "BineshSkin"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "904c2c0b-953f-4e48-bf08-4d1fbd9bc07b",
+            "name": "entity9",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "spiky_002",
+                  "material": "Hair"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "92df62bf-2552-4c14-b425-171b7ef63f21",
+            "name": "entity10",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "mens_trouser_f_elv_chr_002",
+                  "material": "DefaultMaterial"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          },
+          {
+            "uuid": "60aa142c-2a3d-4a13-8b0d-768d6ca5b8c2",
+            "name": "entity7",
+            "priority": 0,
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "visible": true,
+            "active": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "components": [
+              {
+                "data": {
+                  "enabled": true,
+                  "cast_shadow": true,
+                  "mesh": "mens_shirt_untuck_elvbhp1f",
+                  "material": "Jacket"
+                },
+                "type": "MeshRenderer"
+              }
+            ],
+            "children": []
+          }
+        ]
+      }
+    ],
+    "layer_names": {
+      "0": "Default"
+    },
+    "flag_names": {},
+    "light_direction": [
+      -0.5,
+      -1.0,
+      -0.30000001192092896
+    ],
+    "light_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_intensity": 0.1,
+    "skybox_type": "gradient",
+    "skybox_color": [
+      0.30000001192092896,
+      0.5,
+      0.800000011920929
+    ],
+    "skybox_top_color": [
+      0.05000000074505806,
+      0.10000000149011612,
+      0.25
+    ],
+    "skybox_bottom_color": [
+      0.30000001192092896,
+      0.30000001192092896,
+      0.3499999940395355
+    ]
+  },
+  "editor": {
+    "camera": {
+      "target": [
+        0.5864864587783813,
+        -0.9673203229904175,
+        -1.9940520524978638
+      ],
+      "radius": 4.0,
+      "azimuth": 39.6154833617712,
+      "elevation": 0.6108652381980118
+    },
+    "selected_entity": "entity1",
+    "displays": [
+      {
+        "name": "Editor",
+        "editor_only": true,
+        "input_mode": "editor",
+        "block_input_in_editor": false,
+        "viewports": [
+          {
+            "uuid": "6be5a2b7-ef49-44d6-9094-760c38cb6b1a",
+            "camera_entity": "camera",
+            "rect": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "depth": 0
+          }
+        ]
+      },
+      {
+        "name": "Display 0",
+        "editor_only": false,
+        "input_mode": "simple",
+        "block_input_in_editor": false,
+        "viewports": [
+          {
+            "uuid": "d4e07f66-ddbe-4856-bc8c-48f0ddd7d846",
+            "camera_entity": "GameCamera",
+            "rect": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "depth": 0
+          }
+        ]
+      }
+    ]
+  },
+  "resources": {
+    "meshes": {
+      "Cube": {
+        "type": "named",
+        "name": "Cube"
+      },
+      "Sphere": {
+        "type": "named",
+        "name": "Sphere"
+      },
+      "Plane": {
+        "type": "named",
+        "name": "Plane"
+      },
+      "Cylinder": {
+        "type": "named",
+        "name": "Cylinder"
+      },
+      "eyebrow001": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\eyebrow001.obj"
+      },
+      "eyelashes01": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\eyelashes01.obj"
+      },
+      "jammers3": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\jammers3.obj"
+      },
+      "low-poly": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\low-poly.obj"
+      },
+      "male_muscle_13290_003": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\male_muscle_13290_003.obj"
+      },
+      "mens_tanks_elv1f": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\mens_tanks_elv1f.obj"
+      },
+      "spiky": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\spiky.obj"
+      },
+      "bulbasaur": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\bulbasaur.STL"
+      },
+      "bulbasaur1": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\bulbasaur1.stl"
+      },
+      "MC-SciFi-Armor_Helios": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\MC-SciFi-Armor_Helios.obj"
+      },
+      "gymuniform": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\gymuniform.obj"
+      },
+      "low-poly_002": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\low-poly_002.obj"
+      },
+      "male_muscle_13290": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\male_muscle_13290.obj"
+      },
+      "male_muscle_13290_002": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\male_muscle_13290_002.obj"
+      },
+      "mens_shirt_untuck_elvbhp1f": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\mens_shirt_untuck_elvbhp1f.obj"
+      },
+      "mens_shirt_untuck_elvbhp1f_002": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\mens_shirt_untuck_elvbhp1f_002.obj"
+      },
+      "mens_trouser_f_elv_chr_002": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\mens_trouser_f_elv_chr_002.obj"
+      },
+      "mind_eyebrows_14_002": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\mind_eyebrows_14_002.obj"
+      },
+      "mind_eyelashes_03_002": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\mind_eyelashes_03_002.obj"
+      },
+      "shoes06_002": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\shoes06_002.obj"
+      },
+      "spiky_002": {
+        "type": "file",
+        "source_id": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Glitch\\spiky_002.obj"
+      }
+    },
+    "textures": {
+      "Image": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\textures\\Image.png"
+      },
+      "6830-1745580165": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
+      },
+      "eye_in_space.002": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eye_in_space.002.png"
+      },
+      "eyebrow001_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyebrow001_png.png"
+      },
+      "eyelashes01_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyelashes01_png.png"
+      },
+      "toptex1_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\toptex1_png.png"
+      },
+      "young_lightskinned_male_diffuse2_png.001": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
+      }
+    }
+  }
+}

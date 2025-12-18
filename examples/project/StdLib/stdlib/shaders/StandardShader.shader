@@ -1,0 +1,209 @@
+@program StandardShader
+
+// ============================================================
+// Standard Shader - Blinn-Phong lighting with shadow support
+// ============================================================
+//
+// A general-purpose shader with:
+// - Diffuse (Lambert) + Specular (Blinn-Phong) lighting
+// - Support for directional, point, and spot lights
+// - Shadow mapping for directional lights
+// - Albedo texture support
+// - Scene ambient lighting
+//
+// Usage:
+//   1. Deploy standard library to your project
+//   2. Create material from this shader
+//   3. Assign albedo texture and adjust color/shininess
+//
+// ============================================================
+
+@phase opaque
+@priority 0
+@glDepthTest true
+@glDepthMask true
+@glCull true
+
+@property Color u_color = Color(1.0, 1.0, 1.0, 1.0)
+@property Float u_shininess = 32.0 range(1.0, 128.0)
+@property Texture u_albedo_texture
+
+@stage vertex
+#version 330 core
+
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_uv;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+out vec3 v_world_pos;
+out vec3 v_normal;
+out vec2 v_uv;
+
+void main() {
+    vec4 world = u_model * vec4(a_position, 1.0);
+    v_world_pos = world.xyz;
+    v_normal = mat3(transpose(inverse(u_model))) * a_normal;
+    v_uv = a_uv;
+    gl_Position = u_projection * u_view * world;
+}
+@endstage
+
+@stage fragment
+#version 330 core
+
+#include "lighting"
+#include "shadows"
+
+in vec3 v_world_pos;
+in vec3 v_normal;
+in vec2 v_uv;
+
+// Material properties
+uniform vec4 u_color;
+uniform sampler2D u_albedo_texture;
+uniform float u_shininess;
+
+// Camera
+uniform vec3 u_camera_position;
+
+// Ambient lighting (scene-level)
+uniform vec3  u_ambient_color;
+uniform float u_ambient_intensity;
+
+// Lights
+uniform int   u_light_count;
+uniform int   u_light_type[MAX_LIGHTS];
+uniform vec3  u_light_color[MAX_LIGHTS];
+uniform float u_light_intensity[MAX_LIGHTS];
+uniform vec3  u_light_direction[MAX_LIGHTS];
+uniform vec3  u_light_position[MAX_LIGHTS];
+uniform float u_light_range[MAX_LIGHTS];
+uniform vec3  u_light_attenuation[MAX_LIGHTS];
+uniform float u_light_inner_angle[MAX_LIGHTS];
+uniform float u_light_outer_angle[MAX_LIGHTS];
+
+// Shadow maps
+uniform int u_shadow_map_count;
+uniform sampler2D u_shadow_map[MAX_SHADOW_MAPS];
+uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
+uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
+
+out vec4 FragColor;
+
+void main() {
+    vec3 N = normalize(v_normal);
+    vec3 V = normalize(u_camera_position - v_world_pos);
+
+    // Sample albedo texture
+    vec4 tex_color = texture(u_albedo_texture, v_uv);
+    vec3 base_color = u_color.rgb * tex_color.rgb;
+
+    // Start with ambient lighting
+    vec3 result = base_color * u_ambient_color * u_ambient_intensity;
+
+    // Accumulate light contributions
+    for (int i = 0; i < u_light_count; ++i) {
+        int type = u_light_type[i];
+        vec3 radiance = u_light_color[i] * u_light_intensity[i];
+
+        vec3 L;
+        float dist;
+        float weight = 1.0;
+
+        if (type == LIGHT_TYPE_DIRECTIONAL) {
+            L = normalize(-u_light_direction[i]);
+            dist = 1e9;
+        } else {
+            vec3 to_light = u_light_position[i] - v_world_pos;
+            dist = length(to_light);
+            L = dist > 0.0001 ? to_light / dist : vec3(0.0, 1.0, 0.0);
+
+            weight *= compute_distance_attenuation(
+                u_light_attenuation[i],
+                u_light_range[i],
+                dist
+            );
+
+            if (type == LIGHT_TYPE_SPOT) {
+                weight *= compute_spot_weight(
+                    u_light_direction[i],
+                    L,
+                    u_light_inner_angle[i],
+                    u_light_outer_angle[i]
+                );
+            }
+        }
+
+        // Shadow for directional lights
+        float shadow = 1.0;
+        if (type == LIGHT_TYPE_DIRECTIONAL) {
+            shadow = compute_shadow_pcf(
+                i,
+                v_world_pos,
+                u_shadow_map_count,
+                u_shadow_map,
+                u_light_space_matrix,
+                u_shadow_light_index
+            );
+        }
+
+        // Diffuse (Lambert)
+        float NdotL = max(dot(N, L), 0.0);
+        vec3 diffuse = base_color * NdotL;
+
+        // Specular (Blinn-Phong)
+        float spec = blinn_phong_specular(N, L, V, u_shininess);
+        vec3 specular = vec3(spec);
+
+        // Combine with shadow
+        result += (diffuse + specular) * radiance * weight * shadow;
+    }
+
+    FragColor = vec4(result, u_color.a * tex_color.a);
+}
+@endstage
+
+@endphase
+
+// ============================================================
+// Shadow caster phase - renders to shadow map
+// ============================================================
+
+@phase shadow
+@priority 0
+@glDepthTest true
+@glDepthMask true
+@glCull true
+
+@stage vertex
+#version 330 core
+
+layout(location = 0) in vec3 a_position;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+@endstage
+
+@stage fragment
+#version 330 core
+
+out vec4 FragColor;
+
+void main() {
+    // Depth is written automatically to depth buffer
+    // Output depth to color for debugging/sampling
+    float depth = gl_FragCoord.z;
+    FragColor = vec4(depth, depth, depth, 1.0);
+}
+@endstage
+
+@endphase
