@@ -47,16 +47,20 @@ class MenuBarController:
         on_show_undo_stack_viewer: Callable,
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
+        on_toggle_fullscreen: Callable,
         # State getters
         can_undo: Callable[[], bool],
         can_redo: Callable[[], bool],
+        is_fullscreen: Callable[[], bool],
     ):
         self._can_undo = can_undo
         self._can_redo = can_redo
+        self._is_fullscreen = is_fullscreen
 
         self._action_undo: QAction | None = None
         self._action_redo: QAction | None = None
         self._action_play: QAction | None = None
+        self._action_fullscreen: QAction | None = None
 
         self._setup_menu_bar(
             menu_bar,
@@ -79,6 +83,7 @@ class MenuBarController:
             on_show_undo_stack_viewer=on_show_undo_stack_viewer,
             on_show_framegraph_debugger=on_show_framegraph_debugger,
             on_show_resource_manager_viewer=on_show_resource_manager_viewer,
+            on_toggle_fullscreen=on_toggle_fullscreen,
         )
 
     def _setup_menu_bar(
@@ -103,10 +108,12 @@ class MenuBarController:
         on_show_undo_stack_viewer: Callable,
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
+        on_toggle_fullscreen: Callable,
     ) -> None:
         """Create menu bar structure and connect actions."""
         file_menu = menu_bar.addMenu("File")
         edit_menu = menu_bar.addMenu("Edit")
+        view_menu = menu_bar.addMenu("View")
         scene_menu = menu_bar.addMenu("Scene")
         game_menu = menu_bar.addMenu("Game")
         debug_menu = menu_bar.addMenu("Debug")
@@ -171,6 +178,12 @@ class MenuBarController:
         settings_action = edit_menu.addAction("Settings...")
         settings_action.triggered.connect(on_settings)
 
+        # View menu
+        self._action_fullscreen = view_menu.addAction("Fullscreen")
+        self._action_fullscreen.setShortcut("F11")
+        self._action_fullscreen.setCheckable(True)
+        self._action_fullscreen.triggered.connect(on_toggle_fullscreen)
+
         # Scene menu
         scene_properties_action = scene_menu.addAction("Scene Properties...")
         scene_properties_action.triggered.connect(on_scene_properties)
@@ -209,3 +222,8 @@ class MenuBarController:
                 self._action_play.setText("Stop")
             else:
                 self._action_play.setText("Play")
+
+    def update_fullscreen_action(self) -> None:
+        """Update fullscreen action checked state."""
+        if self._action_fullscreen is not None:
+            self._action_fullscreen.setChecked(self._is_fullscreen())

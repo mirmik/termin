@@ -104,6 +104,8 @@ class EditorWindow(QMainWindow):
         self._prefab_menu: QMenu | None = None
         self._viewport_list_widget: ViewportListWidget | None = None
         self._rendering_controller: RenderingController | None = None
+        self._is_fullscreen: bool = False
+        self._pre_fullscreen_state: dict | None = None  # Store widget visibility before fullscreen
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -410,8 +412,10 @@ class EditorWindow(QMainWindow):
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
+            on_toggle_fullscreen=self._toggle_fullscreen,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
+            is_fullscreen=lambda: self._is_fullscreen,
         )
 
     def _update_undo_redo_actions(self) -> None:
@@ -1264,6 +1268,102 @@ class EditorWindow(QMainWindow):
     def _load_components_from_file(self) -> None:
         """Load components from Python file."""
         self._resource_loader.load_components_from_file()
+
+    def _toggle_fullscreen(self) -> None:
+        """Toggle fullscreen mode - expand viewport to fill entire screen."""
+        if self._is_fullscreen:
+            self._exit_fullscreen()
+        else:
+            self._enter_fullscreen()
+
+    def _enter_fullscreen(self) -> None:
+        """Enter fullscreen mode."""
+        # Save current state
+        self._pre_fullscreen_state = {
+            "top_splitter_sizes": self.topSplitter.sizes() if self.topSplitter else None,
+            "vertical_splitter_sizes": self.verticalSplitter.sizes() if self.verticalSplitter else None,
+            "menubar_visible": self.menuBar().isVisible(),
+            "statusbar_visible": self.statusBar().isVisible(),
+            "window_state": self.windowState(),
+        }
+
+        # Hide panels by setting splitter sizes
+        if self.topSplitter:
+            sizes = self.topSplitter.sizes()
+            total = sum(sizes)
+            # Give all space to center (index 1 typically)
+            if len(sizes) >= 3:
+                self.topSplitter.setSizes([0, total, 0])
+            elif len(sizes) >= 2:
+                self.topSplitter.setSizes([0, total])
+
+        if self.verticalSplitter:
+            sizes = self.verticalSplitter.sizes()
+            total = sum(sizes)
+            # Give all space to top part (viewport)
+            if len(sizes) >= 2:
+                self.verticalSplitter.setSizes([total, 0])
+
+        # Hide menu and status bars
+        self.menuBar().hide()
+        self.statusBar().hide()
+
+        # Enter fullscreen
+        self.showFullScreen()
+        self._is_fullscreen = True
+
+        # Update menu checkbox
+        if self._menu_bar_controller:
+            self._menu_bar_controller.update_fullscreen_action()
+
+    def _exit_fullscreen(self) -> None:
+        """Exit fullscreen mode."""
+        # Exit fullscreen first
+        self.showNormal()
+
+        # Restore saved state
+        if self._pre_fullscreen_state:
+            state = self._pre_fullscreen_state
+
+            # Restore window state
+            if state.get("window_state"):
+                self.setWindowState(state["window_state"])
+
+            # Restore menu and status bars
+            if state.get("menubar_visible", True):
+                self.menuBar().show()
+            if state.get("statusbar_visible", True):
+                self.statusBar().show()
+
+            # Restore splitter sizes
+            if self.topSplitter and state.get("top_splitter_sizes"):
+                self.topSplitter.setSizes(state["top_splitter_sizes"])
+            if self.verticalSplitter and state.get("vertical_splitter_sizes"):
+                self.verticalSplitter.setSizes(state["vertical_splitter_sizes"])
+
+            self._pre_fullscreen_state = None
+
+        self._is_fullscreen = False
+
+        # Update menu checkbox
+        if self._menu_bar_controller:
+            self._menu_bar_controller.update_fullscreen_action()
+
+    def keyPressEvent(self, event) -> None:
+        """Handle key press events."""
+        from PyQt6.QtCore import Qt
+
+        # F11 to toggle fullscreen (backup if menu shortcut doesn't work)
+        if event.key() == Qt.Key.Key_F11:
+            self._toggle_fullscreen()
+            return
+
+        # Escape to exit fullscreen
+        if event.key() == Qt.Key.Key_Escape and self._is_fullscreen:
+            self._exit_fullscreen()
+            return
+
+        super().keyPressEvent(event)
 
     def _deploy_stdlib(self) -> None:
         """Deploy standard library to user's project directory."""
