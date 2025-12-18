@@ -185,33 +185,6 @@ class MeshAsset(DataAsset[Mesh3]):
             mesh3.compute_vertex_normals()
         return mesh3
 
-    # --- Embedded asset support (from GLB) ---
-
-    def _extract_from_parent(self) -> bool:
-        """Extract mesh data from parent GLBAsset."""
-        if self._parent_asset is None or self._parent_key is None:
-            return False
-
-        from termin.visualization.core.glb_asset import GLBAsset
-
-        if not isinstance(self._parent_asset, GLBAsset):
-            return False
-
-        glb = self._parent_asset
-        if glb.scene_data is None:
-            return False
-
-        # Find mesh by name in parent's GLB data
-        from termin.loaders.glb_instantiator import _glb_mesh_to_mesh3
-
-        for glb_mesh in glb.scene_data.meshes:
-            if glb_mesh.name == self._parent_key:
-                self._data = _glb_mesh_to_mesh3(glb_mesh)
-                if self._data is not None:
-                    self._loaded = True
-                    return True
-        return False
-
     # --- Convenience methods for mesh manipulation ---
 
     def get_vertex_count(self) -> int:

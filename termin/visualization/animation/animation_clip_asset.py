@@ -60,32 +60,6 @@ class AnimationClipAsset(DataAsset["AnimationClip"]):
 
         return parse_animation_content(content)
 
-    # --- Embedded asset support (from GLB) ---
-
-    def _extract_from_parent(self) -> bool:
-        """Extract animation data from parent GLBAsset (parent already loaded by base class)."""
-        if self._parent_asset is None or self._parent_key is None:
-            return False
-
-        from termin.visualization.core.glb_asset import GLBAsset
-        from termin.visualization.animation.clip import AnimationClip
-
-        if not isinstance(self._parent_asset, GLBAsset):
-            return False
-
-        glb = self._parent_asset
-        if glb.scene_data is None:
-            return False
-
-        # Find animation by name in parent's GLB data
-        for glb_anim in glb.scene_data.animations:
-            if glb_anim.name == self._parent_key:
-                self._data = AnimationClip.from_glb_clip(glb_anim)
-                if self._data is not None:
-                    self._loaded = True
-                    return True
-        return False
-
     # --- Factory methods ---
 
     @classmethod

@@ -55,39 +55,6 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
         """
         return None
 
-    # --- Embedded asset support (from GLB) ---
-
-    def _extract_from_parent(self) -> bool:
-        """Extract skeleton data from parent GLBAsset."""
-        if self._parent_asset is None or self._parent_key is None:
-            return False
-
-        from termin.visualization.core.glb_asset import GLBAsset
-        from termin.loaders.glb_instantiator import _create_skeleton_from_skin
-
-        if not isinstance(self._parent_asset, GLBAsset):
-            return False
-
-        glb = self._parent_asset
-        if glb.scene_data is None:
-            return False
-
-        # skeleton_key is "skeleton" or "skeleton_N"
-        if self._parent_key == "skeleton":
-            skin_index = 0
-        else:
-            skin_index = int(self._parent_key.split("_")[1])
-
-        if skin_index >= len(glb.scene_data.skins):
-            return False
-
-        skin = glb.scene_data.skins[skin_index]
-        self._data = _create_skeleton_from_skin(skin, glb.scene_data.nodes)
-        if self._data is not None:
-            self._loaded = True
-            return True
-        return False
-
     # --- Convenience methods ---
 
     def get_bone_count(self) -> int:

@@ -212,7 +212,11 @@ class DataAsset(Asset, Generic[T]):
             if not self._parent_asset.load():
                 return False
 
-        # Extract our data from parent
+        # Check if parent's _on_loaded() already populated this child
+        if self._loaded:
+            return True
+
+        # Fallback: try to extract data (for subclasses that override this)
         return self._extract_from_parent()
 
     def _extract_from_parent(self) -> bool:

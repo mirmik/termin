@@ -167,7 +167,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         )
 
     def _on_loaded(self) -> None:
-        """After loading, create any missing child assets and update spec."""
+        """After loading, create any missing child assets and populate all with data."""
         if self._data is None:
             return
 
@@ -192,9 +192,51 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                 self._create_new_animation_asset(glb_anim.name)
                 spec_changed = True
 
+        # Populate all child assets with data
+        self._populate_child_assets()
+
         # Save spec if new child assets were created
         if spec_changed and self._source_path:
             self.save_spec_file()
+
+    def _populate_child_assets(self) -> None:
+        """Fill all child assets with extracted data from loaded GLB."""
+        from termin.loaders.glb_instantiator import _glb_mesh_to_mesh3
+        from termin.visualization.animation.clip import AnimationClip
+        from termin.skeleton.skeleton import SkeletonData
+
+        # Populate mesh assets
+        for mesh_name, asset in self._mesh_assets.items():
+            if asset._data is None:
+                for glb_mesh in self._data.meshes:
+                    if glb_mesh.name == mesh_name:
+                        asset._data = _glb_mesh_to_mesh3(glb_mesh)
+                        asset._loaded = True
+                        break
+
+        # Populate skeleton assets
+        for skeleton_key, asset in self._skeleton_assets.items():
+            if asset._data is None:
+                # Parse skeleton_key to get index
+                if skeleton_key == "skeleton":
+                    index = 0
+                else:
+                    index = int(skeleton_key.split("_")[-1])
+                if index < len(self._data.skins):
+                    asset._data = SkeletonData.from_glb_skin(
+                        self._data.skins[index],
+                        self._data.nodes,
+                    )
+                    asset._loaded = True
+
+        # Populate animation assets
+        for anim_name, asset in self._animation_assets.items():
+            if asset._data is None:
+                for glb_anim in self._data.animations:
+                    if glb_anim.name == anim_name:
+                        asset._data = AnimationClip.from_glb_clip(glb_anim)
+                        asset._loaded = True
+                        break
 
     def _create_new_mesh_asset(self, mesh_name: str) -> "MeshAsset":
         """Create a new MeshAsset for a mesh discovered during load."""
