@@ -690,7 +690,8 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     # Bones positions were multiplied by scale_factor, so IBM needs inverse adjustment
     for skin in scene_data.skins:
         for i in range(len(skin.inverse_bind_matrices)):
-            skin.inverse_bind_matrices[i] = skin.inverse_bind_matrices[i] @ inverse_scale_matrix
+            print(f"IBM before:\n{skin.inverse_bind_matrices[i]}")
+            skin.inverse_bind_matrices[i] = scale_matrix @ skin.inverse_bind_matrices[i]
 
     # 4. Scale translation of all child nodes (recursive from root)
     def scale_children_translation(node_idx: int) -> None:

@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "0225617a-1f17-4a67-8b4f-479282ee2f12",
+    "uuid": "dc3b097d-1877-447f-b3e2-4e059c32ee3f",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -4844,10 +4844,10 @@
         0.7415220737457275
       ],
       "radius": 6.5,
-      "azimuth": 50.2550104819295,
-      "elevation": -0.11519173063163286
+      "azimuth": 50.13632809279396,
+      "elevation": 0.44680428851054155
     },
-    "selected_entity": "mind_eyelashes_03Mesh",
+    "selected_entity": "Glitch",
     "displays": [
       {
         "name": "Editor",
@@ -4856,7 +4856,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "4c7dad75-6708-4cb3-8e4a-a000329f0cfa",
+            "uuid": "3e2868cb-5f9f-4988-96a0-1ce8a7d5efce",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -4875,7 +4875,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "4ccd9a94-61ae-41e1-b3dc-9e7915fde35c",
+            "uuid": "d65d1a4b-c5f4-45fe-89e0-bc81a0535fc1",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
