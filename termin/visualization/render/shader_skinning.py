@@ -20,7 +20,7 @@ uniform mat4 u_bone_matrices[MAX_BONES];
 uniform int u_bone_count;
 """
 
-# Skinning function to inject before main()
+# Skinning function to inject before main() - full version with normals
 SKINNING_FUNCTION = """
 // === Skinning function (injected) ===
 void _applySkinning(inout vec3 position, inout vec3 normal) {
@@ -44,11 +44,38 @@ void _applySkinning(inout vec3 position, inout vec3 normal) {
 }
 """
 
-# Call to add at the beginning of main()
+# Skinning function - position only (for shaders without normals)
+SKINNING_FUNCTION_POS_ONLY = """
+// === Skinning function (injected, position only) ===
+void _applySkinning(inout vec3 position) {
+    if (u_bone_count <= 0) return;
+
+    vec4 skinned_pos = vec4(0.0);
+
+    for (int i = 0; i < 4; ++i) {
+        int idx = int(a_joints[i]);
+        float w = a_weights[i];
+        if (w > 0.0 && idx < u_bone_count) {
+            mat4 bone = u_bone_matrices[idx];
+            skinned_pos += w * (bone * vec4(position, 1.0));
+        }
+    }
+
+    position = skinned_pos.xyz;
+}
+"""
+
+# Call to add at the beginning of main() - full version
 SKINNING_CALL = """    // === Apply skinning (injected) ===
     vec3 _skinned_position = a_position;
     vec3 _skinned_normal = a_normal;
     _applySkinning(_skinned_position, _skinned_normal);
+"""
+
+# Call - position only version
+SKINNING_CALL_POS_ONLY = """    // === Apply skinning (injected, position only) ===
+    vec3 _skinned_position = a_position;
+    _applySkinning(_skinned_position);
 """
 
 
@@ -93,7 +120,7 @@ def inject_skinning_into_vertex_shader(vertex_source: str) -> str:
     - Adds a_joints, a_weights inputs
     - Adds u_bone_matrices, u_bone_count uniforms
     - Adds _applySkinning() function
-    - Replaces a_position/a_normal usage with skinned versions
+    - Replaces a_position (and a_normal if present) with skinned versions
 
     Args:
         vertex_source: Original vertex shader source
@@ -106,6 +133,9 @@ def inject_skinning_into_vertex_shader(vertex_source: str) -> str:
         return vertex_source
 
     lines = source_lines = vertex_source.split('\n')
+
+    # Check if shader has a_normal (some shaders like shadow/pick don't need normals)
+    has_normal = bool(re.search(r'\ba_normal\b', vertex_source))
 
     # 1. Find insertion points
     last_layout = _find_last_layout_line(vertex_source)
@@ -135,11 +165,13 @@ def inject_skinning_into_vertex_shader(vertex_source: str) -> str:
     # Build new source (work backwards to preserve line numbers)
     result_lines = list(lines)
 
-    # Insert skinning call (adjusted for previous insertions)
-    skinning_call_lines = SKINNING_CALL.rstrip('\n').split('\n')
-
-    # Insert function before main
-    skinning_func_lines = SKINNING_FUNCTION.strip().split('\n')
+    # Choose version based on whether shader uses normals
+    if has_normal:
+        skinning_call_lines = SKINNING_CALL.rstrip('\n').split('\n')
+        skinning_func_lines = SKINNING_FUNCTION.strip().split('\n')
+    else:
+        skinning_call_lines = SKINNING_CALL_POS_ONLY.rstrip('\n').split('\n')
+        skinning_func_lines = SKINNING_FUNCTION_POS_ONLY.strip().split('\n')
 
     # Insert inputs after layouts
     skinning_input_lines = SKINNING_INPUTS.strip().split('\n')
