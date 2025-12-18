@@ -155,14 +155,18 @@ class Component:
                 # animation_clip_list: List[AnimationClipHandle] → list of UUIDs
                 elif kind == "animation_clip_list" and isinstance(value, (tuple, list)):
                     from termin.visualization.core.animation_clip_handle import AnimationClipHandle
+                    print(f"[Component.serialize] animation_clip_list: {len(value)} handles")
                     uuids = []
                     for item in value:
                         if isinstance(item, AnimationClipHandle):
                             asset = item.asset
+                            print(f"  Handle: asset={asset is not None}, clip={item.clip is not None}")
                             if asset is not None:
+                                print(f"  Asset UUID: {asset.uuid[:8]}...")
                                 uuids.append(asset.uuid)
                         elif isinstance(item, str):
                             uuids.append(item)
+                    print(f"  Result UUIDs: {len(uuids)}")
                     value = uuids
 
                 if value is not None:
@@ -277,9 +281,17 @@ class Component:
                     value = [EntityHandle(uuid=uuid_str) for uuid_str in value]
                 elif kind == "animation_clip_list" and isinstance(value, list):
                     # Convert list of UUIDs to List[AnimationClipHandle]
-                    # Keep all handles - they will resolve lazily when clip is available
                     from termin.visualization.core.animation_clip_handle import AnimationClipHandle
-                    value = [AnimationClipHandle.from_uuid(clip_uuid) for clip_uuid in value]
+                    print(f"[Component.deserialize] animation_clip_list: {len(value)} UUIDs")
+                    handles = []
+                    for clip_uuid in value:
+                        print(f"  UUID: {clip_uuid[:8]}...")
+                        asset = rm.get_animation_clip_asset_by_uuid(clip_uuid)
+                        print(f"  Asset: {asset}, name={asset.name if asset else None}")
+                        handle = AnimationClipHandle.from_uuid(clip_uuid)
+                        print(f"  Handle: asset={handle.asset is not None}, clip={handle.clip is not None}")
+                        handles.append(handle)
+                    value = handles
 
                 # Устанавливаем значение через setter или напрямую
                 if field.setter:
