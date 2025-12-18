@@ -27,6 +27,7 @@ from termin.visualization.render.shadow.shadow_camera import (
     compute_light_space_matrix,
     build_shadow_view_matrix,
     build_shadow_projection_matrix,
+    fit_shadow_frustum_to_camera,
 )
 from termin.visualization.core.lighting.light import Light, LightType
 from termin.editor.inspect_field import InspectField
@@ -152,14 +153,29 @@ class ShadowPass(RenderFramePass):
 
         return fbo
 
-    def _build_shadow_params_for_light(self, light: Light) -> ShadowCameraParams:
+    def _build_shadow_params_for_light(
+        self,
+        light: Light,
+        camera=None,
+    ) -> ShadowCameraParams:
         """
         Строит параметры теневой камеры для источника света.
-        
+
+        Если camera задана — использует frustum fitting для оптимального
+        покрытия видимой области. Иначе — fallback на фиксированные параметры.
+
         Для directional light:
             - Направление камеры = направление света
-            - Ортографическая проекция с заданным размером
+            - Ортографическая проекция, покрывающая view frustum камеры
         """
+        if camera is not None:
+            return fit_shadow_frustum_to_camera(
+                camera=camera,
+                light_direction=light.direction,
+                padding=1.0,
+            )
+
+        # Fallback: фиксированные параметры
         return ShadowCameraParams(
             light_direction=light.direction.copy(),
             ortho_size=self.ortho_size,
@@ -251,8 +267,8 @@ class ShadowPass(RenderFramePass):
             # Получаем FBO
             fbo = self._get_or_create_fbo(graphics, resolution, array_index)
             
-            # Вычисляем параметры теневой камеры
-            shadow_params = self._build_shadow_params_for_light(light)
+            # Вычисляем параметры теневой камеры (с frustum fitting если есть камера)
+            shadow_params = self._build_shadow_params_for_light(light, camera)
             light_space_matrix = compute_light_space_matrix(shadow_params)
             
             # Матрицы view и projection для материала
