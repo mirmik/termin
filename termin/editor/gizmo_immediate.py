@@ -15,6 +15,7 @@ import numpy as np
 from termin.visualization.render.immediate import ImmediateRenderer
 
 if TYPE_CHECKING:
+    from termin.visualization.core.entity import Entity
     from termin.visualization.platform.backends.base import GraphicsBackend
 
 
@@ -98,9 +99,11 @@ class ImmediateGizmoRenderer:
         # Effective dimensions (computed from base * screen_scale)
         self._update_dimensions()
 
-        # Transform
-        self._position = np.zeros(3, dtype=np.float32)
-        self._rotation = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)  # quaternion
+        # Target entity (gizmo reads position/rotation from here)
+        self.target: "Entity | None" = None
+
+        # Orientation mode: "local" = follow target rotation, "global" = world axes
+        self.orientation_mode: str = "local"
 
         # State
         self.visible = True
@@ -127,61 +130,17 @@ class ImmediateGizmoRenderer:
             self._screen_scale = scale
             self._update_dimensions()
 
-    @property
-    def position(self) -> np.ndarray:
-        return self._position.copy()
+    def _get_position(self) -> np.ndarray:
+        """Get gizmo position from target."""
+        if self.target is None:
+            return np.zeros(3, dtype=np.float32)
+        return np.asarray(self.target.transform.global_pose().lin, dtype=np.float32)
 
-    @position.setter
-    def position(self, value: np.ndarray | tuple):
-        self._position = np.asarray(value, dtype=np.float32)
-
-    @property
-    def rotation(self) -> np.ndarray:
-        return self._rotation.copy()
-
-    @rotation.setter
-    def rotation(self, value: np.ndarray | tuple):
-        self._rotation = np.asarray(value, dtype=np.float32)
-        # Normalize quaternion
-        norm = np.linalg.norm(self._rotation)
-        if norm > 1e-6:
-            self._rotation /= norm
-
-    def set_transform_from_matrix(self, matrix: np.ndarray) -> None:
-        """Extract position and rotation from 4x4 matrix."""
-        self._position = matrix[:3, 3].copy()
-        # Extract rotation (assumes no scale in the matrix)
-        rot_mat = matrix[:3, :3]
-        self._rotation = self._matrix_to_quat(rot_mat)
-
-    def _matrix_to_quat(self, m: np.ndarray) -> np.ndarray:
-        """Convert 3x3 rotation matrix to quaternion (x, y, z, w)."""
-        trace = m[0, 0] + m[1, 1] + m[2, 2]
-        if trace > 0:
-            s = 0.5 / np.sqrt(trace + 1.0)
-            w = 0.25 / s
-            x = (m[2, 1] - m[1, 2]) * s
-            y = (m[0, 2] - m[2, 0]) * s
-            z = (m[1, 0] - m[0, 1]) * s
-        elif m[0, 0] > m[1, 1] and m[0, 0] > m[2, 2]:
-            s = 2.0 * np.sqrt(1.0 + m[0, 0] - m[1, 1] - m[2, 2])
-            w = (m[2, 1] - m[1, 2]) / s
-            x = 0.25 * s
-            y = (m[0, 1] + m[1, 0]) / s
-            z = (m[0, 2] + m[2, 0]) / s
-        elif m[1, 1] > m[2, 2]:
-            s = 2.0 * np.sqrt(1.0 + m[1, 1] - m[0, 0] - m[2, 2])
-            w = (m[0, 2] - m[2, 0]) / s
-            x = (m[0, 1] + m[1, 0]) / s
-            y = 0.25 * s
-            z = (m[1, 2] + m[2, 1]) / s
-        else:
-            s = 2.0 * np.sqrt(1.0 + m[2, 2] - m[0, 0] - m[1, 1])
-            w = (m[1, 0] - m[0, 1]) / s
-            x = (m[0, 2] + m[2, 0]) / s
-            y = (m[1, 2] + m[2, 1]) / s
-            z = 0.25 * s
-        return np.array([x, y, z, w], dtype=np.float32)
+    def _get_rotation(self) -> np.ndarray:
+        """Get gizmo rotation based on orientation mode."""
+        if self.orientation_mode == "global" or self.target is None:
+            return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)  # identity
+        return np.asarray(self.target.transform.global_pose().ang, dtype=np.float32)
 
     def _quat_to_matrix(self, q: np.ndarray) -> np.ndarray:
         """Convert quaternion (x, y, z, w) to 3x3 rotation matrix."""
@@ -194,7 +153,7 @@ class ImmediateGizmoRenderer:
 
     def _get_world_axis(self, axis: str) -> np.ndarray:
         """Get world-space axis direction."""
-        rot = self._quat_to_matrix(self._rotation)
+        rot = self._quat_to_matrix(self._get_rotation())
         if axis == "x":
             return rot[:, 0]
         elif axis == "y":
@@ -233,10 +192,10 @@ class ImmediateGizmoRenderer:
         proj_matrix: np.ndarray,
     ) -> None:
         """Render gizmo geometry in two passes: opaque then transparent."""
-        if not self.visible:
+        if not self.visible or self.target is None:
             return
 
-        origin = self._position
+        origin = self._get_position()
 
         # === Pass 1: Opaque geometry (arrows, rings) ===
         self._renderer.begin()
@@ -334,7 +293,7 @@ class ImmediateGizmoRenderer:
         Returns:
             GizmoElement that was hit, or NONE
         """
-        if not self.visible:
+        if not self.visible or self.target is None:
             return GizmoElement.NONE
 
         ray_origin = np.asarray(ray_origin, dtype=np.float32)
@@ -343,7 +302,7 @@ class ImmediateGizmoRenderer:
         best_t = float("inf")
         best_element = GizmoElement.NONE
 
-        center = self._position
+        center = self._get_position()
 
         # Test translation arrows (as cylinders + cones)
         for axis, element in [
@@ -699,20 +658,18 @@ class ImmediateGizmoController:
 
     def set_target(self, target_entity, viewport=None) -> None:
         """Set target entity for gizmo."""
-        from termin.visualization.core.entity import Entity
-
         if target_entity is not None and not target_entity.pickable:
             target_entity = None
 
         self._end_drag()
         self.target = target_entity
+        self.gizmo_renderer.target = target_entity
 
         if self.target is None:
             self.gizmo_renderer.visible = False
             return
 
         self.gizmo_renderer.visible = True
-        self._update_gizmo_transform()
 
         # Rescale gizmo once when target changes
         if viewport is not None:
@@ -736,23 +693,15 @@ class ImmediateGizmoController:
         """Return empty list - immediate gizmo has no entity geometry."""
         return []
 
-    def _update_gizmo_transform(self) -> None:
-        """Update gizmo position/rotation from target."""
-        if self.target is None:
-            return
-        global_pose = self.target.transform.global_pose()
-        self.gizmo_renderer.position = global_pose.lin
-        self.gizmo_renderer.rotation = global_pose.ang
-
     def update_screen_scale(self, viewport) -> None:
         """Update gizmo screen scale based on camera distance."""
-        if viewport is None or viewport.camera is None:
+        if viewport is None or viewport.camera is None or self.target is None:
             return
         camera = viewport.camera
         if camera.entity is None:
             return
         camera_pos = camera.entity.transform.global_pose().lin
-        gizmo_pos = self.gizmo_renderer.position
+        gizmo_pos = self.target.transform.global_pose().lin
         distance = np.linalg.norm(camera_pos - gizmo_pos)
         screen_scale = max(0.1, distance * 0.1)
         self.gizmo_renderer.set_screen_scale(screen_scale)
@@ -988,8 +937,6 @@ class ImmediateGizmoController:
         new_pose = Pose3(lin=new_pos, ang=old_pose.ang)
         self.target.transform.relocate_global(new_pose)
 
-        self._update_gizmo_transform()
-
         if self._on_transform_dragging is not None:
             self._on_transform_dragging()
 
@@ -1013,8 +960,6 @@ class ImmediateGizmoController:
         old_pose = self.target.transform.global_pose()
         new_pose = Pose3(lin=new_pos, ang=old_pose.ang)
         self.target.transform.relocate_global(new_pose)
-
-        self._update_gizmo_transform()
 
         if self._on_transform_dragging is not None:
             self._on_transform_dragging()
@@ -1081,8 +1026,6 @@ class ImmediateGizmoController:
 
         new_pose = Pose3(lin=self.start_target_pos, ang=new_ang)
         self.target.transform.relocate_global(new_pose)
-
-        self._update_gizmo_transform()
 
         if self._on_transform_dragging is not None:
             self._on_transform_dragging()

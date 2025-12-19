@@ -821,6 +821,18 @@ class GizmoController:
         if self.gizmo is not None:
             self.gizmo.set_visible(visible)
 
+    def refresh_transform(self) -> None:
+        """Refresh gizmo position/rotation from target. Call after undo/redo."""
+        if self.gizmo is None:
+            return
+        gizmo_ctrl = self.gizmo.find_component(GizmoMoveController)
+        if gizmo_ctrl is None or gizmo_ctrl.target is None:
+            return
+        # Update gizmo position from target
+        self.gizmo.transform.relocate_global(
+            gizmo_ctrl.target.transform.global_pose().to_pose3()
+        )
+
     def helper_geometry_entities(self) -> list[Entity]:
         if self.gizmo is None:
             return []

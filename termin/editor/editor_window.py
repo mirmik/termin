@@ -490,6 +490,7 @@ class EditorWindow(QMainWindow):
         self._update_undo_redo_actions()
         if cmd is not None:
             self.undo_stack_changed.emit()
+
     def _show_scene_properties(self) -> None:
         """Opens scene properties dialog."""
         self._dialog_manager.show_scene_properties()
