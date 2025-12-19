@@ -31,16 +31,16 @@ class MeshRenderer(Component):
 
     inspect_fields = {
         "mesh": InspectField(
-            path="mesh",
             label="Mesh",
-            kind="mesh",
-            setter=lambda obj, value: obj.set_mesh(value),
+            kind="mesh_handle",
+            getter=lambda self: self._mesh_handle,
+            setter=lambda self, value: self.set_mesh(value),
         ),
         "material": InspectField(
-            path="base_material",
             label="Material",
-            kind="material",
-            setter=lambda obj, value: obj.set_base_material(value),
+            kind="material_handle",
+            getter=lambda self: self._material_handle,
+            setter=lambda self, value: self._set_material_handle(value),
         ),
         "override_material": InspectField(
             path="override_material",
@@ -229,6 +229,26 @@ class MeshRenderer(Component):
     def set_material(self, material: Material | None):
         """Устанавливает материал напрямую (алиас для set_base_material)."""
         self.set_base_material(material)
+
+    def _set_material_handle(self, handle: MaterialHandle | None):
+        """
+        Устанавливает материал через MaterialHandle.
+
+        Используется виджетом HandleSelectorWidget.
+        """
+        if handle is None:
+            self._material_handle = MaterialHandle()
+        else:
+            self._material_handle = handle
+
+        # Если override активен, пересоздаём локальную копию
+        if self._override_material:
+            base_mat = self._material_handle.get_material_or_none()
+            if base_mat is not None:
+                name = f"{base_mat.name}_override" if base_mat.name else "override"
+                self._overridden_material = base_mat.copy(name=name)
+            else:
+                self._overridden_material = None
 
     def set_material_by_name(self, name: str):
         """

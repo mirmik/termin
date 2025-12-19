@@ -1,7 +1,7 @@
 # termin/visualization/resources.py
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # только для типов, чтобы не ловить циклы импортов
     from termin.visualization.core.material import Material
@@ -91,6 +91,27 @@ _BUILTIN_POST_EFFECTS: List[Tuple[str, str]] = [
 # Фиксированные UUID для встроенных ресурсов.
 # Гарантируют стабильные ссылки между сессиями.
 from termin.assets.builtin_uuids import BUILTIN_UUIDS
+
+
+class HandleAccessors:
+    """
+    Unified accessors for handle-based resource types.
+
+    Provides a consistent interface for listing, getting, and finding
+    resources by name/handle for use in generic selector widgets.
+    """
+
+    def __init__(
+        self,
+        list_names: Callable[[], list[str]],
+        get_by_name: Callable[[str], Any],
+        find_name: Callable[[Any], Optional[str]],
+        allow_none: bool = True,
+    ):
+        self.list_names = list_names
+        self.get_by_name = get_by_name
+        self.find_name = find_name
+        self.allow_none = allow_none
 
 
 class ResourceManager:
@@ -1796,6 +1817,151 @@ class ResourceManager:
     def list_pipeline_names(self) -> list[str]:
         """Список имён всех зарегистрированных пайплайнов."""
         return sorted(self.pipelines.keys())
+
+    # --------- Handle Accessors ---------
+
+    def get_handle_accessors(self, kind: str) -> Optional[HandleAccessors]:
+        """
+        Get unified handle accessors for a resource kind.
+
+        Args:
+            kind: Resource kind (material, mesh, audio_clip, voxel_grid, navmesh, skeleton, texture)
+
+        Returns:
+            HandleAccessors with list_names, get_by_name, find_name methods
+        """
+        if kind == "material":
+            return HandleAccessors(
+                list_names=self.list_material_names,
+                get_by_name=self._get_material_handle,
+                find_name=self._find_material_handle_name,
+            )
+        if kind == "mesh":
+            return HandleAccessors(
+                list_names=self.list_mesh_names,
+                get_by_name=self.get_mesh,
+                find_name=self.find_mesh_name,
+            )
+        if kind == "audio_clip":
+            return HandleAccessors(
+                list_names=self.list_audio_clip_names,
+                get_by_name=self.get_audio_clip,
+                find_name=self.find_audio_clip_name,
+            )
+        if kind == "voxel_grid":
+            return HandleAccessors(
+                list_names=self.list_voxel_grid_names,
+                get_by_name=self._get_voxel_grid_handle,
+                find_name=self._find_voxel_grid_handle_name,
+            )
+        if kind == "navmesh":
+            return HandleAccessors(
+                list_names=self.list_navmesh_names,
+                get_by_name=self._get_navmesh_handle,
+                find_name=self._find_navmesh_handle_name,
+            )
+        if kind == "skeleton":
+            return HandleAccessors(
+                list_names=self.list_skeleton_names,
+                get_by_name=self._get_skeleton_handle,
+                find_name=self._find_skeleton_handle_name,
+            )
+        if kind == "texture":
+            return HandleAccessors(
+                list_names=self.list_texture_names,
+                get_by_name=self.get_texture_handle,
+                find_name=self._find_texture_handle_name,
+            )
+        return None
+
+    # Handle accessors for MaterialHandle
+    def _get_material_handle(self, name: str) -> Optional["MaterialHandle"]:
+        """Get MaterialHandle by name."""
+        from termin.assets.material_handle import MaterialHandle
+        return MaterialHandle.from_name(name)
+
+    def _find_material_handle_name(self, handle: Any) -> Optional[str]:
+        """Find name for a MaterialHandle or Material."""
+        from termin.assets.material_handle import MaterialHandle
+        if isinstance(handle, MaterialHandle):
+            asset = handle.get_asset()
+            if asset:
+                return asset.name
+            # Try to find by material
+            mat = handle.get()
+            if mat:
+                return self.find_material_name(mat)
+            return None
+        # Legacy: raw Material object
+        return self.find_material_name(handle)
+
+    # Handle accessors for VoxelGridHandle (creates handle on-the-fly)
+    def _get_voxel_grid_handle(self, name: str) -> Optional["VoxelGridHandle"]:
+        """Get VoxelGridHandle by name."""
+        from termin.assets.voxel_grid_handle import VoxelGridHandle
+        return VoxelGridHandle.from_name(name)
+
+    def _find_voxel_grid_handle_name(self, handle: Any) -> Optional[str]:
+        """Find name for a VoxelGridHandle or VoxelGrid."""
+        from termin.assets.voxel_grid_handle import VoxelGridHandle
+        if isinstance(handle, VoxelGridHandle):
+            asset = handle.get_asset()
+            if asset:
+                return asset.name
+            grid = handle.get()
+            if grid:
+                return self.find_voxel_grid_name(grid)
+            return None
+        # Legacy: raw VoxelGrid
+        return self.find_voxel_grid_name(handle)
+
+    # Handle accessors for NavMeshHandle
+    def _get_navmesh_handle(self, name: str) -> Optional["NavMeshHandle"]:
+        """Get NavMeshHandle by name."""
+        from termin.assets.navmesh_handle import NavMeshHandle
+        return NavMeshHandle.from_name(name)
+
+    def _find_navmesh_handle_name(self, handle: Any) -> Optional[str]:
+        """Find name for a NavMeshHandle or NavMesh."""
+        from termin.assets.navmesh_handle import NavMeshHandle
+        if isinstance(handle, NavMeshHandle):
+            asset = handle.get_asset()
+            if asset:
+                return asset.name
+            navmesh = handle.get()
+            if navmesh:
+                return self.find_navmesh_name(navmesh)
+            return None
+        # Legacy: raw NavMesh
+        return self.find_navmesh_name(handle)
+
+    # Handle accessors for SkeletonHandle
+    def _get_skeleton_handle(self, name: str) -> Optional["SkeletonHandle"]:
+        """Get SkeletonHandle by name."""
+        from termin.assets.skeleton_handle import SkeletonHandle
+        return SkeletonHandle.from_name(name)
+
+    def _find_skeleton_handle_name(self, handle: Any) -> Optional[str]:
+        """Find name for a SkeletonHandle or SkeletonData."""
+        from termin.assets.skeleton_handle import SkeletonHandle
+        if isinstance(handle, SkeletonHandle):
+            asset = handle.get_asset()
+            if asset:
+                return asset.name
+            skeleton = handle.get()
+            if skeleton:
+                return self.find_skeleton_name(skeleton)
+            return None
+        # Legacy: raw SkeletonData
+        return self.find_skeleton_name(handle)
+
+    # Handle accessors for TextureHandle
+    def _find_texture_handle_name(self, handle: Any) -> Optional[str]:
+        """Find name for a TextureHandle."""
+        from termin.assets.texture_handle import TextureHandle
+        if isinstance(handle, TextureHandle):
+            return self.find_texture_name(handle)
+        return None
 
     # --------- Сериализация ---------
 

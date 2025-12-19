@@ -461,8 +461,124 @@ class ClipSelectorWidget(FieldWidget):
             return False
 
 
+class HandleSelectorWidget(FieldWidget):
+    """
+    Unified widget for selecting resources via Handle pattern.
+
+    Works with any resource type that has HandleAccessors registered
+    in ResourceManager (material, mesh, audio_clip, voxel_grid, navmesh, skeleton, texture).
+    """
+
+    def __init__(
+        self,
+        resource_kind: str,
+        resources: Optional["ResourceManager"] = None,
+        allow_none: bool = True,
+        parent: Optional[QWidget] = None,
+    ):
+        super().__init__(parent)
+        self._resource_kind = resource_kind
+        self._resources = resources
+        self._allow_none = allow_none
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._combo = QComboBox()
+        self._combo.currentIndexChanged.connect(lambda _: self.value_changed.emit())
+        layout.addWidget(self._combo)
+
+        self._refresh_items()
+
+    def set_resources(self, resources: "ResourceManager") -> None:
+        self._resources = resources
+        self._refresh_items()
+
+    def _get_accessors(self):
+        """Get HandleAccessors for this resource kind."""
+        if self._resources is None:
+            return None
+        return self._resources.get_handle_accessors(self._resource_kind)
+
+    def _refresh_items(self) -> None:
+        accessors = self._get_accessors()
+        if accessors is None:
+            return
+
+        self._combo.blockSignals(True)
+        current_text = self._combo.currentText()
+        self._combo.clear()
+
+        # Add (None) option if allowed
+        if self._allow_none:
+            self._combo.addItem("(None)", userData=None)
+
+        names = accessors.list_names()
+        for name in names:
+            self._combo.addItem(name, userData=name)
+
+        # Restore selection
+        idx = self._combo.findText(current_text)
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+        elif self._allow_none:
+            self._combo.setCurrentIndex(0)  # (None)
+
+        self._combo.blockSignals(False)
+
+    def get_value(self) -> Any:
+        """Get currently selected handle."""
+        name = self._combo.currentData()
+        if not name:
+            return None
+
+        accessors = self._get_accessors()
+        if accessors is None:
+            return None
+
+        return accessors.get_by_name(name)
+
+    def set_value(self, value: Any) -> None:
+        """Set widget value from a handle or raw resource."""
+        self._combo.blockSignals(True)
+
+        # Refresh items in case the list changed
+        self._refresh_items()
+
+        if value is None:
+            if self._allow_none:
+                self._combo.setCurrentIndex(0)  # (None)
+            else:
+                self._combo.setCurrentIndex(-1)
+            self._combo.blockSignals(False)
+            return
+
+        accessors = self._get_accessors()
+        if accessors is None:
+            self._combo.setCurrentIndex(-1)
+            self._combo.blockSignals(False)
+            return
+
+        name = accessors.find_name(value)
+        if name is None:
+            if self._allow_none:
+                self._combo.setCurrentIndex(0)  # (None)
+            else:
+                self._combo.setCurrentIndex(-1)
+        else:
+            idx = self._combo.findText(name)
+            self._combo.setCurrentIndex(idx if idx >= 0 else (0 if self._allow_none else -1))
+
+        self._combo.blockSignals(False)
+
+
 class ResourceComboWidget(FieldWidget):
-    """Widget for resource fields (material, mesh, voxel_grid, navmesh)."""
+    """
+    Widget for resource fields (material, mesh, voxel_grid, navmesh).
+
+    DEPRECATED: Use HandleSelectorWidget for new code.
+    This widget returns raw resource objects for backward compatibility.
+    """
 
     def __init__(
         self,
@@ -639,6 +755,16 @@ class FieldWidgetFactory:
         if kind == "clip_selector":
             return ClipSelectorWidget()
 
+        # Handle-based resource selectors (new pattern)
+        if kind.endswith("_handle"):
+            resource_kind = kind[:-7]  # Remove "_handle" suffix
+            return HandleSelectorWidget(
+                resource_kind=resource_kind,
+                resources=self._resources,
+                allow_none=True,
+            )
+
+        # Legacy resource selectors (raw resource objects)
         if kind in ("material", "mesh", "voxel_grid", "navmesh", "skeleton"):
             return ResourceComboWidget(
                 resource_kind=kind,
