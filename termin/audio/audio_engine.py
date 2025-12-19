@@ -40,6 +40,9 @@ class AudioEngine:
         # SDL_mixer module reference (set on init)
         self._mixer = None
 
+        # Track channel positions (SDL_mixer has no getter)
+        self._channel_positions: dict[int, tuple[int, int]] = {}  # channel -> (angle, distance)
+
     @classmethod
     def instance(cls) -> "AudioEngine":
         """Get singleton instance."""
@@ -284,7 +287,19 @@ class AudioEngine:
         # Clamp distance
         distance = max(0, min(255, distance))
 
+        # Track position for debugging
+        self._channel_positions[channel] = (angle, distance)
+
         return self._mixer.Mix_SetPosition(channel, angle, distance) != 0
+
+    def get_channel_position(self, channel: int) -> tuple[int, int]:
+        """
+        Get last set position for a channel.
+
+        Returns:
+            Tuple of (angle, distance). Returns (0, 0) if not set.
+        """
+        return self._channel_positions.get(channel, (0, 0))
 
     def set_master_volume(self, volume: float) -> None:
         """
