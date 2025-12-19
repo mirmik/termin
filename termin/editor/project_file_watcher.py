@@ -8,7 +8,7 @@ PreLoaders don't parse files - they only:
 - Determine file type
 - Read UUID if possible (currently only .material files)
 - Read file content (to avoid re-reading)
-- Pass data to ResourceManager which creates/finds Asset and calls Asset.load()
+- Pass data to ResourceManager which creates/finds Asset and calls Asset.ensure_loaded()
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class FilePreLoader(ABC):
     Abstract base class for file pre-loaders.
 
     PreLoaders detect file type, read UUID if possible, and pass
-    data to ResourceManager. Actual parsing is done by Asset.load().
+    data to ResourceManager. Actual parsing is done by Asset._load().
     """
 
     def __init__(

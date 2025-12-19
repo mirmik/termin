@@ -69,7 +69,7 @@ class DataAsset(Asset, Generic[T]):
     def data(self) -> T | None:
         """Get the stored data (lazy loading)."""
         if not self._loaded:
-            self.load()
+            self._load()
         return self._data
 
     @data.setter
@@ -115,9 +115,9 @@ class DataAsset(Asset, Generic[T]):
 
     # --- Loading ---
 
-    def load(self) -> bool:
+    def _load(self) -> bool:
         """
-        Load asset data.
+        Load asset data (internal).
 
         For regular assets: loads from source_path.
         For embedded assets: extracts from parent.
@@ -212,9 +212,8 @@ class DataAsset(Asset, Generic[T]):
         print(f"[LazyLoad] {self.__class__.__name__}: {self._name} (from {self._parent_asset._name})")
 
         # Ensure parent is loaded
-        if not self._parent_asset.is_loaded:
-            if not self._parent_asset.load():
-                return False
+        if not self._parent_asset.ensure_loaded():
+            return False
 
         # Check if parent's _on_loaded() already populated this child
         if self._loaded:

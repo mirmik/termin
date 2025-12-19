@@ -182,7 +182,7 @@ class ResourceManager:
         def data_from_asset(asset):
             # Lazy load if not loaded
             if asset.grid is None:
-                asset.load()
+                asset.ensure_loaded()
             return asset.grid
 
         def data_to_asset(data):
@@ -211,7 +211,7 @@ class ResourceManager:
         def data_from_asset(asset):
             # Lazy load if not loaded
             if asset.navmesh is None:
-                asset.load()
+                asset.ensure_loaded()
             return asset.navmesh
 
         def data_to_asset(data):
@@ -266,7 +266,7 @@ class ResourceManager:
         def data_from_asset(asset):
             # Lazy load if not loaded
             if asset.skeleton_data is None:
-                asset.load()
+                asset.ensure_loaded()
             return asset.skeleton_data
 
         def data_to_asset(data):
@@ -295,7 +295,7 @@ class ResourceManager:
         def data_from_asset(asset):
             # Lazy load if not loaded
             if asset.source is None:
-                asset.load()
+                asset.ensure_loaded()
             return asset.source
 
         def data_to_asset(data):
@@ -405,7 +405,7 @@ class ResourceManager:
 
         If UUID exists and is registered → uses existing Asset.
         Otherwise → creates new Asset.
-        Then calls Asset.load() with content from result.
+        Then calls Asset.ensure_loaded() with content from result.
         """
         from termin.editor.project_file_watcher import PreLoadResult
         import os
@@ -518,7 +518,7 @@ class ResourceManager:
             return
 
         # Reload from file
-        asset.load()
+        asset.ensure_loaded()
 
         # Update legacy dict
         if asset.material is not None:
@@ -567,7 +567,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.load()
+        asset.ensure_loaded()
 
         # Update legacy dict
         if asset.program is not None:
@@ -615,7 +615,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.load()
+        asset.ensure_loaded()
 
         # Invalidate GPU texture to force re-upload
         asset.delete_gpu()
@@ -662,7 +662,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.load()
+        asset.ensure_loaded()
 
         # Invalidate GPU mesh to force re-upload
         asset.delete_gpu()
@@ -709,7 +709,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.load()
+        asset.ensure_loaded()
 
         # Update legacy dict
         if asset.grid is not None:
@@ -757,7 +757,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.load()
+        asset.ensure_loaded()
 
         # Update legacy dict
         if asset.navmesh is not None:
@@ -831,7 +831,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.load()
+        asset.ensure_loaded()
 
         # Re-register child assets (may have new ones after reload)
         self._register_glb_child_assets(asset)
@@ -1036,7 +1036,7 @@ class ResourceManager:
 
         # Ensure asset is loaded
         if not asset.is_loaded:
-            asset.load()
+            asset.ensure_loaded()
 
         return asset.instantiate(parent=parent, position=position, name=instance_name)
 
@@ -1090,7 +1090,7 @@ class ResourceManager:
 
         # Trigger lazy load if not loaded
         if asset.material is None:
-            if not asset.load():
+            if not asset.ensure_loaded():
                 return None
 
         # Cache in legacy dict
@@ -1129,7 +1129,7 @@ class ResourceManager:
 
         # Trigger lazy load if not loaded
         if asset.material is None:
-            if not asset.load():
+            if not asset.ensure_loaded():
                 return None
 
         # Cache in legacy dict
@@ -1180,7 +1180,7 @@ class ResourceManager:
 
         # Trigger lazy load if not loaded
         if asset.program is None:
-            if not asset.load():
+            if not asset.ensure_loaded():
                 return None
 
         # Cache in legacy dict

@@ -103,12 +103,9 @@ class AudioClipFieldWidget(FieldWidget):
         if handle is None:
             return
 
-        # Ensure audio is loaded
-        if not handle.ensure_loaded():
-            return
-
-        chunk = handle.chunk
-        if chunk is None:
+        # Get AudioClip from handle (lazy loads if needed)
+        audio_clip = handle.get()
+        if audio_clip is None or not audio_clip.is_valid:
             return
 
         from termin.audio.audio_engine import AudioEngine
@@ -122,7 +119,7 @@ class AudioClipFieldWidget(FieldWidget):
         self._stop_preview()
 
         # Play on any available channel
-        self._preview_channel = engine.play_chunk(chunk, channel=-1, loops=0)
+        self._preview_channel = engine.play_chunk(audio_clip.chunk, channel=-1, loops=0)
 
     def _on_stop_clicked(self) -> None:
         """Stop preview playback."""

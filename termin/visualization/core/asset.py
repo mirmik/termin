@@ -126,9 +126,9 @@ class Asset(Identifiable):
         # No recent save - this is external modification
         return True
 
-    def load(self) -> bool:
+    def _load(self) -> bool:
         """
-        Load asset data from source_path.
+        Load asset data from source_path (internal).
 
         Override in subclasses to implement actual loading.
 
@@ -144,12 +144,14 @@ class Asset(Identifiable):
         """
         Ensure asset is loaded. Call this for lazy loading.
 
+        This is the primary public API for loading assets.
+
         Returns:
             True if asset is loaded (or was just loaded), False if loading failed.
         """
         if self._loaded:
             return True
-        return self.load()
+        return self._load()
 
     def reload(self) -> bool:
         """
@@ -160,7 +162,7 @@ class Asset(Identifiable):
         """
         if self._source_path is None:
             return False
-        result = self.load()
+        result = self._load()
         if result:
             self._bump_version()
         return result

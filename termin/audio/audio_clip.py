@@ -1,4 +1,4 @@
-"""AudioClipAsset and AudioClipHandle - Audio resource management."""
+"""AudioClip, AudioClipAsset and AudioClipHandle - Audio resource management."""
 
 from __future__ import annotations
 
@@ -13,6 +13,46 @@ if TYPE_CHECKING:
     pass
 
 
+class AudioClip:
+    """
+    Audio clip data - wrapper around SDL_mixer Mix_Chunk.
+
+    This is the actual audio resource that components work with.
+    Does not know about UUIDs, file paths, or asset management.
+    """
+
+    def __init__(self, chunk: ctypes.c_void_p, duration_ms: int = 0):
+        """
+        Initialize AudioClip.
+
+        Args:
+            chunk: Mix_Chunk pointer from SDL_mixer
+            duration_ms: Duration in milliseconds (0 if unknown)
+        """
+        self._chunk: ctypes.c_void_p = chunk
+        self._duration_ms: int = duration_ms
+
+    @property
+    def chunk(self) -> ctypes.c_void_p:
+        """Get Mix_Chunk pointer for SDL_mixer operations."""
+        return self._chunk
+
+    @property
+    def duration_ms(self) -> int:
+        """Duration in milliseconds."""
+        return self._duration_ms
+
+    @property
+    def duration(self) -> float:
+        """Duration in seconds."""
+        return self._duration_ms / 1000.0
+
+    @property
+    def is_valid(self) -> bool:
+        """Check if clip has valid audio data."""
+        return self._chunk is not None
+
+
 class AudioClipAsset(Asset):
     """
     Asset for audio files (.wav, .ogg, .mp3, .flac).
@@ -20,7 +60,7 @@ class AudioClipAsset(Asset):
     IMPORTANT: Create through ResourceManager.get_or_create_audio_clip_asset(),
     not directly. This ensures proper registration and avoids duplicates.
 
-    Stores Mix_Chunk (SDL_mixer loaded audio data).
+    Loads audio file and creates AudioClip on demand.
     Supports lazy loading - audio is loaded on first access.
     """
 
@@ -43,37 +83,27 @@ class AudioClipAsset(Asset):
         """
         super().__init__(name=name, source_path=source_path, uuid=uuid)
 
-        # Audio data (Mix_Chunk pointer from SDL_mixer)
+        # The actual audio clip (created on load)
+        self._clip: AudioClip | None = None
+
+        # Raw chunk pointer for cleanup
         self._chunk: ctypes.c_void_p | None = None
 
-        # Metadata (filled on load)
-        self._duration_ms: int = 0
-
     @property
-    def chunk(self) -> ctypes.c_void_p | None:
+    def clip(self) -> AudioClip | None:
         """
-        Get Mix_Chunk pointer (lazy loading).
+        Get AudioClip (lazy loading).
 
         Returns:
-            Mix_Chunk pointer or None if not loaded.
+            AudioClip or None if not loaded.
         """
         if not self._loaded:
-            self.load()
-        return self._chunk
+            self._load()
+        return self._clip
 
-    @property
-    def duration_ms(self) -> int:
-        """Duration in milliseconds (0 if unknown)."""
-        return self._duration_ms
-
-    @property
-    def duration(self) -> float:
-        """Duration in seconds (0.0 if unknown)."""
-        return self._duration_ms / 1000.0
-
-    def load(self) -> bool:
+    def _load(self) -> bool:
         """
-        Load audio data from source_path.
+        Load audio data from source_path (internal).
 
         Returns:
             True if loaded successfully.
@@ -93,6 +123,7 @@ class AudioClipAsset(Asset):
             return False
 
         self._chunk = chunk
+        self._clip = AudioClip(chunk, duration_ms=0)
         self._loaded = True
         self._bump_version()
 
@@ -108,12 +139,13 @@ class AudioClipAsset(Asset):
             engine.free_chunk(self._chunk)
             self._chunk = None
 
+        self._clip = None
         self._loaded = False
 
     def reload(self) -> bool:
         """Reload audio data from source_path."""
         self.unload()
-        result = self.load()
+        result = self._load()
         if result:
             self._bump_version()
         return result
@@ -147,16 +179,16 @@ class AudioClipAsset(Asset):
         self.unload()
 
 
-class AudioClipHandle(ResourceHandle["ctypes.c_void_p", AudioClipAsset]):
+class AudioClipHandle(ResourceHandle[AudioClip, AudioClipAsset]):
     """
-    Smart reference to audio clip.
+    Smart reference to AudioClip.
 
     Usage:
         handle = AudioClipHandle.from_asset(asset)
         handle = AudioClipHandle.from_name("explosion")
 
-        chunk = handle.get()  # Get Mix_Chunk pointer
-        asset = handle.get_asset()  # Get AudioClipAsset
+        clip = handle.get()  # Get AudioClip
+        clip = handle.clip   # Same, via property
     """
 
     @classmethod
@@ -186,41 +218,36 @@ class AudioClipHandle(ResourceHandle["ctypes.c_void_p", AudioClipAsset]):
             return cls.from_asset(asset)
         return cls()
 
-    def _get_resource_from_asset(self, asset: AudioClipAsset) -> "ctypes.c_void_p | None":
-        """Extract Mix_Chunk from AudioClipAsset (lazy loading)."""
-        return asset.chunk
+    def _get_resource_from_asset(self, asset: AudioClipAsset) -> AudioClip | None:
+        """Extract AudioClip from AudioClipAsset (lazy loading)."""
+        return asset.clip
 
     @property
-    def chunk(self) -> "ctypes.c_void_p | None":
-        """Get Mix_Chunk pointer."""
+    def clip(self) -> AudioClip | None:
+        """Get AudioClip."""
         return self.get()
 
     @property
     def duration(self) -> float:
         """Get duration in seconds."""
-        if self._asset is not None:
-            return self._asset.duration
+        clip = self.get()
+        if clip is not None:
+            return clip.duration
         return 0.0
 
     @property
     def duration_ms(self) -> int:
         """Get duration in milliseconds."""
-        if self._asset is not None:
-            return self._asset.duration_ms
+        clip = self.get()
+        if clip is not None:
+            return clip.duration_ms
         return 0
 
     @property
-    def is_loaded(self) -> bool:
-        """Check if audio is loaded."""
-        if self._asset is not None:
-            return self._asset.is_loaded
-        return False
-
-    def ensure_loaded(self) -> bool:
-        """Ensure audio is loaded. Returns True if successful."""
-        if self._asset is not None:
-            return self._asset.ensure_loaded()
-        return False
+    def is_valid(self) -> bool:
+        """Check if handle points to valid audio."""
+        clip = self.get()
+        return clip is not None and clip.is_valid
 
     # --- Serialization ---
 

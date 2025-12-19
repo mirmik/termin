@@ -58,8 +58,7 @@ class MaterialHandle(ResourceHandle["Material", "MaterialAsset"]):
 
     def _get_resource_from_asset(self, asset: "MaterialAsset") -> "Material | None":
         """Извлечь Material из MaterialAsset (lazy loading)."""
-        if not asset.is_loaded:
-            asset.load()
+        asset.ensure_loaded()
         return asset.material
 
     # --- Convenience accessors ---

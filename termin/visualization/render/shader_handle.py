@@ -55,8 +55,7 @@ class ShaderHandle(ResourceHandle["ShaderMultyPhaseProgramm", "ShaderAsset"]):
 
     def _get_resource_from_asset(self, asset: "ShaderAsset") -> "ShaderMultyPhaseProgramm | None":
         """Извлечь ShaderMultyPhaseProgramm из ShaderAsset (lazy loading)."""
-        if not asset.is_loaded:
-            asset.load()
+        asset.ensure_loaded()
         return asset.program
 
     # --- Convenience accessors ---

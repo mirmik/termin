@@ -133,12 +133,9 @@ class AudioSource(Component):
         if self.clip is None:
             return
 
-        # Ensure clip is loaded
-        if not self.clip.ensure_loaded():
-            return
-
-        chunk = self.clip.chunk
-        if chunk is None:
+        # Get AudioClip from handle (lazy loads if needed)
+        audio_clip = self.clip.get()
+        if audio_clip is None or not audio_clip.is_valid:
             return
 
         from termin.audio.audio_engine import AudioEngine
@@ -153,7 +150,7 @@ class AudioSource(Component):
             engine.stop_channel(self._channel)
 
         loops = -1 if self.loop else 0
-        self._channel = engine.play_chunk(chunk, loops=loops)
+        self._channel = engine.play_chunk(audio_clip.chunk, loops=loops)
 
         if self._channel >= 0:
             engine.set_channel_volume(self._channel, self.volume)

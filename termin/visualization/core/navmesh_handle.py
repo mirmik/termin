@@ -58,8 +58,7 @@ class NavMeshHandle(ResourceHandle["NavMesh", "NavMeshAsset"]):
 
     def _get_resource_from_asset(self, asset: "NavMeshAsset") -> "NavMesh | None":
         """Извлечь NavMesh из NavMeshAsset (lazy loading)."""
-        if not asset.is_loaded:
-            asset.load()
+        asset.ensure_loaded()
         return asset.navmesh
 
     # --- Convenience accessors ---

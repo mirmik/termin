@@ -58,8 +58,7 @@ class VoxelGridHandle(ResourceHandle["VoxelGrid", "VoxelGridAsset"]):
 
     def _get_resource_from_asset(self, asset: "VoxelGridAsset") -> "VoxelGrid | None":
         """Извлечь VoxelGrid из VoxelGridAsset (lazy loading)."""
-        if not asset.is_loaded:
-            asset.load()
+        asset.ensure_loaded()
         return asset.grid
 
     # --- Convenience accessors ---
