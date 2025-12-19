@@ -714,10 +714,14 @@ class ImmediateGizmoController:
         return self.dragging
 
     def recreate_gizmo(self, scene, editor_entities=None) -> None:
-        """Recreate gizmo in new scene."""
+        """Recreate gizmo in new scene. Clears all references to old scene entities."""
         self.scene = scene
         self.editor_entities = editor_entities
         self._end_drag()
+        # Clear target reference (entity from old scene)
+        self.target = None
+        self.gizmo_renderer.target = None
+        self.gizmo_renderer.visible = False
 
     def helper_geometry_entities(self) -> list:
         """Return empty list - immediate gizmo has no entity geometry."""

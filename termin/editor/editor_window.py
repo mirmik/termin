@@ -1613,19 +1613,20 @@ class EditorWindow(QMainWindow):
             editor_features.selected_entity_id = 0
             editor_features.hover_entity_id = 0
 
-        # Переключаем gizmo на новую сцену
+        # Переключаем gizmo на новую сцену (recreate_gizmo сбрасывает target)
         if self.gizmo_controller is not None:
             self.gizmo_controller.recreate_gizmo(scene, self.editor_entities)
-            self.gizmo_controller.set_target(None)
 
         # Обновляем scene tree
         if self.scene_tree_controller is not None:
             self.scene_tree_controller._scene = scene
             self.scene_tree_controller.rebuild()
 
-        # Обновляем inspector scene reference
+        # Обновляем inspector scene reference и сбрасываем target
         if self._inspector_controller is not None:
             self._inspector_controller.set_scene(scene)
+        if self.inspector is not None:
+            self.inspector.set_target(None)
 
         # Сбрасываем сглаженное значение FPS при входе/выходе
         self._fps_smooth = None

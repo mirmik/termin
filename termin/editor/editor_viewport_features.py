@@ -193,8 +193,14 @@ class EditorViewportFeatures:
         camera.add_viewport(viewport)
 
     def set_scene(self, scene) -> None:
-        """Set scene for the primary viewport."""
+        """Set scene for the primary viewport. Clears pending events."""
         self.viewport.scene = scene
+        # Clear pending events (they reference old scene's viewport state)
+        self._pending_pick_press = None
+        self._pending_pick_release = None
+        self._pending_hover = None
+        self._press_position = None
+        self._gizmo_handled_press = False
 
     def set_world_mode(self, mode: str) -> None:
         """Set input mode (editor/game)."""
