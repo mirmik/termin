@@ -53,7 +53,17 @@ class EditorCameraManager:
         self.editor_entities = editor_entities
 
     def _ensure_editor_camera(self) -> None:
-        """Create editor camera entity with OrbitCameraController."""
+        """Find or create editor camera entity with OrbitCameraController."""
+        # Look for existing camera under EditorEntities
+        if self.editor_entities is not None:
+            for child in self.editor_entities.transform.children:
+                if child.entity and child.entity.name == "camera":
+                    camera = child.entity.get_component(PerspectiveCameraComponent)
+                    if camera is not None:
+                        self.camera = camera
+                        return
+
+        # Create new camera
         camera_entity = Entity(name="camera", pose=Pose3.identity(), serializable=False)
         camera = PerspectiveCameraComponent()
         camera_entity.add_component(camera)

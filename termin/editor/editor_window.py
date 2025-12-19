@@ -1592,9 +1592,16 @@ class EditorWindow(QMainWindow):
         if self.selection_manager is not None:
             self.selection_manager.clear()
 
-        # Переключаем все viewport'ы на новую сцену
+        # Пересоздаём editor entities в новой сцене
+        # (в game_scene их нет, в editor_scene они уже есть - _ensure находит существующие)
+        self._camera_manager.recreate_in_scene(scene)
+        self.editor_entities = self._camera_manager.editor_entities
+        self.camera = self._camera_manager.camera
+
+        # Переключаем все viewport'ы на новую сцену и камеру
         for editor_features in self._editor_features.values():
             editor_features.set_scene(scene)
+            editor_features.set_camera(self._camera_manager.camera)
             editor_features.set_world_mode("game" if is_playing else "editor")
             editor_features.selected_entity_id = 0
             editor_features.hover_entity_id = 0
