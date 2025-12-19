@@ -57,18 +57,28 @@ class PrefabPersistence:
     def __init__(self, resource_manager: "ResourceManager"):
         self._resource_manager = resource_manager
 
-    def save(self, entity: "Entity", file_path: str | Path) -> dict:
+    def save(self, entity: "Entity", file_path: str | Path, uuid: str | None = None) -> dict:
         """
         Save entity hierarchy to .prefab file.
 
         Args:
             entity: Root entity to save.
             file_path: Path to .prefab file.
+            uuid: UUID to preserve (if None, tries to read from existing file).
 
         Returns:
             Stats dict with counts of saved items.
         """
         file_path = Path(file_path)
+
+        # Preserve UUID from existing file if not provided
+        if uuid is None and file_path.exists():
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+                uuid = existing_data.get("uuid")
+            except Exception:
+                pass
 
         # Serialize entity hierarchy
         entity_data = entity.serialize()
@@ -79,6 +89,10 @@ class PrefabPersistence:
             "version": self.VERSION,
             "root": entity_data,
         }
+
+        # Include UUID if available
+        if uuid is not None:
+            data["uuid"] = uuid
 
         # Atomic write via temp file
         json_str = json.dumps(data, indent=2, ensure_ascii=False, default=_numpy_encoder)
@@ -124,18 +138,25 @@ class PrefabPersistence:
         entity = Entity.deserialize(root_data, context)
         return entity
 
-    def create_empty(self, file_path: str | Path, name: str = "NewPrefab") -> None:
+    def create_empty(self, file_path: str | Path, name: str = "NewPrefab") -> str:
         """
         Create an empty .prefab file with a single empty entity.
 
         Args:
             file_path: Path to .prefab file.
             name: Ignored, root is always named "[Root]".
+
+        Returns:
+            Generated UUID for the new prefab.
         """
+        import uuid as uuid_module
+
         file_path = Path(file_path)
+        prefab_uuid = str(uuid_module.uuid4())
 
         data = {
             "version": self.VERSION,
+            "uuid": prefab_uuid,
             "root": {
                 "name": self.ROOT_ENTITY_NAME,
                 "priority": 0,
@@ -165,6 +186,8 @@ class PrefabPersistence:
             temp_path = f.name
 
         os.replace(temp_path, str(file_path))
+
+        return prefab_uuid
 
     def _count_entities(self, entity: "Entity") -> int:
         """Count total entities in hierarchy."""
