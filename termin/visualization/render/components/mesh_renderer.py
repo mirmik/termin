@@ -7,7 +7,6 @@ from termin.visualization.core.entity import Component, RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.core.mesh_handle import MeshHandle
-from termin.visualization.core.resources import ResourceManager
 from termin.visualization.render.drawable import GeometryDrawCall
 
 if TYPE_CHECKING:
@@ -22,6 +21,8 @@ class MeshRenderer(Component):
         mesh: Геометрия для отрисовки (через MeshHandle).
         material: Материал для рендеринга.
         cast_shadow: Отбрасывает ли объект тень (добавляет "shadow" в phase_marks).
+        override_material: Если True, используется локальная копия материала
+                          с переопределёнными параметрами.
 
     Фильтрация по фазам:
         phase_marks = фазы из материала + {"shadow"} если cast_shadow.
@@ -36,10 +37,16 @@ class MeshRenderer(Component):
             setter=lambda obj, value: obj.set_mesh(value),
         ),
         "material": InspectField(
-            path="material",
+            path="base_material",
             label="Material",
             kind="material",
-            setter=lambda obj, value: obj.set_material(value),
+            setter=lambda obj, value: obj.set_base_material(value),
+        ),
+        "override_material": InspectField(
+            path="override_material",
+            label="Override Material",
+            kind="bool",
+            setter=lambda obj, value: obj.set_override_material(value),
         ),
         "cast_shadow": InspectField(
             path="cast_shadow",
@@ -55,6 +62,7 @@ class MeshRenderer(Component):
         mesh: MeshHandle | Mesh3 | None = None,
         material: Material | None = None,
         cast_shadow: bool = True,
+        override_material: bool = False,
     ):
         super().__init__(enabled=True)
 
@@ -69,6 +77,8 @@ class MeshRenderer(Component):
                 self._mesh_handle = mesh
 
         self.cast_shadow = cast_shadow
+        self._override_material: bool = override_material
+        self._overridden_material: Material | None = None
 
         self._material_handle: MaterialHandle = MaterialHandle()
         if material is not None:
@@ -87,7 +97,7 @@ class MeshRenderer(Component):
         """
         marks: Set[str] = set()
 
-        mat = self._material_handle.get_material_or_none()
+        mat = self.material
         if mat:
             for phase in mat.phases:
                 marks.add(phase.phase_mark)
@@ -98,17 +108,96 @@ class MeshRenderer(Component):
         return marks
 
     @property
+    def override_material(self) -> bool:
+        """Возвращает флаг переопределения материала."""
+        return self._override_material
+
+    @override_material.setter
+    def override_material(self, value: bool) -> None:
+        """Устанавливает флаг переопределения материала."""
+        self.set_override_material(value)
+
+    def set_override_material(self, value: bool) -> None:
+        """
+        Устанавливает флаг переопределения материала.
+
+        При активации создаёт локальную копию материала для переопределения.
+        При деактивации удаляет локальную копию.
+        """
+        if value == self._override_material:
+            return
+
+        self._override_material = value
+
+        if value:
+            # Создаём локальную копию материала
+            base_mat = self._material_handle.get_material_or_none()
+            if base_mat is not None:
+                name = f"{base_mat.name}_override" if base_mat.name else "override"
+                self._overridden_material = base_mat.copy(name=name)
+            else:
+                self._overridden_material = None
+        else:
+            # Удаляем локальную копию
+            self._overridden_material = None
+
+    @property
+    def base_material(self) -> Material | None:
+        """Возвращает базовый материал (из ассетов)."""
+        return self._material_handle.get_material_or_none()
+
+    @base_material.setter
+    def base_material(self, value: Material | None) -> None:
+        """Устанавливает базовый материал."""
+        self.set_base_material(value)
+
+    def set_base_material(self, material: Material | None) -> None:
+        """
+        Устанавливает базовый материал.
+
+        Если override_material активен, пересоздаёт локальную копию.
+        """
+        if material is None:
+            self._material_handle = MaterialHandle()
+        else:
+            self._material_handle = MaterialHandle.from_material(material)
+
+        # Если override активен, пересоздаём локальную копию
+        if self._override_material:
+            base_mat = self._material_handle.get_material_or_none()
+            if base_mat is not None:
+                name = f"{base_mat.name}_override" if base_mat.name else "override"
+                self._overridden_material = base_mat.copy(name=name)
+            else:
+                self._overridden_material = None
+
+    @property
     def material(self) -> Material | None:
-        """Возвращает текущий материал."""
+        """
+        Возвращает текущий материал для рендеринга.
+
+        Если override_material активен, возвращает локальную копию.
+        Иначе возвращает базовый материал из ассетов.
+        """
+        if self._override_material and self._overridden_material is not None:
+            return self._overridden_material
         return self._material_handle.get_material_or_none()
 
     @material.setter
     def material(self, value: Material | None):
-        """Устанавливает материал."""
-        if value is None:
-            self._material_handle = MaterialHandle()
-        else:
-            self._material_handle = MaterialHandle.from_material(value)
+        """Устанавливает материал (для обратной совместимости)."""
+        self.set_base_material(value)
+
+    @property
+    def overridden_material(self) -> Material | None:
+        """
+        Возвращает переопределённый материал (локальную копию).
+
+        Возвращает None если override_material не активен.
+        """
+        if self._override_material:
+            return self._overridden_material
+        return None
 
     @property
     def mesh(self) -> MeshHandle:
@@ -138,8 +227,8 @@ class MeshRenderer(Component):
         self.mesh = mesh
 
     def set_material(self, material: Material | None):
-        """Устанавливает материал напрямую."""
-        self.material = material
+        """Устанавливает материал напрямую (алиас для set_base_material)."""
+        self.set_base_material(material)
 
     def set_material_by_name(self, name: str):
         """
@@ -172,12 +261,11 @@ class MeshRenderer(Component):
         Возвращает:
             Список GeometryDrawCall с совпадающим phase_mark, отсортированный по priority.
         """
-        mat = self._material_handle.get_material_or_none()
+        mat = self.material  # Использует overridden материал если активен
         if self._DEBUG_DRAWS:
             entity_name = self.entity.name if self.entity else "no_entity"
             print(f"[MeshRenderer.get_geometry_draws] entity={entity_name!r}, phase_mark={phase_mark!r}")
-            print(f"  _material_handle._direct={self._material_handle._direct}")
-            print(f"  _material_handle._asset={self._material_handle._asset}")
+            print(f"  _override_material={self._override_material}")
             print(f"  mat={mat}")
             if mat:
                 print(f"  mat.phases={[(p.phase_mark, type(p.shader_programm).__name__) for p in mat.phases]}")

@@ -111,7 +111,7 @@ class Component:
                 kind = field.kind
 
                 # Конвертация ресурсов в uuid (с fallback на имя для совместимости)
-                if kind in ("mesh", "material", "voxel_grid", "navmesh", "skeleton"):
+                if kind in ("mesh", "material", "voxel_grid", "navmesh", "skeleton", "audio_clip"):
                     if value is not None:
                         from termin.visualization.core.resources import ResourceManager
                         rm = ResourceManager.instance()
@@ -127,6 +127,8 @@ class Component:
                             uuid = rm.find_navmesh_uuid(value)
                         elif kind == "skeleton":
                             uuid = rm.find_skeleton_uuid(value)
+                        elif kind == "audio_clip":
+                            uuid = rm.find_audio_clip_uuid(value)
 
                         if uuid:
                             value = {"uuid": uuid}
@@ -266,6 +268,15 @@ class Component:
                     elif skeleton_uuid is not None:
                         # Store pending UUID for lazy resolution
                         obj._pending_skeleton_uuid = skeleton_uuid
+                    continue
+                elif kind == "audio_clip":
+                    resource = None
+                    if isinstance(value, dict) and "uuid" in value:
+                        resource = rm.get_audio_clip_by_uuid(value["uuid"])
+                    elif isinstance(value, str):
+                        resource = rm.get_audio_clip(value)
+                    if resource is not None and field.setter:
+                        field.setter(obj, resource)
                     continue
                 elif kind in ("color", "vec3", "vec4") and isinstance(value, list):
                     value = tuple(value)

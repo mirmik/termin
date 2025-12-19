@@ -186,6 +186,57 @@ class Entity(Identifiable):
         if not self.serializable:
             return None
 
+        # Check if this is a prefab instance (has PrefabInstanceMarker)
+        from termin.visualization.core.prefab_instance_marker import PrefabInstanceMarker
+        marker = self.get_component(PrefabInstanceMarker)
+
+        if marker is not None:
+            # Compact prefab instance format
+            return self._serialize_as_prefab_instance(marker)
+
+        # Full entity serialization
+        return self._serialize_full()
+
+    def _serialize_as_prefab_instance(self, marker: "PrefabInstanceMarker") -> dict:
+        """Serialize as prefab instance (compact format with overrides only)."""
+        from termin.visualization.core.prefab_instance_marker import PrefabInstanceMarker
+
+        pose = self.transform.local_pose()
+        data = {
+            "prefab_uuid": marker.prefab_uuid,
+            "instance_uuid": self.uuid,
+            "pose": {
+                "position": list(pose.lin),
+                "rotation": list(pose.ang),
+            },
+            "scale": list(pose.scale),
+            "overrides": marker.overrides.copy(),
+        }
+
+        # Store name if different from default (will be checked on load)
+        data["name"] = self.name
+
+        # Children that were added to the instance (not from prefab)
+        if marker.added_children:
+            data["added_children"] = []
+            for child_uuid in marker.added_children:
+                # Find child and serialize it fully
+                for child_transform in self.transform.children:
+                    child_ent = child_transform.entity
+                    if child_ent is not None and child_ent.uuid == child_uuid:
+                        child_data = child_ent._serialize_full()
+                        if child_data is not None:
+                            data["added_children"].append(child_data)
+                        break
+
+        # UUIDs of children removed from instance
+        if marker.removed_children:
+            data["removed_children"] = list(marker.removed_children)
+
+        return data
+
+    def _serialize_full(self) -> dict:
+        """Full entity serialization (non-prefab or prefab source)."""
         pose = self.transform.local_pose()
         data = {
             "uuid": self.uuid,
@@ -223,6 +274,91 @@ class Entity(Identifiable):
 
     @classmethod
     def deserialize(cls, data, context=None):
+        # Check if this is a prefab instance (compact format)
+        if "prefab_uuid" in data:
+            return cls._deserialize_prefab_instance(data, context)
+
+        # Full entity deserialization
+        return cls._deserialize_full(data, context)
+
+    @classmethod
+    def _deserialize_prefab_instance(cls, data: dict, context=None) -> "Entity":
+        """Deserialize a prefab instance from compact format."""
+        import numpy as np
+        from termin.visualization.core.prefab_instance_marker import PrefabInstanceMarker
+
+        prefab_uuid = data["prefab_uuid"]
+        rm = ResourceManager.instance()
+
+        # Get the prefab asset
+        prefab = rm.get_prefab_by_uuid(prefab_uuid)
+        if prefab is None:
+            print(f"[Entity] Prefab not found: {prefab_uuid}, falling back to empty entity")
+            # Create empty entity as fallback
+            return cls(name=data.get("name", "missing_prefab"))
+
+        # Instantiate the prefab (creates new entity hierarchy with marker)
+        position = tuple(data["pose"]["position"]) if "pose" in data else None
+        entity = prefab.instantiate(position=position, name=data.get("name"))
+
+        # Override the instance UUID to restore identity
+        if "instance_uuid" in data:
+            entity._uuid = data["instance_uuid"]
+            # Re-register with new UUID
+            from termin.visualization.core.entity_registry import EntityRegistry
+            EntityRegistry.instance().register(entity)
+
+        # Apply pose (rotation might be different)
+        if "pose" in data:
+            pose = entity.transform.local_pose()
+            pose.lin[...] = data["pose"]["position"]
+            pose.ang[...] = data["pose"]["rotation"]
+            if "scale" in data:
+                pose.scale[...] = data["scale"]
+            entity.transform.set_local_pose(pose)
+
+        # Get the marker and restore overrides
+        marker = entity.get_component(PrefabInstanceMarker)
+        if marker is not None:
+            # Restore overrides from saved data
+            overrides = data.get("overrides", {})
+            for path, value in overrides.items():
+                marker.set_override(path, value)
+
+            # Apply overrides to entity
+            from termin.visualization.core.property_path import PropertyPath
+            for path, value in overrides.items():
+                try:
+                    # Deserialize value if needed
+                    deserialized = prefab._deserialize_property_value(path, value)
+                    PropertyPath.set(entity, path, deserialized)
+                except Exception as e:
+                    print(f"[Entity] Cannot apply override {path}: {e}")
+
+            # Handle removed children
+            removed_children = data.get("removed_children", [])
+            for child_uuid in removed_children:
+                marker.mark_child_removed(child_uuid)
+                # Find and remove the child
+                for child_transform in list(entity.transform.children):
+                    child_ent = child_transform.entity
+                    if child_ent is not None and child_ent.uuid == child_uuid:
+                        entity.transform.remove_child(child_transform)
+                        break
+
+        # Handle added children
+        added_children = data.get("added_children", [])
+        for child_data in added_children:
+            child_ent = cls.deserialize(child_data, context)
+            entity.transform.add_child(child_ent.transform)
+            if marker is not None:
+                marker.mark_child_added(child_ent.uuid)
+
+        return entity
+
+    @classmethod
+    def _deserialize_full(cls, data: dict, context=None) -> "Entity":
+        """Full entity deserialization (non-prefab)."""
         import numpy as np
 
         ent = cls(

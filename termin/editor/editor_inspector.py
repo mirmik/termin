@@ -188,6 +188,7 @@ class ComponentInspectorPanel(QWidget):
     Panel for editing component fields with undo/redo support.
 
     Uses InspectFieldPanel internally but wraps field changes with undo commands.
+    Also shows MaterialPropertiesEditor for components with override_material.
     """
 
     component_changed = pyqtSignal()
@@ -203,6 +204,18 @@ class ComponentInspectorPanel(QWidget):
 
         self._panel = InspectFieldPanel(resources, self)
         layout.addWidget(self._panel)
+
+        # Material properties editor (for components with override_material)
+        from termin.editor.widgets.material_properties_editor import (
+            MaterialPropertiesEditor,
+        )
+
+        self._material_props_editor = MaterialPropertiesEditor(self)
+        self._material_props_editor.setVisible(False)
+        self._material_props_editor.property_changed.connect(
+            self._on_material_property_changed
+        )
+        layout.addWidget(self._material_props_editor)
 
         self._panel.field_changed.connect(self._on_field_changed)
 
@@ -220,6 +233,27 @@ class ComponentInspectorPanel(QWidget):
             for widget in self._panel._widgets.values():
                 if isinstance(widget, ButtonFieldWidget):
                     widget.set_target(comp)
+
+        # Update material properties editor visibility
+        self._update_material_props_editor()
+
+    def _update_material_props_editor(self) -> None:
+        """Update material properties editor visibility and content."""
+        # Check if component has override_material field
+        has_override = (
+            self._component is not None
+            and hasattr(self._component, "override_material")
+            and hasattr(self._component, "overridden_material")
+        )
+
+        if has_override and self._component.override_material:
+            # Show editor with overridden material
+            mat = self._component.overridden_material
+            self._material_props_editor.set_material(mat)
+            self._material_props_editor.setVisible(True)
+        else:
+            self._material_props_editor.setVisible(False)
+            self._material_props_editor.set_material(None)
 
     def _on_field_changed(self, key: str, old_value: Any, new_value: Any) -> None:
         if self._component is None:
@@ -241,6 +275,16 @@ class ComponentInspectorPanel(QWidget):
             )
             self._push_undo_command(cmd, True)
 
+        # If override_material changed, update the material props editor
+        if key == "override_material":
+            self._update_material_props_editor()
+
+        self.component_changed.emit()
+
+    def _on_material_property_changed(self, name: str, value: Any) -> None:
+        """Handle changes from material properties editor."""
+        # The material properties editor already applied the change
+        # to the overridden material, just emit component_changed
         self.component_changed.emit()
 
 

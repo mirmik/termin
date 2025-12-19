@@ -10,9 +10,12 @@ from termin.editor.file_processors.voxel_grid_processor import VoxelGridProcesso
 from termin.editor.file_processors.navmesh_processor import NavMeshProcessor
 from termin.editor.file_processors.glb_processor import GLBPreLoader
 from termin.editor.file_processors.glsl_processor import GlslPreLoader
+from termin.editor.file_processors.prefab_processor import PrefabPreLoader
+from termin.editor.file_processors.audio_processor import AudioPreLoader
 
 # Backward compatibility aliases
 MaterialFileProcessor = MaterialPreLoader
+AudioFileProcessor = AudioPreLoader
 
 __all__ = [
     "MaterialPreLoader",
@@ -26,4 +29,7 @@ __all__ = [
     "NavMeshProcessor",
     "GLBPreLoader",
     "GlslPreLoader",
+    "PrefabPreLoader",
+    "AudioPreLoader",
+    "AudioFileProcessor",  # backward compat
 ]

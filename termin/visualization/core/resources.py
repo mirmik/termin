@@ -11,7 +11,7 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.core.texture_handle import TextureHandle
     from termin.mesh.mesh import Mesh3
     from termin.visualization.core.glb_asset import GLBAsset
-    from termin.visualization.core.entity import Component
+    from termin.visualization.core.entity import Component, Entity
     from termin.visualization.render.texture import Texture
     from termin.visualization.render.texture_asset import TextureAsset
     from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm
@@ -24,6 +24,9 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
     from termin.skeleton.skeleton import SkeletonData
     from termin.skeleton.skeleton_asset import SkeletonAsset
+    from termin.visualization.core.prefab_asset import PrefabAsset
+    from termin.kinematic.general_transform import GeneralTransform3
+    from termin.audio.audio_clip import AudioClipAsset, AudioClipHandle
 
 
 # Список стандартных компонентов для предрегистрации.
@@ -50,6 +53,9 @@ _BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.voxels.display_component", "VoxelDisplayComponent"),
     # NavMesh
     ("termin.navmesh.display_component", "NavMeshDisplayComponent"),
+    # Audio
+    ("termin.audio.components.audio_source", "AudioSource"),
+    ("termin.audio.components.audio_listener", "AudioListener"),
 ]
 
 # Список встроенных FramePass'ов для предрегистрации.
@@ -123,11 +129,13 @@ class ResourceManager:
         self._animation_clip_registry = self._create_animation_clip_registry()
         self._skeleton_registry = self._create_skeleton_registry()
         self._glsl_registry = self._create_glsl_registry()
+        self._audio_clip_registry = self._create_audio_clip_registry()
 
         # Legacy dicts (для обратной совместимости и типов без registry)
         self._material_assets: Dict[str, "MaterialAsset"] = {}
         self._shader_assets: Dict[str, "ShaderAsset"] = {}
         self._glb_assets: Dict[str, "GLBAsset"] = {}
+        self._prefab_assets: Dict[str, "PrefabAsset"] = {}
 
     def _create_mesh_registry(self):
         """Create AssetRegistry for meshes."""
@@ -309,6 +317,31 @@ class ResourceManager:
             data_to_asset=data_to_asset,
         )
 
+    def _create_audio_clip_registry(self):
+        """Create AssetRegistry for audio clips."""
+        from termin.visualization.core.asset_registry import AssetRegistry
+
+        def data_from_asset(asset):
+            from termin.audio.audio_clip import AudioClipHandle
+            return AudioClipHandle.from_asset(asset)
+
+        def data_to_asset(handle):
+            if handle is not None:
+                return handle.get_asset()
+            return None
+
+        # Import asset class lazily to avoid circular imports
+        def get_asset_class():
+            from termin.audio.audio_clip import AudioClipAsset
+            return AudioClipAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
     @property
     def _mesh_assets(self) -> Dict[str, "MeshAsset"]:
         """Legacy access to mesh assets dict."""
@@ -338,6 +371,11 @@ class ResourceManager:
     def _skeleton_assets(self) -> Dict[str, "SkeletonAsset"]:
         """Legacy access to skeleton assets dict."""
         return self._skeleton_registry.assets
+
+    @property
+    def _audio_clip_assets(self) -> Dict[str, "AudioClipAsset"]:
+        """Legacy access to audio clip assets dict."""
+        return self._audio_clip_registry.assets
 
     @property
     def glsl(self):
@@ -391,6 +429,10 @@ class ResourceManager:
             self._register_glb_file(name, result)
         elif result.resource_type == "glsl":
             self._register_glsl_file(name, result)
+        elif result.resource_type == "prefab":
+            self._register_prefab_file(name, result)
+        elif result.resource_type == "audio_clip":
+            self._register_audio_clip_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type: {result.resource_type}")
 
@@ -420,6 +462,10 @@ class ResourceManager:
             self._reload_glb_file(name, result)
         elif result.resource_type == "glsl":
             self._reload_glsl_file(name, result)
+        elif result.resource_type == "prefab":
+            self._reload_prefab_file(name, result)
+        elif result.resource_type == "audio_clip":
+            self._reload_audio_clip_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
 
@@ -825,6 +871,180 @@ class ResourceManager:
         # Reload content
         asset.parse_spec(result.spec_data)
         asset.reload()
+
+    def _register_prefab_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register prefab from PreLoadResult."""
+        from termin.visualization.core.prefab_asset import PrefabAsset
+
+        # Check if already registered by name
+        if name in self._prefab_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, PrefabAsset):
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = PrefabAsset(
+                data=None,
+                name=name,
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+            self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name
+        self._prefab_assets[name] = asset
+
+        # Load content (lazy - don't parse yet, just store path)
+        # Prefabs are loaded on demand when instantiated
+
+    def _reload_prefab_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload prefab from PreLoadResult (hot-reload)."""
+        from termin.visualization.core.prefab_asset import PrefabAsset
+
+        asset = self._prefab_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload from file and update all instances
+        new_asset = PrefabAsset.from_file(result.path, name=name)
+        asset.update_from(new_asset)
+
+    def _register_audio_clip_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register audio clip from PreLoadResult (lazy loading)."""
+        from termin.audio.audio_clip import AudioClipAsset
+
+        # Check if already registered by name
+        if name in self._audio_clip_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, AudioClipAsset):
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = AudioClipAsset(
+                name=name,
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+            self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name (lazy loading - don't load content yet)
+        self._audio_clip_assets[name] = asset
+
+    def _reload_audio_clip_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload audio clip from PreLoadResult."""
+        asset = self._audio_clip_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload audio data
+        asset.reload()
+
+    # --------- Prefabs ---------
+
+    def get_prefab_asset(self, name: str) -> Optional["PrefabAsset"]:
+        """Get PrefabAsset by name."""
+        return self._prefab_assets.get(name)
+
+    def get_prefab(self, name: str) -> Optional["PrefabAsset"]:
+        """Get PrefabAsset by name (alias for get_prefab_asset)."""
+        return self._prefab_assets.get(name)
+
+    def get_prefab_by_uuid(self, uuid: str) -> Optional["PrefabAsset"]:
+        """Get PrefabAsset by UUID."""
+        from termin.visualization.core.prefab_asset import PrefabAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, PrefabAsset):
+            return asset
+        return None
+
+    def register_prefab(
+        self,
+        name: str,
+        asset: "PrefabAsset",
+        source_path: str | None = None,
+    ) -> None:
+        """Register a PrefabAsset."""
+        self._prefab_assets[name] = asset
+        self._assets_by_uuid[asset.uuid] = asset
+        if source_path:
+            asset._source_path = source_path
+
+    def list_prefab_names(self) -> list[str]:
+        """List all registered prefab names."""
+        return sorted(self._prefab_assets.keys())
+
+    def find_prefab_name(self, asset: "PrefabAsset") -> Optional[str]:
+        """Find name of a PrefabAsset."""
+        for name, a in self._prefab_assets.items():
+            if a is asset:
+                return name
+        return None
+
+    def find_prefab_uuid(self, asset: "PrefabAsset") -> Optional[str]:
+        """Find UUID of a PrefabAsset."""
+        return asset.uuid if asset else None
+
+    def instantiate_prefab(
+        self,
+        name_or_uuid: str,
+        parent: "GeneralTransform3 | None" = None,
+        position: tuple[float, float, float] | None = None,
+        instance_name: str | None = None,
+    ) -> Optional["Entity"]:
+        """
+        Instantiate a prefab by name or UUID.
+
+        Args:
+            name_or_uuid: Prefab name or UUID
+            parent: Parent transform to attach to
+            position: Override position (local)
+            instance_name: Override name for root entity
+
+        Returns:
+            Root entity of the instance, or None if prefab not found
+        """
+        # Try by name first
+        asset = self._prefab_assets.get(name_or_uuid)
+
+        # Try by UUID
+        if asset is None:
+            asset = self.get_prefab_by_uuid(name_or_uuid)
+
+        if asset is None:
+            return None
+
+        # Ensure asset is loaded
+        if not asset.is_loaded:
+            asset.load()
+
+        return asset.instantiate(parent=parent, position=position, name=instance_name)
+
+    def unregister_prefab(self, name: str) -> None:
+        """Remove prefab by name."""
+        asset = self._prefab_assets.pop(name, None)
+        if asset is not None:
+            self._assets_by_uuid.pop(asset.uuid, None)
 
     def get_glsl(self, name: str) -> Optional[str]:
         """Get GLSL source by include name."""
@@ -1308,6 +1528,62 @@ class ResourceManager:
         self._skeleton_registry.unregister(name)
         if name in self.skeletons:
             del self.skeletons[name]
+
+    # --------- Audio Clips (Asset-based via registry) ---------
+    def get_audio_clip_asset(self, name: str) -> Optional["AudioClipAsset"]:
+        """Get AudioClipAsset by name."""
+        return self._audio_clip_registry.get_asset(name)
+
+    def get_audio_clip(self, name: str) -> Optional["AudioClipHandle"]:
+        """Get AudioClipHandle by name."""
+        return self._audio_clip_registry.get(name)
+
+    def register_audio_clip_asset(
+        self,
+        name: str,
+        asset: "AudioClipAsset",
+        source_path: str | None = None,
+        uuid: str | None = None,
+    ) -> None:
+        """Register AudioClipAsset."""
+        self._audio_clip_registry.register(name, asset, source_path, uuid)
+
+    def list_audio_clip_names(self) -> list[str]:
+        """List all registered audio clip names."""
+        return self._audio_clip_registry.list_names()
+
+    def find_audio_clip_name(self, handle: "AudioClipHandle") -> Optional[str]:
+        """Find name for an AudioClipHandle."""
+        return self._audio_clip_registry.find_name(handle)
+
+    def find_audio_clip_uuid(self, handle: "AudioClipHandle") -> Optional[str]:
+        """Find UUID for an AudioClipHandle."""
+        return self._audio_clip_registry.find_uuid(handle)
+
+    def get_audio_clip_by_uuid(self, uuid: str) -> Optional["AudioClipHandle"]:
+        """Get AudioClipHandle by UUID."""
+        return self._audio_clip_registry.get_by_uuid(uuid)
+
+    def get_audio_clip_asset_by_uuid(self, uuid: str) -> Optional["AudioClipAsset"]:
+        """Get AudioClipAsset by UUID."""
+        return self._audio_clip_registry.get_asset_by_uuid(uuid)
+
+    def get_or_create_audio_clip_asset(
+        self,
+        name: str,
+        source_path: str | None = None,
+        uuid: str | None = None,
+    ) -> "AudioClipAsset":
+        """Get AudioClipAsset by name, creating it if it doesn't exist."""
+        return self._audio_clip_registry.get_or_create_asset(
+            name=name,
+            source_path=source_path,
+            uuid=uuid,
+        )
+
+    def unregister_audio_clip(self, name: str) -> None:
+        """Remove audio clip by name."""
+        self._audio_clip_registry.unregister(name)
 
     # --------- Текстуры (Asset-based via registry) ---------
     def get_texture_asset(self, name: str) -> Optional["TextureAsset"]:

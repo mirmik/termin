@@ -38,6 +38,8 @@ from termin.editor.file_processors import (
     NavMeshProcessor,
     GLBPreLoader,
     GlslPreLoader,
+    PrefabPreLoader,
+    AudioPreLoader,
 )
 from termin.editor.spacemouse_controller import SpaceMouseController
 
@@ -187,6 +189,18 @@ class EditorWindow(QMainWindow):
         )
         self._project_file_watcher.register_processor(
             GLBPreLoader(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            PrefabPreLoader(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            AudioPreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )

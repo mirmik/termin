@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING, Union
 
 import numpy as np
@@ -261,6 +262,27 @@ class MaterialPhase:
             uniforms=uniforms,
         )
 
+    def copy(self) -> "MaterialPhase":
+        """
+        Создаёт копию фазы материала.
+
+        Стратегия копирования:
+        - shader_programm: переиспользуется (шейдеры неизменяемые)
+        - render_state: переиспользуется (неизменяемый)
+        - color: копируется (numpy array)
+        - textures: копируется dict (TextureHandle переиспользуются)
+        - uniforms: глубокое копирование (могут содержать numpy arrays)
+        """
+        return MaterialPhase(
+            shader_programm=self.shader_programm,  # переиспользуем
+            render_state=self.render_state,  # переиспользуем
+            phase_mark=self.phase_mark,
+            priority=self.priority,
+            color=self.color.copy() if self.color is not None else None,
+            textures=dict(self.textures),  # shallow copy, TextureHandle переиспользуются
+            uniforms=deepcopy(self.uniforms),  # deep copy для numpy arrays
+        )
+
 
 class Material:
     """Collection of shader parameters applied before drawing a mesh."""
@@ -384,6 +406,40 @@ class Material:
         self.phases = other.phases
         self.shader_name = other.shader_name
         # name и source_path не меняем — они идентифицируют материал
+
+    def copy(self, name: str | None = None) -> "Material":
+        """
+        Создаёт копию материала.
+
+        Стратегия копирования:
+        - phases: копируются (каждая фаза копируется через MaterialPhase.copy())
+        - shader_name: копируется
+        - name: задаётся явно или генерируется из оригинала
+        - source_path: не копируется (копия не связана с файлом)
+
+        Шейдеры и render_state переиспользуются (они неизменяемые).
+        Uniforms и color копируются глубоко.
+
+        Args:
+            name: Имя для копии. Если None, генерируется "{original_name}_copy".
+
+        Returns:
+            Новый экземпляр Material с скопированными данными.
+        """
+        mat = Material.__new__(Material)
+
+        if name is not None:
+            mat.name = name
+        elif self.name:
+            mat.name = f"{self.name}_copy"
+        else:
+            mat.name = "copy"
+
+        mat.source_path = None  # копия не связана с файлом
+        mat.shader_name = self.shader_name
+        mat.phases = [phase.copy() for phase in self.phases]
+
+        return mat
 
     def set_shader(self, program: "ShaderMultyPhaseProgramm", shader_name: str) -> None:
         """
