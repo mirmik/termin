@@ -17,6 +17,7 @@ from termin.editor.widgets.field_widgets import (
     FieldWidgetFactory,
     to_qcolor,
 )
+from termin.editor.widgets.audio_clip_widget import AudioClipFieldWidget
 
 __all__ = [
     "Vec3ListWidget",
@@ -32,6 +33,7 @@ __all__ = [
     "ButtonFieldWidget",
     "ComboFieldWidget",
     "ResourceComboWidget",
+    "AudioClipFieldWidget",
     "FieldWidgetFactory",
     "to_qcolor",
 ]

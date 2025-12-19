@@ -584,6 +584,11 @@ class FieldWidgetFactory:
                 resources=self._resources,
             )
 
+        if kind == "audio_clip":
+            from termin.editor.widgets.audio_clip_widget import AudioClipFieldWidget
+
+            return AudioClipFieldWidget(resources=self._resources)
+
         if kind == "vec3_list":
             from termin.editor.widgets.vec3_list_widget import Vec3ListWidget
 

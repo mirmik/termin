@@ -11,24 +11,24 @@
 ```
 termin/
 ├── audio/
-│   ├── __init__.py
-│   ├── audio_engine.py          # Singleton, обёртка над SDL_mixer
-│   ├── audio_clip.py            # AudioClipAsset + AudioClipHandle
+│   ├── __init__.py              ✅
+│   ├── audio_engine.py          ✅ Singleton, обёртка над SDL_mixer
+│   ├── audio_clip.py            ✅ AudioClipAsset + AudioClipHandle
 │   ├── audio_bus.py             # AudioBus, AudioMixer (optional)
-│   └── spatial_audio.py         # Утилиты для 3D звука (optional)
-│
-├── visualization/
-│   ├── core/
-│   │   └── resources.py         # + _audio_clip_registry
 │   └── components/
-│       ├── audio_source.py      # AudioSource component
-│       └── audio_listener.py    # AudioListener component
+│       ├── __init__.py          ✅
+│       ├── audio_source.py      ✅ AudioSource component
+│       └── audio_listener.py    ✅ AudioListener component
+│
+├── visualization/core/
+│   ├── resources.py             ✅ + _audio_clip_registry
+│   └── component.py             ✅ + audio_clip serialization
 │
 └── editor/
     ├── file_processors/
-    │   └── audio_processor.py   # AudioFileProcessor
+    │   └── audio_processor.py   ✅ AudioPreLoader
     └── widgets/
-        └── audio_clip_picker.py # UI widget for inspector
+        └── audio_clip_widget.py ✅ AudioClipFieldWidget
 ```
 
 ---
@@ -194,9 +194,9 @@ class AudioListener(Component):
 
 ---
 
-### Step 7: Inspector Widget
+### Step 7: Inspector Widget ✅ DONE
 
-**File:** `termin/editor/widgets/audio_clip_picker.py`
+**File:** `termin/editor/widgets/audio_clip_widget.py`
 
 UI виджет для выбора AudioClip:
 
@@ -345,8 +345,8 @@ pip install pysdl2-dll  # Includes SDL2_mixer on some platforms
 - [ ] 3D позиционирование работает (spatial_blend = 1)
 - [x] AudioFileProcessor загружает файлы при старте (реализовано)
 - [ ] Hot-reload аудио файлов работает
-- [ ] Inspector widget показывает и выбирает клипы
-- [ ] Preview playback в редакторе работает
+- [x] Inspector widget показывает и выбирает клипы (реализовано)
+- [x] Preview playback в редакторе работает (реализовано)
 - [x] Сериализация/десериализация AudioSource работает (реализовано)
 
 ---
