@@ -27,8 +27,6 @@ C = TypeVar("C", bound=Component)
 class Entity(Identifiable):
     """Container of components with transform data."""
 
-    _entities_by_pick_id: dict[int, "Entity"] = {}
-
     def __init__(
         self,
         pose: Pose3 | GeneralPose3 = None,
@@ -105,12 +103,14 @@ class Entity(Identifiable):
             if h == 0:
                 h = 1  # 0 means "nothing hit"
             self._pick_id = h
-            Entity._entities_by_pick_id[h] = self
+            from termin.visualization.core.entity_registry import EntityRegistry
+            EntityRegistry.instance().register_pick_id(h, self)
         return self._pick_id
 
     @classmethod
     def lookup_by_pick_id(cls, pid: int) -> "Entity | None":
-        return cls._entities_by_pick_id.get(pid)
+        from termin.visualization.core.entity_registry import EntityRegistry
+        return EntityRegistry.instance().get_by_pick_id(pid)
 
     def add_component(self, component: Component) -> Component:
         component.entity = self
@@ -179,7 +179,8 @@ class Entity(Identifiable):
 
         # Очищаем pick_id из глобального реестра
         if self._pick_id is not None:
-            Entity._entities_by_pick_id.pop(self._pick_id, None)
+            from termin.visualization.core.entity_registry import EntityRegistry
+            EntityRegistry.instance().unregister_pick_id(self._pick_id)
             self._pick_id = None
 
     def serialize(self):
