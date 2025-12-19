@@ -122,7 +122,7 @@ class PrefabAsset(DataAsset[dict]):
         if position is not None:
             pose = entity.transform.local_pose()
             pose.lin[...] = position
-            entity.transform.set_local_pose(pose)
+            entity.transform.relocate(pose)
 
         # Add PrefabInstanceMarker (if not already present from nested prefab)
         existing_marker = entity.get_component(PrefabInstanceMarker)
