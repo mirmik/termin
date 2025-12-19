@@ -842,8 +842,6 @@ class ImmediateGizmoController:
 
     def _start_translate(self, axis: str, viewport, x: float, y: float) -> None:
         """Start translation drag."""
-        from termin.geombase.pose3 import Pose3
-
         self.dragging = True
         self.drag_mode = "move"
         self.active_axis = axis
@@ -853,7 +851,8 @@ class ImmediateGizmoController:
         self.start_target_pos = global_pose.lin.copy()
 
         self._drag_transform = self.target.transform
-        self._start_pose = Pose3(lin=global_pose.lin.copy(), ang=global_pose.ang.copy())
+        # Store LOCAL pose for undo (not global!)
+        self._start_pose = self.target.transform.local_pose().copy()
 
         self.axis_vec = self.gizmo_renderer._get_world_axis(axis)
         self.axis_point = self.start_target_pos.copy()
@@ -873,8 +872,6 @@ class ImmediateGizmoController:
 
     def _start_plane_translate(self, element: GizmoElement, viewport, x: float, y: float) -> None:
         """Start plane translation drag."""
-        from termin.geombase.pose3 import Pose3
-
         self.dragging = True
         self.drag_mode = "plane_move"
         self.gizmo_renderer.active_element = element
@@ -883,7 +880,8 @@ class ImmediateGizmoController:
         self.start_target_pos = global_pose.lin.copy()
 
         self._drag_transform = self.target.transform
-        self._start_pose = Pose3(lin=global_pose.lin.copy(), ang=global_pose.ang.copy())
+        # Store LOCAL pose for undo (not global!)
+        self._start_pose = self.target.transform.local_pose().copy()
 
         # Get plane axes and normal
         plane_axes = self.gizmo_renderer.get_plane_axes(element)
@@ -908,8 +906,6 @@ class ImmediateGizmoController:
 
     def _start_rotate(self, axis: str, viewport, x: float, y: float) -> None:
         """Start rotation drag."""
-        from termin.geombase.pose3 import Pose3
-
         self.dragging = True
         self.drag_mode = "rotate"
         self.active_axis = axis
@@ -920,7 +916,8 @@ class ImmediateGizmoController:
         self.start_target_ang = global_pose.ang.copy()
 
         self._drag_transform = self.target.transform
-        self._start_pose = Pose3(lin=global_pose.lin.copy(), ang=global_pose.ang.copy())
+        # Store LOCAL pose for undo (not global!)
+        self._start_pose = self.target.transform.local_pose().copy()
 
         self.rot_axis = self.gizmo_renderer._get_world_axis(axis)
         self.rot_plane_origin = self.start_target_pos.copy()
@@ -1125,29 +1122,22 @@ class ImmediateGizmoController:
             return
 
         from termin.editor.editor_commands import TransformEditCommand
-        from termin.geombase.general_pose3 import GeneralPose3
 
         tf = self._drag_transform
         end_pose = tf.local_pose()
 
-        # Check if anything changed
+        # Check if anything changed (position, rotation, or scale)
         if (
             np.allclose(end_pose.lin, self._start_pose.lin)
             and np.allclose(end_pose.ang, self._start_pose.ang)
+            and np.allclose(end_pose.scale, self._start_pose.scale)
         ):
             return
 
-        # Convert Pose3 to GeneralPose3 with scale from current transform
-        scale = end_pose.scale
-        old_general_pose = GeneralPose3(
-            lin=self._start_pose.lin,
-            ang=self._start_pose.ang,
-            scale=scale,
-        )
-
+        # _start_pose is already a GeneralPose3 (from local_pose().copy())
         cmd = TransformEditCommand(
             transform=tf,
-            old_pose=old_general_pose,
+            old_pose=self._start_pose,
             new_pose=end_pose,
         )
         self._undo_handler(cmd, False)

@@ -552,7 +552,7 @@ class GizmoMoveController(InputComponent):
         self.start_target_pos = global_pose.lin.copy()
 
         self._drag_transform = self.target.transform
-        self._start_pose = self.target.transform.local_pose()
+        self._start_pose = self.target.transform.local_pose().copy()
 
         self.axis_vec = self._get_axis_vector(axis)
         self.axis_point = self.start_target_pos.copy()
@@ -642,7 +642,7 @@ class GizmoMoveController(InputComponent):
         self.start_target_ang = global_pose.ang.copy()
 
         self._drag_transform = self.target.transform
-        self._start_pose = self.target.transform.local_pose()
+        self._start_pose = self.target.transform.local_pose().copy()
 
         # мировая ось вращения – та же, что и направление стрелки/кольца
         self.rot_axis = self._get_axis_vector(axis)
