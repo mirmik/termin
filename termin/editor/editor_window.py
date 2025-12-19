@@ -48,7 +48,6 @@ from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.editor.project_browser import ProjectBrowser
 from termin.editor.settings import EditorSettings
-from termin.editor.prefab_persistence import PrefabPersistence
 from termin.editor.drag_drop import EditorMimeTypes, parse_asset_path_mime_data
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
@@ -1148,23 +1147,19 @@ class EditorWindow(QMainWindow):
             drop_pos: Позиция drop в координатах виджета
         """
         from termin.geombase.pose3 import Pose3
-        import numpy as np
-
-        # Загружаем prefab
-        rm = ResourceManager.instance()
-        persistence = PrefabPersistence(rm)
-
-        try:
-            entity = persistence.load(Path(prefab_path))
-        except Exception as e:
-            print(f"Failed to load prefab: {e}")
-            return
 
         # Определяем позицию в мире через unproject
         world_pos = self._unproject_drop_position(drop_pos)
 
-        # Устанавливаем позицию через relocate
-        entity.transform.relocate(Pose3(lin=world_pos))
+        # Используем PrefabAsset.instantiate() для правильного создания маркера
+        rm = ResourceManager.instance()
+        prefab_name = Path(prefab_path).stem
+        position = (float(world_pos[0]), float(world_pos[1]), float(world_pos[2]))
+
+        entity = rm.instantiate_prefab(prefab_name, position=position)
+        if entity is None:
+            print(f"Failed to instantiate prefab: {prefab_name}")
+            return
 
         # Добавляем entity в сцену через команду (с поддержкой undo)
         cmd = AddEntityCommand(self.scene, entity)

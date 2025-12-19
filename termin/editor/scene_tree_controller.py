@@ -18,7 +18,6 @@ from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.geombase.pose3 import Pose3
 from termin.editor.editor_tree import SceneTreeModel
-from termin.editor.prefab_persistence import PrefabPersistence
 from termin.visualization.core.resources import ResourceManager
 
 
@@ -281,16 +280,17 @@ class SceneTreeController:
     ) -> None:
         """Handle prefab drop from Project Browser."""
         rm = ResourceManager.instance()
-        persistence = PrefabPersistence(rm)
 
-        try:
-            entity = persistence.load(Path(prefab_path))
-        except Exception as e:
-            print(f"Failed to load prefab: {e}")
+        # Use PrefabAsset.instantiate() to properly add PrefabInstanceMarker
+        prefab_name = Path(prefab_path).stem
+        parent_transform = parent_entity.transform if parent_entity else None
+
+        entity = rm.instantiate_prefab(prefab_name, parent=parent_transform)
+        if entity is None:
+            print(f"Failed to instantiate prefab: {prefab_name}")
             return
 
-        parent_transform = parent_entity.transform if parent_entity else None
-        cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
+        cmd = AddEntityCommand(self._scene, entity, parent_transform=None)  # Already parented
         self._undo_handler(cmd, merge=False)
 
         self.rebuild(select_obj=entity)
