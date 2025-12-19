@@ -335,6 +335,10 @@ class EditorDisplayInputManager:
                         if on_click is not None:
                             on_click(hit, button)
 
+        # Editor callbacks for picking/gizmo (allow editing in game mode)
+        if self._on_mouse_button_event is not None:
+            self._on_mouse_button_event(button, action, x, y, viewport)
+
         self._request_update()
 
     def _handle_mouse_button_editor_mode(self, button: MouseButton, action: Action, mods: int) -> None:

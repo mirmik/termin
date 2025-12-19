@@ -1593,25 +1593,12 @@ class EditorWindow(QMainWindow):
             # Переключаем все EditorViewportFeatures в режим game
             for editor_features in self._editor_features.values():
                 editor_features.set_world_mode("game")
-
-            # Скрываем гизмо
-            if self.gizmo_controller is not None:
-                self.gizmo_controller.set_visible(False)
-
-            # Сбрасываем выделение
-            if self.selection_manager is not None:
-                self.selection_manager.clear()
-            if self.inspector is not None:
-                self.inspector.set_target(None)
+            # Гизмо и выделение остаются активными для редактирования в game mode
         else:
             # Выходим из игрового режима
             # Переключаем все EditorViewportFeatures в режим editor
             for editor_features in self._editor_features.values():
                 editor_features.set_world_mode("editor")
-
-            # Показываем гизмо
-            if self.gizmo_controller is not None:
-                self.gizmo_controller.set_visible(True)
 
             # Обновляем дерево сцены
             if self.scene_tree_controller is not None:
