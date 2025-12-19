@@ -13,7 +13,6 @@ from termin.visualization.render.components.light_component import LightComponen
 from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.geombase.ray import Ray3
 from termin.colliders.raycast_hit import RaycastHit
-from termin.colliders.collider_component import ColliderComponent
 
 from .skybox import SkyboxManager
 from .lighting import LightingManager
@@ -295,6 +294,8 @@ class Scene(Identifiable):
     # --- Component registration ---
 
     def register_component(self, component: Component):
+        from termin.colliders.collider_component import ColliderComponent
+
         if isinstance(component, ColliderComponent):
             self.colliders.append(component)
 
