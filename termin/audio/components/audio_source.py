@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from termin.visualization.core.component import Component
 from termin.editor.inspect_field import InspectField
-from termin.audio.audio_clip import AudioClipHandle
+from termin.assets.audio_clip_handle import AudioClipHandle
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

@@ -26,7 +26,8 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.assets.skeleton_asset import SkeletonAsset
     from termin.assets.prefab_asset import PrefabAsset
     from termin.kinematic.general_transform import GeneralTransform3
-    from termin.assets.audio_clip import AudioClipAsset, AudioClipHandle
+    from termin.assets.audio_clip_asset import AudioClipAsset
+    from termin.assets.audio_clip_handle import AudioClipHandle
 
 
 # Список стандартных компонентов для предрегистрации.
@@ -322,7 +323,7 @@ class ResourceManager:
         from termin.assets.asset_registry import AssetRegistry
 
         def data_from_asset(asset):
-            from termin.assets.audio_clip import AudioClipHandle
+            from termin.assets.audio_clip_handle import AudioClipHandle
             return AudioClipHandle.from_asset(asset)
 
         def data_to_asset(handle):
@@ -332,7 +333,7 @@ class ResourceManager:
 
         # Import asset class lazily to avoid circular imports
         def get_asset_class():
-            from termin.assets.audio_clip import AudioClipAsset
+            from termin.assets.audio_clip_asset import AudioClipAsset
             return AudioClipAsset
 
         return AssetRegistry(
@@ -921,7 +922,7 @@ class ResourceManager:
 
     def _register_audio_clip_file(self, name: str, result: "PreLoadResult") -> None:
         """Register audio clip from PreLoadResult (lazy loading)."""
-        from termin.assets.audio_clip import AudioClipAsset
+        from termin.assets.audio_clip_asset import AudioClipAsset
 
         # Check if already registered by name
         if name in self._audio_clip_assets:
