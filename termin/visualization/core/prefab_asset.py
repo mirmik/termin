@@ -126,9 +126,16 @@ class PrefabAsset(DataAsset[dict]):
 
         # Add PrefabInstanceMarker (if not already present from nested prefab)
         existing_marker = entity.get_component(PrefabInstanceMarker)
+        print(f"[PrefabAsset] Instantiating '{self.name}', existing_marker={existing_marker}")
         if existing_marker is None:
             marker = PrefabInstanceMarker(prefab_uuid=self.uuid)
             entity.add_component(marker)
+            # Verify marker was added
+            verify_marker = entity.get_component(PrefabInstanceMarker)
+            print(f"[PrefabAsset] Added PrefabInstanceMarker to '{entity.name}', uuid={self.uuid}, verify={verify_marker is not None}")
+            print(f"[PrefabAsset] Entity components: {[type(c).__name__ for c in entity.components]}")
+        else:
+            print(f"[PrefabAsset] Entity already has marker for prefab={existing_marker.prefab_uuid}")
 
         # Attach to parent
         if parent is not None:
