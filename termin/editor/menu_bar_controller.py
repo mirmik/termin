@@ -48,6 +48,7 @@ class MenuBarController:
         on_show_undo_stack_viewer: Callable,
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
+        on_show_audio_debugger: Callable,
         on_toggle_fullscreen: Callable,
         # State getters
         can_undo: Callable[[], bool],
@@ -85,6 +86,7 @@ class MenuBarController:
             on_show_undo_stack_viewer=on_show_undo_stack_viewer,
             on_show_framegraph_debugger=on_show_framegraph_debugger,
             on_show_resource_manager_viewer=on_show_resource_manager_viewer,
+            on_show_audio_debugger=on_show_audio_debugger,
             on_toggle_fullscreen=on_toggle_fullscreen,
         )
 
@@ -111,6 +113,7 @@ class MenuBarController:
         on_show_undo_stack_viewer: Callable,
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
+        on_show_audio_debugger: Callable,
         on_toggle_fullscreen: Callable,
     ) -> None:
         """Create menu bar structure and connect actions."""
@@ -211,6 +214,9 @@ class MenuBarController:
 
         resource_debug_action = debug_menu.addAction("Resource Manager...")
         resource_debug_action.triggered.connect(on_show_resource_manager_viewer)
+
+        audio_debug_action = debug_menu.addAction("Audio Debugger...")
+        audio_debug_action.triggered.connect(on_show_audio_debugger)
 
         self.update_undo_redo_actions()
 

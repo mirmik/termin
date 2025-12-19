@@ -348,6 +348,7 @@ pip install pysdl2-dll  # Includes SDL2_mixer on some platforms
 - [x] Inspector widget показывает и выбирает клипы (реализовано)
 - [x] Preview playback в редакторе работает (реализовано)
 - [x] Сериализация/десериализация AudioSource работает (реализовано)
+- [x] Audio Debugger в меню Debug (L/R levels, active channels)
 
 ---
 

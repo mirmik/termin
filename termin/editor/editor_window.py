@@ -428,6 +428,7 @@ class EditorWindow(QMainWindow):
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
+            on_show_audio_debugger=self._show_audio_debugger,
             on_toggle_fullscreen=self._toggle_fullscreen,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
@@ -519,6 +520,10 @@ class EditorWindow(QMainWindow):
     def _show_resource_manager_viewer(self) -> None:
         """Opens resource manager viewer dialog."""
         self._dialog_manager.show_resource_manager_viewer()
+
+    def _show_audio_debugger(self) -> None:
+        """Opens audio debugger dialog."""
+        self._dialog_manager.show_audio_debugger()
 
     # ----------- editor camera -----------
 

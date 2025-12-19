@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from termin.editor.undo_stack_viewer import UndoStackViewer
     from termin.editor.framegraph_debugger import FramegraphDebugDialog
     from termin.editor.resource_manager_viewer import ResourceManagerViewer
+    from termin.editor.audio_debugger import AudioDebugDialog
     from termin.editor.project_file_watcher import ProjectFileWatcher
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.resources import ResourceManager
@@ -53,6 +54,7 @@ class DialogManager:
         self._undo_stack_viewer: "UndoStackViewer | None" = None
         self._framegraph_debugger: "FramegraphDebugDialog | None" = None
         self._resource_manager_viewer: "ResourceManagerViewer | None" = None
+        self._audio_debugger: "AudioDebugDialog | None" = None
 
     @property
     def framegraph_debugger(self) -> "FramegraphDebugDialog | None":
@@ -152,6 +154,17 @@ class DialogManager:
         self._resource_manager_viewer.show()
         self._resource_manager_viewer.raise_()
         self._resource_manager_viewer.activateWindow()
+
+    def show_audio_debugger(self) -> None:
+        """Opens audio debugger dialog."""
+        if self._audio_debugger is None:
+            from termin.editor.audio_debugger import AudioDebugDialog
+
+            self._audio_debugger = AudioDebugDialog(parent=self._parent)
+
+        self._audio_debugger.show()
+        self._audio_debugger.raise_()
+        self._audio_debugger.activateWindow()
 
     def show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""
