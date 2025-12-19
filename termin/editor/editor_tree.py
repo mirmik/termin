@@ -1,5 +1,6 @@
 # ===== termin/editor/editor_tree.py =====
 from PyQt6.QtCore import Qt, QAbstractItemModel, QModelIndex, pyqtSignal
+from PyQt6.QtGui import QColor
 
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity
@@ -132,6 +133,12 @@ class SceneTreeModel(QAbstractItemModel):
         node: NodeWrapper = index.internalPointer()
         if role == Qt.ItemDataRole.DisplayRole:
             return node.name
+        if role == Qt.ItemDataRole.ForegroundRole:
+            # Blue color for prefab instances
+            if isinstance(node.obj, Entity):
+                from termin.visualization.core.prefab_instance_marker import PrefabInstanceMarker
+                if node.obj.get_component(PrefabInstanceMarker) is not None:
+                    return QColor(70, 130, 220)  # Steel blue
         return None
 
     # ==============================================================

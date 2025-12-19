@@ -290,6 +290,7 @@ class WorldPersistence:
             "resources": self._resource_manager.serialize(),
             "scene": self._scene.serialize(),
             "editor": editor_data,
+            "scene_path": self._current_scene_path,
         }
         return copy.deepcopy(data)
 
@@ -302,6 +303,8 @@ class WorldPersistence:
             state: Сохранённое состояние из save_state()
         """
         self._restore_from_data(state)
+        # Restore scene path (important for prefab edit mode exit)
+        self._current_scene_path = state.get("scene_path")
 
     def _restore_from_data(self, data: dict) -> dict:
         """
