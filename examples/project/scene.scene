@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "35c476ae-7ca8-4aed-a3fc-7c3eeefa8a25",
+    "uuid": "a44aeb30-4d5a-49dd-96c3-23710012539c",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -26,15 +26,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            -0.07064370368607342,
-            -0.2305206060409546,
-            -0.7046895399689674
+            2.4875641350163877,
+            -0.846806746723527,
+            -2.0413382650130143
           ],
           "rotation": [
-            -0.677741409721475,
-            -0.025704242581240128,
-            -0.023718975315609455,
-            0.7344680276717633
+            -0.6772284224280383,
+            -0.0712766571639874,
+            0.03566676864171612,
+            0.7314432196786133
           ]
         },
         "components": [
@@ -44,9 +44,10 @@
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001"
               },
-              "material": {
-                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
+              "base_material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
               },
+              "override_material": false,
               "cast_shadow": true
             },
             "type": "MeshRenderer"
@@ -83,15 +84,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            1.286,
-            1.8578306641578672,
-            -0.10679727935791017
+            1.0512385234832764,
+            2.8277906384468077,
+            -2.3101813360452654
           ],
           "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
+            0.009471446672855356,
+            -0.010082469061528111,
+            0.6166822763483594,
+            0.7870905955183
           ]
         },
         "components": [
@@ -101,9 +102,7 @@
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001"
               },
-              "material": {
-                "uuid": "e4dee1c0-cbfb-4092-a3b1-592371eac13d"
-              },
+              "override_material": false,
               "cast_shadow": true
             },
             "type": "MeshRenderer"
@@ -203,9 +202,9 @@
           ],
           "rotation": [
             0.0,
+            0.0023149690472851346,
             0.0,
-            0.0,
-            1.0
+            0.9999973204555651
           ]
         },
         "components": [
@@ -215,12 +214,26 @@
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001"
               },
-              "material": {
-                "uuid": "1f35d050-0b74-4b8e-af69-ca422915e8b4"
+              "base_material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
               },
+              "override_material": true,
               "cast_shadow": true
             },
             "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "volume": 1.0,
+              "pitch": 1.0,
+              "loop": false,
+              "play_on_awake": true,
+              "spatial_blend": 1.0,
+              "min_distance": 1.0,
+              "max_distance": 50.0
+            },
+            "type": "AudioSource"
           }
         ],
         "children": []
@@ -360,8 +373,8 @@
         "flags": 0,
         "pose": {
           "position": [
-            -1.8909255862236023,
-            -3.264790177345276,
+            -0.8422852158546448,
+            -2.507051467895508,
             -1.0276350677013397
           ],
           "rotation": [
@@ -378,9 +391,7 @@
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001"
               },
-              "material": {
-                "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
-              },
+              "override_material": false,
               "cast_shadow": true
             },
             "type": "MeshRenderer"
@@ -428,9 +439,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            3.389,
-            -6.906,
-            -1.3676974067687988
+            2.891357006072998,
+            -8.817680221557616,
+            -2.7110032329559326
           ],
           "rotation": [
             0.0,
@@ -446,9 +457,10 @@
               "mesh": {
                 "uuid": "150908e5-3116-488a-9a0e-77f14786003d"
               },
-              "material": {
+              "base_material": {
                 "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
               },
+              "override_material": false,
               "cast_shadow": true
             },
             "type": "MeshRenderer"
@@ -709,6 +721,7 @@
               {
                 "data": {
                   "enabled": false,
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "MeshRenderer"
@@ -748,6 +761,7 @@
               {
                 "data": {
                   "enabled": false,
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "MeshRenderer"
@@ -819,6 +833,7 @@
               {
                 "data": {
                   "enabled": true,
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "MeshRenderer"
@@ -830,7 +845,7 @@
       },
       {
         "uuid": "43819aaa-aca9-48ee-bc46-e888088ffcfb",
-        "name": "entity5",
+        "name": "Light",
         "priority": 0,
         "scale": [
           1.0,
@@ -850,10 +865,10 @@
             -0.4468865394592285
           ],
           "rotation": [
-            0.14468039355396725,
-            0.0,
-            0.0,
-            0.9894784402507562
+            -0.7094985030164561,
+            -0.03247937341678645,
+            0.03530809367320712,
+            0.703072046835191
           ]
         },
         "components": [
@@ -867,7 +882,7 @@
               ],
               "intensity": 1.0,
               "shadows_enabled": true,
-              "shadows_map_resolution": 1024
+              "shadows_map_resolution": 4096
             },
             "type": "LightComponent"
           }
@@ -936,6 +951,7 @@
               {
                 "data": {
                   "enabled": true,
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "MeshRenderer"
@@ -975,6 +991,7 @@
               {
                 "data": {
                   "enabled": true,
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "MeshRenderer"
@@ -1014,6 +1031,7 @@
               {
                 "data": {
                   "enabled": true,
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "MeshRenderer"
@@ -1053,6 +1071,7 @@
               {
                 "data": {
                   "enabled": true,
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "MeshRenderer"
@@ -1079,7 +1098,7 @@
         "flags": 0,
         "pose": {
           "position": [
-            -1.6395319700241089,
+            -1.1645675897598267,
             2.088759742946422e-06,
             -2.920297861099243
           ],
@@ -1257,9 +1276,7 @@
                   "mesh": {
                     "uuid": "8bd09416-9c7e-4e78-bda1-641d3482e506"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1302,9 +1319,10 @@
                   "mesh": {
                     "uuid": "786bb9bf-0e64-4dca-afec-d62b3dc9feae"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
+                  "base_material": {
+                    "uuid": "00000000-0000-0000-0002-000000000001"
                   },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1347,9 +1365,7 @@
                   "mesh": {
                     "uuid": "287cc28b-657b-429c-9d00-e69195cb1887"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1392,9 +1408,7 @@
                   "mesh": {
                     "uuid": "ed833ccb-7339-4d23-94d2-07d21d3e7b08"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1437,9 +1451,10 @@
                   "mesh": {
                     "uuid": "f5ec0c5a-99cb-4bd8-a424-953aa97bf6b7"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
+                  "base_material": {
+                    "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b"
                   },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1482,9 +1497,7 @@
                   "mesh": {
                     "uuid": "7b49ace0-9ca3-42f4-a911-fcf77a6cbd3c"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1527,9 +1540,7 @@
                   "mesh": {
                     "uuid": "507bd6b6-819a-4ebb-92bf-a167f42ac354"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1572,9 +1583,7 @@
                   "mesh": {
                     "uuid": "6432a38a-882f-4c5c-8e47-a800cb44cc3e"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1617,9 +1626,7 @@
                   "mesh": {
                     "uuid": "0cb882c2-d41b-4ebe-b500-72dd04b63e90"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1662,9 +1669,7 @@
                   "mesh": {
                     "uuid": "282bd2fd-dcd6-42ff-a07d-f76aaa11cec9"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1707,9 +1712,7 @@
                   "mesh": {
                     "uuid": "c6513438-2b62-4d41-ab65-d7371067cd14"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1752,9 +1755,7 @@
                   "mesh": {
                     "uuid": "b7de39e1-9b44-4358-ac3f-40dffc2ca401"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1797,9 +1798,7 @@
                   "mesh": {
                     "uuid": "35f6c7a0-80f6-437e-9c89-04c71d55e4cc"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1842,9 +1841,7 @@
                   "mesh": {
                     "uuid": "82ff9fa0-28ad-41fc-8007-54cda380f60c"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
-                  },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -1887,9 +1884,10 @@
                   "mesh": {
                     "uuid": "f995496f-6565-44b6-9df1-99b10b48ca81"
                   },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000005"
+                  "base_material": {
+                    "uuid": "00000000-0000-0000-0002-000000000001"
                   },
+                  "override_material": false,
                   "cast_shadow": true
                 },
                 "type": "SkinnedMeshRenderer"
@@ -4797,6 +4795,68 @@
             ]
           }
         ]
+      },
+      {
+        "uuid": "277899a4-9f8a-4389-b348-bb7809b5cf43",
+        "name": "entity5",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true
+            },
+            "type": "PhysicsWorldComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "prefab_uuid": "d476c9da-14ec-43da-9d98-2702592db3ab",
+        "instance_uuid": "50c0029e-a3db-45cc-9060-412f85b08597",
+        "pose": {
+          "position": [
+            -3.5773003101348877,
+            -3.5520684719085693,
+            -2.926180124282837
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "overrides": {},
+        "name": "[Root]"
       }
     ],
     "layer_names": {
@@ -4819,6 +4879,11 @@
       1.0
     ],
     "ambient_intensity": 0.1,
+    "shadow_settings": {
+      "method": 2,
+      "softness": 0.40000000000000036,
+      "bias": 0.001
+    },
     "skybox_type": "gradient",
     "skybox_color": [
       0.30000001192092896,
@@ -4839,15 +4904,15 @@
   "editor": {
     "camera": {
       "target": [
-        -1.6395319700241089,
-        2.0887596292595845e-06,
-        -2.920297861099243
+        5.50241231918335,
+        11.719310760498047,
+        -5.3004021644592285
       ],
-      "radius": 5.5,
-      "azimuth": 49.56386009813976,
-      "elevation": 0.6911503837897474
+      "radius": 22.5,
+      "azimuth": 68.78691647960511,
+      "elevation": 0.24085543677521304
     },
-    "selected_entity": "cube2",
+    "selected_entity": "entity1",
     "displays": [
       {
         "name": "Editor",
@@ -4856,7 +4921,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "5e3d16d7-1b8b-406b-b816-6d690326fcc2",
+            "uuid": "d16b4c2f-fdff-44a4-9b85-c6a9d6e72b01",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -4875,7 +4940,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "0f51a599-e10a-4826-97b3-31366d959802",
+            "uuid": "4c854ec7-54e1-499a-b5d4-072d22cf0abc",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
