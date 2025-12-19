@@ -44,15 +44,16 @@ class SceneTreeController:
         self._request_viewport_update = request_viewport_update
 
         self._model: SceneTreeModel = SceneTreeModel(self._scene)
-        self._setup_tree()
+        self._setup_tree(expand_all=True)
 
     @property
     def model(self) -> SceneTreeModel:
         return self._model
 
-    def _setup_tree(self) -> None:
+    def _setup_tree(self, expand_all: bool = False) -> None:
         self._tree.setModel(self._model)
-        self._tree.expandAll()
+        if expand_all:
+            self._tree.expandAll()
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._on_tree_context_menu)
 
@@ -80,14 +81,89 @@ class SceneTreeController:
         Перестраивает модель по текущей сцене и опционально выделяет объект.
         Вызывается, когда структура сцены поменялась (Add/Delete/Rename, undo/redo).
         """
+        # Save expanded state before rebuilding
+        expanded_names = self._get_expanded_entity_names()
+
         self._model = SceneTreeModel(self._scene)
-        self._setup_tree()
+        self._setup_tree(expand_all=False)
+
+        # Restore expanded state
+        self._restore_expanded_state(expanded_names)
+
         if select_obj is not None:
             self.select_object(select_obj)
+
+    def _get_expanded_entity_names(self) -> set[str]:
+        """Collect names of expanded entities."""
+        expanded = set()
+        self._collect_expanded_recursive(self._model.root, expanded)
+        return expanded
+
+    def _collect_expanded_recursive(self, node, expanded: set[str]) -> None:
+        """Recursively collect expanded entity names."""
+        from termin.editor.editor_tree import NodeWrapper
+
+        for child in node.children:
+            if isinstance(child, NodeWrapper) and isinstance(child.obj, Entity):
+                index = self._model.index_for_object(child.obj)
+                if index.isValid() and self._tree.isExpanded(index):
+                    expanded.add(child.obj.name)
+            self._collect_expanded_recursive(child, expanded)
+
+    def _restore_expanded_state(self, expanded_names: set[str]) -> None:
+        """Restore expanded state for entities by name."""
+        self._expand_by_names_recursive(self._model.root, expanded_names)
+
+    def _expand_by_names_recursive(self, node, expanded_names: set[str]) -> None:
+        """Recursively expand entities that were previously expanded."""
+        from termin.editor.editor_tree import NodeWrapper
+
+        for child in node.children:
+            if isinstance(child, NodeWrapper) and isinstance(child.obj, Entity):
+                if child.obj.name in expanded_names:
+                    index = self._model.index_for_object(child.obj)
+                    if index.isValid():
+                        self._tree.setExpanded(index, True)
+            self._expand_by_names_recursive(child, expanded_names)
+
+    # ---------- инкрементальные обновления ----------
+
+    def add_entity(self, entity: Entity) -> None:
+        """Add single entity to tree and select it."""
+        self._model.add_entity(entity)
+        self.select_object(entity)
+
+    def add_entity_hierarchy(self, entity: Entity) -> None:
+        """Add entity with all children to tree and select root."""
+        self._model.add_entity_hierarchy(entity)
+        self.select_object(entity)
+
+    def remove_entity(self, entity: Entity, select_parent: bool = True) -> None:
+        """Remove entity from tree. Optionally select parent."""
+        parent_ent = None
+        if select_parent:
+            node = self._model._obj_to_node.get(entity)
+            if node and node.parent and node.parent.obj:
+                parent_ent = node.parent.obj
+
+        self._model.remove_entity(entity)
+
+        if select_parent and parent_ent:
+            self.select_object(parent_ent)
+
+    def move_entity(self, entity: Entity, new_parent: Entity | None) -> None:
+        """Move entity to new parent in tree."""
+        self._model.move_entity(entity, new_parent)
+        self.select_object(entity)
+
+    def update_entity(self, entity: Entity) -> None:
+        """Update entity display (e.g., after rename)."""
+        self._model.update_entity(entity)
 
     def select_object(self, obj: object | None) -> None:
         """
         Выделяет объект в дереве, если он там есть.
+        Раскрывает родительские узлы, чтобы объект был видим.
         """
         if obj is None:
             return
@@ -95,6 +171,13 @@ class SceneTreeController:
         idx = model.index_for_object(obj)
         if not idx.isValid():
             return
+
+        # Expand all ancestors so the item is visible
+        parent_idx = idx.parent()
+        while parent_idx.isValid():
+            self._tree.setExpanded(parent_idx, True)
+            parent_idx = parent_idx.parent()
+
         self._tree.setCurrentIndex(idx)
         self._tree.scrollTo(idx)
 
@@ -157,7 +240,7 @@ class SceneTreeController:
         cmd = AddEntityCommand(self._scene, ent, parent_transform=parent_transform)
         self._undo_handler(cmd, merge=False)
 
-        self.rebuild(select_obj=ent)
+        self.add_entity(ent)
         if self._request_viewport_update is not None:
             self._request_viewport_update()
 
@@ -208,7 +291,9 @@ class SceneTreeController:
             cmd = DeleteEntityCommand(self._scene, ent)
             self._undo_handler(cmd, merge=False)
 
-        self.rebuild(select_obj=parent_ent_for_select)
+        self.remove_entity(ent, select_parent=False)
+        if parent_ent_for_select:
+            self.select_object(parent_ent_for_select)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()
@@ -243,7 +328,7 @@ class SceneTreeController:
         cmd = RenameEntityCommand(ent, old_name, new_name)
         self._undo_handler(cmd, merge=False)
 
-        self.rebuild(select_obj=ent)
+        self.update_entity(ent)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()
@@ -266,7 +351,7 @@ class SceneTreeController:
         cmd = ReparentEntityCommand(entity, old_parent, new_parent)
         self._undo_handler(cmd, merge=False)
 
-        self.rebuild(select_obj=entity)
+        self.move_entity(entity, new_parent_entity)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()
@@ -293,7 +378,7 @@ class SceneTreeController:
         cmd = AddEntityCommand(self._scene, entity, parent_transform=None)  # Already parented
         self._undo_handler(cmd, merge=False)
 
-        self.rebuild(select_obj=entity)
+        self.add_entity_hierarchy(entity)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()
@@ -318,7 +403,7 @@ class SceneTreeController:
         cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
         self._undo_handler(cmd, merge=False)
 
-        self.rebuild(select_obj=entity)
+        self.add_entity_hierarchy(entity)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()
@@ -354,7 +439,7 @@ class SceneTreeController:
         cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
         self._undo_handler(cmd, merge=False)
 
-        self.rebuild(select_obj=entity)
+        self.add_entity_hierarchy(entity)
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()

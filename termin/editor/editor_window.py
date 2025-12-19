@@ -1166,7 +1166,7 @@ class EditorWindow(QMainWindow):
         self.push_undo_command(cmd, merge=False)
 
         # Обновляем SceneTree и выделяем новый entity
-        self.scene_tree_controller.rebuild(select_obj=entity)
+        self.scene_tree_controller.add_entity_hierarchy(entity)
 
         # Выделяем entity
         if self.selection_manager is not None:

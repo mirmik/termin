@@ -182,6 +182,155 @@ class SceneTreeModel(QAbstractItemModel):
         return parent_index
 
     # ==============================================================
+    # Incremental updates
+    # ==============================================================
+
+    def add_entity_hierarchy(self, entity: Entity) -> QModelIndex:
+        """
+        Add an entity and all its children to the tree.
+        Returns the QModelIndex of the root entity.
+        """
+        index = self.add_entity(entity)
+
+        # Recursively add children
+        for child_tf in entity.transform.children:
+            child_ent = child_tf.entity
+            if child_ent is not None:
+                self.add_entity_hierarchy(child_ent)
+
+        return index
+
+    def add_entity(self, entity: Entity) -> QModelIndex:
+        """
+        Add a new entity to the tree (without children).
+        Returns the QModelIndex of the new node.
+        """
+        if entity in self._obj_to_node:
+            # Already exists
+            return self.index_for_object(entity)
+
+        # Find parent node
+        parent_tf = entity.transform.parent
+        parent_ent = parent_tf.entity if parent_tf is not None else None
+
+        if isinstance(parent_ent, Entity) and parent_ent in self._obj_to_node:
+            parent_node = self._obj_to_node[parent_ent]
+        else:
+            parent_node = self.root
+
+        parent_index = self.index_for_object(parent_ent) if parent_ent else QModelIndex()
+
+        # Insert new node
+        row = len(parent_node.children)
+        self.beginInsertRows(parent_index, row, row)
+
+        node = NodeWrapper(entity, parent=parent_node)
+        self._obj_to_node[entity] = node
+        parent_node.children.append(node)
+
+        self.endInsertRows()
+
+        return self.index_for_object(entity)
+
+    def remove_entity(self, entity: Entity) -> bool:
+        """
+        Remove an entity from the tree.
+        Returns True if removed successfully.
+        """
+        node = self._obj_to_node.get(entity)
+        if node is None:
+            return False
+
+        parent_node = node.parent
+        if parent_node is None:
+            return False
+
+        # Get parent index
+        if parent_node is self.root:
+            parent_index = QModelIndex()
+        else:
+            parent_index = self.index_for_object(parent_node.obj)
+
+        row = parent_node.children.index(node)
+
+        self.beginRemoveRows(parent_index, row, row)
+
+        parent_node.children.remove(node)
+        del self._obj_to_node[entity]
+
+        # Also remove all descendants from the map
+        self._remove_descendants_from_map(node)
+
+        self.endRemoveRows()
+
+        return True
+
+    def _remove_descendants_from_map(self, node: NodeWrapper) -> None:
+        """Remove all descendant entities from _obj_to_node."""
+        for child in node.children:
+            if child.obj is not None:
+                self._obj_to_node.pop(child.obj, None)
+            self._remove_descendants_from_map(child)
+
+    def move_entity(self, entity: Entity, new_parent: Entity | None) -> bool:
+        """
+        Move an entity to a new parent.
+        Returns True if moved successfully.
+        """
+        node = self._obj_to_node.get(entity)
+        if node is None:
+            return False
+
+        old_parent_node = node.parent
+        if old_parent_node is None:
+            return False
+
+        # Determine new parent node
+        if new_parent is not None and new_parent in self._obj_to_node:
+            new_parent_node = self._obj_to_node[new_parent]
+        else:
+            new_parent_node = self.root
+
+        # Already at the right parent?
+        if old_parent_node is new_parent_node:
+            return True
+
+        # Get indices
+        if old_parent_node is self.root:
+            old_parent_index = QModelIndex()
+        else:
+            old_parent_index = self.index_for_object(old_parent_node.obj)
+
+        if new_parent_node is self.root:
+            new_parent_index = QModelIndex()
+        else:
+            new_parent_index = self.index_for_object(new_parent_node.obj)
+
+        old_row = old_parent_node.children.index(node)
+        new_row = len(new_parent_node.children)
+
+        # Use beginMoveRows for efficient move
+        if not self.beginMoveRows(old_parent_index, old_row, old_row,
+                                   new_parent_index, new_row):
+            return False
+
+        old_parent_node.children.remove(node)
+        node.parent = new_parent_node
+        new_parent_node.children.append(node)
+
+        self.endMoveRows()
+
+        return True
+
+    def update_entity(self, entity: Entity) -> None:
+        """
+        Notify that an entity's data has changed (e.g., name).
+        """
+        index = self.index_for_object(entity)
+        if index.isValid():
+            self.dataChanged.emit(index, index)
+
+    # ==============================================================
     # Drag-drop support
     # ==============================================================
 
