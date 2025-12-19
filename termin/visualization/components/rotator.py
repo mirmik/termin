@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-from termin.visualization.core.entity import Component
+from termin.visualization.core.component import Component
 from termin.editor.inspect_field import inspect
 from termin.geombase.pose3 import Pose3
 from termin.util import qmul

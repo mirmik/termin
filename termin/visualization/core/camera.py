@@ -24,7 +24,7 @@ import numpy as np
 from termin.geombase.pose3 import Pose3
 
 from termin.editor.inspect_field import InspectField, inspect
-from termin.visualization.core.entity import Component, InputComponent
+from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.platform.backends.base import Action, MouseButton
 
 

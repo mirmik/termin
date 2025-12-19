@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 import numpy as np
 
-from termin.visualization.core.entity import Component
+from termin.visualization.core.component import Component
 from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat, Screw3
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase.pose3 import Pose3

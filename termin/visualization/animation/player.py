@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.core.entity import Component
+from termin.visualization.core.component import Component
 from termin.visualization.core.animation_clip_handle import AnimationClipHandle
 from termin.editor.inspect_field import InspectField
 from termin.geombase.pose3 import Pose3

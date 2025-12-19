@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import List, Set, TYPE_CHECKING
 from termin.mesh.mesh import Mesh3
 from termin.editor.inspect_field import InspectField
-from termin.visualization.core.entity import Component, RenderContext
+from termin.visualization.core.component import Component
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.material_handle import MaterialHandle
 from termin.visualization.core.mesh_handle import MeshHandle

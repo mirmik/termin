@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 from termin.editor.inspect_field import InspectField
-from termin.visualization.core.entity import Component
+from termin.visualization.core.component import Component
 from termin.visualization.core.entity_handle import EntityHandle
 
 if TYPE_CHECKING:

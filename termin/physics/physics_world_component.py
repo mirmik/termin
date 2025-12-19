@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 import numpy as np
 
-from termin.visualization.core.entity import Component
+from termin.visualization.core.component import Component
 from termin.geombase._geom_native import Vec3
 from termin.physics._physics_native import PhysicsWorld
 from termin.editor.inspect_field import InspectField

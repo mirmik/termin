@@ -4,7 +4,7 @@ from typing import Optional
 
 import numpy as np
 
-from termin.visualization.core.entity import Component
+from termin.visualization.core.component import Component
 from termin.visualization.core.serialization import COMPONENT_REGISTRY
 from termin.editor.inspect_field import InspectField
 from termin.visualization.core.lighting.light import LightType, Light, LightShadowParams

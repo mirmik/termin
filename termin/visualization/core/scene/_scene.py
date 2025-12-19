@@ -6,7 +6,8 @@ from typing import List, Sequence, TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.core.entity import Component, Entity, InputComponent
+from termin.visualization.core.component import Component, InputComponent
+from termin.visualization.core.entity import Entity
 from termin.visualization.core.identifiable import Identifiable
 from termin.visualization.core.lighting.light import Light
 from termin.visualization.render.components.light_component import LightComponent
@@ -315,6 +316,8 @@ class Scene(Identifiable):
             self._pending_start.append(component)
 
     def unregister_component(self, component: Component):
+        from termin.colliders.collider_component import ColliderComponent
+
         if isinstance(component, ColliderComponent) and component in self.colliders:
             self.colliders.remove(component)
 

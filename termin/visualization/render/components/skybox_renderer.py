@@ -1,7 +1,8 @@
 from __future__ import annotations
 import numpy as np
 from termin.geombase.pose3 import Pose3
-from termin.visualization.core.entity import Component, RenderContext
+from termin.visualization.core.component import Component
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 

@@ -17,7 +17,8 @@ from typing import Iterable, List, Set, TYPE_CHECKING
 import numpy as np
 
 from termin.mesh.mesh import Mesh2, Mesh3
-from termin.visualization.core.entity import Component, RenderContext
+from termin.visualization.core.component import Component
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import Mesh2Drawable
 from termin.visualization.core.mesh_handle import MeshHandle
