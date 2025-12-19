@@ -78,7 +78,8 @@ class WorldPersistence:
             set_expanded_entities: Колбэк для восстановления развёрнутых entity.
             rescan_file_resources: Колбэк для пересканирования файловых ресурсов проекта.
         """
-        self._scene = scene
+        self._editor_scene = scene
+        self._game_scene: "Scene | None" = None  # Copy for game mode
         self._resource_manager = resource_manager
         self._scene_factory = scene_factory
         self._on_scene_changed = on_scene_changed
@@ -108,8 +109,20 @@ class WorldPersistence:
 
     @property
     def scene(self) -> "Scene":
-        """Текущая сцена. Всегда используйте это свойство для доступа к сцене."""
-        return self._scene
+        """Текущая сцена. Возвращает game scene если в game mode, иначе editor scene."""
+        if self._game_scene is not None:
+            return self._game_scene
+        return self._editor_scene
+
+    @property
+    def editor_scene(self) -> "Scene":
+        """Editor scene (оригинал). Используется для undo/redo."""
+        return self._editor_scene
+
+    @property
+    def is_game_mode(self) -> bool:
+        """True если сейчас game mode."""
+        return self._game_scene is not None
 
     @property
     def resource_manager(self) -> "ResourceManager":
@@ -128,12 +141,11 @@ class WorldPersistence:
         from termin.visualization.core.scene import Scene
         return Scene()
 
-    def _replace_scene(self, new_scene: "Scene") -> None:
+    def _replace_editor_scene(self, new_scene: "Scene") -> None:
         """
-        Заменяет текущую сцену на новую и уведомляет подписчиков.
+        Заменяет editor scene на новую и уведомляет подписчиков.
         """
-        old_scene = self._scene
-        self._scene = new_scene
+        self._editor_scene = new_scene
 
         # Уведомляем подписчиков
         if self._on_scene_changed is not None:
@@ -151,7 +163,7 @@ class WorldPersistence:
         """
         if reset_path:
             self._current_scene_path = None
-        self._replace_scene(new_scene)
+        self._replace_editor_scene(new_scene)
 
     def save(self, file_path: str) -> dict:
         """
@@ -204,7 +216,7 @@ class WorldPersistence:
 
         data = {
             "version": "1.0",
-            "scene": self._scene.serialize(),
+            "scene": self._editor_scene.serialize(),
             "editor": editor_data,
             "resources": self._resource_manager.serialize(),
         }
@@ -229,7 +241,7 @@ class WorldPersistence:
         self._current_scene_path = file_path
 
         return {
-            "entities": sum(1 for e in self._scene.entities if e.transform.parent is None and e.serializable),
+            "entities": sum(1 for e in self._editor_scene.entities if e.transform.parent is None and e.serializable),
             "materials": len(self._resource_manager.materials),
             "meshes": len(self._resource_manager._mesh_assets),
         }
@@ -266,7 +278,7 @@ class WorldPersistence:
 
         # Создаём новую пустую сцену
         new_scene = self._create_new_scene()
-        self._replace_scene(new_scene)
+        self._replace_editor_scene(new_scene)
 
     def save_state(self) -> dict:
         """
@@ -308,7 +320,7 @@ class WorldPersistence:
 
         data = {
             "resources": self._resource_manager.serialize(),
-            "scene": self._scene.serialize(),
+            "scene": self._editor_scene.serialize(),
             "editor": editor_data,
             "scene_path": self._current_scene_path,
         }
@@ -360,7 +372,7 @@ class WorldPersistence:
             )
 
         # Заменяем текущую сцену
-        self._replace_scene(new_scene)
+        self._replace_editor_scene(new_scene)
 
         # Уведомляем компоненты о старте в режиме редактора
         new_scene.notify_editor_start()
@@ -402,3 +414,37 @@ class WorldPersistence:
             "materials": len(self._resource_manager.materials),
             "meshes": len(self._resource_manager._mesh_assets),
         }
+
+    # --- Game Mode ---
+
+    def enter_game_mode(self) -> "Scene":
+        """
+        Входит в game mode: создаёт копию editor scene для игры.
+
+        Editor scene остаётся нетронутой. Все изменения в game mode
+        происходят в копии и не влияют на оригинал.
+
+        Returns:
+            Game scene (копия) для переключения viewport'ов.
+        """
+        if self._game_scene is not None:
+            return self._game_scene
+
+        # Сериализуем editor scene
+        scene_data = self._editor_scene.serialize()
+
+        # Создаём копию
+        self._game_scene = self._create_new_scene()
+        self._game_scene.load_from_data(scene_data, context=None, update_settings=True)
+
+        return self._game_scene
+
+    def exit_game_mode(self) -> "Scene":
+        """
+        Выходит из game mode: уничтожает копию, возвращает editor scene.
+
+        Returns:
+            Editor scene (оригинал) для переключения viewport'ов.
+        """
+        self._game_scene = None
+        return self._editor_scene

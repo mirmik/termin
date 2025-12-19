@@ -1586,23 +1586,32 @@ class EditorWindow(QMainWindow):
         if self.game_mode_controller is not None:
             self.game_mode_controller.toggle()
 
-    def _on_game_mode_changed(self, is_playing: bool) -> None:
+    def _on_game_mode_changed(self, is_playing: bool, scene) -> None:
         """Колбэк от GameModeController при изменении режима."""
-        if is_playing:
-            # Входим в игровой режим
-            # Переключаем все EditorViewportFeatures в режим game
-            for editor_features in self._editor_features.values():
-                editor_features.set_world_mode("game")
-            # Гизмо и выделение остаются активными для редактирования в game mode
-        else:
-            # Выходим из игрового режима
-            # Переключаем все EditorViewportFeatures в режим editor
-            for editor_features in self._editor_features.values():
-                editor_features.set_world_mode("editor")
+        # Сбрасываем выделение (entity из разных сцен несовместимы)
+        if self.selection_manager is not None:
+            self.selection_manager.clear()
 
-            # Обновляем дерево сцены
-            if self.scene_tree_controller is not None:
-                self.scene_tree_controller.rebuild()
+        # Переключаем все viewport'ы на новую сцену
+        for editor_features in self._editor_features.values():
+            editor_features.set_scene(scene)
+            editor_features.set_world_mode("game" if is_playing else "editor")
+            editor_features.selected_entity_id = 0
+            editor_features.hover_entity_id = 0
+
+        # Переключаем gizmo на новую сцену
+        if self.gizmo_controller is not None:
+            self.gizmo_controller.recreate_gizmo(scene, self.editor_entities)
+            self.gizmo_controller.set_target(None)
+
+        # Обновляем scene tree
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller._scene = scene
+            self.scene_tree_controller.rebuild()
+
+        # Обновляем inspector scene reference
+        if self._inspector_controller is not None:
+            self._inspector_controller.set_scene(scene)
 
         # Сбрасываем сглаженное значение FPS при входе/выходе
         self._fps_smooth = None

@@ -8,6 +8,7 @@ from PyQt6.QtCore import QTimer, QElapsedTimer
 
 if TYPE_CHECKING:
     from termin.editor.world_persistence import WorldPersistence
+    from termin.visualization.core.scene import Scene
 
 
 class GameModeController:
@@ -15,18 +16,21 @@ class GameModeController:
     Управляет игровым режимом редактора.
 
     Ответственности:
-    - Сохранение/восстановление состояния сцены при входе/выходе
+    - Создание копии сцены для game mode
     - Игровой цикл (таймер + update)
     - Переключение режимов window
 
+    При входе в game mode создаётся копия editor scene.
+    Игра работает на копии, оригинал не изменяется.
+    Undo/redo стек остаётся валидным.
+
     ВАЖНО: Использует WorldPersistence для доступа к сцене.
-    Не хранит собственную ссылку на scene.
     """
 
     def __init__(
         self,
         world_persistence: "WorldPersistence",
-        on_mode_changed: Optional[Callable[[bool], None]] = None,
+        on_mode_changed: Optional[Callable[[bool, "Scene"], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
         on_tick: Optional[Callable[[float], None]] = None,
     ):
@@ -36,7 +40,6 @@ class GameModeController:
         self._on_tick = on_tick
 
         self._game_mode = False
-        self._saved_state: dict | None = None
 
         # Game loop timer (~60 FPS)
         self._game_timer = QTimer()
@@ -60,12 +63,12 @@ class GameModeController:
             self.play()
 
     def play(self) -> None:
-        """Входит в игровой режим, сохраняя состояние сцены."""
+        """Входит в игровой режим, создавая копию сцены."""
         if self._game_mode:
             return
 
-        # Сохраняем состояние через WorldPersistence
-        self._saved_state = self._world_persistence.save_state()
+        # Создаём копию сцены для game mode
+        game_scene = self._world_persistence.enter_game_mode()
 
         # Переключаем режим
         self._game_mode = True
@@ -75,27 +78,24 @@ class GameModeController:
         self._game_timer.start(16)  # ~60 FPS
 
         if self._on_mode_changed:
-            self._on_mode_changed(True)
+            self._on_mode_changed(True, game_scene)
 
     def stop(self) -> None:
-        """Выходит из игрового режима, восстанавливая состояние сцены."""
+        """Выходит из игрового режима, возвращаясь к оригинальной сцене."""
         if not self._game_mode:
             return
 
         # Останавливаем игровой цикл
         self._game_timer.stop()
 
-        # Восстанавливаем состояние через WorldPersistence
-        # Это создаст НОВУЮ сцену и вызовет on_scene_changed
-        if self._saved_state is not None:
-            self._world_persistence.restore_state(self._saved_state)
-            self._saved_state = None
+        # Выходим из game mode - копия уничтожается
+        editor_scene = self._world_persistence.exit_game_mode()
 
         # Переключаем режим
         self._game_mode = False
 
         if self._on_mode_changed:
-            self._on_mode_changed(False)
+            self._on_mode_changed(False, editor_scene)
 
     def _tick(self) -> None:
         """Вызывается таймером для обновления сцены."""
