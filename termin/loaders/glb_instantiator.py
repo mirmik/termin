@@ -271,10 +271,6 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
         if clips:
             root_entity.add_component(animation_player)
 
-            # Auto-play longest animation
-            best_clip = max(clips, key=lambda c: c.duration)
-            animation_player.play(best_clip.name)
-
     return GLBInstantiateResult(
         entity=root_entity,
         skeleton_controller=skeleton_controller,
