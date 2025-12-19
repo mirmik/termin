@@ -160,6 +160,14 @@ class SceneTreeController:
         """Update entity display (e.g., after rename)."""
         self._model.update_entity(entity)
 
+    def get_expanded_entity_names(self) -> list[str]:
+        """Get list of expanded entity names for saving."""
+        return list(self._get_expanded_entity_names())
+
+    def set_expanded_entity_names(self, names: list[str]) -> None:
+        """Restore expanded state from saved names."""
+        self._restore_expanded_state(set(names))
+
     def select_object(self, obj: object | None) -> None:
         """
         Выделяет объект в дереве, если он там есть.

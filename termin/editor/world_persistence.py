@@ -56,6 +56,8 @@ class WorldPersistence:
         select_entity_by_name: Optional[Callable[[str], None]] = None,
         get_displays_data: Optional[Callable[[], list]] = None,
         set_displays_data: Optional[Callable[[list], None]] = None,
+        get_expanded_entities: Optional[Callable[[], list[str]]] = None,
+        set_expanded_entities: Optional[Callable[[list[str]], None]] = None,
         rescan_file_resources: Optional[Callable[[], None]] = None,
     ):
         """
@@ -72,6 +74,8 @@ class WorldPersistence:
             select_entity_by_name: Колбэк для выделения сущности по имени.
             get_displays_data: Колбэк для получения данных дисплеев/вьюпортов.
             set_displays_data: Колбэк для восстановления дисплеев/вьюпортов.
+            get_expanded_entities: Колбэк для получения списка развёрнутых entity.
+            set_expanded_entities: Колбэк для восстановления развёрнутых entity.
             rescan_file_resources: Колбэк для пересканирования файловых ресурсов проекта.
         """
         self._scene = scene
@@ -84,6 +88,8 @@ class WorldPersistence:
         self._select_entity_by_name = select_entity_by_name
         self._get_displays_data = get_displays_data
         self._set_displays_data = set_displays_data
+        self._get_expanded_entities = get_expanded_entities
+        self._set_expanded_entities = set_expanded_entities
         self._rescan_file_resources = rescan_file_resources
         self._current_scene_path: str | None = None
         self._resources_initialized: bool = False
@@ -180,6 +186,11 @@ class WorldPersistence:
         if self._get_displays_data is not None:
             displays_data = self._get_displays_data()
 
+        # Получаем развёрнутые entity
+        expanded_entities = None
+        if self._get_expanded_entities is not None:
+            expanded_entities = self._get_expanded_entities()
+
         # Формируем данные редактора
         editor_data = {}
         if editor_camera_data is not None:
@@ -188,6 +199,8 @@ class WorldPersistence:
             editor_data["selected_entity"] = selected_entity_name
         if displays_data is not None:
             editor_data["displays"] = displays_data
+        if expanded_entities:
+            editor_data["expanded_entities"] = expanded_entities
 
         data = {
             "version": "1.0",
@@ -277,6 +290,11 @@ class WorldPersistence:
         if self._get_displays_data is not None:
             displays_data = self._get_displays_data()
 
+        # Получаем развёрнутые entity
+        expanded_entities = None
+        if self._get_expanded_entities is not None:
+            expanded_entities = self._get_expanded_entities()
+
         # Формируем данные редактора
         editor_data = {}
         if editor_camera_data is not None:
@@ -285,6 +303,8 @@ class WorldPersistence:
             editor_data["selected_entity"] = selected_entity_name
         if displays_data is not None:
             editor_data["displays"] = displays_data
+        if expanded_entities:
+            editor_data["expanded_entities"] = expanded_entities
 
         data = {
             "resources": self._resource_manager.serialize(),
@@ -371,6 +391,11 @@ class WorldPersistence:
         displays_data = editor_data.get("displays")
         if displays_data is not None and self._set_displays_data is not None:
             self._set_displays_data(displays_data)
+
+        # Развёрнутые entity в дереве
+        expanded_entities = editor_data.get("expanded_entities")
+        if expanded_entities is not None and self._set_expanded_entities is not None:
+            self._set_expanded_entities(expanded_entities)
 
         return {
             "loaded_entities": loaded_count,

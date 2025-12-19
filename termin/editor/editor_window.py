@@ -86,6 +86,8 @@ class EditorWindow(QMainWindow):
             select_entity_by_name=self._select_entity_by_name,
             get_displays_data=self._get_displays_data,
             set_displays_data=self._set_displays_data,
+            get_expanded_entities=self._get_expanded_entities,
+            set_expanded_entities=self._set_expanded_entities,
             rescan_file_resources=self._rescan_file_resources,
         )
 
@@ -582,6 +584,20 @@ class EditorWindow(QMainWindow):
         if self._rendering_controller is None:
             return
         self._rendering_controller.restore_displays(data, self.scene)
+
+    def _get_expanded_entities(self) -> list[str] | None:
+        """Get expanded entity names for serialization."""
+        if self.scene_tree_controller is None:
+            return None
+        return self.scene_tree_controller.get_expanded_entity_names()
+
+    def _set_expanded_entities(self, names: list[str]) -> None:
+        """Restore expanded entities from saved names."""
+        if self.scene_tree_controller is None:
+            return
+        # Rebuild tree first - entities were added after initial rebuild
+        self.scene_tree_controller.rebuild()
+        self.scene_tree_controller.set_expanded_entity_names(names)
 
     def _get_project_path(self) -> str | None:
         """Get current project path from project browser."""
