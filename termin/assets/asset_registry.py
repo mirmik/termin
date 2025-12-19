@@ -14,7 +14,7 @@ from typing import (
     TypeVar,
 )
 
-from termin.visualization.core.asset import Asset
+from termin.assets.asset import Asset
 
 AssetT = TypeVar("AssetT", bound=Asset)  # Asset type (MeshAsset, TextureAsset, etc.)
 DataT = TypeVar("DataT")  # Data/Handle type (MeshHandle, Material, VoxelGrid, etc.)
@@ -111,7 +111,7 @@ class AssetRegistry(Generic[AssetT, DataT]):
 
         # Set parent for embedded assets
         if parent is not None and parent_key is not None:
-            from termin.visualization.core.data_asset import DataAsset
+            from termin.assets.data_asset import DataAsset
             if isinstance(asset, DataAsset):
                 asset.set_parent(parent, parent_key)
 

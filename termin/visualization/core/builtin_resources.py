@@ -13,25 +13,8 @@ if TYPE_CHECKING:
     from termin.visualization.core.resources import ResourceManager
 
 
-# Stable UUIDs for builtin resources (never change these)
-BUILTIN_UUIDS = {
-    # Shaders
-    "DefaultShader": "00000000-0000-0000-0001-000000000001",
-    "PBRShader": "00000000-0000-0000-0001-000000000002",
-    "AdvancedPBRShader": "00000000-0000-0000-0001-000000000003",
-    "SkinnedShader": "00000000-0000-0000-0001-000000000004",
-    # Materials
-    "DefaultMaterial": "00000000-0000-0000-0002-000000000001",
-    "PBRMaterial": "00000000-0000-0000-0002-000000000002",
-    "AdvancedPBRMaterial": "00000000-0000-0000-0002-000000000003",
-    "GridMaterial": "00000000-0000-0000-0002-000000000004",
-    "SkinnedMaterial": "00000000-0000-0000-0002-000000000005",
-    # Meshes
-    "Cube": "00000000-0000-0000-0003-000000000001",
-    "Sphere": "00000000-0000-0000-0003-000000000002",
-    "Plane": "00000000-0000-0000-0003-000000000003",
-    "Cylinder": "00000000-0000-0000-0003-000000000004",
-}
+# Re-export for backwards compatibility
+from termin.assets.builtin_uuids import BUILTIN_UUIDS
 
 
 def register_default_shader(rm: "ResourceManager") -> None:

@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 
 if TYPE_CHECKING:
-    from termin.visualization.core.asset import Asset
+    from termin.assets.asset import Asset
 
 T = TypeVar("T")  # Raw resource type (Texture, ShaderProgram, etc.)
 AssetT = TypeVar("AssetT", bound="Asset")  # Asset type

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.identifiable import Identifiable
+from termin.core.identifiable import Identifiable
 
 if TYPE_CHECKING:
     pass

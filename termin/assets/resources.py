@@ -5,28 +5,28 @@ from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # только для типов, чтобы не ловить циклы импортов
     from termin.visualization.core.material import Material
-    from termin.visualization.core.material_asset import MaterialAsset
-    from termin.visualization.core.mesh_asset import MeshAsset
-    from termin.visualization.core.mesh_handle import MeshHandle
-    from termin.visualization.core.texture_handle import TextureHandle
+    from termin.assets.material_asset import MaterialAsset
+    from termin.assets.mesh_asset import MeshAsset
+    from termin.assets.mesh_handle import MeshHandle
+    from termin.assets.texture_handle import TextureHandle
     from termin.mesh.mesh import Mesh3
-    from termin.visualization.core.glb_asset import GLBAsset
+    from termin.assets.glb_asset import GLBAsset
     from termin.visualization.core.entity import Component, Entity
     from termin.visualization.render.texture import Texture
-    from termin.visualization.render.texture_asset import TextureAsset
+    from termin.assets.texture_asset import TextureAsset
     from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm
-    from termin.visualization.render.shader_asset import ShaderAsset
+    from termin.assets.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
-    from termin.voxels.voxel_grid_asset import VoxelGridAsset
+    from termin.assets.voxel_grid_asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
-    from termin.navmesh.navmesh_asset import NavMeshAsset
+    from termin.assets.navmesh_asset import NavMeshAsset
     from termin.visualization.animation.clip import AnimationClip
-    from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+    from termin.assets.animation_clip_asset import AnimationClipAsset
     from termin.skeleton.skeleton import SkeletonData
-    from termin.skeleton.skeleton_asset import SkeletonAsset
-    from termin.visualization.core.prefab_asset import PrefabAsset
+    from termin.assets.skeleton_asset import SkeletonAsset
+    from termin.assets.prefab_asset import PrefabAsset
     from termin.kinematic.general_transform import GeneralTransform3
-    from termin.audio.audio_clip import AudioClipAsset, AudioClipHandle
+    from termin.assets.audio_clip import AudioClipAsset, AudioClipHandle
 
 
 # Список стандартных компонентов для предрегистрации.
@@ -89,7 +89,7 @@ _BUILTIN_POST_EFFECTS: List[Tuple[str, str]] = [
 
 # Фиксированные UUID для встроенных ресурсов.
 # Гарантируют стабильные ссылки между сессиями.
-from termin.visualization.core.builtin_resources import BUILTIN_UUIDS
+from termin.assets.builtin_uuids import BUILTIN_UUIDS
 
 
 class ResourceManager:
@@ -118,7 +118,7 @@ class ResourceManager:
         self.pipelines: Dict[str, "RenderPipeline"] = {}  # RenderPipeline instances by name
 
         # Asset'ы по UUID (для поиска существующих при загрузке)
-        from termin.visualization.core.asset import Asset
+        from termin.assets.asset import Asset
         self._assets_by_uuid: Dict[str, Asset] = {}
 
         # Asset registries
@@ -139,9 +139,9 @@ class ResourceManager:
 
     def _create_mesh_registry(self):
         """Create AssetRegistry for meshes."""
-        from termin.visualization.core.asset_registry import AssetRegistry
-        from termin.visualization.core.mesh_asset import MeshAsset
-        from termin.visualization.core.mesh_handle import MeshHandle
+        from termin.assets.asset_registry import AssetRegistry
+        from termin.assets.mesh_asset import MeshAsset
+        from termin.assets.mesh_handle import MeshHandle
 
         def data_from_asset(asset: MeshAsset) -> MeshHandle:
             return MeshHandle.from_asset(asset)
@@ -158,9 +158,9 @@ class ResourceManager:
 
     def _create_texture_registry(self):
         """Create AssetRegistry for textures."""
-        from termin.visualization.core.asset_registry import AssetRegistry
-        from termin.visualization.render.texture_asset import TextureAsset
-        from termin.visualization.core.texture_handle import TextureHandle
+        from termin.assets.asset_registry import AssetRegistry
+        from termin.assets.texture_asset import TextureAsset
+        from termin.assets.texture_handle import TextureHandle
 
         def data_from_asset(asset: TextureAsset) -> TextureHandle:
             return TextureHandle.from_asset(asset)
@@ -177,7 +177,7 @@ class ResourceManager:
 
     def _create_voxel_grid_registry(self):
         """Create AssetRegistry for voxel grids."""
-        from termin.visualization.core.asset_registry import AssetRegistry
+        from termin.assets.asset_registry import AssetRegistry
 
         def data_from_asset(asset):
             # Lazy load if not loaded
@@ -194,7 +194,7 @@ class ResourceManager:
 
         # Import asset class lazily to avoid circular imports
         def get_asset_class():
-            from termin.voxels.voxel_grid_asset import VoxelGridAsset
+            from termin.assets.voxel_grid_asset import VoxelGridAsset
             return VoxelGridAsset
 
         return AssetRegistry(
@@ -206,7 +206,7 @@ class ResourceManager:
 
     def _create_navmesh_registry(self):
         """Create AssetRegistry for navmeshes."""
-        from termin.visualization.core.asset_registry import AssetRegistry
+        from termin.assets.asset_registry import AssetRegistry
 
         def data_from_asset(asset):
             # Lazy load if not loaded
@@ -223,7 +223,7 @@ class ResourceManager:
 
         # Import asset class lazily to avoid circular imports
         def get_asset_class():
-            from termin.navmesh.navmesh_asset import NavMeshAsset
+            from termin.assets.navmesh_asset import NavMeshAsset
             return NavMeshAsset
 
         return AssetRegistry(
@@ -235,7 +235,7 @@ class ResourceManager:
 
     def _create_animation_clip_registry(self):
         """Create AssetRegistry for animation clips."""
-        from termin.visualization.core.asset_registry import AssetRegistry
+        from termin.assets.asset_registry import AssetRegistry
 
         def data_from_asset(asset):
             return asset.clip
@@ -249,7 +249,7 @@ class ResourceManager:
 
         # Import asset class lazily to avoid circular imports
         def get_asset_class():
-            from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+            from termin.assets.animation_clip_asset import AnimationClipAsset
             return AnimationClipAsset
 
         return AssetRegistry(
@@ -261,7 +261,7 @@ class ResourceManager:
 
     def _create_skeleton_registry(self):
         """Create AssetRegistry for skeletons."""
-        from termin.visualization.core.asset_registry import AssetRegistry
+        from termin.assets.asset_registry import AssetRegistry
 
         def data_from_asset(asset):
             # Lazy load if not loaded
@@ -278,7 +278,7 @@ class ResourceManager:
 
         # Import asset class lazily to avoid circular imports
         def get_asset_class():
-            from termin.skeleton.skeleton_asset import SkeletonAsset
+            from termin.assets.skeleton_asset import SkeletonAsset
             return SkeletonAsset
 
         return AssetRegistry(
@@ -290,7 +290,7 @@ class ResourceManager:
 
     def _create_glsl_registry(self):
         """Create AssetRegistry for GLSL include files."""
-        from termin.visualization.core.asset_registry import AssetRegistry
+        from termin.assets.asset_registry import AssetRegistry
 
         def data_from_asset(asset):
             # Lazy load if not loaded
@@ -307,7 +307,7 @@ class ResourceManager:
 
         # Import asset class lazily to avoid circular imports
         def get_asset_class():
-            from termin.visualization.render.glsl_asset import GlslAsset
+            from termin.assets.glsl_asset import GlslAsset
             return GlslAsset
 
         return AssetRegistry(
@@ -319,10 +319,10 @@ class ResourceManager:
 
     def _create_audio_clip_registry(self):
         """Create AssetRegistry for audio clips."""
-        from termin.visualization.core.asset_registry import AssetRegistry
+        from termin.assets.asset_registry import AssetRegistry
 
         def data_from_asset(asset):
-            from termin.audio.audio_clip import AudioClipHandle
+            from termin.assets.audio_clip import AudioClipHandle
             return AudioClipHandle.from_asset(asset)
 
         def data_to_asset(handle):
@@ -332,7 +332,7 @@ class ResourceManager:
 
         # Import asset class lazily to avoid circular imports
         def get_asset_class():
-            from termin.audio.audio_clip import AudioClipAsset
+            from termin.assets.audio_clip import AudioClipAsset
             return AudioClipAsset
 
         return AssetRegistry(
@@ -471,7 +471,7 @@ class ResourceManager:
 
     def _register_material_file(self, name: str, result: "PreLoadResult") -> None:
         """Register material from PreLoadResult."""
-        from termin.visualization.core.material_asset import MaterialAsset
+        from termin.assets.material_asset import MaterialAsset
 
         # Check if already registered by name
         if name in self._material_assets:
@@ -527,7 +527,7 @@ class ResourceManager:
 
     def _register_shader_file(self, name: str, result: "PreLoadResult") -> None:
         """Register shader from PreLoadResult (lazy loading)."""
-        from termin.visualization.render.shader_asset import ShaderAsset
+        from termin.assets.shader_asset import ShaderAsset
 
         # Check if already registered by name
         if name in self._shader_assets:
@@ -575,7 +575,7 @@ class ResourceManager:
 
     def _register_texture_file(self, name: str, result: "PreLoadResult") -> None:
         """Register texture from PreLoadResult (lazy loading)."""
-        from termin.visualization.render.texture_asset import TextureAsset
+        from termin.assets.texture_asset import TextureAsset
 
         # Check if already registered by name
         if name in self._texture_assets:
@@ -622,7 +622,7 @@ class ResourceManager:
 
     def _register_mesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Register mesh from PreLoadResult."""
-        from termin.visualization.core.mesh_asset import MeshAsset
+        from termin.assets.mesh_asset import MeshAsset
 
         # Check if already registered by name
         if name in self._mesh_assets:
@@ -669,7 +669,7 @@ class ResourceManager:
 
     def _register_voxel_grid_file(self, name: str, result: "PreLoadResult") -> None:
         """Register voxel grid from PreLoadResult."""
-        from termin.voxels.voxel_grid_asset import VoxelGridAsset
+        from termin.assets.voxel_grid_asset import VoxelGridAsset
 
         # Check if already registered by name
         if name in self._voxel_grid_assets:
@@ -717,7 +717,7 @@ class ResourceManager:
 
     def _register_navmesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Register navmesh from PreLoadResult."""
-        from termin.navmesh.navmesh_asset import NavMeshAsset
+        from termin.assets.navmesh_asset import NavMeshAsset
 
         # Check if already registered by name
         if name in self._navmesh_assets:
@@ -765,7 +765,7 @@ class ResourceManager:
 
     def _register_glb_file(self, name: str, result: "PreLoadResult") -> None:
         """Register GLB from PreLoadResult."""
-        from termin.visualization.core.glb_asset import GLBAsset
+        from termin.assets.glb_asset import GLBAsset
 
         # Check if already registered by name
         if name in self._glb_assets:
@@ -838,7 +838,7 @@ class ResourceManager:
 
     def _register_glsl_file(self, name: str, result: "PreLoadResult") -> None:
         """Register GLSL include file from PreLoadResult."""
-        from termin.visualization.render.glsl_asset import GlslAsset
+        from termin.assets.glsl_asset import GlslAsset
 
         # Check if UUID already registered
         uuid = result.spec_data.get("uuid") if result.spec_data else None
@@ -874,7 +874,7 @@ class ResourceManager:
 
     def _register_prefab_file(self, name: str, result: "PreLoadResult") -> None:
         """Register prefab from PreLoadResult."""
-        from termin.visualization.core.prefab_asset import PrefabAsset
+        from termin.assets.prefab_asset import PrefabAsset
 
         # Check if already registered by name
         if name in self._prefab_assets:
@@ -905,7 +905,7 @@ class ResourceManager:
 
     def _reload_prefab_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload prefab from PreLoadResult (hot-reload)."""
-        from termin.visualization.core.prefab_asset import PrefabAsset
+        from termin.assets.prefab_asset import PrefabAsset
 
         asset = self._prefab_assets.get(name)
         if asset is None:
@@ -921,7 +921,7 @@ class ResourceManager:
 
     def _register_audio_clip_file(self, name: str, result: "PreLoadResult") -> None:
         """Register audio clip from PreLoadResult (lazy loading)."""
-        from termin.audio.audio_clip import AudioClipAsset
+        from termin.assets.audio_clip import AudioClipAsset
 
         # Check if already registered by name
         if name in self._audio_clip_assets:
@@ -971,7 +971,7 @@ class ResourceManager:
 
     def get_prefab_by_uuid(self, uuid: str) -> Optional["PrefabAsset"]:
         """Get PrefabAsset by UUID."""
-        from termin.visualization.core.prefab_asset import PrefabAsset
+        from termin.assets.prefab_asset import PrefabAsset
 
         asset = self._assets_by_uuid.get(uuid)
         if asset is not None and isinstance(asset, PrefabAsset):
@@ -1056,7 +1056,7 @@ class ResourceManager:
 
     def get_asset_by_uuid(self, uuid: str) -> Optional["Asset"]:
         """Get any Asset by UUID."""
-        from termin.visualization.core.asset import Asset
+        from termin.assets.asset import Asset
         return self._assets_by_uuid.get(uuid)
 
     # --------- Материалы (Asset-based) ---------
@@ -1068,7 +1068,7 @@ class ResourceManager:
         self, name: str, mat: "Material", source_path: str | None = None, uuid: str | None = None
     ):
         """Регистрирует материал."""
-        from termin.visualization.core.material_asset import MaterialAsset
+        from termin.assets.material_asset import MaterialAsset
 
         asset = MaterialAsset.from_material(mat, name=name, source_path=source_path, uuid=uuid)
         self._material_assets[name] = asset
@@ -1121,7 +1121,7 @@ class ResourceManager:
 
     def get_material_by_uuid(self, uuid: str) -> Optional["Material"]:
         """Get Material by UUID (lazy loading)."""
-        from termin.visualization.core.material_asset import MaterialAsset
+        from termin.assets.material_asset import MaterialAsset
 
         asset = self._assets_by_uuid.get(uuid)
         if asset is None or not isinstance(asset, MaterialAsset):
@@ -1140,7 +1140,7 @@ class ResourceManager:
 
     def get_material_asset_by_uuid(self, uuid: str) -> Optional["MaterialAsset"]:
         """Get MaterialAsset by UUID."""
-        from termin.visualization.core.material_asset import MaterialAsset
+        from termin.assets.material_asset import MaterialAsset
 
         asset = self._assets_by_uuid.get(uuid)
         if asset is not None and isinstance(asset, MaterialAsset):
@@ -1156,7 +1156,7 @@ class ResourceManager:
         self, name: str, shader: "ShaderMultyPhaseProgramm", source_path: str | None = None, uuid: str | None = None
     ):
         """Регистрирует шейдер."""
-        from termin.visualization.render.shader_asset import ShaderAsset
+        from termin.assets.shader_asset import ShaderAsset
 
         asset = ShaderAsset.from_program(shader, name=name, source_path=source_path, uuid=uuid)
         self._shader_assets[name] = asset
@@ -1295,7 +1295,7 @@ class ResourceManager:
 
     def register_voxel_grid(self, name: str, grid: "VoxelGrid", source_path: str | None = None) -> None:
         """Регистрирует воксельную сетку."""
-        from termin.voxels.voxel_grid_asset import VoxelGridAsset
+        from termin.assets.voxel_grid_asset import VoxelGridAsset
 
         grid.name = name
         asset = VoxelGridAsset.from_grid(grid, name=name, source_path=source_path)
@@ -1350,7 +1350,7 @@ class ResourceManager:
 
     def register_navmesh(self, name: str, navmesh: "NavMesh", source_path: str | None = None) -> None:
         """Регистрирует NavMesh."""
-        from termin.navmesh.navmesh_asset import NavMeshAsset
+        from termin.assets.navmesh_asset import NavMeshAsset
 
         navmesh.name = name
         asset = NavMeshAsset.from_navmesh(navmesh, name=name, source_path=source_path)
@@ -1407,7 +1407,7 @@ class ResourceManager:
         self, name: str, clip: "AnimationClip", source_path: str | None = None, uuid: str | None = None
     ) -> None:
         """Регистрирует AnimationClip."""
-        from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+        from termin.assets.animation_clip_asset import AnimationClipAsset
 
         clip.name = name
         asset = AnimationClipAsset(clip=clip, name=name, source_path=source_path, uuid=uuid)
@@ -1465,7 +1465,7 @@ class ResourceManager:
         self, name: str, skeleton: "SkeletonData", source_path: str | None = None, uuid: str | None = None
     ) -> None:
         """Регистрирует скелет."""
-        from termin.skeleton.skeleton_asset import SkeletonAsset
+        from termin.assets.skeleton_asset import SkeletonAsset
 
         asset = SkeletonAsset.from_skeleton_data(skeleton, name=name, source_path=source_path, uuid=uuid)
         self._skeleton_registry.register(name, asset, source_path, uuid)
@@ -1619,7 +1619,7 @@ class ResourceManager:
 
     def find_texture_name(self, texture: "TextureAsset | TextureHandle") -> Optional[str]:
         """Find name for a TextureAsset or TextureHandle."""
-        from termin.visualization.core.texture_handle import TextureHandle
+        from termin.assets.texture_handle import TextureHandle
 
         # Extract asset if given TextureHandle
         if isinstance(texture, TextureHandle):
