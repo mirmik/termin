@@ -276,6 +276,82 @@ class ImmediateRenderer:
             offset = radius * (np.cos(angle) * tangent + np.sin(angle) * bitangent)
             self.line(start + offset, end + offset, color)
 
+    def sphere_wireframe(
+        self,
+        center: np.ndarray | tuple,
+        radius: float,
+        color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+        segments: int = 16,
+    ) -> None:
+        """Add a wireframe sphere (3 orthogonal circles)."""
+        center = np.asarray(center, dtype=np.float32)
+        # XY plane circle (normal = Z)
+        self.circle(center, (0.0, 0.0, 1.0), radius, color, segments)
+        # XZ plane circle (normal = Y)
+        self.circle(center, (0.0, 1.0, 0.0), radius, color, segments)
+        # YZ plane circle (normal = X)
+        self.circle(center, (1.0, 0.0, 0.0), radius, color, segments)
+
+    def capsule_wireframe(
+        self,
+        start: np.ndarray | tuple,
+        end: np.ndarray | tuple,
+        radius: float,
+        color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+        segments: int = 16,
+    ) -> None:
+        """Add a wireframe capsule (cylinder + hemisphere caps)."""
+        start = np.asarray(start, dtype=np.float32)
+        end = np.asarray(end, dtype=np.float32)
+
+        axis = end - start
+        length = np.linalg.norm(axis)
+        if length < 1e-6:
+            # Degenerate capsule = sphere
+            self.sphere_wireframe(start, radius, color, segments)
+            return
+        axis = axis / length
+
+        # Build orthonormal basis
+        up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+        if abs(np.dot(axis, up)) > 0.99:
+            up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+        tangent = np.cross(axis, up)
+        tangent = tangent / np.linalg.norm(tangent)
+        bitangent = np.cross(axis, tangent)
+
+        # Circles at ends (perpendicular to axis)
+        self.circle(start, axis, radius, color, segments)
+        self.circle(end, axis, radius, color, segments)
+
+        # Connecting lines (4 lines along the cylinder)
+        for i in range(4):
+            angle = 2.0 * np.pi * i / 4
+            offset = radius * (np.cos(angle) * tangent + np.sin(angle) * bitangent)
+            self.line(start + offset, end + offset, color)
+
+        # Hemisphere arcs at each end
+        # Draw 2 half-circles for each hemisphere (in tangent and bitangent planes)
+        half_segments = segments // 2
+
+        for basis_vec in [tangent, bitangent]:
+            # Arc at start (hemisphere pointing away from end)
+            points_start = []
+            for i in range(half_segments + 1):
+                angle = np.pi * i / half_segments  # 0 to pi
+                # Point on hemisphere: center + radius * (cos(angle) * basis + sin(angle) * (-axis))
+                pt = start + radius * (np.cos(angle) * basis_vec - np.sin(angle) * axis)
+                points_start.append(pt)
+            self.polyline(points_start, color)
+
+            # Arc at end (hemisphere pointing away from start)
+            points_end = []
+            for i in range(half_segments + 1):
+                angle = np.pi * i / half_segments
+                pt = end + radius * (np.cos(angle) * basis_vec + np.sin(angle) * axis)
+                points_end.append(pt)
+            self.polyline(points_end, color)
+
     # ============================================================
     # Solid primitives (for gizmos, etc.)
     # ============================================================
