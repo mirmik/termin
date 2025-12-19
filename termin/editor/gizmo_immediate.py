@@ -19,6 +19,42 @@ if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend
 
 
+def closest_point_on_axis_from_ray(axis_point, axis_dir, ray_origin, ray_dir):
+    """
+    Find closest point on line (axis_point + t * axis_dir) to ray (ray_origin + s * ray_dir).
+    Returns parameter t and the point itself.
+    """
+    p = np.asarray(axis_point, dtype=np.float32)
+    a = np.asarray(axis_dir, dtype=np.float32)
+    o = np.asarray(ray_origin, dtype=np.float32)
+    d = np.asarray(ray_dir, dtype=np.float32)
+
+    a_norm = np.linalg.norm(a)
+    if a_norm == 0:
+        return 0.0, p.copy()
+    a /= a_norm
+
+    d_norm = np.linalg.norm(d)
+    if d_norm == 0:
+        return 0.0, p.copy()
+    d /= d_norm
+
+    w0 = p - o
+    a_dot_d = np.dot(a, d)
+    denom = 1.0 - a_dot_d * a_dot_d
+
+    if float(np.abs(denom)) < 1e-6:
+        t = -np.dot(w0, a)
+        return t, p + a * t
+
+    w0_dot_d = np.dot(w0, d)
+    w0_dot_a = np.dot(w0, a)
+
+    t = (a_dot_d * w0_dot_d - w0_dot_a) / denom
+    point_on_axis = p + a * t
+    return t, point_on_axis
+
+
 class GizmoElement(Enum):
     """Gizmo element types for picking."""
     NONE = auto()
@@ -586,14 +622,13 @@ class ImmediateGizmoRenderer:
 
 
 # ============================================================
-# Controller (drop-in replacement for GizmoController)
+# Controller
 # ============================================================
 
 class ImmediateGizmoController:
     """
     Controller for immediate mode gizmo.
 
-    Provides similar interface to GizmoController for easy integration.
     Uses raycast picking instead of ID buffer.
     """
 
@@ -604,8 +639,6 @@ class ImmediateGizmoController:
         undo_handler=None,
         size: float = 1.5,
     ):
-        from termin.editor.gizmo import GizmoMoveController, closest_point_on_axis_from_ray
-
         self.scene = scene
         self.editor_entities = editor_entities
         self._undo_handler = undo_handler
@@ -644,9 +677,6 @@ class ImmediateGizmoController:
 
         # Callbacks
         self._on_transform_dragging: "Callable[[], None] | None" = None
-
-        # Store reference to utility function
-        self._closest_point_on_axis_from_ray = closest_point_on_axis_from_ray
 
     def set_undo_command_handler(self, handler):
         """Register undo command handler."""
@@ -786,7 +816,7 @@ class ImmediateGizmoController:
         self.gizmo_renderer.hovered_element = element
 
     # ============================================================
-    # Drag operations (similar to GizmoMoveController)
+    # Drag operations
     # ============================================================
 
     def _start_translate(self, axis: str, viewport, x: float, y: float) -> None:
@@ -811,7 +841,7 @@ class ImmediateGizmoController:
             self._end_drag()
             return
 
-        _, axis_hit_point = self._closest_point_on_axis_from_ray(
+        _, axis_hit_point = closest_point_on_axis_from_ray(
             axis_point=self.axis_point,
             axis_dir=self.axis_vec,
             ray_origin=ray.origin,
@@ -925,7 +955,7 @@ class ImmediateGizmoController:
         if ray is None:
             return
 
-        _, axis_point_now = self._closest_point_on_axis_from_ray(
+        _, axis_point_now = closest_point_on_axis_from_ray(
             axis_point=self.axis_point,
             axis_dir=self.axis_vec,
             ray_origin=ray.origin,

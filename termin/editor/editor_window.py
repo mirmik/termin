@@ -94,7 +94,7 @@ class EditorWindow(QMainWindow):
         # контроллеры создадим чуть позже
         self.scene_tree_controller: SceneTreeController | None = None
         self.editor_viewport: EditorViewportFeatures | None = None
-        self.gizmo_controller: GizmoController | None = None
+        self.gizmo_controller: ImmediateGizmoController | None = None
         self.selection_manager: SelectionManager | None = None
         self.game_mode_controller: GameModeController | None = None
         self.prefab_edit_controller: PrefabEditController | None = None
