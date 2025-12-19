@@ -17,6 +17,7 @@ from termin.editor.widgets.field_widgets import (
     FieldWidget,
     FieldWidgetFactory,
     ButtonFieldWidget,
+    ClipSelectorWidget,
 )
 
 if TYPE_CHECKING:
@@ -95,8 +96,8 @@ class InspectFieldPanel(QWidget):
                 widget = self._factory.create(field)
                 self._widgets[key] = widget
 
-                # Set target for button widgets
-                if isinstance(widget, ButtonFieldWidget):
+                # Set target for widgets that need it
+                if isinstance(widget, (ButtonFieldWidget, ClipSelectorWidget)):
                     widget.set_target(target)
 
                 # Buttons span the full row, no separate label

@@ -36,9 +36,10 @@ class AnimationPlayer(Component):
             setter=lambda self, v: self._set_clip_handles(v),
         ),
         "_current_clip_name": InspectField(
-            path="_current_clip_name",
             label="Current Clip",
-            kind="str",
+            kind="clip_selector",
+            getter=lambda self: self._current_clip_name,
+            setter=lambda self, v: self._set_current_clip(v),
         ),
         "playing": InspectField(
             path="playing",
@@ -69,6 +70,14 @@ class AnimationPlayer(Component):
                     print(f"  [{i}] asset_uuid={asset_uuid}..., clip={clip_name}")
         self._clip_handles = handles if handles else []
         self._rebuild_clips_cache()
+
+    def _set_current_clip(self, clip_name: str) -> None:
+        """Setter for current clip from inspector."""
+        self._current_clip_name = clip_name
+        if clip_name and clip_name in self.clips:
+            self.current = self.clips[clip_name]
+        else:
+            self.current = None
 
     def _rebuild_clips_cache(self) -> None:
         """Rebuild clips dict from handles."""

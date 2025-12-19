@@ -384,6 +384,64 @@ class ComboFieldWidget(FieldWidget):
             self._combo.setCurrentIndex(idx if idx >= 0 else -1)
         self._combo.blockSignals(False)
 
+
+class ClipSelectorWidget(FieldWidget):
+    """Widget for selecting animation clip from available clips."""
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._target: Any = None
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._combo = QComboBox()
+        self._combo.currentIndexChanged.connect(lambda _: self.value_changed.emit())
+        layout.addWidget(self._combo)
+
+    def set_target(self, target: Any) -> None:
+        """Set target component to read available clips from."""
+        self._target = target
+        self._refresh_choices()
+
+    def _refresh_choices(self) -> None:
+        """Refresh dropdown options from target's clips."""
+        self._combo.blockSignals(True)
+        current = self._combo.currentText()
+        self._combo.clear()
+
+        # Add empty option
+        self._combo.addItem("(none)", userData="")
+
+        if self._target is not None:
+            clips = getattr(self._target, "clips", {})
+            for clip_name in sorted(clips.keys()):
+                self._combo.addItem(clip_name, userData=clip_name)
+
+        # Restore selection
+        idx = self._combo.findData(current)
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+
+        self._combo.blockSignals(False)
+
+    def get_value(self) -> str:
+        return self._combo.currentData() or ""
+
+    def set_value(self, value: Any) -> None:
+        self._combo.blockSignals(True)
+        # Refresh in case clips changed
+        if self._target is not None:
+            self._refresh_choices()
+
+        value_str = str(value) if value else ""
+        idx = self._combo.findData(value_str)
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+        else:
+            self._combo.setCurrentIndex(0)  # (none)
+        self._combo.blockSignals(False)
+
     @staticmethod
     def _values_equal(a: Any, b: Any) -> bool:
         """Safe comparison that handles numpy arrays."""
@@ -577,6 +635,9 @@ class FieldWidgetFactory:
 
         if kind == "enum":
             return ComboFieldWidget(choices=field.choices)
+
+        if kind == "clip_selector":
+            return ClipSelectorWidget()
 
         if kind in ("material", "mesh", "voxel_grid", "navmesh", "skeleton"):
             return ResourceComboWidget(
