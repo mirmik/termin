@@ -111,7 +111,21 @@ class Component:
                 kind = field.kind
 
                 # Конвертация ресурсов в uuid (с fallback на имя для совместимости)
-                if kind in ("mesh", "material", "voxel_grid", "navmesh", "skeleton", "audio_clip"):
+                # Handle-based kinds (new pattern)
+                if kind.endswith("_handle"):
+                    if value is not None:
+                        # value is a ResourceHandle subclass
+                        asset = value.get_asset() if hasattr(value, "get_asset") else None
+                        if asset is not None and hasattr(asset, "uuid"):
+                            value = {"uuid": asset.uuid}
+                        elif hasattr(value, "name") and value.name:
+                            value = {"name": value.name}
+                        else:
+                            value = None
+                    else:
+                        value = None
+                # Legacy resource kinds (raw resource objects)
+                elif kind in ("mesh", "material", "voxel_grid", "navmesh", "skeleton", "audio_clip"):
                     if value is not None:
                         from termin.visualization.core.resources import ResourceManager
                         rm = ResourceManager.instance()
@@ -219,6 +233,61 @@ class Component:
                 kind = field.kind
 
                 # Конвертация типов и загрузка ресурсов
+                # Handle-based kinds (new pattern)
+                if kind.endswith("_handle"):
+                    resource_kind = kind[:-7]  # Remove "_handle" suffix
+                    handle = None
+
+                    if isinstance(value, dict):
+                        uuid = value.get("uuid")
+                        name = value.get("name")
+                        if uuid:
+                            # Load by UUID
+                            if resource_kind == "mesh":
+                                handle = rm.get_mesh_by_uuid(uuid)
+                            elif resource_kind == "material":
+                                from termin.assets.material_handle import MaterialHandle
+                                asset = rm.get_material_asset_by_uuid(uuid)
+                                if asset:
+                                    handle = MaterialHandle.from_asset(asset)
+                            elif resource_kind == "voxel_grid":
+                                from termin.assets.voxel_grid_handle import VoxelGridHandle
+                                asset = rm.get_voxel_grid_asset_by_uuid(uuid)
+                                if asset:
+                                    handle = VoxelGridHandle.from_asset(asset)
+                            elif resource_kind == "navmesh":
+                                from termin.assets.navmesh_handle import NavMeshHandle
+                                asset = rm.get_navmesh_asset_by_uuid(uuid)
+                                if asset:
+                                    handle = NavMeshHandle.from_asset(asset)
+                            elif resource_kind == "skeleton":
+                                from termin.assets.skeleton_handle import SkeletonHandle
+                                asset = rm.get_skeleton_asset_by_uuid(uuid)
+                                if asset:
+                                    handle = SkeletonHandle.from_asset(asset)
+                            elif resource_kind == "audio_clip":
+                                handle = rm.get_audio_clip_by_uuid(uuid)
+                            elif resource_kind == "texture":
+                                from termin.assets.texture_handle import TextureHandle
+                                asset = rm.get_texture_asset(name) if name else None
+                                if asset:
+                                    handle = TextureHandle.from_asset(asset)
+                        elif name:
+                            # Load by name (fallback)
+                            accessors = rm.get_handle_accessors(resource_kind)
+                            if accessors:
+                                handle = accessors.get_by_name(name)
+                    elif isinstance(value, str):
+                        # Legacy: name as string
+                        accessors = rm.get_handle_accessors(resource_kind)
+                        if accessors:
+                            handle = accessors.get_by_name(value)
+
+                    if handle is not None and field.setter:
+                        field.setter(obj, handle)
+                    continue
+
+                # Legacy resource kinds (raw resource objects)
                 if kind == "mesh":
                     resource = None
                     if isinstance(value, dict) and "uuid" in value:
