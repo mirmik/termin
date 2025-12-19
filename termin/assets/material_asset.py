@@ -1,4 +1,22 @@
-"""MaterialAsset - Asset for material configuration."""
+"""MaterialAsset - Asset for material configuration.
+
+NOTE: This class has some deviations from the standard DataAsset pattern:
+
+1. from_file() reads content immediately instead of lazy loading.
+   Standard pattern defers reading until .data is accessed.
+
+2. UUID is stored inside the .material JSON file, not in a separate .spec file.
+   This requires manual UUID extraction in _parse_content().
+
+3. _on_loaded() auto-saves the file if UUID was missing.
+   This ensures all materials get persistent UUIDs.
+
+These deviations exist because materials are self-contained JSON documents
+that embed their own metadata. Since materials are typically small files
+(a few KB), eager loading does not significantly impact engine performance.
+
+See also: PrefabAsset (same pattern).
+"""
 
 from __future__ import annotations
 
@@ -22,9 +40,6 @@ class MaterialAsset(DataAsset["Material"]):
     This ensures proper registration and avoids duplicates.
 
     Stores Material (shader reference, uniforms, textures).
-
-    Note: Materials store UUID in the file itself, not in a .spec file.
-    The entire JSON content acts as both spec and data.
     """
 
     _uses_binary = False  # JSON text format

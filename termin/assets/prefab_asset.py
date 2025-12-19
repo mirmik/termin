@@ -3,6 +3,26 @@ PrefabAsset — Asset for .prefab files with hot-reload support.
 
 A prefab is a reusable entity hierarchy that can be instantiated into scenes.
 Instances maintain a link to the source prefab and can override properties.
+
+NOTE: This class has some deviations from the standard DataAsset pattern:
+
+1. from_file() reads content immediately instead of lazy loading.
+   Standard pattern defers reading until .data is accessed.
+
+2. UUID is stored inside the .prefab JSON file, not in a separate .spec file.
+   This requires manual UUID extraction in _parse_content().
+
+3. _on_loaded() auto-saves the file if UUID was missing.
+   This ensures all prefabs get persistent UUIDs.
+
+These deviations exist because prefabs are self-contained JSON documents
+that embed their own metadata. Since prefabs are typically small files
+(a few KB), eager loading does not significantly impact engine performance.
+
+Potential fix path:
+    1. Change from_file() to use lazy loading (data=None, source_path=path)
+    2. Extract UUID in _parse_spec_fields() or accept spec-less design
+    3. Document the "UUID in content" pattern as intentional
 """
 
 from __future__ import annotations
