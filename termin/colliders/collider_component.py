@@ -1,14 +1,30 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from termin.colliders.attached import AttachedCollider
 from termin.colliders.collider import Collider
-from termin.visualization.core.entity import Component 
 
-class ColliderComponent(Component):
+if TYPE_CHECKING:
+    from termin.visualization.core.scene import Scene
+
+
+def _get_component_base():
+    from termin.visualization.core.entity import Component
+    return Component
+
+
+class ColliderComponent(_get_component_base()):
     """
     Компонент, навешиваемый на Entity.
     Оборачивает коллайдер в AttachedCollider, чтобы он следовал за Transform3.
     """
-    def __init__(self, collider: Collider):
+
+    def __init__(self, collider: Collider | None = None):
         super().__init__(enabled=True)
+        if collider is None:
+            from termin.colliders.box import BoxCollider
+            collider = BoxCollider()
         self._source_collider = collider
         self.attached = None
 
