@@ -1,4 +1,4 @@
 """Re-export for backwards compatibility."""
-from termin.assets.texture_handle import TextureHandle
+from termin.assets.texture_handle import TextureHandle, get_white_texture_handle
 
-__all__ = ["TextureHandle"]
+__all__ = ["TextureHandle", "get_white_texture_handle"]
