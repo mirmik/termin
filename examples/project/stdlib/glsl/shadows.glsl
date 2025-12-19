@@ -2,7 +2,7 @@
  * Shadow mapping utilities for Termin engine.
  *
  * Usage in your shader:
- *   #include "shadows"
+ *   #include "shadows.glsl"
  *
  * This file declares all required uniforms automatically.
  * The engine sets these uniforms via upload_shadow_maps_to_shader().
@@ -33,6 +33,14 @@ uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
 uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
 uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
 
+// Shadow settings (set by engine from Scene.shadow_settings)
+// u_shadow_method: 0=hard, 1=pcf, 2=poisson
+// u_shadow_softness: sampling radius multiplier (0=sharp, 1=default, >1=softer)
+// u_shadow_bias: depth bias to prevent shadow acne
+uniform int u_shadow_method;
+uniform float u_shadow_softness;
+uniform float u_shadow_bias;
+
 // 16-sample Poisson disk for high-quality shadow sampling
 const int POISSON_SAMPLES = 16;
 const vec2 poissonDisk[16] = vec2[](
@@ -55,10 +63,19 @@ const vec2 poissonDisk[16] = vec2[](
 );
 
 /**
+ * Get effective shadow bias (uniform or fallback to define).
+ */
+float _get_shadow_bias() {
+    return u_shadow_bias > 0.0 ? u_shadow_bias : SHADOW_BIAS;
+}
+
+/**
  * Compute hard shadow using hardware PCF (sampler2DShadow).
  * Single sample with automatic depth comparison + bilinear filtering.
  */
 float compute_shadow(int light_index) {
+    float bias = _get_shadow_bias();
+
     for (int sm = 0; sm < u_shadow_map_count; ++sm) {
         if (u_shadow_light_index[sm] != light_index) {
             continue;
@@ -75,7 +92,7 @@ float compute_shadow(int light_index) {
         }
 
         // Hardware PCF: texture() on sampler2DShadow does depth comparison
-        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - SHADOW_BIAS));
+        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - bias));
     }
 
     return 1.0;
@@ -84,8 +101,12 @@ float compute_shadow(int light_index) {
 /**
  * Compute soft shadow with 5x5 PCF grid.
  * 25 samples using hardware depth comparison.
+ * Softness controlled by u_shadow_softness uniform.
  */
 float compute_shadow_pcf(int light_index) {
+    float bias = _get_shadow_bias();
+    float softness = max(u_shadow_softness, 0.0);
+
     for (int sm = 0; sm < u_shadow_map_count; ++sm) {
         if (u_shadow_light_index[sm] != light_index) {
             continue;
@@ -102,12 +123,12 @@ float compute_shadow_pcf(int light_index) {
         }
 
         vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));
-        float compare_depth = proj_coords.z - SHADOW_BIAS;
+        float compare_depth = proj_coords.z - bias;
 
         float shadow = 0.0;
         for (int x = -2; x <= 2; ++x) {
             for (int y = -2; y <= 2; ++y) {
-                vec2 offset = vec2(float(x), float(y)) * texel_size;
+                vec2 offset = vec2(float(x), float(y)) * texel_size * softness;
                 shadow += texture(u_shadow_map[sm], vec3(proj_coords.xy + offset, compare_depth));
             }
         }
@@ -121,8 +142,12 @@ float compute_shadow_pcf(int light_index) {
 /**
  * Compute high-quality soft shadow with Poisson disk sampling.
  * 16 samples with better distribution than grid, reduces banding artifacts.
+ * Softness controlled by u_shadow_softness uniform.
  */
 float compute_shadow_poisson(int light_index) {
+    float bias = _get_shadow_bias();
+    float softness = max(u_shadow_softness, 0.0);
+
     for (int sm = 0; sm < u_shadow_map_count; ++sm) {
         if (u_shadow_light_index[sm] != light_index) {
             continue;
@@ -139,8 +164,8 @@ float compute_shadow_poisson(int light_index) {
         }
 
         vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));
-        float compare_depth = proj_coords.z - SHADOW_BIAS;
-        float radius = 2.5;
+        float compare_depth = proj_coords.z - bias;
+        float radius = 2.5 * softness;
 
         float shadow = 0.0;
         for (int i = 0; i < POISSON_SAMPLES; ++i) {
@@ -152,6 +177,22 @@ float compute_shadow_poisson(int light_index) {
     }
 
     return 1.0;
+}
+
+/**
+ * Compute shadow using method selected by u_shadow_method uniform.
+ * 0 = hard (single sample)
+ * 1 = PCF 5x5 grid (default)
+ * 2 = Poisson disk (16 samples)
+ */
+float compute_shadow_auto(int light_index) {
+    if (u_shadow_method == 0) {
+        return compute_shadow(light_index);
+    } else if (u_shadow_method == 2) {
+        return compute_shadow_poisson(light_index);
+    } else {
+        return compute_shadow_pcf(light_index);
+    }
 }
 
 #endif // SHADOWS_GLSL

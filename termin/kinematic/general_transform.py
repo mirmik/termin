@@ -74,6 +74,9 @@ class GeneralTransform3:
         self._local_pose = pose
         self._mark_dirty()
 
+    def set_local_pose(self, local_pose: GeneralPose3):
+        self.relocate(local_pose)
+
     def relocate_global(self, global_pose: GeneralPose3 | Pose3):
         """Set global pose by computing corresponding local pose."""
         if isinstance(global_pose, Pose3):
@@ -92,6 +95,9 @@ class GeneralTransform3:
         else:
             self._local_pose = global_pose
         self._mark_dirty()
+
+    def set_global_pose(self, global_pose: GeneralPose3):
+        self.relocate_global(global_pose)
 
     def increment_version(self, version: int) -> int:
         return (version + 1) % (2**31 - 1)

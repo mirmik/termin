@@ -59,8 +59,8 @@ in vec3 v_world_pos;
 in vec3 v_normal;
 in vec2 v_uv;
 
-#include "lighting"
-#include "shadows"
+#include "lighting.glsl"
+#include "shadows.glsl"
 
 // Material properties
 uniform vec4 u_color;
@@ -137,7 +137,7 @@ void main() {
         // Shadow for directional lights
         float shadow = 1.0;
         if (type == LIGHT_TYPE_DIRECTIONAL) {
-            shadow = compute_shadow_pcf(i);
+            shadow = compute_shadow_auto(i);
         }
 
         // Diffuse (Lambert)
