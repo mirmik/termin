@@ -80,6 +80,15 @@ class AudioClipAsset(Asset):
             self._load()
         return self._clip
 
+    @property
+    def resource(self) -> "AudioClip | None":
+        """
+        Get the underlying resource (alias for clip).
+
+        Provides uniform interface for ResourceHandle.
+        """
+        return self.clip
+
     def _load(self) -> bool:
         """
         Load audio data from source_path (internal).

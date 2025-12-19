@@ -29,29 +29,14 @@ class TextureHandle(ResourceHandle["TextureData", "TextureAsset"]):
         handle = TextureHandle.from_name("wood")          # lookup в ResourceManager
     """
 
+    _asset_getter = "get_texture_asset"
+
     @classmethod
     def from_direct(cls, texture_data: "TextureData") -> "TextureHandle":
         """Создать handle с raw TextureData."""
         handle = cls()
         handle._init_direct(texture_data)
         return handle
-
-    @classmethod
-    def from_asset(cls, asset: "TextureAsset") -> "TextureHandle":
-        """Создать handle с TextureAsset."""
-        handle = cls()
-        handle._init_asset(asset)
-        return handle
-
-    @classmethod
-    def from_name(cls, name: str) -> "TextureHandle":
-        """Создать handle по имени (lookup в ResourceManager)."""
-        from termin.assets.resources import ResourceManager
-
-        asset = ResourceManager.instance().get_texture_asset(name)
-        if asset is not None:
-            return cls.from_asset(asset)
-        return cls()
 
     @classmethod
     def from_texture_data(cls, texture_data: "TextureData", name: str = "texture") -> "TextureHandle":
@@ -66,13 +51,6 @@ class TextureHandle(ResourceHandle["TextureData", "TextureAsset"]):
         from termin.visualization.render.texture_asset import TextureAsset
         asset = TextureAsset.from_file(path, name=name)
         return cls.from_asset(asset)
-
-    # --- Resource extraction ---
-
-    def _get_resource_from_asset(self, asset: "TextureAsset") -> "TextureData | None":
-        """Извлечь TextureData из TextureAsset (lazy loading)."""
-        asset.ensure_loaded()
-        return asset.texture_data
 
     # --- Convenience accessors ---
 

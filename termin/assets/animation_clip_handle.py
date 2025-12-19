@@ -27,6 +27,8 @@ class AnimationClipHandle(ResourceHandle["AnimationClip", "AnimationClipAsset"])
         handle = AnimationClipHandle.from_name("walk")  # lookup в ResourceManager
     """
 
+    _asset_getter = "get_animation_clip_asset"
+
     @classmethod
     def from_direct(cls, clip: "AnimationClip") -> "AnimationClipHandle":
         """Создать handle с raw AnimationClip."""
@@ -38,23 +40,6 @@ class AnimationClipHandle(ResourceHandle["AnimationClip", "AnimationClipAsset"])
     from_clip = from_direct
 
     @classmethod
-    def from_asset(cls, asset: "AnimationClipAsset") -> "AnimationClipHandle":
-        """Создать handle с AnimationClipAsset."""
-        handle = cls()
-        handle._init_asset(asset)
-        return handle
-
-    @classmethod
-    def from_name(cls, name: str) -> "AnimationClipHandle":
-        """Создать handle по имени (lookup в ResourceManager)."""
-        from termin.assets.resources import ResourceManager
-
-        asset = ResourceManager.instance().get_animation_clip_asset(name)
-        if asset is not None:
-            return cls.from_asset(asset)
-        return cls()
-
-    @classmethod
     def from_uuid(cls, uuid: str) -> "AnimationClipHandle":
         """Создать handle по UUID (lookup в ResourceManager)."""
         from termin.assets.resources import ResourceManager
@@ -63,13 +48,6 @@ class AnimationClipHandle(ResourceHandle["AnimationClip", "AnimationClipAsset"])
         if asset is not None:
             return cls.from_asset(asset)
         return cls()
-
-    # --- Resource extraction ---
-
-    def _get_resource_from_asset(self, asset: "AnimationClipAsset") -> "AnimationClip | None":
-        """Извлечь AnimationClip из AnimationClipAsset (lazy loading)."""
-        asset.ensure_loaded()
-        return asset.clip
 
     # --- Convenience accessors ---
 

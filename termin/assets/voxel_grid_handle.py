@@ -27,6 +27,8 @@ class VoxelGridHandle(ResourceHandle["VoxelGrid", "VoxelGridAsset"]):
         handle = VoxelGridHandle.from_name("grid")   # lookup в ResourceManager
     """
 
+    _asset_getter = "get_voxel_grid_asset"
+
     @classmethod
     def from_direct(cls, grid: "VoxelGrid") -> "VoxelGridHandle":
         """Создать handle с raw VoxelGrid."""
@@ -36,30 +38,6 @@ class VoxelGridHandle(ResourceHandle["VoxelGrid", "VoxelGridAsset"]):
 
     # Alias for backward compatibility
     from_grid = from_direct
-
-    @classmethod
-    def from_asset(cls, asset: "VoxelGridAsset") -> "VoxelGridHandle":
-        """Создать handle с VoxelGridAsset."""
-        handle = cls()
-        handle._init_asset(asset)
-        return handle
-
-    @classmethod
-    def from_name(cls, name: str) -> "VoxelGridHandle":
-        """Создать handle по имени (lookup в ResourceManager)."""
-        from termin.assets.resources import ResourceManager
-
-        asset = ResourceManager.instance().get_voxel_grid_asset(name)
-        if asset is not None:
-            return cls.from_asset(asset)
-        return cls()
-
-    # --- Resource extraction ---
-
-    def _get_resource_from_asset(self, asset: "VoxelGridAsset") -> "VoxelGrid | None":
-        """Извлечь VoxelGrid из VoxelGridAsset (lazy loading)."""
-        asset.ensure_loaded()
-        return asset.grid
 
     # --- Convenience accessors ---
 

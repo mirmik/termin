@@ -74,11 +74,46 @@ class ResourceHandle(Generic[T, AssetT]):
     Два режима работы:
     1. Direct — хранит raw объект напрямую (Texture, ShaderProgram)
     2. Asset — хранит ссылку на Asset (lookup по имени через ResourceManager)
+
+    Subclasses should set _asset_getter to enable from_name():
+        _asset_getter = "get_mesh_asset"  # ResourceManager method name
     """
+
+    # Override in subclasses: ResourceManager method name for get_*_asset()
+    _asset_getter: str = ""
 
     def __init__(self):
         self._direct: T | None = None  # Raw object
         self._asset: AssetT | None = None  # Asset wrapper
+
+    @classmethod
+    def from_name(cls, name: str) -> "ResourceHandle[T, AssetT]":
+        """
+        Создать handle по имени (lookup в ResourceManager).
+
+        Subclasses must set _asset_getter class attribute.
+        """
+        if not cls._asset_getter:
+            return cls()
+
+        from termin.assets.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        getter = getattr(rm, cls._asset_getter, None)
+        if getter is None:
+            return cls()
+
+        asset = getter(name)
+        if asset is not None:
+            return cls.from_asset(asset)
+        return cls()
+
+    @classmethod
+    def from_asset(cls, asset: AssetT) -> "ResourceHandle[T, AssetT]":
+        """Создать handle с Asset."""
+        handle = cls()
+        handle._init_asset(asset)
+        return handle
 
     @property
     def is_direct(self) -> bool:
@@ -122,9 +157,11 @@ class ResourceHandle(Generic[T, AssetT]):
         """
         Извлечь raw ресурс из Asset.
 
-        Subclasses должны переопределить.
+        Default implementation uses asset.resource property.
+        Subclasses can override for custom behavior (e.g., ensure_loaded).
         """
-        return None
+        asset.ensure_loaded()
+        return asset.resource  # type: ignore
 
     def get_or_none(self) -> T | None:
         """Алиас для get()."""

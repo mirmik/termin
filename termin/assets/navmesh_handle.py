@@ -27,6 +27,8 @@ class NavMeshHandle(ResourceHandle["NavMesh", "NavMeshAsset"]):
         handle = NavMeshHandle.from_name("level1")    # lookup в ResourceManager
     """
 
+    _asset_getter = "get_navmesh_asset"
+
     @classmethod
     def from_direct(cls, navmesh: "NavMesh") -> "NavMeshHandle":
         """Создать handle с raw NavMesh."""
@@ -36,30 +38,6 @@ class NavMeshHandle(ResourceHandle["NavMesh", "NavMeshAsset"]):
 
     # Alias for backward compatibility
     from_navmesh = from_direct
-
-    @classmethod
-    def from_asset(cls, asset: "NavMeshAsset") -> "NavMeshHandle":
-        """Создать handle с NavMeshAsset."""
-        handle = cls()
-        handle._init_asset(asset)
-        return handle
-
-    @classmethod
-    def from_name(cls, name: str) -> "NavMeshHandle":
-        """Создать handle по имени (lookup в ResourceManager)."""
-        from termin.assets.resources import ResourceManager
-
-        asset = ResourceManager.instance().get_navmesh_asset(name)
-        if asset is not None:
-            return cls.from_asset(asset)
-        return cls()
-
-    # --- Resource extraction ---
-
-    def _get_resource_from_asset(self, asset: "NavMeshAsset") -> "NavMesh | None":
-        """Извлечь NavMesh из NavMeshAsset (lazy loading)."""
-        asset.ensure_loaded()
-        return asset.navmesh
 
     # --- Convenience accessors ---
 

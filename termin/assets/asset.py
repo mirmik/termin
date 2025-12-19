@@ -126,6 +126,19 @@ class Asset(Identifiable):
         # No recent save - this is external modification
         return True
 
+    @property
+    def resource(self):
+        """
+        Get the underlying resource data.
+
+        Subclasses should override to return their specific data type.
+        This provides a uniform interface for ResourceHandle.
+
+        Returns:
+            Resource data or None if not loaded.
+        """
+        return None
+
     def _load(self) -> bool:
         """
         Load asset data from source_path (internal).

@@ -27,6 +27,8 @@ class MaterialHandle(ResourceHandle["Material", "MaterialAsset"]):
         handle = MaterialHandle.from_name("Metal")     # lookup в ResourceManager
     """
 
+    _asset_getter = "get_material_asset"
+
     @classmethod
     def from_direct(cls, material: "Material") -> "MaterialHandle":
         """Создать handle с raw Material."""
@@ -36,30 +38,6 @@ class MaterialHandle(ResourceHandle["Material", "MaterialAsset"]):
 
     # Alias for backward compatibility
     from_material = from_direct
-
-    @classmethod
-    def from_asset(cls, asset: "MaterialAsset") -> "MaterialHandle":
-        """Создать handle с MaterialAsset."""
-        handle = cls()
-        handle._init_asset(asset)
-        return handle
-
-    @classmethod
-    def from_name(cls, name: str) -> "MaterialHandle":
-        """Создать handle по имени (lookup в ResourceManager)."""
-        from termin.assets.resources import ResourceManager
-
-        asset = ResourceManager.instance().get_material_asset(name)
-        if asset is not None:
-            return cls.from_asset(asset)
-        return cls()
-
-    # --- Resource extraction ---
-
-    def _get_resource_from_asset(self, asset: "MaterialAsset") -> "Material | None":
-        """Извлечь Material из MaterialAsset (lazy loading)."""
-        asset.ensure_loaded()
-        return asset.material
 
     # --- Convenience accessors ---
 

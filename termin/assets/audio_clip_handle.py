@@ -23,22 +23,7 @@ class AudioClipHandle(ResourceHandle["AudioClip", "AudioClipAsset"]):
         clip = handle.clip   # Same, via property
     """
 
-    @classmethod
-    def from_asset(cls, asset: "AudioClipAsset") -> "AudioClipHandle":
-        """Create handle from AudioClipAsset."""
-        handle = cls()
-        handle._init_asset(asset)
-        return handle
-
-    @classmethod
-    def from_name(cls, name: str) -> "AudioClipHandle":
-        """Create handle by name (lookup in ResourceManager)."""
-        from termin.assets.resources import ResourceManager
-
-        asset = ResourceManager.instance().get_audio_clip_asset(name)
-        if asset is not None:
-            return cls.from_asset(asset)
-        return cls()
+    _asset_getter = "get_audio_clip_asset"
 
     @classmethod
     def from_uuid(cls, uuid: str) -> "AudioClipHandle":
@@ -49,10 +34,6 @@ class AudioClipHandle(ResourceHandle["AudioClip", "AudioClipAsset"]):
         if asset is not None:
             return cls.from_asset(asset)
         return cls()
-
-    def _get_resource_from_asset(self, asset: "AudioClipAsset") -> "AudioClip | None":
-        """Extract AudioClip from AudioClipAsset (lazy loading)."""
-        return asset.clip
 
     @property
     def clip(self) -> "AudioClip | None":

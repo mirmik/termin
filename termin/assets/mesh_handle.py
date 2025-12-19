@@ -25,8 +25,10 @@ class MeshHandle(ResourceHandle["Mesh3", "MeshAsset"]):
     Использование:
         handle = MeshHandle.from_direct(mesh)     # raw Mesh3
         handle = MeshHandle.from_asset(asset)     # MeshAsset
-        handle = MeshHandle.from_name("cube")     # lookup в ResourceManager
+        handle = MeshHandle.from_name("Cube")     # lookup в ResourceManager
     """
+
+    _asset_getter = "get_mesh_asset"
 
     @classmethod
     def from_direct(cls, mesh: "Mesh3") -> "MeshHandle":
@@ -51,29 +53,6 @@ class MeshHandle(ResourceHandle["Mesh3", "MeshAsset"]):
         from termin.mesh.mesh import Mesh3
         mesh = Mesh3(vertices=vertices, triangles=indices)
         return cls.from_mesh3(mesh, name=name)
-
-    @classmethod
-    def from_asset(cls, asset: "MeshAsset") -> "MeshHandle":
-        """Создать handle с MeshAsset."""
-        handle = cls()
-        handle._init_asset(asset)
-        return handle
-
-    @classmethod
-    def from_name(cls, name: str) -> "MeshHandle":
-        """Создать handle по имени (lookup в ResourceManager)."""
-        from termin.assets.resources import ResourceManager
-
-        asset = ResourceManager.instance().get_mesh_asset(name)
-        if asset is not None:
-            return cls.from_asset(asset)
-        return cls()
-
-    # --- Resource extraction ---
-
-    def _get_resource_from_asset(self, asset: "MeshAsset") -> "Mesh3 | None":
-        """Извлечь Mesh3 из MeshAsset (lazy loading внутри asset.data)."""
-        return asset.data
 
     # --- Convenience accessors ---
 

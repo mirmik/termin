@@ -79,6 +79,15 @@ class DataAsset(Asset, Generic[T]):
         self._loaded = value is not None
         self._bump_version()
 
+    @property
+    def resource(self) -> T | None:
+        """
+        Get the underlying resource (alias for data).
+
+        Provides uniform interface for ResourceHandle.
+        """
+        return self.data
+
     # --- Spec parsing (called immediately) ---
 
     def parse_spec(self, spec_data: dict | None) -> None:

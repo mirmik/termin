@@ -242,38 +242,8 @@ class Component:
                         uuid = value.get("uuid")
                         name = value.get("name")
                         if uuid:
-                            # Load by UUID
-                            if resource_kind == "mesh":
-                                handle = rm.get_mesh_by_uuid(uuid)
-                            elif resource_kind == "material":
-                                from termin.assets.material_handle import MaterialHandle
-                                asset = rm.get_material_asset_by_uuid(uuid)
-                                if asset:
-                                    handle = MaterialHandle.from_asset(asset)
-                            elif resource_kind == "voxel_grid":
-                                from termin.assets.voxel_grid_handle import VoxelGridHandle
-                                asset = rm.get_voxel_grid_asset_by_uuid(uuid)
-                                if asset:
-                                    handle = VoxelGridHandle.from_asset(asset)
-                            elif resource_kind == "navmesh":
-                                from termin.assets.navmesh_handle import NavMeshHandle
-                                asset = rm.get_navmesh_asset_by_uuid(uuid)
-                                if asset:
-                                    handle = NavMeshHandle.from_asset(asset)
-                            elif resource_kind == "skeleton":
-                                from termin.assets.skeleton_handle import SkeletonHandle
-                                asset = rm.get_skeleton_asset_by_uuid(uuid)
-                                if asset:
-                                    handle = SkeletonHandle.from_asset(asset)
-                            elif resource_kind == "audio_clip":
-                                handle = rm.get_audio_clip_by_uuid(uuid)
-                            elif resource_kind == "texture":
-                                from termin.assets.texture_handle import TextureHandle
-                                asset = rm.get_texture_asset(name) if name else None
-                                if asset:
-                                    handle = TextureHandle.from_asset(asset)
+                            handle = rm.get_handle_by_uuid(resource_kind, uuid)
                         elif name:
-                            # Load by name (fallback)
                             accessors = rm.get_handle_accessors(resource_kind)
                             if accessors:
                                 handle = accessors.get_by_name(name)

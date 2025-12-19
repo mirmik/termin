@@ -27,6 +27,8 @@ class SkeletonHandle(ResourceHandle["SkeletonData", "SkeletonAsset"]):
         handle = SkeletonHandle.from_name("humanoid")  # lookup в ResourceManager
     """
 
+    _asset_getter = "get_skeleton_asset"
+
     @classmethod
     def from_direct(cls, skeleton: "SkeletonData") -> "SkeletonHandle":
         """Создать handle с raw SkeletonData."""
@@ -36,30 +38,6 @@ class SkeletonHandle(ResourceHandle["SkeletonData", "SkeletonAsset"]):
 
     # Alias for backward compatibility
     from_skeleton = from_direct
-
-    @classmethod
-    def from_asset(cls, asset: "SkeletonAsset") -> "SkeletonHandle":
-        """Создать handle с SkeletonAsset."""
-        handle = cls()
-        handle._init_asset(asset)
-        return handle
-
-    @classmethod
-    def from_name(cls, name: str) -> "SkeletonHandle":
-        """Создать handle по имени (lookup в ResourceManager)."""
-        from termin.assets.resources import ResourceManager
-
-        asset = ResourceManager.instance().get_skeleton_asset(name)
-        if asset is not None:
-            return cls.from_asset(asset)
-        return cls()
-
-    # --- Resource extraction ---
-
-    def _get_resource_from_asset(self, asset: "SkeletonAsset") -> "SkeletonData | None":
-        """Извлечь SkeletonData из SkeletonAsset (lazy loading)."""
-        asset.ensure_loaded()
-        return asset.skeleton_data
 
     # --- Convenience accessors ---
 

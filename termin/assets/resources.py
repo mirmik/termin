@@ -1963,6 +1963,60 @@ class ResourceManager:
             return self.find_texture_name(handle)
         return None
 
+    def get_handle_by_uuid(self, kind: str, uuid: str) -> Any:
+        """
+        Get a Handle by UUID for the specified resource kind.
+
+        Args:
+            kind: Resource kind (mesh, material, voxel_grid, navmesh, skeleton, audio_clip, texture)
+            uuid: Asset UUID
+
+        Returns:
+            Handle instance or None if not found
+        """
+        if kind == "mesh":
+            return self.get_mesh_by_uuid(uuid)
+
+        if kind == "material":
+            from termin.assets.material_handle import MaterialHandle
+            asset = self.get_material_asset_by_uuid(uuid)
+            if asset:
+                return MaterialHandle.from_asset(asset)
+            return None
+
+        if kind == "voxel_grid":
+            from termin.assets.voxel_grid_handle import VoxelGridHandle
+            asset = self.get_voxel_grid_asset_by_uuid(uuid)
+            if asset:
+                return VoxelGridHandle.from_asset(asset)
+            return None
+
+        if kind == "navmesh":
+            from termin.assets.navmesh_handle import NavMeshHandle
+            asset = self.get_navmesh_asset_by_uuid(uuid)
+            if asset:
+                return NavMeshHandle.from_asset(asset)
+            return None
+
+        if kind == "skeleton":
+            from termin.assets.skeleton_handle import SkeletonHandle
+            asset = self.get_skeleton_asset_by_uuid(uuid)
+            if asset:
+                return SkeletonHandle.from_asset(asset)
+            return None
+
+        if kind == "audio_clip":
+            return self.get_audio_clip_by_uuid(uuid)
+
+        if kind == "texture":
+            from termin.assets.texture_handle import TextureHandle
+            asset = self.get_texture_asset_by_uuid(uuid)
+            if asset:
+                return TextureHandle.from_asset(asset)
+            return None
+
+        return None
+
     # --------- Сериализация ---------
 
     def serialize(self) -> dict:

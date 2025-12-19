@@ -27,36 +27,14 @@ class ShaderHandle(ResourceHandle["ShaderMultyPhaseProgramm", "ShaderAsset"]):
         handle = ShaderHandle.from_name("PBR")       # lookup в ResourceManager
     """
 
+    _asset_getter = "get_shader_asset"
+
     @classmethod
     def from_direct(cls, program: "ShaderMultyPhaseProgramm") -> "ShaderHandle":
         """Создать handle с raw ShaderMultyPhaseProgramm."""
         handle = cls()
         handle._init_direct(program)
         return handle
-
-    @classmethod
-    def from_asset(cls, asset: "ShaderAsset") -> "ShaderHandle":
-        """Создать handle с ShaderAsset."""
-        handle = cls()
-        handle._init_asset(asset)
-        return handle
-
-    @classmethod
-    def from_name(cls, name: str) -> "ShaderHandle":
-        """Создать handle по имени (lookup в ResourceManager)."""
-        from termin.assets.resources import ResourceManager
-
-        asset = ResourceManager.instance().get_shader_asset(name)
-        if asset is not None:
-            return cls.from_asset(asset)
-        return cls()
-
-    # --- Resource extraction ---
-
-    def _get_resource_from_asset(self, asset: "ShaderAsset") -> "ShaderMultyPhaseProgramm | None":
-        """Извлечь ShaderMultyPhaseProgramm из ShaderAsset (lazy loading)."""
-        asset.ensure_loaded()
-        return asset.program
 
     # --- Convenience accessors ---
 
