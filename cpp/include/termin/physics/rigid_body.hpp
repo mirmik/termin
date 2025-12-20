@@ -128,7 +128,7 @@ public:
 
     /**
      * Интегрирование сил для обновления скорости.
-     * Упрощённый подход: линейная и угловая части обрабатываются отдельно.
+     * Использует spatial algebra в СК тела (нотация Фезерстоуна).
      */
     void integrate_forces(double dt, const geom::Vec3& gravity) {
         if (is_static) {
@@ -136,29 +136,26 @@ public:
             return;
         }
 
-        // Линейная часть: F = m*a, v += (F/m + g) * dt
-        if (inertia.mass > 1e-10) {
-            geom::Vec3 linear_accel = wrench.lin * (1.0 / inertia.mass) + gravity;
-            velocity.lin = velocity.lin + linear_accel * dt;
-        }
+        // Всё в СК тела
+        geom::Screw3 v_body = velocity.inverse_transform_by(pose);
+        geom::Vec3 g_body = pose.inverse_transform_vector(gravity);
+        geom::Screw3 f_ext_body = wrench.inverse_transform_by(pose);
 
-        // Угловая часть: τ = I*α, α = I⁻¹*τ
-        // I⁻¹ в мировой СК = R * diag(1/I) * R^T
-        double Iinv[9];
-        world_inertia_inv(Iinv);
+        // Суммарный винт: внешний + гравитация - bias
+        geom::Screw3 f_gravity = inertia.gravity_wrench(g_body);
+        geom::Screw3 f_bias = inertia.bias_wrench(v_body);
+        geom::Screw3 f_total(
+            f_ext_body.ang + f_gravity.ang - f_bias.ang,
+            f_ext_body.lin + f_gravity.lin - f_bias.lin
+        );
 
-        // Угловое ускорение = I⁻¹ * τ
-        geom::Vec3 tau = wrench.ang;
-        geom::Vec3 angular_accel = {
-            Iinv[0]*tau.x + Iinv[1]*tau.y + Iinv[2]*tau.z,
-            Iinv[3]*tau.x + Iinv[4]*tau.y + Iinv[5]*tau.z,
-            Iinv[6]*tau.x + Iinv[7]*tau.y + Iinv[8]*tau.z
-        };
+        // Ускорение: a = I⁻¹ * f
+        geom::Screw3 a_body = inertia.solve(f_total);
 
-        velocity.ang = velocity.ang + angular_accel * dt;
-
-        // Демпфирование угловой скорости для стабильности
-        velocity.ang = velocity.ang * 0.99;
+        // В мировую СК и обновляем скорость
+        geom::Screw3 a_world = a_body.transform_by(pose);
+        velocity.ang = velocity.ang + a_world.ang * dt;
+        velocity.lin = velocity.lin + a_world.lin * dt;
 
         wrench = geom::Screw3();
     }
