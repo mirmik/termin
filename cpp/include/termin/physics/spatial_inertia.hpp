@@ -105,11 +105,22 @@ public:
     }
 
     /**
-     * Bias wrench: v ×* (I @ v)
+     * Bias wrench (гироскопический момент): τ_gyro = ω × (I * ω)
+     *
+     * Для нашей конвенции где velocity.lin = скорость COM (не spatial velocity),
+     * bias имеет только угловую часть.
      */
     geom::Screw3 bias_wrench(const geom::Screw3& velocity) const {
-        geom::Screw3 h = apply(velocity);
-        return velocity.cross_force(h);
+        // Гироскопический момент: ω × (I * ω)
+        geom::Vec3 Iw = {
+            I_diag.x * velocity.ang.x,
+            I_diag.y * velocity.ang.y,
+            I_diag.z * velocity.ang.z
+        };
+        geom::Vec3 gyro = velocity.ang.cross(Iw);
+
+        // Линейная часть = 0 (нет дополнительных сил для движения COM)
+        return geom::Screw3(gyro, geom::Vec3(0, 0, 0));
     }
 };
 
