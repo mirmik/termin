@@ -82,6 +82,24 @@ class FieldWidget(QWidget):
         """Set widget value."""
         raise NotImplementedError
 
+    @staticmethod
+    def _values_equal(a: Any, b: Any) -> bool:
+        """Safe comparison that handles numpy arrays."""
+        try:
+            if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+                a_arr = np.asarray(a)
+                b_arr = np.asarray(b)
+                if a_arr.shape != b_arr.shape:
+                    return False
+                return bool(np.allclose(a_arr, b_arr))
+            if isinstance(a, (tuple, list)) and isinstance(b, (tuple, list)):
+                if len(a) != len(b):
+                    return False
+                return all(FieldWidget._values_equal(x, y) for x, y in zip(a, b))
+            return a == b
+        except Exception:
+            return False
+
 
 class FloatFieldWidget(FieldWidget):
     """Widget for float/int fields using QDoubleSpinBox."""
@@ -441,24 +459,6 @@ class ClipSelectorWidget(FieldWidget):
         else:
             self._combo.setCurrentIndex(0)  # (none)
         self._combo.blockSignals(False)
-
-    @staticmethod
-    def _values_equal(a: Any, b: Any) -> bool:
-        """Safe comparison that handles numpy arrays."""
-        try:
-            if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
-                a_arr = np.asarray(a)
-                b_arr = np.asarray(b)
-                if a_arr.shape != b_arr.shape:
-                    return False
-                return bool(np.allclose(a_arr, b_arr))
-            if isinstance(a, (tuple, list)) and isinstance(b, (tuple, list)):
-                if len(a) != len(b):
-                    return False
-                return all(ComboFieldWidget._values_equal(x, y) for x, y in zip(a, b))
-            return a == b
-        except Exception:
-            return False
 
 
 class HandleSelectorWidget(FieldWidget):
