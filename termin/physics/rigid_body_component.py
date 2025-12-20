@@ -92,6 +92,9 @@ class RigidBodyComponent(Component):
         if self.entity is None:
             return np.array([0.5, 0.5, 0.5])
 
+        # Получаем global scale
+        global_scale = np.asarray(self.entity.transform.global_pose().scale)
+
         # Проверяем наличие существующего компонента коллайдера
         from termin.colliders.collider_component import ColliderComponent
         from termin.colliders.box import BoxCollider as PyBoxCollider
@@ -101,10 +104,12 @@ class RigidBodyComponent(Component):
         if collider_comp is not None:
             collider = collider_comp.collider
             if isinstance(collider, PyBoxCollider):
-                return collider.size / 2.0
+                return (collider.size / 2.0) * global_scale
             elif isinstance(collider, PySphereCollider):
                 r = collider.radius
-                return np.array([r, r, r])
+                # Для сферы берём максимальный scale
+                max_scale = np.max(global_scale)
+                return np.array([r, r, r]) * max_scale
 
         # Пробуем создать из меш-рендерера
         from termin.visualization.render.components.mesh_renderer import MeshRenderer
@@ -114,10 +119,10 @@ class RigidBodyComponent(Component):
             if hasattr(mesh, 'get_bounds'):
                 bounds = mesh.get_bounds()
                 size = bounds.max_point - bounds.min_point
-                return size / 2.0
+                return (size / 2.0) * global_scale
 
         # По умолчанию: единичный куб
-        return np.array([0.5, 0.5, 0.5])
+        return np.array([0.5, 0.5, 0.5]) * global_scale
 
     def _find_and_register_with_physics_world(self, scene: "Scene"):
         """Найти PhysicsWorldComponent в сцене и зарегистрироваться."""
