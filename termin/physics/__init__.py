@@ -1,14 +1,19 @@
-"""Модуль физической симуляции для динамики твёрдых тел."""
+"""Модуль физической симуляции для динамики твёрдых тел (C++ backend)."""
 
-from termin.physics.rigid_body import RigidBody
-from termin.physics.world import PhysicsWorld
-from termin.physics.contact import Contact, ContactConstraint
+from termin.physics._physics_native import (
+    RigidBody,
+    PhysicsWorld,
+    SpatialInertia3D,
+    Contact,
+    ContactConstraint,
+)
 from termin.physics.rigid_body_component import RigidBodyComponent
 from termin.physics.physics_world_component import PhysicsWorldComponent
 
 __all__ = [
     "RigidBody",
     "PhysicsWorld",
+    "SpatialInertia3D",
     "Contact",
     "ContactConstraint",
     "RigidBodyComponent",
