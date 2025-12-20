@@ -128,7 +128,7 @@ public:
 
     /**
      * Интегрирование сил для обновления скорости.
-     * Использует spatial algebra в СК тела (нотация Фезерстоуна).
+     * Spatial algebra в СК тела (нотация Фезерстоуна).
      */
     void integrate_forces(double dt, const geom::Vec3& gravity) {
         if (is_static) {
@@ -136,10 +136,10 @@ public:
             return;
         }
 
-        // Всё в СК тела
-        geom::Screw3 v_body = velocity.inverse_transform_by(pose);
+        // Всё в СК тела (используем adjoint)
+        geom::Screw3 v_body = velocity.adjoint_inv(pose);
         geom::Vec3 g_body = pose.inverse_transform_vector(gravity);
-        geom::Screw3 f_ext_body = wrench.inverse_transform_by(pose);
+        geom::Screw3 f_ext_body = wrench.adjoint_inv(pose);
 
         // Суммарный винт: внешний + гравитация - bias
         geom::Screw3 f_gravity = inertia.gravity_wrench(g_body);
@@ -153,7 +153,7 @@ public:
         geom::Screw3 a_body = inertia.solve(f_total);
 
         // В мировую СК и обновляем скорость
-        geom::Screw3 a_world = a_body.transform_by(pose);
+        geom::Screw3 a_world = a_body.adjoint(pose);
         velocity.ang = velocity.ang + a_world.ang * dt;
         velocity.lin = velocity.lin + a_world.lin * dt;
 

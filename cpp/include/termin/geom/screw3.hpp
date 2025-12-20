@@ -68,6 +68,24 @@ struct Screw3 {
         };
     }
 
+    // Adjoint transform (body -> world) for spatial velocity
+    // ω_world = R * ω_body
+    // v_world = R * v_body + p × ω_world
+    Screw3 adjoint(const Pose3& pose) const {
+        Vec3 ang_world = pose.transform_vector(ang);
+        Vec3 lin_world = pose.transform_vector(lin) + pose.lin.cross(ang_world);
+        return {ang_world, lin_world};
+    }
+
+    // Inverse adjoint (world -> body) for spatial velocity
+    // ω_body = R^T * ω_world
+    // v_body = R^T * (v_world - p × ω_world)
+    Screw3 adjoint_inv(const Pose3& pose) const {
+        Vec3 ang_body = pose.inverse_transform_vector(ang);
+        Vec3 lin_body = pose.inverse_transform_vector(lin - pose.lin.cross(ang));
+        return {ang_body, lin_body};
+    }
+
     // Convert to Pose3 (exponential map for small motions)
     Pose3 to_pose() const {
         double theta = ang.norm();
