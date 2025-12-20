@@ -86,6 +86,24 @@ struct Screw3 {
         return {ang_body, lin_body};
     }
 
+    // Coadjoint transform (body -> world) for wrench (force vectors)
+    // f_world = R * f_body
+    // τ_world = R * τ_body + p × f_world
+    Screw3 coadjoint(const Pose3& pose) const {
+        Vec3 lin_world = pose.transform_vector(lin);
+        Vec3 ang_world = pose.transform_vector(ang) + pose.lin.cross(lin_world);
+        return {ang_world, lin_world};
+    }
+
+    // Inverse coadjoint (world -> body) for wrench
+    // f_body = R^T * f_world
+    // τ_body = R^T * (τ_world - p × f_world)
+    Screw3 coadjoint_inv(const Pose3& pose) const {
+        Vec3 lin_body = pose.inverse_transform_vector(lin);
+        Vec3 ang_body = pose.inverse_transform_vector(ang - pose.lin.cross(lin));
+        return {ang_body, lin_body};
+    }
+
     // Convert to Pose3 (exponential map for small motions)
     Pose3 to_pose() const {
         double theta = ang.norm();

@@ -136,10 +136,12 @@ public:
             return;
         }
 
-        // Всё в СК тела (используем adjoint)
+        // Всё в СК тела
+        // velocity - twist, используем adjoint_inv
+        // wrench - force, используем coadjoint_inv
         geom::Screw3 v_body = velocity.adjoint_inv(pose);
         geom::Vec3 g_body = pose.inverse_transform_vector(gravity);
-        geom::Screw3 f_ext_body = wrench.adjoint_inv(pose);
+        geom::Screw3 f_ext_body = wrench.coadjoint_inv(pose);
 
         // Суммарный винт: внешний + гравитация - bias
         geom::Screw3 f_gravity = inertia.gravity_wrench(g_body);
