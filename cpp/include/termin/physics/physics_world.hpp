@@ -92,26 +92,21 @@ public:
 
 private:
     void step_fixed(double dt) {
-        // 1. Интегрирование сил
+        // 1. Интегрирование сил (обновление скоростей)
         for (auto& body : bodies) {
             body.integrate_forces(dt, gravity);
         }
 
-        // 2. Интегрирование позиций
-        for (auto& body : bodies) {
-            body.integrate_positions(dt);
-        }
-
-        // 3. Обнаружение коллизий
+        // 2. Обнаружение коллизий (на текущих позициях)
         detect_collisions();
 
-        // 4. Создание constraint'ов
+        // 3. Создание constraint'ов
         constraints.clear();
         for (auto& contact : contacts) {
             constraints.emplace_back(&contact, restitution, friction);
         }
 
-        // 5. Решение (Sequential Impulses)
+        // 4. Решение (Sequential Impulses) - корректируем скорости
         for (int iter = 0; iter < iterations; ++iter) {
             for (auto& constraint : constraints) {
                 constraint.solve_normal(dt);
@@ -119,7 +114,12 @@ private:
             }
         }
 
-        // 6. Коррекция позиций
+        // 5. Интегрирование позиций (после коррекции скоростей)
+        for (auto& body : bodies) {
+            body.integrate_positions(dt);
+        }
+
+        // 6. Коррекция позиций (разрешение пенетрации)
         solve_position_constraints();
     }
 
