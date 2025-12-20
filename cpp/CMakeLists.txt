@@ -33,8 +33,8 @@ find_package(pybind11 CONFIG REQUIRED)
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-# Geom native module (Vec3, Quat, Pose3, Screw3)
-pybind11_add_module(_geom_native termin/bindings.cpp)
+# Geom native module (Vec3, Quat, Pose3, Screw3, GeneralPose3)
+pybind11_add_module(_geom_native termin/geom_bindings.cpp)
 target_compile_options(_geom_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )

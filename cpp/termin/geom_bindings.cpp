@@ -10,7 +10,7 @@ using namespace termin;
 using namespace termin::geom;
 
 // Helper to create numpy array from Vec3
-py::array_t<double> vec3_to_numpy(const Vec3& v) {
+static py::array_t<double> vec3_to_numpy(const Vec3& v) {
     auto result = py::array_t<double>(3);
     auto buf = result.mutable_unchecked<1>();
     buf(0) = v.x;
@@ -20,13 +20,13 @@ py::array_t<double> vec3_to_numpy(const Vec3& v) {
 }
 
 // Helper to create Vec3 from numpy array
-Vec3 numpy_to_vec3(py::array_t<double> arr) {
+static Vec3 numpy_to_vec3(py::array_t<double> arr) {
     auto buf = arr.unchecked<1>();
     return {buf(0), buf(1), buf(2)};
 }
 
 // Helper to create numpy array from Quat
-py::array_t<double> quat_to_numpy(const Quat& q) {
+static py::array_t<double> quat_to_numpy(const Quat& q) {
     auto result = py::array_t<double>(4);
     auto buf = result.mutable_unchecked<1>();
     buf(0) = q.x;
@@ -37,13 +37,17 @@ py::array_t<double> quat_to_numpy(const Quat& q) {
 }
 
 // Helper to create Quat from numpy array
-Quat numpy_to_quat(py::array_t<double> arr) {
+static Quat numpy_to_quat(py::array_t<double> arr) {
     auto buf = arr.unchecked<1>();
     return {buf(0), buf(1), buf(2), buf(3)};
 }
 
 PYBIND11_MODULE(_geom_native, m) {
     m.doc() = "Native C++ geometry module for termin";
+
+    auto make_mat = [](int rows, int cols) {
+        return py::array_t<double>({rows, cols});
+    };
 
     // Vec3
     py::class_<Vec3>(m, "Vec3")
@@ -152,6 +156,101 @@ PYBIND11_MODULE(_geom_native, m) {
 
     m.def("lerp", py::overload_cast<const Pose3&, const Pose3&, double>(&lerp),
           "Linear interpolation between poses");
+
+    // GeneralPose3
+    py::class_<GeneralPose3>(m, "GeneralPose3")
+        .def(py::init<>())
+        .def(py::init<const Quat&, const Vec3&, const Vec3&>(),
+             py::arg("ang"), py::arg("lin"), py::arg("scale") = Vec3{1.0, 1.0, 1.0})
+        .def(py::init([](py::array_t<double> ang_arr, py::array_t<double> lin_arr, py::array_t<double> scale_arr) {
+            return GeneralPose3(numpy_to_quat(ang_arr), numpy_to_vec3(lin_arr), numpy_to_vec3(scale_arr));
+        }))
+        .def_readwrite("ang", &GeneralPose3::ang)
+        .def_readwrite("lin", &GeneralPose3::lin)
+        .def_readwrite("scale", &GeneralPose3::scale)
+        .def(py::self * py::self)
+        .def("inverse", &GeneralPose3::inverse)
+        .def("transform_point", &GeneralPose3::transform_point)
+        .def("transform_vector", &GeneralPose3::transform_vector)
+        .def("rotate_point", &GeneralPose3::rotate_point)
+        .def("inverse_transform_point", &GeneralPose3::inverse_transform_point)
+        .def("inverse_transform_vector", &GeneralPose3::inverse_transform_vector)
+        .def("normalized", &GeneralPose3::normalized)
+        .def("with_translation", &GeneralPose3::with_translation)
+        .def("with_rotation", &GeneralPose3::with_rotation)
+        .def("with_scale", &GeneralPose3::with_scale)
+        .def("to_pose3", &GeneralPose3::to_pose3)
+        .def("rotation_matrix", [](const GeneralPose3& p) {
+            auto result = make_mat(3, 3);
+            auto buf = result.mutable_unchecked<2>();
+            double m_arr[9];
+            p.rotation_matrix(m_arr);
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                    buf(i, j) = m_arr[i * 3 + j];
+            return result;
+        })
+        .def("as_matrix", [](const GeneralPose3& p) {
+            auto result = make_mat(4, 4);
+            auto buf = result.mutable_unchecked<2>();
+            double m_arr[16];
+            p.matrix4(m_arr);
+            for (int i = 0; i < 4; i++)
+                for (int j = 0; j < 4; j++)
+                    buf(i, j) = m_arr[i * 4 + j];
+            return result;
+        })
+        .def("as_matrix34", [](const GeneralPose3& p) {
+            auto result = make_mat(3, 4);
+            auto buf = result.mutable_unchecked<2>();
+            double m_arr[12];
+            p.matrix34(m_arr);
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 4; j++)
+                    buf(i, j) = m_arr[i * 4 + j];
+            return result;
+        })
+        .def("inverse_matrix", [](const GeneralPose3& p) {
+            auto result = make_mat(4, 4);
+            auto buf = result.mutable_unchecked<2>();
+            double m_arr[16];
+            p.inverse_matrix4(m_arr);
+            for (int i = 0; i < 4; i++)
+                for (int j = 0; j < 4; j++)
+                    buf(i, j) = m_arr[i * 4 + j];
+            return result;
+        })
+        .def_static("identity", &GeneralPose3::identity)
+        .def_static("translation", py::overload_cast<double, double, double>(&GeneralPose3::translation))
+        .def_static("translation", py::overload_cast<const Vec3&>(&GeneralPose3::translation))
+        .def_static("rotation", &GeneralPose3::rotation)
+        .def_static("scaling", py::overload_cast<double>(&GeneralPose3::scaling))
+        .def_static("scaling", py::overload_cast<double, double, double>(&GeneralPose3::scaling))
+        .def_static("rotate_x", &GeneralPose3::rotate_x)
+        .def_static("rotate_y", &GeneralPose3::rotate_y)
+        .def_static("rotate_z", &GeneralPose3::rotate_z)
+        .def_static("move", &GeneralPose3::move)
+        .def_static("move_x", &GeneralPose3::move_x)
+        .def_static("move_y", &GeneralPose3::move_y)
+        .def_static("move_z", &GeneralPose3::move_z)
+        .def_static("right", &GeneralPose3::right)
+        .def_static("forward", &GeneralPose3::forward)
+        .def_static("up", &GeneralPose3::up)
+        .def_static("looking_at", &GeneralPose3::looking_at,
+                    py::arg("eye"), py::arg("target"), py::arg("up_vec") = Vec3{0.0, 0.0, 1.0})
+        .def("__repr__", [](const GeneralPose3& p) {
+            return "GeneralPose3(ang=Quat(" + std::to_string(p.ang.x) + ", " +
+                   std::to_string(p.ang.y) + ", " + std::to_string(p.ang.z) + ", " +
+                   std::to_string(p.ang.w) + "), lin=Vec3(" +
+                   std::to_string(p.lin.x) + ", " + std::to_string(p.lin.y) + ", " +
+                   std::to_string(p.lin.z) + "), scale=Vec3(" +
+                   std::to_string(p.scale.x) + ", " + std::to_string(p.scale.y) + ", " +
+                   std::to_string(p.scale.z) + "))";
+        });
+
+    m.def("lerp_general_pose3",
+          py::overload_cast<const GeneralPose3&, const GeneralPose3&, double>(&lerp),
+          "Linear interpolation between GeneralPose3 (with scale)");
 
     // Screw3
     py::class_<Screw3>(m, "Screw3")
