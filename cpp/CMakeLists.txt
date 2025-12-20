@@ -31,28 +31,28 @@ endif()
 find_package(pybind11 CONFIG REQUIRED)
 
 # Include directories
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # Geom native module (Vec3, Quat, Pose3, Screw3)
-pybind11_add_module(_geom_native src/bindings.cpp)
+pybind11_add_module(_geom_native termin/bindings.cpp)
 target_compile_options(_geom_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
 # Colliders native module (BoxCollider, SphereCollider)
-pybind11_add_module(_colliders_native src/colliders_bindings.cpp)
+pybind11_add_module(_colliders_native termin/colliders_bindings.cpp)
 target_compile_options(_colliders_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
 # Physics native module (RigidBody, PhysicsWorld, Contact)
-pybind11_add_module(_physics_native src/physics_bindings.cpp)
+pybind11_add_module(_physics_native termin/physics_bindings.cpp)
 target_compile_options(_physics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
 # Voxels native module (VoxelGrid, voxelization)
-pybind11_add_module(_voxels_native src/voxels_bindings.cpp)
+pybind11_add_module(_voxels_native termin/voxels_bindings.cpp)
 target_compile_options(_voxels_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
