@@ -97,6 +97,8 @@ if __name__ == "__main__":
                 "visualization/*",
                 "visualization/**/*",
                 "mesh/*",
+                "assets/*",
+                "core/*",
                 "editor/*",
                 "tests/__init__.py",
             ]

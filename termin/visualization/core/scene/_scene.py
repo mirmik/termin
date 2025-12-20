@@ -340,11 +340,17 @@ class Scene(Identifiable):
             pending = self._pending_start
             self._pending_start = []
             for component in pending:
-                if not component._started:
+                if component._started:
+                    continue
+                if component.enabled:
                     component.start(self)
+                else:
+                    # Keep disabled components in pending until enabled
+                    self._pending_start.append(component)
 
         for component in self.update_list:
-            component.update(dt)
+            if component.enabled:
+                component.update(dt)
 
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""

@@ -467,6 +467,32 @@ class OpenGLGraphicsBackend(GraphicsBackend):
         }
         gl.glBlendFunc(mapping.get(src, gl.GL_SRC_ALPHA), mapping.get(dst, gl.GL_ONE_MINUS_SRC_ALPHA))
 
+    def reset_state(self) -> None:
+        # Depth
+        gl.glEnable(gl.GL_DEPTH_TEST)
+        gl.glDepthFunc(gl.GL_LESS)
+        gl.glDepthMask(gl.GL_TRUE)
+
+        # Blending off (opaque)
+        gl.glDisable(gl.GL_BLEND)
+
+        # Face culling
+        gl.glEnable(gl.GL_CULL_FACE)
+        gl.glCullFace(gl.GL_BACK)
+        gl.glFrontFace(gl.GL_CCW)
+
+        # Polygon mode
+        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+
+        # Color mask
+        gl.glColorMask(gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE)
+
+        # Stencil off
+        gl.glDisable(gl.GL_STENCIL_TEST)
+
+        # Scissor off
+        gl.glDisable(gl.GL_SCISSOR_TEST)
+
     def create_shader(self, vertex_source: str, fragment_source: str, geometry_source: str | None = None) -> ShaderHandle:
         return OpenGLShaderHandle(vertex_source, fragment_source, geometry_source)
 

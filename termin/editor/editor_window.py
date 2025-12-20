@@ -12,7 +12,7 @@ from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
 from termin.editor.editor_viewport_features import EditorViewportFeatures
-from termin.editor.gizmo_immediate import ImmediateGizmoController
+from termin.editor.gizmo import GizmoManager
 from termin.editor.game_mode_controller import GameModeController
 from termin.editor.prefab_edit_controller import PrefabEditController
 from termin.editor.world_persistence import WorldPersistence
@@ -94,7 +94,7 @@ class EditorWindow(QMainWindow):
         # контроллеры создадим чуть позже
         self.scene_tree_controller: SceneTreeController | None = None
         self.editor_viewport: EditorViewportFeatures | None = None
-        self.gizmo_controller: ImmediateGizmoController | None = None
+        self.gizmo_manager: GizmoManager | None = None
         self.selection_manager: SelectionManager | None = None
         self.game_mode_controller: GameModeController | None = None
         self.prefab_edit_controller: PrefabEditController | None = None
@@ -265,15 +265,8 @@ class EditorWindow(QMainWindow):
         # --- SpaceMouse support (initialized later after console is ready) ---
         self._spacemouse: SpaceMouseController | None = None
 
-        # --- гизмо-контроллер (immediate mode) ---
-        self.gizmo_controller = ImmediateGizmoController(
-            scene=self.scene,
-            editor_entities=self._camera_manager.editor_entities,
-            undo_handler=self.push_undo_command,
-        )
-        self.gizmo_controller.set_on_transform_dragging(
-            self._on_gizmo_transform_dragging
-        )
+        # --- unified gizmo manager ---
+        self.gizmo_manager = GizmoManager()
 
         # --- дерево сцены ---
         self.scene_tree_controller = SceneTreeController(
@@ -327,12 +320,15 @@ class EditorWindow(QMainWindow):
             display=editor_display,
             backend_window=backend_window,
             graphics=self.world.graphics,
-            gizmo_controller=self.gizmo_controller,
+            gizmo_manager=self.gizmo_manager,
             on_entity_picked=self._on_entity_picked_from_viewport,
             on_hover_entity=self._on_hover_entity_from_viewport,
             get_fbo_pool=self._rendering_controller.get_editor_fbo_pool,
             request_update=self._request_viewport_update,
         )
+        # Set undo handler and transform callback for gizmo operations
+        self.editor_viewport.set_gizmo_undo_handler(self.push_undo_command)
+        self.editor_viewport.set_on_transform_dragging(self._on_gizmo_transform_dragging)
 
         # Register in editor features dict
         self._editor_features[id(editor_display)] = self.editor_viewport
@@ -1281,10 +1277,10 @@ class EditorWindow(QMainWindow):
             for editor_features in self._editor_features.values():
                 editor_features.selected_entity_id = selected_id
 
-        # Обновляем гизмо (передаём viewport для расчёта масштаба)
-        if self.gizmo_controller is not None:
-            viewport = self.editor_viewport.viewport if self.editor_viewport else None
-            self.gizmo_controller.set_target(entity, viewport)
+        # Обновляем гизмо target через EditorViewportFeatures
+        if self.editor_viewport is not None:
+            self.editor_viewport.set_gizmo_target(entity)
+            self.editor_viewport.update_gizmo_screen_scale(self.editor_viewport.viewport)
 
         self._request_viewport_update()
 
@@ -1524,12 +1520,9 @@ class EditorWindow(QMainWindow):
         self.editor_entities = self._camera_manager.editor_entities
         self.camera = self._camera_manager.camera
 
-        # Recreate gizmo in new scene
-        if self.gizmo_controller is not None:
-            self.gizmo_controller.recreate_gizmo(new_scene, self._camera_manager.editor_entities)
-            self.gizmo_controller.set_on_transform_dragging(
-                self._on_gizmo_transform_dragging
-            )
+        # Clear gizmo target for new scene
+        if self.editor_viewport is not None:
+            self.editor_viewport.set_gizmo_target(None)
 
         # Update all EditorViewportFeatures
         for editor_features in self._editor_features.values():
@@ -1613,9 +1606,9 @@ class EditorWindow(QMainWindow):
             editor_features.selected_entity_id = 0
             editor_features.hover_entity_id = 0
 
-        # Переключаем gizmo на новую сцену (recreate_gizmo сбрасывает target)
-        if self.gizmo_controller is not None:
-            self.gizmo_controller.recreate_gizmo(scene, self.editor_entities)
+        # Clear gizmo target when switching scenes
+        if self.editor_viewport is not None:
+            self.editor_viewport.set_gizmo_target(None)
 
         # Обновляем scene tree
         if self.scene_tree_controller is not None:
@@ -1829,12 +1822,14 @@ class EditorWindow(QMainWindow):
                 display=display,
                 backend_window=backend_window,
                 graphics=self.world.graphics,
-                gizmo_controller=self.gizmo_controller,
+                gizmo_manager=self.gizmo_manager,
                 on_entity_picked=self._on_entity_picked_from_viewport,
                 on_hover_entity=self._on_hover_entity_from_viewport,
                 get_fbo_pool=get_fbo_pool,
                 request_update=self._request_viewport_update,
             )
+            editor_features.set_gizmo_undo_handler(self.push_undo_command)
+            editor_features.set_on_transform_dragging(self._on_gizmo_transform_dragging)
 
             # Sync current selection state
             if self.selection_manager is not None:

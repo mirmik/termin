@@ -87,6 +87,16 @@ class MeshRenderer(Component):
             if self._DEBUG_INIT:
                 print(f"  Created MaterialHandle from material: _direct={self._material_handle._direct}")
 
+    def setup_editor_defaults(self):
+        """Set default mesh (Cube) and material (DefaultMaterial) from ResourceManager."""
+        # Set default mesh if not set
+        if self._mesh_handle.mesh is None:
+            self._mesh_handle = MeshHandle.from_name("Cube")
+
+        # Set default material if not set
+        if self._material_handle.get_material_or_none() is None:
+            self._material_handle = MaterialHandle.from_name("DefaultMaterial")
+
     @property
     def phase_marks(self) -> Set[str]:
         """

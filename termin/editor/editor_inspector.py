@@ -168,6 +168,9 @@ class ComponentsPanel(QWidget):
             logger.exception("Failed to create component %s", comp_cls)
             return
 
+        # Apply editor defaults (e.g. default mesh/material for MeshRenderer)
+        comp.setup_editor_defaults()
+
         if self._push_undo_command is not None:
             cmd = AddComponentCommand(self._entity, comp)
             self._push_undo_command(cmd, False)

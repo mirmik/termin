@@ -23,7 +23,7 @@ from termin.visualization.core.viewport import Viewport
 from termin.visualization.platform.backends.base import Action, MouseButton
 from termin.visualization.render.framegraph import RenderPipeline
 
-from termin.editor.gizmo_immediate import ImmediateGizmoController
+from termin.editor.gizmo import GizmoManager, TransformGizmo
 from termin.editor.editor_display_input_manager import EditorDisplayInputManager
 
 if TYPE_CHECKING:
@@ -46,7 +46,7 @@ class EditorViewportFeatures:
         display: "Display",
         backend_window: "BackendWindow",
         graphics: "GraphicsBackend",
-        gizmo_controller: ImmediateGizmoController,
+        gizmo_manager: GizmoManager,
         on_entity_picked: Callable[[Entity | None], None],
         on_hover_entity: Callable[[Entity | None], None],
         get_fbo_pool: Callable[[], dict],
@@ -59,7 +59,7 @@ class EditorViewportFeatures:
             display: Display reference (owned by RenderingController).
             backend_window: Backend window reference (owned by RenderingController).
             graphics: Graphics backend reference.
-            gizmo_controller: Gizmo controller for transform manipulation.
+            gizmo_manager: Unified gizmo manager.
             on_entity_picked: Callback when entity is selected.
             on_hover_entity: Callback when entity is hovered.
             get_fbo_pool: Callback to get FBO pool for picking.
@@ -68,11 +68,19 @@ class EditorViewportFeatures:
         self._display = display
         self._backend_window = backend_window
         self._graphics = graphics
-        self._gizmo_controller = gizmo_controller
+        self._gizmo_manager = gizmo_manager
         self._on_entity_picked = on_entity_picked
         self._on_hover_entity = on_hover_entity
         self._get_fbo_pool = get_fbo_pool
         self._request_update = request_update
+
+        # Transform gizmo (main gizmo for entity manipulation)
+        self._transform_gizmo = TransformGizmo(
+            size=1.5,
+            on_transform_changed=self._request_update,
+        )
+        self._gizmo_manager.add_gizmo(self._transform_gizmo)
+        self._on_transform_dragging = None
 
         self._framegraph_debugger = None
         self._debug_source_res: str = "color_pp"
@@ -236,8 +244,8 @@ class EditorViewportFeatures:
         if button_type == MouseButton.LEFT and action == Action.RELEASE:
             self._pending_pick_release = (x, y, viewport)
             # End gizmo drag on release
-            if self._gizmo_controller.is_dragging():
-                self._gizmo_controller.on_mouse_button(viewport, 0, 0, 0)  # button=0, action=0 (release)
+            if self._gizmo_manager.is_dragging:
+                self._gizmo_manager.on_mouse_up()
         if button_type == MouseButton.LEFT and action == Action.PRESS:
             self._pending_pick_press = (x, y, viewport)
 
@@ -247,9 +255,11 @@ class EditorViewportFeatures:
             return
         self._pending_hover = (x, y, viewport)
 
-        # Forward to gizmo controller for drag updates
-        if self._gizmo_controller.is_dragging() and viewport is not None:
-            self._gizmo_controller.on_mouse_move(viewport, x, y, 0, 0)
+        # Forward to gizmo manager for drag updates
+        if self._gizmo_manager.is_dragging and viewport is not None:
+            ray = viewport.screen_point_to_ray(x, y)
+            if ray is not None:
+                self._gizmo_manager.on_mouse_move(ray.origin, ray.direction)
 
     def after_render(self) -> None:
         """
@@ -274,10 +284,10 @@ class EditorViewportFeatures:
         self._pending_hover = None
 
         # Update gizmo hover state (raycast-based)
-        if not self._gizmo_controller.is_dragging() and viewport is not None:
+        if not self._gizmo_manager.is_dragging and viewport is not None:
             ray = viewport.screen_point_to_ray(x, y)
             if ray is not None:
-                self._gizmo_controller.update_hover(ray.origin, ray.direction)
+                self._gizmo_manager.on_mouse_move(ray.origin, ray.direction)
 
         ent = self.pick_entity_at(x, y, viewport)
         if ent is not None and not ent.selectable:
@@ -330,10 +340,15 @@ class EditorViewportFeatures:
         self._press_position = (x, y)
         self._gizmo_handled_press = False
 
-        picked_color = self.pick_color_at(x, y, viewport, buffer_name="id")
-        handled = self._gizmo_controller.handle_pick_press_with_color(
-            x, y, viewport, picked_color
-        )
+        if viewport is None:
+            return
+
+        ray = viewport.screen_point_to_ray(x, y)
+        if ray is None:
+            return
+
+        # Try gizmo picking first (raycast-based)
+        handled = self._gizmo_manager.on_mouse_down(ray.origin, ray.direction)
         if handled:
             self._gizmo_handled_press = True
 
@@ -356,6 +371,51 @@ class EditorViewportFeatures:
     def get_debug_paused(self) -> bool:
         return self._debug_paused
 
+    # ---------- Gizmo control ----------
+
+    def set_gizmo_target(self, entity: Entity | None) -> None:
+        """Set target entity for transform gizmo."""
+        self._transform_gizmo.target = entity
+        self._transform_gizmo.visible = entity is not None
+
+    def update_gizmo_screen_scale(self, viewport: Viewport) -> None:
+        """Update gizmo screen scale based on camera distance."""
+        if viewport is None or viewport.camera is None:
+            return
+        target = self._transform_gizmo.target
+        if target is None:
+            return
+
+        camera = viewport.camera
+        if camera.entity is None:
+            return
+
+        import numpy as np
+        camera_pos = camera.entity.transform.global_pose().lin
+        gizmo_pos = target.transform.global_pose().lin
+        distance = np.linalg.norm(np.array(camera_pos) - np.array(gizmo_pos))
+        screen_scale = max(0.1, distance * 0.1)
+        self._transform_gizmo.set_screen_scale(screen_scale)
+
+    def set_gizmo_undo_handler(self, handler) -> None:
+        """Set undo handler for gizmo operations."""
+        self._transform_gizmo.set_undo_handler(handler)
+
+    def set_on_transform_dragging(self, callback) -> None:
+        """Set callback for when transform is being dragged."""
+        self._on_transform_dragging = callback
+        # Update the transform gizmo's callback to also call our callback
+        def combined_callback():
+            self._request_update()
+            if self._on_transform_dragging is not None:
+                self._on_transform_dragging()
+        self._transform_gizmo._on_transform_changed = combined_callback
+
+    @property
+    def gizmo_manager(self) -> GizmoManager:
+        """Get the gizmo manager."""
+        return self._gizmo_manager
+
     # ---------- Pipeline ----------
 
     def make_editor_pipeline(self) -> RenderPipeline:
@@ -371,7 +431,7 @@ class EditorViewportFeatures:
             CanvasPass,
             PresentToScreenPass,
         )
-        from termin.visualization.render.framegraph.passes.gizmo_immediate import ImmediateGizmoPass
+        from termin.visualization.render.framegraph.passes.unified_gizmo import UnifiedGizmoPass
         from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
         from termin.visualization.render.postprocess import PostProcessPass
         from termin.visualization.render.posteffects.highlight import HighlightEffect
@@ -379,8 +439,8 @@ class EditorViewportFeatures:
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
 
-        def get_gizmo_renderer():
-            return self._gizmo_controller.gizmo_renderer
+        def get_gizmo_manager():
+            return self._gizmo_manager
 
         postprocess = PostProcessPass(
             effects=[],
@@ -423,9 +483,9 @@ class EditorViewportFeatures:
             pass_name="ColliderGizmo",
         )
 
-        # Immediate gizmo pass (renders directly, no entities)
-        gizmo_pass = ImmediateGizmoPass(
-            gizmo_renderer=get_gizmo_renderer,
+        # Unified gizmo pass (renders all gizmos via GizmoManager)
+        gizmo_pass = UnifiedGizmoPass(
+            gizmo_manager=get_gizmo_manager,
             input_res="color_colliders",
             output_res="color",
             pass_name="Gizmo",

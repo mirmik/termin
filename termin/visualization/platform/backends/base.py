@@ -165,6 +165,22 @@ class GraphicsBackend(ABC):
         ...
 
     @abstractmethod
+    def reset_state(self) -> None:
+        """
+        Сбрасывает состояние в дефолтное для opaque color pass.
+
+        Устанавливает:
+        - Depth test: enabled, func=LESS, mask=TRUE
+        - Blend: disabled
+        - Cull face: enabled, back, CCW
+        - Polygon mode: fill
+        - Color mask: all true
+        - Stencil: disabled
+        - Scissor: disabled
+        """
+        ...
+
+    @abstractmethod
     def create_shader(self, vertex_source: str, fragment_source: str, geometry_source: str | None = None) -> ShaderHandle:
         ...
 

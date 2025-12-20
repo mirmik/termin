@@ -78,6 +78,10 @@ class Component:
         """Called when scene starts in editor mode."""
         return
 
+    def setup_editor_defaults(self):
+        """Called when component is created via editor UI. Override to set defaults from ResourceManager."""
+        pass
+
     def serialize_data(self):
         fields = self.serializable_fields
 

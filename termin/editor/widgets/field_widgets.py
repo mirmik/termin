@@ -160,9 +160,10 @@ class BoolFieldWidget(FieldWidget):
         self._checkbox.setChecked(bool(value) if value is not None else False)
         self._checkbox.blockSignals(False)
 
-
 class StringFieldWidget(FieldWidget):
     """Widget for string fields using QLineEdit."""
+
+    value_changed = pyqtSignal()  # Переопределяем сигнал явно
 
     def __init__(
         self,
@@ -178,9 +179,15 @@ class StringFieldWidget(FieldWidget):
         self._line_edit = QLineEdit()
         self._line_edit.setReadOnly(read_only)
         if not read_only:
-            self._line_edit.textEdited.connect(lambda _: self.value_changed.emit())
-            self._line_edit.editingFinished.connect(self.value_changed.emit)
+            self._line_edit.textEdited.connect(self._on_text_changed)
+            self._line_edit.editingFinished.connect(self._on_editing_finished)
         layout.addWidget(self._line_edit)
+
+    def _on_text_changed(self, text: str) -> None:
+        self.value_changed.emit()
+
+    def _on_editing_finished(self) -> None:
+        self.value_changed.emit()
 
     def get_value(self) -> Optional[str]:
         text = self._line_edit.text()

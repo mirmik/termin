@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 class RenderEngine:
     """
     Центральный движок рендеринга.
-    
+
     Выполняет RenderPipeline для набора RenderView на целевой RenderSurface.
     Управляет framegraph и FBO пулами.
     """
@@ -280,6 +280,9 @@ class RenderEngine:
             print(f"=== end ===\n")
 
         for render_pass in schedule:
+            # Сброс GL-состояния перед каждым пассом
+            self.graphics.reset_state()
+
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
 

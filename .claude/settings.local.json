@@ -6,7 +6,12 @@
       "Bash(python -m pytest:*)",
       "Bash(ls:*)",
       "Bash(python setup.py:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(timeout 5 python:*)",
+      "Bash(cat:*)",
+      "Bash(readlink:*)",
+      "Bash(echo:*)",
+      "Bash(PYTHONPATH=/media/sf_Shared/termin:$PYTHONPATH timeout 5 python:*)"
     ]
   }
 }
