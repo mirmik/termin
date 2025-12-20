@@ -167,3 +167,8 @@ class ColliderComponent(Component):
 
     def get_collider(self):
         return self.attached
+
+    @property
+    def collider(self) -> Collider:
+        """Return the source collider (Box, Sphere, Capsule)."""
+        return self._source_collider
