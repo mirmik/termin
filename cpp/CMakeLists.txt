@@ -5,6 +5,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Default CTest config for multi-config generators so plain `ctest .` works
+if(CMAKE_CONFIGURATION_TYPES)
+    if(NOT CTEST_CONFIGURATION_TYPE)
+        set(CTEST_CONFIGURATION_TYPE "Debug" CACHE STRING "Default CTest config" FORCE)
+    endif()
+endif()
+
 # Put all binaries into a flat bin/ directory so tests don't depend on config subdirs
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
