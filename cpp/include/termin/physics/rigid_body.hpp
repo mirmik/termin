@@ -1,232 +1,277 @@
 #pragma once
 
+/**
+ * @file rigid_body.hpp
+ * @brief Простое твёрдое тело для игровой физики.
+ *
+ * Модель:
+ * - pose: позиция центра масс + ориентация (SE(3))
+ * - velocity: линейная + угловая скорости в мировой СК
+ * - mass, inertia: масса и главные моменты инерции
+ *
+ * Угловая динамика учитывает гироскопический момент: τ_gyro = ω × (I·ω)
+ */
+
 #include "../geom/vec3.hpp"
 #include "../geom/quat.hpp"
 #include "../geom/pose3.hpp"
-#include "../geom/screw3.hpp"
-#include "spatial_inertia.hpp"
 #include <cmath>
 
 namespace termin {
 namespace physics {
 
-/**
- * Твёрдое тело в формализме spatial algebra (нотация Фезерстоуна).
- *
- * Состояние:
- * - pose: Pose3 — система координат тела относительно мира (X_WB)
- * - velocity: Screw3 — пространственная скорость в МИРОВОЙ СК (ang=ω, lin=v)
- *
- * Динамика:
- * - inertia: SpatialInertia3D — в системе координат тела
- * - wrench: Screw3 — накопленный внешний винт сил в мировой СК
- */
+using geom::Vec3;
+using geom::Quat;
+using geom::Pose3;
+
 class RigidBody {
 public:
-    SpatialInertia3D inertia;
-    geom::Pose3 pose;
-    geom::Screw3 velocity;
-    geom::Screw3 wrench;
-    bool is_static;
+    // --- Состояние ---
+    Pose3 pose;
+    Vec3 linear_velocity;
+    Vec3 angular_velocity;
 
-    // Для коллайдера храним half-extents (для box) или radius (для sphere)
-    // Упрощённая версия: только box collider
-    geom::Vec3 half_extents;  // Половинные размеры box collider'а
-    bool has_collider;
+    // --- Масса и инерция ---
+    double mass = 1.0;
+    Vec3 inertia{1.0, 1.0, 1.0};  // I_xx, I_yy, I_zz в СК тела
 
-    RigidBody()
-        : inertia(), pose(), velocity(), wrench(), is_static(false),
-          half_extents(0.5, 0.5, 0.5), has_collider(false) {}
+    // --- Аккумуляторы сил ---
+    Vec3 force;
+    Vec3 torque;
 
-    RigidBody(const SpatialInertia3D& i, const geom::Pose3& p, bool stat = false)
-        : inertia(i), pose(p), velocity(), wrench(), is_static(stat),
-          half_extents(0.5, 0.5, 0.5), has_collider(false) {}
+    // --- Флаги ---
+    bool is_static = false;
+    bool is_kinematic = false;
 
-    // Вспомогательные свойства
-    double mass() const { return inertia.mass; }
-    double inv_mass() const { return is_static ? 0.0 : inertia.inv_mass(); }
-    geom::Vec3 position() const { return pose.lin; }
+    // --- Демпфирование ---
+    double linear_damping = 0.01;
+    double angular_damping = 0.01;
 
-    // Матрица поворота (3x3) как 9 элементов
-    void rotation_matrix(double* R) const {
-        // R = quat_to_matrix
-        const auto& q = pose.ang;
-        double xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z;
-        double xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z;
-        double wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z;
+    // --- Коллайдер ---
+    int collider_type = 0;  // 0=none, 1=box, 2=sphere
+    Vec3 collider_half_size{0.5, 0.5, 0.5};
+    double collider_radius = 0.5;
 
-        R[0] = 1 - 2*(yy + zz);  R[1] = 2*(xy - wz);      R[2] = 2*(xz + wy);
-        R[3] = 2*(xy + wz);      R[4] = 1 - 2*(xx + zz);  R[5] = 2*(yz - wx);
-        R[6] = 2*(xz - wy);      R[7] = 2*(yz + wx);      R[8] = 1 - 2*(xx + yy);
+    RigidBody() = default;
+
+    // ==================== Фабрики ====================
+
+    static RigidBody create_box(double sx, double sy, double sz, double m,
+                                 const Pose3& p = Pose3(), bool stat = false) {
+        RigidBody body;
+        body.pose = p;
+        body.mass = m;
+        body.is_static = stat;
+        body.collider_type = 1;
+        body.collider_half_size = Vec3(sx / 2, sy / 2, sz / 2);
+
+        // I = m/12 · (b² + c²)
+        body.inertia.x = (m / 12.0) * (sy * sy + sz * sz);
+        body.inertia.y = (m / 12.0) * (sx * sx + sz * sz);
+        body.inertia.z = (m / 12.0) * (sx * sx + sy * sy);
+
+        return body;
     }
 
+    static RigidBody create_sphere(double radius, double m,
+                                    const Pose3& p = Pose3(), bool stat = false) {
+        RigidBody body;
+        body.pose = p;
+        body.mass = m;
+        body.is_static = stat;
+        body.collider_type = 2;
+        body.collider_radius = radius;
+
+        // I = 2/5 · m · r²
+        double I = 0.4 * m * radius * radius;
+        body.inertia = Vec3(I, I, I);
+
+        return body;
+    }
+
+    // ==================== Свойства ====================
+
+    double inv_mass() const {
+        return (is_static || is_kinematic || mass < 1e-10) ? 0.0 : 1.0 / mass;
+    }
+
+    Vec3 inv_inertia() const {
+        if (is_static || is_kinematic) return Vec3(0, 0, 0);
+        return Vec3(
+            inertia.x > 1e-10 ? 1.0 / inertia.x : 0.0,
+            inertia.y > 1e-10 ? 1.0 / inertia.y : 0.0,
+            inertia.z > 1e-10 ? 1.0 / inertia.z : 0.0
+        );
+    }
+
+    Vec3 position() const { return pose.lin; }
+
+    // ==================== Мировой тензор инерции ====================
+
     /**
-     * Обратный тензор инерции 3x3 в мировой СК (для импульсов).
-     * I_world_inv = R @ diag(1/I_diag) @ R.T
+     * I_world⁻¹ = R · diag(I⁻¹_body) · R^T
      */
     void world_inertia_inv(double* Iinv) const {
-        if (is_static || mass() <= 0) {
+        if (is_static || is_kinematic) {
             for (int i = 0; i < 9; ++i) Iinv[i] = 0.0;
             return;
         }
 
         double R[9];
-        rotation_matrix(R);
+        pose.rotation_matrix(R);
 
-        geom::Vec3 inv_I = inertia.inv_I_diag();
-
-        // Iinv = R @ diag(inv_I) @ R.T
-        // Iinv[i][j] = sum_k R[i][k] * inv_I[k] * R[j][k]
-        double d[3] = {inv_I.x, inv_I.y, inv_I.z};
+        Vec3 d = inv_inertia();
 
         for (int i = 0; i < 3; ++i) {
             for (int j = 0; j < 3; ++j) {
-                double sum = 0;
-                for (int k = 0; k < 3; ++k) {
-                    sum += R[i*3+k] * d[k] * R[j*3+k];
-                }
-                Iinv[i*3+j] = sum;
+                Iinv[i * 3 + j] =
+                    R[i * 3 + 0] * d.x * R[j * 3 + 0] +
+                    R[i * 3 + 1] * d.y * R[j * 3 + 1] +
+                    R[i * 3 + 2] * d.z * R[j * 3 + 2];
             }
         }
     }
 
-    /**
-     * Скорость точки, закреплённой на теле (мировые координаты).
-     * v_point = v + ω × r
-     */
-    geom::Vec3 point_velocity(const geom::Vec3& point) const {
-        geom::Vec3 r = point - pose.lin;
-        return velocity.lin + velocity.ang.cross(r);
-    }
-
-    /**
-     * Приложить импульс в точке. Меняет скорость напрямую.
-     */
-    void apply_impulse(const geom::Vec3& impulse, const geom::Vec3& point) {
-        if (is_static) return;
-
-        geom::Vec3 r = point - pose.lin;
-        geom::Vec3 tau = r.cross(impulse);
-
-        // Δv_lin = impulse / m
-        if (inertia.mass > 0) {
-            velocity.lin = velocity.lin + impulse * (1.0 / inertia.mass);
-        }
-
-        // Δω = I⁻¹_world @ τ
+    Vec3 apply_inv_inertia_world(const Vec3& v) const {
         double Iinv[9];
         world_inertia_inv(Iinv);
-
-        geom::Vec3 dw = {
-            Iinv[0]*tau.x + Iinv[1]*tau.y + Iinv[2]*tau.z,
-            Iinv[3]*tau.x + Iinv[4]*tau.y + Iinv[5]*tau.z,
-            Iinv[6]*tau.x + Iinv[7]*tau.y + Iinv[8]*tau.z
-        };
-
-        velocity.ang = velocity.ang + dw;
+        return Vec3(
+            Iinv[0] * v.x + Iinv[1] * v.y + Iinv[2] * v.z,
+            Iinv[3] * v.x + Iinv[4] * v.y + Iinv[5] * v.z,
+            Iinv[6] * v.x + Iinv[7] * v.y + Iinv[8] * v.z
+        );
     }
 
+    // ==================== Скорость точки ====================
+
+    Vec3 point_velocity(const Vec3& world_point) const {
+        Vec3 r = world_point - pose.lin;
+        return linear_velocity + angular_velocity.cross(r);
+    }
+
+    // ==================== Силы ====================
+
+    void add_force(const Vec3& f) {
+        if (!is_static && !is_kinematic) force += f;
+    }
+
+    void add_torque(const Vec3& t) {
+        if (!is_static && !is_kinematic) torque += t;
+    }
+
+    void add_force_at_point(const Vec3& f, const Vec3& world_point) {
+        if (is_static || is_kinematic) return;
+        force += f;
+        torque += (world_point - pose.lin).cross(f);
+    }
+
+    // ==================== Импульсы ====================
+
+    void apply_impulse(const Vec3& impulse) {
+        if (!is_static && !is_kinematic) {
+            linear_velocity += impulse * inv_mass();
+        }
+    }
+
+    void apply_angular_impulse(const Vec3& ang_impulse) {
+        if (!is_static && !is_kinematic) {
+            angular_velocity += apply_inv_inertia_world(ang_impulse);
+        }
+    }
+
+    void apply_impulse_at_point(const Vec3& impulse, const Vec3& world_point) {
+        if (is_static || is_kinematic) return;
+        linear_velocity += impulse * inv_mass();
+        angular_velocity += apply_inv_inertia_world((world_point - pose.lin).cross(impulse));
+    }
+
+    // ==================== Интеграция ====================
+
     /**
-     * Интегрирование сил для обновления скорости.
-     * Spatial algebra в СК тела (нотация Фезерстоуна).
+     * Интеграция сил → скорости.
      *
-     * Все вычисления в body frame. Преобразование - просто вращение R^T / R.
+     * Линейная: v += (g + F/m) · dt
+     * Угловая:  ω += I_world⁻¹ · (τ - ω × L) · dt
      */
-    void integrate_forces(double dt, const geom::Vec3& gravity) {
-        if (is_static) {
-            wrench = geom::Screw3();
+    void integrate_forces(double dt, const Vec3& gravity) {
+        if (is_static || is_kinematic) {
+            force = Vec3();
+            torque = Vec3();
             return;
         }
 
-        // Переводим в СК тела (только вращение, origin совпадает с COM)
-        geom::Screw3 v_body = velocity.inverse_transform_by(pose);
-        geom::Vec3 g_body = pose.inverse_transform_vector(gravity);
-        geom::Screw3 f_ext_body = wrench.inverse_transform_by(pose);
+        // Линейная часть
+        linear_velocity += (gravity + force * inv_mass()) * dt;
 
-        // Суммарный винт: внешний + гравитация - bias
-        geom::Screw3 f_gravity = inertia.gravity_wrench(g_body);
-        geom::Screw3 f_bias = inertia.bias_wrench(v_body);
-        geom::Screw3 f_total(
-            f_ext_body.ang + f_gravity.ang - f_bias.ang,
-            f_ext_body.lin + f_gravity.lin - f_bias.lin
+        // Угловая часть с гироскопическим эффектом
+        double R[9];
+        pose.rotation_matrix(R);
+
+        // ω_body = R^T · ω_world
+        Vec3 omega_body(
+            R[0] * angular_velocity.x + R[3] * angular_velocity.y + R[6] * angular_velocity.z,
+            R[1] * angular_velocity.x + R[4] * angular_velocity.y + R[7] * angular_velocity.z,
+            R[2] * angular_velocity.x + R[5] * angular_velocity.y + R[8] * angular_velocity.z
         );
 
-        // Ускорение: a = I⁻¹ * f
-        geom::Screw3 a_body = inertia.solve(f_total);
+        // L_body = I · ω_body
+        Vec3 L_body(inertia.x * omega_body.x, inertia.y * omega_body.y, inertia.z * omega_body.z);
 
-        // Обратно в мировую СК (только вращение)
-        geom::Screw3 a_world = a_body.transform_by(pose);
-        velocity.ang = velocity.ang + a_world.ang * dt;
-        velocity.lin = velocity.lin + a_world.lin * dt;
+        // L_world = R · L_body
+        Vec3 L_world(
+            R[0] * L_body.x + R[1] * L_body.y + R[2] * L_body.z,
+            R[3] * L_body.x + R[4] * L_body.y + R[5] * L_body.z,
+            R[6] * L_body.x + R[7] * L_body.y + R[8] * L_body.z
+        );
 
-        wrench = geom::Screw3();
+        // τ_eff = τ - ω × L (вычитаем гироскопический момент)
+        Vec3 tau_eff = torque - angular_velocity.cross(L_world);
+        angular_velocity += apply_inv_inertia_world(tau_eff) * dt;
+
+        // Демпфирование
+        linear_velocity *= (1.0 - linear_damping * dt);
+        angular_velocity *= (1.0 - angular_damping * dt);
+
+        force = Vec3();
+        torque = Vec3();
     }
 
     /**
-     * Интегрирование скорости для обновления позы.
-     * Простой Эйлер: позиция и ориентация интегрируются отдельно в мировой СК.
+     * Интеграция скоростей → позиции.
      */
     void integrate_positions(double dt) {
         if (is_static) return;
 
-        // Интегрируем позицию в мировой СК
-        pose.lin = pose.lin + velocity.lin * dt;
+        pose.lin += linear_velocity * dt;
 
-        // Интегрируем ориентацию: q' = dq * q
-        // где dq = exp(ω * dt / 2) как кватернион
-        double theta = velocity.ang.norm() * dt;
+        double theta = angular_velocity.norm() * dt;
         if (theta > 1e-10) {
-            geom::Vec3 axis = velocity.ang * (1.0 / velocity.ang.norm());
+            Vec3 axis = angular_velocity / angular_velocity.norm();
             double half = theta * 0.5;
-            geom::Quat dq = {
+            Quat dq(
                 axis.x * std::sin(half),
                 axis.y * std::sin(half),
                 axis.z * std::sin(half),
                 std::cos(half)
-            };
-            // Композиция: новая ориентация = dq * текущая
+            );
             pose.ang = (dq * pose.ang).normalized();
         }
     }
 
-    /**
-     * Получить вершины box collider'а в мировых координатах.
-     * Записывает 8 вершин (24 double) в corners.
-     */
+    // ==================== Утилиты ====================
+
     void get_box_corners_world(double* corners) const {
-        double hx = half_extents.x;
-        double hy = half_extents.y;
-        double hz = half_extents.z;
-
-        // 8 вершин в локальных координатах
-        geom::Vec3 local[8] = {
-            {-hx, -hy, -hz}, {+hx, -hy, -hz}, {-hx, +hy, -hz}, {+hx, +hy, -hz},
-            {-hx, -hy, +hz}, {+hx, -hy, +hz}, {-hx, +hy, +hz}, {+hx, +hy, +hz}
+        Vec3 h = collider_half_size;
+        Vec3 local[8] = {
+            {-h.x, -h.y, -h.z}, {+h.x, -h.y, -h.z}, {-h.x, +h.y, -h.z}, {+h.x, +h.y, -h.z},
+            {-h.x, -h.y, +h.z}, {+h.x, -h.y, +h.z}, {-h.x, +h.y, +h.z}, {+h.x, +h.y, +h.z}
         };
-
         for (int i = 0; i < 8; ++i) {
-            geom::Vec3 world = pose.transform_point(local[i]);
-            corners[i*3 + 0] = world.x;
-            corners[i*3 + 1] = world.y;
-            corners[i*3 + 2] = world.z;
+            Vec3 world = pose.transform_point(local[i]);
+            corners[i * 3 + 0] = world.x;
+            corners[i * 3 + 1] = world.y;
+            corners[i * 3 + 2] = world.z;
         }
-    }
-
-    // Фабричный метод для создания куба
-    static RigidBody create_box(double sx, double sy, double sz, double m,
-                                 const geom::Pose3& p, bool stat = false) {
-        // Главные моменты инерции кубоида
-        double Ixx = (m / 12.0) * (sy*sy + sz*sz);
-        double Iyy = (m / 12.0) * (sx*sx + sz*sz);
-        double Izz = (m / 12.0) * (sx*sx + sy*sy);
-
-        SpatialInertia3D inertia(m, geom::Vec3(Ixx, Iyy, Izz));
-
-        RigidBody body(inertia, p, stat);
-        body.half_extents = geom::Vec3(sx/2, sy/2, sz/2);
-        body.has_collider = true;
-
-        return body;
     }
 };
 

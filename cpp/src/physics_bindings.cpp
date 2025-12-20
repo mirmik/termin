@@ -1,13 +1,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-#include <pybind11/operators.h>
 #include <pybind11/stl.h>
 
 #include "termin/geom/geom.hpp"
-#include "termin/physics/spatial_inertia.hpp"
-#include "termin/physics/rigid_body.hpp"
-#include "termin/physics/contact.hpp"
-#include "termin/physics/physics_world.hpp"
+#include "termin/physics/physics.hpp"
 
 namespace py = pybind11;
 using namespace termin;
@@ -17,106 +13,126 @@ using namespace termin::physics;
 PYBIND11_MODULE(_physics_native, m) {
     m.doc() = "Native C++ physics module for termin";
 
-    // Import _geom_native for Vec3, Quat, Pose3, Screw3
+    // Import _geom_native for Vec3, Quat, Pose3
     py::module_::import("termin.geombase._geom_native");
 
-    // SpatialInertia3D
-    py::class_<SpatialInertia3D>(m, "SpatialInertia3D")
-        .def(py::init<>())
-        .def(py::init<double, const Vec3&, const Pose3&>(),
-             py::arg("mass"), py::arg("I_diag"), py::arg("frame") = Pose3())
-        .def_readwrite("mass", &SpatialInertia3D::mass)
-        .def_readwrite("I_diag", &SpatialInertia3D::I_diag)
-        .def_readwrite("frame", &SpatialInertia3D::frame)
-        .def("inv_mass", &SpatialInertia3D::inv_mass)
-        .def("inv_I_diag", &SpatialInertia3D::inv_I_diag)
-        .def("com", &SpatialInertia3D::com)
-        .def("apply", &SpatialInertia3D::apply)
-        .def("solve", &SpatialInertia3D::solve)
-        .def("gravity_wrench", &SpatialInertia3D::gravity_wrench)
-        .def("bias_wrench", &SpatialInertia3D::bias_wrench);
-
-    // RigidBody
+    // ==================== RigidBody ====================
     py::class_<RigidBody>(m, "RigidBody")
         .def(py::init<>())
-        .def(py::init<const SpatialInertia3D&, const Pose3&, bool>(),
-             py::arg("inertia"), py::arg("pose"), py::arg("is_static") = false)
-        .def_readwrite("inertia", &RigidBody::inertia)
+
+        // Состояние
         .def_readwrite("pose", &RigidBody::pose)
-        .def_readwrite("velocity", &RigidBody::velocity)
-        .def_readwrite("wrench", &RigidBody::wrench)
+        .def_readwrite("linear_velocity", &RigidBody::linear_velocity)
+        .def_readwrite("angular_velocity", &RigidBody::angular_velocity)
+
+        // Масса и инерция
+        .def_readwrite("mass", &RigidBody::mass)
+        .def_readwrite("inertia", &RigidBody::inertia)
+
+        // Силы
+        .def_readwrite("force", &RigidBody::force)
+        .def_readwrite("torque", &RigidBody::torque)
+
+        // Флаги
         .def_readwrite("is_static", &RigidBody::is_static)
-        .def_readwrite("half_extents", &RigidBody::half_extents)
-        .def_readwrite("has_collider", &RigidBody::has_collider)
-        .def("mass", &RigidBody::mass)
+        .def_readwrite("is_kinematic", &RigidBody::is_kinematic)
+
+        // Демпфирование
+        .def_readwrite("linear_damping", &RigidBody::linear_damping)
+        .def_readwrite("angular_damping", &RigidBody::angular_damping)
+
+        // Коллайдер
+        .def_readwrite("collider_type", &RigidBody::collider_type)
+        .def_readwrite("collider_half_size", &RigidBody::collider_half_size)
+        .def_readwrite("collider_radius", &RigidBody::collider_radius)
+
+        // Методы
         .def("inv_mass", &RigidBody::inv_mass)
+        .def("inv_inertia", &RigidBody::inv_inertia)
         .def("position", &RigidBody::position)
         .def("point_velocity", &RigidBody::point_velocity)
+
+        .def("add_force", &RigidBody::add_force)
+        .def("add_torque", &RigidBody::add_torque)
+        .def("add_force_at_point", &RigidBody::add_force_at_point)
+
         .def("apply_impulse", &RigidBody::apply_impulse)
+        .def("apply_angular_impulse", &RigidBody::apply_angular_impulse)
+        .def("apply_impulse_at_point", &RigidBody::apply_impulse_at_point)
+
         .def("integrate_forces", &RigidBody::integrate_forces)
         .def("integrate_positions", &RigidBody::integrate_positions)
+
         .def("get_box_corners_world", [](const RigidBody& b) {
             py::array_t<double> result({8, 3});
             auto buf = result.mutable_unchecked<2>();
             double corners[24];
             b.get_box_corners_world(corners);
             for (int i = 0; i < 8; i++) {
-                buf(i, 0) = corners[i*3 + 0];
-                buf(i, 1) = corners[i*3 + 1];
-                buf(i, 2) = corners[i*3 + 2];
+                buf(i, 0) = corners[i * 3 + 0];
+                buf(i, 1) = corners[i * 3 + 1];
+                buf(i, 2) = corners[i * 3 + 2];
             }
             return result;
         })
-        .def_static("create_box", &RigidBody::create_box,
-             py::arg("sx"), py::arg("sy"), py::arg("sz"),
-             py::arg("mass"), py::arg("pose"), py::arg("is_static") = false);
 
-    // Contact
+        // Фабрики
+        .def_static("create_box", &RigidBody::create_box,
+            py::arg("sx"), py::arg("sy"), py::arg("sz"),
+            py::arg("mass"), py::arg("pose") = Pose3(), py::arg("is_static") = false)
+        .def_static("create_sphere", &RigidBody::create_sphere,
+            py::arg("radius"), py::arg("mass"),
+            py::arg("pose") = Pose3(), py::arg("is_static") = false);
+
+    // ==================== Contact ====================
     py::class_<Contact>(m, "Contact")
         .def(py::init<>())
-        .def_readwrite("point", &Contact::point)
-        .def_readwrite("normal", &Contact::normal)
-        .def_readwrite("penetration", &Contact::penetration)
-        .def_readwrite("accumulated_normal_impulse", &Contact::accumulated_normal_impulse)
-        .def_readwrite("accumulated_tangent_impulse1", &Contact::accumulated_tangent_impulse1)
-        .def_readwrite("accumulated_tangent_impulse2", &Contact::accumulated_tangent_impulse2);
+        .def_readonly("point", &Contact::point)
+        .def_readonly("normal", &Contact::normal)
+        .def_readonly("penetration", &Contact::penetration)
+        .def_readonly("accumulated_normal", &Contact::accumulated_normal)
+        .def_readonly("accumulated_tangent1", &Contact::accumulated_tangent1)
+        .def_readonly("accumulated_tangent2", &Contact::accumulated_tangent2);
 
-    // ContactConstraint
-    py::class_<ContactConstraint>(m, "ContactConstraint")
-        .def(py::init<Contact*, double, double, double, double>(),
-             py::arg("contact"), py::arg("restitution") = 0.3,
-             py::arg("friction") = 0.5, py::arg("baumgarte") = 0.2,
-             py::arg("slop") = 0.005)
-        .def("precompute", &ContactConstraint::precompute)
-        .def("relative_velocity", &ContactConstraint::relative_velocity)
-        .def("solve_normal", &ContactConstraint::solve_normal)
-        .def("solve_friction", &ContactConstraint::solve_friction)
-        .def("apply_impulse", &ContactConstraint::apply_impulse);
-
-    // PhysicsWorld
+    // ==================== PhysicsWorld ====================
     py::class_<PhysicsWorld>(m, "PhysicsWorld")
         .def(py::init<>())
+
+        // Параметры симуляции
         .def_readwrite("gravity", &PhysicsWorld::gravity)
-        .def_readwrite("iterations", &PhysicsWorld::iterations)
-        .def_readwrite("restitution", &PhysicsWorld::restitution)
-        .def_readwrite("friction", &PhysicsWorld::friction)
-        .def_readwrite("ground_height", &PhysicsWorld::ground_height)
-        .def_readwrite("ground_enabled", &PhysicsWorld::ground_enabled)
         .def_readwrite("fixed_dt", &PhysicsWorld::fixed_dt)
         .def_readwrite("max_substeps", &PhysicsWorld::max_substeps)
+
+        // Параметры контактов
+        .def_readwrite("restitution", &PhysicsWorld::restitution)
+        .def_readwrite("friction", &PhysicsWorld::friction)
+        .def_readwrite("solver_iterations", &PhysicsWorld::solver_iterations)
+
+        // Земля
+        .def_readwrite("ground_enabled", &PhysicsWorld::ground_enabled)
+        .def_readwrite("ground_height", &PhysicsWorld::ground_height)
+
+        // Управление телами
         .def("add_body", &PhysicsWorld::add_body)
         .def("get_body", py::overload_cast<size_t>(&PhysicsWorld::get_body),
              py::return_value_policy::reference)
         .def("body_count", &PhysicsWorld::body_count)
+        .def("remove_body", &PhysicsWorld::remove_body)
+        .def("clear", &PhysicsWorld::clear)
+
+        // Фабрики
+        .def("add_box", &PhysicsWorld::add_box,
+            py::arg("sx"), py::arg("sy"), py::arg("sz"),
+            py::arg("mass"), py::arg("pose"), py::arg("is_static") = false)
+        .def("add_sphere", &PhysicsWorld::add_sphere,
+            py::arg("radius"), py::arg("mass"),
+            py::arg("pose"), py::arg("is_static") = false)
+
+        // Симуляция
         .def("step", &PhysicsWorld::step)
-        // Helper to add a box body directly
-        .def("add_box", [](PhysicsWorld& world, double sx, double sy, double sz,
-                          double mass, const Pose3& pose, bool is_static) {
-            RigidBody body = RigidBody::create_box(sx, sy, sz, mass, pose, is_static);
-            return world.add_body(body);
-        }, py::arg("sx"), py::arg("sy"), py::arg("sz"),
-           py::arg("mass"), py::arg("pose"), py::arg("is_static") = false)
-        // Get body positions as numpy array
+        .def("step_fixed", &PhysicsWorld::step_fixed)
+
+        // Массовый доступ к данным
         .def("get_positions", [](const PhysicsWorld& world) {
             size_t n = world.body_count();
             py::array_t<double> result({(int)n, 3});
@@ -129,7 +145,6 @@ PYBIND11_MODULE(_physics_native, m) {
             }
             return result;
         })
-        // Get body quaternions as numpy array
         .def("get_rotations", [](const PhysicsWorld& world) {
             size_t n = world.body_count();
             py::array_t<double> result({(int)n, 4});
@@ -140,6 +155,38 @@ PYBIND11_MODULE(_physics_native, m) {
                 buf(i, 1) = q.y;
                 buf(i, 2) = q.z;
                 buf(i, 3) = q.w;
+            }
+            return result;
+        })
+        .def("get_velocities", [](const PhysicsWorld& world) {
+            size_t n = world.body_count();
+            py::array_t<double> result({(int)n, 3});
+            auto buf = result.mutable_unchecked<2>();
+            for (size_t i = 0; i < n; ++i) {
+                const auto& v = world.get_body(i).linear_velocity;
+                buf(i, 0) = v.x;
+                buf(i, 1) = v.y;
+                buf(i, 2) = v.z;
+            }
+            return result;
+        })
+
+        // Доступ к контактам
+        .def("contact_count", [](const PhysicsWorld& world) {
+            return world.contacts().size();
+        })
+        .def("contacts", [](const PhysicsWorld& world) {
+            return world.contacts();
+        })
+        .def("get_contact_points", [](const PhysicsWorld& world) {
+            const auto& contacts = world.contacts();
+            size_t n = contacts.size();
+            py::array_t<double> result({(int)n, 3});
+            auto buf = result.mutable_unchecked<2>();
+            for (size_t i = 0; i < n; ++i) {
+                buf(i, 0) = contacts[i].point.x;
+                buf(i, 1) = contacts[i].point.y;
+                buf(i, 2) = contacts[i].point.z;
             }
             return result;
         });

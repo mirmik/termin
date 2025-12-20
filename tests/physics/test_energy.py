@@ -1,15 +1,16 @@
 """Тест на сохранение энергии в физическом движке."""
 
 import numpy as np
-from termin.geombase.pose3 import Pose3
+from termin.geombase._geom_native import Pose3, Vec3, Quat
 from termin.physics import RigidBody, PhysicsWorld
 
 
-def compute_total_energy(world: PhysicsWorld, gravity: np.ndarray) -> float:
+def compute_total_energy(world: PhysicsWorld, gravity_z: float) -> float:
     """Вычислить полную механическую энергию системы."""
     total = 0.0
 
-    for body in world.bodies:
+    for i in range(world.body_count()):
+        body = world.get_body(i)
         if body.is_static:
             continue
 
@@ -17,17 +18,28 @@ def compute_total_energy(world: PhysicsWorld, gravity: np.ndarray) -> float:
         # T = 0.5 * m * v² + 0.5 * ω · (I · ω)
         m = body.mass
         v = body.linear_velocity
-        omega = body.omega
+        omega = body.angular_velocity
 
-        # Инерция в мировой СК
-        I_world = body.rotation @ body.spatial_inertia.Ic @ body.rotation.T
+        # Линейная КЭ
+        v_sq = v.x**2 + v.y**2 + v.z**2
+        T_lin = 0.5 * m * v_sq
 
-        T = 0.5 * m * np.dot(v, v) + 0.5 * np.dot(omega, I_world @ omega)
+        # Угловая КЭ (упрощённо, в СК тела инерция диагональная)
+        # Для точности нужно преобразовать omega в СК тела
+        R = body.pose.rotation_matrix()  # numpy array (3,3)
+
+        # omega_body = R^T @ omega_world
+        omega_arr = np.array([omega.x, omega.y, omega.z])
+        omega_body = R.T @ omega_arr
+
+        I = body.inertia
+        T_rot = 0.5 * (I.x * omega_body[0]**2 + I.y * omega_body[1]**2 + I.z * omega_body[2]**2)
+
+        T = T_lin + T_rot
 
         # Потенциальная энергия (относительно z=0)
-        # U = m * g * h
-        h = body.position[2]
-        g = -gravity[2]  # gravity направлена вниз, берём модуль
+        h = body.position().z
+        g = abs(gravity_z)
         U = m * g * h
 
         total += T + U
@@ -37,94 +49,81 @@ def compute_total_energy(world: PhysicsWorld, gravity: np.ndarray) -> float:
 
 def test_free_fall_energy():
     """Тест: энергия сохраняется при свободном падении (без коллизий)."""
-    gravity = np.array([0, 0, -9.81])
-
-    world = PhysicsWorld(
-        gravity=gravity,
-        iterations=10,
-        restitution=0.0,
-        friction=0.0,
-    )
-    world.ground_enabled = False  # Отключаем землю
+    world = PhysicsWorld()
+    world.gravity = Vec3(0, 0, -9.81)
+    world.solver_iterations = 10
+    world.restitution = 0.0
+    world.friction = 0.0
+    world.ground_enabled = False
 
     # Кубик падает свободно
-    cube = RigidBody.create_box(
-        size=(1, 1, 1),
-        mass=1.0,
-        pose=Pose3.identity().with_translation(np.array([0, 0, 10.0])),
-    )
-    world.add_body(cube)
+    pose = Pose3()
+    pose.lin = Vec3(0, 0, 10.0)
+    idx = world.add_box(1, 1, 1, 1.0, pose)
+
+    # Отключаем демпфирование для чистого теста энергии
+    body = world.get_body(idx)
+    body.linear_damping = 0.0
+    body.angular_damping = 0.0
 
     dt = 1.0 / 60.0
+    gravity_z = -9.81
 
-    initial_energy = compute_total_energy(world, gravity)
+    initial_energy = compute_total_energy(world, gravity_z)
     print(f"Initial energy: {initial_energy:.6f}")
-
-    energies = [initial_energy]
 
     for i in range(120):  # 2 секунды
         world.step(dt)
-        E = compute_total_energy(world, gravity)
-        energies.append(E)
 
         if i % 30 == 0:
-            print(f"Step {i}: E={E:.6f}, z={cube.position[2]:.3f}, "
-                  f"v_z={cube.linear_velocity[2]:.3f}, "
-                  f"omega={np.linalg.norm(cube.omega):.6f}")
+            E = compute_total_energy(world, gravity_z)
+            pos = world.get_body(idx).position()
+            vel = world.get_body(idx).linear_velocity
+            print(f"Step {i}: E={E:.6f}, z={pos.z:.3f}, v_z={vel.z:.3f}")
 
-    final_energy = energies[-1]
+    final_energy = compute_total_energy(world, gravity_z)
 
     # Энергия должна сохраняться (с небольшой погрешностью из-за численного интегрирования)
     energy_drift = abs(final_energy - initial_energy) / initial_energy
     print(f"\nFinal energy: {final_energy:.6f}")
     print(f"Energy drift: {energy_drift * 100:.4f}%")
 
-    # Допускаем 5% дрейфа за 2 секунды (полу-неявный Эйлер имеет численную диссипацию)
+    # Допускаем 5% дрейфа за 2 секунды
     assert energy_drift < 0.05, f"Energy drift too large: {energy_drift * 100:.2f}%"
 
 
 def test_spinning_cube_energy():
     """Тест: энергия сохраняется при вращении без гравитации."""
-    world = PhysicsWorld(
-        gravity=np.array([0, 0, 0]),  # Без гравитации
-        iterations=10,
-        restitution=0.0,
-        friction=0.0,
-    )
+    world = PhysicsWorld()
+    world.gravity = Vec3(0, 0, 0)
+    world.solver_iterations = 10
     world.ground_enabled = False
 
-    cube = RigidBody.create_box(
-        size=(1, 1, 1),
-        mass=1.0,
-        pose=Pose3.identity().with_translation(np.array([0, 0, 5.0])),
-    )
-    # Задаём начальную угловую скорость
-    from termin.geombase.screw import Screw3
-    cube.velocity = Screw3(
-        ang=np.array([1.0, 0.5, 0.3]),  # Вращение
-        lin=np.array([0.0, 0.0, 0.0]),  # Без линейной скорости
-    )
-    world.add_body(cube)
+    pose = Pose3()
+    pose.lin = Vec3(0, 0, 5.0)
+    idx = world.add_box(1, 1, 1, 1.0, pose)
+
+    body = world.get_body(idx)
+    body.angular_velocity = Vec3(1.0, 0.5, 0.3)
+    body.linear_damping = 0.0
+    body.angular_damping = 0.0
 
     dt = 1.0 / 60.0
-    gravity = np.array([0, 0, 0])
 
-    initial_energy = compute_total_energy(world, gravity)
+    initial_energy = compute_total_energy(world, 0.0)
     print(f"\nSpinning cube test:")
     print(f"Initial energy: {initial_energy:.6f}")
-    print(f"Initial omega: {cube.omega}")
-
-    energies = [initial_energy]
 
     for i in range(300):  # 5 секунд
         world.step(dt)
-        E = compute_total_energy(world, gravity)
-        energies.append(E)
 
         if i % 60 == 0:
-            print(f"Step {i}: E={E:.6f}, omega_norm={np.linalg.norm(cube.omega):.6f}")
+            E = compute_total_energy(world, 0.0)
+            omega = world.get_body(idx).angular_velocity
+            omega_norm = (omega.x**2 + omega.y**2 + omega.z**2)**0.5
+            print(f"Step {i}: E={E:.6f}, omega_norm={omega_norm:.6f}")
 
-    final_energy = energies[-1]
+    final_energy = compute_total_energy(world, 0.0)
 
     energy_drift = abs(final_energy - initial_energy) / initial_energy if initial_energy > 0 else 0
     print(f"\nFinal energy: {final_energy:.6f}")
@@ -136,30 +135,26 @@ def test_spinning_cube_energy():
 
 def test_multiple_cubes_energy():
     """Тест: несколько кубиков без столкновений."""
-    gravity = np.array([0, 0, -9.81])
-
-    world = PhysicsWorld(
-        gravity=gravity,
-        iterations=10,
-        restitution=0.0,
-        friction=0.0,
-    )
+    world = PhysicsWorld()
+    world.gravity = Vec3(0, 0, -9.81)
+    world.solver_iterations = 10
     world.ground_enabled = False
 
     # Несколько кубиков на разных высотах
-    cubes = []
+    indices = []
     for i in range(5):
-        cube = RigidBody.create_box(
-            size=(1, 1, 1),
-            mass=1.0,
-            pose=Pose3.identity().with_translation(np.array([i * 3.0, 0, 10.0 + i * 2.0])),
-        )
-        world.add_body(cube)
-        cubes.append(cube)
+        pose = Pose3()
+        pose.lin = Vec3(i * 3.0, 0, 10.0 + i * 2.0)
+        idx = world.add_box(1, 1, 1, 1.0, pose)
+        body = world.get_body(idx)
+        body.linear_damping = 0.0
+        body.angular_damping = 0.0
+        indices.append(idx)
 
     dt = 1.0 / 60.0
+    gravity_z = -9.81
 
-    initial_energy = compute_total_energy(world, gravity)
+    initial_energy = compute_total_energy(world, gravity_z)
     print(f"\nMultiple cubes test:")
     print(f"Initial energy: {initial_energy:.6f}")
 
@@ -167,16 +162,16 @@ def test_multiple_cubes_energy():
         world.step(dt)
 
         if i % 30 == 0:
-            E = compute_total_energy(world, gravity)
+            E = compute_total_energy(world, gravity_z)
             print(f"Step {i}: E={E:.6f}")
 
-    final_energy = compute_total_energy(world, gravity)
+    final_energy = compute_total_energy(world, gravity_z)
     energy_drift = abs(final_energy - initial_energy) / initial_energy
 
     print(f"Final energy: {final_energy:.6f}")
     print(f"Energy drift: {energy_drift * 100:.4f}%")
 
-    # Допускаем 5% дрейфа (численная диссипация)
+    # Допускаем 5% дрейфа
     assert energy_drift < 0.05, f"Energy drift too large: {energy_drift * 100:.2f}%"
 
 

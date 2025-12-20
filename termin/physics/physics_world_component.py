@@ -92,7 +92,7 @@ class PhysicsWorldComponent(Component):
         # C++ PhysicsWorld
         self._physics_world = PhysicsWorld()
         self._physics_world.gravity = Vec3(gravity[0], gravity[1], gravity[2])
-        self._physics_world.iterations = iterations
+        self._physics_world.solver_iterations = iterations
         self._physics_world.restitution = restitution
         self._physics_world.friction = friction
         self._physics_world.ground_height = ground_height
@@ -118,11 +118,11 @@ class PhysicsWorldComponent(Component):
 
     @property
     def iterations(self) -> int:
-        return self._physics_world.iterations
+        return self._physics_world.solver_iterations
 
     @iterations.setter
     def iterations(self, value: int):
-        self._physics_world.iterations = value
+        self._physics_world.solver_iterations = value
 
     @property
     def restitution(self) -> float:
@@ -162,17 +162,23 @@ class PhysicsWorldComponent(Component):
         self._initialized = True
 
     def _collect_rigid_bodies(self, scene: "Scene"):
-        """Найти все RigidBodyComponent в сцене и зарегистрировать их."""
+        """Найти все RigidBodyComponent в сцене и зарегистрировать их без дублей."""
         from termin.physics.rigid_body_component import RigidBodyComponent
 
         self._rigid_body_components.clear()
 
+        visited_entities = set()
         for entity in scene.entities:
-            self._collect_from_entity(entity)
+            self._collect_from_entity(entity, visited_entities)
 
-    def _collect_from_entity(self, entity):
+    def _collect_from_entity(self, entity, visited_entities):
         """Рекурсивно собрать RigidBodyComponent из дерева сущностей."""
         from termin.physics.rigid_body_component import RigidBodyComponent
+
+        entity_id = id(entity)
+        if entity_id in visited_entities:
+            return
+        visited_entities.add(entity_id)
 
         rb_comp = entity.get_component(RigidBodyComponent)
         if rb_comp is not None:
@@ -183,10 +189,12 @@ class PhysicsWorldComponent(Component):
         # Проверяем дочерние элементы через трансформ
         for child_transform in entity.transform.children:
             if child_transform.entity is not None:
-                self._collect_from_entity(child_transform.entity)
+                self._collect_from_entity(child_transform.entity, visited_entities)
 
     def add_rigid_body_component(self, rb_comp: "RigidBodyComponent"):
         """Динамически добавить RigidBodyComponent после инициализации."""
+        if rb_comp in self._rigid_body_components:
+            return
         self._rigid_body_components.append(rb_comp)
         rb_comp._register_with_world(self._physics_world)
 

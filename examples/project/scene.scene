@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "80f6e855-7ac1-4858-8739-f8e66751b894",
+    "uuid": "4316b8b5-8e0a-4bd9-bebe-3d8f4ca2fe05",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -84,15 +84,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            1.0512385234832764,
-            2.8277906384468077,
-            -2.3101813360452654
+            -1.3658794894218445,
+            3.3831747975349424,
+            -0.8897692128419878
           ],
           "rotation": [
-            0.009471446672855356,
-            -0.010082469061528111,
-            0.6166822763483594,
-            0.7870905955183
+            0.11493677277472744,
+            -0.14472075495404252,
+            0.6059507214192146,
+            0.7737371417743858
           ]
         },
         "components": [
@@ -101,6 +101,9 @@
               "enabled": true,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000004"
               },
               "override_material": false,
               "cast_shadow": true
@@ -175,6 +178,31 @@
               "contour_width": 0.05
             },
             "type": "NavMeshDisplayComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
           }
         ],
         "children": []
@@ -196,9 +224,9 @@
         "flags": 1,
         "pose": {
           "position": [
-            0.0,
-            0.0,
-            -3.0
+            -1.0918287172317505,
+            1.755,
+            -3.6065918159484864
           ],
           "rotation": [
             0.0,
@@ -398,15 +426,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            -0.8422852158546448,
-            -0.9992080926895142,
-            -0.4276007115840912
+            -0.20791339874267578,
+            -0.0006372332572937012,
+            -0.49967867136001587
           ],
           "rotation": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
+            0.27154025274985677,
+            0.2986372967710959,
+            0.0890556607667465,
+            0.9105771496140206
           ]
         },
         "components": [
@@ -4948,15 +4976,14 @@
   "editor": {
     "camera": {
       "target": [
-        3.7252429816506485,
-        -4.627519919080205,
-        -4.697533706778446
+        0.6540316343307495,
+        1.4706597328186035,
+        -4.9625163078308105
       ],
-      "radius": 17.5,
-      "azimuth": 66.61921754862786,
-      "elevation": 0.56548667764616
+      "radius": 13.5,
+      "azimuth": 67.76066287943185,
+      "elevation": 0.46774823953447925
     },
-    "selected_entity": "cube1",
     "displays": [
       {
         "name": "Editor",
@@ -4965,7 +4992,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "fb0b0fbc-a577-40a7-acdb-3e1461497a35",
+            "uuid": "791e9f99-cafb-403f-882c-8e5a40c80a7a",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -4984,7 +5011,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "101fd7fb-8e13-4ac2-a922-94a0e660b824",
+            "uuid": "2f224f66-ac77-4214-81c1-d16b04ba3c6c",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -4998,11 +5025,11 @@
       }
     ],
     "expanded_entities": [
-      "cube1",
-      "camera",
+      "Arti",
       "EditorEntities",
+      "camera",
       "cube2",
-      "Arti"
+      "cube1"
     ]
   },
   "resources": {

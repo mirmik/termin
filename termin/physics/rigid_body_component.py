@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 import numpy as np
 
 from termin.visualization.core.component import Component
-from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat, Screw3
+from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase.pose3 import Pose3
 from termin.geombase.general_pose3 import GeneralPose3
@@ -143,6 +143,9 @@ class RigidBodyComponent(Component):
         if self.entity is None:
             return
 
+        if self._body_index >= 0 and self._physics_world is world:
+            return
+
         self._physics_world = world
 
         # Получаем начальную позу
@@ -196,18 +199,29 @@ class RigidBodyComponent(Component):
         )
 
         # Сбрасываем скорости при телепортации
-        cpp_body.velocity = Screw3()
+        cpp_body.linear_velocity = Vec3(0, 0, 0)
+        cpp_body.angular_velocity = Vec3(0, 0, 0)
 
-    def apply_impulse(self, impulse: np.ndarray, point: np.ndarray):
-        """Приложить импульс к твёрдому телу."""
+    def apply_impulse(self, impulse: np.ndarray, point: Optional[np.ndarray] = None):
+        """Приложить импульс к твёрдому телу.
+
+        Args:
+            impulse: Вектор импульса (3,)
+            point: Точка приложения в мировых координатах. Если None, импульс к центру масс.
+        """
         if self._body_index < 0 or self._physics_world is None:
             return
 
         cpp_body = self._physics_world.get_body(self._body_index)
-        cpp_body.apply_impulse(
-            Vec3(impulse[0], impulse[1], impulse[2]),
-            Vec3(point[0], point[1], point[2])
-        )
+        impulse_vec = Vec3(float(impulse[0]), float(impulse[1]), float(impulse[2]))
+
+        if point is not None:
+            cpp_body.apply_impulse_at_point(
+                impulse_vec,
+                Vec3(float(point[0]), float(point[1]), float(point[2]))
+            )
+        else:
+            cpp_body.apply_impulse(impulse_vec)
 
     # Legacy compatibility
     @property
