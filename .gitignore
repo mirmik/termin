@@ -134,3 +134,6 @@ cmake_install.cmake
 Makefile
 *.cmake
 !CMakeLists.txt
+
+*.vcxproj
+*.vcxproj.filters
