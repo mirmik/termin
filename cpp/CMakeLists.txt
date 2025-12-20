@@ -57,6 +57,21 @@ target_compile_options(_voxels_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
+# ---------------- Tests ----------------
+enable_testing()
+add_executable(termin_tests
+    tests/main.cpp
+    tests/tests_general_pose3.cpp
+)
+target_include_directories(termin_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_compile_options(termin_tests PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+add_test(NAME termin_tests COMMAND termin_tests)
+
 # Install to python packages
 install(TARGETS _geom_native DESTINATION ${CMAKE_INSTALL_PREFIX}/geombase)
 install(TARGETS _colliders_native DESTINATION ${CMAKE_INSTALL_PREFIX}/colliders)

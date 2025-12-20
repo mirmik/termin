@@ -137,3 +137,16 @@ Makefile
 
 *.vcxproj
 *.vcxproj.filters
+*.sln
+*.tlog
+*.ilk
+*.recipe
+*.idb
+*.pdb
+*.ipch
+*.exp
+*.lib
+cpp/**/*.obj
+cpp/**/*.exe
+cpp/**/*.dll
+cpp/**/*.out

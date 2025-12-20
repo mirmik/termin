@@ -42,12 +42,12 @@ static Quat numpy_to_quat(py::array_t<double> arr) {
     return {buf(0), buf(1), buf(2), buf(3)};
 }
 
+static py::array_t<double> make_mat(int rows, int cols) {
+    return py::array_t<double>({rows, cols});
+}
+
 PYBIND11_MODULE(_geom_native, m) {
     m.doc() = "Native C++ geometry module for termin";
-
-    auto make_mat = [](int rows, int cols) {
-        return py::array_t<double>({rows, cols});
-    };
 
     // Vec3
     py::class_<Vec3>(m, "Vec3")
