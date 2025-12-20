@@ -5,6 +5,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Put all binaries into a flat bin/ directory so tests don't depend on config subdirs
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+if(CMAKE_CONFIGURATION_TYPES)
+    foreach(cfg ${CMAKE_CONFIGURATION_TYPES})
+        string(TOUPPER ${cfg} cfg_upper)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${cfg_upper} ${CMAKE_BINARY_DIR}/bin)
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${cfg_upper} ${CMAKE_BINARY_DIR}/bin)
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${cfg_upper} ${CMAKE_BINARY_DIR}/bin)
+    endforeach()
+endif()
+
 # Platform-specific optimization flags
 if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
@@ -59,6 +72,15 @@ target_compile_options(_voxels_native PRIVATE
 
 # ---------------- Tests ----------------
 enable_testing()
+
+# Default config for multi-config generators so that plain `ctest` works
+set(DEFAULT_CTEST_CONFIG "Debug")
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/CTestCustom.cmake
+    @ONLY
+)
+
 add_executable(termin_tests
     tests/main.cpp
     tests/tests_general_pose3.cpp
@@ -70,7 +92,14 @@ target_include_directories(termin_tests PRIVATE
 target_compile_options(termin_tests PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-add_test(NAME termin_tests COMMAND termin_tests)
+add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
+
+# Convenience target to run tests with correct config on multi-config generators (MSVC)
+add_custom_target(run_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
+    DEPENDS termin_tests
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Running C++ tests")
 
 # Install to python packages
 install(TARGETS _geom_native DESTINATION ${CMAKE_INSTALL_PREFIX}/geombase)
