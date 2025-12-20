@@ -101,6 +101,20 @@ target_compile_options(termin_tests PRIVATE
 )
 add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
 
+# Pybind module to run C++ tests from Python
+pybind11_add_module(_cpp_tests
+    tests/tests_binding.cpp
+    tests/tests_general_pose3.cpp
+)
+target_include_directories(_cpp_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_compile_options(_cpp_tests PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+install(TARGETS _cpp_tests DESTINATION ${CMAKE_INSTALL_PREFIX}/tests)
+
 # Convenience target to run tests with correct config on multi-config generators (MSVC)
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>

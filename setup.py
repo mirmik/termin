@@ -4,6 +4,7 @@ from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from distutils.util import get_platform
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import os
@@ -46,6 +47,13 @@ class CMakeBuildExt(build_ext):
         for ext in self.extensions:
             self._built_objects = getattr(self, "_built_objects", [])  # satisfy setuptools expectations
 
+        # Copy cpp test module into source tree for editable/pytest runs
+        tests_dst = Path(directory) / "termin" / "tests"
+        tests_dst.mkdir(parents=True, exist_ok=True)
+        built_tests = list((install_prefix / "tests").glob("_cpp_tests.*"))
+        for so in built_tests:
+            shutil.copy2(so, tests_dst / so.name)
+
 directory = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -82,6 +90,7 @@ if __name__ == "__main__":
                 "visualization/**/*",
                 "mesh/*",
                 "editor/*",
+                "tests/__init__.py",
             ]
         },
         include_package_data=True,
@@ -101,6 +110,7 @@ if __name__ == "__main__":
             Extension("termin.colliders._colliders_native", sources=[]),
             Extension("termin.physics._physics_native", sources=[]),
             Extension("termin.voxels._voxels_native", sources=[]),
+            Extension("termin.tests._cpp_tests", sources=[]),
         ],
         cmdclass={"build_ext": CMakeBuildExt},
         zip_safe=False,
