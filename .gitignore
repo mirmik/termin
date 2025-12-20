@@ -120,6 +120,12 @@ doxygen/latex
 
 # C++ build directory
 cpp/build/
+cpp/build*/
+cpp/**/CMakeCache.txt
+cpp/**/CMakeFiles/
+cpp/**/cmake_install.cmake
+cpp/**/Makefile
+cpp/**/CTestTestfile.cmake
 
 # CMake artifacts
 CMakeCache.txt

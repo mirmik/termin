@@ -1,12 +1,50 @@
 #!/usr/bin/env python3
 
-from wheel.bdist_wheel import bdist_wheel as bdist_wheel_
-from setuptools import setup, Extension, Command
+from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext
 from distutils.util import get_platform
-
-import glob
+from pathlib import Path
+import subprocess
 import sys
 import os
+
+
+class CMakeBuildExt(build_ext):
+    """
+    Build pybind11 extensions via CMake (cpp/CMakeLists.txt).
+    CMake builds all native modules in one go, then installs them into build_lib/termin/*.
+    """
+
+    def run(self):
+        try:
+            subprocess.check_output(["cmake", "--version"])
+        except OSError as exc:
+            raise RuntimeError("CMake is required to build native extensions") from exc
+
+        source_dir = Path(directory) / "cpp"
+        build_temp = Path(self.build_temp)
+        build_temp.mkdir(parents=True, exist_ok=True)
+
+        build_lib = Path(self.build_lib)
+        install_prefix = (build_lib / "termin").resolve()
+        install_prefix.mkdir(parents=True, exist_ok=True)
+
+        cfg = "Debug" if self.debug else "Release"
+        cmake_args = [
+            str(source_dir),
+            f"-DCMAKE_BUILD_TYPE={cfg}",
+            f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
+            f"-DPython_EXECUTABLE={sys.executable}",
+        ]
+
+        subprocess.check_call(["cmake", *cmake_args], cwd=build_temp)
+        subprocess.check_call(["cmake", "--build", ".", "--config", cfg], cwd=build_temp)
+        subprocess.check_call(["cmake", "--install", ".", "--config", cfg], cwd=build_temp)
+
+        # Nothing else to do; CMake produced the .so/.pyd into build_lib already.
+        # Mark build as done so setuptools continues.
+        for ext in self.extensions:
+            self._built_objects = getattr(self, "_built_objects", [])  # satisfy setuptools expectations
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
@@ -58,5 +96,12 @@ if __name__ == "__main__":
         ],
         extras_require={
         },
+        ext_modules=[
+            Extension("termin.geombase._geom_native", sources=[]),
+            Extension("termin.colliders._colliders_native", sources=[]),
+            Extension("termin.physics._physics_native", sources=[]),
+            Extension("termin.voxels._voxels_native", sources=[]),
+        ],
+        cmdclass={"build_ext": CMakeBuildExt},
         zip_safe=False,
     )
