@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(./bin/termin_tests:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(ls:*)",
+      "Bash(python setup.py:*)",
+      "Bash(python:*)"
+    ]
+  }
+}

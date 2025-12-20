@@ -91,6 +91,7 @@ configure_file(
 add_executable(termin_tests
     tests/main.cpp
     tests/tests_general_pose3.cpp
+    tests/tests_general_transform3.cpp
 )
 target_include_directories(termin_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -105,6 +106,7 @@ add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_test
 pybind11_add_module(_cpp_tests
     tests/tests_binding.cpp
     tests/tests_general_pose3.cpp
+    tests/tests_general_transform3.cpp
 )
 target_include_directories(_cpp_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

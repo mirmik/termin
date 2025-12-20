@@ -4,25 +4,28 @@
 Содержит фундаментальные классы для представления геометрии:
 - Pose2 - позы (положение + ориентация) в 2D пространстве
 - Pose3 - позы (положение + ориентация) в 3D пространстве
+- GeneralPose3 - позы с масштабированием
 - Screw, Screw2, Screw3 - винтовые преобразования
 
-При наличии скомпилированного C++ модуля использует его для ускорения.
+Использует скомпилированный C++ модуль для Pose3, GeneralPose3 и связанных типов.
 """
 
-# Try to import C++ native implementations
-try:
-    from ._geom_native import Vec3, Quat, Pose3 as Pose3Native, Screw3 as Screw3Native
-    _HAS_NATIVE = True
-except ImportError:
-    _HAS_NATIVE = False
+# Import C++ native implementations
+from ._geom_native import (
+    Vec3,
+    Quat,
+    Pose3,
+    GeneralPose3,
+    Screw3,
+)
 
 from .pose2 import Pose2
-from .pose3 import Pose3
-from .general_pose3 import GeneralPose3
-from .screw import Screw, Screw2, Screw3
+from .screw import Screw, Screw2
 from .aabb import AABB, TransformAABB
 
 __all__ = [
+    'Vec3',
+    'Quat',
     'Pose2',
     'Pose3',
     'GeneralPose3',
@@ -32,6 +35,3 @@ __all__ = [
     'AABB',
     'TransformAABB',
 ]
-
-if _HAS_NATIVE:
-    __all__.extend(['Vec3', 'Quat', 'Pose3Native', 'Screw3Native'])

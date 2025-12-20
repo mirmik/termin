@@ -47,12 +47,20 @@ class CMakeBuildExt(build_ext):
         for ext in self.extensions:
             self._built_objects = getattr(self, "_built_objects", [])  # satisfy setuptools expectations
 
-        # Copy cpp test module into source tree for editable/pytest runs
-        tests_dst = Path(directory) / "termin" / "tests"
-        tests_dst.mkdir(parents=True, exist_ok=True)
-        built_tests = list((install_prefix / "tests").glob("_cpp_tests.*"))
-        for so in built_tests:
-            shutil.copy2(so, tests_dst / so.name)
+        # Copy all native modules into source tree for editable/pytest runs
+        module_mappings = [
+            ("tests", "_cpp_tests"),
+            ("geombase", "_geom_native"),
+            ("colliders", "_colliders_native"),
+            ("physics", "_physics_native"),
+            ("voxels", "_voxels_native"),
+        ]
+        for subdir, module_name in module_mappings:
+            dst_dir = Path(directory) / "termin" / subdir
+            dst_dir.mkdir(parents=True, exist_ok=True)
+            src_dir = install_prefix / subdir
+            for so in src_dir.glob(f"{module_name}.*"):
+                shutil.copy2(so, dst_dir / so.name)
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
