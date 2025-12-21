@@ -35,6 +35,15 @@ public:
         return pose.transform_point(local_center);
     }
 
+    AABB aabb() const override {
+        Vec3 a = world_a();
+        Vec3 b = world_b();
+        Vec3 r(radius, radius, radius);
+        Vec3 min_pt(std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z));
+        Vec3 max_pt(std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z));
+        return AABB(min_pt - r, max_pt + r);
+    }
+
     /**
      * Концы капсулы в мировых координатах.
      */

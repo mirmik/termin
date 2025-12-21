@@ -4,7 +4,8 @@ import pytest
 from termin.visualization import Entity, Scene
 from termin.visualization.core.camera import PerspectiveCameraComponent
 from termin.geombase import Pose3
-from termin.colliders.sphere import SphereCollider
+from termin.geombase._geom_native import Vec3
+from termin.colliders import SphereCollider
 
 
 def build_basic_camera():
@@ -68,7 +69,7 @@ def test_raycast_center_hits_object():
 
     # Y-forward convention: object in front of camera is at +Y
     obj = Entity(pose=Pose3(lin=np.array([0.0, 5.0, 0.0])), name="obj")
-    sphere = SphereCollider(np.array([0.0, 5.0, 0.0]), 1.0)
+    sphere = SphereCollider(Vec3(0.0, 5.0, 0.0), 1.0)
 
     from termin.colliders.collider_component import ColliderComponent
     obj.add_component(ColliderComponent(sphere))

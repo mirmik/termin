@@ -9,6 +9,8 @@
 #include "box_collider.hpp"
 #include "sphere_collider.hpp"
 #include "capsule_collider.hpp"
+#include "attached_collider.hpp"
+#include "union_collider.hpp"
 
 // ==================== closest_to_collider implementations ====================
 // Определены здесь после того, как все типы полностью объявлены

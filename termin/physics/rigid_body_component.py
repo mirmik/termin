@@ -97,15 +97,15 @@ class RigidBodyComponent(Component):
 
         # Проверяем наличие существующего компонента коллайдера
         from termin.colliders.collider_component import ColliderComponent
-        from termin.colliders.box import BoxCollider as PyBoxCollider
-        from termin.colliders.sphere import SphereCollider as PySphereCollider
+        from termin.colliders import BoxCollider, SphereCollider
 
         collider_comp = self.entity.get_component(ColliderComponent)
         if collider_comp is not None:
             collider = collider_comp.collider
-            if isinstance(collider, PyBoxCollider):
-                return (collider.size / 2.0) * global_scale
-            elif isinstance(collider, PySphereCollider):
+            if isinstance(collider, BoxCollider):
+                hs = collider.half_size
+                return np.array([hs.x, hs.y, hs.z]) * global_scale
+            elif isinstance(collider, SphereCollider):
                 r = collider.radius
                 # Для сферы берём максимальный scale
                 max_scale = np.max(global_scale)

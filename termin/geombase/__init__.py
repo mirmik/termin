@@ -16,6 +16,7 @@ from ._geom_native import (
     Quat,
     Pose3,
     GeneralPose3,
+    GeneralTransform3,
     Screw3,
     AABB,
 )
@@ -31,6 +32,7 @@ __all__ = [
     'Pose2',
     'Pose3',
     'GeneralPose3',
+    'GeneralTransform3',
     'Screw',
     'Screw2',
     'Screw3',

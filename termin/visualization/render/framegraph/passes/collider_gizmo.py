@@ -99,9 +99,7 @@ class ColliderGizmoPass(RenderFramePass):
 
     def _draw_colliders(self, scene):
         """Draw wireframes for all colliders in the scene."""
-        from termin.colliders.box import BoxCollider
-        from termin.colliders.sphere import SphereCollider
-        from termin.colliders.capsule import CapsuleCollider
+        from termin.colliders import BoxCollider, SphereCollider, CapsuleCollider
 
         for comp in scene.colliders:
             if comp.entity is None or not comp.enabled:
@@ -123,15 +121,14 @@ class ColliderGizmoPass(RenderFramePass):
 
     def _draw_box(self, collider, pose, color):
         """Draw wireframe box."""
-        from termin.colliders.box import BoxCollider
 
         # Get local AABB corners
-        center = collider.center
-        half_size = collider.size / 2.0
+        center = collider.local_center
+        hs = collider.half_size
 
         # 8 corners in local space
         corners_local = [
-            center + np.array([dx * half_size[0], dy * half_size[1], dz * half_size[2]])
+            np.array([center.x + dx * hs.x, center.y + dy * hs.y, center.z + dz * hs.z])
             for dx in [-1, 1] for dy in [-1, 1] for dz in [-1, 1]
         ]
 
@@ -160,12 +157,15 @@ class ColliderGizmoPass(RenderFramePass):
     def _draw_sphere(self, collider, pose, color):
         """Draw wireframe sphere."""
         # Transform center to world space
-        center_world = pose.transform_point(collider.center)
+        lc = collider.local_center
+        center_local = np.array([lc.x, lc.y, lc.z])
+        center_world = pose.transform_point(center_local)
         self._renderer.sphere_wireframe(center_world, collider.radius, color)
 
     def _draw_capsule(self, collider, pose, color):
         """Draw wireframe capsule."""
         # Transform endpoints to world space
-        a_world = pose.transform_point(collider.a)
-        b_world = pose.transform_point(collider.b)
+        la, lb = collider.local_a, collider.local_b
+        a_world = pose.transform_point(np.array([la.x, la.y, la.z]))
+        b_world = pose.transform_point(np.array([lb.x, lb.y, lb.z]))
         self._renderer.capsule_wireframe(a_world, b_world, collider.radius, color)

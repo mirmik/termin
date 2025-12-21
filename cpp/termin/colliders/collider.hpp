@@ -8,6 +8,7 @@
 #include "../geom/vec3.hpp"
 #include "../geom/pose3.hpp"
 #include "../geom/ray3.hpp"
+#include "../geom/aabb.hpp"
 #include <memory>
 #include <cmath>
 #include <algorithm>
@@ -18,6 +19,7 @@ namespace colliders {
 using geom::Vec3;
 using geom::Pose3;
 using geom::Ray3;
+using geom::AABB;
 
 // ==================== Результаты запросов ====================
 
@@ -90,6 +92,11 @@ public:
      * Центр коллайдера в мировых координатах.
      */
     virtual Vec3 center() const = 0;
+
+    /**
+     * Axis-aligned bounding box в мировых координатах.
+     */
+    virtual AABB aabb() const = 0;
 
     // Методы для double dispatch (public для взаимного доступа между типами)
     virtual ColliderHit closest_to_box_impl(const class BoxCollider& box) const = 0;

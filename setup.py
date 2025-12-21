@@ -54,6 +54,7 @@ class CMakeBuildExt(build_ext):
             ("colliders", "_colliders_native"),
             ("physics", "_physics_native"),
             ("voxels", "_voxels_native"),
+            ("collision", "_collision_native"),
         ]
         for subdir, module_name in module_mappings:
             dst_dir = Path(directory) / "termin" / subdir
@@ -86,6 +87,7 @@ if __name__ == "__main__":
                 "ga201/*",
                 "physics/*",
                 "colliders/*",
+                "collision/*",
                 "fem/*",
                 "kinematic/*",
                 "geombase/*",
@@ -120,6 +122,7 @@ if __name__ == "__main__":
             Extension("termin.colliders._colliders_native", sources=[]),
             Extension("termin.physics._physics_native", sources=[]),
             Extension("termin.voxels._voxels_native", sources=[]),
+            Extension("termin.collision._collision_native", sources=[]),
             Extension("termin.tests._cpp_tests", sources=[]),
         ],
         cmdclass={"build_ext": CMakeBuildExt},

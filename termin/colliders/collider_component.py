@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
-
-from termin.colliders.attached import AttachedCollider
-from termin.colliders.collider import Collider
+from termin.colliders import (
+    Collider, SphereCollider, BoxCollider, CapsuleCollider, AttachedCollider
+)
+from termin.geombase import Vec3
 from termin.visualization.core.component import Component
 from termin.editor.inspect_field import InspectField
 
@@ -11,7 +11,7 @@ from termin.editor.inspect_field import InspectField
 class ColliderComponent(Component):
     """
     Компонент, навешиваемый на Entity.
-    Оборачивает коллайдер в AttachedCollider, чтобы он следовал за Transform3.
+    Оборачивает коллайдер в AttachedCollider, который следует за entity.transform.
     """
 
     inspect_fields = {
@@ -76,62 +76,50 @@ class ColliderComponent(Component):
         else:
             self._source_collider = self._create_collider()
 
-        self.attached = None
+        self._attached = None
 
     def _extract_collider_params(self, collider: Collider):
         """Extract type and parameters from an existing collider."""
-        from termin.colliders.box import BoxCollider
-        from termin.colliders.sphere import SphereCollider
-        from termin.colliders.capsule import CapsuleCollider
-
         if isinstance(collider, BoxCollider):
             self.collider_type = "Box"
-            self.box_size = tuple(collider.size)
+            hs = collider.half_size
+            self.box_size = (hs.x * 2, hs.y * 2, hs.z * 2)
         elif isinstance(collider, SphereCollider):
             self.collider_type = "Sphere"
             self.sphere_radius = float(collider.radius)
         elif isinstance(collider, CapsuleCollider):
             self.collider_type = "Capsule"
-            # Calculate height from a and b
-            a = np.asarray(collider.a)
-            b = np.asarray(collider.b)
-            self.capsule_height = float(np.linalg.norm(b - a))
+            a = collider.local_a
+            b = collider.local_b
+            self.capsule_height = float((Vec3(b.x - a.x, b.y - a.y, b.z - a.z)).norm())
             self.capsule_radius = float(collider.radius)
 
     def _create_collider(self) -> Collider:
         """Create a collider based on current type and parameters."""
-        from termin.colliders.box import BoxCollider
-        from termin.colliders.sphere import SphereCollider
-        from termin.colliders.capsule import CapsuleCollider
-
         if self.collider_type == "Box":
-            return BoxCollider(
-                center=np.zeros(3, dtype=np.float32),
-                size=np.array(self.box_size, dtype=np.float32),
-            )
+            half = Vec3(self.box_size[0] / 2, self.box_size[1] / 2, self.box_size[2] / 2)
+            return BoxCollider(Vec3(0, 0, 0), half)
         elif self.collider_type == "Sphere":
-            return SphereCollider(
-                center=np.zeros(3, dtype=np.float32),
-                radius=self.sphere_radius,
-            )
+            return SphereCollider(Vec3(0, 0, 0), self.sphere_radius)
         elif self.collider_type == "Capsule":
-            # Capsule aligned along local Z axis
             half_height = self.capsule_height / 2.0
             return CapsuleCollider(
-                a=np.array([0.0, 0.0, -half_height], dtype=np.float32),
-                b=np.array([0.0, 0.0, half_height], dtype=np.float32),
-                radius=self.capsule_radius,
+                Vec3(0, 0, -half_height),
+                Vec3(0, 0, half_height),
+                self.capsule_radius,
             )
         else:
-            # Fallback to box
-            return BoxCollider()
+            return BoxCollider(Vec3(0, 0, 0), Vec3(0.5, 0.5, 0.5))
 
     def _rebuild_collider(self):
         """Rebuild collider after parameter change."""
         self._source_collider = self._create_collider()
-        # Update attached if we're in a scene
-        if self.attached is not None and self.entity is not None:
-            self.attached = AttachedCollider(self._source_collider, self.entity.transform)
+        self._rebuild_attached()
+
+    def _rebuild_attached(self):
+        """Rebuild AttachedCollider with current collider and transform."""
+        if self._source_collider is not None and self.entity is not None:
+            self._attached = AttachedCollider(self._source_collider, self.entity.transform)
 
     def _set_collider_type(self, value: str):
         if value != self.collider_type:
@@ -160,13 +148,12 @@ class ColliderComponent(Component):
 
     def on_added(self, scene):
         super().on_added(scene)
-        if self.entity is None:
-            return
-        # entity.transform всегда Transform3
-        self.attached = AttachedCollider(self._source_collider, self.entity.transform)
+        self._rebuild_attached()
 
-    def get_collider(self):
-        return self.attached
+    @property
+    def attached(self) -> AttachedCollider | None:
+        """Get the AttachedCollider."""
+        return self._attached
 
     @property
     def collider(self) -> Collider:

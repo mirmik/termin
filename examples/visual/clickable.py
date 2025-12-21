@@ -20,8 +20,9 @@ from termin.visualization import (
 from termin.visualization.core.entity import Entity, Component
 from termin.visualization.render.components import MeshRenderer, LightComponent
 from termin.visualization.render.shader import ShaderProgram
-from termin.colliders.box import BoxCollider
+from termin.colliders import BoxCollider
 from termin.colliders.collider_component import ColliderComponent
+from termin.geombase._geom_native import Vec3
 
 # === воображаемый интерфейс кликабельности ===
 class Clickable:
@@ -104,14 +105,14 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
     cube1 = Entity(pose=Pose3.identity(), name="cube_1")
     cube1.add_component(MeshRenderer(drawable, material))
     cube1.add_component(CubeClickHandler("cube_1"))
-    cube1.add_component(ColliderComponent(BoxCollider(size=np.array([1.0, 1.0, 1.0]))))
+    cube1.add_component(ColliderComponent(BoxCollider(Vec3(0, 0, 0), Vec3(0.5, 0.5, 0.5))))
     cube1.transform.relocate(Pose3(lin=np.array([-2.0, 0.0, 0.0])))
 
     # Второй куб
     cube2 = Entity(pose=Pose3.identity(), name="cube_2")
     cube2.add_component(MeshRenderer(drawable, material))
     cube2.add_component(CubeClickHandler("cube_2"))
-    cube2.add_component(ColliderComponent(BoxCollider(size=np.array([1.0, 1.0, 1.0]))))
+    cube2.add_component(ColliderComponent(BoxCollider(Vec3(0, 0, 0), Vec3(0.5, 0.5, 0.5))))
     cube2.transform.relocate(Pose3(lin=np.array([0.0, 0.0, 1.0])))
     cube2.transform.set_parent(cube1.transform)
 

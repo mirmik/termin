@@ -3,17 +3,30 @@
 
 Содержит:
 - Базовый класс Collider
-- Примитивные коллайдеры: Sphere, Box, Capsule
-- AttachedCollider - коллайдер, прикрепленный к трансформации
-- UnionCollider - объединение нескольких коллайдеров
+- Примитивные коллайдеры: SphereCollider, BoxCollider, CapsuleCollider
+- AttachedCollider - коллайдер, прикрепленный к Pose3
+- ColliderHit, RayHit - результаты запросов
 """
 
-from .collider import Collider
-from .sphere import SphereCollider
-from .box import BoxCollider
-from .capsule import CapsuleCollider
-from .attached import AttachedCollider
-from .union_collider import UnionCollider
+from ._colliders_native import (
+    Collider,
+    SphereCollider,
+    BoxCollider,
+    CapsuleCollider,
+    AttachedCollider,
+    UnionCollider,
+    ColliderHit,
+    RayHit,
+    ColliderType,
+    Ray3,
+    # Ground contact helpers
+    SphereGroundContact,
+    BoxGroundContact,
+    # Geometry primitives
+    Sphere,
+    Box,
+    Capsule,
+)
 
 __all__ = [
     'Collider',
@@ -22,4 +35,13 @@ __all__ = [
     'CapsuleCollider',
     'AttachedCollider',
     'UnionCollider',
+    'ColliderHit',
+    'RayHit',
+    'ColliderType',
+    'Ray3',
+    'SphereGroundContact',
+    'BoxGroundContact',
+    'Sphere',
+    'Box',
+    'Capsule',
 ]

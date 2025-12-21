@@ -34,6 +34,12 @@ public:
         return pose.transform_point(local_center);
     }
 
+    AABB aabb() const override {
+        Vec3 c = center();
+        Vec3 r(radius, radius, radius);
+        return AABB(c - r, c + r);
+    }
+
     RayHit closest_to_ray(const Ray3& ray) const override;
     ColliderHit closest_to_collider(const Collider& other) const override;
     ColliderPtr transform_by(const Pose3& t) const override;

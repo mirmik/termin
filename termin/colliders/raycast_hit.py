@@ -1,8 +1,6 @@
-import numpy as np
-
 class RaycastHit:
     """
-    Результат пересечения луча с объектом.
+    Результат пересечения луча с объектом сцены.
     """
     def __init__(self, entity, component, point, collider_point, distance):
         self.entity = entity

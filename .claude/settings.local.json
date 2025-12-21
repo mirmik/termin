@@ -18,7 +18,14 @@
       "Bash(timeout 30 python -m pytest:*)",
       "Bash(timeout 60 python -m pytest:*)",
       "Bash(timeout 120 python -m pytest:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(/media/sf_Shared/termin/termin/colliders/box.py )",
+      "Bash(/media/sf_Shared/termin/termin/colliders/capsule.py )",
+      "Bash(/media/sf_Shared/termin/termin/colliders/collider.py )",
+      "Bash(/media/sf_Shared/termin/termin/colliders/attached.py )",
+      "Bash(/media/sf_Shared/termin/termin/colliders/union_collider.py )",
+      "Bash(/media/sf_Shared/termin/termin/colliders/raycast_hit.py)",
+      "Bash(./build/temp.linux-x86_64-cpython-310/bin/termin_tests:*)"
     ]
   }
 }

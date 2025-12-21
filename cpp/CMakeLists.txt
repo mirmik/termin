@@ -77,6 +77,12 @@ target_compile_options(_voxels_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
+# Collision native module (BVH, CollisionWorld, ContactManifold)
+pybind11_add_module(_collision_native termin/collision_bindings.cpp)
+target_compile_options(_collision_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
 # ---------------- Tests ----------------
 enable_testing()
 
@@ -93,6 +99,7 @@ add_executable(termin_tests
     tests/tests_general_pose3.cpp
     tests/tests_general_transform3.cpp
     tests/tests_colliders.cpp
+    tests/tests_collision.cpp
 )
 target_include_directories(termin_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -109,6 +116,7 @@ pybind11_add_module(_cpp_tests
     tests/tests_general_pose3.cpp
     tests/tests_general_transform3.cpp
     tests/tests_colliders.cpp
+    tests/tests_collision.cpp
 )
 target_include_directories(_cpp_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -131,3 +139,4 @@ install(TARGETS _geom_native DESTINATION ${CMAKE_INSTALL_PREFIX}/geombase)
 install(TARGETS _colliders_native DESTINATION ${CMAKE_INSTALL_PREFIX}/colliders)
 install(TARGETS _physics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/physics)
 install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/voxels)
+install(TARGETS _collision_native DESTINATION ${CMAKE_INSTALL_PREFIX}/collision)

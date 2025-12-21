@@ -40,6 +40,15 @@ public:
         return pose.transform_point(local_center);
     }
 
+    AABB aabb() const override {
+        auto corners = get_corners_world();
+        AABB result(corners[0], corners[0]);
+        for (int i = 1; i < 8; ++i) {
+            result.extend(corners[i]);
+        }
+        return result;
+    }
+
     RayHit closest_to_ray(const Ray3& ray) const override;
     ColliderHit closest_to_collider(const Collider& other) const override;
     ColliderPtr transform_by(const Pose3& t) const override;

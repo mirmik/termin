@@ -4,12 +4,14 @@
 #include <pybind11/stl.h>
 
 #include "termin/geom/geom.hpp"
+#include "termin/geom/general_transform3.hpp"
 #include "termin/colliders/colliders.hpp"
 
 namespace py = pybind11;
 using namespace termin;
 using namespace termin::geom;
 using namespace termin::colliders;
+using geom::GeneralTransform3;
 
 PYBIND11_MODULE(_colliders_native, m) {
     m.doc() = "Native C++ colliders module for termin";
@@ -141,4 +143,40 @@ PYBIND11_MODULE(_colliders_native, m) {
         .def_readwrite("pose", &CapsuleCollider::pose)
         .def("world_a", &CapsuleCollider::world_a)
         .def("world_b", &CapsuleCollider::world_b);
+
+    // ==================== UnionCollider ====================
+
+    py::class_<UnionCollider, Collider, std::shared_ptr<UnionCollider>>(m, "UnionCollider")
+        .def(py::init<>())
+        .def(py::init<std::vector<Collider*>>(),
+             py::arg("colliders"),
+             py::keep_alive<1, 2>())
+        .def("colliders", &UnionCollider::colliders,
+             py::return_value_policy::reference)
+        .def("add", &UnionCollider::add, py::arg("collider"),
+             py::keep_alive<1, 2>())
+        .def("clear", &UnionCollider::clear)
+        .def("center", &UnionCollider::center)
+        .def("aabb", &UnionCollider::aabb)
+        .def("closest_to_ray", &UnionCollider::closest_to_ray, py::arg("ray"))
+        .def("closest_to_collider", &UnionCollider::closest_to_collider, py::arg("other"));
+
+    // ==================== AttachedCollider ====================
+
+    py::class_<AttachedCollider, Collider, std::shared_ptr<AttachedCollider>>(m, "AttachedCollider")
+        .def(py::init<Collider*, GeneralTransform3*>(),
+             py::arg("collider"), py::arg("transform"),
+             py::keep_alive<1, 2>(),  // Keep collider alive
+             py::keep_alive<1, 3>())  // Keep transform alive
+        .def("collider", &AttachedCollider::collider,
+             py::return_value_policy::reference)
+        .def("transform", &AttachedCollider::transform,
+             py::return_value_policy::reference)
+        .def("world_pose", &AttachedCollider::world_pose)
+        .def("center", &AttachedCollider::center)
+        .def("aabb", &AttachedCollider::aabb)
+        .def("closest_to_ray", &AttachedCollider::closest_to_ray, py::arg("ray"))
+        .def("closest_to_collider", &AttachedCollider::closest_to_collider, py::arg("other"))
+        .def("colliding", &AttachedCollider::colliding, py::arg("other"))
+        .def("distance", &AttachedCollider::distance, py::arg("other"));
 }

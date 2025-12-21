@@ -25,6 +25,10 @@ if TYPE_CHECKING:  # pragma: no cover
     from termin.visualization.core.material import Material
 
 
+def _vec3_to_np(v) -> np.ndarray:
+    return np.array([v.x, v.y, v.z])
+
+
 def is_overrides_method(obj, method_name, base_class):
     return getattr(obj.__class__, method_name) is not getattr(base_class, method_name)
 
@@ -169,22 +173,25 @@ class Scene(Identifiable):
         """
         best_hit = None
         best_ray_dist = float("inf")
+        origin = _vec3_to_np(ray.origin)
 
         for comp in self.colliders:
             attached = comp.attached
             if attached is None:
                 continue
 
-            p_col, p_ray, dist = attached.closest_to_ray(ray)
-
-            if dist != 0.0:
+            hit = attached.closest_to_ray(ray)
+            if hit.distance != 0.0:
                 continue
 
-            d_ray = np.linalg.norm(p_ray - ray.origin)
+            p_ray = _vec3_to_np(hit.point_on_ray)
+            d_ray = np.linalg.norm(p_ray - origin)
 
             if d_ray < best_ray_dist:
                 best_ray_dist = d_ray
-                best_hit = RaycastHit(comp.entity, comp, p_ray, p_col, 0.0)
+                best_hit = RaycastHit(
+                    comp.entity, comp, p_ray, _vec3_to_np(hit.point_on_collider), 0.0
+                )
 
         return best_hit
 
@@ -201,11 +208,15 @@ class Scene(Identifiable):
             if attached is None:
                 continue
 
-            p_col, p_ray, dist = attached.closest_to_ray(ray)
-
-            if dist < best_dist:
-                best_dist = dist
-                best_hit = RaycastHit(comp.entity, comp, p_ray, p_col, dist)
+            hit = attached.closest_to_ray(ray)
+            if hit.distance < best_dist:
+                best_dist = hit.distance
+                best_hit = RaycastHit(
+                    comp.entity, comp,
+                    _vec3_to_np(hit.point_on_ray),
+                    _vec3_to_np(hit.point_on_collider),
+                    hit.distance
+                )
 
         return best_hit
 
