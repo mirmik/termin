@@ -176,16 +176,16 @@ class RigidBodyComponent(Component):
         cpp_body = self._physics_world.get_body(self._body_index)
         cpp_pose = cpp_body.pose
 
-        # Конвертируем в GeneralPose3, сохраняя текущий scale
-        current_scale = self.entity.transform.local_pose().scale.copy()
-        general_pose = GeneralPose3(
+        # Конвертируем в GeneralPose3, сохраняя текущий global scale
+        current_global_scale = self.entity.transform.global_pose().scale.copy()
+        global_pose = GeneralPose3(
             ang=np.array([cpp_pose.ang.x, cpp_pose.ang.y, cpp_pose.ang.z, cpp_pose.ang.w]),
             lin=np.array([cpp_pose.lin.x, cpp_pose.lin.y, cpp_pose.lin.z]),
-            scale=current_scale
+            scale=current_global_scale
         )
 
-        # Обновляем трансформ сущности
-        self.entity.transform.relocate(general_pose)
+        # Обновляем трансформ сущности (relocate_global пересчитает local pose)
+        self.entity.transform.relocate_global(global_pose)
 
     def sync_to_physics(self):
         """Синхронизация физического тела из трансформа сущности (для редактора)."""
