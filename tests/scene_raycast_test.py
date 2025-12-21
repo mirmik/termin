@@ -6,7 +6,7 @@ from termin.visualization.core.entity import Entity
 from termin.colliders import SphereCollider, BoxCollider
 from termin.colliders.raycast_hit import RaycastHit
 from termin.colliders.collider_component import ColliderComponent
-from termin.geombase import Ray3
+from termin.geombase import Ray3, GeneralPose3, Quat
 from termin.geombase._geom_native import Vec3
 
 
@@ -26,12 +26,12 @@ class SceneRaycastTest(unittest.TestCase):
         scene = Scene()
 
         # Сфера, по которой точно попадёт луч
-        sphere_hit = SphereCollider(Vec3(0.0, 0.0, 5.0), 1.0)
+        sphere_hit = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(0.0, 0.0, 5.0)))
         e1, _ = self.make_entity_with_collider(sphere_hit)
         scene.add(e1)
 
         # Сфера в стороне — пересечения нет
-        sphere_miss = SphereCollider(Vec3(3.0, 0.0, 5.0), 1.0)
+        sphere_miss = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(3.0, 0.0, 5.0)))
         e2, _ = self.make_entity_with_collider(sphere_miss)
         scene.add(e2)
 
@@ -52,12 +52,12 @@ class SceneRaycastTest(unittest.TestCase):
         scene = Scene()
 
         # Промах — но ближайшая сфера
-        sphere1 = SphereCollider(Vec3(3.0, 0.0, 5.0), 1.0)
+        sphere1 = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(3.0, 0.0, 5.0)))
         e1, _ = self.make_entity_with_collider(sphere1)
         scene.add(e1)
 
         # Далёкая сфера — точно проиграет
-        sphere2 = SphereCollider(Vec3(10.0, 0.0, 5.0), 1.0)
+        sphere2 = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(10.0, 0.0, 5.0)))
         e2, _ = self.make_entity_with_collider(sphere2)
         scene.add(e2)
 

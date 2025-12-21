@@ -6,6 +6,7 @@
  */
 
 #include "collider.hpp"
+#include "collider_primitive.hpp"
 #include "box_collider.hpp"
 #include "sphere_collider.hpp"
 #include "capsule_collider.hpp"

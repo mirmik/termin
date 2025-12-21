@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "bd571282-427d-4ced-9150-49a1023635cd",
+    "uuid": "61183229-e08a-4acc-82dd-229fb19705b3",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -26,9 +26,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            6.643949031829834,
-            -0.3744738698005676,
-            0.28263455629348755
+            -2.175642967224121,
+            2.132739305496216,
+            0.09157770872116089
           ],
           "rotation": [
             -0.6772284224280383,
@@ -63,6 +63,31 @@
               "enabled": true
             },
             "type": "RotatorComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
           }
         ],
         "children": []
@@ -313,7 +338,7 @@
             1.3770318031311035
           ],
           "rotation": [
-            -0.2391176226180235,
+            -0.23911762261802347,
             -0.09904575496855096,
             0.36964378710788504,
             0.8923991100560079
@@ -4902,7 +4927,7 @@
         "components": [
           {
             "data": {
-              "enabled": false
+              "enabled": true
             },
             "type": "PhysicsWorldComponent"
           }
@@ -4914,9 +4939,9 @@
         "instance_uuid": "50c0029e-a3db-45cc-9060-412f85b08597",
         "pose": {
           "position": [
-            -3.5773003101348877,
-            -3.5520684719085693,
-            -2.926180124282837
+            0.0,
+            0.0,
+            0.0
           ],
           "rotation": [
             0.0,
@@ -5217,9 +5242,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            3.7847657203674316,
-            0.0,
-            -2.1738474369049072
+            0.4881729442769158,
+            -4.006746818087095,
+            2.7755677834407964
           ],
           "rotation": [
             0.0,
@@ -5302,11 +5327,11 @@
         1.7549999952316284,
         -3.6065917015075684
       ],
-      "radius": 10.5,
-      "azimuth": 68.26331770400617,
-      "elevation": 0.7225663103256543
+      "radius": 15.5,
+      "azimuth": 68.00500897471112,
+      "elevation": 0.5899212871740844
     },
-    "selected_entity": "TeleportCube",
+    "selected_entity": "Physics",
     "displays": [
       {
         "name": "Editor",
@@ -5315,7 +5340,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "798bdebd-99c6-40b2-a331-892edc8732f1",
+            "uuid": "fa7df38f-c3be-4cd7-ba88-a6ae8aae3c3e",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -5334,7 +5359,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "00ae757f-5541-4367-a36b-1fab680bbace",
+            "uuid": "bbb6d2f7-f452-4701-8539-57caaf81b46f",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -5348,10 +5373,10 @@
       }
     ],
     "expanded_entities": [
-      "camera",
+      "cube2",
       "Arti",
       "cube1",
-      "cube2",
+      "camera",
       "EditorEntities"
     ]
   },

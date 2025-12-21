@@ -1,9 +1,11 @@
 #pragma once
 
-#include "collider.hpp"
+#include "collider_primitive.hpp"
 #include <array>
 #include <vector>
 #include <limits>
+#include <cmath>
+#include <algorithm>
 
 namespace termin {
 namespace colliders {
@@ -14,31 +16,44 @@ class CapsuleCollider;
 
 /**
  * Box collider — ориентированный параллелепипед.
+ *
+ * Геометрия определяется:
+ * - half_size: половинные размеры в локальных координатах
+ * - transform: позиция, ориентация и масштаб
+ *
+ * Эффективные размеры = half_size * transform.scale
  */
-class BoxCollider : public Collider {
+class BoxCollider : public ColliderPrimitive {
 public:
-    Vec3 local_center;  // Центр в локальных координатах
-    Vec3 half_size;     // Половинные размеры
-    Pose3 pose;         // Поза в мировых координатах
+    Vec3 half_size;  // Половинные размеры (до применения scale)
 
     BoxCollider()
-        : local_center(0, 0, 0), half_size(0.5, 0.5, 0.5), pose() {}
+        : ColliderPrimitive(), half_size(0.5, 0.5, 0.5) {}
 
-    BoxCollider(const Vec3& center, const Vec3& half_size, const Pose3& pose = Pose3())
-        : local_center(center), half_size(half_size), pose(pose) {}
+    BoxCollider(const Vec3& half_size, const GeneralPose3& t = GeneralPose3())
+        : ColliderPrimitive(t), half_size(half_size) {}
 
     // Создать из полного размера
-    static BoxCollider from_size(const Vec3& center, const Vec3& size, const Pose3& pose = Pose3()) {
-        return BoxCollider(center, Vec3(size.x/2, size.y/2, size.z/2), pose);
+    static BoxCollider from_size(const Vec3& size, const GeneralPose3& t = GeneralPose3()) {
+        return BoxCollider(Vec3(size.x/2, size.y/2, size.z/2), t);
+    }
+
+    // ==================== Эффективные размеры ====================
+
+    /**
+     * Половинные размеры с учётом scale.
+     */
+    Vec3 effective_half_size() const {
+        return Vec3(
+            half_size.x * transform.scale.x,
+            half_size.y * transform.scale.y,
+            half_size.z * transform.scale.z
+        );
     }
 
     // ==================== Интерфейс Collider ====================
 
     ColliderType type() const override { return ColliderType::Box; }
-
-    Vec3 center() const override {
-        return pose.transform_point(local_center);
-    }
 
     AABB aabb() const override {
         auto corners = get_corners_world();
@@ -51,7 +66,6 @@ public:
 
     RayHit closest_to_ray(const Ray3& ray) const override;
     ColliderHit closest_to_collider(const Collider& other) const override;
-    ColliderPtr transform_by(const Pose3& t) const override;
 
     // ==================== Геометрия ====================
 
@@ -60,22 +74,22 @@ public:
      */
     std::array<Vec3, 8> get_corners_world() const {
         std::array<Vec3, 8> corners;
-        Vec3 c = local_center;
-        Vec3 h = half_size;
+        Vec3 h = effective_half_size();
 
         Vec3 local[8] = {
-            {c.x - h.x, c.y - h.y, c.z - h.z},
-            {c.x + h.x, c.y - h.y, c.z - h.z},
-            {c.x - h.x, c.y + h.y, c.z - h.z},
-            {c.x + h.x, c.y + h.y, c.z - h.z},
-            {c.x - h.x, c.y - h.y, c.z + h.z},
-            {c.x + h.x, c.y - h.y, c.z + h.z},
-            {c.x - h.x, c.y + h.y, c.z + h.z},
-            {c.x + h.x, c.y + h.y, c.z + h.z}
+            {-h.x, -h.y, -h.z},
+            {+h.x, -h.y, -h.z},
+            {-h.x, +h.y, -h.z},
+            {+h.x, +h.y, -h.z},
+            {-h.x, -h.y, +h.z},
+            {+h.x, -h.y, +h.z},
+            {-h.x, +h.y, +h.z},
+            {+h.x, +h.y, +h.z}
         };
 
+        Pose3 p = pose();
         for (int i = 0; i < 8; ++i) {
-            corners[i] = pose.transform_point(local[i]);
+            corners[i] = p.transform_point(local[i]);
         }
         return corners;
     }
@@ -84,10 +98,11 @@ public:
      * Получить 3 оси (нормали граней) в мировых координатах.
      */
     std::array<Vec3, 3> get_axes_world() const {
+        Pose3 p = pose();
         return {
-            pose.transform_vector(Vec3(1, 0, 0)),
-            pose.transform_vector(Vec3(0, 1, 0)),
-            pose.transform_vector(Vec3(0, 0, 1))
+            p.transform_vector(Vec3(1, 0, 0)),
+            p.transform_vector(Vec3(0, 1, 0)),
+            p.transform_vector(Vec3(0, 0, 1))
         };
     }
 
@@ -123,33 +138,29 @@ public:
 
 private:
     /**
-     * Точка в локальных координатах box'а.
+     * Точка в локальных координатах box'а (с учётом scale).
      */
     Vec3 to_local(const Vec3& world_point) const {
-        return pose.inverse_transform_point(world_point);
+        return transform.inverse_transform_point(world_point);
     }
 
     /**
-     * AABB bounds в локальных координатах.
+     * AABB bounds в локальных координатах (БЕЗ scale, т.к. to_local уже применяет inverse scale).
      */
     void local_bounds(Vec3& min_pt, Vec3& max_pt) const {
-        min_pt = local_center - half_size;
-        max_pt = local_center + half_size;
+        min_pt = Vec3(-half_size.x, -half_size.y, -half_size.z);
+        max_pt = Vec3(+half_size.x, +half_size.y, +half_size.z);
     }
 };
 
 // ==================== Реализация методов ====================
 
-inline ColliderPtr BoxCollider::transform_by(const Pose3& t) const {
-    return std::make_shared<BoxCollider>(local_center, half_size, t * pose);
-}
-
 inline RayHit BoxCollider::closest_to_ray(const Ray3& ray) const {
     RayHit result;
 
-    // Переносим луч в локальные координаты
+    // Переносим луч в локальные координаты (с учётом scale)
     Vec3 O_local = to_local(ray.origin);
-    Vec3 D_local = pose.inverse_transform_vector(ray.direction);
+    Vec3 D_local = transform.inverse_transform_vector(ray.direction);
 
     double n = D_local.norm();
     if (n < 1e-10) {
@@ -185,9 +196,11 @@ inline RayHit BoxCollider::closest_to_ray(const Ray3& ray) const {
     if (hit_possible && tmax >= std::max(tmin, 0.0)) {
         double t_hit = (tmin >= 0) ? tmin : tmax;
         if (t_hit >= 0) {
-            Vec3 p_ray = ray.point_at(t_hit);
-            result.point_on_ray = p_ray;
-            result.point_on_collider = p_ray;
+            // t_hit — параметр для локального луча, преобразуем точку обратно в мировые координаты
+            Vec3 p_local = O_local + D_local * t_hit;
+            Vec3 p_world = transform.transform_point(p_local);
+            result.point_on_ray = p_world;
+            result.point_on_collider = p_world;
             result.distance = 0.0;
             return result;
         }
@@ -225,14 +238,15 @@ inline RayHit BoxCollider::closest_to_ray(const Ray3& ray) const {
         }
     }
 
-    result.point_on_ray = ray.point_at(best_t);
     Vec3 p_ray_local = O_local + D_local * best_t;
     Vec3 p_box_local(
         std::clamp(p_ray_local.x, box_min.x, box_max.x),
         std::clamp(p_ray_local.y, box_min.y, box_max.y),
         std::clamp(p_ray_local.z, box_min.z, box_max.z)
     );
-    result.point_on_collider = pose.transform_point(p_box_local);
+    // Преобразуем обе точки из локальных в мировые координаты
+    result.point_on_ray = transform.transform_point(p_ray_local);
+    result.point_on_collider = transform.transform_point(p_box_local);
     result.distance = best_dist;
 
     return result;
@@ -248,6 +262,9 @@ inline ColliderHit BoxCollider::closest_to_box_impl(const BoxCollider& other) co
 
     auto axes_a = get_axes_world();
     auto axes_b = other.get_axes_world();
+
+    Vec3 half_a = effective_half_size();
+    Vec3 half_b = other.effective_half_size();
 
     Vec3 d = center_b - center_a;
     double min_overlap = std::numeric_limits<double>::max();
@@ -266,8 +283,8 @@ inline ColliderHit BoxCollider::closest_to_box_impl(const BoxCollider& other) co
         if (len < 1e-8) return;  // Вырожденная ось
         axis = axis / len;
 
-        double ext_a = project_extent(axes_a, half_size, axis);
-        double ext_b = project_extent(axes_b, other.half_size, axis);
+        double ext_a = project_extent(axes_a, half_a, axis);
+        double ext_b = project_extent(axes_b, half_b, axis);
         double dist = std::abs(d.dot(axis));
         double overlap = ext_a + ext_b - dist;
 

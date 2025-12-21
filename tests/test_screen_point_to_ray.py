@@ -6,6 +6,7 @@ from termin.visualization.core.camera import PerspectiveCameraComponent
 from termin.geombase import Pose3
 from termin.geombase._geom_native import Vec3
 from termin.colliders import SphereCollider
+from termin.geombase import GeneralPose3, Quat
 
 
 def build_basic_camera():
@@ -69,7 +70,7 @@ def test_raycast_center_hits_object():
 
     # Y-forward convention: object in front of camera is at +Y
     obj = Entity(pose=Pose3(lin=np.array([0.0, 5.0, 0.0])), name="obj")
-    sphere = SphereCollider(Vec3(0.0, 5.0, 0.0), 1.0)
+    sphere = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(0.0, 5.0, 0.0)))
 
     from termin.colliders.collider_component import ColliderComponent
     obj.add_component(ColliderComponent(sphere))

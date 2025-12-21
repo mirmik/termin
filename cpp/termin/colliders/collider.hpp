@@ -2,22 +2,23 @@
 
 /**
  * @file collider.hpp
- * @brief Унифицированная система коллайдеров с поддержкой raycast и collision detection.
+ * @brief Базовый интерфейс коллайдера.
+ *
+ * Collider — абстрактный интерфейс для всех типов коллайдеров:
+ * - ColliderPrimitive (Box, Sphere, Capsule, будущий Mesh)
+ * - AttachedCollider (привязка к GeneralTransform3)
+ * - UnionCollider (объединение нескольких коллайдеров)
  */
 
 #include "../geom/vec3.hpp"
-#include "../geom/pose3.hpp"
 #include "../geom/ray3.hpp"
 #include "../geom/aabb.hpp"
 #include <memory>
-#include <cmath>
-#include <algorithm>
 
 namespace termin {
 namespace colliders {
 
 using geom::Vec3;
-using geom::Pose3;
 using geom::Ray3;
 using geom::AABB;
 
@@ -54,13 +55,24 @@ enum class ColliderType {
     Capsule
 };
 
-// ==================== Базовый класс коллайдера ====================
+// ==================== Forward declarations ====================
 
 class Collider;
+class BoxCollider;
+class SphereCollider;
+class CapsuleCollider;
+
 using ColliderPtr = std::shared_ptr<Collider>;
 
+// ==================== Базовый интерфейс ====================
+
 /**
- * Абстрактный базовый класс для всех коллайдеров.
+ * Абстрактный интерфейс для всех коллайдеров.
+ *
+ * Наследники:
+ * - ColliderPrimitive: базовый класс для геометрических примитивов
+ * - AttachedCollider: привязка к GeneralTransform3
+ * - UnionCollider: объединение нескольких коллайдеров
  */
 class Collider {
 public:
@@ -84,11 +96,6 @@ public:
     virtual ColliderHit closest_to_collider(const Collider& other) const = 0;
 
     /**
-     * Создать копию коллайдера, трансформированную заданной позой.
-     */
-    virtual ColliderPtr transform_by(const Pose3& pose) const = 0;
-
-    /**
      * Центр коллайдера в мировых координатах.
      */
     virtual Vec3 center() const = 0;
@@ -98,10 +105,10 @@ public:
      */
     virtual AABB aabb() const = 0;
 
-    // Методы для double dispatch (public для взаимного доступа между типами)
-    virtual ColliderHit closest_to_box_impl(const class BoxCollider& box) const = 0;
-    virtual ColliderHit closest_to_sphere_impl(const class SphereCollider& sphere) const = 0;
-    virtual ColliderHit closest_to_capsule_impl(const class CapsuleCollider& capsule) const = 0;
+    // Double dispatch для коллизий между примитивами
+    virtual ColliderHit closest_to_box_impl(const BoxCollider& box) const = 0;
+    virtual ColliderHit closest_to_sphere_impl(const SphereCollider& sphere) const = 0;
+    virtual ColliderHit closest_to_capsule_impl(const CapsuleCollider& capsule) const = 0;
 };
 
 } // namespace colliders

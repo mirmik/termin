@@ -41,11 +41,6 @@ PYBIND11_MODULE(_physics_native, m) {
         .def_readwrite("linear_damping", &RigidBody::linear_damping)
         .def_readwrite("angular_damping", &RigidBody::angular_damping)
 
-        // Коллайдер
-        .def_readwrite("collider_type", &RigidBody::collider_type)
-        .def_readwrite("collider_half_size", &RigidBody::collider_half_size)
-        .def_readwrite("collider_radius", &RigidBody::collider_radius)
-
         // Методы
         .def("inv_mass", &RigidBody::inv_mass)
         .def("inv_inertia", &RigidBody::inv_inertia)
@@ -62,19 +57,6 @@ PYBIND11_MODULE(_physics_native, m) {
 
         .def("integrate_forces", &RigidBody::integrate_forces)
         .def("integrate_positions", &RigidBody::integrate_positions)
-
-        .def("get_box_corners_world", [](const RigidBody& b) {
-            py::array_t<double> result({8, 3});
-            auto buf = result.mutable_unchecked<2>();
-            double corners[24];
-            b.get_box_corners_world(corners);
-            for (int i = 0; i < 8; i++) {
-                buf(i, 0) = corners[i * 3 + 0];
-                buf(i, 1) = corners[i * 3 + 1];
-                buf(i, 2) = corners[i * 3 + 2];
-            }
-            return result;
-        })
 
         // Фабрики
         .def_static("create_box", &RigidBody::create_box,
@@ -117,7 +99,6 @@ PYBIND11_MODULE(_physics_native, m) {
         .def("get_body", py::overload_cast<size_t>(&PhysicsWorld::get_body),
              py::return_value_policy::reference)
         .def("body_count", &PhysicsWorld::body_count)
-        .def("remove_body", &PhysicsWorld::remove_body)
         .def("clear", &PhysicsWorld::clear)
 
         // Фабрики

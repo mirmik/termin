@@ -40,7 +40,7 @@
 
 ## Фазы реализации
 
-### Фаза 1: BVH + CollisionWorld [CURRENT]
+### Фаза 1: BVH + CollisionWorld [DONE]
 
 **Файлы:**
 ```
@@ -71,11 +71,16 @@ class CollisionWorld {
 };
 ```
 
-### Фаза 2: Унификация
+### Фаза 2: Унификация [DONE]
 
-- Убрать дублирование коллизий из `cpp/termin/physics/collider.hpp`
-- PhysicsWorld использует CollisionWorld
-- Миграция тестов
+- [x] RigidBody — чистая динамика (без collider_type/half_size/radius)
+- [x] Удалён `cpp/termin/physics/collider.hpp`
+- [x] PhysicsWorld использует CollisionWorld через set_collision_world()
+- [x] Маппинг collider→body хранится в PhysicsWorld (не в Collider)
+- [x] Фабричные методы add_box/add_sphere создают тело + коллайдер
+- [x] sync_collider_poses() синхронизирует позы перед detect
+- [x] Земля временно как отдельный кейс (до PlaneCollider)
+- [x] Python биндинги обновлены
 
 ### Фаза 3: GJK + EPA
 
@@ -115,8 +120,8 @@ struct ContactID {
 
 ## Статус
 
-- [x] Фаза 1: BVH + CollisionWorld — IN PROGRESS
-- [ ] Фаза 2: Унификация
+- [x] Фаза 1: BVH + CollisionWorld — DONE
+- [x] Фаза 2: Унификация — DONE
 - [ ] Фаза 3: GJK + EPA
 - [ ] Фаза 4: Persistent Contacts
 - [ ] Фаза 5: FEM интеграция

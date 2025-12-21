@@ -3,40 +3,46 @@
 /**
  * @file attached_collider.hpp
  * @brief Коллайдер, привязанный к GeneralTransform3.
+ *
+ * AttachedCollider комбинирует:
+ * - Базовый ColliderPrimitive (геометрия в локальных координатах)
+ * - GeneralTransform3* (указатель на трансформ entity)
+ *
+ * Итоговый трансформ = entity_transform * collider.transform
  */
 
 #include "collider.hpp"
-#include "../geom/pose3.hpp"
-#include "../geom/aabb.hpp"
+#include "collider_primitive.hpp"
+#include "box_collider.hpp"
+#include "sphere_collider.hpp"
+#include "capsule_collider.hpp"
 #include "../geom/general_transform3.hpp"
 #include <cassert>
+#include <memory>
 
 namespace termin {
 namespace colliders {
 
-using geom::Pose3;
-using geom::Vec3;
-using geom::AABB;
+using geom::GeneralPose3;
 using geom::GeneralTransform3;
 
 /**
  * Коллайдер, привязанный к GeneralTransform3.
  *
  * Наследуется от Collider для полиморфного использования в CollisionWorld.
- * Мировая поза получается из transform_->global_pose().
- * Внутренний коллайдер трансформируется этой позой.
+ * Мировой трансформ = transform_->global_pose() * collider_->transform
  */
 class AttachedCollider : public Collider {
 public:
-    Collider* collider_;
+    ColliderPrimitive* collider_;
     GeneralTransform3* transform_;
 
     /**
      * Создать привязанный коллайдер.
-     * @param collider Базовый коллайдер (в локальных координатах), не должен быть null
+     * @param collider Базовый примитив (в локальных координатах), не должен быть null
      * @param transform Указатель на GeneralTransform3, не должен быть null
      */
-    AttachedCollider(Collider* collider, GeneralTransform3* transform)
+    AttachedCollider(ColliderPrimitive* collider, GeneralTransform3* transform)
         : collider_(collider)
         , transform_(transform)
     {
@@ -44,12 +50,15 @@ public:
         assert(transform_ != nullptr && "transform must not be null");
     }
 
-    Collider* collider() const { return collider_; }
+    ColliderPrimitive* collider() const { return collider_; }
     GeneralTransform3* transform() const { return transform_; }
 
-    /// Получить мировую позу из трансформа
-    Pose3 world_pose() const {
-        return transform_->global_pose().to_pose3();
+    /**
+     * Получить комбинированный мировой трансформ.
+     * entity_transform * collider.transform
+     */
+    GeneralPose3 world_transform() const {
+        return transform_->global_pose() * collider_->transform;
     }
 
     ColliderType type() const override {
@@ -57,74 +66,131 @@ public:
     }
 
     Vec3 center() const override {
-        Pose3 pose = world_pose();
-        return pose.transform_point(collider_->center());
+        GeneralPose3 wt = world_transform();
+        return wt.lin;
     }
 
     AABB aabb() const override {
-        AABB local = collider_->aabb();
-        Pose3 pose = world_pose();
+        // Для корректного AABB нужно применить мировой трансформ
+        // Создаём временный коллайдер с мировым трансформом
+        GeneralPose3 wt = world_transform();
 
-        Vec3 corners[8] = {
-            {local.min_point.x, local.min_point.y, local.min_point.z},
-            {local.max_point.x, local.min_point.y, local.min_point.z},
-            {local.min_point.x, local.max_point.y, local.min_point.z},
-            {local.max_point.x, local.max_point.y, local.min_point.z},
-            {local.min_point.x, local.min_point.y, local.max_point.z},
-            {local.max_point.x, local.min_point.y, local.max_point.z},
-            {local.min_point.x, local.max_point.y, local.max_point.z},
-            {local.max_point.x, local.max_point.y, local.max_point.z},
-        };
-
-        Vec3 first = pose.transform_point(corners[0]);
-        AABB result(first, first);
-        for (int i = 1; i < 8; ++i) {
-            result.extend(pose.transform_point(corners[i]));
+        if (auto* box = dynamic_cast<BoxCollider*>(collider_)) {
+            BoxCollider world_box(box->half_size, wt);
+            return world_box.aabb();
+        } else if (auto* sphere = dynamic_cast<SphereCollider*>(collider_)) {
+            SphereCollider world_sphere(sphere->radius, wt);
+            return world_sphere.aabb();
+        } else if (auto* capsule = dynamic_cast<CapsuleCollider*>(collider_)) {
+            CapsuleCollider world_capsule(capsule->half_height, capsule->radius, wt);
+            return world_capsule.aabb();
         }
-        return result;
+
+        // Fallback
+        return collider_->aabb();
     }
 
     RayHit closest_to_ray(const Ray3& ray) const override {
-        Pose3 pose = world_pose();
-        ColliderPtr world_collider = collider_->transform_by(pose);
-        return world_collider->closest_to_ray(ray);
+        GeneralPose3 wt = world_transform();
+
+        if (auto* box = dynamic_cast<BoxCollider*>(collider_)) {
+            BoxCollider world_box(box->half_size, wt);
+            return world_box.closest_to_ray(ray);
+        } else if (auto* sphere = dynamic_cast<SphereCollider*>(collider_)) {
+            SphereCollider world_sphere(sphere->radius, wt);
+            return world_sphere.closest_to_ray(ray);
+        } else if (auto* capsule = dynamic_cast<CapsuleCollider*>(collider_)) {
+            CapsuleCollider world_capsule(capsule->half_height, capsule->radius, wt);
+            return world_capsule.closest_to_ray(ray);
+        }
+
+        return RayHit{};
     }
 
     ColliderHit closest_to_collider(const Collider& other) const override {
-        Pose3 pose = world_pose();
-        ColliderPtr world_collider = collider_->transform_by(pose);
+        GeneralPose3 wt = world_transform();
 
+        // Создаём world-space версию нашего коллайдера
+        std::unique_ptr<ColliderPrimitive> world_collider;
+
+        if (auto* box = dynamic_cast<BoxCollider*>(collider_)) {
+            world_collider = std::make_unique<BoxCollider>(box->half_size, wt);
+        } else if (auto* sphere = dynamic_cast<SphereCollider*>(collider_)) {
+            world_collider = std::make_unique<SphereCollider>(sphere->radius, wt);
+        } else if (auto* capsule = dynamic_cast<CapsuleCollider*>(collider_)) {
+            world_collider = std::make_unique<CapsuleCollider>(capsule->half_height, capsule->radius, wt);
+        } else {
+            return ColliderHit{};
+        }
+
+        // Если other тоже AttachedCollider, разворачиваем его
         const AttachedCollider* other_attached = dynamic_cast<const AttachedCollider*>(&other);
         if (other_attached != nullptr) {
-            Pose3 other_pose = other_attached->world_pose();
-            ColliderPtr other_world = other_attached->collider_->transform_by(other_pose);
-            return world_collider->closest_to_collider(*other_world);
+            GeneralPose3 other_wt = other_attached->world_transform();
+
+            std::unique_ptr<ColliderPrimitive> other_world;
+            if (auto* box = dynamic_cast<BoxCollider*>(other_attached->collider_)) {
+                other_world = std::make_unique<BoxCollider>(box->half_size, other_wt);
+            } else if (auto* sphere = dynamic_cast<SphereCollider*>(other_attached->collider_)) {
+                other_world = std::make_unique<SphereCollider>(sphere->radius, other_wt);
+            } else if (auto* capsule = dynamic_cast<CapsuleCollider*>(other_attached->collider_)) {
+                other_world = std::make_unique<CapsuleCollider>(capsule->half_height, capsule->radius, other_wt);
+            }
+
+            if (other_world) {
+                return world_collider->closest_to_collider(*other_world);
+            }
         }
 
         return world_collider->closest_to_collider(other);
     }
 
-    ColliderPtr transform_by(const Pose3& pose) const override {
-        Pose3 combined = pose * world_pose();
-        return collider_->transform_by(combined);
-    }
-
     ColliderHit closest_to_box_impl(const BoxCollider& box) const override {
-        Pose3 pose = world_pose();
-        ColliderPtr world_collider = collider_->transform_by(pose);
-        return world_collider->closest_to_box_impl(box);
+        GeneralPose3 wt = world_transform();
+
+        if (auto* b = dynamic_cast<BoxCollider*>(collider_)) {
+            BoxCollider world_box(b->half_size, wt);
+            return world_box.closest_to_box_impl(box);
+        } else if (auto* s = dynamic_cast<SphereCollider*>(collider_)) {
+            SphereCollider world_sphere(s->radius, wt);
+            return world_sphere.closest_to_box_impl(box);
+        } else if (auto* c = dynamic_cast<CapsuleCollider*>(collider_)) {
+            CapsuleCollider world_capsule(c->half_height, c->radius, wt);
+            return world_capsule.closest_to_box_impl(box);
+        }
+        return ColliderHit{};
     }
 
     ColliderHit closest_to_sphere_impl(const SphereCollider& sphere) const override {
-        Pose3 pose = world_pose();
-        ColliderPtr world_collider = collider_->transform_by(pose);
-        return world_collider->closest_to_sphere_impl(sphere);
+        GeneralPose3 wt = world_transform();
+
+        if (auto* b = dynamic_cast<BoxCollider*>(collider_)) {
+            BoxCollider world_box(b->half_size, wt);
+            return world_box.closest_to_sphere_impl(sphere);
+        } else if (auto* s = dynamic_cast<SphereCollider*>(collider_)) {
+            SphereCollider world_sphere(s->radius, wt);
+            return world_sphere.closest_to_sphere_impl(sphere);
+        } else if (auto* c = dynamic_cast<CapsuleCollider*>(collider_)) {
+            CapsuleCollider world_capsule(c->half_height, c->radius, wt);
+            return world_capsule.closest_to_sphere_impl(sphere);
+        }
+        return ColliderHit{};
     }
 
     ColliderHit closest_to_capsule_impl(const CapsuleCollider& capsule) const override {
-        Pose3 pose = world_pose();
-        ColliderPtr world_collider = collider_->transform_by(pose);
-        return world_collider->closest_to_capsule_impl(capsule);
+        GeneralPose3 wt = world_transform();
+
+        if (auto* b = dynamic_cast<BoxCollider*>(collider_)) {
+            BoxCollider world_box(b->half_size, wt);
+            return world_box.closest_to_capsule_impl(capsule);
+        } else if (auto* s = dynamic_cast<SphereCollider*>(collider_)) {
+            SphereCollider world_sphere(s->radius, wt);
+            return world_sphere.closest_to_capsule_impl(capsule);
+        } else if (auto* c = dynamic_cast<CapsuleCollider*>(collider_)) {
+            CapsuleCollider world_capsule(c->half_height, c->radius, wt);
+            return world_capsule.closest_to_capsule_impl(capsule);
+        }
+        return ColliderHit{};
     }
 
     bool colliding(const Collider& other) const {

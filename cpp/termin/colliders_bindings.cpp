@@ -16,7 +16,7 @@ using geom::GeneralTransform3;
 PYBIND11_MODULE(_colliders_native, m) {
     m.doc() = "Native C++ colliders module for termin";
 
-    // Import _geom_native for Vec3, Quat, Pose3
+    // Import _geom_native for Vec3, Quat, Pose3, GeneralPose3
     py::module_::import("termin.geombase._geom_native");
 
     // Helper to create Vec3 from numpy array
@@ -63,26 +63,32 @@ PYBIND11_MODULE(_colliders_native, m) {
         .value("Capsule", ColliderType::Capsule)
         .export_values();
 
-    // ==================== Collider (базовый класс) ====================
+    // ==================== Collider (базовый интерфейс) ====================
 
     py::class_<Collider, ColliderPtr>(m, "Collider")
         .def("type", &Collider::type)
         .def("center", &Collider::center)
+        .def("aabb", &Collider::aabb)
         .def("closest_to_ray", &Collider::closest_to_ray, py::arg("ray"))
-        .def("closest_to_collider", &Collider::closest_to_collider, py::arg("other"))
-        .def("transform_by", &Collider::transform_by, py::arg("pose"));
+        .def("closest_to_collider", &Collider::closest_to_collider, py::arg("other"));
+
+    // ==================== ColliderPrimitive ====================
+
+    py::class_<ColliderPrimitive, Collider, std::shared_ptr<ColliderPrimitive>>(m, "ColliderPrimitive")
+        .def_readwrite("transform", &ColliderPrimitive::transform)
+        .def("uniform_scale", &ColliderPrimitive::uniform_scale)
+        .def("pose", &ColliderPrimitive::pose);
 
     // ==================== BoxCollider ====================
 
-    py::class_<BoxCollider, Collider, std::shared_ptr<BoxCollider>>(m, "BoxCollider")
+    py::class_<BoxCollider, ColliderPrimitive, std::shared_ptr<BoxCollider>>(m, "BoxCollider")
         .def(py::init<>())
-        .def(py::init<const Vec3&, const Vec3&, const Pose3&>(),
-             py::arg("center"), py::arg("half_size"), py::arg("pose") = Pose3())
+        .def(py::init<const Vec3&, const GeneralPose3&>(),
+             py::arg("half_size"), py::arg("transform") = GeneralPose3())
         .def_static("from_size", &BoxCollider::from_size,
-             py::arg("center"), py::arg("size"), py::arg("pose") = Pose3())
-        .def_readwrite("local_center", &BoxCollider::local_center)
+             py::arg("size"), py::arg("transform") = GeneralPose3())
         .def_readwrite("half_size", &BoxCollider::half_size)
-        .def_readwrite("pose", &BoxCollider::pose)
+        .def("effective_half_size", &BoxCollider::effective_half_size)
         .def("get_corners_world", [](const BoxCollider& b) {
             auto corners = b.get_corners_world();
             py::array_t<double> result({8, 3});
@@ -115,13 +121,12 @@ PYBIND11_MODULE(_colliders_native, m) {
 
     // ==================== SphereCollider ====================
 
-    py::class_<SphereCollider, Collider, std::shared_ptr<SphereCollider>>(m, "SphereCollider")
+    py::class_<SphereCollider, ColliderPrimitive, std::shared_ptr<SphereCollider>>(m, "SphereCollider")
         .def(py::init<>())
-        .def(py::init<const Vec3&, double, const Pose3&>(),
-             py::arg("center"), py::arg("radius"), py::arg("pose") = Pose3())
-        .def_readwrite("local_center", &SphereCollider::local_center)
+        .def(py::init<double, const GeneralPose3&>(),
+             py::arg("radius"), py::arg("transform") = GeneralPose3())
         .def_readwrite("radius", &SphereCollider::radius)
-        .def_readwrite("pose", &SphereCollider::pose)
+        .def("effective_radius", &SphereCollider::effective_radius)
         .def("collide_ground", &SphereCollider::collide_ground, py::arg("ground_height"));
 
     // SphereCollider::GroundContact
@@ -133,14 +138,17 @@ PYBIND11_MODULE(_colliders_native, m) {
 
     // ==================== CapsuleCollider ====================
 
-    py::class_<CapsuleCollider, Collider, std::shared_ptr<CapsuleCollider>>(m, "CapsuleCollider")
+    py::class_<CapsuleCollider, ColliderPrimitive, std::shared_ptr<CapsuleCollider>>(m, "CapsuleCollider")
         .def(py::init<>())
-        .def(py::init<const Vec3&, const Vec3&, double, const Pose3&>(),
-             py::arg("a"), py::arg("b"), py::arg("radius"), py::arg("pose") = Pose3())
-        .def_readwrite("local_a", &CapsuleCollider::local_a)
-        .def_readwrite("local_b", &CapsuleCollider::local_b)
+        .def(py::init<double, double, const GeneralPose3&>(),
+             py::arg("half_height"), py::arg("radius"), py::arg("transform") = GeneralPose3())
+        .def_static("from_total_height", &CapsuleCollider::from_total_height,
+             py::arg("total_height"), py::arg("radius"), py::arg("transform") = GeneralPose3())
+        .def_readwrite("half_height", &CapsuleCollider::half_height)
         .def_readwrite("radius", &CapsuleCollider::radius)
-        .def_readwrite("pose", &CapsuleCollider::pose)
+        .def("effective_half_height", &CapsuleCollider::effective_half_height)
+        .def("effective_radius", &CapsuleCollider::effective_radius)
+        .def("axis_direction", &CapsuleCollider::axis_direction)
         .def("world_a", &CapsuleCollider::world_a)
         .def("world_b", &CapsuleCollider::world_b);
 
@@ -155,16 +163,12 @@ PYBIND11_MODULE(_colliders_native, m) {
              py::return_value_policy::reference)
         .def("add", &UnionCollider::add, py::arg("collider"),
              py::keep_alive<1, 2>())
-        .def("clear", &UnionCollider::clear)
-        .def("center", &UnionCollider::center)
-        .def("aabb", &UnionCollider::aabb)
-        .def("closest_to_ray", &UnionCollider::closest_to_ray, py::arg("ray"))
-        .def("closest_to_collider", &UnionCollider::closest_to_collider, py::arg("other"));
+        .def("clear", &UnionCollider::clear);
 
     // ==================== AttachedCollider ====================
 
     py::class_<AttachedCollider, Collider, std::shared_ptr<AttachedCollider>>(m, "AttachedCollider")
-        .def(py::init<Collider*, GeneralTransform3*>(),
+        .def(py::init<ColliderPrimitive*, GeneralTransform3*>(),
              py::arg("collider"), py::arg("transform"),
              py::keep_alive<1, 2>(),  // Keep collider alive
              py::keep_alive<1, 3>())  // Keep transform alive
@@ -172,11 +176,7 @@ PYBIND11_MODULE(_colliders_native, m) {
              py::return_value_policy::reference)
         .def("transform", &AttachedCollider::transform,
              py::return_value_policy::reference)
-        .def("world_pose", &AttachedCollider::world_pose)
-        .def("center", &AttachedCollider::center)
-        .def("aabb", &AttachedCollider::aabb)
-        .def("closest_to_ray", &AttachedCollider::closest_to_ray, py::arg("ray"))
-        .def("closest_to_collider", &AttachedCollider::closest_to_collider, py::arg("other"))
+        .def("world_transform", &AttachedCollider::world_transform)
         .def("colliding", &AttachedCollider::colliding, py::arg("other"))
         .def("distance", &AttachedCollider::distance, py::arg("other"));
 }

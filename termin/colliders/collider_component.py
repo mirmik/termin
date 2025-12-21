@@ -89,27 +89,22 @@ class ColliderComponent(Component):
             self.sphere_radius = float(collider.radius)
         elif isinstance(collider, CapsuleCollider):
             self.collider_type = "Capsule"
-            a = collider.local_a
-            b = collider.local_b
-            self.capsule_height = float((Vec3(b.x - a.x, b.y - a.y, b.z - a.z)).norm())
+            # half_height is the half-length of the axis (not including caps)
+            self.capsule_height = float(collider.half_height * 2)
             self.capsule_radius = float(collider.radius)
 
     def _create_collider(self) -> Collider:
         """Create a collider based on current type and parameters."""
         if self.collider_type == "Box":
             half = Vec3(self.box_size[0] / 2, self.box_size[1] / 2, self.box_size[2] / 2)
-            return BoxCollider(Vec3(0, 0, 0), half)
+            return BoxCollider(half)
         elif self.collider_type == "Sphere":
-            return SphereCollider(Vec3(0, 0, 0), self.sphere_radius)
+            return SphereCollider(self.sphere_radius)
         elif self.collider_type == "Capsule":
             half_height = self.capsule_height / 2.0
-            return CapsuleCollider(
-                Vec3(0, 0, -half_height),
-                Vec3(0, 0, half_height),
-                self.capsule_radius,
-            )
+            return CapsuleCollider(half_height, self.capsule_radius)
         else:
-            return BoxCollider(Vec3(0, 0, 0), Vec3(0.5, 0.5, 0.5))
+            return BoxCollider(Vec3(0.5, 0.5, 0.5))
 
     def _rebuild_collider(self):
         """Rebuild collider after parameter change."""

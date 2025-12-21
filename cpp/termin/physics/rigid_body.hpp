@@ -47,23 +47,20 @@ public:
     double linear_damping = 0.01;
     double angular_damping = 0.01;
 
-    // --- Коллайдер ---
-    int collider_type = 0;  // 0=none, 1=box, 2=sphere
-    Vec3 collider_half_size{0.5, 0.5, 0.5};
-    double collider_radius = 0.5;
-
     RigidBody() = default;
 
     // ==================== Фабрики ====================
 
+    /**
+     * Создать тело с инерцией параллелепипеда.
+     * @param sx, sy, sz — полные размеры (не half)
+     */
     static RigidBody create_box(double sx, double sy, double sz, double m,
                                  const Pose3& p = Pose3(), bool stat = false) {
         RigidBody body;
         body.pose = p;
         body.mass = m;
         body.is_static = stat;
-        body.collider_type = 1;
-        body.collider_half_size = Vec3(sx / 2, sy / 2, sz / 2);
 
         // I = m/12 · (b² + c²)
         body.inertia.x = (m / 12.0) * (sy * sy + sz * sz);
@@ -73,14 +70,15 @@ public:
         return body;
     }
 
+    /**
+     * Создать тело с инерцией сферы.
+     */
     static RigidBody create_sphere(double radius, double m,
                                     const Pose3& p = Pose3(), bool stat = false) {
         RigidBody body;
         body.pose = p;
         body.mass = m;
         body.is_static = stat;
-        body.collider_type = 2;
-        body.collider_radius = radius;
 
         // I = 2/5 · m · r²
         double I = 0.4 * m * radius * radius;
@@ -258,21 +256,6 @@ public:
         }
     }
 
-    // ==================== Утилиты ====================
-
-    void get_box_corners_world(double* corners) const {
-        Vec3 h = collider_half_size;
-        Vec3 local[8] = {
-            {-h.x, -h.y, -h.z}, {+h.x, -h.y, -h.z}, {-h.x, +h.y, -h.z}, {+h.x, +h.y, -h.z},
-            {-h.x, -h.y, +h.z}, {+h.x, -h.y, +h.z}, {-h.x, +h.y, +h.z}, {+h.x, +h.y, +h.z}
-        };
-        for (int i = 0; i < 8; ++i) {
-            Vec3 world = pose.transform_point(local[i]);
-            corners[i * 3 + 0] = world.x;
-            corners[i * 3 + 1] = world.y;
-            corners[i * 3 + 2] = world.z;
-        }
-    }
 };
 
 } // namespace physics

@@ -105,22 +105,6 @@ public:
         return best;
     }
 
-    ColliderPtr transform_by(const Pose3& pose) const override {
-        std::vector<ColliderPtr> transformed;
-        transformed.reserve(colliders_.size());
-
-        for (const auto* c : colliders_) {
-            transformed.push_back(c->transform_by(pose));
-        }
-
-        auto result = std::make_shared<UnionCollider>();
-        result->owned_colliders_ = std::move(transformed);
-        for (const auto& tc : result->owned_colliders_) {
-            result->colliders_.push_back(tc.get());
-        }
-        return result;
-    }
-
     ColliderHit closest_to_box_impl(const BoxCollider& box) const override {
         ColliderHit best;
         best.distance = std::numeric_limits<double>::infinity();

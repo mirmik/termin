@@ -198,6 +198,10 @@ PYBIND11_MODULE(_geom_native, m) {
     py::class_<Pose3>(m, "Pose3")
         .def(py::init<>())
         .def(py::init<const Quat&, const Vec3&>())
+        // Convenience: Pose3(Vec3) - translation only
+        .def(py::init([](const Vec3& lin) {
+            return Pose3{Quat::identity(), lin};
+        }))
         .def(py::init([](py::array_t<double> ang_arr, py::array_t<double> lin_arr) {
             return Pose3(numpy_to_quat(ang_arr), numpy_to_vec3(lin_arr));
         }))

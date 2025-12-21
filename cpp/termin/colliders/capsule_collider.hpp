@@ -1,6 +1,6 @@
 #pragma once
 
-#include "collider.hpp"
+#include "collider_primitive.hpp"
 #include "box_collider.hpp"
 #include "sphere_collider.hpp"
 #include <cmath>
@@ -12,47 +12,88 @@ namespace colliders {
 
 /**
  * Capsule collider — капсула (цилиндр с полусферами на концах).
+ *
+ * Геометрия определяется:
+ * - half_height: половина высоты цилиндрической части (без учёта полусфер)
+ * - radius: радиус цилиндра и полусфер
+ * - transform: позиция центра, ориентация (ось = local Z) и масштаб
+ *
+ * Эффективные размеры:
+ * - effective_half_height = half_height * scale.z
+ * - effective_radius = radius * min(scale.x, scale.y)
  */
-class CapsuleCollider : public Collider {
+class CapsuleCollider : public ColliderPrimitive {
 public:
-    Vec3 local_a;   // Первая точка оси в локальных координатах
-    Vec3 local_b;   // Вторая точка оси в локальных координатах
-    double radius;
-    Pose3 pose;     // Поза в мировых координатах
+    double half_height;  // Половина высоты цилиндрической части
+    double radius;       // Радиус
 
     CapsuleCollider()
-        : local_a(0, 0, -0.5), local_b(0, 0, 0.5), radius(0.25), pose() {}
+        : ColliderPrimitive(), half_height(0.25), radius(0.25) {}
 
-    CapsuleCollider(const Vec3& a, const Vec3& b, double radius, const Pose3& pose = Pose3())
-        : local_a(a), local_b(b), radius(radius), pose(pose) {}
+    CapsuleCollider(double half_height, double radius, const GeneralPose3& t = GeneralPose3())
+        : ColliderPrimitive(t), half_height(half_height), radius(radius) {}
+
+    // Создать из общей высоты (включая полусферы)
+    static CapsuleCollider from_total_height(double total_height, double radius,
+                                              const GeneralPose3& t = GeneralPose3()) {
+        double hh = std::max(0.0, (total_height - 2.0 * radius) / 2.0);
+        return CapsuleCollider(hh, radius, t);
+    }
+
+    // ==================== Эффективные размеры ====================
+
+    /**
+     * Половина высоты с учётом scale.z.
+     */
+    double effective_half_height() const {
+        return half_height * transform.scale.z;
+    }
+
+    /**
+     * Радиус с учётом radial scale (min of x, y).
+     */
+    double effective_radius() const {
+        return radius * std::min(transform.scale.x, transform.scale.y);
+    }
+
+    /**
+     * Направление оси (local Z, трансформированный rotation).
+     */
+    Vec3 axis_direction() const {
+        return transform.ang.rotate(Vec3(0, 0, 1));
+    }
+
+    /**
+     * Концы капсулы (центры полусфер) в мировых координатах.
+     */
+    Vec3 world_a() const {
+        double hh = effective_half_height();
+        Vec3 local_a(0, 0, -hh);
+        return pose().transform_point(local_a);
+    }
+
+    Vec3 world_b() const {
+        double hh = effective_half_height();
+        Vec3 local_b(0, 0, +hh);
+        return pose().transform_point(local_b);
+    }
 
     // ==================== Интерфейс Collider ====================
 
     ColliderType type() const override { return ColliderType::Capsule; }
 
-    Vec3 center() const override {
-        Vec3 local_center = (local_a + local_b) * 0.5;
-        return pose.transform_point(local_center);
-    }
-
     AABB aabb() const override {
         Vec3 a = world_a();
         Vec3 b = world_b();
-        Vec3 r(radius, radius, radius);
+        double r = effective_radius();
+        Vec3 rv(r, r, r);
         Vec3 min_pt(std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z));
         Vec3 max_pt(std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z));
-        return AABB(min_pt - r, max_pt + r);
+        return AABB(min_pt - rv, max_pt + rv);
     }
-
-    /**
-     * Концы капсулы в мировых координатах.
-     */
-    Vec3 world_a() const { return pose.transform_point(local_a); }
-    Vec3 world_b() const { return pose.transform_point(local_b); }
 
     RayHit closest_to_ray(const Ray3& ray) const override;
     ColliderHit closest_to_collider(const Collider& other) const override;
-    ColliderPtr transform_by(const Pose3& t) const override;
 
     // Double dispatch implementations
     ColliderHit closest_to_box_impl(const BoxCollider& box) const override;
@@ -84,10 +125,6 @@ private:
 };
 
 // ==================== Реализация методов ====================
-
-inline ColliderPtr CapsuleCollider::transform_by(const Pose3& t) const {
-    return std::make_shared<CapsuleCollider>(local_a, local_b, radius, t * pose);
-}
 
 inline double CapsuleCollider::project_to_segment(const Vec3& p, const Vec3& a, const Vec3& b) {
     Vec3 ab = b - a;
@@ -181,6 +218,7 @@ inline RayHit CapsuleCollider::closest_to_ray(const Ray3& ray) const {
 
     Vec3 A = world_a();
     Vec3 B = world_b();
+    double R = effective_radius();
     Vec3 O = ray.origin;
     Vec3 D = ray.direction;
 
@@ -189,7 +227,7 @@ inline RayHit CapsuleCollider::closest_to_ray(const Ray3& ray) const {
 
     // Вырожденная капсула → сфера
     if (length < 1e-10) {
-        SphereCollider sphere(A, radius);
+        SphereCollider sphere(R, GeneralPose3(geom::Quat::identity(), A, Vec3(1,1,1)));
         return sphere.closest_to_ray(ray);
     }
 
@@ -199,7 +237,7 @@ inline RayHit CapsuleCollider::closest_to_ray(const Ray3& ray) const {
     double proj0 = (O - A).dot(U);
     Vec3 closest_axis_pt = A + U * std::clamp(proj0, 0.0, length);
     double dist_axis0 = (O - closest_axis_pt).norm();
-    if (dist_axis0 <= radius + 1e-8) {
+    if (dist_axis0 <= R + 1e-8) {
         result.point_on_collider = O;
         result.point_on_ray = O;
         result.distance = 0.0;
@@ -217,7 +255,7 @@ inline RayHit CapsuleCollider::closest_to_ray(const Ray3& ray) const {
 
     double a = D_perp.dot(D_perp);
     double b = 2.0 * D_perp.dot(w_perp);
-    double c = w_perp.dot(w_perp) - radius * radius;
+    double c = w_perp.dot(w_perp) - R * R;
 
     if (a > 1e-12) {
         double disc = b * b - 4.0 * a * c;
@@ -237,10 +275,10 @@ inline RayHit CapsuleCollider::closest_to_ray(const Ray3& ray) const {
     }
 
     // 2. Пересечение со сферическими концами
-    auto t_sphere_a = sphere_ray_hit(A, radius, O, D);
+    auto t_sphere_a = sphere_ray_hit(A, R, O, D);
     if (t_sphere_a) t_candidates.push_back(*t_sphere_a);
 
-    auto t_sphere_b = sphere_ray_hit(B, radius, O, D);
+    auto t_sphere_b = sphere_ray_hit(B, R, O, D);
     if (t_sphere_b) t_candidates.push_back(*t_sphere_b);
 
     // Есть пересечение?
@@ -264,7 +302,7 @@ inline RayHit CapsuleCollider::closest_to_ray(const Ray3& ray) const {
     double n = dir_vec.norm();
 
     if (n > 1e-10) {
-        result.point_on_collider = p_seg + dir_vec * (radius / n);
+        result.point_on_collider = p_seg + dir_vec * (R / n);
     } else {
         // Луч параллелен оси
         Vec3 normal = U.cross(Vec3(1, 0, 0));
@@ -272,7 +310,7 @@ inline RayHit CapsuleCollider::closest_to_ray(const Ray3& ray) const {
             normal = U.cross(Vec3(0, 1, 0));
         }
         normal = normal.normalized();
-        result.point_on_collider = p_seg + normal * radius;
+        result.point_on_collider = p_seg + normal * R;
     }
 
     result.point_on_ray = p_ray_seg;
@@ -288,7 +326,9 @@ inline ColliderHit CapsuleCollider::closest_to_sphere_impl(const SphereCollider&
 
     Vec3 A = world_a();
     Vec3 B = world_b();
+    double R = effective_radius();
     Vec3 C = sphere.center();
+    double sphere_r = sphere.effective_radius();
 
     // Проекция центра сферы на ось капсулы
     double t = project_to_segment(C, A, B);
@@ -303,9 +343,9 @@ inline ColliderHit CapsuleCollider::closest_to_sphere_impl(const SphereCollider&
         result.normal = Vec3(0, 0, 1);
     }
 
-    result.point_on_a = closest_on_axis + result.normal * radius;
-    result.point_on_b = C - result.normal * sphere.radius;
-    result.distance = dist - radius - sphere.radius;
+    result.point_on_a = closest_on_axis + result.normal * R;
+    result.point_on_b = C - result.normal * sphere_r;
+    result.distance = dist - R - sphere_r;
 
     return result;
 }
@@ -315,6 +355,8 @@ inline ColliderHit CapsuleCollider::closest_to_capsule_impl(const CapsuleCollide
 
     Vec3 a1 = world_a(), b1 = world_b();
     Vec3 a2 = other.world_a(), b2 = other.world_b();
+    double r1 = effective_radius();
+    double r2 = other.effective_radius();
 
     Vec3 p1, p2;
     closest_points_segments(a1, b1, a2, b2, p1, p2);
@@ -328,9 +370,9 @@ inline ColliderHit CapsuleCollider::closest_to_capsule_impl(const CapsuleCollide
         result.normal = Vec3(0, 0, 1);
     }
 
-    result.point_on_a = p1 + result.normal * radius;
-    result.point_on_b = p2 - result.normal * other.radius;
-    result.distance = dist - radius - other.radius;
+    result.point_on_a = p1 + result.normal * r1;
+    result.point_on_b = p2 - result.normal * r2;
+    result.distance = dist - r1 - r2;
 
     return result;
 }
@@ -339,11 +381,13 @@ inline ColliderHit CapsuleCollider::closest_to_box_impl(const BoxCollider& box) 
     ColliderHit result;
 
     // Переносим капсулу в локальные координаты box'а
-    Vec3 A = box.pose.inverse_transform_point(world_a());
-    Vec3 B = box.pose.inverse_transform_point(world_b());
+    Vec3 A = box.transform.inverse_transform_point(world_a());
+    Vec3 B = box.transform.inverse_transform_point(world_b());
+    double R = effective_radius();
 
-    Vec3 box_min = box.local_center - box.half_size;
-    Vec3 box_max = box.local_center + box.half_size;
+    Vec3 half = box.effective_half_size();
+    Vec3 box_min(-half.x, -half.y, -half.z);
+    Vec3 box_max(+half.x, +half.y, +half.z);
 
     // Ближайшая точка на оси капсулы
     // Для каждой точки на оси ищем ближайшую точку на box
@@ -373,8 +417,8 @@ inline ColliderHit CapsuleCollider::closest_to_box_impl(const BoxCollider& box) 
     }
 
     // Также проверяем проекцию ближайшей точки box на ось
-    Vec3 closest_box_world = box.pose.transform_point(best_box_pt);
-    double t = project_to_segment(box.pose.inverse_transform_point(closest_box_world), A, B);
+    Vec3 closest_box_world = box.transform.transform_point(best_box_pt);
+    double t = project_to_segment(box.transform.inverse_transform_point(closest_box_world), A, B);
     Vec3 axis_pt = A + (B - A) * t;
 
     Vec3 box_pt(
@@ -391,8 +435,8 @@ inline ColliderHit CapsuleCollider::closest_to_box_impl(const BoxCollider& box) 
     }
 
     // Переводим обратно в мировые координаты
-    Vec3 world_axis_pt = box.pose.transform_point(best_axis_pt);
-    Vec3 world_box_pt = box.pose.transform_point(best_box_pt);
+    Vec3 world_axis_pt = box.transform.transform_point(best_axis_pt);
+    Vec3 world_box_pt = box.transform.transform_point(best_box_pt);
 
     Vec3 diff = world_box_pt - world_axis_pt;
     double d = diff.norm();
@@ -403,9 +447,9 @@ inline ColliderHit CapsuleCollider::closest_to_box_impl(const BoxCollider& box) 
         result.normal = (world_box_pt - box.center()).normalized();
     }
 
-    result.point_on_a = world_axis_pt + result.normal * radius;
+    result.point_on_a = world_axis_pt + result.normal * R;
     result.point_on_b = world_box_pt;
-    result.distance = d - radius;
+    result.distance = d - R;
 
     return result;
 }

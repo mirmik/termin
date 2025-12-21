@@ -12,7 +12,6 @@
 
 #include "../geom/vec3.hpp"
 #include "rigid_body.hpp"
-#include "collider.hpp"
 #include <algorithm>
 #include <cmath>
 

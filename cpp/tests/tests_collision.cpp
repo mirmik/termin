@@ -27,7 +27,7 @@ TEST_CASE("BVH empty")
 TEST_CASE("BVH insert single")
 {
     BVH bvh;
-    SphereCollider sphere(Vec3(0, 0, 0), 1.0);
+    SphereCollider sphere(1.0);  // at origin
 
     bvh.insert(&sphere, sphere.aabb());
 
@@ -39,9 +39,9 @@ TEST_CASE("BVH insert single")
 TEST_CASE("BVH insert multiple")
 {
     BVH bvh;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(5, 0, 0), 1.0);
-    SphereCollider s3(Vec3(10, 0, 0), 1.0);
+    SphereCollider s1(1.0);  // at origin
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0)));
 
     bvh.insert(&s1, s1.aabb());
     bvh.insert(&s2, s2.aabb());
@@ -54,8 +54,8 @@ TEST_CASE("BVH insert multiple")
 TEST_CASE("BVH remove")
 {
     BVH bvh;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(5, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
 
     bvh.insert(&s1, s1.aabb());
     bvh.insert(&s2, s2.aabb());
@@ -72,7 +72,7 @@ TEST_CASE("BVH remove")
 TEST_CASE("BVH update no change")
 {
     BVH bvh;
-    SphereCollider sphere(Vec3(0, 0, 0), 1.0);
+    SphereCollider sphere(1.0);
     bvh.insert(&sphere, sphere.aabb());
 
     // Small movement within fattened AABB
@@ -83,11 +83,11 @@ TEST_CASE("BVH update no change")
 TEST_CASE("BVH update with movement")
 {
     BVH bvh;
-    SphereCollider sphere(Vec3(0, 0, 0), 1.0);
+    SphereCollider sphere(1.0);
     bvh.insert(&sphere, sphere.aabb());
 
     // Large movement outside fattened AABB
-    sphere = SphereCollider(Vec3(10, 0, 0), 1.0);
+    sphere = SphereCollider(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0)));
     bool changed = bvh.update(&sphere, sphere.aabb());
     CHECK(changed);
     CHECK(bvh.validate());
@@ -96,9 +96,9 @@ TEST_CASE("BVH update with movement")
 TEST_CASE("BVH query_aabb")
 {
     BVH bvh;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(5, 0, 0), 1.0);
-    SphereCollider s3(Vec3(10, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0)));
 
     bvh.insert(&s1, s1.aabb());
     bvh.insert(&s2, s2.aabb());
@@ -118,9 +118,9 @@ TEST_CASE("BVH query_aabb")
 TEST_CASE("BVH query_aabb multiple")
 {
     BVH bvh;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(3, 0, 0), 1.0);
-    SphereCollider s3(Vec3(10, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(3, 0, 0)));
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0)));
 
     bvh.insert(&s1, s1.aabb());
     bvh.insert(&s2, s2.aabb());
@@ -138,9 +138,9 @@ TEST_CASE("BVH query_aabb multiple")
 TEST_CASE("BVH query_ray")
 {
     BVH bvh;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(5, 0, 0), 1.0);
-    SphereCollider s3(Vec3(0, 5, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(0, 5, 0)));
 
     bvh.insert(&s1, s1.aabb());
     bvh.insert(&s2, s2.aabb());
@@ -159,9 +159,9 @@ TEST_CASE("BVH query_ray")
 TEST_CASE("BVH query_all_pairs")
 {
     BVH bvh;
-    SphereCollider s1(Vec3(0, 0, 0), 2.0);
-    SphereCollider s2(Vec3(3, 0, 0), 2.0);  // Overlaps with s1
-    SphereCollider s3(Vec3(10, 0, 0), 1.0); // Far away
+    SphereCollider s1(2.0);
+    SphereCollider s2(2.0, GeneralPose3(Quat::identity(), Vec3(3, 0, 0)));  // Overlaps with s1
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0))); // Far away
 
     bvh.insert(&s1, s1.aabb());
     bvh.insert(&s2, s2.aabb());
@@ -190,7 +190,7 @@ TEST_CASE("CollisionWorld empty")
 TEST_CASE("CollisionWorld add/remove")
 {
     CollisionWorld world;
-    SphereCollider sphere(Vec3(0, 0, 0), 1.0);
+    SphereCollider sphere(1.0);
 
     world.add(&sphere);
     CHECK_EQ(world.size(), 1u);
@@ -204,8 +204,8 @@ TEST_CASE("CollisionWorld add/remove")
 TEST_CASE("CollisionWorld detect_contacts no collision")
 {
     CollisionWorld world;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(5, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
 
     world.add(&s1);
     world.add(&s2);
@@ -217,8 +217,8 @@ TEST_CASE("CollisionWorld detect_contacts no collision")
 TEST_CASE("CollisionWorld detect_contacts with collision")
 {
     CollisionWorld world;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(1.5, 0, 0), 1.0);  // Overlapping
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0)));  // Overlapping
 
     world.add(&s1);
     world.add(&s2);
@@ -234,9 +234,9 @@ TEST_CASE("CollisionWorld detect_contacts with collision")
 TEST_CASE("CollisionWorld detect_contacts multiple")
 {
     CollisionWorld world;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(1.5, 0, 0), 1.0);
-    SphereCollider s3(Vec3(0, 1.5, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0)));
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(0, 1.5, 0)));
 
     world.add(&s1);
     world.add(&s2);
@@ -249,8 +249,8 @@ TEST_CASE("CollisionWorld detect_contacts multiple")
 TEST_CASE("CollisionWorld update_pose")
 {
     CollisionWorld world;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(5, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
 
     world.add(&s1);
     world.add(&s2);
@@ -259,7 +259,7 @@ TEST_CASE("CollisionWorld update_pose")
     CHECK(manifolds.empty());
 
     // Move s2 to overlap with s1
-    s2 = SphereCollider(Vec3(1.5, 0, 0), 1.0);
+    s2 = SphereCollider(1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0)));
     world.update_pose(&s2);
 
     manifolds = world.detect_contacts();
@@ -269,8 +269,8 @@ TEST_CASE("CollisionWorld update_pose")
 TEST_CASE("CollisionWorld query_aabb")
 {
     CollisionWorld world;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(5, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
 
     world.add(&s1);
     world.add(&s2);
@@ -283,9 +283,9 @@ TEST_CASE("CollisionWorld query_aabb")
 TEST_CASE("CollisionWorld raycast")
 {
     CollisionWorld world;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(5, 0, 0), 1.0);
-    SphereCollider s3(Vec3(0, 5, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(0, 5, 0)));
 
     world.add(&s1);
     world.add(&s2);
@@ -302,8 +302,8 @@ TEST_CASE("CollisionWorld raycast")
 TEST_CASE("CollisionWorld raycast_closest")
 {
     CollisionWorld world;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(5, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
 
     world.add(&s1);
     world.add(&s2);
@@ -319,7 +319,7 @@ TEST_CASE("CollisionWorld raycast_closest")
 TEST_CASE("CollisionWorld raycast miss")
 {
     CollisionWorld world;
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
+    SphereCollider s1(1.0);
 
     world.add(&s1);
 
@@ -334,11 +334,11 @@ TEST_CASE("CollisionWorld raycast miss")
 TEST_CASE("CollisionWorld mixed colliders")
 {
     CollisionWorld world;
-    SphereCollider sphere(Vec3(0, 0, 0), 1.0);
-    // Overlapping with sphere: box center at (1.2, 0, 0), extends to 0.7 in x
-    BoxCollider box(Vec3(1.2, 0, 0), Vec3(0.5, 0.5, 0.5));
+    SphereCollider sphere(1.0);
+    // Overlapping with sphere: box center at (1.2, 0, 0), half_size (0.5,0.5,0.5) extends to 0.7 in x
+    BoxCollider box(Vec3(0.5, 0.5, 0.5), GeneralPose3(Quat::identity(), Vec3(1.2, 0, 0)));
     // Overlapping with sphere: capsule axis at y=1.2, radius 0.5 => surface at y=0.7
-    CapsuleCollider capsule(Vec3(0, 1.2, -0.5), Vec3(0, 1.2, 0.5), 0.5);
+    CapsuleCollider capsule(0.5, 0.5, GeneralPose3(Quat::identity(), Vec3(0, 1.2, 0)));
 
     world.add(&sphere);
     world.add(&box);
@@ -352,7 +352,7 @@ TEST_CASE("CollisionWorld mixed colliders")
 
 TEST_CASE("AttachedCollider basic")
 {
-    SphereCollider sphere(Vec3(0, 0, 0), 1.0);
+    SphereCollider sphere(1.0);  // at origin
     GeneralTransform3 transform(GeneralPose3::translation(5, 0, 0));
     AttachedCollider attached(&sphere, &transform);
 
@@ -365,8 +365,8 @@ TEST_CASE("AttachedCollider basic")
 
 TEST_CASE("AttachedCollider in CollisionWorld")
 {
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(0, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0);
     GeneralTransform3 t1;
     GeneralTransform3 t2(GeneralPose3::translation(5, 0, 0));
     AttachedCollider a1(&s1, &t1);
@@ -422,9 +422,9 @@ TEST_CASE("ContactManifold clear")
 
 TEST_CASE("ContactManifold same_pair")
 {
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(1, 0, 0), 1.0);
-    SphereCollider s3(Vec3(2, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1, 0, 0)));
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(2, 0, 0)));
 
     ContactManifold m1;
     m1.collider_a = &s1;
@@ -444,8 +444,8 @@ TEST_CASE("ContactManifold same_pair")
 
 TEST_CASE("ContactManifold pair_key")
 {
-    SphereCollider s1(Vec3(0, 0, 0), 1.0);
-    SphereCollider s2(Vec3(1, 0, 0), 1.0);
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1, 0, 0)));
 
     ContactManifold m1;
     m1.collider_a = &s1;
@@ -463,7 +463,7 @@ TEST_CASE("ContactManifold pair_key")
 
 TEST_CASE("SphereCollider aabb")
 {
-    SphereCollider sphere(Vec3(1, 2, 3), 0.5);
+    SphereCollider sphere(0.5, GeneralPose3(Quat::identity(), Vec3(1, 2, 3)));
     AABB box = sphere.aabb();
 
     CHECK_EQ(box.min_point.x, Approx(0.5).epsilon(1e-12));
@@ -476,7 +476,7 @@ TEST_CASE("SphereCollider aabb")
 
 TEST_CASE("BoxCollider aabb identity")
 {
-    BoxCollider box(Vec3(0, 0, 0), Vec3(1, 2, 3));  // half_size
+    BoxCollider box(Vec3(1, 2, 3));  // half_size, at origin
     AABB aabb = box.aabb();
 
     CHECK_EQ(aabb.min_point.x, Approx(-1.0).epsilon(1e-12));
@@ -489,7 +489,7 @@ TEST_CASE("BoxCollider aabb identity")
 
 TEST_CASE("CapsuleCollider aabb")
 {
-    CapsuleCollider capsule(Vec3(0, 0, -1), Vec3(0, 0, 1), 0.5);
+    CapsuleCollider capsule(1.0, 0.5);  // half_height=1, radius=0.5, axis along Z
     AABB aabb = capsule.aabb();
 
     CHECK_EQ(aabb.min_point.x, Approx(-0.5).epsilon(1e-12));
