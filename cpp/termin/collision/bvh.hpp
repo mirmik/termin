@@ -157,6 +157,7 @@ public:
         if (root_ == BVH_NULL_NODE) return;
 
         Vec3 inv_dir(1.0 / ray.direction.x, 1.0 / ray.direction.y, 1.0 / ray.direction.z);
+        const Vec3& dir = ray.direction;
 
         std::vector<int32_t> stack;
         stack.reserve(64);
@@ -171,7 +172,7 @@ public:
             const BVHNode& node = nodes_[node_index];
 
             double t_min, t_max;
-            if (!ray_intersects_aabb(ray, inv_dir, node.bounds, t_min, t_max)) continue;
+            if (!ray_intersects_aabb(ray, inv_dir, dir, node.bounds, t_min, t_max)) continue;
 
             if (node.is_leaf()) {
                 callback(node.collider, t_min, t_max);
@@ -530,22 +531,53 @@ private:
                outer.max_point.z >= inner.max_point.z;
     }
 
-    bool ray_intersects_aabb(const Ray3& ray, const Vec3& inv_dir,
-                             const AABB& aabb, double& t_min, double& t_max) const {
-        double tx1 = (aabb.min_point.x - ray.origin.x) * inv_dir.x;
-        double tx2 = (aabb.max_point.x - ray.origin.x) * inv_dir.x;
-        t_min = std::min(tx1, tx2);
-        t_max = std::max(tx1, tx2);
+    bool ray_intersects_aabb(const Ray3& ray, const Vec3& inv_dir, const Vec3& dir,
+                             const AABB& aabb, double& t_min, double& t_max) const 
+    {
+        t_min = -std::numeric_limits<double>::infinity();
+        t_max = std::numeric_limits<double>::infinity();
 
-        double ty1 = (aabb.min_point.y - ray.origin.y) * inv_dir.y;
-        double ty2 = (aabb.max_point.y - ray.origin.y) * inv_dir.y;
-        t_min = std::max(t_min, std::min(ty1, ty2));
-        t_max = std::min(t_max, std::max(ty1, ty2));
+        if (std::abs(dir.x) >= 1e-8) { 
+            double tx1 = (aabb.min_point.x - ray.origin.x) * inv_dir.x;
+            double tx2 = (aabb.max_point.x - ray.origin.x) * inv_dir.x;
+            t_min = std::max(t_min, std::min(tx1, tx2));
+            t_max = std::min(t_max, std::max(tx1, tx2));
+            if (t_max < t_min) return false;
+        }
+        else {
+            // Ray is parallel to x slabs; check if origin is within slabs
+            if (ray.origin.x < aabb.min_point.x || ray.origin.x > aabb.max_point.x) {
+                return false;
+            }
+        }
 
-        double tz1 = (aabb.min_point.z - ray.origin.z) * inv_dir.z;
-        double tz2 = (aabb.max_point.z - ray.origin.z) * inv_dir.z;
-        t_min = std::max(t_min, std::min(tz1, tz2));
-        t_max = std::min(t_max, std::max(tz1, tz2));
+        if (std::abs(dir.y) >= 1e-8) {
+            double ty1 = (aabb.min_point.y - ray.origin.y) * inv_dir.y;
+            double ty2 = (aabb.max_point.y - ray.origin.y) * inv_dir.y;
+            t_min = std::max(t_min, std::min(ty1, ty2));
+            t_max = std::min(t_max, std::max(ty1, ty2));
+            if (t_max < t_min) return false;
+        }
+        else {
+            // Ray is parallel to y slabs; check if origin is within slabs
+            if (ray.origin.y < aabb.min_point.y || ray.origin.y > aabb.max_point.y) {
+                return false;
+            }
+        }
+
+        if (std::abs(dir.z) >= 1e-8) {
+            double tz1 = (aabb.min_point.z - ray.origin.z) * inv_dir.z;
+            double tz2 = (aabb.max_point.z - ray.origin.z) * inv_dir.z;
+            t_min = std::max(t_min, std::min(tz1, tz2));
+            t_max = std::min(t_max, std::max(tz1, tz2));
+            if (t_max < t_min) return false;
+        }
+        else {
+            // Ray is parallel to z slabs; check if origin is within slabs
+            if (ray.origin.z < aabb.min_point.z || ray.origin.z > aabb.max_point.z) {
+                return false;
+            }
+        }
 
         return t_max >= std::max(t_min, 0.0);
     }
