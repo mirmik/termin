@@ -44,16 +44,15 @@ class SceneTreeController:
         self._request_viewport_update = request_viewport_update
 
         self._model: SceneTreeModel = SceneTreeModel(self._scene)
-        self._setup_tree(expand_all=True)
+        self._setup_tree_once()
+        self._apply_model(expand_all=True)
 
     @property
     def model(self) -> SceneTreeModel:
         return self._model
 
-    def _setup_tree(self, expand_all: bool = False) -> None:
-        self._tree.setModel(self._model)
-        if expand_all:
-            self._tree.expandAll()
+    def _setup_tree_once(self) -> None:
+        """One-time tree view setup (signals that don't change with model)."""
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._on_tree_context_menu)
 
@@ -63,6 +62,12 @@ class SceneTreeController:
         self._tree.setDropIndicatorShown(True)
         self._tree.setDragDropMode(QTreeView.DragDropMode.DragDrop)
         self._tree.setDefaultDropAction(Qt.DropAction.MoveAction)
+
+    def _apply_model(self, expand_all: bool = False) -> None:
+        """Apply current model to tree and connect model-specific signals."""
+        self._tree.setModel(self._model)
+        if expand_all:
+            self._tree.expandAll()
 
         # Connect model signals for reparenting and prefab/fbx drops
         self._model.entity_reparent_requested.connect(self._on_entity_reparent_requested)
@@ -85,7 +90,7 @@ class SceneTreeController:
         expanded_names = self._get_expanded_entity_names()
 
         self._model = SceneTreeModel(self._scene)
-        self._setup_tree(expand_all=False)
+        self._apply_model(expand_all=False)
 
         # Restore expanded state
         self._restore_expanded_state(expanded_names)
@@ -214,8 +219,10 @@ class SceneTreeController:
 
         action_rename: Optional[QAction] = None
         action_delete: Optional[QAction] = None
+        action_duplicate: Optional[QAction] = None
         if isinstance(target_obj, Entity):
             action_rename = menu.addAction("Rename entity")
+            action_duplicate = menu.addAction("Duplicate")
             action_delete = menu.addAction("Delete entity")
 
         global_pos = self._tree.viewport().mapToGlobal(pos)
@@ -225,6 +232,8 @@ class SceneTreeController:
             self._create_entity_from_context(target_obj)
         elif action == action_rename:
             self._rename_entity_from_context(target_obj)
+        elif action == action_duplicate:
+            self._duplicate_entity_from_context(target_obj)
         elif action == action_delete:
             self._delete_entity_from_context(target_obj)
 
@@ -280,11 +289,14 @@ class SceneTreeController:
             if clicked == btn_only_this:
                 # Move children to parent, then delete entity
                 parent_transform = ent.transform.parent
+                parent_entity = parent_transform.entity if parent_transform else None
                 for child_transform in children:
                     child_entity = child_transform.entity
                     if child_entity is not None:
                         cmd = ReparentEntityCommand(child_entity, ent.transform, parent_transform)
                         self._undo_handler(cmd, merge=False)
+                        # Update tree to reflect the move
+                        self.move_entity(child_entity, parent_entity)
             else:
                 # Delete with children
                 delete_children = True
@@ -295,10 +307,11 @@ class SceneTreeController:
             # Delete children first (bottom-up to handle nested hierarchies)
             self._delete_entity_recursive(ent)
         else:
-            # Delete only this entity
+            # Delete only this entity (children already moved)
             cmd = DeleteEntityCommand(self._scene, ent)
             self._undo_handler(cmd, merge=False)
 
+        # Remove from tree (also removes descendants)
         self.remove_entity(ent, select_parent=False)
         if parent_ent_for_select:
             self.select_object(parent_ent_for_select)
@@ -340,6 +353,44 @@ class SceneTreeController:
 
         if self._request_viewport_update is not None:
             self._request_viewport_update()
+
+    def _duplicate_entity_from_context(self, ent: Entity | None) -> None:
+        """Create a copy of the entity using serialization."""
+        if not isinstance(ent, Entity):
+            return
+
+        # Serialize the entity
+        data = ent.serialize()
+        if data is None:
+            return
+
+        # Remove UUIDs to generate new ones on deserialization
+        self._remove_uuids_recursive(data)
+
+        # Deserialize to create a copy
+        copy = Entity.deserialize(data, context=None)
+
+        # Rename to indicate it's a copy
+        copy.name = f"{ent.name}_copy"
+
+        # Add to scene with same parent
+        parent_transform = ent.transform.parent
+        cmd = AddEntityCommand(self._scene, copy, parent_transform=parent_transform)
+        self._undo_handler(cmd, merge=False)
+
+        self.add_entity_hierarchy(copy)
+
+        if self._request_viewport_update is not None:
+            self._request_viewport_update()
+
+    def _remove_uuids_recursive(self, data: dict) -> None:
+        """Remove uuid fields from serialized data to force new UUID generation."""
+        data.pop("uuid", None)
+        data.pop("instance_uuid", None)
+        for child in data.get("children", []):
+            self._remove_uuids_recursive(child)
+        for child in data.get("added_children", []):
+            self._remove_uuids_recursive(child)
 
     # ---------- drag-drop reparenting ----------
 

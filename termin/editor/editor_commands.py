@@ -262,6 +262,9 @@ class ReparentEntityCommand(UndoCommand):
 
     В do() сущность перемещается к новому родителю,
     в undo() — возвращается к старому.
+
+    Global pose сохраняется: local pose пересчитывается так,
+    чтобы объект остался на том же месте в мире.
     """
 
     def __init__(
@@ -279,16 +282,25 @@ class ReparentEntityCommand(UndoCommand):
         self._entity = entity
         self._old_parent = old_parent
         self._new_parent = new_parent
+        # Сохраняем local pose для undo
+        self._old_local_pose = _clone_pose(entity.transform.local_pose())
 
     @property
     def entity(self) -> Entity:
         return self._entity
 
     def do(self) -> None:
+        # Сохраняем global pose до смены родителя
+        global_pose = self._entity.transform.global_pose()
+        # Меняем родителя
         self._entity.transform.set_parent(self._new_parent)
+        # Восстанавливаем global pose (пересчитывает local pose)
+        self._entity.transform.relocate_global(global_pose)
 
     def undo(self) -> None:
+        # Возвращаем родителя и восстанавливаем оригинальный local pose
         self._entity.transform.set_parent(self._old_parent)
+        self._entity.transform.relocate(self._old_local_pose)
 
 
 __all__ = [

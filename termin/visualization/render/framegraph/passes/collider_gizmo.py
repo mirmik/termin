@@ -95,7 +95,7 @@ class ColliderGizmoPass(RenderFramePass):
 
         self._renderer.begin()
         self._draw_colliders(scene)
-        self._renderer.flush(graphics, view, proj)
+        self._renderer.flush(graphics, view, proj, depth_test=False)
 
     def _draw_colliders(self, scene):
         """Draw wireframes for all colliders in the scene."""
@@ -185,7 +185,7 @@ class ColliderGizmoPass(RenderFramePass):
         entity_scale = min(entity_pose.scale.x, entity_pose.scale.y, entity_pose.scale.z)
         world_radius = radius * entity_scale
 
-        self._renderer.sphere_wireframe(center_world, world_radius, color)
+        self._renderer.sphere_wireframe(center_world, world_radius, color, segments=32)
 
     def _draw_capsule(self, collider, entity_pose, color):
         """Draw wireframe capsule."""
@@ -212,4 +212,4 @@ class ColliderGizmoPass(RenderFramePass):
         entity_scale = min(entity_pose.scale.x, entity_pose.scale.y, entity_pose.scale.z)
         world_radius = radius * entity_scale
 
-        self._renderer.capsule_wireframe(a_world, b_world, world_radius, color)
+        self._renderer.capsule_wireframe(a_world, b_world, world_radius, color, segments=32)
