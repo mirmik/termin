@@ -318,11 +318,80 @@ inline ColliderHit BoxCollider::closest_to_box_impl(const BoxCollider& other) co
         return result;
     }
 
-    // Есть коллизия
+    // Есть коллизия - нужно найти точки контакта на поверхностях
     result.normal = best_axis;
     result.distance = -min_overlap;
-    result.point_on_a = (center_a + center_b) * 0.5;
-    result.point_on_b = result.point_on_a;
+
+    // Найдём глубже всего проникающие вершины box B в box A
+    auto corners_b = other.get_corners_world();
+    double deepest_pen = -std::numeric_limits<double>::infinity();
+    Vec3 best_corner;
+    bool found_corner = false;
+
+    for (const auto& corner : corners_b) {
+        // Проверяем, насколько глубоко эта вершина проникла в A
+        // Проекция на ось пенетрации
+        Vec3 rel = corner - center_a;
+        double pen_depth = -rel.dot(best_axis);  // Насколько глубоко в направлении -normal
+
+        // Проверяем, внутри ли вершина box A (приблизительно)
+        double proj_x = std::abs(rel.dot(axes_a[0]));
+        double proj_y = std::abs(rel.dot(axes_a[1]));
+        double proj_z = std::abs(rel.dot(axes_a[2]));
+
+        bool inside = proj_x <= half_a.x + 1e-6 &&
+                      proj_y <= half_a.y + 1e-6 &&
+                      proj_z <= half_a.z + 1e-6;
+
+        if (inside || pen_depth > 0) {
+            if (pen_depth > deepest_pen) {
+                deepest_pen = pen_depth;
+                best_corner = corner;
+                found_corner = true;
+            }
+        }
+    }
+
+    if (found_corner) {
+        // Точка на B - это вершина
+        result.point_on_b = best_corner;
+        // Точка на A - проекция вершины на поверхность A вдоль нормали
+        result.point_on_a = best_corner + best_axis * min_overlap;
+    } else {
+        // Fallback: попробуем вершины A в B
+        auto corners_a = get_corners_world();
+        deepest_pen = -std::numeric_limits<double>::infinity();
+
+        for (const auto& corner : corners_a) {
+            Vec3 rel = corner - center_b;
+            double pen_depth = rel.dot(best_axis);
+
+            double proj_x = std::abs(rel.dot(axes_b[0]));
+            double proj_y = std::abs(rel.dot(axes_b[1]));
+            double proj_z = std::abs(rel.dot(axes_b[2]));
+
+            bool inside = proj_x <= half_b.x + 1e-6 &&
+                          proj_y <= half_b.y + 1e-6 &&
+                          proj_z <= half_b.z + 1e-6;
+
+            if (inside || pen_depth > 0) {
+                if (pen_depth > deepest_pen) {
+                    deepest_pen = pen_depth;
+                    best_corner = corner;
+                    found_corner = true;
+                }
+            }
+        }
+
+        if (found_corner) {
+            result.point_on_a = best_corner;
+            result.point_on_b = best_corner - best_axis * min_overlap;
+        } else {
+            // Последний fallback: midpoint на поверхностях вдоль нормали
+            result.point_on_a = center_a + best_axis * (d.dot(best_axis) * 0.5 - min_overlap * 0.5);
+            result.point_on_b = center_b - best_axis * (d.dot(best_axis) * 0.5 - min_overlap * 0.5);
+        }
+    }
 
     return result;
 }
