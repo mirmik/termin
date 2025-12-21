@@ -7,8 +7,8 @@ import numpy as np
 from termin.visualization.core.component import Component
 from termin.visualization.core.animation_clip_handle import AnimationClipHandle
 from termin.editor.inspect_field import InspectField
-from termin.geombase.pose3 import Pose3
-from termin.geombase.general_pose3 import GeneralPose3
+from termin.geombase import Pose3
+from termin.geombase import GeneralPose3
 from .clip import AnimationClip
 
 if TYPE_CHECKING:

@@ -1159,7 +1159,7 @@ class EditorWindow(QMainWindow):
             prefab_path: Путь к .prefab файлу
             drop_pos: Позиция drop в координатах виджета
         """
-        from termin.geombase.pose3 import Pose3
+        from termin.geombase import Pose3
 
         # Определяем позицию в мире через unproject
         world_pos = self._unproject_drop_position(drop_pos)

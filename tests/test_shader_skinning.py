@@ -194,8 +194,9 @@ def test_inject_skinning_position_only():
 
     assert 'u_bone_matrices' in result
     assert '_skinned_position' in result
-    # a_normal replacement should still be in the injected code
-    assert '_skinned_normal' in result
+    # No a_normal in shader, so no _skinned_normal should be generated
+    assert '_skinned_normal' not in result
+    assert 'position only' in result
 
 
 # Shader with multiple functions

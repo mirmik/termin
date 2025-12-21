@@ -29,11 +29,18 @@ class UnionCollider(Collider):
         closest_p = None
         closest_q = None
 
+        # If other is also a UnionCollider, iterate over its colliders too
+        if isinstance(other, UnionCollider):
+            other_colliders = other.colliders
+        else:
+            other_colliders = [other]
+
         for collider in self.colliders:
-            p_near, q_near, dist = collider.closest_to_collider(other)
-            if dist < min_dist:
-                min_dist = dist
-                closest_p = p_near
-                closest_q = q_near
+            for other_col in other_colliders:
+                p_near, q_near, dist = collider.closest_to_collider(other_col)
+                if dist < min_dist:
+                    min_dist = dist
+                    closest_p = p_near
+                    closest_q = q_near
 
         return closest_p, closest_q, min_dist

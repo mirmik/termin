@@ -6,8 +6,8 @@ from typing import Iterable, List, Optional, Type, TypeVar, TYPE_CHECKING
 
 import numpy as np
 
-from termin.geombase.pose3 import Pose3
-from termin.geombase.general_pose3 import GeneralPose3
+from termin.geombase import Pose3
+from termin.geombase import GeneralPose3
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.identifiable import Identifiable
 from termin.visualization.core.resources import ResourceManager

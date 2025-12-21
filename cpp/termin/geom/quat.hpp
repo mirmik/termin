@@ -62,6 +62,40 @@ struct Quat {
         return {n.x * s, n.y * s, n.z * s, std::cos(half)};
     }
 
+    // Create from 3x3 rotation matrix (row-major: m[row*3+col])
+    static Quat from_rotation_matrix(const double* m) {
+        double trace = m[0] + m[4] + m[8];
+        double x, y, z, w;
+
+        if (trace > 0) {
+            double s = 0.5 / std::sqrt(trace + 1.0);
+            w = 0.25 / s;
+            x = (m[7] - m[5]) * s;
+            y = (m[2] - m[6]) * s;
+            z = (m[3] - m[1]) * s;
+        } else if (m[0] > m[4] && m[0] > m[8]) {
+            double s = 2.0 * std::sqrt(1.0 + m[0] - m[4] - m[8]);
+            w = (m[7] - m[5]) / s;
+            x = 0.25 * s;
+            y = (m[1] + m[3]) / s;
+            z = (m[2] + m[6]) / s;
+        } else if (m[4] > m[8]) {
+            double s = 2.0 * std::sqrt(1.0 + m[4] - m[0] - m[8]);
+            w = (m[2] - m[6]) / s;
+            x = (m[1] + m[3]) / s;
+            y = 0.25 * s;
+            z = (m[5] + m[7]) / s;
+        } else {
+            double s = 2.0 * std::sqrt(1.0 + m[8] - m[0] - m[4]);
+            w = (m[3] - m[1]) / s;
+            x = (m[2] + m[6]) / s;
+            y = (m[5] + m[7]) / s;
+            z = 0.25 * s;
+        }
+
+        return Quat{x, y, z, w}.normalized();
+    }
+
     // To 3x3 rotation matrix (row-major)
     void to_matrix(double* m) const {
         double xx = x * x, yy = y * y, zz = z * z;

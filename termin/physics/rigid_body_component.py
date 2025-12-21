@@ -8,8 +8,8 @@ import numpy as np
 from termin.visualization.core.component import Component
 from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat
 from termin.physics._physics_native import PhysicsWorld, RigidBody
-from termin.geombase.pose3 import Pose3
-from termin.geombase.general_pose3 import GeneralPose3
+from termin.geombase import Pose3
+from termin.geombase import GeneralPose3
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:

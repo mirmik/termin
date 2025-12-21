@@ -7,8 +7,8 @@ from typing import Dict, List
 
 import numpy as np
 
-from termin.geombase.pose3 import Pose3
-from termin.geombase.general_pose3 import GeneralPose3
+from termin.geombase import Pose3
+from termin.geombase import GeneralPose3
 from termin.mesh.mesh import Mesh3
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.mesh_handle import MeshHandle

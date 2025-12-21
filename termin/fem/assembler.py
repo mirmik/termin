@@ -11,7 +11,7 @@
 import numpy as np
 from typing import List, Dict, Tuple, Optional
 import numpy
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 
 import termin.linalg.subspaces
 

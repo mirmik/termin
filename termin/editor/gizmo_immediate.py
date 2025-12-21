@@ -950,7 +950,7 @@ class ImmediateGizmoController:
 
     def _update_translate(self, viewport, x: float, y: float) -> None:
         """Update translation during drag."""
-        from termin.geombase.pose3 import Pose3
+        from termin.geombase import Pose3
 
         if self.axis_vec is None or self.axis_point is None or self.grab_offset is None:
             return
@@ -976,7 +976,7 @@ class ImmediateGizmoController:
 
     def _update_plane_translate(self, viewport, x: float, y: float) -> None:
         """Update plane translation during drag."""
-        from termin.geombase.pose3 import Pose3
+        from termin.geombase import Pose3
 
         if self.plane_normal is None or self.plane_origin is None or self.plane_grab_offset is None:
             return
@@ -1010,7 +1010,7 @@ class ImmediateGizmoController:
 
     def _update_rotate(self, viewport, x: float, y: float) -> None:
         """Update rotation during drag."""
-        from termin.geombase.pose3 import Pose3
+        from termin.geombase import Pose3
         from termin.util import qmul
 
         if (

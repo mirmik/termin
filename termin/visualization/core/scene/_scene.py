@@ -12,7 +12,7 @@ from termin.visualization.core.identifiable import Identifiable
 from termin.visualization.core.lighting.light import Light
 from termin.visualization.render.components.light_component import LightComponent
 from termin.visualization.platform.backends.base import GraphicsBackend
-from termin.geombase.ray import Ray3
+from termin.geombase import Ray3
 from termin.colliders.raycast_hit import RaycastHit
 
 from .skybox import SkyboxManager

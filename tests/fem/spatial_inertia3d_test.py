@@ -1,6 +1,6 @@
 import numpy as np
 from termin.fem.inertia3d import SpatialInertia3D
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 
 def test_spatial_inertia3d_add():
     # Два тела с разными центрами масс и тензорами

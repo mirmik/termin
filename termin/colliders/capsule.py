@@ -1,164 +1,87 @@
+"""
+CapsuleCollider — обёртка над C++ реализацией.
+"""
 
-from termin.closest import closest_points_between_segments, closest_points_between_capsules, closest_points_between_capsule_and_sphere
-import numpy
+import numpy as np
+from termin.geombase import Pose3
 from termin.colliders.collider import Collider
-from termin.colliders.sphere import SphereCollider
+from termin.colliders._colliders_native import CapsuleCollider as NativeCapsuleCollider
+from termin.geombase._geom_native import Vec3, Pose3 as NativePose3
+
 
 class CapsuleCollider(Collider):
-    def closest_to_ray(self, ray: "Ray3"):
-        """
-        Ближайшие точки между сегментом капсулы и лучом:
-        Реализуем прямой рейкаст в капсулу (цилиндр вдоль [a,b] + две сферы)
-        через аналитические уравнения:
-            |(w_perp + t * D_perp)|^2 = r^2  — пересечение с цилиндром
-            |O + tD - C|^2 = r^2              — пересечение с каждой сферой
-        """
-        from termin.closest import closest_points_between_segments
+    """
+    Capsule collider — капсула (цилиндр с полусферами на концах).
 
-        O = ray.origin
-        D = ray.direction
-        A = self.a
-        B = self.b
-        r = self.radius
+    Параметры:
+        a: Первая точка оси в локальных координатах
+        b: Вторая точка оси в локальных координатах
+        radius: Радиус
+        pose: Поза в мировых координатах
+    """
 
-        axis = B - A
-        length = numpy.linalg.norm(axis)
-        if length < 1e-8:
-            # Вырожденная капсула → сфера.
-            return SphereCollider(A, r).closest_to_ray(ray)
+    def __init__(
+        self,
+        a: np.ndarray = None,
+        b: np.ndarray = None,
+        radius: float = 0.25,
+        pose: Pose3 = None
+    ):
+        if a is None:
+            a = np.array([0, 0, -0.5], dtype=np.float32)
+        if b is None:
+            b = np.array([0, 0, 0.5], dtype=np.float32)
 
-        U = axis / length
+        self.local_a = np.asarray(a, dtype=np.float32)
+        self.local_b = np.asarray(b, dtype=np.float32)
+        self.radius = float(radius)
+        self.pose = pose if pose is not None else Pose3.identity()
 
-        # Проверяем, стартует ли луч внутри капсулы.
-        proj0 = numpy.dot(O - A, U)
-        closest_axis_pt = A + numpy.clip(proj0, 0.0, length) * U
-        dist_axis0 = numpy.linalg.norm(O - closest_axis_pt)
-        if dist_axis0 <= r + 1e-8:
-            return O, O, 0.0
+        # Создаём native объект
+        self._rebuild_native()
 
-        def sphere_hit(center: numpy.ndarray) -> float | None:
-            m = O - center
-            b = numpy.dot(m, D)
-            c = numpy.dot(m, m) - r * r
-            disc = b * b - c
-            if disc < 0:
-                return None
-            sqrt_disc = numpy.sqrt(disc)
-            t0 = -b - sqrt_disc
-            if t0 >= 0:
-                return t0
-            t1 = -b + sqrt_disc
-            return t1 if t1 >= 0 else None
+    def _rebuild_native(self):
+        """Пересоздать C++ объект из текущих параметров."""
+        native_a = Vec3(float(self.local_a[0]), float(self.local_a[1]), float(self.local_a[2]))
+        native_b = Vec3(float(self.local_b[0]), float(self.local_b[1]), float(self.local_b[2]))
 
-        t_candidates = []
-
-        # Пересечение с цилиндрической частью: |w_perp + t D_perp|^2 = r^2
-        w = O - A
-        w_par = numpy.dot(w, U)
-        w_perp = w - w_par * U
-        D_par = numpy.dot(D, U)
-        D_perp = D - D_par * U
-
-        a = numpy.dot(D_perp, D_perp)
-        b = 2.0 * numpy.dot(D_perp, w_perp)
-        c = numpy.dot(w_perp, w_perp) - r * r
-
-        if a > 1e-12:
-            disc = b * b - 4.0 * a * c
-            if disc >= 0.0:
-                sqrt_disc = numpy.sqrt(disc)
-                t0 = (-b - sqrt_disc) / (2.0 * a)
-                t1 = (-b + sqrt_disc) / (2.0 * a)
-                for t in (t0, t1):
-                    if t < 0:
-                        continue
-                    s = w_par + t * D_par  # параметр вдоль оси капсулы
-                    if 0.0 <= s <= length:
-                        t_candidates.append(t)
+        # Конвертируем Pose3
+        if hasattr(self.pose, 'lin') and hasattr(self.pose, 'ang'):
+            native_pose = NativePose3(
+                Vec3(float(self.pose.lin[0]), float(self.pose.lin[1]), float(self.pose.lin[2])),
+                self.pose.ang  # Quat уже native
+            )
         else:
-            # Луч параллелен оси. Если проекция в пределах радиуса, стукнемся об крышки.
-            if c <= 0.0 and (D_par > 0.0 or D_par < 0.0):
-                # Попадание в цилиндрическую часть, но точное t определят сферы.
-                pass
+            native_pose = NativePose3()
 
-        # Пересечения с капами
-        t_sphere_a = sphere_hit(A)
-        if t_sphere_a is not None:
-            t_candidates.append(t_sphere_a)
-        t_sphere_b = sphere_hit(B)
-        if t_sphere_b is not None:
-            t_candidates.append(t_sphere_b)
+        self._native = NativeCapsuleCollider(native_a, native_b, self.radius, native_pose)
 
-        if t_candidates:
-            t_hit = min(t_candidates)
-            p_hit = ray.point_at(t_hit)
-            return p_hit, p_hit, 0.0
-
-        # Нет пересечения — берем ближайшие точки между лучом (обрезанным) и осью капсулы.
-        FAR = 1e6
-        p_seg, p_ray, dist_axis = closest_points_between_segments(
-            A, B,
-            O, O + D * FAR
-        )
-        dir_vec = p_ray - p_seg
-        n = numpy.linalg.norm(dir_vec)
-        if n > 1e-8:
-            p_col = p_seg + dir_vec * (r / n)
-        else:
-            # Луч параллелен оси: сдвигаем вдоль любой нормали.
-            normal = numpy.cross(U, numpy.array([1.0, 0.0, 0.0]))
-            if numpy.linalg.norm(normal) < 1e-8:
-                normal = numpy.cross(U, numpy.array([0.0, 1.0, 0.0]))
-            normal = normal / numpy.linalg.norm(normal)
-            p_col = p_seg + normal * r
-        return p_col, p_ray, numpy.linalg.norm(p_col - p_ray)
-    
-    def __init__(self, a: numpy.ndarray, b: numpy.ndarray, radius: float):
-        self.a = a
-        self.b = b
-        self.radius = radius
-
-    def transform_by(self, transform: 'Pose3'):
+    def transform_by(self, tpose: Pose3) -> "CapsuleCollider":
         """Return a new CapsuleCollider transformed by the given Pose3."""
-        new_a = transform.transform_point(self.a)
-        new_b = transform.transform_point(self.b)
-        return CapsuleCollider(new_a, new_b, self.radius)
-    
-    def closest_to_capsule(self, other: "CapsuleCollider"):
-        """Return the closest points and distance between this capsule and another capsule."""
-        p_near, q_near, dist = closest_points_between_capsules(
-            self.a, self.b, self.radius,
-            other.a, other.b, other.radius)
-        return p_near, q_near, dist
+        new_pose = tpose * self.pose
+        return CapsuleCollider(self.local_a.copy(), self.local_b.copy(), self.radius, new_pose)
 
-    def closest_to_sphere(self, other: "SphereCollider"):
-        """Return the closest points and distance between this capsule and a sphere."""
-        p_near, q_near, dist = closest_points_between_capsule_and_sphere(
-            self.a, self.b, self.radius,
-            other.center, other.radius)
-        return p_near, q_near, dist
+    def scale_by(self, scale: np.ndarray) -> "CapsuleCollider":
+        """Return a new CapsuleCollider with scaled size."""
+        scale_arr = np.asarray(scale, dtype=np.float32)
+        new_a = self.local_a * scale_arr
+        new_b = self.local_b * scale_arr
+        # Radius scales uniformly (average)
+        new_radius = self.radius * float(np.mean(scale_arr))
+        return CapsuleCollider(new_a, new_b, new_radius, self.pose)
 
-    def closest_to_union_collider(self, other: "UnionCollider"):
-        """Return the closest points and distance between this capsule and a union collider."""
-        a,b,c = other.closest_to_collider(self)
-        return b,a,c
+    def __repr__(self):
+        return f"CapsuleCollider(a={self.local_a}, b={self.local_b}, radius={self.radius}, pose={self.pose})"
 
-    def closest_to_collider(self, other: "Collider"):
-        """Return the closest points and distance between this collider and another collider."""
+    # Свойства для совместимости со старым кодом
+    @property
+    def a(self) -> np.ndarray:
+        """Первая точка оси в мировых координатах."""
+        native_a = self._native.world_a()
+        return np.array([native_a.x, native_a.y, native_a.z], dtype=np.float32)
 
-        from .sphere import SphereCollider
-        from .union_collider import UnionCollider
-
-        if isinstance(other, CapsuleCollider):
-            return self.closest_to_capsule(other)
-        elif isinstance(other, SphereCollider):
-            return other.closest_to_sphere(self)
-        elif isinstance(other, UnionCollider):
-            return self.closest_to_union_collider(other)
-        else:
-            raise NotImplementedError(f"closest_to_collider not implemented for {type(other)}")
-
-    def distance(self, other: "Collider") -> float:
-        """Return the distance between this collider and another collider."""
-        _, _, dist = self.closest_to_collider(other)
-        return dist
+    @property
+    def b(self) -> np.ndarray:
+        """Вторая точка оси в мировых координатах."""
+        native_b = self._native.world_b()
+        return np.array([native_b.x, native_b.y, native_b.z], dtype=np.float32)

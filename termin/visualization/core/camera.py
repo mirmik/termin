@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 import numpy as np
 
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 
 from termin.editor.inspect_field import InspectField, inspect
 from termin.visualization.core.component import Component, InputComponent
@@ -34,32 +34,32 @@ class CameraComponent(Component):
 
     def screen_point_to_ray(self, x: float, y: float, viewport_rect):
         import numpy as np
-        from termin.geombase.ray import Ray3
+        from termin.geombase import Ray3, Vec3
 
         px, py, pw, ph = viewport_rect
-        
+
         nx = ( (x - px) / pw ) * 2.0 - 1.0
         ny = ( (y - py) / ph ) * -2.0 + 1.0
-        
+
         PV = self.get_projection_matrix() @ self.get_view_matrix()
-        
+
         inv_PV = np.linalg.inv(PV)
-        
+
         near = np.array([nx, ny, -1.0, 1.0], dtype=np.float32)
         far  = np.array([nx, ny,  1.0, 1.0], dtype=np.float32)
-        
+
         p_near = inv_PV @ near
         p_far  = inv_PV @ far
-        
+
         p_near /= p_near[3]
         p_far  /= p_far[3]
-        
+
         origin = p_near[:3]
         direction = p_far[:3] - p_near[:3]
-        
         direction /= np.linalg.norm(direction)
-        
-        return Ray3(origin, direction)
+
+        return Ray3(Vec3(float(origin[0]), float(origin[1]), float(origin[2])),
+                    Vec3(float(direction[0]), float(direction[1]), float(direction[2])))
 
     def __init__(self, near: float = 0.1, far: float = 100.0):
         super().__init__(enabled=True)

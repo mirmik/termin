@@ -50,6 +50,16 @@ class FEMPhysicsWorldComponent(Component):
             min=1,
             max=20,
         ),
+        "energy_stabilization": InspectField(
+            path="energy_stabilization",
+            label="Energy Stabilization",
+            kind="bool",
+        ),
+        "strict_energy_mode": InspectField(
+            path="strict_energy_mode",
+            label="Strict Energy Mode",
+            kind="bool",
+        ),
     }
 
     def __init__(
@@ -57,6 +67,8 @@ class FEMPhysicsWorldComponent(Component):
         gravity: np.ndarray | None = None,
         time_step: float = 0.01,
         substeps: int = 1,
+        energy_stabilization: bool = True,
+        strict_energy_mode: bool = False,
     ):
         super().__init__(enabled=True)
 
@@ -66,6 +78,8 @@ class FEMPhysicsWorldComponent(Component):
         self.gravity = np.asarray(gravity, dtype=np.float64)
         self.time_step = time_step
         self.substeps = substeps
+        self.energy_stabilization = energy_stabilization
+        self.strict_energy_mode = strict_energy_mode
 
         self._assembler: DynamicMatrixAssembler | None = None
         self._bodies: List["FEMRigidBodyComponent"] = []
@@ -73,6 +87,7 @@ class FEMPhysicsWorldComponent(Component):
         self._revolute_joints: List["FEMRevoluteJointComponent"] = []
         self._initialized = False
         self._accumulated_time = 0.0
+        self._target_energy: float | None = None
 
     @property
     def assembler(self) -> DynamicMatrixAssembler | None:
@@ -179,9 +194,127 @@ class FEMPhysicsWorldComponent(Component):
         # 5. Интегрировать с коррекцией ограничений
         self._assembler.integrate_with_constraint_projection(q_ddot, matrices)
 
-        # 6. Синхронизировать результаты обратно в entity transforms
+        # 6. Стабилизация энергии (предотвращает численный рост)
+        if self.energy_stabilization:
+            self._stabilize_energy()
+
+        # 7. Синхронизировать результаты обратно в entity transforms
         for body_comp in self._bodies:
             body_comp._sync_from_physics()
+
+    def _compute_total_energy(self) -> float:
+        """Вычислить полную механическую энергию системы."""
+        total_energy = 0.0
+
+        for body_comp in self._bodies:
+            fem_body = body_comp.fem_body
+            if fem_body is None:
+                continue
+
+            # Кинетическая энергия
+            v = fem_body.velocity_var.value
+            v_lin = v[0:3]
+            omega = v[3:6]
+
+            mass = fem_body.inertia.mass
+            I_diag = fem_body.inertia.I_diag
+
+            T_lin = 0.5 * mass * np.dot(v_lin, v_lin)
+            T_rot = 0.5 * np.dot(omega * I_diag, omega)
+
+            # Потенциальная энергия (гравитация)
+            pos = fem_body.pose().lin
+            g = self.gravity
+            U = -mass * np.dot(g, pos)
+
+            total_energy += T_lin + T_rot + U
+
+        return total_energy
+
+    def _compute_total_damping_dissipation(self, dt: float) -> float:
+        """Вычислить суммарную диссипацию энергии от всех источников демпфирования."""
+        total = 0.0
+
+        # Демпфирование тел (сопротивление среды)
+        for body_comp in self._bodies:
+            total += body_comp.compute_damping_dissipation(dt)
+
+        # Демпфирование fixed joints
+        for joint_comp in self._fixed_joints:
+            total += joint_comp.compute_damping_dissipation(dt)
+
+        # Демпфирование revolute joints
+        for joint_comp in self._revolute_joints:
+            total += joint_comp.compute_damping_dissipation(dt)
+
+        return total
+
+    def _stabilize_energy(self):
+        """Масштабировать скорости для стабилизации энергии."""
+        current_energy = self._compute_total_energy()
+        dt = self._assembler.time_step
+
+        # Вычислить ожидаемую диссипацию от демпфирования
+        damping_loss = self._compute_total_damping_dissipation(dt)
+
+        # Инициализация целевой энергии на первом шаге
+        if self._target_energy is None:
+            self._target_energy = current_energy
+            return
+
+        # Уменьшить целевую энергию на величину диссипации
+        self._target_energy = max(self._target_energy - damping_loss, 0.0)
+
+        # Вычисляем кинетическую энергию
+        kinetic_energy = self._compute_kinetic_energy()
+
+        if kinetic_energy < 1e-10:
+            return
+
+        # Разница энергий: положительная = избыток, отрицательная = недостаток
+        energy_diff = current_energy - self._target_energy
+
+        # Определяем, нужна ли коррекция
+        if self.strict_energy_mode:
+            # Строгий режим: корректируем в обе стороны
+            needs_correction = abs(energy_diff) > 1e-10
+        else:
+            # Обычный режим: корректируем только избыток
+            needs_correction = energy_diff > 1e-10
+
+        if needs_correction:
+            # Новая кинетическая энергия = kinetic - diff
+            # (diff > 0: уменьшаем, diff < 0: увеличиваем)
+            new_kinetic = kinetic_energy - energy_diff
+
+            # Ограничиваем снизу нулём
+            if new_kinetic < 0.0:
+                new_kinetic = 0.0
+
+            # Коэффициент масштабирования скоростей
+            scale = np.sqrt(new_kinetic / kinetic_energy)
+
+            # Применяем масштабирование ко всем телам
+            for body_comp in self._bodies:
+                fem_body = body_comp.fem_body
+                if fem_body is not None:
+                    fem_body.velocity_var.value *= scale
+
+    def _compute_kinetic_energy(self) -> float:
+        """Вычислить суммарную кинетическую энергию системы."""
+        kinetic_energy = 0.0
+        for body_comp in self._bodies:
+            fem_body = body_comp.fem_body
+            if fem_body is None:
+                continue
+            v = fem_body.velocity_var.value
+            v_lin = v[0:3]
+            omega = v[3:6]
+            mass = fem_body.inertia.mass
+            I_diag = fem_body.inertia.I_diag
+            kinetic_energy += 0.5 * mass * np.dot(v_lin, v_lin)
+            kinetic_energy += 0.5 * np.dot(omega * I_diag, omega)
+        return kinetic_energy
 
     def get_body_by_entity(self, entity) -> "FEMRigidBodyComponent | None":
         """Найти FEMRigidBodyComponent для заданного entity."""

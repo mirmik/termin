@@ -17,11 +17,13 @@ from ._geom_native import (
     Pose3,
     GeneralPose3,
     Screw3,
+    AABB,
 )
 
 from .pose2 import Pose2
 from .screw import Screw, Screw2
-from .aabb import AABB, TransformAABB
+from .transform_aabb import TransformAABB
+from termin.colliders._colliders_native import Ray3
 
 __all__ = [
     'Vec3',
@@ -34,4 +36,5 @@ __all__ = [
     'Screw3',
     'AABB',
     'TransformAABB',
+    'Ray3',
 ]

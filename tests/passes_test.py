@@ -12,7 +12,7 @@ from termin.visualization.core.entity import Entity
 from termin.mesh.mesh import CubeMesh
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.materials.simple import ColorMaterial
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3, Vec3
 from termin.visualization.render import (
     RenderEngine,
     HeadlessContext,
@@ -189,7 +189,7 @@ class TestPasses(unittest.TestCase):
             cube_entity.add_component(cube_renderer)
             scene.add(cube_entity)
 
-            # Камера на (0, 0, 3), смотрит в центр
+            # Камера на (0, -3, 0), смотрит в центр (Y-forward convention)
             camera_entity = Entity(name="camera")
             scene.add(camera_entity)
             camera = camera_entity.add_component(PerspectiveCameraComponent(
@@ -198,7 +198,12 @@ class TestPasses(unittest.TestCase):
                 near=0.1,
                 far=10.0,
             ))
-            camera_entity.transform.relocate(Pose3.translation(0.0, 0.0, 3.0))
+            # Use looking_at to properly orient camera towards the cube at origin
+            camera_entity.transform.relocate(Pose3.looking_at(
+                eye=Vec3(0.0, -3.0, 0.0),
+                target=Vec3(0.0, 0.0, 0.0),
+                up=Vec3(0.0, 0.0, 1.0)
+            ))
 
             # Подготовка сцены
             scene.ensure_ready(graphics)

@@ -209,3 +209,6 @@ class NOPGraphicsBackend(GraphicsBackend):
 
     def read_depth_pixel(self, framebuffer, x: int, y: int) -> float | None:
         return None
+
+    def reset_state(self):
+        return None

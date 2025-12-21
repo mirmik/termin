@@ -7,7 +7,7 @@ from termin.colliders.sphere import SphereCollider
 from termin.colliders.box import BoxCollider
 from termin.colliders.raycast_hit import RaycastHit
 from termin.colliders.collider_component import ColliderComponent
-from termin.geombase.ray import Ray3
+from termin.geombase import Ray3
 
 
 class SceneRaycastTest(unittest.TestCase):

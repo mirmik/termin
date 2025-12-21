@@ -9,8 +9,8 @@ from termin.visualization.core.entity import Component
 
 import numpy as np
 from termin.visualization.core.entity import Entity, Component
-from termin.geombase.pose3 import Pose3
-from termin.geombase.general_pose3 import GeneralPose3
+from termin.geombase import Pose3, Vec3
+from termin.geombase import GeneralPose3
 from termin.visualization.core.scene import Scene
 
 
@@ -86,8 +86,8 @@ def test_entity_serialize_deserialize():
 
     assert e2.name == "test"
     scale = e2.transform.local_pose().scale
-    assert isinstance(scale, np.ndarray)
-    np.testing.assert_array_almost_equal(scale, np.array([2.0, 2.0, 2.0]))
+    assert isinstance(scale, Vec3)
+    np.testing.assert_array_almost_equal(scale.tolist(), [2.0, 2.0, 2.0])
     assert e2.priority == 3
     assert len(e2.components) == 1
     assert e2.components[0].x == 123

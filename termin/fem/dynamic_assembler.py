@@ -2,7 +2,7 @@ from termin.fem.assembler import MatrixAssembler, Variable, Contribution
 from typing import Dict, List, Tuple
 import numpy as np
 from termin.linalg.subspaces import project_onto_affine, metric_project_onto_constraints 
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 
 class DynamicMatrixAssembler(MatrixAssembler):
     def __init__(self):

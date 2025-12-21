@@ -17,7 +17,7 @@ import numpy as np
 
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

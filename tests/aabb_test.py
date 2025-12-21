@@ -29,14 +29,14 @@ class AABBTest(unittest.TestCase):
         numpy.testing.assert_array_equal(merged_aabb.max_point, expected_max)
 
     def test_intersects(self):
-        aabb1 = AABB(numpy.array([0.0, 0.0]), numpy.array([1.0, 1.0]))
-        aabb2 = AABB(numpy.array([0.5, 0.5]), numpy.array([1.5, 1.5]))
-        aabb3 = AABB(numpy.array([2.0, 2.0]), numpy.array([3.0, 3.0]))
+        aabb1 = AABB(numpy.array([0.0, 0.0, 0.0]), numpy.array([1.0, 1.0, 1.0]))
+        aabb2 = AABB(numpy.array([0.5, 0.5, 0.5]), numpy.array([1.5, 1.5, 1.5]))
+        aabb3 = AABB(numpy.array([2.0, 2.0, 2.0]), numpy.array([3.0, 3.0, 3.0]))
 
         self.assertTrue(aabb1.intersects(aabb2))
         self.assertFalse(aabb1.intersects(aabb3))
 
-        aabb4 = AABB(numpy.array([-0.5, 0.5]), numpy.array([0.5, 1.5]))
+        aabb4 = AABB(numpy.array([-0.5, 0.5, 0.0]), numpy.array([0.5, 1.5, 1.0]))
         self.assertTrue(aabb1.intersects(aabb4))
 
     def test_transform_aabb(self):

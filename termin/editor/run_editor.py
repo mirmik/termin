@@ -1,5 +1,9 @@
 import sys
 import time
+import warnings
+
+# Suppress SDL2 informational warning about using pysdl2-dll binaries (Windows)
+warnings.filterwarnings("ignore", message="Using SDL2 binaries from pysdl2-dll")
 
 import numpy as np
 from PyQt6.QtGui import QPalette, QColor
@@ -7,8 +11,8 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6 import QtCore
 
 from termin.editor.editor_window import EditorWindow
-from termin.geombase.pose3 import Pose3
-from termin.geombase.general_pose3 import GeneralPose3
+from termin.geombase import Pose3
+from termin.geombase import GeneralPose3
 from termin.mesh.mesh import CubeMesh, CylinderMesh, Mesh3
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.core.entity import Entity

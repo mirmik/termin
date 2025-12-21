@@ -274,7 +274,6 @@ class TestGeneralPose3Matrix:
         assert mat[1, 1] == pytest.approx(3)
         assert mat[2, 2] == pytest.approx(4)
 
-    @pytest.mark.skip(reason="from_matrix not yet implemented in C++")
     def test_from_matrix_extracts_scale(self):
         import numpy as np
         # Create matrix with scale
@@ -290,7 +289,6 @@ class TestGeneralPose3Matrix:
         assert_vec3_approx(gp.lin, (1, 2, 3))
         assert_vec3_approx(gp.scale, (2, 3, 4))
 
-    @pytest.mark.skip(reason="from_matrix not yet implemented in C++")
     def test_matrix_roundtrip(self):
         gp = GeneralPose3(
             lin=Vec3(1, 2, 3),

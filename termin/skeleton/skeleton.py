@@ -187,7 +187,7 @@ class SkeletonInstance:
             rotation: Quaternion (4,) as [x, y, z, w] or None
             scale: Scale (3,) or uniform float, or None
         """
-        from termin.geombase.general_pose3 import GeneralPose3
+        from termin.geombase import GeneralPose3
 
         entity = self.get_bone_entity_by_name(bone_name)
         if entity is None:

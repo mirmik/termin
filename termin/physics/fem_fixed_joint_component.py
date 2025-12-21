@@ -34,15 +34,24 @@ class FEMFixedJointComponent(Component):
             label="Body Entity",
             kind="string",
         ),
+        "damping": InspectField(
+            path="damping",
+            label="Angular Damping",
+            kind="float",
+            min=0.0,
+            step=0.01,
+        ),
     }
 
     def __init__(
         self,
         body_entity_name: str = "",
+        damping: float = 0.0,
     ):
         super().__init__(enabled=True)
 
         self.body_entity_name = body_entity_name
+        self.damping = damping
 
         self._fem_joint: FixedRotationJoint3D | None = None
         self._fem_world: "FEMPhysicsWorldComponent | None" = None
@@ -128,3 +137,16 @@ class FEMFixedJointComponent(Component):
             color=(1.0, 0.5, 0.0, 1.0),  # оранжевая
             segments=8,
         )
+
+    def compute_damping_dissipation(self, dt: float) -> float:
+        """
+        Вычислить диссипацию энергии за шаг dt.
+
+        Сферический шарнир — сопротивляется угловой скорости тела:
+        τ_damp = -c * ω  → P = c * |ω|²
+        """
+        if self._body_component is None or self._body_component.fem_body is None:
+            return 0.0
+
+        omega = self._body_component.fem_body.velocity_var.value[3:6]
+        return self.damping * np.dot(omega, omega) * dt

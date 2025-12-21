@@ -2,7 +2,7 @@ from typing import List, Dict
 import numpy as np
 
 from termin.fem.assembler import Variable, Contribution
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 from termin.geombase.screw import Screw3
 from termin.fem.inertia3d import SpatialInertia3D
 
@@ -117,7 +117,7 @@ class RigidBody3D(Contribution):
         g_local = self.global_pose.inverse().rotate_vector(self.gravity)
         grav = self.inertia.gravity_wrench(g_local)
 
-        b[a_idx] += bias.to_vector_vw_order() + grav.to_vector_vw_order()
+        b[a_idx] += - bias.to_vector_vw_order() + grav.to_vector_vw_order()
 
     def contribute_for_constraints_correction(self, matrices, index_maps):
         self.contribute_to_mass_matrix(matrices, index_maps)
@@ -346,12 +346,14 @@ class RevoluteJoint3D(Contribution):
         omegaB = np.asarray(self.bodyB.velocity_var.value[3:6], dtype=float)
 
         # квадратичные члены (центростремительные), всё в СК A:
-        # bias = (ωA×(ωA×rA))  -  (ωB×(ωB×rB_A))
+        # biasA вычисляется в СК A (omegaA и rA_local оба в СК A)
+        # biasB вычисляется в СК B, затем преобразуется в СК A
         rA = self.rA_local
-        rB_A = self.rB_in_A
 
         biasA = np.cross(omegaA, np.cross(omegaA, rA))
-        biasB = np.cross(omegaB, np.cross(omegaB, rB_A))
+        # Центростремительное ускорение B в его локальной СК, затем в СК A
+        biasB_in_B = np.cross(omegaB, np.cross(omegaB, self.rB_local))
+        biasB = self.R_AB @ biasB_in_B
         bias = biasA - biasB
 
         # по принятой конвенции — добавляем -bias

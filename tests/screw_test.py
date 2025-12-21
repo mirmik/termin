@@ -3,7 +3,7 @@ from termin.ga201.motor import Motor2
 from termin.ga201.screw import Screw2 as GA201_Screw2
 from termin.geombase.screw import Screw2, Screw3
 from termin.geombase.pose2 import Pose2
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 import math
 import numpy
 

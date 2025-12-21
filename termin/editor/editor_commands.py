@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 
 from termin.editor.undo_stack import UndoCommand
-from termin.geombase.general_pose3 import GeneralPose3
+from termin.geombase import GeneralPose3
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
 from termin.editor.inspect_field import InspectField

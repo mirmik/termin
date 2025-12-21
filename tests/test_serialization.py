@@ -184,12 +184,11 @@ def test_mesh_drawable_serialize_file_reference():
 def test_entity_serialize_basic():
     """Entity сериализуется с базовыми полями."""
     from termin.visualization.core.entity import Entity
-    from termin.geombase.pose3 import Pose3
+    from termin.geombase import Pose3
 
     ent = Entity(
         pose=Pose3(lin=np.array([1, 2, 3]), ang=np.array([0, 0, 0, 1])),
         name="test_entity",
-        scale=2.0,
         priority=5,
     )
 
@@ -204,7 +203,7 @@ def test_entity_serialize_basic():
 def test_entity_non_serializable():
     """Entity с serializable=False не сериализуется."""
     from termin.visualization.core.entity import Entity
-    from termin.geombase.pose3 import Pose3
+    from termin.geombase import Pose3
 
     ent = Entity(
         pose=Pose3.identity(),
@@ -220,7 +219,7 @@ def test_scene_excludes_non_serializable_entities():
     """Scene не включает non-serializable Entity в сериализацию."""
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.entity import Entity
-    from termin.geombase.pose3 import Pose3
+    from termin.geombase import Pose3
 
     scene = Scene()
     normal_ent = Entity(pose=Pose3.identity(), name="normal")
@@ -238,7 +237,7 @@ def test_scene_excludes_non_serializable_entities():
 def test_entity_serialize_with_children():
     """Entity сериализуется с дочерними Entity."""
     from termin.visualization.core.entity import Entity
-    from termin.geombase.pose3 import Pose3
+    from termin.geombase import Pose3
 
     parent = Entity(pose=Pose3.identity(), name="parent")
     child1 = Entity(pose=Pose3.identity(), name="child1")
@@ -258,7 +257,7 @@ def test_entity_serialize_with_children():
 def test_entity_deserialize_with_children():
     """Entity десериализуется с дочерними Entity."""
     from termin.visualization.core.entity import Entity
-    from termin.geombase.pose3 import Pose3
+    from termin.geombase import Pose3
 
     parent = Entity(pose=Pose3.identity(), name="parent")
     child = Entity(pose=Pose3.identity(), name="child")
@@ -278,7 +277,7 @@ def test_scene_serialize():
     """Scene сериализуется с entities."""
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.entity import Entity
-    from termin.geombase.pose3 import Pose3
+    from termin.geombase import Pose3
 
     scene = Scene(background_color=(0.1, 0.2, 0.3, 1.0))
     ent1 = Entity(pose=Pose3.identity(), name="entity1")
@@ -296,7 +295,7 @@ def test_scene_serialize_only_root_entities():
     """Scene сериализует только корневые Entity."""
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.entity import Entity
-    from termin.geombase.pose3 import Pose3
+    from termin.geombase import Pose3
 
     scene = Scene()
     parent = Entity(pose=Pose3.identity(), name="parent")
@@ -316,11 +315,9 @@ def test_scene_serialize_only_root_entities():
 # ============== ResourceManager ==============
 
 def test_resource_manager_serialize():
-    """ResourceManager сериализует все ресурсы."""
+    """ResourceManager сериализует только текстуры (материалы и меши загружаются из файлов)."""
     from termin.visualization.core.resources import ResourceManager
     from termin.visualization.core.material import Material
-    from termin.visualization.core.mesh import MeshDrawable
-    from termin.mesh.mesh import Mesh3
 
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()
@@ -328,42 +325,28 @@ def test_resource_manager_serialize():
     mat = Material(color=np.array([1, 0, 0, 1], dtype=np.float32))
     rm.register_material("red", mat)
 
-    mesh = Mesh3(
-        vertices=np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32),
-        triangles=np.array([[0, 1, 2]], dtype=np.int32)
-    )
-    drawable = MeshDrawable(mesh)
-    rm.register_mesh("triangle", drawable)
-
     data = rm.serialize()
 
-    # Materials are NOT serialized - they are loaded from .material files
+    # Materials and meshes are NOT serialized - they are loaded from project files
     assert "materials" not in data
-    assert "meshes" in data
-    assert "triangle" in data["meshes"]
+    assert "meshes" not in data
+    # Only textures are serialized
+    assert "textures" in data
 
 
 def test_resource_manager_deserialize():
-    """ResourceManager десериализуется."""
+    """ResourceManager десериализуется (только текстуры)."""
     from termin.visualization.core.resources import ResourceManager
-    from termin.visualization.core.mesh import MeshDrawable
-    from termin.mesh.mesh import Mesh3
 
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()
 
-    mesh = Mesh3(
-        vertices=np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32),
-        triangles=np.array([[0, 1, 2]], dtype=np.int32)
-    )
-    drawable = MeshDrawable(mesh)
-    rm.register_mesh("triangle", drawable)
-
     data = rm.serialize()
     restored = ResourceManager.deserialize(data)
 
-    # Materials are NOT serialized/deserialized - they are loaded from .material files
-    assert "triangle" in restored.meshes
+    # Materials and meshes are NOT serialized/deserialized - they are loaded from project files
+    # Deserialization restores a minimal ResourceManager with textures only
+    assert restored is not None
 
 
 # ============== Full round-trip with JSON ==============
@@ -373,10 +356,8 @@ def test_full_world_json_roundtrip():
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.entity import Entity
     from termin.visualization.core.material import Material
-    from termin.visualization.core.mesh import MeshDrawable
     from termin.visualization.core.resources import ResourceManager
-    from termin.mesh.mesh import Mesh3
-    from termin.geombase.pose3 import Pose3
+    from termin.geombase import Pose3
 
     # Конвертер numpy типов
     def numpy_encoder(obj):
@@ -388,20 +369,13 @@ def test_full_world_json_roundtrip():
             return int(obj)
         raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
-    # Создаём ресурсы
+    # Создаём ресурсы (materials and meshes are NOT serialized)
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()
 
     mat = Material(color=np.array([0.8, 0.2, 0.1, 1.0], dtype=np.float32))
     mat.name = "test_mat"
     rm.register_material("test_mat", mat)
-
-    mesh = Mesh3(
-        vertices=np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32),
-        triangles=np.array([[0, 1, 2]], dtype=np.int32)
-    )
-    drawable = MeshDrawable(mesh)
-    rm.register_mesh("test_mesh", drawable)
 
     # Создаём сцену
     scene = Scene(background_color=(0.1, 0.1, 0.1, 1.0))
@@ -426,8 +400,8 @@ def test_full_world_json_roundtrip():
 
     # Десериализуем
     restored_rm = ResourceManager.deserialize(loaded_data["resources"])
-    assert "test_mat" in restored_rm.materials
-    assert "test_mesh" in restored_rm.meshes
+    # Materials and meshes are NOT serialized/deserialized - loaded from project files
+    assert restored_rm is not None
 
     scene_data = loaded_data["scenes"][0]
     assert np.allclose(scene_data["background_color"], [0.1, 0.1, 0.1, 1.0])

@@ -96,7 +96,7 @@ class AnimationChannel:
             ch: FBXAnimationChannel с pos_keys, rot_keys, scale_keys в тиках
                 rot_keys содержат Euler углы (в градусах) которые конвертируются в кватернионы
         """
-        from termin.geombase.pose3 import Pose3
+        from termin.geombase import Pose3
 
         tr = [AnimationKeyframe(t, translation=np.array(v))
               for (t, v) in ch.pos_keys]

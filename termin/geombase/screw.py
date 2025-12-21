@@ -1,6 +1,14 @@
 import numpy
 import math
-from .pose3 import Pose3
+from termin.geombase._geom_native import Pose3, Vec3
+
+def _to_numpy(v):
+    """Convert Vec3 or array-like to numpy array."""
+    if isinstance(v, numpy.ndarray):
+        return v
+    if isinstance(v, Vec3):
+        return numpy.array([v.x, v.y, v.z], dtype=numpy.float64)
+    return numpy.asarray(v, dtype=numpy.float64)
 
 def cross2d(scalar, vec):
     """2D cross product: scalar × vector = [vy, -vx] * scalar"""
@@ -20,14 +28,9 @@ class Screw:
     __slots__ = ('ang', 'lin')
 
     def __init__(self, ang, lin):
-        self.ang = ang  # Bivector part
-        self.lin = lin  # Vector part
-
-        if not isinstance(self.ang, numpy.ndarray):
-            raise Exception("ang must be ndarray")
-
-        if not isinstance(self.lin, numpy.ndarray):
-            raise Exception("lin must be ndarray")
+        # Convert to numpy if needed
+        self.ang = _to_numpy(ang)  # Bivector part
+        self.lin = _to_numpy(lin)  # Vector part
 
     def __repr__(self):
         return f"Screw(ang={self.ang}, lin={self.lin})"
@@ -205,55 +208,57 @@ class Screw3(Screw):
 
     def transform_by(self, trans):
         return Screw3(
-            ang=trans.transform_vector(self.ang),
-            lin=trans.transform_vector(self.lin)
+            ang=_to_numpy(trans.transform_vector(self.ang)),
+            lin=_to_numpy(trans.transform_vector(self.lin))
         )
 
     def rotate_by(self, rot):
         return Screw3(
-            ang=rot.transform_vector(self.ang),
-            lin=rot.transform_vector(self.lin)
+            ang=_to_numpy(rot.transform_vector(self.ang)),
+            lin=_to_numpy(rot.transform_vector(self.lin))
         )
 
     def inverse_rotate_by(self, rot):
         return Screw3(
-            ang=rot.inverse_transform_vector(self.ang),
-            lin=rot.inverse_transform_vector(self.lin)
+            ang=_to_numpy(rot.inverse_transform_vector(self.ang)),
+            lin=_to_numpy(rot.inverse_transform_vector(self.lin))
         )
 
     def inverse_transform_by(self, trans):
         return Screw3(
-            ang=trans.inverse_transform_vector(self.ang),
-            lin=trans.inverse_transform_vector(self.lin)
+            ang=_to_numpy(trans.inverse_transform_vector(self.ang)),
+            lin=_to_numpy(trans.inverse_transform_vector(self.lin))
         )
 
     def transform_as_twist_by(self, trans):
-        rang = trans.transform_vector(self.ang)
+        rang = _to_numpy(trans.transform_vector(self.ang))
+        trans_lin = _to_numpy(trans.lin) if isinstance(trans.lin, Vec3) else trans.lin
         return Screw3(
             ang = rang,
-            lin = trans.transform_vector(self.lin) + numpy.cross(trans.lin, rang)
+            lin = _to_numpy(trans.transform_vector(self.lin)) + numpy.cross(trans_lin, rang)
         )
 
     def inverse_transform_as_twist_by(self, trans):
+        trans_lin = _to_numpy(trans.lin) if isinstance(trans.lin, Vec3) else trans.lin
         return Screw3(
-            ang = trans.inverse_transform_vector(self.ang),
-            lin = trans.inverse_transform_vector(self.lin - numpy.cross(trans.lin, self.ang))
+            ang = _to_numpy(trans.inverse_transform_vector(self.ang)),
+            lin = _to_numpy(trans.inverse_transform_vector(self.lin - numpy.cross(trans_lin, self.ang)))
         )
 
     def transform_as_wrench_by(self, trans):
         """Transform wrench (moment + force) under SE(3) transform."""
-        p = trans.lin
+        p = _to_numpy(trans.lin) if isinstance(trans.lin, Vec3) else trans.lin
         return Screw3(
-            ang = trans.transform_vector(self.ang + numpy.cross(p, self.lin)),
-            lin = trans.transform_vector(self.lin)
+            ang = _to_numpy(trans.transform_vector(self.ang + numpy.cross(p, self.lin))),
+            lin = _to_numpy(trans.transform_vector(self.lin))
         )
 
     def inverse_transform_as_wrench_by(self, trans):
         """Inverse transform of a wrench under SE(3) transform."""
-        p = trans.lin
+        p = _to_numpy(trans.lin) if isinstance(trans.lin, Vec3) else trans.lin
         return Screw3(
-            ang = trans.inverse_transform_vector(self.ang - numpy.cross(p, self.lin)),
-            lin = trans.inverse_transform_vector(self.lin)
+            ang = _to_numpy(trans.inverse_transform_vector(self.ang - numpy.cross(p, self.lin))),
+            lin = _to_numpy(trans.inverse_transform_vector(self.lin))
         )
 
     def as_pose3(self):

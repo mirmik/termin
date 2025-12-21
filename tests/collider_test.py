@@ -21,7 +21,7 @@ class TestCollider(unittest.TestCase):
             radius = 0.25
         )
 
-        p_near, q_near, dist = capsule1.closest_to_capsule(capsule2)
+        p_near, q_near, dist = capsule1.closest_to_collider(capsule2)
 
         expected_dist = 0.5  # Capsules are touching
         self.assertAlmostEqual(dist, expected_dist)
@@ -46,7 +46,7 @@ class TestCollider(unittest.TestCase):
             radius = sphere_radius
         )
 
-        p_near, q_near, dist = sphere.closest_to_capsule(capsule)
+        p_near, q_near, dist = sphere.closest_to_collider(capsule)
 
         expected_dist = 0.0  # They are touching
         self.assertAlmostEqual(dist, expected_dist)
@@ -127,7 +127,7 @@ class TestCollider(unittest.TestCase):
             radius = 0.2
         )
 
-        closest_box_point, closest_capsule_point, distance = box.closest_point_to_capsule(capsule)
+        closest_box_point, closest_capsule_point, distance = box.closest_to_collider(capsule)
 
         expected_distance = 1.8
         self.assertAlmostEqual(distance, expected_distance)
@@ -192,7 +192,7 @@ class TestColliderRay(unittest.TestCase):
             center=numpy.array([0.0, 0.0, 5.0]),
             radius=1.0
         )
-        from termin.geombase.ray import Ray3
+        from termin.geombase import Ray3
 
         ray = Ray3(
             origin=numpy.array([0.0, 0.0, 0.0]),
@@ -214,7 +214,7 @@ class TestColliderRay(unittest.TestCase):
             center=numpy.array([0.0, 5.0, 5.0]),
             radius=1.0
         )
-        from termin.geombase.ray import Ray3
+        from termin.geombase import Ray3
 
         ray = Ray3(
             origin=numpy.array([0.0, 0.0, 0.0]),
@@ -239,7 +239,7 @@ class TestColliderRay(unittest.TestCase):
             b=numpy.array([0.0, 0.0, 7.0]),
             radius=1.0
         )
-        from termin.geombase.ray import Ray3
+        from termin.geombase import Ray3
 
         ray = Ray3(
             origin=numpy.array([0.0, 0.0, 0.0]),
@@ -259,7 +259,7 @@ class TestColliderRay(unittest.TestCase):
             b=numpy.array([5.0, 0.0, 5.0]),
             radius=0.5
         )
-        from termin.geombase.ray import Ray3
+        from termin.geombase import Ray3
 
         ray = Ray3(
             origin=numpy.array([0.0, 0.0, 0.0]),
@@ -279,7 +279,7 @@ class TestColliderRay(unittest.TestCase):
             center=numpy.array([0.0, 0.0, 5.0]),
             size=numpy.array([2.0, 2.0, 2.0])
         )
-        from termin.geombase.ray import Ray3
+        from termin.geombase import Ray3
 
         ray = Ray3(
             origin=numpy.array([0.0, 0.0, 0.0]),
@@ -297,7 +297,7 @@ class TestColliderRay(unittest.TestCase):
             center=numpy.array([5.0, 0.0, 5.0]),
             size=numpy.array([2.0, 2.0, 2.0])
         )
-        from termin.geombase.ray import Ray3
+        from termin.geombase import Ray3
 
         ray = Ray3(
             origin=numpy.array([0.0, 0.0, 0.0]),
@@ -327,7 +327,7 @@ class TestColliderRay(unittest.TestCase):
         )
         union = UnionCollider([sphere1, sphere2])
 
-        from termin.geombase.ray import Ray3
+        from termin.geombase import Ray3
         ray = Ray3(
             origin=numpy.array([0.0, 0.0, 0.0]),
             direction=numpy.array([0.0, 0.0, 1.0])

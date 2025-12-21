@@ -6,7 +6,7 @@ Textured cube demo + grayscale + Gaussian blur (two-pass)
 from __future__ import annotations
 import numpy as np
 
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 from termin.mesh.mesh import TexturedCubeMesh
 from termin.visualization import (
     Entity,

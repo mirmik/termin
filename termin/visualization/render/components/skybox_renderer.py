@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 from termin.visualization.core.component import Component
 from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.material import Material

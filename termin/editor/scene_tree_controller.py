@@ -16,7 +16,7 @@ from termin.editor.editor_commands import (
 )
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 from termin.editor.editor_tree import SceneTreeModel
 from termin.visualization.core.resources import ResourceManager
 

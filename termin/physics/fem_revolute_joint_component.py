@@ -24,8 +24,8 @@ class FEMRevoluteJointComponent(Component):
     Соединяет два тела в точке, позволяя им вращаться
     относительно друг друга.
 
-    Позиция entity = точка шарнира.
-    body_a_entity_name, body_b_entity_name = имена entity с телами.
+    Точка шарнира задаётся смещением в локальной СК тела A.
+    Позиция самого entity игнорируется.
     """
 
     inspect_fields = {
@@ -39,30 +39,47 @@ class FEMRevoluteJointComponent(Component):
             label="Body B",
             kind="string",
         ),
+        "joint_offset_in_body_a": InspectField(
+            path="joint_offset_in_body_a",
+            label="Joint Offset (in Body A)",
+            kind="vec3",
+        ),
+        "damping": InspectField(
+            path="damping",
+            label="Damping",
+            kind="float",
+            min=0.0,
+            step=0.01,
+        ),
     }
 
     def __init__(
         self,
         body_a_entity_name: str = "",
         body_b_entity_name: str = "",
+        joint_offset_in_body_a: np.ndarray | None = None,
+        damping: float = 0.0,
     ):
         super().__init__(enabled=True)
 
         self.body_a_entity_name = body_a_entity_name
         self.body_b_entity_name = body_b_entity_name
+        self.damping = damping
+
+        if joint_offset_in_body_a is None:
+            joint_offset_in_body_a = np.zeros(3, dtype=np.float64)
+        self.joint_offset_in_body_a = np.asarray(joint_offset_in_body_a, dtype=np.float64)
 
         self._fem_joint: RevoluteJoint3D | None = None
         self._fem_world: "FEMPhysicsWorldComponent | None" = None
         self._body_a_component: "FEMRigidBodyComponent | None" = None
         self._body_b_component: "FEMRigidBodyComponent | None" = None
 
-    @property
-    def joint_point(self) -> np.ndarray:
-        """Точка шарнира = позиция этого entity."""
-        if self.entity is None:
-            return np.zeros(3, dtype=np.float64)
-        pose = self.entity.transform.global_pose()
-        return np.asarray(pose.lin, dtype=np.float64)
+    def _compute_joint_point(self, entity_a: "Entity") -> np.ndarray:
+        """Вычислить точку шарнира в мировых координатах."""
+        pose_a = entity_a.transform.global_pose()
+        # Преобразуем локальное смещение в мировые координаты
+        return np.asarray(pose_a.transform_point(self.joint_offset_in_body_a), dtype=np.float64)
 
     def _find_entity_by_name(self, scene: "Scene", name: str) -> "Entity | None":
         """Найти entity по имени."""
@@ -108,11 +125,14 @@ class FEMRevoluteJointComponent(Component):
             print("FEMRevoluteJointComponent: FEM bodies not initialized")
             return
 
+        # Вычислить точку шарнира из позиции тела A и смещения
+        joint_point = self._compute_joint_point(entity_a)
+
         # Создать joint
         self._fem_joint = RevoluteJoint3D(
             bodyA=fem_body_a,
             bodyB=fem_body_b,
-            coords_of_joint=self.joint_point,
+            coords_of_joint=joint_point,
             assembler=world.assembler,
         )
 
@@ -122,20 +142,24 @@ class FEMRevoluteJointComponent(Component):
         if renderer is None:
             return
 
-        joint_pos = self.joint_point.astype(np.float32)
+        # Вычисляем точку шарнира из позиции тела A
+        if self._body_a_component is None or self._body_a_component.entity is None:
+            return
+
+        entity_a = self._body_a_component.entity
+        joint_pos = self._compute_joint_point(entity_a).astype(np.float32)
 
         # Линия к телу A
-        if self._body_a_component is not None and self._body_a_component.entity is not None:
-            body_a_pos = np.asarray(
-                self._body_a_component.entity.transform.global_pose().lin,
-                dtype=np.float32
-            )
-            renderer.line(
-                start=joint_pos,
-                end=body_a_pos,
-                color=(0.2, 0.8, 0.8, 1.0),  # cyan
-                width=2.0,
-            )
+        body_a_pos = np.asarray(
+            entity_a.transform.global_pose().lin,
+            dtype=np.float32
+        )
+        renderer.line(
+            start=joint_pos,
+            end=body_a_pos,
+            color=(0.2, 0.8, 0.8, 1.0),  # cyan
+            width=2.0,
+        )
 
         # Линия к телу B
         if self._body_b_component is not None and self._body_b_component.entity is not None:
@@ -157,3 +181,26 @@ class FEMRevoluteJointComponent(Component):
             color=(0.2, 0.8, 0.2, 1.0),  # green
             segments=8,
         )
+
+    def compute_damping_dissipation(self, dt: float) -> float:
+        """
+        Вычислить диссипацию энергии за шаг dt.
+
+        Шарнир сопротивляется относительной угловой скорости:
+        ω_rel = ω_A - ω_B
+        τ_damp = -c * ω_rel  → P = c * |ω_rel|²
+        """
+        if self._body_a_component is None or self._body_b_component is None:
+            return 0.0
+
+        fem_body_a = self._body_a_component.fem_body
+        fem_body_b = self._body_b_component.fem_body
+
+        if fem_body_a is None or fem_body_b is None:
+            return 0.0
+
+        omega_a = fem_body_a.velocity_var.value[3:6]
+        omega_b = fem_body_b.velocity_var.value[3:6]
+        omega_rel = omega_a - omega_b
+
+        return self.damping * np.dot(omega_rel, omega_rel) * dt

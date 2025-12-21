@@ -10,7 +10,7 @@
 """
 
 import numpy as np
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 from termin.geombase.screw import Screw3
 
 

@@ -3,7 +3,7 @@ import pytest
 
 from termin.visualization import Entity, Scene
 from termin.visualization.core.camera import PerspectiveCameraComponent
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 from termin.colliders.sphere import SphereCollider
 
 

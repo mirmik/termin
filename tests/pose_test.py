@@ -118,7 +118,6 @@ class TestPose3(unittest.TestCase):
 
         assert_vec3_approx(transformed_point, expected_point)
 
-    @pytest.mark.skip(reason="Pose3.lerp not yet bound in C++")
     def test_lerp(self):
         pose1 = Pose3(
             ang=Quat(0.0, 0.0, math.sin(0.0), math.cos(0.0)),
@@ -155,7 +154,6 @@ class TestPose3(unittest.TestCase):
         norm = math.sqrt(ang.x**2 + ang.y**2 + ang.z**2 + ang.w**2)
         self.assertAlmostEqual(norm, 1.0)
 
-    @pytest.mark.skip(reason="Pose3.distance not yet bound in C++")
     def test_distance(self):
         pose1 = Pose3(
             ang=Quat(0.0, 0.0, 0.0, 1.0),
@@ -169,7 +167,6 @@ class TestPose3(unittest.TestCase):
         expected_distance = math.sqrt((4-1)**2 + (6-2)**2 + (3-3)**2)
         self.assertAlmostEqual(distance, expected_distance)
 
-    @pytest.mark.skip(reason="Pose3.from_axis_angle not yet bound in C++")
     def test_axis_angle_conversion(self):
         # Create a rotation around Z axis by 90 degrees
         axis = Vec3(0.0, 0.0, 1.0)
@@ -184,7 +181,6 @@ class TestPose3(unittest.TestCase):
         # Check the axis (should be normalized)
         assert_vec3_approx(result_axis, axis)
 
-    @pytest.mark.skip(reason="Pose3.from_euler not yet bound in C++")
     def test_euler_conversion_xyz(self):
         # Create a pose from Euler angles
         roll = math.pi / 6   # 30 degrees
@@ -201,7 +197,6 @@ class TestPose3(unittest.TestCase):
         self.assertAlmostEqual(result_pitch, pitch, places=6)
         self.assertAlmostEqual(result_yaw, yaw, places=6)
 
-    @pytest.mark.skip(reason="Pose3.from_euler not yet bound in C++")
     def test_euler_consistency(self):
         # Test that rotation by Euler angles produces expected result
         pose = Pose3.from_euler(0, 0, math.pi / 2)  # 90 degrees around Z
@@ -210,7 +205,6 @@ class TestPose3(unittest.TestCase):
         expected = Vec3(0.0, 1.0, 0.0)
         assert_vec3_approx(transformed, expected)
 
-    @pytest.mark.skip(reason="Pose3.looking_at not yet bound in C++")
     def test_looking_at(self):
         # Create a pose at origin looking towards (1, 0, 0)
         eye = Vec3(0.0, 0.0, 0.0)
@@ -231,7 +225,6 @@ class TestPose3(unittest.TestCase):
             decimal=5
         )
 
-    @pytest.mark.skip(reason="Pose3.x/y/z properties not yet bound in C++")
     def test_properties_xyz(self):
         pose = Pose3(
             ang=Quat(0.0, 0.0, 0.0, 1.0),
@@ -250,7 +243,6 @@ class TestPose3(unittest.TestCase):
 
         assert_vec3_approx(pose.lin, (4.0, 5.0, 6.0))
 
-    @pytest.mark.skip(reason="Pose3.as_matrix34 not yet bound in C++")
     def test_as_matrix34(self):
         pose = Pose3(
             ang=Quat(0.0, 0.0, math.sin(math.pi/4), math.cos(math.pi/4)),
@@ -299,7 +291,6 @@ class TestPose3(unittest.TestCase):
         recovered = pose.inverse_transform_vector(transformed)
         assert_vec3_approx(recovered, vector)
 
-    @pytest.mark.skip(reason="Pose3.compose not yet bound in C++")
     def test_compose_method(self):
         # Test that compose() method works same as * operator
         pose1 = Pose3.rotateZ(math.pi / 4) * Pose3.translation(1.0, 0.0, 0.0)
@@ -335,7 +326,6 @@ class TestPose3(unittest.TestCase):
         expected = Vec3(0.0, 1.0, 0.0)
         assert_vec3_approx(transformed, expected)
 
-    @pytest.mark.skip(reason="Pose3.moveX/moveY/moveZ not yet bound in C++")
     def test_static_move_methods(self):
         # Test moveX, moveY, moveZ, right, forward, up
         point = Vec3(0.0, 0.0, 0.0)

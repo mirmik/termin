@@ -8,7 +8,7 @@ import numpy as np
 from termin.visualization.core.component import Component
 from termin.fem.multibody3d_3 import RigidBody3D
 from termin.fem.inertia3d import SpatialInertia3D
-from termin.geombase.pose3 import Pose3
+from termin.geombase import Pose3
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -37,16 +37,34 @@ class FEMRigidBodyComponent(Component):
             label="Inertia (diagonal)",
             kind="vec3",
         ),
+        "linear_damping": InspectField(
+            path="linear_damping",
+            label="Linear Damping",
+            kind="float",
+            min=0.0,
+            step=0.01,
+        ),
+        "angular_damping": InspectField(
+            path="angular_damping",
+            label="Angular Damping",
+            kind="float",
+            min=0.0,
+            step=0.01,
+        ),
     }
 
     def __init__(
         self,
         mass: float = 1.0,
         inertia_diagonal: np.ndarray | None = None,
+        linear_damping: float = 0.0,
+        angular_damping: float = 0.0,
     ):
         super().__init__(enabled=True)
 
         self.mass = mass
+        self.linear_damping = linear_damping
+        self.angular_damping = angular_damping
 
         # Диагональные моменты инерции (Ixx, Iyy, Izz)
         # По умолчанию — сфера радиусом 0.5
@@ -139,3 +157,24 @@ class FEMRigidBodyComponent(Component):
         Izz = 0.5 * mass * radius * radius
         Ixx = (1.0 / 12.0) * mass * (3 * radius * radius + height * height)
         return np.array([Ixx, Ixx, Izz], dtype=np.float64)
+
+    def compute_damping_dissipation(self, dt: float) -> float:
+        """
+        Вычислить диссипацию энергии за шаг dt.
+
+        Демпфирование тела — сопротивление среды (воздух):
+        - F_damp = -c_lin * v  → P = c_lin * |v|²
+        - τ_damp = -c_rot * ω  → P = c_rot * |ω|²
+        """
+        if self._fem_body is None:
+            return 0.0
+
+        v = self._fem_body.velocity_var.value
+        v_lin = v[0:3]
+        omega = v[3:6]
+
+        dissipation = 0.0
+        dissipation += self.linear_damping * np.dot(v_lin, v_lin) * dt
+        dissipation += self.angular_damping * np.dot(omega, omega) * dt
+
+        return dissipation

@@ -77,6 +77,13 @@ struct Screw3 {
         return {ang_world, lin_world};
     }
 
+    // Adjoint transform by translation only (kinematic_carry)
+    // ω_out = ω
+    // v_out = v + ω × arm
+    Screw3 adjoint(const Vec3& arm) const {
+        return {ang, lin + ang.cross(arm)};
+    }
+
     // Inverse adjoint (world -> body) for spatial velocity
     // ω_body = R^T * ω_world
     // v_body = R^T * (v_world - p × ω_world)
@@ -84,6 +91,13 @@ struct Screw3 {
         Vec3 ang_body = pose.inverse_transform_vector(ang);
         Vec3 lin_body = pose.inverse_transform_vector(lin - pose.lin.cross(ang));
         return {ang_body, lin_body};
+    }
+
+    // Inverse adjoint by translation only
+    // ω_out = ω
+    // v_out = v - ω × arm
+    Screw3 adjoint_inv(const Vec3& arm) const {
+        return {ang, lin - ang.cross(arm)};
     }
 
     // Coadjoint transform (body -> world) for wrench (force vectors)
@@ -95,6 +109,13 @@ struct Screw3 {
         return {ang_world, lin_world};
     }
 
+    // Coadjoint by translation only (force_carry)
+    // f_out = f
+    // τ_out = τ + arm × f
+    Screw3 coadjoint(const Vec3& arm) const {
+        return {ang + arm.cross(lin), lin};
+    }
+
     // Inverse coadjoint (world -> body) for wrench
     // f_body = R^T * f_world
     // τ_body = R^T * (τ_world - p × f_world)
@@ -102,6 +123,13 @@ struct Screw3 {
         Vec3 lin_body = pose.inverse_transform_vector(lin);
         Vec3 ang_body = pose.inverse_transform_vector(ang - pose.lin.cross(lin));
         return {ang_body, lin_body};
+    }
+
+    // Inverse coadjoint by translation only
+    // f_out = f
+    // τ_out = τ - arm × f
+    Screw3 coadjoint_inv(const Vec3& arm) const {
+        return {ang - arm.cross(lin), lin};
     }
 
     // Convert to Pose3 (exponential map for small motions)

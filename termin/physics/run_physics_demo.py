@@ -6,8 +6,8 @@ from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtWidgets import QApplication
 from PyQt6 import QtCore
 
-from termin.geombase.pose3 import Pose3
-from termin.geombase.general_pose3 import GeneralPose3
+from termin.geombase import Pose3
+from termin.geombase import GeneralPose3
 from termin.mesh.mesh import CubeMesh
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.core.entity import Entity

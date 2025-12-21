@@ -193,7 +193,8 @@ class Asset(Identifiable):
         return {
             "uuid": self.uuid,
             "name": self._name,
-            "source_path": str(self._source_path) if self._source_path else None,
+            # Use as_posix() for cross-platform consistency (always forward slashes)
+            "source_path": self._source_path.as_posix() if self._source_path else None,
         }
 
     @classmethod

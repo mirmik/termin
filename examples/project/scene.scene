@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "4316b8b5-8e0a-4bd9-bebe-3d8f4ca2fe05",
+    "uuid": "bd571282-427d-4ced-9150-49a1023635cd",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -26,9 +26,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            2.394756365240997,
-            -1.0145354092143717,
-            0.041787445474351426
+            6.643949031829834,
+            -0.3744738698005676,
+            0.28263455629348755
           ],
           "rotation": [
             -0.6772284224280383,
@@ -84,9 +84,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            -1.3658794894218445,
-            3.3831747975349424,
-            -0.8897692128419878
+            -4.2191667556762695,
+            -8.149691581726074,
+            -5.521704196929932
           ],
           "rotation": [
             0.11493677277472744,
@@ -427,8 +427,8 @@
         "pose": {
           "position": [
             -0.20791339874267578,
-            -0.0006372332572937012,
-            -0.49967867136001587
+            -11.951974868774414,
+            -8.323357582092285
           ],
           "rotation": [
             0.27154025274985677,
@@ -445,7 +445,7 @@
                 "uuid": "00000000-0000-0000-0003-000000000001"
               },
               "material": {
-                "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b"
+                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
               },
               "override_material": false,
               "cast_shadow": true
@@ -1057,21 +1057,24 @@
             "flags": 0,
             "pose": {
               "position": [
-                0.0,
-                0.0,
-                0.0
+                0.22228217124938965,
+                1.2220641855747978,
+                2.5586575454805573
               ],
               "rotation": [
-                0.0,
-                0.0,
-                0.0,
-                1.0
+                0.26685775578803134,
+                0.24382122907854728,
+                -0.24287180806318354,
+                0.9001952464914246
               ]
             },
             "components": [
               {
                 "data": {
                   "enabled": true,
+                  "material": {
+                    "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
+                  },
                   "override_material": false,
                   "cast_shadow": true
                 },
@@ -4870,7 +4873,7 @@
       },
       {
         "uuid": "277899a4-9f8a-4389-b348-bb7809b5cf43",
-        "name": "entity5",
+        "name": "Physics",
         "priority": 0,
         "scale": [
           1.0,
@@ -4899,7 +4902,7 @@
         "components": [
           {
             "data": {
-              "enabled": true
+              "enabled": false
             },
             "type": "PhysicsWorldComponent"
           }
@@ -4929,6 +4932,325 @@
         ],
         "overrides": {},
         "name": "[Root]"
+      },
+      {
+        "uuid": "5b70bf74-801f-4ca0-a483-93c1c9c1d99f",
+        "name": "FEMPhysics",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "gravity": [
+                0.0,
+                0.0,
+                -9.81
+              ],
+              "time_step": 0.01,
+              "substeps": 1,
+              "energy_stabilization": true,
+              "strict_energy_mode": false
+            },
+            "type": "FEMPhysicsWorldComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "affc56a9-d31f-42fe-99fa-63c976944777",
+        "name": "Joint",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "body_entity_name": "Pendulum",
+              "damping": 0.0
+            },
+            "type": "FEMFixedJointComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000004"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "10f2ee7d-6e16-45d7-baf1-e4d157c1a4ab",
+        "name": "Pendulum",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            2.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "inertia_diagonal": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "linear_damping": 0.0,
+              "angular_damping": 0.0
+            },
+            "type": "FEMRigidBodyComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "c9238cbb-8281-4809-9f8d-12c25fc72b56",
+        "name": "Pendulum2",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            4.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "material": {
+                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "inertia_diagonal": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "linear_damping": 0.0,
+              "angular_damping": 0.0
+            },
+            "type": "FEMRigidBodyComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "8775e3c4-9f4f-4832-8c89-92524fae3683",
+        "name": "JointAB",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -13.461803436279297,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "body_a_entity_name": "Pendulum",
+              "body_b_entity_name": "Pendulum2",
+              "joint_offset_in_body_a": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "damping": 0.0
+            },
+            "type": "FEMRevoluteJointComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "bf0bc1c8-0abc-4203-854b-ebf2b589a30e",
+        "name": "TeleportCube",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.7847657203674316,
+            0.0,
+            -2.1738474369049072
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true
+            },
+            "type": "TeleportComponent"
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -4976,14 +5298,15 @@
   "editor": {
     "camera": {
       "target": [
-        0.6540316343307495,
-        1.4706597328186035,
-        -4.9625163078308105
+        -1.09182870388031,
+        1.7549999952316284,
+        -3.6065917015075684
       ],
-      "radius": 13.5,
-      "azimuth": 67.76066287943185,
-      "elevation": 0.46774823953447925
+      "radius": 10.5,
+      "azimuth": 68.26331770400617,
+      "elevation": 0.7225663103256543
     },
+    "selected_entity": "TeleportCube",
     "displays": [
       {
         "name": "Editor",
@@ -4992,7 +5315,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "791e9f99-cafb-403f-882c-8e5a40c80a7a",
+            "uuid": "798bdebd-99c6-40b2-a331-892edc8732f1",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -5011,8 +5334,8 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "2f224f66-ac77-4214-81c1-d16b04ba3c6c",
-            "camera_entity": "GameCamera",
+            "uuid": "00ae757f-5541-4367-a36b-1fab680bbace",
+            "camera_entity": "camera",
             "rect": [
               0.0,
               0.0,
@@ -5025,46 +5348,46 @@
       }
     ],
     "expanded_entities": [
-      "Arti",
-      "EditorEntities",
       "camera",
+      "Arti",
+      "cube1",
       "cube2",
-      "cube1"
+      "EditorEntities"
     ]
   },
   "resources": {
     "textures": {
       "Image": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\textures\\Image.png"
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\ArthurL\\textures\\Image.png"
       },
       "6830-1745580165": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
       },
       "Dalan": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\Dalan.png"
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Assets\\Dalan.png"
       },
       "eye_in_space.002": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eye_in_space.002.png"
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Assets\\eye_in_space.002.png"
       },
       "eyebrow001_png": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyebrow001_png.png"
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Assets\\eyebrow001_png.png"
       },
       "eyelashes01_png": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyelashes01_png.png"
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Assets\\eyelashes01_png.png"
       },
       "toptex1_png": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\toptex1_png.png"
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Assets\\toptex1_png.png"
       },
       "young_lightskinned_male_diffuse2_png.001": {
         "type": "file",
-        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
+        "source_path": "C:\\Users\\mirmik\\project\\Shared\\termin\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
       }
     }
   }

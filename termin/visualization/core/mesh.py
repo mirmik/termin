@@ -149,9 +149,10 @@ class MeshDrawable:
             return {"type": "none"}
 
         if asset.source_path is not None:
+            # Use as_posix() for cross-platform consistency (always forward slashes)
             return {
                 "type": "file",
-                "source_id": str(asset.source_path),
+                "source_id": asset.source_path.as_posix(),
             }
 
         # Без source_path сохраняем имя
