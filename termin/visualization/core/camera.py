@@ -32,16 +32,29 @@ from termin.visualization.platform.backends.base import Action, MouseButton
 class CameraComponent(Component):
     """Component that exposes view/projection matrices based on entity pose."""
 
+    aspect: float | None = None
+
     def screen_point_to_ray(self, x: float, y: float, viewport_rect):
         import numpy as np
         from termin.geombase import Ray3, Vec3
 
         px, py, pw, ph = viewport_rect
 
+        # Используем реальный aspect из viewport_rect, а не сохранённый в камере
+        # (камера.aspect может быть устаревшим если размер окна изменился)
+        viewport_aspect = pw / float(max(1, ph))
+        old_aspect = self.aspect
+        if old_aspect is not None:
+            self.aspect = viewport_aspect
+
         nx = ( (x - px) / pw ) * 2.0 - 1.0
         ny = ( (y - py) / ph ) * -2.0 + 1.0
 
         PV = self.get_projection_matrix() @ self.get_view_matrix()
+
+        # Восстанавливаем старый aspect
+        if old_aspect is not None:
+            self.aspect = old_aspect
 
         inv_PV = np.linalg.inv(PV)
 

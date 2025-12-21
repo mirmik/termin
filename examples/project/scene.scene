@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "eef8d533-875e-447e-b374-94fd604bec77",
+    "uuid": "67c96f9b-afb0-43ad-89cd-8e9fc70d736c",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -5668,7 +5668,7 @@
           {
             "data": {
               "enabled": true,
-              "mass": 1.0,
+              "mass": 5.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
@@ -5711,14 +5711,14 @@
         "pose": {
           "position": [
             0.0,
-            4.8,
-            -1.447
+            4.800000190734863,
+            -1.4470000267028809
           ],
           "rotation": [
             0.0,
             0.0,
-            0.0,
-            1.0
+            -0.005180361680686474,
+            0.9999866485595703
           ]
         },
         "components": [
@@ -6395,6 +6395,574 @@
             "children": []
           }
         ]
+      },
+      {
+        "uuid": "1b473894-2d9f-481c-b690-f789926dc33b",
+        "name": "entity12_copy_copy",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.2623562812805176,
+            16.03561019897461,
+            -1.9741756916046143
+          ],
+          "rotation": [
+            0.006262910188051355,
+            0.00015572270759700333,
+            -0.02530604133387178,
+            0.9996601202300827
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "81fe8085-2f6b-4f5a-9c60-3ad04c74c5bc",
+        "name": "entity12_copy_copy_copy",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.211514472961426,
+            15.01760196685791,
+            -0.8165416717529297
+          ],
+          "rotation": [
+            0.006262910188051355,
+            0.00015572270759700333,
+            -0.02530604133387178,
+            0.9996601202300827
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "71d00a00-a0b1-4a99-911f-a39fc3a0f1e5",
+        "name": "entity12_copy_copy_copy_copy",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.264064073562622,
+            16.03221893310547,
+            1.013224720954895
+          ],
+          "rotation": [
+            0.006262910188051355,
+            0.00015572270759700333,
+            -0.02530604133387178,
+            0.9996601202300827
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "95241d2d-6ba3-4a2f-9e11-57b746c9b5a0",
+        "name": "entity12_copy_copy_copy_copy_copy",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.2115042209625244,
+            14.994837760925293,
+            1.00022554397583
+          ],
+          "rotation": [
+            0.006262910188051355,
+            0.00015572270759700333,
+            -0.02530604133387178,
+            0.9996601202300827
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "16d376d7-de89-4b5a-9a9f-25c151dada67",
+        "name": "entity12_copy_copy_copy_copy_copy_copy",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.0912694931030273,
+            15.587942123413086,
+            2.0000855922698975
+          ],
+          "rotation": [
+            0.006262910188051355,
+            0.00015572270759700333,
+            -0.02530604133387178,
+            0.9996601202300827
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "94ed1525-a529-4311-a8d4-1fecd9e05bac",
+        "name": "entity12_copy_copy_copy_copy_copy_copy_copy",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.2694971561431885,
+            16.160221099853516,
+            -0.6577546000480652
+          ],
+          "rotation": [
+            0.006262910188051355,
+            0.00015572270759700333,
+            -0.02530604133387178,
+            0.9996601202300827
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "60aaaf1f-9bca-445d-839d-c4d3526bac3c",
+        "name": "entity12_copy_copy_copy_copy_copy",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            2.0542190074920654,
+            16.093505859375,
+            1.0139858722686768
+          ],
+          "rotation": [
+            0.006262910188051355,
+            0.00015572270759700333,
+            -0.02530604133387178,
+            0.9996601202300827
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "5d701cea-a938-4af1-a1a0-0646de016d29",
+        "name": "entity12_copy_copy_copy_copy_copy_copy",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            2.3515360355377197,
+            16.597936630249023,
+            0.0001425389782525599
+          ],
+          "rotation": [
+            0.006262910188051355,
+            0.00015572270759700333,
+            -0.02530604133387178,
+            0.9996601202300827
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -6442,13 +7010,13 @@
   "editor": {
     "camera": {
       "target": [
-        -0.47835585474967957,
-        12.911030769348145,
-        -6.675699710845947
+        -5.275979518890381,
+        10.019316673278809,
+        -5.857997894287109
       ],
-      "radius": 21.0,
-      "azimuth": 58.070594872359415,
-      "elevation": 0.3630284844148207
+      "radius": 23.0,
+      "azimuth": 57.81926746007238,
+      "elevation": 0.551524043630212
     },
     "displays": [
       {
@@ -6458,7 +7026,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "43858f1c-1426-4fa2-ba73-edb861ac1d28",
+            "uuid": "8f84c8e0-cf7f-4565-bc66-618952b9ad8c",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -6477,7 +7045,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "d4f24431-80bb-4934-a248-70f92142a677",
+            "uuid": "c73c167b-c36d-4ec3-b7fb-0d61974592fe",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -6491,15 +7059,15 @@
       }
     ],
     "expanded_entities": [
-      "camera",
-      "cube1",
-      "cube2",
-      "EditorEntities",
-      "entity13",
       "Walls",
+      "cube2",
+      "cube1",
+      "entity13",
+      "EditorEntities",
+      "Arti",
       "[Root]",
       "entity12_copy",
-      "Arti"
+      "camera"
     ]
   },
   "resources": {
