@@ -193,10 +193,11 @@ inline ColliderHit SphereCollider::closest_to_box_impl(const BoxCollider& box) c
     Vec3 sphere_center = center();
     double sphere_radius = effective_radius();
 
-    // Центр сферы в локальных координатах box'а
+    // Центр сферы в локальных координатах box'а (unscaled space)
     Vec3 local = box.transform.inverse_transform_point(sphere_center);
 
-    Vec3 half = box.effective_half_size();
+    // Bounds в unscaled пространстве (inverse_transform_point уже применил inverse scale)
+    Vec3 half = box.half_size;
     Vec3 box_min = Vec3(-half.x, -half.y, -half.z);
     Vec3 box_max = Vec3(+half.x, +half.y, +half.z);
 
@@ -207,21 +208,24 @@ inline ColliderHit SphereCollider::closest_to_box_impl(const BoxCollider& box) c
         std::clamp(local.z, box_min.z, box_max.z)
     );
 
-    Vec3 diff = local - closest;
-    double dist = diff.norm();
-
     Vec3 closest_world = box.transform.transform_point(closest);
 
-    if (dist > 1e-10) {
-        result.normal = (sphere_center - closest_world).normalized();
+    // Расстояние в мировом пространстве
+    Vec3 diff_world = closest_world - sphere_center;
+    double dist_world = diff_world.norm();
+
+    if (dist_world > 1e-10) {
+        // Normal points from A (sphere) toward B (box)
+        result.normal = diff_world / dist_world;
     } else {
-        // Сфера внутри box'а
-        result.normal = (sphere_center - box.center()).normalized();
+        // Сфера внутри box'а — направление к центру box'а
+        result.normal = (box.center() - sphere_center).normalized();
     }
 
-    result.point_on_a = sphere_center - result.normal * sphere_radius;
+    // Point on sphere surface in direction of box
+    result.point_on_a = sphere_center + result.normal * sphere_radius;
     result.point_on_b = closest_world;
-    result.distance = dist - sphere_radius;
+    result.distance = dist_world - sphere_radius;
 
     return result;
 }
