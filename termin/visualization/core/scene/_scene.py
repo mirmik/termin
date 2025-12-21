@@ -14,6 +14,7 @@ from termin.visualization.render.components.light_component import LightComponen
 from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.geombase import Ray3
 from termin.colliders.raycast_hit import RaycastHit
+from termin.collision._collision_native import CollisionWorld
 
 from .skybox import SkyboxManager
 from .lighting import LightingManager
@@ -49,6 +50,7 @@ class Scene(Identifiable):
         self._input_components: List[InputComponent] = []
         self._graphics: GraphicsBackend | None = None
         self.colliders = []
+        self._collision_world = CollisionWorld()
         self.update_list: List[Component] = []
         self._pending_start: List[Component] = []
 
@@ -163,6 +165,13 @@ class Scene(Identifiable):
     def build_lights(self) -> List[Light]:
         """Build world-space light parameters from all light components."""
         return self._lighting.build_lights()
+
+    # --- Collision World ---
+
+    @property
+    def collision_world(self) -> CollisionWorld:
+        """Get the collision world for physics and raycasting."""
+        return self._collision_world
 
     # --- Raycast ---
 

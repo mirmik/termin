@@ -4,6 +4,7 @@
 
 #include "termin/geom/geom.hpp"
 #include "termin/physics/physics.hpp"
+#include "termin/collision/collision_world.hpp"
 
 namespace py = pybind11;
 using namespace termin;
@@ -94,8 +95,16 @@ PYBIND11_MODULE(_physics_native, m) {
         .def_readwrite("ground_enabled", &PhysicsWorld::ground_enabled)
         .def_readwrite("ground_height", &PhysicsWorld::ground_height)
 
+        // Collision world
+        .def("set_collision_world", &PhysicsWorld::set_collision_world,
+            py::arg("collision_world"), py::keep_alive<1, 2>())
+        .def("collision_world", &PhysicsWorld::collision_world,
+             py::return_value_policy::reference)
+
         // Управление телами
         .def("add_body", &PhysicsWorld::add_body)
+        .def("register_collider", &PhysicsWorld::register_collider,
+            py::arg("body_idx"), py::arg("collider"))
         .def("get_body", py::overload_cast<size_t>(&PhysicsWorld::get_body),
              py::return_value_policy::reference)
         .def("body_count", &PhysicsWorld::body_count)

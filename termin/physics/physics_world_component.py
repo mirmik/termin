@@ -158,6 +158,8 @@ class PhysicsWorldComponent(Component):
 
     def start(self, scene: "Scene"):
         super().start(scene)
+        # Передаём CollisionWorld из сцены в PhysicsWorld
+        self._physics_world.set_collision_world(scene.collision_world)
         self._collect_rigid_bodies(scene)
         self._initialized = True
 

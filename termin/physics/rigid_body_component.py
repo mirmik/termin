@@ -155,14 +155,17 @@ class RigidBodyComponent(Component):
             Vec3(py_pose.lin[0], py_pose.lin[1], py_pose.lin[2])
         )
 
-        # Добавляем тело в C++ мир
-        sx, sy, sz = self._half_extents * 2.0  # size = 2 * half_extents
-        self._body_index = world.add_box(
-            sx, sy, sz,
-            self.mass,
-            cpp_pose,
-            self.is_static
-        )
+        # Создаём RigidBody
+        from termin.physics._physics_native import RigidBody
+        sx, sy, sz = self._half_extents * 2.0
+        body = RigidBody.create_box(sx, sy, sz, self.mass, cpp_pose, self.is_static)
+        self._body_index = world.add_body(body)
+
+        # Связываем с существующим ColliderComponent (если есть)
+        from termin.colliders.collider_component import ColliderComponent
+        collider_comp = self.entity.get_component(ColliderComponent)
+        if collider_comp is not None and collider_comp.attached is not None:
+            world.register_collider(self._body_index, collider_comp.attached)
 
     def _sync_from_physics(self):
         """Синхронизация трансформа сущности из C++ физического тела."""

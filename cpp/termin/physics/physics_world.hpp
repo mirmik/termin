@@ -21,6 +21,7 @@
 #include "contact_solver.hpp"
 #include <vector>
 #include <unordered_map>
+#include <memory>
 
 namespace termin {
 namespace physics {
@@ -63,7 +64,8 @@ private:
     // Маппинг: индекс тела → collider (для синхронизации позы)
     std::unordered_map<size_t, Collider*> body_to_collider_;
 
-    // Внешний CollisionWorld (не владеем)
+    // CollisionWorld: внешний (через set_collision_world) или собственный (для standalone использования)
+    std::unique_ptr<CollisionWorld> owned_collision_world_;
     CollisionWorld* collision_world_ = nullptr;
 
     double time_accumulator_ = 0.0;
@@ -82,6 +84,17 @@ public:
     }
 
     CollisionWorld* collision_world() const { return collision_world_; }
+
+    /**
+     * Получить (или создать) CollisionWorld для standalone использования.
+     */
+    CollisionWorld* ensure_collision_world() {
+        if (!collision_world_) {
+            owned_collision_world_ = std::make_unique<CollisionWorld>();
+            collision_world_ = owned_collision_world_.get();
+        }
+        return collision_world_;
+    }
 
     // ==================== Управление телами ====================
 
@@ -131,11 +144,9 @@ public:
         auto collider = std::make_shared<BoxCollider>(half_size, GeneralPose3(pose.ang, pose.lin));
         owned_colliders_.push_back(collider);
 
-        // Регистрируем
+        // Регистрируем (создаём CollisionWorld если нужно для standalone)
         Collider* raw = collider.get();
-        if (collision_world_) {
-            collision_world_->add(raw);
-        }
+        ensure_collision_world()->add(raw);
         register_collider(idx, raw);
 
         return idx;
@@ -152,9 +163,7 @@ public:
         owned_colliders_.push_back(collider);
 
         Collider* raw = collider.get();
-        if (collision_world_) {
-            collision_world_->add(raw);
-        }
+        ensure_collision_world()->add(raw);
         register_collider(idx, raw);
 
         return idx;
@@ -214,18 +223,23 @@ public:
 
 private:
     /**
-     * Синхронизировать позы коллайдеров с позами тел.
+     * Синхронизировать позы коллайдеров с телами и обновить BVH.
+     *
+     * Для ColliderPrimitive (standalone использование): синхронизируем pose из body.
+     * Для AttachedCollider (сцена): поза автоматически следует за entity.transform.
      */
     void sync_collider_poses() {
         for (auto& [body_idx, collider] : body_to_collider_) {
             if (body_idx >= bodies_.size()) continue;
 
-            const Pose3& pose = bodies_[body_idx].pose;
-
-            // Обновляем позу коллайдера (ColliderPrimitive)
+            // Для ColliderPrimitive (не AttachedCollider) синхронизируем позу из body
+            // AttachedCollider автоматически следует за entity.transform
             if (auto* prim = dynamic_cast<colliders::ColliderPrimitive*>(collider)) {
-                // Сохраняем scale, обновляем только позицию и ориентацию
-                prim->transform = GeneralPose3(pose.ang, pose.lin, prim->transform.scale);
+                // Проверяем, не AttachedCollider ли это
+                if (dynamic_cast<colliders::AttachedCollider*>(collider) == nullptr) {
+                    const Pose3& pose = bodies_[body_idx].pose;
+                    prim->transform = GeneralPose3(pose.ang, pose.lin, prim->transform.scale);
+                }
             }
 
             // Обновляем BVH

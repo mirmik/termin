@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "61183229-e08a-4acc-82dd-229fb19705b3",
+    "uuid": "4a9736b3-66f4-42f8-b351-ea3d7ead6b22",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -26,9 +26,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            -2.175642967224121,
-            2.132739305496216,
-            0.09157770872116089
+            -2.440293312072754,
+            1.9213082790374756,
+            0.06276339292526245
           ],
           "rotation": [
             -0.6772284224280383,
@@ -109,15 +109,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            -4.2191667556762695,
-            -8.149691581726074,
-            -5.521704196929932
+            -3.59470272064209,
+            2.385007381439209,
+            -1.470747947692871
           ],
           "rotation": [
-            0.11493677277472744,
-            -0.14472075495404252,
-            0.6059507214192146,
-            0.7737371417743858
+            0.07503165304660797,
+            -0.16889292001724243,
+            0.7804097533226013,
+            0.5973325967788696
           ]
         },
         "components": [
@@ -5276,6 +5276,67 @@
           }
         ],
         "children": []
+      },
+      {
+        "uuid": "50a85ac4-e6ef-4c76-9e9d-bd934da80b66",
+        "name": "entity5",
+        "priority": 0,
+        "scale": [
+          5.0,
+          5.0,
+          5.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -8.929,
+            6.195,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "material": {
+                "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -5327,11 +5388,10 @@
         1.7549999952316284,
         -3.6065917015075684
       ],
-      "radius": 15.5,
-      "azimuth": 68.00500897471112,
-      "elevation": 0.5899212871740844
+      "radius": 17.0,
+      "azimuth": 68.67521540747703,
+      "elevation": 0.8307767239493026
     },
-    "selected_entity": "Physics",
     "displays": [
       {
         "name": "Editor",
@@ -5340,7 +5400,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "fa7df38f-c3be-4cd7-ba88-a6ae8aae3c3e",
+            "uuid": "459160e8-f1b3-40c1-878d-f41a341772a7",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -5359,7 +5419,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "bbb6d2f7-f452-4701-8539-57caaf81b46f",
+            "uuid": "87398440-50af-498e-8f57-c19b58d68ab4",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -5373,11 +5433,12 @@
       }
     ],
     "expanded_entities": [
-      "cube2",
+      "EditorEntities",
       "Arti",
-      "cube1",
       "camera",
-      "EditorEntities"
+      "[Root]",
+      "cube1",
+      "cube2"
     ]
   },
   "resources": {
