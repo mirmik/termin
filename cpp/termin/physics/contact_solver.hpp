@@ -146,16 +146,6 @@ private:
         return v_b - v_a;
     }
 
-    /**
-     * Относительная скорость центров масс (без учёта вращения).
-     * Используется для трения, чтобы избежать артефактов при множественных контактах.
-     */
-    Vec3 relative_velocity_linear_only(const Contact& c) const {
-        Vec3 v_b = c.body_b ? c.body_b->linear_velocity : Vec3();
-        Vec3 v_a = c.body_a ? c.body_a->linear_velocity : Vec3();
-        return v_b - v_a;
-    }
-
     void solve_normal(CachedContact& cc, double dt) {
         Contact& c = *cc.contact;
 
@@ -193,46 +183,33 @@ private:
     void solve_friction(CachedContact& cc) {
         Contact& c = *cc.contact;
         double max_friction = friction * c.accumulated_normal;
-        
-        // Порог скорости для трения — избегаем численных артефактов
-        const double friction_velocity_threshold = 0.01;
 
-        // Используем линейную скорость (без учёта вращения) для более стабильного трения
-        Vec3 v_rel = relative_velocity_linear_only(c);
+        // Полная относительная скорость в точке контакта (включая вращение)
+        // v_point = v_linear + ω × r
+        Vec3 v_rel = relative_velocity(c);
 
         // Tangent 1
         {
             double vt = v_rel.dot(cc.tangent1);
-            
-            // Не применяем трение при очень малых скоростях
-            if (std::abs(vt) < friction_velocity_threshold) {
-                // Пропускаем
-            } else {
-                double impulse = cc.eff_mass_t1 * (-vt);
+            double impulse = cc.eff_mass_t1 * (-vt);
 
-                double old = c.accumulated_tangent1;
-                c.accumulated_tangent1 = std::clamp(old + impulse, -max_friction, max_friction);
-                impulse = c.accumulated_tangent1 - old;
+            double old = c.accumulated_tangent1;
+            c.accumulated_tangent1 = std::clamp(old + impulse, -max_friction, max_friction);
+            impulse = c.accumulated_tangent1 - old;
 
-                apply_impulse(c, cc.tangent1 * impulse);
-            }
+            apply_impulse(c, cc.tangent1 * impulse);
         }
 
         // Tangent 2
         {
             double vt = v_rel.dot(cc.tangent2);
-            
-            if (std::abs(vt) < friction_velocity_threshold) {
-                // Пропускаем
-            } else {
-                double impulse = cc.eff_mass_t2 * (-vt);
+            double impulse = cc.eff_mass_t2 * (-vt);
 
-                double old = c.accumulated_tangent2;
-                c.accumulated_tangent2 = std::clamp(old + impulse, -max_friction, max_friction);
-                impulse = c.accumulated_tangent2 - old;
+            double old = c.accumulated_tangent2;
+            c.accumulated_tangent2 = std::clamp(old + impulse, -max_friction, max_friction);
+            impulse = c.accumulated_tangent2 - old;
 
-                apply_impulse(c, cc.tangent2 * impulse);
-            }
+            apply_impulse(c, cc.tangent2 * impulse);
         }
     }
 
