@@ -39,13 +39,11 @@ class PhysicsWorld {
 public:
     // --- Параметры симуляции ---
     Vec3 gravity{0, 0, -9.81};
-    double fixed_dt = 1.0 / 60.0;
-    int max_substeps = 8;
+    int solver_iterations = 10;
 
     // --- Параметры контактов ---
     double restitution = 0.3;
     double friction = 0.5;
-    int solver_iterations = 10;
 
     // --- Земля (временно, пока нет PlaneCollider) ---
     bool ground_enabled = false;
@@ -68,7 +66,6 @@ private:
     std::unique_ptr<CollisionWorld> owned_collision_world_;
     CollisionWorld* collision_world_ = nullptr;
 
-    double time_accumulator_ = 0.0;
     std::vector<Contact> contacts_;
     ContactSolver solver_;
 
@@ -171,23 +168,11 @@ public:
 
     // ==================== Симуляция ====================
 
+    /**
+     * Выполнить один шаг физики с заданным dt.
+     * Накопление времени (fixed timestep) теперь на уровне Scene.
+     */
     void step(double dt) {
-        time_accumulator_ += dt;
-
-        int substeps = 0;
-        while (time_accumulator_ >= fixed_dt && substeps < max_substeps) {
-            step_fixed(fixed_dt);
-            time_accumulator_ -= fixed_dt;
-            ++substeps;
-        }
-
-        // Защита от спирали смерти
-        if (time_accumulator_ > fixed_dt * max_substeps) {
-            time_accumulator_ = 0.0;
-        }
-    }
-
-    void step_fixed(double dt) {
         // 1. Интегрируем силы → скорости
         for (auto& body : bodies_) {
             body.integrate_forces(dt, gravity);

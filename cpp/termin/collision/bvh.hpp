@@ -218,12 +218,27 @@ public:
             const BVHNode& leaf = nodes_[leaf_index];
             query_aabb(leaf.bounds, [&](Collider* other) {
                 // Avoid duplicate pairs and self-collision
-                if (other > leaf.collider) {
+                // Use center position for deterministic ordering
+                if (collider_less(leaf.collider, other)) {
                     callback(leaf.collider, other);
                 }
             });
         }
     }
+
+private:
+    /// Детерминированное сравнение коллайдеров по позиции центра
+    static bool collider_less(const Collider* a, const Collider* b) {
+        Vec3 ca = a->center();
+        Vec3 cb = b->center();
+        if (ca.x != cb.x) return ca.x < cb.x;
+        if (ca.y != cb.y) return ca.y < cb.y;
+        if (ca.z != cb.z) return ca.z < cb.z;
+        // Если центры совпадают — fallback на указатель (редкий случай)
+        return a < b;
+    }
+
+public:
 
     // ==================== Accessors ====================
 

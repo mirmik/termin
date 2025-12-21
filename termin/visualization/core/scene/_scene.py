@@ -52,7 +52,12 @@ class Scene(Identifiable):
         self.colliders = []
         self._collision_world = CollisionWorld()
         self.update_list: List[Component] = []
+        self.fixed_update_list: List[Component] = []
         self._pending_start: List[Component] = []
+
+        # Fixed timestep для физики (Unity-style)
+        self._fixed_timestep: float = 1.0 / 60.0
+        self._accumulated_time: float = 0.0
 
         # Skybox manager
         self._skybox = SkyboxManager()
@@ -332,6 +337,9 @@ class Scene(Identifiable):
         if is_overrides_method(component, "update", Component):
             self.update_list.append(component)
 
+        if is_overrides_method(component, "fixed_update", Component):
+            self.fixed_update_list.append(component)
+
         if not component._started:
             self._pending_start.append(component)
 
@@ -350,6 +358,9 @@ class Scene(Identifiable):
         if component in self.update_list:
             self.update_list.remove(component)
 
+        if component in self.fixed_update_list:
+            self.fixed_update_list.remove(component)
+
         if component in self._pending_start:
             self._pending_start.remove(component)
 
@@ -367,6 +378,14 @@ class Scene(Identifiable):
                 else:
                     # Keep disabled components in pending until enabled
                     self._pending_start.append(component)
+
+        # Fixed update loop (Unity-style)
+        self._accumulated_time += dt
+        while self._accumulated_time >= self._fixed_timestep:
+            for component in self.fixed_update_list:
+                if component.enabled:
+                    component.fixed_update(self._fixed_timestep)
+            self._accumulated_time -= self._fixed_timestep
 
         for component in self.update_list:
             if component.enabled:

@@ -63,7 +63,11 @@ class Component:
         self._started = True
 
     def update(self, dt: float):
-        """Called every frame."""
+        """Called every frame with variable dt."""
+        return
+
+    def fixed_update(self, dt: float):
+        """Called with fixed timestep for physics. dt is always fixed_timestep."""
         return
 
     def draw(self, context: RenderContext):

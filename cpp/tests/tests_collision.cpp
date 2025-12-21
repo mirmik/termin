@@ -158,17 +158,17 @@ TEST_CASE("BVH query_ray")
 
 TEST_CASE("BVH query_all_pairs")
 {
-    BVH bvh;
+    CollisionWorld world;
     SphereCollider s1(2.0);
     SphereCollider s2(2.0, GeneralPose3(Quat::identity(), Vec3(3, 0, 0)));  // Overlaps with s1
     SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0))); // Far away
 
-    bvh.insert(&s1, s1.aabb());
-    bvh.insert(&s2, s2.aabb());
-    bvh.insert(&s3, s3.aabb());
+    world.add(&s1);
+    world.add(&s2);
+    world.add(&s3);
 
     std::vector<std::pair<Collider*, Collider*>> pairs;
-    bvh.query_all_pairs([&](Collider* a, Collider* b) {
+    world.bvh().query_all_pairs([&](Collider* a, Collider* b) {
         pairs.push_back({a, b});
     });
 

@@ -83,13 +83,11 @@ PYBIND11_MODULE(_physics_native, m) {
 
         // Параметры симуляции
         .def_readwrite("gravity", &PhysicsWorld::gravity)
-        .def_readwrite("fixed_dt", &PhysicsWorld::fixed_dt)
-        .def_readwrite("max_substeps", &PhysicsWorld::max_substeps)
+        .def_readwrite("solver_iterations", &PhysicsWorld::solver_iterations)
 
         // Параметры контактов
         .def_readwrite("restitution", &PhysicsWorld::restitution)
         .def_readwrite("friction", &PhysicsWorld::friction)
-        .def_readwrite("solver_iterations", &PhysicsWorld::solver_iterations)
 
         // Земля
         .def_readwrite("ground_enabled", &PhysicsWorld::ground_enabled)
@@ -120,7 +118,6 @@ PYBIND11_MODULE(_physics_native, m) {
 
         // Симуляция
         .def("step", &PhysicsWorld::step)
-        .def("step_fixed", &PhysicsWorld::step_fixed)
 
         // Массовый доступ к данным
         .def("get_positions", [](const PhysicsWorld& world) {

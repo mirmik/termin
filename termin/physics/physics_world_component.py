@@ -206,8 +206,8 @@ class PhysicsWorldComponent(Component):
             self._rigid_body_components.remove(rb_comp)
             # Note: C++ world не поддерживает удаление тел (пока)
 
-    def update(self, dt: float):
-        """Шаг физики и синхронизация трансформов."""
+    def fixed_update(self, dt: float):
+        """Шаг физики с фиксированным dt и синхронизация трансформов."""
         if not self._initialized or not self.enabled:
             return
 

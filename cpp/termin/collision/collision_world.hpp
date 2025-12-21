@@ -12,7 +12,7 @@
 #include "contact_manifold.hpp"
 #include "termin/colliders/colliders.hpp"
 #include <vector>
-#include <unordered_set>
+#include <algorithm>
 
 namespace termin {
 namespace collision {
@@ -33,9 +33,9 @@ public:
      */
     void add(Collider* collider) {
         if (!collider) return;
-        if (colliders_.count(collider)) return;
+        if (contains(collider)) return;
 
-        colliders_.insert(collider);
+        colliders_.push_back(collider);
         bvh_.insert(collider, collider->aabb());
     }
 
@@ -44,10 +44,12 @@ public:
      */
     void remove(Collider* collider) {
         if (!collider) return;
-        if (!colliders_.count(collider)) return;
+
+        auto it = std::find(colliders_.begin(), colliders_.end(), collider);
+        if (it == colliders_.end()) return;
 
         bvh_.remove(collider);
-        colliders_.erase(collider);
+        colliders_.erase(it);
     }
 
     /**
@@ -56,7 +58,7 @@ public:
      */
     void update_pose(Collider* collider) {
         if (!collider) return;
-        if (!colliders_.count(collider)) return;
+        if (!contains(collider)) return;
 
         bvh_.update(collider, collider->aabb());
     }
@@ -75,7 +77,7 @@ public:
      * Check if a collider is in the world.
      */
     bool contains(Collider* collider) const {
-        return colliders_.count(collider) > 0;
+        return std::find(colliders_.begin(), colliders_.end(), collider) != colliders_.end();
     }
 
     /**
@@ -334,7 +336,7 @@ public:
 
 private:
     BVH bvh_;
-    std::unordered_set<Collider*> colliders_;
+    std::vector<Collider*> colliders_;
 };
 
 } // namespace collision

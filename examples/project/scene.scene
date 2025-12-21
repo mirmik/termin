@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "bb9e0ba6-505a-4e92-bf23-cfcf92b1ecd2",
+    "uuid": "d32d6c0d-939b-409a-9e8c-561ac6b38eb1",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -5337,6 +5337,77 @@
           }
         ],
         "children": []
+      },
+      {
+        "uuid": "5e0d1c4b-f2c7-46d5-9b07-c62ad7c48311",
+        "name": "С2",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -2.353062868118286,
+            2.363551139831543,
+            1.711883783340454
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -5388,9 +5459,9 @@
         1.7549999952316284,
         -3.6065917015075684
       ],
-      "radius": 17.0,
-      "azimuth": 68.64729013944508,
-      "elevation": 0.9215338450530081
+      "radius": 13.5,
+      "azimuth": 68.34011219109401,
+      "elevation": 1.134464013796316
     },
     "displays": [
       {
@@ -5400,7 +5471,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "7ab3d50c-01ff-49a6-b823-b91ffdbd3a00",
+            "uuid": "485a73dd-dea7-4214-b85e-ab0ff97ce582",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -5419,7 +5490,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "faa510a6-74f4-4ec3-a2f3-1b146013ed29",
+            "uuid": "578e9578-522e-45f2-b556-69dd2dfe801b",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -5433,12 +5504,12 @@
       }
     ],
     "expanded_entities": [
-      "cube1",
-      "cube2",
+      "camera",
       "Arti",
-      "[Root]",
+      "cube2",
       "EditorEntities",
-      "camera"
+      "cube1",
+      "[Root]"
     ]
   },
   "resources": {
