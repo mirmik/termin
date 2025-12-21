@@ -28,6 +28,13 @@ import threading
 from typing import TYPE_CHECKING, Optional, Set, Callable
 from weakref import WeakSet
 
+from termin.visualization.core.input_events import (
+    MouseButtonEvent,
+    MouseMoveEvent,
+    ScrollEvent,
+    KeyEvent,
+)
+
 if TYPE_CHECKING:
     from termin.visualization.core.world import VisualizationWorld
     from termin.visualization.core.scene import Scene
@@ -325,10 +332,8 @@ class WebStreamServer:
         """Передаёт событие движения мыши в сцену."""
         if self.scene is None:
             return
-        self.scene.dispatch_input(
-            None, "on_mouse_move",
-            x=x, y=y, dx=dx, dy=dy,
-        )
+        event = MouseMoveEvent(viewport=None, x=x, y=y, dx=dx, dy=dy)
+        self.scene.dispatch_input("on_mouse_move", event)
 
     def _dispatch_mouse_button(self, button: int, action: str):
         """Передаёт событие кнопки мыши в сцену."""
@@ -345,19 +350,16 @@ class WebStreamServer:
         mb = button_map.get(button, MouseButton.LEFT)
         act = Action.PRESS if action == "press" else Action.RELEASE
 
-        self.scene.dispatch_input(
-            None, "on_mouse_button",
-            button=mb, action=act, mods=0,
-        )
+        # Для streaming нет viewport, передаём x=0, y=0
+        event = MouseButtonEvent(viewport=None, x=0, y=0, button=mb, action=act, mods=0)
+        self.scene.dispatch_input("on_mouse_button", event)
 
     def _dispatch_scroll(self, x_offset: float, y_offset: float):
         """Передаёт событие скролла в сцену."""
         if self.scene is None:
             return
-        self.scene.dispatch_input(
-            None, "on_scroll",
-            xoffset=x_offset, yoffset=y_offset,
-        )
+        event = ScrollEvent(viewport=None, x=0, y=0, xoffset=x_offset, yoffset=y_offset)
+        self.scene.dispatch_input("on_scroll", event)
 
     def _dispatch_key(self, key: str, action: str):
         """Передаёт событие клавиатуры в сцену."""
@@ -386,10 +388,8 @@ class WebStreamServer:
             return
 
         act = Action.PRESS if action == "press" else Action.RELEASE
-        self.scene.dispatch_input(
-            None, "on_key",
-            key=k, scancode=0, action=act, mods=0,
-        )
+        event = KeyEvent(viewport=None, key=k, scancode=0, action=act, mods=0)
+        self.scene.dispatch_input("on_key", event)
 
     def _resize(self, width: int, height: int):
         """Изменяет размер рендера."""

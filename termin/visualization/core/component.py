@@ -346,14 +346,27 @@ class Component:
 class InputComponent(Component):
     """Component capable of handling input events."""
 
-    def on_mouse_button(self, viewport, button: int, action: int, mods: int):
-        return
+    def __init__(self, enabled: bool = True, active_in_editor: bool = False):
+        super().__init__(enabled)
+        self.active_in_editor = active_in_editor
 
-    def on_mouse_move(self, viewport, x: float, y: float, dx: float, dy: float):
-        return
+    def on_mouse_button(self, event: "MouseButtonEvent"):
+        pass
 
-    def on_scroll(self, viewport, xoffset: float, yoffset: float):
-        return
+    def on_mouse_move(self, event: "MouseMoveEvent"):
+        pass
 
-    def on_key(self, viewport, key: int, scancode: int, action: int, mods: int):
-        return
+    def on_scroll(self, event: "ScrollEvent"):
+        pass
+
+    def on_key(self, event: "KeyEvent"):
+        pass
+
+
+# Import event types for type hints
+from termin.visualization.core.input_events import (
+    MouseButtonEvent,
+    MouseMoveEvent,
+    ScrollEvent,
+    KeyEvent,
+)

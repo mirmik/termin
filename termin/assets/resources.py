@@ -47,6 +47,11 @@ _BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     # Физика
     ("termin.physics.physics_world_component", "PhysicsWorldComponent"),
     ("termin.physics.rigid_body_component", "RigidBodyComponent"),
+    # FEM Физика
+    ("termin.physics.fem_physics_world_component", "FEMPhysicsWorldComponent"),
+    ("termin.physics.fem_rigid_body_component", "FEMRigidBodyComponent"),
+    ("termin.physics.fem_fixed_joint_component", "FEMFixedJointComponent"),
+    ("termin.physics.fem_revolute_joint_component", "FEMRevoluteJointComponent"),
     # Коллайдеры
     ("termin.colliders.collider_component", "ColliderComponent"),
     # Воксели
@@ -57,6 +62,8 @@ _BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     # Audio
     ("termin.audio.components.audio_source", "AudioSource"),
     ("termin.audio.components.audio_listener", "AudioListener"),
+    # Game components
+    ("termin.components.teleport_component", "TeleportComponent"),
 ]
 
 # Список встроенных FramePass'ов для предрегистрации.

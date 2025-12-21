@@ -25,6 +25,7 @@ from termin.geombase.pose3 import Pose3
 
 from termin.editor.inspect_field import InspectField, inspect
 from termin.visualization.core.component import Component, InputComponent
+from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEvent, ScrollEvent
 from termin.visualization.platform.backends.base import Action, MouseButton
 
 
@@ -339,39 +340,39 @@ class OrbitCameraController(CameraController):
             self._states[key] = {"orbit": False, "pan": False, "last": None}
         return self._states[key]
 
-    def on_mouse_button(self, viewport, button: int, action: int, mods: int):
-        if not self.camera_component.has_viewport(viewport):
+    def on_mouse_button(self, event: MouseButtonEvent):
+        if not self.camera_component.has_viewport(event.viewport):
             return
 
-        state = self._state(viewport)
-        if button == MouseButton.MIDDLE:
-            state["orbit"] = action == Action.PRESS
-        elif button == MouseButton.RIGHT:
-            state["pan"] = action == Action.PRESS
-        if action == Action.RELEASE:
+        state = self._state(event.viewport)
+        if event.button == MouseButton.MIDDLE:
+            state["orbit"] = event.action == Action.PRESS
+        elif event.button == MouseButton.RIGHT:
+            state["pan"] = event.action == Action.PRESS
+        if event.action == Action.RELEASE:
             state["last"] = None
 
-    def on_mouse_move(self, viewport, x: float, y: float, dx: float, dy: float):
+    def on_mouse_move(self, event: MouseMoveEvent):
         if self._prevent_moving:
             return
-        if not self.camera_component.has_viewport(viewport):
+        if not self.camera_component.has_viewport(event.viewport):
             return
-        state = self._state(viewport)
+        state = self._state(event.viewport)
         if state.get("last") is None:
-            state["last"] = (x, y)
+            state["last"] = (event.x, event.y)
             return
-        state["last"] = (x, y)
+        state["last"] = (event.x, event.y)
         if state.get("orbit"):
-            self.orbit(-dx * self._orbit_speed, dy * self._orbit_speed)
+            self.orbit(-event.dx * self._orbit_speed, event.dy * self._orbit_speed)
         elif state.get("pan"):
-            self.pan(-dx * self._pan_speed, dy * self._pan_speed)
+            self.pan(-event.dx * self._pan_speed, event.dy * self._pan_speed)
 
-    def on_scroll(self, viewport, xoffset: float, yoffset: float):
+    def on_scroll(self, event: ScrollEvent):
         if self._prevent_moving:
             return
-        if not self.camera_component.has_viewport(viewport):
+        if not self.camera_component.has_viewport(event.viewport):
             return
-        self.zoom(-yoffset * self._zoom_speed)
+        self.zoom(-event.yoffset * self._zoom_speed)
 
     def center_on(self, position: np.ndarray) -> None:
         """Центрирует камеру на заданной позиции."""

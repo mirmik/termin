@@ -17,6 +17,12 @@ from termin.visualization.platform.backends.base import (
     Key,
     MouseButton,
 )
+from termin.visualization.core.input_events import (
+    MouseButtonEvent,
+    MouseMoveEvent,
+    ScrollEvent,
+    KeyEvent,
+)
 
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
@@ -123,10 +129,11 @@ class SimpleDisplayInputManager:
 
         # Dispatch to scene
         if viewport is not None:
-            viewport.scene.dispatch_input(
-                viewport, "on_mouse_button",
+            event = MouseButtonEvent(
+                viewport=viewport, x=x, y=y,
                 button=button, action=action, mods=mods
             )
+            viewport.scene.dispatch_input("on_mouse_button", event)
 
         # Object click handling (raycast)
         if viewport is not None and action == Action.PRESS and button == MouseButton.LEFT:
@@ -162,10 +169,8 @@ class SimpleDisplayInputManager:
 
         # Dispatch to scene
         if viewport is not None:
-            viewport.scene.dispatch_input(
-                viewport, "on_mouse_move",
-                x=x, y=y, dx=dx, dy=dy
-            )
+            event = MouseMoveEvent(viewport=viewport, x=x, y=y, dx=dx, dy=dy)
+            viewport.scene.dispatch_input("on_mouse_move", event)
 
         self._request_update()
 
@@ -175,10 +180,8 @@ class SimpleDisplayInputManager:
         viewport = self._viewport_under_cursor(x, y) or self._active_viewport
 
         if viewport is not None:
-            viewport.scene.dispatch_input(
-                viewport, "on_scroll",
-                xoffset=xoffset, yoffset=yoffset
-            )
+            event = ScrollEvent(viewport=viewport, x=x, y=y, xoffset=xoffset, yoffset=yoffset)
+            viewport.scene.dispatch_input("on_scroll", event)
 
         self._request_update()
 
@@ -193,9 +196,10 @@ class SimpleDisplayInputManager:
         )
 
         if viewport is not None:
-            viewport.scene.dispatch_input(
-                viewport, "on_key",
+            event = KeyEvent(
+                viewport=viewport,
                 key=key, scancode=scancode, action=action, mods=mods
             )
+            viewport.scene.dispatch_input("on_key", event)
 
         self._request_update()

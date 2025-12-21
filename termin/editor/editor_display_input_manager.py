@@ -20,6 +20,12 @@ from termin.visualization.platform.backends.base import (
 from termin.visualization.core.camera import CameraController
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.picking import rgb_to_id
+from termin.visualization.core.input_events import (
+    MouseButtonEvent,
+    MouseMoveEvent,
+    ScrollEvent,
+    KeyEvent,
+)
 
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
@@ -104,6 +110,18 @@ class EditorDisplayInputManager:
     def set_world_mode(self, mode: str) -> None:
         """Устанавливает режим работы."""
         self._world_mode = mode
+
+    def _dispatch_to_camera(self, viewport: "Viewport", event_name: str, event) -> None:
+        """Диспатчит событие в InputComponent'ы камеры viewport'а."""
+        from termin.visualization.core.component import InputComponent
+        camera = viewport.camera
+        if camera is None or camera.entity is None:
+            return
+        for comp in camera.entity.components:
+            if isinstance(comp, InputComponent):
+                handler = getattr(comp, event_name, None)
+                if handler:
+                    handler(event)
 
     def _request_update(self) -> None:
         """Запрашивает перерисовку."""
@@ -314,12 +332,13 @@ class EditorDisplayInputManager:
                 viewport = self._active_viewport
             self._active_viewport = None
 
-        # Dispatch to scene
+        # Dispatch to camera
         if viewport is not None:
-            viewport.scene.dispatch_input(
-                viewport, "on_mouse_button",
+            event = MouseButtonEvent(
+                viewport=viewport, x=x, y=y,
                 button=button, action=action, mods=mods
             )
+            self._dispatch_to_camera(viewport, "on_mouse_button", event)
 
         # Object click handling (raycast)
         if viewport is not None and action == Action.PRESS and button == MouseButton.LEFT:
@@ -363,12 +382,13 @@ class EditorDisplayInputManager:
                 viewport = self._active_viewport
             self._active_viewport = None
 
-        # Dispatch to scene (для CameraController и т.п.)
+        # Dispatch to camera (в editor mode события идут только в камеру)
         if viewport is not None:
-            viewport.scene.dispatch_input(
-                viewport, "on_mouse_button",
+            event = MouseButtonEvent(
+                viewport=viewport, x=x, y=y,
                 button=button, action=action, mods=mods
             )
+            self._dispatch_to_camera(viewport, "on_mouse_button", event)
 
         # Double-click: center camera on clicked entity
         if is_double_click and viewport is not None:
@@ -414,12 +434,10 @@ class EditorDisplayInputManager:
             rect = self._viewport_rect_to_pixels(viewport)
             viewport.canvas.mouse_move(x, y, rect)
 
-        # Dispatch to scene
+        # Dispatch to camera
         if viewport is not None:
-            viewport.scene.dispatch_input(
-                viewport, "on_mouse_move",
-                x=x, y=y, dx=dx, dy=dy
-            )
+            event = MouseMoveEvent(viewport=viewport, x=x, y=y, dx=dx, dy=dy)
+            self._dispatch_to_camera(viewport, "on_mouse_move", event)
 
         # Внешний колбэк
         if self._on_mouse_move_event is not None:
@@ -433,10 +451,8 @@ class EditorDisplayInputManager:
         viewport = self._viewport_under_cursor(x, y) or self._active_viewport
 
         if viewport is not None:
-            viewport.scene.dispatch_input(
-                viewport, "on_scroll",
-                xoffset=xoffset, yoffset=yoffset
-            )
+            event = ScrollEvent(viewport=viewport, x=x, y=y, xoffset=xoffset, yoffset=yoffset)
+            self._dispatch_to_camera(viewport, "on_scroll", event)
 
         self._request_update()
 
@@ -451,9 +467,10 @@ class EditorDisplayInputManager:
         )
 
         if viewport is not None:
-            viewport.scene.dispatch_input(
-                viewport, "on_key",
+            event = KeyEvent(
+                viewport=viewport,
                 key=key, scancode=scancode, action=action, mods=mods
             )
+            self._dispatch_to_camera(viewport, "on_key", event)
 
         self._request_update()

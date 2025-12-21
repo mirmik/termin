@@ -100,8 +100,14 @@ class BoxCollider(Collider):
         return f"BoxCollider(center={self.center}, size={self.size}, pose={self.pose})"
 
     def transform_by(self, tpose: 'Pose3'):
-        new_pose = tpose.compose(self.pose)
+        new_pose = tpose * self.pose
         return BoxCollider(self.center, self.size, new_pose)
+
+    def scale_by(self, scale: numpy.ndarray):
+        """Return a new BoxCollider with scaled size."""
+        new_size = self.size * scale
+        new_center = self.center * scale
+        return BoxCollider(new_center, new_size, self.pose)
 
     def point_in_local_frame(self, point: numpy.ndarray) -> numpy.ndarray:
         """Transform point to local frame"""

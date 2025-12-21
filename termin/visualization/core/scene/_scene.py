@@ -377,12 +377,13 @@ class Scene(Identifiable):
 
     # --- Input dispatch ---
 
-    def dispatch_input(self, viewport, event: str, **kwargs):
+    def dispatch_input(self, event_name: str, event):
+        """Dispatch input event to all InputComponents."""
         listeners = list(self._input_components)
         for component in listeners:
-            handler = getattr(component, event, None)
+            handler = getattr(component, event_name, None)
             if handler:
-                handler(viewport, **kwargs)
+                handler(event)
 
     # --- Serialization ---
 

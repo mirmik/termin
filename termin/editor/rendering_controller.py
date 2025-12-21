@@ -561,7 +561,7 @@ class RenderingController:
         backend_window.set_key_callback(None)
 
         # Create new input manager based on mode (unless blocked in editor)
-        if mode == "none" or is_blocked:
+        if mode == "none" or (mode == "editor" and is_blocked):
             # No input handling - callbacks already cleared
             pass
         elif mode == "simple":

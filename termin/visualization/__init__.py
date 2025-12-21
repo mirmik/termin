@@ -8,6 +8,12 @@ camera models and GPU resources such as meshes, shaders, materials and textures.
 from termin.visualization.platform.window import Window, GLWindow
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity, Component, InputComponent, RenderContext
+from termin.visualization.core.input_events import (
+    MouseButtonEvent,
+    MouseMoveEvent,
+    ScrollEvent,
+    KeyEvent,
+)
 from termin.visualization.core.camera import (
     CameraComponent,
     PerspectiveCameraComponent,
@@ -33,6 +39,10 @@ __all__ = [
     "Component",
     "InputComponent",
     "RenderContext",
+    "MouseButtonEvent",
+    "MouseMoveEvent",
+    "ScrollEvent",
+    "KeyEvent",
     "CameraComponent",
     "PerspectiveCameraComponent",
     "OrthographicCameraComponent",

@@ -1606,6 +1606,17 @@ class EditorWindow(QMainWindow):
             editor_features.selected_entity_id = 0
             editor_features.hover_entity_id = 0
 
+        # Обновляем viewports у display'ов без EditorViewportFeatures
+        if self._rendering_controller is not None:
+            for display in self._rendering_controller.displays:
+                display_id = id(display)
+                if display_id not in self._editor_features:
+                    # Display в режиме "simple" - обновляем viewport'ы напрямую
+                    for viewport in display.viewports:
+                        viewport.scene = scene
+                        viewport.camera = self._camera_manager.camera
+                        self._camera_manager.camera.add_viewport(viewport)
+
         # Clear gizmo target when switching scenes
         if self.editor_viewport is not None:
             self.editor_viewport.set_gizmo_target(None)
