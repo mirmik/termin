@@ -27,7 +27,11 @@
       "Bash(/media/sf_Shared/termin/termin/colliders/raycast_hit.py)",
       "Bash(./build/temp.linux-x86_64-cpython-310/bin/termin_tests:*)",
       "Bash(xargs:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(cmake --build:*)",
+      "Bash(timeout 30 python:*)",
+      "Bash(grep:*)",
+      "Bash(cut:*)"
     ]
   }
 }

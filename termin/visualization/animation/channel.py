@@ -1,177 +1,49 @@
+# Re-export native AnimationChannel
 from __future__ import annotations
-from typing import List, Optional, Tuple
+
 import numpy as np
 
-from termin.util import qslerp
-from .keyframe import AnimationKeyframe
+from ._animation_native import AnimationChannel, AnimationKeyframe, deserialize_channel
 
 
-class AnimationChannel:
+def channel_from_fbx(ch) -> AnimationChannel:
     """
-    Канал одного узла FBX:
-        - translation_keys: ключи позиций (в тиках)
-        - rotation_keys: ключи вращения (кватернионы) (в тиках)
-        - scale_keys: ключи скейла (в тиках)
+    Создаёт AnimationChannel из FBXAnimationChannel.
 
-    Всё хранится в ТИКАХ, без пересчёта в секунды.
+    Args:
+        ch: FBXAnimationChannel с pos_keys, rot_keys, scale_keys в тиках
+            rot_keys содержат Euler углы (в градусах) которые конвертируются в кватернионы
     """
+    from termin.geombase import Pose3
 
-    def __init__(self, translation_keys, rotation_keys, scale_keys):
-        self.translation_keys = sorted(translation_keys, key=lambda k: k.time)
-        self.rotation_keys = sorted(rotation_keys, key=lambda k: k.time)
-        self.scale_keys = sorted(scale_keys, key=lambda k: k.time)
+    tr_keys = []
+    for (t, v) in ch.pos_keys:
+        tr_keys.append((t, np.array(v, dtype=np.float64)))
 
-        # duration в тиках
-        self.duration = 0.0
-        for arr in (self.translation_keys, self.rotation_keys, self.scale_keys):
-            if arr:
-                self.duration = max(self.duration, arr[-1].time)
+    rot_keys = []
+    for (t, v) in ch.rot_keys:
+        rad = np.radians(v)
+        pose = Pose3.from_euler(rad[0], rad[1], rad[2], order='xyz')
+        rot_keys.append((t, pose.ang))
 
-    # --------------------------------------------
+    sc_keys = [(t, float(np.mean(v))) for (t, v) in ch.scale_keys]
 
-    @staticmethod
-    def _interp_linear(a, b, alpha):
-        return (1.0 - alpha) * np.asarray(a, float) + alpha * np.asarray(b, float)
+    return AnimationChannel(tr_keys, rot_keys, sc_keys)
 
-    @staticmethod
-    def _sample_keys(keys, t_ticks, interp):
-        if not keys:
-            return None
 
-        first = keys[0]
-        last = keys[-1]
+def channel_from_glb(ch) -> AnimationChannel:
+    """
+    Создаёт AnimationChannel из GLBAnimationChannel.
 
-        if t_ticks <= first.time:
-            return interp(first, first, 0.0)
-        if t_ticks >= last.time:
-            return interp(last, last, 0.0)
+    Args:
+        ch: GLBAnimationChannel с pos_keys, rot_keys, scale_keys
+            Время уже в секундах, кватернионы в формате XYZW
+    """
+    tr_keys = [(t, np.array(v, dtype=np.float64)) for (t, v) in ch.pos_keys]
+    rot_keys = [(t, np.array(v, dtype=np.float64)) for (t, v) in ch.rot_keys]
+    sc_keys = [(t, float(np.mean(v))) for (t, v) in ch.scale_keys]
 
-        for k1, k2 in zip(keys, keys[1:]):
-            if k1.time <= t_ticks <= k2.time:
-                dt = k2.time - k1.time
-                alpha = (t_ticks - k1.time) / dt if dt != 0 else 0.0
-                return interp(k1, k2, alpha)
+    return AnimationChannel(tr_keys, rot_keys, sc_keys)
 
-        return interp(last, last, 0.0)
 
-    # --------------------------------------------
-
-    def sample(self, t_ticks: float) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[float]]:
-        """
-        t_ticks — время в ТИКАХ.
-        """
-
-        tr = None
-        rot = None
-        sc = None
-
-        if self.translation_keys:
-            tr = self._sample_keys(
-                self.translation_keys, t_ticks,
-                lambda a, b, alpha: self._interp_linear(a.translation, b.translation, alpha)
-            )
-
-        if self.rotation_keys:
-            rot = self._sample_keys(
-                self.rotation_keys, t_ticks,
-                lambda a, b, alpha: qslerp(a.rotation, b.rotation, alpha)
-            )
-
-        if self.scale_keys:
-            sc = self._sample_keys(
-                self.scale_keys, t_ticks,
-                lambda a, b, alpha: float((1 - alpha) * a.scale + alpha * b.scale)
-            )
-
-        return tr, rot, sc
-
-    # --------------------------------------------
-
-    @staticmethod
-    def from_fbx_channel(ch) -> "AnimationChannel":
-        """
-        Создаёт AnimationChannel из FBXAnimationChannel.
-
-        Args:
-            ch: FBXAnimationChannel с pos_keys, rot_keys, scale_keys в тиках
-                rot_keys содержат Euler углы (в градусах) которые конвертируются в кватернионы
-        """
-        from termin.geombase import Pose3
-
-        tr = [AnimationKeyframe(t, translation=np.array(v))
-              for (t, v) in ch.pos_keys]
-
-        # FBX хранит rotation как Euler углы (градусы), конвертируем в кватернионы
-        rot = []
-        for (t, v) in ch.rot_keys:
-            # v = [rx, ry, rz] в градусах
-            rad = np.radians(v)
-            pose = Pose3.from_euler(rad[0], rad[1], rad[2], order='xyz')
-            rot.append(AnimationKeyframe(t, rotation=pose.ang))
-
-        sc = [AnimationKeyframe(t, scale=float(np.mean(v)))
-              for (t, v) in ch.scale_keys]
-
-        return AnimationChannel(tr, rot, sc)
-
-    # --------------------------------------------
-
-    @staticmethod
-    def from_glb_channel(ch) -> "AnimationChannel":
-        """
-        Создаёт AnimationChannel из GLBAnimationChannel.
-
-        Args:
-            ch: GLBAnimationChannel с pos_keys, rot_keys, scale_keys
-                Время уже в секундах, кватернионы в формате XYZW
-        """
-        tr = [AnimationKeyframe(t, translation=np.array(v))
-              for (t, v) in ch.pos_keys]
-
-        # GLB хранит кватернионы как XYZW, наша система тоже
-        rot = [AnimationKeyframe(t, rotation=np.array(v))
-               for (t, v) in ch.rot_keys]
-
-        # GLB хранит scale как vec3, берём среднее для uniform scale
-        sc = [AnimationKeyframe(t, scale=float(np.mean(v)))
-              for (t, v) in ch.scale_keys]
-
-        return AnimationChannel(tr, rot, sc)
-
-    # --------------------------------------------
-
-    def __repr__(self):
-        return f"<AnimationChannel ticks={self.duration:.2f} tr_keys={len(self.translation_keys)} rot_keys={len(self.rotation_keys)} scale_keys={len(self.scale_keys)}>"
-
-    # --------------------------------------------
-
-    def serialize(self) -> dict:
-        """Сериализует канал в словарь для JSON."""
-        return {
-            "translation": [
-                [kf.time, kf.translation.tolist()] for kf in self.translation_keys
-            ],
-            "rotation": [
-                [kf.time, kf.rotation.tolist()] for kf in self.rotation_keys
-            ],
-            "scale": [
-                [kf.time, kf.scale] for kf in self.scale_keys
-            ],
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict) -> "AnimationChannel":
-        """Десериализует канал из словаря."""
-        translation_keys = [
-            AnimationKeyframe(time=t, translation=np.array(v, dtype=float))
-            for t, v in data.get("translation", [])
-        ]
-        rotation_keys = [
-            AnimationKeyframe(time=t, rotation=np.array(v, dtype=float))
-            for t, v in data.get("rotation", [])
-        ]
-        scale_keys = [
-            AnimationKeyframe(time=t, scale=float(v))
-            for t, v in data.get("scale", [])
-        ]
-        return cls(translation_keys, rotation_keys, scale_keys)
+__all__ = ["AnimationChannel", "AnimationKeyframe", "channel_from_fbx", "channel_from_glb", "deserialize_channel"]

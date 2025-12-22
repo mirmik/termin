@@ -34,11 +34,11 @@ def load_animation_clip(path: str | Path) -> "AnimationClip":
     Returns:
         Loaded AnimationClip
     """
-    from .clip import AnimationClip
+    from .clip import deserialize_clip
 
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8"))
-    return AnimationClip.deserialize(data)
+    return deserialize_clip(data)
 
 
 def parse_animation_content(content: str) -> "AnimationClip":
@@ -51,10 +51,10 @@ def parse_animation_content(content: str) -> "AnimationClip":
     Returns:
         Parsed AnimationClip
     """
-    from .clip import AnimationClip
+    from .clip import deserialize_clip
 
     data = json.loads(content)
-    return AnimationClip.deserialize(data)
+    return deserialize_clip(data)
 
 
 __all__ = ["save_animation_clip", "load_animation_clip", "parse_animation_content"]

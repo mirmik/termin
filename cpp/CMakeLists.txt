@@ -83,6 +83,12 @@ target_compile_options(_collision_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
+# Animation native module (Channel, Clip)
+pybind11_add_module(_animation_native termin/animation_bindings.cpp)
+target_compile_options(_animation_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
 # ---------------- Tests ----------------
 enable_testing()
 
@@ -140,3 +146,4 @@ install(TARGETS _colliders_native DESTINATION ${CMAKE_INSTALL_PREFIX}/colliders)
 install(TARGETS _physics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/physics)
 install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/voxels)
 install(TARGETS _collision_native DESTINATION ${CMAKE_INSTALL_PREFIX}/collision)
+install(TARGETS _animation_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/animation)

@@ -1,141 +1,46 @@
+# Re-export native AnimationClip
 from __future__ import annotations
-from typing import Dict
-from .channel import AnimationChannel
+
+from ._animation_native import AnimationClip, deserialize_clip
+from .channel import channel_from_fbx, channel_from_glb
 
 
-class AnimationClip:
+def clip_from_fbx(fbx_clip) -> AnimationClip:
     """
-    channels: { node_name : AnimationChannel }
-    duration: секунды
-    tps: ticks per second
+    Создаёт AnimationClip из FBXAnimationClip.
+
+    Args:
+        fbx_clip: FBXAnimationClip из fbx_loader
     """
+    channels = {}
+    for ch in fbx_clip.channels:
+        channels[ch.node_name] = channel_from_fbx(ch)
 
-    def __init__(
-        self,
-        name: str,
-        channels: Dict[str, AnimationChannel],
-        tps: float,
-        loop: bool = True,
-        source_path: str | None = None,
-    ):
-        self.name = name
-        self.channels = channels
-        self.loop = loop
-        self.tps = tps
-        self.source_path: str | None = source_path
+    return AnimationClip(
+        fbx_clip.name,
+        channels,
+        fbx_clip.ticks_per_second or 30.0,
+        True,  # loop
+    )
 
-        # переводим тики → секунды
-        max_ticks = 0.0
-        for ch in channels.values():
-            max_ticks = max(max_ticks, ch.duration)
 
-        self.duration = max_ticks / tps if tps > 0 else 0.0
+def clip_from_glb(glb_clip) -> AnimationClip:
+    """
+    Создаёт AnimationClip из GLBAnimationClip.
 
-    # --------------------------------------------
+    Args:
+        glb_clip: GLBAnimationClip из glb_loader
+    """
+    channels = {}
+    for ch in glb_clip.channels:
+        channels[ch.node_name] = channel_from_glb(ch)
 
-    @staticmethod
-    def from_fbx_clip(fbx_clip) -> "AnimationClip":
-        """
-        Создаёт AnimationClip из FBXAnimationClip.
+    return AnimationClip(
+        glb_clip.name,
+        channels,
+        1.0,  # GLB использует секунды напрямую
+        True,  # loop
+    )
 
-        Args:
-            fbx_clip: FBXAnimationClip из fbx_loader
-        """
-        channels = {}
-        for ch in fbx_clip.channels:
-            channels[ch.node_name] = AnimationChannel.from_fbx_channel(ch)
 
-        return AnimationClip(
-            name=fbx_clip.name,
-            channels=channels,
-            tps=fbx_clip.ticks_per_second or 30.0,
-            loop=True,
-        )
-
-    # --------------------------------------------
-
-    @staticmethod
-    def from_glb_clip(glb_clip) -> "AnimationClip":
-        """
-        Создаёт AnimationClip из GLBAnimationClip.
-
-        Args:
-            glb_clip: GLBAnimationClip из glb_loader
-        """
-        channels = {}
-        for ch in glb_clip.channels:
-            channels[ch.node_name] = AnimationChannel.from_glb_channel(ch)
-
-        # GLB хранит время в секундах, используем tps=1.0
-        return AnimationClip(
-            name=glb_clip.name,
-            channels=channels,
-            tps=1.0,  # GLB использует секунды напрямую
-            loop=True,
-        )
-
-    # --------------------------------------------
-
-    def sample(self, t_seconds: float):
-        """
-        sample в секундах (как в движке).
-        Возвращает dict:
-            { node_name : (tr, rot, sc) }
-        """
-
-        if self.loop and self.duration > 0:
-            t_seconds = t_seconds % self.duration
-
-        # переводим секунды → тики
-        t_ticks = t_seconds * self.tps
-
-        return { node: ch.sample(t_ticks) for node, ch in self.channels.items() }
-
-    # --------------------------------------------
-
-    def __repr__(self):
-        return f"<AnimationClip name={self.name} duration={self.duration:.2f}s channels={len(self.channels)}>"
-
-    # --------------------------------------------
-
-    def direct_serialize(self) -> dict:
-        """
-        Сериализует клип в словарь для JSON.
-
-        Если source_path задан, возвращает ссылку на файл.
-        Иначе сериализует данные inline.
-        """
-        if self.source_path is not None:
-            return {
-                "type": "path",
-                "path": self.source_path,
-            }
-
-        return {
-            "type": "inline",
-            "version": 1,
-            "name": self.name,
-            "tps": self.tps,
-            "loop": self.loop,
-            "channels": {name: ch.serialize() for name, ch in self.channels.items()},
-        }
-
-    @classmethod
-    def direct_deserialize(cls, data: dict) -> "AnimationClip":
-        """Десериализует клип из словаря."""
-        source_path = data.get("path") if data.get("type") == "path" else None
-        channels = {
-            name: AnimationChannel.deserialize(ch_data)
-            for name, ch_data in data.get("channels", {}).items()
-        }
-        return cls(
-            name=data.get("name", "Unnamed"),
-            channels=channels,
-            tps=data.get("tps", 30.0),
-            loop=data.get("loop", True),
-            source_path=source_path,
-        )
-
-    # Backward compatibility aliases
-    serialize = direct_serialize
-    deserialize = direct_deserialize
+__all__ = ["AnimationClip", "clip_from_fbx", "clip_from_glb", "deserialize_clip"]

@@ -21,7 +21,6 @@ from termin.visualization.animation import (
     AnimationChannel,
     AnimationClip,
     AnimationPlayer,
-    AnimationKeyframe,
 )
 
 
@@ -72,41 +71,41 @@ def build_scene(world: VisualizationWorld):
     cube.add_component(MeshRenderer(mesh, material))
 
     # ============
-    # Keyframes
+    # Keyframes (time, value)
     # ============
 
     # движение по "квадрату"
     trs_keys = [
-        AnimationKeyframe(0.0, translation=np.array([1.5, 0.0, 0.0])),
-        AnimationKeyframe(1.0, translation=np.array([0.0, 1.5, 0.0])),
-        AnimationKeyframe(2.0, translation=np.array([-1.5, 0.0, 0.0])),
-        AnimationKeyframe(3.0, translation=np.array([0.0, -1.5, 0.0])),
-        AnimationKeyframe(4.0, translation=np.array([1.5, 0.0, 0.0])),
+        (0.0, np.array([1.5, 0.0, 0.0])),
+        (1.0, np.array([0.0, 1.5, 0.0])),
+        (2.0, np.array([-1.5, 0.0, 0.0])),
+        (3.0, np.array([0.0, -1.5, 0.0])),
+        (4.0, np.array([1.5, 0.0, 0.0])),
     ]
 
     # полный оборот вокруг Y за 4 секунды
     rot_keys = [
-        AnimationKeyframe(0.0, rotation=Pose3.rotateY(0.0).ang),
-        AnimationKeyframe(1.0, rotation=Pose3.rotateY(np.pi/2).ang),
-        AnimationKeyframe(2.0, rotation=Pose3.rotateY(np.pi).ang),
-        AnimationKeyframe(3.0, rotation=Pose3.rotateY(1.5 * np.pi).ang),
-        AnimationKeyframe(4.0, rotation=Pose3.rotateY(2.0 * np.pi).ang),
+        (0.0, Pose3.rotateY(0.0).ang),
+        (1.0, Pose3.rotateY(np.pi/2).ang),
+        (2.0, Pose3.rotateY(np.pi).ang),
+        (3.0, Pose3.rotateY(1.5 * np.pi).ang),
+        (4.0, Pose3.rotateY(2.0 * np.pi).ang),
     ]
 
     # пульсация масштаба
     scale_keys = [
-        AnimationKeyframe(0.0, scale=1.0),
-        AnimationKeyframe(1.0, scale=1.5),
-        AnimationKeyframe(2.0, scale=1.0),
-        AnimationKeyframe(3.0, scale=0.7),
-        AnimationKeyframe(4.0, scale=1.0),
+        (0.0, 1.0),
+        (1.0, 1.5),
+        (2.0, 1.0),
+        (3.0, 0.7),
+        (4.0, 1.0),
     ]
 
     clip = AnimationClip(
         "move_rotate_scale",
-        tps = 1.0,  # тики в секунду
+        tps=1.0,
         channels={
-            "clip" :AnimationChannel(translation_keys=trs_keys, rotation_keys=rot_keys, scale_keys=scale_keys)
+            "clip": AnimationChannel(trs_keys, rot_keys, scale_keys)
         },
         loop=True,
     )

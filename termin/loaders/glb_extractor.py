@@ -148,7 +148,7 @@ def extract_animations(
     Returns:
         List of created animation files
     """
-    from termin.visualization.animation.clip import AnimationClip
+    from termin.visualization.animation.clip import clip_from_glb
     from termin.visualization.animation.clip_io import save_animation_clip
 
     glb_path = Path(glb_path)
@@ -164,7 +164,7 @@ def extract_animations(
     created_files = []
 
     for glb_anim in scene_data.animations:
-        clip = AnimationClip.from_glb_clip(glb_anim)
+        clip = clip_from_glb(glb_anim)
 
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in clip.name)
         if not safe_name:

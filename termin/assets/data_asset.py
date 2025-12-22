@@ -218,8 +218,6 @@ class DataAsset(Asset, Generic[T]):
         if self._parent_asset is None:
             return False
 
-        print(f"[LazyLoad] {self.__class__.__name__}: {self._name} (from {self._parent_asset._name})")
-
         # Ensure parent is loaded
         if not self._parent_asset.ensure_loaded():
             return False
@@ -227,6 +225,8 @@ class DataAsset(Asset, Generic[T]):
         # Check if parent's _on_loaded() already populated this child
         if self._loaded:
             return True
+
+        print(f"[LazyLoad] {self.__class__.__name__}: {self._name} [{self._uuid[:8]}] (from {self._parent_asset._name})")
 
         # Fallback: try to extract data (for subclasses that override this)
         return self._extract_from_parent()

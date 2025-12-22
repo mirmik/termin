@@ -208,16 +208,24 @@ class GLBAsset(DataAsset["GLBSceneData"]):
     def _populate_child_assets(self) -> None:
         """Fill all child assets with extracted data from loaded GLB."""
         from termin.loaders.glb_instantiator import _glb_mesh_to_mesh3
-        from termin.visualization.animation.clip import AnimationClip
+        from termin.visualization.animation.clip import clip_from_glb
         from termin.skeleton.skeleton import SkeletonData
+
+        glb_mesh_names = {m.name for m in self._data.meshes}
+        mesh_asset_keys = set(self._mesh_assets.keys())
+        print(f"[GLBAsset] _populate_child_assets: mesh_asset_keys={mesh_asset_keys}")
+        print(f"[GLBAsset] _populate_child_assets: glb_mesh_names={glb_mesh_names}")
 
         # Populate mesh assets
         for mesh_name, asset in self._mesh_assets.items():
             if asset._data is None:
+                if mesh_name not in glb_mesh_names:
+                    print(f"[GLBAsset] WARNING: mesh '{mesh_name}' not found in GLB. Available: {glb_mesh_names}")
                 for glb_mesh in self._data.meshes:
                     if glb_mesh.name == mesh_name:
                         asset._data = _glb_mesh_to_mesh3(glb_mesh)
                         asset._loaded = True
+                        print(f"[GLBAsset] Populated mesh '{mesh_name}' -> _loaded=True")
                         break
 
         # Populate skeleton assets
@@ -240,7 +248,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
             if asset._data is None:
                 for glb_anim in self._data.animations:
                     if glb_anim.name == anim_name:
-                        asset._data = AnimationClip.from_glb_clip(glb_anim)
+                        asset._data = clip_from_glb(glb_anim)
                         asset._loaded = True
                         break
 

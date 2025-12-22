@@ -55,6 +55,7 @@ class CMakeBuildExt(build_ext):
             ("physics", "_physics_native"),
             ("voxels", "_voxels_native"),
             ("collision", "_collision_native"),
+            ("visualization/animation", "_animation_native"),
         ]
         for subdir, module_name in module_mappings:
             dst_dir = Path(directory) / "termin" / subdir
@@ -123,6 +124,7 @@ if __name__ == "__main__":
             Extension("termin.physics._physics_native", sources=[]),
             Extension("termin.voxels._voxels_native", sources=[]),
             Extension("termin.collision._collision_native", sources=[]),
+            Extension("termin.visualization.animation._animation_native", sources=[]),
             Extension("termin.tests._cpp_tests", sources=[]),
         ],
         cmdclass={"build_ext": CMakeBuildExt},

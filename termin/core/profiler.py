@@ -130,15 +130,12 @@ class Profiler:
         Идемпотентен — если frame уже начат, ничего не делает.
         """
         if not self._enabled:
-            print(f"[Profiler] begin_frame: disabled")
             return
 
         # Идемпотентность: если frame уже начат, не начинаем новый
         if self._current_frame is not None:
-            print(f"[Profiler] begin_frame: already in frame")
             return
 
-        print(f"[Profiler] begin_frame: starting frame {self._frame_count}")
         self._current_frame = FrameProfile(frame_number=self._frame_count)
         self._frame_count += 1
         self._section_stack.clear()
@@ -151,7 +148,6 @@ class Profiler:
         Вызывайте в конце игрового цикла.
         """
         if not self._enabled or self._current_frame is None:
-            print(f"[Profiler] end_frame: skipped (enabled={self._enabled}, frame={self._current_frame})")
             return
 
         self._current_frame.total_ms = (time.perf_counter() - self._frame_start) * 1000.0
@@ -160,7 +156,6 @@ class Profiler:
         if len(self._history) > self._history_size:
             self._history.pop(0)
 
-        print(f"[Profiler] end_frame: saved frame, history={len(self._history)}, sections={list(self._current_frame.sections.keys())}")
         self._current_frame = None
 
     @contextmanager
