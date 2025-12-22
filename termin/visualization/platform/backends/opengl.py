@@ -111,9 +111,37 @@ class OpenGLShaderHandle(ShaderHandle):
         shaders.append(frag)
         self.program = _link_program(shaders)
 
+    # Флаг для валидации шейдеров при каждом use().
+    # Включить если glDrawElements даёт GL_INVALID_OPERATION.
+    # AMD драйверы строже проверяют состояние GL.
+    DEBUG_VALIDATE_ON_USE = False
+
     def use(self):
         self._ensure_compiled()
         gl.glUseProgram(self.program)
+        if self.DEBUG_VALIDATE_ON_USE:
+            self.validate()
+
+    def validate(self) -> bool:
+        """
+        Валидирует шейдерную программу с текущим GL состоянием.
+
+        Полезно для диагностики GL_INVALID_OPERATION на AMD.
+        Возвращает True если валидация прошла, иначе печатает ошибку.
+        """
+        if self.program is None:
+            print("[ShaderHandle.validate] ERROR: program is None")
+            return False
+
+        gl.glValidateProgram(self.program)
+        status = gl.glGetProgramiv(self.program, gl.GL_VALIDATE_STATUS)
+        if not status:
+            log = gl.glGetProgramInfoLog(self.program)
+            if isinstance(log, bytes):
+                log = log.decode('utf-8', errors='replace')
+            print(f"[ShaderHandle.validate] FAILED: {log}")
+            return False
+        return True
 
     def stop(self):
         gl.glUseProgram(0)
@@ -208,13 +236,6 @@ class OpenGLMeshHandle(MeshHandle):
         buf = self._mesh.interleaved_buffer()
         layout = self._mesh.get_vertex_layout()
 
-        # Store context where VAO was created
-        try:
-            wgl = ctypes.windll.opengl32
-            self._created_in_ctx = wgl.wglGetCurrentContext()
-        except:
-            self._created_in_ctx = None
-
         self._vao = gl.glGenVertexArrays(1)
         self._vbo = gl.glGenBuffers(1)
         self._ebo = gl.glGenBuffers(1)
@@ -226,7 +247,6 @@ class OpenGLMeshHandle(MeshHandle):
 
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self._ebo)
         gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, self._mesh.indices.nbytes, self._mesh.indices, gl.GL_STATIC_DRAW)
-
 
         for index, attr in enumerate(layout.attributes):
             gl_type = GL_TYPE_MAP[attr.vtype]
@@ -242,69 +262,15 @@ class OpenGLMeshHandle(MeshHandle):
 
         gl.glBindVertexArray(0)
 
-
-    _DEBUG_DRAW = False  # DEBUG: investigate GL_INVALID_OPERATION
-
     def draw(self):
         gl.glEnable(gl.GL_DEPTH_TEST)
-
         gl.glBindVertexArray(self._vao or 0)
 
         mode = gl.GL_TRIANGLES
         if self._mesh.type == "lines":
             mode = gl.GL_LINES
 
-        # Check for pre-existing GL errors
-        pre_error = gl.glGetError()
-        if pre_error != gl.GL_NO_ERROR:
-            print(f"[OpenGLMeshHandle.draw] PRE-EXISTING GL ERROR: {pre_error}")
-
-        import ctypes as ct
-        try:
-            gl.glDrawElements(mode, self._index_count, gl.GL_UNSIGNED_INT, ct.c_void_p(0))
-        except Exception as e:
-            # Dump state on error
-            current_program = gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM)
-            bound_vao = gl.glGetIntegerv(gl.GL_VERTEX_ARRAY_BINDING)
-            bound_ebo = gl.glGetIntegerv(gl.GL_ELEMENT_ARRAY_BUFFER_BINDING)
-            bound_vbo = gl.glGetIntegerv(gl.GL_ARRAY_BUFFER_BINDING)
-            bound_fbo = gl.glGetIntegerv(gl.GL_FRAMEBUFFER_BINDING)
-
-            # Get actual GL context pointer (Windows)
-            try:
-                wgl = ct.windll.opengl32
-                ctx_ptr = wgl.wglGetCurrentContext()
-            except:
-                ctx_ptr = "N/A"
-
-            created_ctx = getattr(self, '_created_in_ctx', None)
-
-            # Check FBO completeness
-            fbo_status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
-            fbo_complete = fbo_status == gl.GL_FRAMEBUFFER_COMPLETE
-
-            # Validate shader program
-            prog_valid = "N/A"
-            prog_log = ""
-            if current_program and current_program > 0:
-                gl.glValidateProgram(current_program)
-                validate_status = gl.glGetProgramiv(current_program, gl.GL_VALIDATE_STATUS)
-                prog_valid = bool(validate_status)
-                if not prog_valid:
-                    prog_log = gl.glGetProgramInfoLog(current_program)
-                    if isinstance(prog_log, bytes):
-                        prog_log = prog_log.decode('utf-8', errors='replace')
-
-            print(f"[OpenGLMeshHandle.draw] ERROR STATE:")
-            print(f"  self: vao={self._vao}, vbo={self._vbo}, ebo={self._ebo}, idx_count={self._index_count}")
-            print(f"  GL state: bound_vao={bound_vao}, bound_ebo={bound_ebo}, bound_vbo={bound_vbo}")
-            print(f"  current_program={current_program}, bound_fbo={bound_fbo}")
-            print(f"  FBO complete={fbo_complete}, program_valid={prog_valid}")
-            if prog_log:
-                print(f"  program validation log: {prog_log}")
-            print(f"  created_in_ctx={created_ctx}, current_ctx={ctx_ptr}, MATCH={created_ctx == ctx_ptr}")
-            raise
-
+        gl.glDrawElements(mode, self._index_count, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))
         gl.glBindVertexArray(0)
 
     def delete(self):

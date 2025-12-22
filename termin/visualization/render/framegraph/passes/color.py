@@ -414,14 +414,7 @@ class ColorPass(RenderFramePass):
                 render_context.current_shader = shader
 
                 # Рисуем геометрию через Drawable
-                try:
-                    dc.drawable.draw_geometry(render_context, dc.geometry_id)
-                except Exception as e:
-                    shader_path = shader.source_path if shader.source_path else "<inline>"
-                    print(f"[ColorPass] DRAW FAILED for entity={dc.entity.name}")
-                    print(f"  shader: {shader_path}")
-                    print(f"  phase_mark: {dc.phase.phase_mark}")
-                    raise
+                dc.drawable.draw_geometry(render_context, dc.geometry_id)
 
                 if debugger_window is not None and dc.entity.name == debug_symbol:
                     self._blit_to_debugger(graphics, fb, debugger_window, (pw, ph))

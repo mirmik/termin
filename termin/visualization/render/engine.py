@@ -297,24 +297,17 @@ class RenderEngine:
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
 
-            # DEBUG: track which pass is executing
-            pass_name = type(render_pass).__name__
-            try:
-                render_pass.execute(
-                    self.graphics,
-                    reads_fbos=pass_reads,
-                    writes_fbos=pass_writes,
-                    rect=(px, py, pw, ph),
-                    scene=scene,
-                    camera=view.camera,
-                    context_key=context_key,
-                    lights=lights,
-                    canvas=view.canvas,
-                )
-            except Exception as e:
-                print(f"[RenderEngine] PASS FAILED: {pass_name}")
-                print(f"  reads: {list(pass_reads.keys())}, writes: {list(pass_writes.keys())}")
-                raise
+            render_pass.execute(
+                self.graphics,
+                reads_fbos=pass_reads,
+                writes_fbos=pass_writes,
+                rect=(px, py, pw, ph),
+                scene=scene,
+                camera=view.camera,
+                context_key=context_key,
+                lights=lights,
+                canvas=view.canvas,
+            )
 
             # После выполнения пасса обновляем ресурсы в пуле
             # (пасс мог создать новые ресурсы, например ShadowMapArray)
