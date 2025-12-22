@@ -247,7 +247,26 @@ class OpenGLMeshHandle(MeshHandle):
         if self._mesh.type == "lines":
             mode = gl.GL_LINES
 
-        gl.glDrawElements(mode, self._index_count, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))
+        # Check for pre-existing GL errors
+        pre_error = gl.glGetError()
+        if pre_error != gl.GL_NO_ERROR:
+            print(f"[OpenGLMeshHandle.draw] PRE-EXISTING GL ERROR: {pre_error}")
+
+        try:
+            gl.glDrawElements(mode, self._index_count, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))
+        except Exception as e:
+            # Dump state on error
+            current_program = gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM)
+            bound_vao = gl.glGetIntegerv(gl.GL_VERTEX_ARRAY_BINDING)
+            bound_ebo = gl.glGetIntegerv(gl.GL_ELEMENT_ARRAY_BUFFER_BINDING)
+            bound_vbo = gl.glGetIntegerv(gl.GL_ARRAY_BUFFER_BINDING)
+            bound_fbo = gl.glGetIntegerv(gl.GL_FRAMEBUFFER_BINDING)
+            print(f"[OpenGLMeshHandle.draw] ERROR STATE:")
+            print(f"  self: vao={self._vao}, vbo={self._vbo}, ebo={self._ebo}, idx_count={self._index_count}")
+            print(f"  GL state: bound_vao={bound_vao}, bound_ebo={bound_ebo}, bound_vbo={bound_vbo}")
+            print(f"  current_program={current_program}, bound_fbo={bound_fbo}")
+            raise
+
         gl.glBindVertexArray(0)
 
     def delete(self):
