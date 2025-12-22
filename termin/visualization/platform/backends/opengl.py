@@ -283,11 +283,25 @@ class OpenGLMeshHandle(MeshHandle):
             fbo_status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
             fbo_complete = fbo_status == gl.GL_FRAMEBUFFER_COMPLETE
 
+            # Validate shader program
+            prog_valid = "N/A"
+            prog_log = ""
+            if current_program and current_program > 0:
+                gl.glValidateProgram(current_program)
+                validate_status = gl.glGetProgramiv(current_program, gl.GL_VALIDATE_STATUS)
+                prog_valid = bool(validate_status)
+                if not prog_valid:
+                    prog_log = gl.glGetProgramInfoLog(current_program)
+                    if isinstance(prog_log, bytes):
+                        prog_log = prog_log.decode('utf-8', errors='replace')
+
             print(f"[OpenGLMeshHandle.draw] ERROR STATE:")
             print(f"  self: vao={self._vao}, vbo={self._vbo}, ebo={self._ebo}, idx_count={self._index_count}")
             print(f"  GL state: bound_vao={bound_vao}, bound_ebo={bound_ebo}, bound_vbo={bound_vbo}")
             print(f"  current_program={current_program}, bound_fbo={bound_fbo}")
-            print(f"  FBO status: 0x{fbo_status:X}, complete={fbo_complete}")
+            print(f"  FBO complete={fbo_complete}, program_valid={prog_valid}")
+            if prog_log:
+                print(f"  program validation log: {prog_log}")
             print(f"  created_in_ctx={created_ctx}, current_ctx={ctx_ptr}, MATCH={created_ctx == ctx_ptr}")
             raise
 
