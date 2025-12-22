@@ -2,6 +2,7 @@
 ColliderGizmoPass - Renders collider wireframes for editor visualization.
 
 Draws wireframe representations of all ColliderComponents in the scene.
+Uses WireframeRenderer with pre-built unit meshes for efficiency.
 """
 
 from __future__ import annotations
@@ -11,7 +12,16 @@ from typing import List, Tuple, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
-from termin.visualization.render.immediate import ImmediateRenderer
+from termin.visualization.render.wireframe import (
+    WireframeRenderer,
+    mat4_translate,
+    mat4_scale,
+    mat4_scale_uniform,
+    mat4_from_rotation_matrix,
+    rotation_matrix_align_z_to_axis,
+)
+from termin.colliders import BoxCollider, SphereCollider, CapsuleCollider
+from termin.geombase import Vec3
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend
@@ -45,7 +55,7 @@ class ColliderGizmoPass(RenderFramePass):
         self.input_res = input_res
         self.output_res = output_res
         self.enabled = enabled
-        self._renderer = ImmediateRenderer()
+        self._renderer = WireframeRenderer()
 
     def _serialize_params(self) -> dict:
         return {
@@ -81,7 +91,7 @@ class ColliderGizmoPass(RenderFramePass):
         if not self.enabled:
             return
 
-        if scene is None or not hasattr(scene, 'colliders') or not scene.colliders:
+        if scene is None or not scene.colliders:
             return
 
         px, py, pw, ph = rect
@@ -93,15 +103,12 @@ class ColliderGizmoPass(RenderFramePass):
         view = camera.get_view_matrix()
         proj = camera.get_projection_matrix()
 
-        self._renderer.begin()
+        self._renderer.begin(graphics, view, proj, depth_test=False)
         self._draw_colliders(scene)
-        self._renderer.flush(graphics, view, proj, depth_test=False)
+        self._renderer.end()
 
     def _draw_colliders(self, scene):
         """Draw wireframes for all colliders in the scene."""
-        from termin.colliders import BoxCollider, SphereCollider, CapsuleCollider
-        from termin.geombase import Vec3
-
         for comp in scene.colliders:
             if comp.entity is None or not comp.enabled:
                 continue
@@ -110,106 +117,222 @@ class ColliderGizmoPass(RenderFramePass):
             if collider is None:
                 continue
 
-            # Get world transform: entity_transform * collider.transform
+            # Get world transform from entity
             entity_pose = comp.entity.transform.global_pose()
 
             if isinstance(collider, BoxCollider):
-                self._draw_box(collider, entity_pose, COLLIDER_COLOR)
+                self._draw_box(collider, entity_pose)
             elif isinstance(collider, SphereCollider):
-                self._draw_sphere(collider, entity_pose, COLLIDER_COLOR)
+                self._draw_sphere(collider, entity_pose)
             elif isinstance(collider, CapsuleCollider):
-                self._draw_capsule(collider, entity_pose, COLLIDER_COLOR)
+                self._draw_capsule(collider, entity_pose)
 
-    def _draw_box(self, collider, entity_pose, color):
-        """Draw wireframe box."""
+    def _draw_box(self, collider, entity_pose):
+        """Draw wireframe box using unit box mesh."""
         # Get effective half-size (includes scale from collider.transform)
         hs = collider.effective_half_size()
 
-        # Collider's local transform: center position + rotation + scale
-        collider_transform = collider.transform
+        # Collider's local transform
+        ct = collider.transform
 
-        # 8 corners in collider's local space (using scaled half-size)
-        corners_local = [
-            np.array([dx * hs.x, dy * hs.y, dz * hs.z])
-            for dx in [-1, 1] for dy in [-1, 1] for dz in [-1, 1]
-        ]
+        # Build model matrix: entity_pose * collider_transform * scale(2*half_size)
+        # Unit box is -0.5 to +0.5, so we scale by full size (2 * half_size)
 
-        # Transform to world space
-        # 1. Apply collider's rotation and translation (scale already in effective_half_size)
-        # 2. Apply entity's world pose (which includes entity scale)
-        from termin.geombase import Vec3
-        corners_world = []
-        for c in corners_local:
-            # Rotate by collider's orientation and add collider's center
-            c_vec = Vec3(c[0], c[1], c[2])
-            c_rotated = collider_transform.ang.rotate(c_vec)
-            c_collider = np.array([
-                c_rotated.x + collider_transform.lin.x,
-                c_rotated.y + collider_transform.lin.y,
-                c_rotated.z + collider_transform.lin.z
-            ])
-            # Apply entity's world pose
-            c_world = entity_pose.transform_point(c_collider)
-            corners_world.append(c_world)
+        # Collider rotation as 3x3 matrix
+        collider_rot = _quat_to_matrix3(ct.ang)
 
-        # Draw 12 edges
-        # Bottom face: 0-1, 1-3, 3-2, 2-0
-        # Top face: 4-5, 5-7, 7-6, 6-4
-        # Vertical edges: 0-4, 1-5, 2-6, 3-7
-        edges = [
-            (0, 1), (1, 3), (3, 2), (2, 0),  # bottom (z=-1)
-            (4, 5), (5, 7), (7, 6), (6, 4),  # top (z=+1)
-            (0, 4), (1, 5), (2, 6), (3, 7),  # vertical
-        ]
+        # Entity pose as 4x4 matrix
+        entity_mat = _pose_to_matrix4(entity_pose)
 
-        for i, j in edges:
-            self._renderer.line(corners_world[i], corners_world[j], color)
+        # Collider local transform (rotation + translation, scale is in effective_half_size)
+        collider_translate = mat4_translate(ct.lin.x, ct.lin.y, ct.lin.z)
+        collider_rotate = mat4_from_rotation_matrix(collider_rot)
 
-    def _draw_sphere(self, collider, entity_pose, color):
-        """Draw wireframe sphere."""
-        # Get effective radius (includes scale from collider.transform)
+        # Scale by box size (2 * half_size because unit box is -0.5 to +0.5)
+        scale = mat4_scale(2.0 * hs.x, 2.0 * hs.y, 2.0 * hs.z)
+
+        # Compose: entity * collider_translate * collider_rotate * scale
+        local_transform = collider_translate @ collider_rotate @ scale
+        model = entity_mat @ local_transform
+
+        self._renderer.draw_box(model, COLLIDER_COLOR)
+
+    def _draw_sphere(self, collider, entity_pose):
+        """Draw wireframe sphere using 3 orthogonal circles."""
+        # Get effective radius
         radius = collider.effective_radius()
 
         # Collider center in local space
-        collider_transform = collider.transform
-        center_local = np.array([
-            collider_transform.lin.x,
-            collider_transform.lin.y,
-            collider_transform.lin.z
-        ])
+        ct = collider.transform
+        center_local = np.array([ct.lin.x, ct.lin.y, ct.lin.z], dtype=np.float32)
 
-        # Transform center to world space via entity pose
+        # Transform center to world space
         center_world = entity_pose.transform_point(center_local)
 
-        # Scale the radius by entity's uniform scale
+        # Scale radius by entity's uniform scale
         entity_scale = min(entity_pose.scale.x, entity_pose.scale.y, entity_pose.scale.z)
         world_radius = radius * entity_scale
 
-        self._renderer.sphere_wireframe(center_world, world_radius, color, segments=32)
+        # Draw 3 orthogonal circles
+        # XY plane (normal = Z)
+        model_xy = mat4_translate(center_world[0], center_world[1], center_world[2]) @ mat4_scale_uniform(world_radius)
+        self._renderer.draw_circle(model_xy, COLLIDER_COLOR)
 
-    def _draw_capsule(self, collider, entity_pose, color):
-        """Draw wireframe capsule."""
-        from termin.geombase import Vec3
-        # Get effective dimensions (includes scale from collider.transform)
+        # XZ plane (normal = Y) - rotate unit circle from XY to XZ
+        rot_xz = np.array([
+            [1, 0, 0],
+            [0, 0, -1],
+            [0, 1, 0],
+        ], dtype=np.float32)
+        model_xz = mat4_translate(center_world[0], center_world[1], center_world[2]) @ mat4_from_rotation_matrix(rot_xz) @ mat4_scale_uniform(world_radius)
+        self._renderer.draw_circle(model_xz, COLLIDER_COLOR)
+
+        # YZ plane (normal = X) - rotate unit circle from XY to YZ
+        rot_yz = np.array([
+            [0, 0, 1],
+            [0, 1, 0],
+            [-1, 0, 0],
+        ], dtype=np.float32)
+        model_yz = mat4_translate(center_world[0], center_world[1], center_world[2]) @ mat4_from_rotation_matrix(rot_yz) @ mat4_scale_uniform(world_radius)
+        self._renderer.draw_circle(model_yz, COLLIDER_COLOR)
+
+    def _draw_capsule(self, collider, entity_pose):
+        """Draw wireframe capsule: 2 circles + 4 lines + 4 arcs."""
+        # Get effective dimensions
         half_height = collider.effective_half_height()
         radius = collider.effective_radius()
 
         # Collider's local transform
-        collider_transform = collider.transform
-        center = collider_transform.lin
-        axis_vec = collider_transform.ang.rotate(Vec3(0.0, 0.0, 1.0))
-        axis = np.array([axis_vec.x, axis_vec.y, axis_vec.z])
+        ct = collider.transform
+        center = np.array([ct.lin.x, ct.lin.y, ct.lin.z], dtype=np.float32)
+
+        # Capsule axis in collider local space (default is Z)
+        axis_local = _quat_rotate(ct.ang, Vec3(0.0, 0.0, 1.0))
+        axis = np.array([axis_local.x, axis_local.y, axis_local.z], dtype=np.float32)
 
         # Endpoints in collider's local space
-        a_local = np.array([center.x, center.y, center.z]) - axis * half_height
-        b_local = np.array([center.x, center.y, center.z]) + axis * half_height
+        a_local = center - axis * half_height
+        b_local = center + axis * half_height
 
-        # Transform to world space via entity pose
+        # Transform to world space
         a_world = entity_pose.transform_point(a_local)
         b_world = entity_pose.transform_point(b_local)
 
-        # Scale radius by entity's uniform scale (in the XY plane of the capsule)
+        # Scale radius by entity's uniform scale
         entity_scale = min(entity_pose.scale.x, entity_pose.scale.y, entity_pose.scale.z)
         world_radius = radius * entity_scale
 
-        self._renderer.capsule_wireframe(a_world, b_world, world_radius, color, segments=32)
+        # Axis in world space
+        axis_world = b_world - a_world
+        axis_len = np.linalg.norm(axis_world)
+        if axis_len > 1e-6:
+            axis_world = axis_world / axis_len
+
+        # Build orthonormal basis for capsule
+        tangent, bitangent = _build_basis(axis_world)
+
+        # Draw circles at endpoints (perpendicular to axis)
+        # Unit circle is in XY plane, we need to rotate it so Z becomes axis_world
+        rot_to_axis = rotation_matrix_align_z_to_axis(axis_world)
+
+        model_a = mat4_translate(a_world[0], a_world[1], a_world[2]) @ mat4_from_rotation_matrix(rot_to_axis) @ mat4_scale_uniform(world_radius)
+        model_b = mat4_translate(b_world[0], b_world[1], b_world[2]) @ mat4_from_rotation_matrix(rot_to_axis) @ mat4_scale_uniform(world_radius)
+
+        self._renderer.draw_circle(model_a, COLLIDER_COLOR)
+        self._renderer.draw_circle(model_b, COLLIDER_COLOR)
+
+        # Draw 4 connecting lines
+        for i in range(4):
+            angle = np.pi * i / 2  # 0, 90, 180, 270 degrees
+            offset = world_radius * (np.cos(angle) * tangent + np.sin(angle) * bitangent)
+            start = a_world + offset
+            end = b_world + offset
+
+            # Line from start to end
+            line_vec = end - start
+            line_len = np.linalg.norm(line_vec)
+            if line_len > 1e-6:
+                line_rot = rotation_matrix_align_z_to_axis(line_vec)
+                model_line = mat4_translate(start[0], start[1], start[2]) @ mat4_from_rotation_matrix(line_rot) @ mat4_scale(1, 1, line_len)
+                self._renderer.draw_line(model_line, COLLIDER_COLOR)
+
+        # Draw hemisphere arcs at each end
+        # Arc is in XY plane from +X to -X via +Y
+        # We need to orient it for each hemisphere
+
+        for basis_vec, other_vec in [(tangent, bitangent), (bitangent, -tangent)]:
+            # Arc at start (pointing away from end, i.e., -axis direction)
+            # Rotate arc so: +X -> basis_vec, +Y -> -axis_world
+            arc_rot_a = np.column_stack([basis_vec, -axis_world, other_vec]).astype(np.float32)
+            model_arc_a = mat4_translate(a_world[0], a_world[1], a_world[2]) @ mat4_from_rotation_matrix(arc_rot_a) @ mat4_scale_uniform(world_radius)
+            self._renderer.draw_arc(model_arc_a, COLLIDER_COLOR)
+
+            # Arc at end (pointing away from start, i.e., +axis direction)
+            arc_rot_b = np.column_stack([basis_vec, axis_world, -other_vec]).astype(np.float32)
+            model_arc_b = mat4_translate(b_world[0], b_world[1], b_world[2]) @ mat4_from_rotation_matrix(arc_rot_b) @ mat4_scale_uniform(world_radius)
+            self._renderer.draw_arc(model_arc_b, COLLIDER_COLOR)
+
+
+# ============================================================
+# Helper functions (module-level to avoid repeated imports)
+# ============================================================
+
+def _quat_to_matrix3(q) -> np.ndarray:
+    """Convert quaternion to 3x3 rotation matrix."""
+    # q is assumed to have x, y, z, w attributes
+    x, y, z, w = q.x, q.y, q.z, q.w
+
+    xx = x * x
+    yy = y * y
+    zz = z * z
+    xy = x * y
+    xz = x * z
+    yz = y * z
+    wx = w * x
+    wy = w * y
+    wz = w * z
+
+    return np.array([
+        [1 - 2*(yy + zz), 2*(xy - wz), 2*(xz + wy)],
+        [2*(xy + wz), 1 - 2*(xx + zz), 2*(yz - wx)],
+        [2*(xz - wy), 2*(yz + wx), 1 - 2*(xx + yy)],
+    ], dtype=np.float32)
+
+
+def _quat_rotate(q, v: Vec3) -> Vec3:
+    """Rotate vector by quaternion."""
+    return q.rotate(v)
+
+
+def _pose_to_matrix4(pose) -> np.ndarray:
+    """Convert Pose to 4x4 transformation matrix."""
+    # Get rotation matrix
+    rot = _quat_to_matrix3(pose.ang)
+
+    # Apply scale to rotation
+    scale = pose.scale
+    rot[:, 0] *= scale.x
+    rot[:, 1] *= scale.y
+    rot[:, 2] *= scale.z
+
+    # Build 4x4 matrix
+    m = np.eye(4, dtype=np.float32)
+    m[:3, :3] = rot
+    m[0, 3] = pose.lin.x
+    m[1, 3] = pose.lin.y
+    m[2, 3] = pose.lin.z
+
+    return m
+
+
+def _build_basis(axis: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Build orthonormal basis from axis direction. Returns (tangent, bitangent)."""
+    up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    if abs(np.dot(axis, up)) > 0.99:
+        up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+
+    tangent = np.cross(axis, up)
+    tangent = tangent / np.linalg.norm(tangent)
+    bitangent = np.cross(axis, tangent)
+
+    return tangent, bitangent

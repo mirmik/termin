@@ -25,6 +25,8 @@ from termin.editor.gizmo.base import (
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
     from termin.visualization.render.immediate import ImmediateRenderer
+    from termin.visualization.render.solid_primitives import SolidPrimitiveRenderer
+    from termin.visualization.platform.backends.base import GraphicsBackend
 
 
 class TransformElement(Enum):
@@ -192,8 +194,19 @@ class TransformGizmo(Gizmo):
     # Gizmo Interface
     # ============================================================
 
-    def draw(self, renderer: "ImmediateRenderer") -> None:
-        """Draw opaque gizmo geometry (arrows, rings)."""
+    @property
+    def uses_solid_renderer(self) -> bool:
+        """Use efficient SolidPrimitiveRenderer."""
+        return True
+
+    def draw_solid(
+        self,
+        renderer: "SolidPrimitiveRenderer",
+        graphics: "GraphicsBackend",
+        view: np.ndarray,
+        proj: np.ndarray,
+    ) -> None:
+        """Draw opaque gizmo geometry using efficient GPU meshes."""
         if not self.visible or self._target is None:
             return
 
@@ -207,7 +220,7 @@ class TransformGizmo(Gizmo):
         ]:
             axis_dir = self._get_world_axis(axis)
             color = self._get_color(axis, element)
-            renderer.arrow_solid(
+            renderer.draw_arrow(
                 origin=origin,
                 direction=axis_dir,
                 length=self._scaled(self._arrow_length),
@@ -215,7 +228,6 @@ class TransformGizmo(Gizmo):
                 shaft_radius=self._scaled(self._shaft_radius),
                 head_radius=self._scaled(self._head_radius),
                 head_length_ratio=self._head_length_ratio,
-                segments=16,
             )
 
         # Draw rotation rings
@@ -226,18 +238,23 @@ class TransformGizmo(Gizmo):
         ]:
             ring_axis = self._get_world_axis(axis)
             color = self._get_color(axis, element)
-            renderer.torus_solid(
-                center=origin,
-                axis=ring_axis,
-                major_radius=self._scaled(self._ring_major_radius),
-                minor_radius=self._scaled(self._ring_minor_radius),
-                color=color,
-                major_segments=48,
-                minor_segments=8,
-            )
 
-    def draw_transparent(self, renderer: "ImmediateRenderer") -> None:
-        """Draw transparent gizmo geometry (plane quads)."""
+            # Build model matrix for torus
+            # Unit torus has axis=Z, major_radius=1
+            # We need to rotate it so Z aligns with ring_axis
+            rot = _rotation_align_z_to(ring_axis)
+            scale = self._scaled(self._ring_major_radius)
+            model = _compose_trs(origin, rot, scale)
+            renderer.draw_torus(model, color)
+
+    def draw_transparent_solid(
+        self,
+        renderer: "SolidPrimitiveRenderer",
+        graphics: "GraphicsBackend",
+        view: np.ndarray,
+        proj: np.ndarray,
+    ) -> None:
+        """Draw transparent gizmo geometry using efficient GPU meshes."""
         if not self.visible or self._target is None:
             return
 
@@ -251,15 +268,26 @@ class TransformGizmo(Gizmo):
 
         for plane, element, a1, a2 in [
             ("xy", TransformElement.TRANSLATE_XY, axis_x, axis_y),
-            ("xz", TransformElement.TRANSLATE_XZ, axis_z, axis_x),  # match collider winding
+            ("xz", TransformElement.TRANSLATE_XZ, axis_z, axis_x),
             ("yz", TransformElement.TRANSLATE_YZ, axis_y, axis_z),
         ]:
             color = self._get_plane_color(plane, element)
+            # Unit quad is from (0,0,0) to (1,1,0) in XY plane
+            # We need to position it at origin + offset and scale by sz
             p0 = origin + a1 * off + a2 * off
-            p1 = origin + a1 * (off + sz) + a2 * off
-            p2 = origin + a1 * (off + sz) + a2 * (off + sz)
-            p3 = origin + a1 * off + a2 * (off + sz)
-            renderer.quad(p0, p1, p2, p3, color)
+
+            # Build rotation: X -> a1, Y -> a2
+            rot = np.column_stack([a1, a2, np.cross(a1, a2)]).astype(np.float32)
+            model = _compose_trs(p0, rot, sz)
+            renderer.draw_quad(model, color)
+
+    def draw(self, renderer: "ImmediateRenderer") -> None:
+        """Legacy draw method - not used when uses_solid_renderer=True."""
+        pass
+
+    def draw_transparent(self, renderer: "ImmediateRenderer") -> None:
+        """Legacy draw method - not used when uses_solid_renderer=True."""
+        pass
 
     def get_colliders(self) -> list[GizmoCollider]:
         """Get colliders for all gizmo elements."""
@@ -594,3 +622,44 @@ def _quat_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
         w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
         w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
     ], dtype=np.float32)
+
+
+# ============================================================
+# Matrix Utilities for SolidPrimitiveRenderer
+# ============================================================
+
+def _rotation_align_z_to(target: np.ndarray) -> np.ndarray:
+    """Build 3x3 rotation matrix that rotates Z axis to target direction."""
+    target = np.asarray(target, dtype=np.float32)
+    length = np.linalg.norm(target)
+    if length < 1e-6:
+        return np.eye(3, dtype=np.float32)
+
+    z_new = target / length
+
+    up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    if abs(np.dot(z_new, up)) > 0.99:
+        up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+
+    x_new = np.cross(up, z_new)
+    x_new = x_new / np.linalg.norm(x_new)
+    y_new = np.cross(z_new, x_new)
+
+    return np.column_stack([x_new, y_new, z_new]).astype(np.float32)
+
+
+def _compose_trs(translate: np.ndarray, rotate: np.ndarray, scale: float) -> np.ndarray:
+    """Compose 4x4 TRS matrix from translation, 3x3 rotation, and uniform scale."""
+    m = np.eye(4, dtype=np.float32)
+
+    # Apply scale to rotation columns
+    m[:3, 0] = rotate[:, 0] * scale
+    m[:3, 1] = rotate[:, 1] * scale
+    m[:3, 2] = rotate[:, 2] * scale
+
+    # Translation
+    m[0, 3] = translate[0]
+    m[1, 3] = translate[1]
+    m[2, 3] = translate[2]
+
+    return m

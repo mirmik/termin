@@ -21,6 +21,7 @@ from termin.editor.gizmo.base import (
 
 if TYPE_CHECKING:
     from termin.visualization.render.immediate import ImmediateRenderer
+    from termin.visualization.render.solid_primitives import SolidPrimitiveRenderer
     from termin.visualization.platform.backends.base import GraphicsBackend
 
 
@@ -46,6 +47,7 @@ class GizmoManager:
     def __init__(self):
         self._gizmos: list[Gizmo] = []
         self._renderer: "ImmediateRenderer | None" = None
+        self._solid_renderer: "SolidPrimitiveRenderer | None" = None
 
         # Drag state
         self._active_gizmo: Gizmo | None = None
@@ -88,6 +90,13 @@ class GizmoManager:
     # Rendering
     # ============================================================
 
+    def _ensure_solid_renderer(self) -> "SolidPrimitiveRenderer":
+        """Lazily create SolidPrimitiveRenderer."""
+        if self._solid_renderer is None:
+            from termin.visualization.render.solid_primitives import SolidPrimitiveRenderer
+            self._solid_renderer = SolidPrimitiveRenderer()
+        return self._solid_renderer
+
     def render(
         self,
         renderer: "ImmediateRenderer",
@@ -98,31 +107,61 @@ class GizmoManager:
         """Render all visible gizmos."""
         self._renderer = renderer
 
-        # Pass 1: Opaque geometry (arrows, rings, spheres)
-        renderer.begin()
+        # Separate gizmos by renderer type
+        solid_gizmos = []
+        immediate_gizmos = []
         for gizmo in self._gizmos:
             if gizmo.visible:
-                gizmo.draw(renderer)
-        renderer.flush(
-            graphics=graphics,
-            view_matrix=view_matrix,
-            proj_matrix=proj_matrix,
-            depth_test=True,
-            blend=False,
-        )
+                if gizmo.uses_solid_renderer:
+                    solid_gizmos.append(gizmo)
+                else:
+                    immediate_gizmos.append(gizmo)
 
-        # Pass 2: Transparent geometry (plane quads)
-        renderer.begin()
-        for gizmo in self._gizmos:
-            if gizmo.visible:
+        # Pass 1: Opaque geometry
+
+        # Solid renderer gizmos (efficient GPU meshes)
+        if solid_gizmos:
+            solid_renderer = self._ensure_solid_renderer()
+            solid_renderer.begin(graphics, view_matrix, proj_matrix, depth_test=True, blend=False)
+            for gizmo in solid_gizmos:
+                gizmo.draw_solid(solid_renderer, graphics, view_matrix, proj_matrix)
+            solid_renderer.end()
+
+        # Immediate renderer gizmos (legacy, generates geometry each frame)
+        if immediate_gizmos:
+            renderer.begin()
+            for gizmo in immediate_gizmos:
+                gizmo.draw(renderer)
+            renderer.flush(
+                graphics=graphics,
+                view_matrix=view_matrix,
+                proj_matrix=proj_matrix,
+                depth_test=True,
+                blend=False,
+            )
+
+        # Pass 2: Transparent geometry
+
+        # Solid renderer transparent
+        if solid_gizmos:
+            solid_renderer = self._ensure_solid_renderer()
+            solid_renderer.begin(graphics, view_matrix, proj_matrix, depth_test=True, blend=True)
+            for gizmo in solid_gizmos:
+                gizmo.draw_transparent_solid(solid_renderer, graphics, view_matrix, proj_matrix)
+            solid_renderer.end()
+
+        # Immediate renderer transparent
+        if immediate_gizmos:
+            renderer.begin()
+            for gizmo in immediate_gizmos:
                 gizmo.draw_transparent(renderer)
-        renderer.flush(
-            graphics=graphics,
-            view_matrix=view_matrix,
-            proj_matrix=proj_matrix,
-            depth_test=True,
-            blend=True,
-        )
+            renderer.flush(
+                graphics=graphics,
+                view_matrix=view_matrix,
+                proj_matrix=proj_matrix,
+                depth_test=True,
+                blend=True,
+            )
 
         # Restore default state
         graphics.set_blend(False)
