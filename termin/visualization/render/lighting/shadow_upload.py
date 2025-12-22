@@ -61,8 +61,13 @@ def upload_shadow_maps_to_shader(
         shader: Активный шейдер (после use())
         shadow_array: Массив shadow maps из ShadowPass
     """
-    if shadow_array is None:
+    if shadow_array is None or len(shadow_array) == 0:
         shader.set_uniform_int("u_shadow_map_count", 0)
+        # ВАЖНО: Всё равно установить uniform'ы для sampler'ов чтобы они
+        # указывали на units 8+ (не 0, где u_albedo_texture).
+        # AMD драйверы не позволяют sampler2D и sampler2DShadow на одном unit.
+        for i in range(MAX_SHADOW_MAPS):
+            shader.set_uniform_int(f"u_shadow_map[{i}]", SHADOW_MAP_TEXTURE_UNIT_START + i)
         return
 
     count = min(len(shadow_array), MAX_SHADOW_MAPS)
@@ -72,7 +77,7 @@ def upload_shadow_maps_to_shader(
         entry = shadow_array[i]
         unit = SHADOW_MAP_TEXTURE_UNIT_START + i
 
-        # Texture unit для sampler2D
+        # Texture unit для sampler2DShadow
         shader.set_uniform_int(f"u_shadow_map[{i}]", unit)
 
         # Матрица light-space: P_light * V_light
@@ -81,3 +86,7 @@ def upload_shadow_maps_to_shader(
 
         # Индекс источника света (для соответствия с u_light_* массивами)
         shader.set_uniform_int(f"u_shadow_light_index[{i}]", entry.light_index)
+
+    # Установить оставшиеся sampler'ы на их unit'ы (для AMD)
+    for i in range(count, MAX_SHADOW_MAPS):
+        shader.set_uniform_int(f"u_shadow_map[{i}]", SHADOW_MAP_TEXTURE_UNIT_START + i)
