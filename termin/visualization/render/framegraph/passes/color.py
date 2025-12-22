@@ -230,20 +230,31 @@ class ColorPass(RenderFramePass):
     ) -> None:
         """
         Биндит shadow map текстуры на texture units.
-        
+
         Shadow maps биндятся начиная с SHADOW_MAP_TEXTURE_UNIT_START.
         MeshRenderer будет загружать uniform'ы при отрисовке.
+
+        AMD драйверы требуют чтобы ВСЕ sampler2DShadow были привязаны
+        к валидным текстурам, даже если они не используются.
         """
-        if shadow_array is None or len(shadow_array) == 0:
-            return
-        
-        for i, entry in enumerate(shadow_array):
-            if i >= MAX_SHADOW_MAPS:
-                break
-            
+        from termin.visualization.render.texture import get_dummy_shadow_texture
+
+        # Привязываем реальные shadow maps
+        bound_count = 0
+        if shadow_array is not None:
+            for i, entry in enumerate(shadow_array):
+                if i >= MAX_SHADOW_MAPS:
+                    break
+                unit = SHADOW_MAP_TEXTURE_UNIT_START + i
+                texture = entry.texture()
+                texture.bind(unit)
+                bound_count += 1
+
+        # Привязываем dummy текстуру к оставшимся слотам (для AMD)
+        dummy = get_dummy_shadow_texture()
+        for i in range(bound_count, MAX_SHADOW_MAPS):
             unit = SHADOW_MAP_TEXTURE_UNIT_START + i
-            texture = entry.texture()
-            texture.bind(unit)
+            dummy.bind(unit)
 
     def execute(
         self,

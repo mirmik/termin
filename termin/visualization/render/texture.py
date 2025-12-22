@@ -223,3 +223,75 @@ def get_white_texture() -> Texture:
         _white_texture = Texture.from_data(data, width=1, height=1, source_path="__white_1x1__")
 
     return _white_texture
+
+
+# --- Dummy Shadow Texture (for sampler2DShadow) ---
+
+class _DummyShadowTexture:
+    """
+    Placeholder depth texture for sampler2DShadow.
+
+    AMD драйверы требуют чтобы sampler2DShadow были привязаны к
+    валидным depth текстурам с GL_TEXTURE_COMPARE_MODE, даже если
+    они не используются в шейдере.
+
+    Возвращает 1.0 (полностью освещено) при любом сэмплировании.
+    """
+
+    def __init__(self):
+        self._tex_id: int | None = None
+
+    def _ensure_created(self):
+        if self._tex_id is not None:
+            return
+
+        from OpenGL import GL as gl
+
+        self._tex_id = gl.glGenTextures(1)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self._tex_id)
+
+        # 1x1 depth texture со значением 1.0 (максимальная глубина = нет тени)
+        gl.glTexImage2D(
+            gl.GL_TEXTURE_2D, 0, gl.GL_DEPTH_COMPONENT24,
+            1, 1, 0,
+            gl.GL_DEPTH_COMPONENT, gl.GL_FLOAT,
+            np.array([1.0], dtype=np.float32)
+        )
+
+        # Параметры для sampler2DShadow
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE)
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
+
+        # Hardware depth comparison для sampler2DShadow
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_COMPARE_MODE, gl.GL_COMPARE_REF_TO_TEXTURE)
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_COMPARE_FUNC, gl.GL_LEQUAL)
+
+        gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+
+    def bind(self, unit: int):
+        """Bind to texture unit."""
+        from OpenGL import GL as gl
+
+        self._ensure_created()
+        gl.glActiveTexture(gl.GL_TEXTURE0 + unit)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self._tex_id)
+
+
+_dummy_shadow_texture: _DummyShadowTexture | None = None
+
+
+def get_dummy_shadow_texture() -> _DummyShadowTexture:
+    """
+    Returns a 1x1 depth texture for sampler2DShadow placeholders.
+
+    Used when shadow maps are not available but shader expects
+    sampler2DShadow to be bound (required by AMD drivers).
+    """
+    global _dummy_shadow_texture
+
+    if _dummy_shadow_texture is None:
+        _dummy_shadow_texture = _DummyShadowTexture()
+
+    return _dummy_shadow_texture
