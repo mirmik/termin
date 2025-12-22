@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "92068f77-7364-469f-a7c4-46eecbd0ec2a",
+    "uuid": "7f1b8983-cdca-42d3-8902-62b56a6f092c",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -333,15 +333,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            2.022104263305664,
-            -2.173909902572632,
-            1.3770318031311035
+            -0.7658929228782654,
+            -0.4835587441921234,
+            -1.444739580154419
           ],
           "rotation": [
-            -0.23911762261802347,
-            -0.09904575496855096,
-            0.36964378710788504,
-            0.8923991100560079
+            -0.14551882644329842,
+            -0.0259208520248754,
+            0.17344048127686323,
+            0.9736892625654858
           ]
         },
         "components": [
@@ -357,11 +357,11 @@
           {
             "data": {
               "enabled": true,
-              "radius": 2.0,
+              "radius": 1.5,
               "target": [
-                0.7973594008108107,
-                -0.9491649120308799,
-                0.37703174965863634
+                -1.2612084141246367,
+                0.8626692790576646,
+                -1.8832971154573008
               ]
             },
             "type": "OrbitCameraController"
@@ -1557,6 +1557,9 @@
                   "mesh": {
                     "uuid": "f5ec0c5a-99cb-4bd8-a424-953aa97bf6b7"
                   },
+                  "material": {
+                    "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b"
+                  },
                   "override_material": false,
                   "cast_shadow": true
                 },
@@ -1643,6 +1646,9 @@
                   "mesh": {
                     "uuid": "507bd6b6-819a-4ebb-92bf-a167f42ac354"
                   },
+                  "material": {
+                    "uuid": "8ea1c94c-9960-4541-9083-01531d967c10"
+                  },
                   "override_material": false,
                   "cast_shadow": true
                 },
@@ -1685,6 +1691,9 @@
                   "enabled": true,
                   "mesh": {
                     "uuid": "6432a38a-882f-4c5c-8e47-a800cb44cc3e"
+                  },
+                  "material": {
+                    "uuid": "8ea1c94c-9960-4541-9083-01531d967c10"
                   },
                   "override_material": false,
                   "cast_shadow": true
@@ -1986,6 +1995,9 @@
                   "enabled": true,
                   "mesh": {
                     "uuid": "f995496f-6565-44b6-9df1-99b10b48ca81"
+                  },
+                  "material": {
+                    "uuid": "00000000-0000-0000-0002-000000000001"
                   },
                   "override_material": false,
                   "cast_shadow": true
@@ -6311,7 +6323,7 @@
         "pose": {
           "position": [
             0.0,
-            10.0,
+            10.429728507995605,
             0.0
           ],
           "rotation": [
@@ -6335,6 +6347,31 @@
               "cast_shadow": true
             },
             "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "box_size": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1.0,
+              "capsule_radius": 0.25
+            },
+            "type": "ColliderComponent"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            },
+            "type": "RigidBodyComponent"
           }
         ],
         "children": [
@@ -6356,7 +6393,7 @@
             "pose": {
               "position": [
                 0.0,
-                5.0,
+                4.463102340698242,
                 0.0
               ],
               "rotation": [
@@ -6390,6 +6427,21 @@
                   "friction": 0.5
                 },
                 "type": "RigidBodyComponent"
+              },
+              {
+                "data": {
+                  "enabled": true,
+                  "collider_type": "Box",
+                  "box_size": [
+                    1.0,
+                    1.0,
+                    1.0
+                  ],
+                  "sphere_radius": 0.5,
+                  "capsule_height": 1.0,
+                  "capsule_radius": 0.25
+                },
+                "type": "ColliderComponent"
               }
             ],
             "children": []
@@ -7100,14 +7152,15 @@
   "editor": {
     "camera": {
       "target": [
-        -4.3214805806300225,
-        9.949135740484044,
-        -6.155478311440149
+        -5.753103635901714,
+        9.465648048841029,
+        -4.830494653786999
       ],
-      "radius": 25.5,
-      "azimuth": 58.381263479214596,
-      "elevation": 0.855211333477224
+      "radius": 11.5,
+      "azimuth": 57.00245337013908,
+      "elevation": 0.30368728984701726
     },
+    "selected_entity": "spikyMesh",
     "displays": [
       {
         "name": "Editor",
@@ -7116,7 +7169,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "4deab772-881b-4002-8fe5-a02d01659994",
+            "uuid": "66bd07a6-4c3b-411e-b639-b4b7b2eeca28",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7135,8 +7188,8 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "1c0d9690-94aa-4bc0-81b1-6d4b13825bb3",
-            "camera_entity": "camera",
+            "uuid": "fb1eea83-e413-4eaf-a4d2-fbe15f0d7adc",
+            "camera_entity": "GameCamera",
             "rect": [
               0.0,
               0.0,
@@ -7149,15 +7202,16 @@
       }
     ],
     "expanded_entities": [
-      "camera",
+      "entity13",
       "[Root]",
-      "EditorEntities",
-      "entity12_copy",
+      "Glitch",
+      "cube2",
+      "camera",
+      "cube1",
       "Walls",
       "Arti",
-      "cube2",
-      "entity13",
-      "cube1"
+      "entity12_copy",
+      "EditorEntities"
     ]
   },
   "resources": {

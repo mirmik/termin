@@ -210,6 +210,75 @@ void main() {
 """
 
 
+class ResolvePass(RenderFramePass):
+    """
+    Resolve MSAA FBO в обычный FBO через glBlitFramebuffer.
+
+    Необходим перед любым pass'ом, который сэмплирует текстуру (PostProcess и др.),
+    если источник — MSAA FBO.
+    """
+
+    def __init__(
+        self,
+        input_res: str,
+        output_res: str,
+        pass_name: str = "Resolve",
+    ):
+        super().__init__(
+            pass_name=pass_name,
+            reads={input_res},
+            writes={output_res},
+        )
+        self.input_res = input_res
+        self.output_res = output_res
+
+    def _serialize_params(self) -> dict:
+        return {
+            "input_res": self.input_res,
+            "output_res": self.output_res,
+        }
+
+    @classmethod
+    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ResolvePass":
+        return cls(
+            input_res=data.get("input_res", "color"),
+            output_res=data.get("output_res", "color_resolved"),
+            pass_name=data.get("pass_name", "Resolve"),
+        )
+
+    def execute(
+        self,
+        graphics: "GraphicsBackend",
+        reads_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle" | None],
+        rect: tuple[int, int, int, int],
+        scene=None,
+        camera=None,
+        context_key: int = 0,
+        lights=None,
+        canvas=None,
+    ):
+        from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
+
+        if isinstance(graphics, NOPGraphicsBackend):
+            return
+
+        px, py, pw, ph = rect
+
+        fb_in = reads_fbos.get(self.input_res)
+        fb_out = writes_fbos.get(self.output_res)
+        if fb_in is None or fb_out is None:
+            return
+
+        src_size = fb_in.get_size()
+        graphics.blit_framebuffer(
+            fb_in,
+            fb_out,
+            (0, 0, src_size[0], src_size[1]),
+            (0, 0, pw, ph),
+        )
+
+
 class PresentToScreenPass(RenderFramePass):
     """
     Берёт текстуру из ресурса input_res и выводит её на экран
@@ -273,32 +342,17 @@ class PresentToScreenPass(RenderFramePass):
             return
 
         px, py, pw, ph = rect
-        key = context_key
 
         fb_in = reads_fbos.get(self.input_res)
         fb_out = writes_fbos.get("DISPLAY")
         if fb_in is None or fb_out is None:
             return
 
-        # Извлекаем текстуру с учетом типа ресурса
-        tex_in = _get_texture_from_resource(fb_in)
-        if tex_in is None:
-            return
-
-        graphics.bind_framebuffer(fb_out)
-        graphics.set_viewport(px, py, pw, ph)
-
-        graphics.set_depth_test(False)
-        graphics.set_depth_mask(False)
-
-        shader = self._get_shader()
-        shader.ensure_ready(graphics)
-        shader.use()
-        shader.set_uniform_int("u_tex", 0)
-
-        tex_in.bind(0)
-
-        graphics.draw_ui_textured_quad(key)
-
-        graphics.set_depth_test(True)
-        graphics.set_depth_mask(True)
+        # Используем glBlitFramebuffer — работает и для обычных FBO, и для MSAA (resolve)
+        src_size = fb_in.get_size()
+        graphics.blit_framebuffer(
+            fb_in,
+            fb_out,
+            (0, 0, src_size[0], src_size[1]),
+            (px, py, px + pw, py + ph),
+        )

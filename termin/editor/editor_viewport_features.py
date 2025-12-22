@@ -431,6 +431,8 @@ class EditorViewportFeatures:
             CanvasPass,
             PresentToScreenPass,
         )
+        from termin.visualization.render.framegraph.passes.present import ResolvePass
+        from termin.visualization.render.framegraph.resource_spec import ResourceSpec
         from termin.visualization.render.framegraph.passes.unified_gizmo import UnifiedGizmoPass
         from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
         from termin.visualization.render.postprocess import PostProcessPass
@@ -442,9 +444,16 @@ class EditorViewportFeatures:
         def get_gizmo_manager():
             return self._gizmo_manager
 
+        # MSAA resolve перед постобработкой
+        resolve_pass = ResolvePass(
+            input_res="color",
+            output_res="color_resolved",
+            pass_name="Resolve",
+        )
+
         postprocess = PostProcessPass(
             effects=[],
-            input_res="color",
+            input_res="color_resolved",  # читаем из resolved (не MSAA)
             output_res="color_pp",
             pass_name="PostFX",
         )
@@ -512,6 +521,7 @@ class EditorViewportFeatures:
             gizmo_pass,
             depth_pass,
             IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
+            resolve_pass,  # MSAA → обычный FBO
             postprocess,
             CanvasPass(
                 src="color_pp",
@@ -537,7 +547,21 @@ class EditorViewportFeatures:
             )
         )
 
+        # MSAA 4x для всех FBO где рисуется геометрия
+        # TODO: После редизайна системы алиасов framegraph эти спеки нужно упростить.
+        #       Сейчас приходится указывать canonical name ('empty') и дублировать
+        #       clear_color/clear_depth из pass specs, т.к. pipeline_specs перезаписывают их.
+        msaa_samples = 4
+        msaa_specs = [
+            ResourceSpec(
+                resource="empty",
+                samples=msaa_samples,
+                clear_color=(0.2, 0.2, 0.2, 1.0),
+                clear_depth=1.0,
+            ),
+        ]
+
         return RenderPipeline(
             passes=passes,
-            pipeline_specs=[],
+            pipeline_specs=msaa_specs,
         )

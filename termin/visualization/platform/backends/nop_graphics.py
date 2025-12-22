@@ -190,7 +190,7 @@ class NOPGraphicsBackend(GraphicsBackend):
     def set_depth_write_enabled(self, enabled: bool):
         self._state["depth_mask"] = enabled
 
-    def create_framebuffer(self, size: Tuple[int, int]) -> FramebufferHandle:
+    def create_framebuffer(self, size: Tuple[int, int], samples: int = 1) -> FramebufferHandle:
         return NOPFramebufferHandle(size)
 
     def create_shadow_framebuffer(self, size: Tuple[int, int]) -> FramebufferHandle:
@@ -199,6 +199,16 @@ class NOPGraphicsBackend(GraphicsBackend):
     def bind_framebuffer(self, framebuffer: FramebufferHandle | None):
         # Можно сохранить ссылку, если нужно для отладки
         self._state["bound_fbo"] = framebuffer
+
+    def blit_framebuffer(
+        self,
+        src: FramebufferHandle,
+        dst: FramebufferHandle,
+        src_rect: Tuple[int, int, int, int],
+        dst_rect: Tuple[int, int, int, int],
+    ):
+        # NOP: ничего не делаем
+        pass
 
     def read_pixel(self, framebuffer, x: int, y: int) -> Any:
         # Возвращаем пустые данные

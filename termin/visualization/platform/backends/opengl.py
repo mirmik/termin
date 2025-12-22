@@ -569,8 +569,8 @@ class OpenGLGraphicsBackend(GraphicsBackend):
         from OpenGL import GL as gl
         gl.glDepthMask(gl.GL_TRUE if enabled else gl.GL_FALSE)
 
-    def create_framebuffer(self, size: Tuple[int, int]) -> FramebufferHandle:
-        return OpenGLFramebufferHandle(size)
+    def create_framebuffer(self, size: Tuple[int, int], samples: int = 1) -> FramebufferHandle:
+        return OpenGLFramebufferHandle(size, samples=samples)
 
     def create_shadow_framebuffer(self, size: Tuple[int, int]) -> FramebufferHandle:
         """Создаёт framebuffer для shadow mapping с depth texture и hardware PCF."""
@@ -582,6 +582,34 @@ class OpenGLGraphicsBackend(GraphicsBackend):
         else:
             assert isinstance(framebuffer, (OpenGLFramebufferHandle, OpenGLShadowFramebufferHandle))
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, framebuffer._fbo or 0)
+
+    def blit_framebuffer(
+        self,
+        src: FramebufferHandle,
+        dst: FramebufferHandle,
+        src_rect: Tuple[int, int, int, int],
+        dst_rect: Tuple[int, int, int, int],
+    ):
+        """
+        Копирует color buffer из src в dst через glBlitFramebuffer.
+        Автоматически выполняет MSAA resolve.
+        """
+        src_fbo = src._fbo if src._fbo is not None else 0
+        dst_fbo = dst._fbo if dst._fbo is not None else 0
+
+        gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, src_fbo)
+        gl.glBindFramebuffer(gl.GL_DRAW_FRAMEBUFFER, dst_fbo)
+
+        gl.glBlitFramebuffer(
+            src_rect[0], src_rect[1], src_rect[2], src_rect[3],
+            dst_rect[0], dst_rect[1], dst_rect[2], dst_rect[3],
+            gl.GL_COLOR_BUFFER_BIT,
+            gl.GL_NEAREST,
+        )
+
+        # Возвращаем состояние
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+
 
 class _OpenGLColorTextureHandle(TextureHandle):
     """
@@ -603,9 +631,16 @@ class _OpenGLColorTextureHandle(TextureHandle):
         self._tex_id = tex_id
 
 class OpenGLFramebufferHandle(FramebufferHandle):
-    def __init__(self, size: Tuple[int, int], fbo_id: int | None = None, owns_attachments: bool = True):
+    def __init__(
+        self,
+        size: Tuple[int, int],
+        fbo_id: int | None = None,
+        owns_attachments: bool = True,
+        samples: int = 1,
+    ):
         self._size = size
         self._owns_attachments = owns_attachments
+        self._samples = samples  # 1 = обычный, >1 = MSAA
         self._fbo: int | None = None
         self._color_tex: int | None = None
         self._depth_rb: int | None = None
@@ -614,6 +649,16 @@ class OpenGLFramebufferHandle(FramebufferHandle):
             self._create()
         else:
             self._fbo = fbo_id
+
+    @property
+    def samples(self) -> int:
+        """Количество MSAA samples (1 = без MSAA)."""
+        return self._samples
+
+    @property
+    def is_msaa(self) -> bool:
+        """True если FBO использует MSAA."""
+        return self._samples > 1
 
     def set_external_target(self, fbo_id: int, size: Tuple[int, int]):
         """Rebind handle to an externally managed FBO without owning attachments."""
@@ -632,37 +677,72 @@ class OpenGLFramebufferHandle(FramebufferHandle):
         self._fbo = gl.glGenFramebuffers(1)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self._fbo)
 
-        # цветовой attachment (RGBA8)
-        self._color_tex = gl.glGenTextures(1)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self._color_tex)
-        gl.glTexImage2D(
-            gl.GL_TEXTURE_2D, 0, gl.GL_RGBA8,
-            w, h, 0,
-            gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, None
-        )
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE)
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
+        if self._samples > 1:
+            # MSAA: используем GL_TEXTURE_2D_MULTISAMPLE
+            self._color_tex = gl.glGenTextures(1)
+            gl.glBindTexture(gl.GL_TEXTURE_2D_MULTISAMPLE, self._color_tex)
+            gl.glTexImage2DMultisample(
+                gl.GL_TEXTURE_2D_MULTISAMPLE,
+                self._samples,
+                gl.GL_RGBA8,
+                w, h,
+                gl.GL_TRUE,  # fixedsamplelocations
+            )
+            gl.glFramebufferTexture2D(
+                gl.GL_FRAMEBUFFER,
+                gl.GL_COLOR_ATTACHMENT0,
+                gl.GL_TEXTURE_2D_MULTISAMPLE,
+                self._color_tex,
+                0,
+            )
 
-        gl.glFramebufferTexture2D(
-            gl.GL_FRAMEBUFFER,
-            gl.GL_COLOR_ATTACHMENT0,
-            gl.GL_TEXTURE_2D,
-            self._color_tex,
-            0,
-        )
+            # depth renderbuffer с MSAA
+            self._depth_rb = gl.glGenRenderbuffers(1)
+            gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self._depth_rb)
+            gl.glRenderbufferStorageMultisample(
+                gl.GL_RENDERBUFFER,
+                self._samples,
+                gl.GL_DEPTH_COMPONENT24,
+                w, h,
+            )
+            gl.glFramebufferRenderbuffer(
+                gl.GL_FRAMEBUFFER,
+                gl.GL_DEPTH_ATTACHMENT,
+                gl.GL_RENDERBUFFER,
+                self._depth_rb,
+            )
+        else:
+            # Обычный FBO без MSAA
+            self._color_tex = gl.glGenTextures(1)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self._color_tex)
+            gl.glTexImage2D(
+                gl.GL_TEXTURE_2D, 0, gl.GL_RGBA8,
+                w, h, 0,
+                gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, None
+            )
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
 
-        # depth renderbuffer
-        self._depth_rb = gl.glGenRenderbuffers(1)
-        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self._depth_rb)
-        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, w, h)
-        gl.glFramebufferRenderbuffer(
-            gl.GL_FRAMEBUFFER,
-            gl.GL_DEPTH_ATTACHMENT,
-            gl.GL_RENDERBUFFER,
-            self._depth_rb,
-        )
+            gl.glFramebufferTexture2D(
+                gl.GL_FRAMEBUFFER,
+                gl.GL_COLOR_ATTACHMENT0,
+                gl.GL_TEXTURE_2D,
+                self._color_tex,
+                0,
+            )
+
+            # depth renderbuffer
+            self._depth_rb = gl.glGenRenderbuffers(1)
+            gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self._depth_rb)
+            gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, w, h)
+            gl.glFramebufferRenderbuffer(
+                gl.GL_FRAMEBUFFER,
+                gl.GL_DEPTH_ATTACHMENT,
+                gl.GL_RENDERBUFFER,
+                self._depth_rb,
+            )
 
         status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
         if status != gl.GL_FRAMEBUFFER_COMPLETE:
@@ -671,7 +751,7 @@ class OpenGLFramebufferHandle(FramebufferHandle):
 
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
-        # обновляем handle текстуры
+        # обновляем handle текстуры (для MSAA текстура не сэмплируется напрямую)
         self._color_handle._set_tex_id(self._color_tex)
 
     def resize(self, size: Tuple[int, int]):

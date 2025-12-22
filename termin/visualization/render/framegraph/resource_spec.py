@@ -35,6 +35,7 @@ class ResourceSpec:
     clear_color: Tuple[float, float, float, float] | None = None
     clear_depth: float | None = None
     format: str | None = None
+    samples: int = 1  # 1 = без MSAA, 4 = 4x MSAA
 
     def serialize(self) -> dict:
         """Сериализует ResourceSpec в словарь."""
@@ -50,6 +51,8 @@ class ResourceSpec:
             data["clear_depth"] = self.clear_depth
         if self.format is not None:
             data["format"] = self.format
+        if self.samples != 1:
+            data["samples"] = self.samples
         return data
 
     @classmethod
@@ -70,4 +73,5 @@ class ResourceSpec:
             clear_color=clear_color,
             clear_depth=data.get("clear_depth"),
             format=data.get("format"),
+            samples=data.get("samples", 1),
         )

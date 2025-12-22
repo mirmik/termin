@@ -252,7 +252,14 @@ class GraphicsBackend(ABC):
         ...
 
     @abstractmethod
-    def create_framebuffer(self, size: Tuple[int, int]) -> "FramebufferHandle":
+    def create_framebuffer(self, size: Tuple[int, int], samples: int = 1) -> "FramebufferHandle":
+        """
+        Создаёт framebuffer с цветовым и depth attachment.
+
+        Параметры:
+            size: Размер (width, height).
+            samples: Количество MSAA samples (1 = без MSAA, 4 = 4x MSAA).
+        """
         ...
 
     @abstractmethod
@@ -271,6 +278,27 @@ class GraphicsBackend(ABC):
     def bind_framebuffer(self, framebuffer: "FramebufferHandle | None"):
         """
         Bind custom framebuffer or default (if None).
+        """
+        ...
+
+    @abstractmethod
+    def blit_framebuffer(
+        self,
+        src: "FramebufferHandle",
+        dst: "FramebufferHandle",
+        src_rect: Tuple[int, int, int, int],
+        dst_rect: Tuple[int, int, int, int],
+    ):
+        """
+        Копирует содержимое src FBO в dst FBO.
+
+        Автоматически выполняет MSAA resolve если src — мультисемплированный.
+
+        Параметры:
+            src: Исходный framebuffer.
+            dst: Целевой framebuffer.
+            src_rect: (x0, y0, x1, y1) прямоугольник источника.
+            dst_rect: (x0, y0, x1, y1) прямоугольник назначения.
         """
         ...
 

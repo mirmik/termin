@@ -190,20 +190,21 @@ class RenderEngine:
         schedule = graph.build_schedule()
         alias_groups = graph.fbo_alias_groups()
 
-        # Есть две механики передачи спеков. Спеи может объявить тот, кто собирал pipeline,
+        # Есть две механики передачи спеков. Спеки может объявить тот, кто собирал pipeline,
         # или каждый pass может объявить свои спеки. Собираем все спеки в одну мапу.
+        # Pipeline-level specs имеют приоритет над pass specs.
         resource_specs_map = {}  # resource_name -> ResourceSpec
 
-        # Добавляем pipeline-level ResourceSpec'ы
-        if pipeline.pipeline_specs:
-            for spec in pipeline.pipeline_specs:
-                resource_specs_map[spec.resource] = spec
-
-        # Собираем ResourceSpec'ы из всех pass'ов
+        # Сначала собираем ResourceSpec'ы из всех pass'ов
         for render_pass in frame_passes:
             if isinstance(render_pass, RenderFramePass):
                 for spec in render_pass.get_resource_specs():
                     resource_specs_map[spec.resource] = spec
+
+        # Затем добавляем pipeline-level ResourceSpec'ы (они имеют приоритет)
+        if pipeline.pipeline_specs:
+            for spec in pipeline.pipeline_specs:
+                resource_specs_map[spec.resource] = spec
 
         # Управляем пулом ресурсов через state
         # fbos — это словарь ресурсов (FBO, ShadowMapArray и др.)
@@ -216,8 +217,15 @@ class RenderEngine:
                     resources[name] = display_fbo
                 continue
 
-            # Проверяем тип ресурса из спека
+            # Проверяем тип ресурса из спека — ищем по canonical name или по любому alias
             spec = resource_specs_map.get(canon)
+            if spec is None:
+                # Ищем spec по любому имени из alias группы
+                for name in names:
+                    if name in resource_specs_map:
+                        spec = resource_specs_map[name]
+                        break
+
             resource_type = "fbo"
             if spec is not None:
                 resource_type = spec.resource_type
@@ -230,12 +238,15 @@ class RenderEngine:
                         resources[name] = None
                 continue
 
-            # Определяем размер из ResourceSpec или используем размер viewport'а
+            # Определяем размер и samples из ResourceSpec
             resource_size = (pw, ph)
-            if spec is not None and spec.size is not None:
-                resource_size = spec.size
+            resource_samples = 1
+            if spec is not None:
+                if spec.size is not None:
+                    resource_size = spec.size
+                resource_samples = spec.samples
 
-            fb = self._ensure_fbo(state, canon, resource_size)
+            fb = self._ensure_fbo(state, canon, resource_size, resource_samples)
             for name in names:
                 resources[name] = fb
 
@@ -309,22 +320,25 @@ class RenderEngine:
         state: "ViewportRenderState",
         key: str,
         size: Tuple[int, int],
+        samples: int = 1,
     ) -> "FramebufferHandle":
         """
         Получает или создаёт FBO для ресурса.
-        
+
         Параметры:
             state: ViewportRenderState с FBO пулом.
             key: Имя ресурса.
             size: Требуемый размер (width, height).
-        
+            samples: Количество MSAA samples (1 = без MSAA).
+
         Возвращает:
             FramebufferHandle подходящего размера.
         """
         framebuffer = state.fbos.get(key)
         if framebuffer is None:
-            framebuffer = self.graphics.create_framebuffer(size)
+            framebuffer = self.graphics.create_framebuffer(size, samples=samples)
             state.fbos[key] = framebuffer
         else:
+            # TODO: пересоздать FBO если изменился samples
             framebuffer.resize(size)
         return framebuffer

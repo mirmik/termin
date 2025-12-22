@@ -18,7 +18,7 @@ from termin.visualization.render.framegraph.passes.canvas import CanvasPass
 from termin.visualization.render.framegraph.passes.color import ColorPass
 from termin.visualization.render.framegraph.passes.gizmo import GizmoPass
 from termin.visualization.render.framegraph.passes.id_pass import IdPass
-from termin.visualization.render.framegraph.passes.present import BlitPass, PresentToScreenPass, blit_fbo_to_fbo
+from termin.visualization.render.framegraph.passes.present import BlitPass, PresentToScreenPass, ResolvePass, blit_fbo_to_fbo
 from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
 
 __all__ = [
@@ -41,5 +41,6 @@ __all__ = [
     "GizmoPass",
     "IdPass",
     "PresentToScreenPass",
+    "ResolvePass",
     "blit_fbo_to_fbo",
 ]
