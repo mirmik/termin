@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from dataclasses import dataclass
 from typing import List, Tuple, TYPE_CHECKING
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
@@ -7,16 +9,28 @@ from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.core.picking import id_to_rgb
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.renderpass import RenderState
-from termin.visualization.render.framegraph.passes.present import blit_fbo_to_fbo
+from termin.visualization.render.system_shaders import get_system_shader
 from termin.visualization.render.drawable import Drawable
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
+    from termin.visualization.core.entity import Entity
+
+
+@dataclass
+class PickDrawCall:
+    """Pre-collected draw call for IdPass."""
+    entity: "Entity"
+    drawable: Drawable
+    pick_id: int
 
 
 class IdPass(RenderFramePass):
     """Проход для ID-карты (picking)."""
+
+    _DEBUG_TIMING = False  # Profile timing breakdown
+    _DEBUG_DRAW_COUNT = False  # Log draw call count
 
     inspect_fields = {
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
@@ -83,11 +97,43 @@ class IdPass(RenderFramePass):
             )
         ]
 
+    def _collect_draw_calls(self, scene) -> List[PickDrawCall]:
+        """
+        Собирает все draw calls для pickable entities.
+
+        Один проход по сцене, плоский список результатов.
+        """
+        draw_calls: List[PickDrawCall] = []
+
+        for entity in scene.entities:
+            if not (entity.active and entity.visible):
+                continue
+
+            if not entity.is_pickable():
+                continue
+
+            pick_id = entity.pick_id
+
+            for component in entity.components:
+                if not component.enabled:
+                    continue
+
+                if not isinstance(component, Drawable):
+                    continue
+
+                draw_calls.append(PickDrawCall(
+                    entity=entity,
+                    drawable=component,
+                    pick_id=pick_id,
+                ))
+
+        return draw_calls
+
     def execute(
         self,
         graphics: "GraphicsBackend",
         reads_fbos: dict[str, "FramebufferHandle" | None],
-        writes_fbos: dict[str, "FramebufferHandle" | None],
+        writes_fbos: dict[str, "FramebufferHandle | None"],
         rect: tuple[int, int, int, int],
         scene,
         camera,
@@ -96,39 +142,18 @@ class IdPass(RenderFramePass):
         canvas=None,
     ):
         px, py, pw, ph = rect
-        key = context_key
 
         fb = writes_fbos.get(self.output_res)
         if fb is None:
             return
 
-        # Внутренняя точка дебага
-        debug_symbol = self.get_debug_internal_point()
-        debugger_window = self.get_debugger_window()
-
-        # Обновляем список имён pickable-сущностей
-        self._entity_names = []
-
         graphics.bind_framebuffer(fb)
         graphics.set_viewport(0, 0, pw, ph)
         graphics.clear_color_depth((0.0, 0.0, 0.0, 0.0))
 
-        # Матрицы камеры для фазовой формулы p_clip = P · V · M · p_local
+        # Матрицы камеры
         view = camera.view_matrix()
         proj = camera.projection_matrix()
-
-        render_ctx = RenderContext(
-            view=view,
-            projection=proj,
-            graphics=graphics,
-            context_key=key,
-            scene=scene,
-            camera=camera,
-            phase="pick",
-        )
-
-        from termin.visualization.render.materials.pick_material import PickMaterial
-        pick_material = PickMaterial()
 
         # Жёсткое состояние для ID-прохода
         graphics.apply_render_state(RenderState(
@@ -138,64 +163,64 @@ class IdPass(RenderFramePass):
             cull=True,
         ))
 
-        # Рисуем каждую pickable-сущность по очереди
-        for ent in scene.entities:
-            if not (ent.active and ent.visible):
-                continue
+        # Получаем шейдер из глобального реестра
+        shader = get_system_shader("pick", graphics)
+        shader.use()
+        shader.set_uniform_matrix4("u_view", view)
+        shader.set_uniform_matrix4("u_projection", proj)
 
-            if not ent.is_pickable():
-                continue
+        # Extra uniforms для передачи в SkinnedMeshRenderer
+        extra_uniforms: dict = {}
 
-            # Собираем все Drawable компоненты
-            drawables = []
-            for component in ent.components:
-                if not component.enabled:
-                    continue
-                if isinstance(component, Drawable):
-                    drawables.append(component)
+        # Контекст рендеринга
+        render_ctx = RenderContext(
+            view=view,
+            projection=proj,
+            graphics=graphics,
+            context_key=context_key,
+            scene=scene,
+            camera=camera,
+            phase="pick",
+            current_shader=shader,
+            extra_uniforms=extra_uniforms,
+        )
 
-            if not drawables:
-                continue
+        # Собираем draw calls один раз
+        draw_calls = self._collect_draw_calls(scene)
 
-            self._entity_names.append(ent.name)
+        # Обновляем список имён для debug
+        self._entity_names = []
+        seen_entities = set()
 
-            pid = ent.pick_id
-            color = id_to_rgb(pid)
-            model = ent.model_matrix()
+        # Текущий pick_id для батчинга
+        current_pick_id = -1
+        current_color: tuple = (0.0, 0.0, 0.0)
+
+        # Рисуем все draw calls
+        for dc in draw_calls:
+            # Re-bind shader before setting uniforms (draw_geometry may switch shaders)
+            shader.use()
+
+            # Обновляем pick color только при смене entity
+            if dc.pick_id != current_pick_id:
+                current_pick_id = dc.pick_id
+                current_color = id_to_rgb(dc.pick_id)
+                shader.set_uniform_vec3("u_pickColor", current_color)
+                # Обновляем extra_uniforms для SkinnedMeshRenderer
+                extra_uniforms["u_pickColor"] = ("vec3", current_color)
+
+            # Обновляем model matrix
+            model = dc.entity.model_matrix()
+            shader.set_uniform_matrix4("u_model", model)
             render_ctx.model = model
 
-            pick_material.apply_for_pick(
-                model=model,
-                view=view,
-                proj=proj,
-                pick_color=color,
-                graphics=graphics,
-                context_key=key,
-            )
+            # Debug: track entity names (unique)
+            if dc.entity.name not in seen_entities:
+                seen_entities.add(dc.entity.name)
+                self._entity_names.append(dc.entity.name)
 
-            render_ctx.current_shader = pick_material.shader
-            render_ctx.extra_uniforms = {"u_pickColor": ("vec3", color)}
+            # Рисуем геометрию
+            dc.drawable.draw_geometry(render_ctx)
 
-            # Рисуем все Drawable компоненты с одним pick_id
-            for drawable in drawables:
-                drawable.draw_geometry(render_ctx)
-
-            # TODO: реализовать дебаг через debugger_window
-
-    def _blit_to_debug(
-        self,
-        gfx: "GraphicsBackend",
-        src_fb,
-        dst_fb,
-        size: tuple[int, int],
-        context_key: int,
-    ) -> None:
-        """
-        Копирует текущее состояние ID-карты в debug FBO.
-
-        После копирования возвращает привязку к исходному FBO,
-        чтобы продолжить проход без изменения состояния.
-        """
-        blit_fbo_to_fbo(gfx, src_fb, dst_fb, size, context_key)
-        gfx.bind_framebuffer(src_fb)
-        gfx.set_viewport(0, 0, size[0], size[1])
+        if self._DEBUG_DRAW_COUNT:
+            print(f"[IdPass] draw_calls: {len(draw_calls)}")

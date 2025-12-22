@@ -191,13 +191,6 @@ class MenuBarController:
         settings_action.triggered.connect(on_settings)
 
         # View menu
-        self._action_profiler = view_menu.addAction("Profiler")
-        self._action_profiler.setShortcut("F7")
-        self._action_profiler.setCheckable(True)
-        self._action_profiler.triggered.connect(on_toggle_profiler)
-
-        view_menu.addSeparator()
-
         self._action_fullscreen = view_menu.addAction("Fullscreen")
         self._action_fullscreen.setShortcut("F11")
         self._action_fullscreen.setCheckable(True)
@@ -219,6 +212,13 @@ class MenuBarController:
         self._action_play.triggered.connect(on_toggle_game_mode)
 
         # Debug menu
+        self._action_profiler = debug_menu.addAction("Profiler")
+        self._action_profiler.setShortcut("F7")
+        self._action_profiler.setCheckable(True)
+        self._action_profiler.triggered.connect(on_toggle_profiler)
+
+        debug_menu.addSeparator()
+
         debug_action = debug_menu.addAction("Undo/Redo Stack...")
         debug_action.triggered.connect(on_show_undo_stack_viewer)
 

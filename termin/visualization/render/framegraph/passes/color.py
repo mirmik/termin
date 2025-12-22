@@ -63,6 +63,7 @@ class ColorPass(RenderFramePass):
     """
 
     _DEBUG_FIRST_FRAMES = False  # Debug: track first frames
+    _DEBUG_DRAW_COUNT = False  # Log draw call count
     _debug_frame_count = 0
 
     inspect_fields = {
@@ -418,6 +419,9 @@ class ColorPass(RenderFramePass):
 
                 if debugger_window is not None and dc.entity.name == debug_symbol:
                     self._blit_to_debugger(graphics, fb, debugger_window, (pw, ph))
+
+            if self._DEBUG_DRAW_COUNT:
+                print(f"[ColorPass:{self.phase_mark}] draw_calls: {len(draw_calls)}")
 
             # Сбрасываем render state
             graphics.apply_render_state(RenderState())

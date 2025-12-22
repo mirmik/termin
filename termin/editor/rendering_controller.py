@@ -941,27 +941,25 @@ class RenderingController:
         self._update_center_tabs()
         self._request_update()
 
-    def render_additional_displays(self) -> None:
-        """Render all additional displays excluding editor (legacy method)."""
-        self._render_displays(skip_editor=True)
-
     def render_all_displays(self) -> None:
-        """Render all displays including editor (unified render loop)."""
-        self._render_displays(skip_editor=False)
+        """Render all displays (unified render loop)."""
+        self._render_displays()
 
-    def _render_displays(self, skip_editor: bool = False) -> None:
-        """
-        Internal method to render displays.
-
-        Args:
-            skip_editor: If True, skip editor display (legacy mode).
-        """
+    def _render_displays(self) -> None:
+        """Internal method to render displays."""
         if self._get_graphics is None:
             return
 
         graphics = self._get_graphics()
         if graphics is None:
             return
+
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
+        # Начинаем frame если ещё не начат (в game mode его начинает game_mode_controller)
+        frame_started_here = profiler._current_frame is None
+        profiler.begin_frame()
 
         # Lazy creation of RenderEngine
         if self._render_engine is None:
@@ -974,10 +972,6 @@ class RenderingController:
 
         for display in self._displays:
             display_id = id(display)
-
-            # Skip editor display if requested (legacy mode)
-            if skip_editor and display_id == self._editor_display_id:
-                continue
 
             # All displays must be in _display_tabs now
             if display_id not in self._display_tabs:
@@ -1035,3 +1029,7 @@ class RenderingController:
 
             backend_window.swap_buffers()
             backend_window.clear_render_flag()
+
+        # Завершаем frame только если мы его начали (не в game mode)
+        if frame_started_here:
+            profiler.end_frame()

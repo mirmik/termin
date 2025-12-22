@@ -91,7 +91,6 @@ class RenderEngine:
         """
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
-        profiler.begin_frame()
 
         with profiler.section("Render"):
             self.graphics.ensure_ready()
@@ -127,8 +126,6 @@ class RenderEngine:
 
             if present:
                 surface.present()
-
-        profiler.end_frame()
 
     def render_single_view(
         self,

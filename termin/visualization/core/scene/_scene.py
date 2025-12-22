@@ -445,15 +445,27 @@ class Scene(Identifiable):
         with profiler.section("FixedUpdate"):
             self._accumulated_time += dt
             while self._accumulated_time >= self._fixed_timestep:
-                for component in self.fixed_update_list:
-                    if component.enabled:
-                        component.fixed_update(self._fixed_timestep)
+                if profiler.profile_components:
+                    for component in self.fixed_update_list:
+                        if component.enabled:
+                            with profiler.section(type(component).__name__):
+                                component.fixed_update(self._fixed_timestep)
+                else:
+                    for component in self.fixed_update_list:
+                        if component.enabled:
+                            component.fixed_update(self._fixed_timestep)
                 self._accumulated_time -= self._fixed_timestep
 
         with profiler.section("Update"):
-            for component in self.update_list:
-                if component.enabled:
-                    component.update(dt)
+            if profiler.enabled and profiler.profile_components:
+                for component in self.update_list:
+                    if component.enabled:
+                        with profiler.section(type(component).__name__):
+                            component.update(dt)
+            else:
+                for component in self.update_list:
+                    if component.enabled:
+                        component.update(dt)
 
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""

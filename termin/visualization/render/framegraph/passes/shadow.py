@@ -11,6 +11,7 @@ ShadowPass — проход генерации shadow maps для источни
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Dict, List, TYPE_CHECKING
 
 import numpy as np
@@ -21,7 +22,7 @@ from termin.visualization.render.framegraph.resource import ShadowMapArrayResour
 from termin.visualization.core.entity import RenderContext
 from termin.visualization.render.drawable import Drawable
 from termin.visualization.render.renderpass import RenderState
-from termin.visualization.render.materials.shadow_material import ShadowMaterial
+from termin.visualization.render.system_shaders import get_system_shader
 from termin.visualization.render.shadow.shadow_camera import (
     ShadowCameraParams,
     compute_light_space_matrix,
@@ -34,6 +35,14 @@ from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import GraphicsBackend, FramebufferHandle
+    from termin.visualization.core.entity import Entity
+
+
+@dataclass
+class ShadowDrawCall:
+    """Pre-collected draw call for ShadowPass."""
+    entity: "Entity"
+    drawable: Drawable
 
 
 class ShadowPass(RenderFramePass):
@@ -52,6 +61,7 @@ class ShadowPass(RenderFramePass):
     """
 
     _DEBUG_FIRST_FRAMES = False  # Debug: track first frames
+    _DEBUG_DRAW_COUNT = False  # Log draw call count
     _debug_frame_count = 0
 
     inspect_fields = {
@@ -99,13 +109,10 @@ class ShadowPass(RenderFramePass):
         self.near = near
         self.far = far
         self.caster_offset = caster_offset
-        
-        # Материал для shadow pass (общий для всех источников)
-        self._material: ShadowMaterial | None = None
 
         # Пул FBO для shadow maps (переиспользуются между кадрами)
         self._fbo_pool: Dict[int, "FramebufferHandle"] = {}
-        
+
         # Текущий ShadowMapArrayResource (обновляется в execute)
         self._shadow_map_array: ShadowMapArrayResource | None = None
 
@@ -138,12 +145,6 @@ class ShadowPass(RenderFramePass):
             caster_offset=data.get("caster_offset", 50.0),
         )
 
-    def _get_material(self) -> ShadowMaterial:
-        """Ленивая инициализация материала."""
-        if self._material is None:
-            self._material = ShadowMaterial()
-        return self._material
-
     def _get_or_create_fbo(
         self,
         graphics: "GraphicsBackend",
@@ -152,7 +153,7 @@ class ShadowPass(RenderFramePass):
     ) -> "FramebufferHandle":
         """
         Получает или создаёт FBO для shadow map.
-        
+
         FBO кэшируются по индексу для переиспользования между кадрами.
         При изменении разрешения FBO пересоздаётся.
         """
@@ -211,7 +212,7 @@ class ShadowPass(RenderFramePass):
     def get_resource_specs(self) -> list[ResourceSpec]:
         """
         Объявляет требования к ресурсу shadow_maps.
-        
+
         Тип ресурса — shadow_map_array, создаётся динамически в execute().
         """
         return [
@@ -224,6 +225,37 @@ class ShadowPass(RenderFramePass):
     def get_shadow_map_array(self) -> ShadowMapArrayResource | None:
         """Возвращает текущий ShadowMapArrayResource (после execute)."""
         return self._shadow_map_array
+
+    def _collect_draw_calls(self, scene) -> List[ShadowDrawCall]:
+        """
+        Собирает все draw calls для shadow casters.
+
+        Один проход по сцене, плоский список результатов.
+        Фильтрует только объекты с "shadow" в phase_marks.
+        """
+        draw_calls: List[ShadowDrawCall] = []
+
+        for entity in scene.entities:
+            if not (entity.active and entity.visible):
+                continue
+
+            for component in entity.components:
+                if not component.enabled:
+                    continue
+
+                if not isinstance(component, Drawable):
+                    continue
+
+                # Пропускаем объекты без метки "shadow"
+                if "shadow" not in component.phase_marks:
+                    continue
+
+                draw_calls.append(ShadowDrawCall(
+                    entity=entity,
+                    drawable=component,
+                ))
+
+        return draw_calls
 
     def execute(
         self,
@@ -239,15 +271,15 @@ class ShadowPass(RenderFramePass):
     ) -> None:
         """
         Выполняет shadow pass для всех источников света с тенями.
-        
+
         Алгоритм:
-        1. Находит все источники света с включёнными тенями
-        2. Для каждого источника:
+        1. Собирает draw calls ОДИН РАЗ
+        2. Находит все источники света с включёнными тенями
+        3. Для каждого источника:
            a. Создаёт/получает FBO
            b. Вычисляет light-space матрицу
-           c. Рендерит сцену в shadow map
-        3. Собирает результат в ShadowMapArray
-        4. Кладёт ShadowMapArray в writes_fbos
+           c. Рендерит draw calls в shadow map
+        4. Собирает результат в ShadowMapArray
         """
         if lights is None:
             lights = []
@@ -276,41 +308,61 @@ class ShadowPass(RenderFramePass):
             # Нет источников с тенями — возвращаем пустой массив
             writes_fbos[self.output_res] = shadow_array
             return
-        
-        shadow_material = self._get_material()
+
+        # Собираем draw calls ОДИН РАЗ (не для каждого источника света!)
+        draw_calls = self._collect_draw_calls(scene)
+
+        # Обновляем debug-список имён
         self._entity_names = []
-        
+        seen_entities = set()
+        for dc in draw_calls:
+            if dc.entity.name not in seen_entities:
+                seen_entities.add(dc.entity.name)
+                self._entity_names.append(dc.entity.name)
+
+        # Если нет shadow casters — возвращаем пустой массив
+        if not draw_calls:
+            writes_fbos[self.output_res] = shadow_array
+            return
+
+        # Получаем шейдер из глобального реестра
+        shader = get_system_shader("shadow", graphics)
+
+        # Состояние рендера: depth test/write, без blending
+        render_state = RenderState(
+            depth_test=True,
+            depth_write=True,
+            blend=False,
+            cull=True,
+        )
+
         # Рендерим shadow map для каждого источника
         for array_index, (light_index, light) in enumerate(shadow_lights):
             resolution = light.shadows.map_resolution
-            
+
             # Получаем FBO
             fbo = self._get_or_create_fbo(graphics, resolution, array_index)
-            
+
             # Вычисляем параметры теневой камеры (с frustum fitting если есть камера)
             shadow_params = self._build_shadow_params_for_light(light, camera)
             light_space_matrix = compute_light_space_matrix(shadow_params)
-            
-            # Матрицы view и projection для материала
+
+            # Матрицы view и projection
             view_matrix = build_shadow_view_matrix(shadow_params)
             proj_matrix = build_shadow_projection_matrix(shadow_params)
-            
+
             # Очищаем и настраиваем FBO
             graphics.bind_framebuffer(fbo)
             graphics.set_viewport(0, 0, resolution, resolution)
             graphics.clear_color_depth((1.0, 1.0, 1.0, 1.0))
-            
-            # Состояние рендера: depth test/write, без blending
-            graphics.apply_render_state(
-                RenderState(
-                    depth_test=True,
-                    depth_write=True,
-                    blend=False,
-                    cull=True,
-                )
-            )
-            
-            # Контекст рендеринга с матрицами теневой камеры
+            graphics.apply_render_state(render_state)
+
+            # Настраиваем шейдер для этого источника
+            shader.use()
+            shader.set_uniform_matrix4("u_view", view_matrix)
+            shader.set_uniform_matrix4("u_projection", proj_matrix)
+
+            # Контекст рендеринга
             render_ctx = RenderContext(
                 view=view_matrix,
                 projection=proj_matrix,
@@ -319,53 +371,31 @@ class ShadowPass(RenderFramePass):
                 scene=scene,
                 camera=None,
                 phase="shadow",
+                current_shader=shader,
             )
-            
-            # Рендерим все объекты с Drawable, у которых "shadow" в phase_marks
-            for entity in scene.entities:
-                if not (entity.active and entity.visible):
-                    continue
 
-                for component in entity.components:
-                    if not component.enabled:
-                        continue
+            # Рендерим все draw calls (переиспользуем собранный список!)
+            for dc in draw_calls:
+                model = dc.entity.model_matrix()
+                # Re-bind shader before setting uniforms (draw_geometry may switch shaders)
+                shader.use()
+                shader.set_uniform_matrix4("u_model", model)
+                render_ctx.model = model
+                dc.drawable.draw_geometry(render_ctx)
 
-                    if not isinstance(component, Drawable):
-                        continue
-
-                    drawable = component
-
-                    # Пропускаем объекты без метки "shadow"
-                    if "shadow" not in drawable.phase_marks:
-                        continue
-
-                    # Добавляем в debug-список только для первого источника
-                    if array_index == 0:
-                        self._entity_names.append(entity.name)
-
-                    model = entity.model_matrix()
-                    render_ctx.model = model
-
-                    shadow_material.apply(
-                        model,
-                        view_matrix,
-                        proj_matrix,
-                        graphics=graphics,
-                        context_key=context_key,
-                    )
-                    render_ctx.current_shader = shadow_material.shader
-
-                    drawable.draw_geometry(render_ctx)
-            
             # Добавляем в массив
             shadow_array.add_entry(
                 fbo=fbo,
                 light_space_matrix=light_space_matrix,
                 light_index=light_index,
             )
-        
+
+        if self._DEBUG_DRAW_COUNT:
+            total_draws = len(draw_calls) * len(shadow_lights)
+            print(f"[ShadowPass] draw_calls: {len(draw_calls)}, lights: {len(shadow_lights)}, total: {total_draws}")
+
         # Сбрасываем состояние
         graphics.apply_render_state(RenderState())
-        
+
         # Кладём результат в writes
         writes_fbos[self.output_res] = shadow_array

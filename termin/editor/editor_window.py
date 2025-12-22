@@ -532,7 +532,7 @@ class EditorWindow(QMainWindow):
         if checked:
             if self._profiler_panel is None:
                 self._profiler_panel = ProfilerPanel(self)
-                self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._profiler_panel)
+                self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._profiler_panel)
                 # Connect visibility changed to update menu checkbox
                 self._profiler_panel.visibilityChanged.connect(self._on_profiler_visibility_changed)
             self._profiler_panel.show()

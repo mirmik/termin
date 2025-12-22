@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Callable, Optional
 
 from PyQt6.QtCore import QTimer, QElapsedTimer
 
+from termin.core.profiler import Profiler
+
 if TYPE_CHECKING:
     from termin.editor.world_persistence import WorldPersistence
     from termin.visualization.core.scene import Scene
@@ -102,16 +104,23 @@ class GameModeController:
         if not self._game_mode:
             return
 
+        profiler = Profiler.instance()
+        profiler.begin_frame()
+
         # Вычисляем dt в секундах
         elapsed_ms = self._elapsed_timer.restart()
         dt = elapsed_ms / 1000.0
 
         # Обновляем сцену (получаем актуальную через property)
-        self.scene.update(dt)
+        with profiler.section("Components"):
+            self.scene.update(dt)
 
         if self._on_tick is not None:
             self._on_tick(dt)
 
-        # Перерисовываем viewport
+        # Перерисовываем viewport (рендер добавит свои секции)
         if self._on_request_update:
             self._on_request_update()
+
+        # Завершаем frame после рендера
+        profiler.end_frame()

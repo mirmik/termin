@@ -237,11 +237,11 @@ class SkinnedMeshRenderer(MeshRenderer):
                     non_identity_count = sum(1 for m in bone_matrices if not np.allclose(m, identity, atol=1e-4))
                     print(f"  non_identity_matrices: {non_identity_count}/{bone_count}")
 
-            # Get skinned variant via registry (cached by shader source hash)
+            # Get skinned variant via registry (cached by shader id)
             from termin.visualization.render.shader_skinning import get_skinned_shader
             skinned_shader = get_skinned_shader(base_shader)
 
-            # Activate skinned shader and set uniforms
+            # Activate skinned shader
             skinned_shader.ensure_ready(context.graphics)
             skinned_shader.use()
 

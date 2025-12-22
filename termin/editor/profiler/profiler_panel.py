@@ -2,7 +2,7 @@
 Profiler panel for the editor.
 
 Dock-виджет с графиком frame time и таблицей секций.
-Включается через View → Profiler (F7).
+Включается через Debug → Profiler (F7).
 """
 
 from __future__ import annotations
@@ -53,6 +53,11 @@ class ProfilerPanel(QtWidgets.QDockWidget):
         self._enable_check.setToolTip("Enable/disable profiling (affects performance when enabled)")
         self._enable_check.toggled.connect(self._on_enable_toggled)
         toolbar.addWidget(self._enable_check)
+
+        self._components_check = QtWidgets.QCheckBox("Components")
+        self._components_check.setToolTip("Profile individual components in Update/FixedUpdate (higher overhead)")
+        self._components_check.toggled.connect(self._on_components_toggled)
+        toolbar.addWidget(self._components_check)
 
         toolbar.addSpacing(16)
 
@@ -125,6 +130,10 @@ class ProfilerPanel(QtWidgets.QDockWidget):
             self._graph.clear()
             self._fps_label.setText("-- FPS")
             self._last_sections.clear()
+
+    def _on_components_toggled(self, checked: bool) -> None:
+        """Обработчик включения/выключения детального профилирования компонентов."""
+        self._profiler.profile_components = checked
 
     def _on_clear_clicked(self) -> None:
         """Обработчик кнопки Clear."""
@@ -270,6 +279,7 @@ class ProfilerPanel(QtWidgets.QDockWidget):
         """При показе панели синхронизируем состояние checkbox."""
         super().showEvent(event)
         self._enable_check.setChecked(self._profiler.enabled)
+        self._components_check.setChecked(self._profiler.profile_components)
         if self._profiler.enabled:
             self._update_timer.start(100)
 
