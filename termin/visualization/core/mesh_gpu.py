@@ -70,6 +70,12 @@ class MeshGPU:
         if ctx_key not in self._handles:
             self._upload(context, mesh_data)
 
+        # DEBUG: check context consistency
+        from termin.visualization.platform.backends.opengl import get_current_context_key
+        actual_ctx = get_current_context_key()
+        if actual_ctx != ctx_key:
+            print(f"[MeshGPU.draw] CONTEXT MISMATCH! ctx_key={ctx_key}, actual_ctx={actual_ctx}, handles={list(self._handles.keys())}")
+
         # Draw
         self._handles[ctx_key].draw()
 

@@ -236,14 +236,10 @@ class OpenGLMeshHandle(MeshHandle):
         gl.glBindVertexArray(0)
 
 
-    _DEBUG_DRAW = True  # DEBUG: investigate GL_INVALID_OPERATION
+    _DEBUG_DRAW = False  # DEBUG: investigate GL_INVALID_OPERATION
 
     def draw(self):
         gl.glEnable(gl.GL_DEPTH_TEST)
-
-        if self._DEBUG_DRAW:
-            current_program = gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM)
-            print(f"[OpenGLMeshHandle.draw] vao={self._vao}, vbo={self._vbo}, ebo={self._ebo}, idx_count={self._index_count}, current_program={current_program}")
 
         gl.glBindVertexArray(self._vao or 0)
 
