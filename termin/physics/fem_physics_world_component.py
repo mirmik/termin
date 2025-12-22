@@ -93,9 +93,9 @@ class FEMPhysicsWorldComponent(Component):
     def assembler(self) -> DynamicMatrixAssembler | None:
         return self._assembler
 
-    def start(self, scene: "Scene"):
-        super().start(scene)
-        self._scene = scene
+    def start(self):
+        super().start()
+        self._scene = self.entity.scene
         self._rebuild_simulation()
         self._initialized = True
 

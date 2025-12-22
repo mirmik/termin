@@ -15,6 +15,7 @@ from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.geombase import Ray3
 from termin.colliders.raycast_hit import RaycastHit
 from termin.collision._collision_native import CollisionWorld
+from termin.core import Event
 
 from .skybox import SkyboxManager
 from .lighting import LightingManager
@@ -68,6 +69,10 @@ class Scene(Identifiable):
         # Layer and flag names (index -> name)
         self.layer_names: dict[int, str] = {}  # 0-63
         self.flag_names: dict[int, str] = {}   # 0-63 (bit index)
+
+        # Entity lifecycle events
+        self.on_entity_added: Event[Entity] = Event()
+        self.on_entity_removed: Event[Entity] = Event()
 
     # --- Skybox delegation (backward compatibility) ---
 
@@ -269,6 +274,7 @@ class Scene(Identifiable):
         entity.on_added(self)
         for shader in entity.gather_shaders():
             self._register_shader(shader)
+        self.on_entity_added.emit(entity)
         return entity
 
     def add(self, entity: Entity) -> Entity:
@@ -285,6 +291,7 @@ class Scene(Identifiable):
 
     def remove(self, entity: Entity):
         self.entities.remove(entity)
+        self.on_entity_removed.emit(entity)
         entity.on_removed()
 
     def find_entity_by_uuid(self, uuid: str) -> Entity | None:
@@ -315,6 +322,57 @@ class Scene(Identifiable):
                 result = self._find_entity_by_uuid_recursive(child, uuid)
                 if result is not None:
                     return result
+        return None
+
+    # --- Component search ---
+
+    def find_component(self, component_type: type) -> Component | None:
+        """
+        Find first component of given type in scene.
+
+        Args:
+            component_type: Component class to search for.
+
+        Returns:
+            First matching component or None.
+        """
+        for entity in self.entities:
+            comp = entity.get_component(component_type)
+            if comp is not None:
+                return comp
+        return None
+
+    def find_components(self, component_type: type) -> List[Component]:
+        """
+        Find all components of given type in scene.
+
+        Args:
+            component_type: Component class to search for.
+
+        Returns:
+            List of all matching components.
+        """
+        result = []
+        for entity in self.entities:
+            comp = entity.get_component(component_type)
+            if comp is not None:
+                result.append(comp)
+        return result
+
+    def find_component_by_name(self, class_name: str) -> Component | None:
+        """
+        Find first component by class name string.
+
+        Args:
+            class_name: Name of the component class (e.g. "TweenManagerComponent").
+
+        Returns:
+            First matching component or None.
+        """
+        for entity in self.entities:
+            for comp in entity.components:
+                if type(comp).__name__ == class_name:
+                    return comp
         return None
 
     # --- Component registration ---
@@ -374,7 +432,7 @@ class Scene(Identifiable):
                 if component._started:
                     continue
                 if component.enabled:
-                    component.start(self)
+                    component.start()
                 else:
                     # Keep disabled components in pending until enabled
                     self._pending_start.append(component)

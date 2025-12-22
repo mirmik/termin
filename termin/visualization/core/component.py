@@ -58,7 +58,7 @@ class Component:
         """Called immediately when the component is added to an active scene."""
         pass
 
-    def start(self, scene: "Scene"):
+    def start(self):
         """Called once before the first update, after all components are added."""
         self._started = True
 

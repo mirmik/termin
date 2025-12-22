@@ -75,8 +75,8 @@ class RigidBodyComponent(Component):
         # Размеры коллайдера (определяются в start)
         self._half_extents: np.ndarray = np.array([0.5, 0.5, 0.5])
 
-    def start(self, scene: "Scene"):
-        super().start(scene)
+    def start(self):
+        super().start()
 
         if self.entity is None:
             return
@@ -85,7 +85,7 @@ class RigidBodyComponent(Component):
         self._half_extents = self._compute_half_extents()
 
         # Ищем PhysicsWorldComponent в сцене и регистрируемся
-        self._find_and_register_with_physics_world(scene)
+        self._find_and_register_with_physics_world(self.entity.scene)
 
     def _compute_half_extents(self) -> np.ndarray:
         """Вычислить half_extents из меша или коллайдера сущности."""

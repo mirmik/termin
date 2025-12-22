@@ -13,7 +13,6 @@ from .clip import AnimationClip
 
 if TYPE_CHECKING:
     from termin.skeleton.skeleton import SkeletonInstance
-    from termin.visualization.core.scene import Scene
 
 
 class AnimationPlayer(Component):
@@ -89,12 +88,12 @@ class AnimationPlayer(Component):
         if self._DEBUG_LIFECYCLE:
             print(f"[AnimationPlayer._rebuild_clips_cache] clips={list(self.clips.keys())}")
 
-    def start(self, scene: "Scene") -> None:
+    def start(self) -> None:
         """Called once before the first update. Find SkeletonController on entity."""
         if self._DEBUG_LIFECYCLE:
             print(f"[AnimationPlayer.start] entity={self.entity.name if self.entity else 'None'}")
             print(f"  _clip_handles={len(self._clip_handles)}, _current_clip_name={self._current_clip_name!r}, playing={self.playing}")
-        super().start(scene)
+        super().start()
         self._acquire_skeleton()
         self._rebuild_clips_cache()
         # Resume playing if we have a current clip name

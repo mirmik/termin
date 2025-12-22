@@ -1269,19 +1269,15 @@ void main() {{
         if current_dir is None:
             return
 
-        name, ok = QInputDialog.getText(
+        file_name, ok = QInputDialog.getText(
             self._file_list,
             "Create Component",
-            "Component class name:",
-            text="NewComponent",
+            "File name:",
+            text="my_component",
         )
 
-        if not ok or not name:
+        if not ok or not file_name:
             return
-
-        # Преобразуем имя класса в snake_case для имени файла
-        import re
-        file_name = re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
 
         # Убираем расширение если пользователь его ввёл
         if file_name.endswith(".py"):
@@ -1298,8 +1294,8 @@ void main() {{
             return
 
         # Болванка компонента
-        template = f'''"""
-{name} component.
+        template = '''"""
+MyComponent component.
 """
 
 from __future__ import annotations
@@ -1307,7 +1303,7 @@ from __future__ import annotations
 from termin.visualization.core.component import Component
 
 
-class {name}(Component):
+class MyComponent(Component):
     """
     Custom component.
 
@@ -1319,20 +1315,16 @@ class {name}(Component):
         super().__init__()
         self.speed = speed
 
-    def on_start(self) -> None:
+    def start(self) -> None:
         """Called when the component is first activated."""
-        pass
+        super().start()
 
-    def on_update(self, dt: float) -> None:
+    def update(self, dt: float) -> None:
         """Called every frame.
 
         Args:
             dt: Delta time in seconds.
         """
-        pass
-
-    def on_destroy(self) -> None:
-        """Called when the component is destroyed."""
         pass
 '''
 

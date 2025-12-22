@@ -156,8 +156,9 @@ class PhysicsWorldComponent(Component):
     def ground_height(self, value: float):
         self._physics_world.ground_height = value
 
-    def start(self, scene: "Scene"):
-        super().start(scene)
+    def start(self):
+        super().start()
+        scene = self.entity.scene
         # Передаём CollisionWorld из сцены в PhysicsWorld
         self._physics_world.set_collision_world(scene.collision_world)
         self._collect_rigid_bodies(scene)

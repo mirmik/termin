@@ -123,9 +123,9 @@ class AudioSource(Component):
         """Called when component is removed."""
         self.stop()
 
-    def start(self, scene: "Scene") -> None:
+    def start(self) -> None:
         """Called before first update."""
-        super().start(scene)
+        super().start()
         # play_on_awake is handled in on_added for immediate playback
 
     def play(self) -> None:

@@ -64,6 +64,8 @@ _BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.audio.components.audio_listener", "AudioListener"),
     # Game components
     ("termin.components.teleport_component", "TeleportComponent"),
+    # Tween
+    ("termin.tween.component", "TweenManagerComponent"),
 ]
 
 # Список встроенных FramePass'ов для предрегистрации.

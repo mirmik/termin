@@ -39,9 +39,9 @@ class AudioListener(Component):
         """Called when component is added to scene."""
         self._apply_volume()
 
-    def start(self, scene: "Scene") -> None:
+    def start(self) -> None:
         """Called before first update."""
-        super().start(scene)
+        super().start()
         self._apply_volume()
 
     def update(self, dt: float) -> None:

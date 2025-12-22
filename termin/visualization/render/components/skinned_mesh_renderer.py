@@ -88,9 +88,9 @@ class SkinnedMeshRenderer(MeshRenderer):
         """Set material and invalidate skinned cache."""
         self.material = material
 
-    def start(self, scene) -> None:
+    def start(self) -> None:
         """Called once before the first update. Re-acquire skeleton_controller if needed."""
-        super().start(scene)
+        super().start()
 
         # After deserialization, skeleton_controller may be None - try to find it
         if self._skeleton_controller is None and self.entity is not None:

@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "67c96f9b-afb0-43ad-89cd-8e9fc70d736c",
+    "uuid": "92068f77-7364-469f-a7c4-46eecbd0ec2a",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -6963,6 +6963,96 @@
           }
         ],
         "children": []
+      },
+      {
+        "uuid": "19b45a2f-b70b-4f63-99ab-dbbb64613d4d",
+        "name": "entity16",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            5.428746223449707,
+            5.2974934577941895,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true
+            },
+            "type": "TweenTest"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "691ab5c0-c4fd-4309-ad5c-c252db4bf84b",
+        "name": "TweenManager",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true
+            },
+            "type": "TweenManagerComponent"
+          }
+        ],
+        "children": []
       }
     ],
     "layer_names": {
@@ -7010,13 +7100,13 @@
   "editor": {
     "camera": {
       "target": [
-        -5.275979518890381,
-        10.019316673278809,
-        -5.857997894287109
+        -4.3214805806300225,
+        9.949135740484044,
+        -6.155478311440149
       ],
-      "radius": 23.0,
-      "azimuth": 57.81926746007238,
-      "elevation": 0.551524043630212
+      "radius": 25.5,
+      "azimuth": 58.381263479214596,
+      "elevation": 0.855211333477224
     },
     "displays": [
       {
@@ -7026,7 +7116,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "8f84c8e0-cf7f-4565-bc66-618952b9ad8c",
+            "uuid": "4deab772-881b-4002-8fe5-a02d01659994",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7045,7 +7135,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "c73c167b-c36d-4ec3-b7fb-0d61974592fe",
+            "uuid": "1c0d9690-94aa-4bc0-81b1-6d4b13825bb3",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7059,15 +7149,15 @@
       }
     ],
     "expanded_entities": [
-      "Walls",
-      "cube2",
-      "cube1",
-      "entity13",
-      "EditorEntities",
-      "Arti",
+      "camera",
       "[Root]",
+      "EditorEntities",
       "entity12_copy",
-      "camera"
+      "Walls",
+      "Arti",
+      "cube2",
+      "entity13",
+      "cube1"
     ]
   },
   "resources": {
