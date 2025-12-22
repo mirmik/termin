@@ -208,6 +208,13 @@ class OpenGLMeshHandle(MeshHandle):
         buf = self._mesh.interleaved_buffer()
         layout = self._mesh.get_vertex_layout()
 
+        # Store context where VAO was created
+        try:
+            wgl = ctypes.windll.opengl32
+            self._created_in_ctx = wgl.wglGetCurrentContext()
+        except:
+            self._created_in_ctx = None
+
         self._vao = gl.glGenVertexArrays(1)
         self._vbo = gl.glGenBuffers(1)
         self._ebo = gl.glGenBuffers(1)
@@ -261,10 +268,21 @@ class OpenGLMeshHandle(MeshHandle):
             bound_ebo = gl.glGetIntegerv(gl.GL_ELEMENT_ARRAY_BUFFER_BINDING)
             bound_vbo = gl.glGetIntegerv(gl.GL_ARRAY_BUFFER_BINDING)
             bound_fbo = gl.glGetIntegerv(gl.GL_FRAMEBUFFER_BINDING)
+
+            # Get actual GL context pointer (Windows)
+            try:
+                import ctypes
+                wgl = ctypes.windll.opengl32
+                ctx_ptr = wgl.wglGetCurrentContext()
+            except:
+                ctx_ptr = "N/A"
+
+            created_ctx = getattr(self, '_created_in_ctx', None)
             print(f"[OpenGLMeshHandle.draw] ERROR STATE:")
             print(f"  self: vao={self._vao}, vbo={self._vbo}, ebo={self._ebo}, idx_count={self._index_count}")
             print(f"  GL state: bound_vao={bound_vao}, bound_ebo={bound_ebo}, bound_vbo={bound_vbo}")
             print(f"  current_program={current_program}, bound_fbo={bound_fbo}")
+            print(f"  created_in_ctx={created_ctx}, current_ctx={ctx_ptr}, MATCH={created_ctx == ctx_ptr}")
             raise
 
         gl.glBindVertexArray(0)
