@@ -8,10 +8,83 @@
 #include "termin/entity/entity_registry.hpp"
 #include "termin/entity/components/rotator_component.hpp"
 #include "termin/geom/general_transform3.hpp"
+#include "trent/trent.h"
 
 namespace py = pybind11;
 using namespace termin;
 using namespace termin::geom;
+
+// --- trent <-> Python conversion ---
+
+nos::trent py_to_trent(py::object obj) {
+    if (obj.is_none()) {
+        return nos::trent::nil();
+    }
+    if (py::isinstance<py::bool_>(obj)) {
+        return nos::trent(obj.cast<bool>());
+    }
+    if (py::isinstance<py::int_>(obj)) {
+        return nos::trent(obj.cast<int64_t>());
+    }
+    if (py::isinstance<py::float_>(obj)) {
+        return nos::trent(obj.cast<double>());
+    }
+    if (py::isinstance<py::str>(obj)) {
+        return nos::trent(obj.cast<std::string>());
+    }
+    if (py::isinstance<py::list>(obj)) {
+        nos::trent result;
+        result.init(nos::trent_type::list);
+        for (auto item : obj) {
+            result.as_list().push_back(py_to_trent(py::reinterpret_borrow<py::object>(item)));
+        }
+        return result;
+    }
+    if (py::isinstance<py::dict>(obj)) {
+        nos::trent result;
+        result.init(nos::trent_type::dict);
+        for (auto item : obj.cast<py::dict>()) {
+            std::string key = item.first.cast<std::string>();
+            result[key] = py_to_trent(py::reinterpret_borrow<py::object>(item.second));
+        }
+        return result;
+    }
+    return nos::trent::nil();
+}
+
+py::object trent_to_py(const nos::trent& t) {
+    switch (t.get_type()) {
+        case nos::trent_type::nil:
+            return py::none();
+        case nos::trent_type::boolean:
+            return py::bool_(t.as_bool());
+        case nos::trent_type::numer: {
+            double val = t.as_numer();
+            // Return int if it's a whole number
+            if (val == static_cast<int64_t>(val)) {
+                return py::int_(static_cast<int64_t>(val));
+            }
+            return py::float_(val);
+        }
+        case nos::trent_type::string:
+            return py::str(t.as_string());
+        case nos::trent_type::list: {
+            py::list result;
+            for (const auto& item : t.as_list()) {
+                result.append(trent_to_py(item));
+            }
+            return result;
+        }
+        case nos::trent_type::dict: {
+            py::dict result;
+            for (const auto& [key, val] : t.as_dict()) {
+                result[py::str(key)] = trent_to_py(val);
+            }
+            return result;
+        }
+    }
+    return py::none();
+}
 
 /**
  * Trampoline class for Component.
@@ -199,14 +272,32 @@ PYBIND11_MODULE(_entity_native, m) {
         })
 
         // Hierarchy
-        .def("set_parent", &Entity::set_parent, py::arg("parent"))
+        .def("set_parent", &Entity::set_parent, py::arg("parent"),
+             py::keep_alive<2, 1>())  // parent keeps child alive
         .def_property_readonly("parent", &Entity::parent, py::return_value_policy::reference)
         .def("children", &Entity::children)
 
         // Lifecycle
         .def("update", &Entity::update, py::arg("dt"))
         .def("on_added_to_scene", &Entity::on_added_to_scene, py::arg("scene"))
-        .def("on_removed_from_scene", &Entity::on_removed_from_scene);
+        .def("on_removed_from_scene", &Entity::on_removed_from_scene)
+
+        // Serialization
+        .def_readwrite("serializable", &Entity::serializable)
+        .def("serialize", [](Entity& e) -> py::object {
+            nos::trent data = e.serialize();
+            if (data.is_nil()) {
+                return py::none();
+            }
+            return trent_to_py(data);
+        })
+        .def_static("deserialize", [](py::object data) -> Entity* {
+            if (data.is_none()) {
+                return nullptr;
+            }
+            nos::trent tdata = py_to_trent(data);
+            return Entity::deserialize(tdata);
+        }, py::arg("data"), py::return_value_policy::take_ownership);
 
     // --- EntityRegistry ---
     py::class_<EntityRegistry>(m, "EntityRegistry")

@@ -143,7 +143,7 @@ class Entity(_NativeEntity):
         # Deserialize children
         for child_data in data.get("children", []):
             child_ent = cls.deserialize(child_data, context)
-            ent.set_parent(child_ent)
+            child_ent.set_parent(ent)
 
         return ent
 

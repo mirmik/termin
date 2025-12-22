@@ -119,7 +119,7 @@ class GizmoPass(RenderFramePass):
         shader.set_uniform_matrix4("u_view", view)
         shader.set_uniform_matrix4("u_projection", proj)
 
-        from termin.visualization.core.entity import RenderContext
+        from termin.visualization.render.render_context import RenderContext
         ctx_render = RenderContext(
             view=view,
             projection=proj,

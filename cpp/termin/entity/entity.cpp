@@ -253,4 +253,133 @@ void Entity::on_removed_from_scene() {
     scene = py::none();
 }
 
+nos::trent Entity::serialize() const {
+    if (!serializable) {
+        return nos::trent::nil();
+    }
+
+    nos::trent data;
+    data.init(nos::trent_type::dict);
+
+    data["uuid"] = uuid;
+    data["name"] = name;
+    data["priority"] = priority;
+    data["visible"] = visible;
+    data["active"] = active;
+    data["pickable"] = pickable;
+    data["selectable"] = selectable;
+    data["layer"] = static_cast<int64_t>(layer);
+    data["flags"] = static_cast<int64_t>(flags);
+
+    // Pose
+    const auto& pose = transform->local_pose();
+    nos::trent pose_data;
+    pose_data.init(nos::trent_type::dict);
+
+    nos::trent position;
+    position.init(nos::trent_type::list);
+    position.as_list().push_back(pose.lin.x);
+    position.as_list().push_back(pose.lin.y);
+    position.as_list().push_back(pose.lin.z);
+    pose_data["position"] = std::move(position);
+
+    nos::trent rotation;
+    rotation.init(nos::trent_type::list);
+    rotation.as_list().push_back(pose.ang.x);
+    rotation.as_list().push_back(pose.ang.y);
+    rotation.as_list().push_back(pose.ang.z);
+    rotation.as_list().push_back(pose.ang.w);
+    pose_data["rotation"] = std::move(rotation);
+
+    data["pose"] = std::move(pose_data);
+
+    nos::trent scale;
+    scale.init(nos::trent_type::list);
+    scale.as_list().push_back(pose.scale.x);
+    scale.as_list().push_back(pose.scale.y);
+    scale.as_list().push_back(pose.scale.z);
+    data["scale"] = std::move(scale);
+
+    // Components - will be handled by Python wrapper for now
+    // (components need their own serialize methods)
+
+    // Children
+    nos::trent children_data;
+    children_data.init(nos::trent_type::list);
+    for (auto* child : children()) {
+        if (child->serializable) {
+            children_data.as_list().push_back(child->serialize());
+        }
+    }
+    data["children"] = std::move(children_data);
+
+    return data;
+}
+
+Entity* Entity::deserialize(const nos::trent& data) {
+    if (data.is_nil() || !data.is_dict()) {
+        return nullptr;
+    }
+
+    std::string entity_uuid = data["uuid"].as_string_default("");
+    std::string entity_name = data["name"].as_string_default("entity");
+
+    // Create entity
+    Entity* ent = new Entity(entity_name, entity_uuid);
+
+    // Restore flags
+    ent->priority = static_cast<int>(data["priority"].as_numer_default(0));
+    ent->visible = data["visible"].as_bool_default(true);
+    ent->active = data["active"].as_bool_default(true);
+    ent->pickable = data["pickable"].as_bool_default(true);
+    ent->selectable = data["selectable"].as_bool_default(true);
+    ent->layer = static_cast<uint64_t>(data["layer"].as_numer_default(1));
+    ent->flags = static_cast<uint64_t>(data["flags"].as_numer_default(0));
+
+    // Restore pose
+    const nos::trent* pose_ptr = data.get(nos::trent_path("pose"));
+    if (pose_ptr && pose_ptr->is_dict()) {
+        geom::GeneralPose3 pose;
+
+        const nos::trent* pos = pose_ptr->get(nos::trent_path("position"));
+        if (pos && pos->is_list() && pos->as_list().size() >= 3) {
+            pose.lin.x = pos->at(0).as_numer();
+            pose.lin.y = pos->at(1).as_numer();
+            pose.lin.z = pos->at(2).as_numer();
+        }
+
+        const nos::trent* rot = pose_ptr->get(nos::trent_path("rotation"));
+        if (rot && rot->is_list() && rot->as_list().size() >= 4) {
+            pose.ang.x = rot->at(0).as_numer();
+            pose.ang.y = rot->at(1).as_numer();
+            pose.ang.z = rot->at(2).as_numer();
+            pose.ang.w = rot->at(3).as_numer();
+        }
+
+        const nos::trent* scl = data.get(nos::trent_path("scale"));
+        if (scl && scl->is_list() && scl->as_list().size() >= 3) {
+            pose.scale.x = scl->at(0).as_numer();
+            pose.scale.y = scl->at(1).as_numer();
+            pose.scale.z = scl->at(2).as_numer();
+        }
+
+        ent->transform->set_local_pose(pose);
+    }
+
+    // Components will be handled by Python wrapper
+
+    // Children
+    const nos::trent* children_ptr = data.get(nos::trent_path("children"));
+    if (children_ptr && children_ptr->is_list()) {
+        for (const auto& child_data : children_ptr->as_list()) {
+            Entity* child = Entity::deserialize(child_data);
+            if (child) {
+                child->set_parent(ent);
+            }
+        }
+    }
+
+    return ent;
+}
+
 } // namespace termin

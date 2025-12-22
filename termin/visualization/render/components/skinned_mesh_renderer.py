@@ -8,7 +8,7 @@ import numpy as np
 
 from termin.editor.inspect_field import InspectField
 from termin.mesh.skinned_mesh import SkinnedMesh3
-from termin.visualization.core.entity import RenderContext
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.resources import ResourceManager

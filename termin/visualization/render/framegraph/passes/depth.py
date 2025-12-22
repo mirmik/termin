@@ -5,7 +5,7 @@ from typing import List, Tuple
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.components import MeshRenderer
-from termin.visualization.core.entity import RenderContext
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.render.renderpass import RenderState
 from termin.visualization.render.framegraph.passes.present import blit_fbo_to_fbo
 from termin.visualization.render.materials.depth_material import DepthMaterial

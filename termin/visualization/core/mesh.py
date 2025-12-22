@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 from termin.mesh.mesh import Mesh2, Mesh3
-from termin.visualization.core.entity import RenderContext
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.mesh_asset import MeshAsset
 from termin.visualization.core.mesh_gpu import MeshGPU
 from termin.visualization.core.mesh_handle import MeshHandle

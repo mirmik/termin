@@ -7,7 +7,7 @@ import numpy as np
 
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
-from termin.visualization.core.entity import RenderContext
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.render.drawable import Drawable
 from termin.editor.inspect_field import InspectField
 

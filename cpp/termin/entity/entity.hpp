@@ -7,6 +7,7 @@
 #include <functional>
 #include <pybind11/pybind11.h>
 #include "../geom/general_transform3.hpp"
+#include "../../trent/trent.h"
 
 namespace py = pybind11;
 
@@ -34,6 +35,7 @@ public:
     bool active = true;
     bool pickable = true;
     bool selectable = true;
+    bool serializable = true;
 
     // Rendering
     int priority = 0;      // lower values drawn first
@@ -120,6 +122,11 @@ public:
     void update(float dt);
     void on_added_to_scene(py::object scene);
     void on_removed_from_scene();
+
+    // --- Serialization ---
+
+    nos::trent serialize() const;
+    static Entity* deserialize(const nos::trent& data);
 
 private:
     uint32_t _pick_id = 0;

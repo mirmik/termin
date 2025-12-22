@@ -7,7 +7,7 @@ from typing import List, Tuple, TYPE_CHECKING
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.core.picking import id_to_rgb
-from termin.visualization.core.entity import RenderContext
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.render.renderpass import RenderState
 from termin.visualization.render.system_shaders import get_system_shader
 from termin.visualization.render.drawable import Drawable

@@ -19,7 +19,7 @@ import numpy as np
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
-from termin.visualization.core.entity import RenderContext
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.render.drawable import Drawable
 from termin.visualization.render.renderpass import RenderState
 from termin.visualization.render.system_shaders import get_system_shader

@@ -96,6 +96,9 @@ pybind11_add_module(_entity_native
     termin/entity/entity_registry.cpp
     termin/entity/component_registry.cpp
     termin/entity/components/rotator_component.cpp
+    trent/trent.cpp
+    trent/trent_path.cpp
+    trent/string_ext.cpp
 )
 target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>

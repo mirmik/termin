@@ -6,7 +6,8 @@ from termin.visualization.core.camera import (
     OrthographicCameraComponent,
     PerspectiveCameraComponent,
 )
-from termin.visualization.core.entity import Component, Entity, InputComponent, RenderContext
+from termin.visualization.core.entity import Component, Entity, InputComponent
+from termin.visualization.render.render_context import RenderContext
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh import Mesh2Drawable, MeshDrawable
 from termin.visualization.core.picking import id_to_rgb, rgb_to_id
