@@ -74,11 +74,17 @@ class ResourceManagerViewer(QDialog):
         self._textures_tree.setAlternatingRowColors(True)
         self._tab_widget.addTab(self._textures_tree, "Textures")
 
-        # Компоненты
+        # Компоненты (Python ResourceManager)
         self._components_tree = QTreeWidget()
         self._components_tree.setHeaderLabels(["Name", "Module"])
         self._components_tree.setAlternatingRowColors(True)
         self._tab_widget.addTab(self._components_tree, "Components")
+
+        # Component Registry (C++)
+        self._registry_tree = QTreeWidget()
+        self._registry_tree.setHeaderLabels(["Name", "Type"])
+        self._registry_tree.setAlternatingRowColors(True)
+        self._tab_widget.addTab(self._registry_tree, "Component Registry")
 
         # Отслеживаемые файлы
         self._watched_tree = QTreeWidget()
@@ -111,6 +117,7 @@ class ResourceManagerViewer(QDialog):
         self._refresh_meshes()
         self._refresh_textures()
         self._refresh_components()
+        self._refresh_registry()
         self._refresh_watched()
         self._update_status()
 
@@ -186,6 +193,36 @@ class ResourceManagerViewer(QDialog):
 
         self._components_tree.resizeColumnToContents(0)
         self._components_tree.resizeColumnToContents(1)
+
+    def _refresh_registry(self) -> None:
+        """Обновляет список компонентов из C++ ComponentRegistry."""
+        from termin.entity import ComponentRegistry
+
+        self._registry_tree.clear()
+        reg = ComponentRegistry.instance()
+
+        # Native (C++) components
+        native_names = reg.list_native()
+        if native_names:
+            native_item = QTreeWidgetItem([f"Native ({len(native_names)})", "C++"])
+            native_item.setExpanded(True)
+            self._registry_tree.addTopLevelItem(native_item)
+            for name in sorted(native_names):
+                child = QTreeWidgetItem([name, "C++"])
+                native_item.addChild(child)
+
+        # Python components
+        python_names = reg.list_python()
+        if python_names:
+            python_item = QTreeWidgetItem([f"Python ({len(python_names)})", "Python"])
+            python_item.setExpanded(True)
+            self._registry_tree.addTopLevelItem(python_item)
+            for name in sorted(python_names):
+                child = QTreeWidgetItem([name, "Python"])
+                python_item.addChild(child)
+
+        self._registry_tree.expandAll()
+        self._registry_tree.resizeColumnToContents(0)
 
     def _refresh_watched(self) -> None:
         """Обновляет список отслеживаемых файлов и директорий."""

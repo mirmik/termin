@@ -63,7 +63,6 @@ class ComponentsPanel(QWidget):
         layout.addWidget(self._list)
 
         self._entity: Optional[Entity] = None
-        self._component_library: list[tuple[str, type[Component]]] = []
 
         self._push_undo_command: Optional[Callable[[UndoCommand, bool], None]] = None
 
@@ -85,9 +84,6 @@ class ComponentsPanel(QWidget):
             item = QListWidgetItem(name)
             self._list.addItem(item)
 
-    def set_component_library(self, library: list[tuple[str, type[Component]]]) -> None:
-        self._component_library = list(library)
-
     def current_component(self) -> Optional[Component]:
         if self._entity is None:
             return None
@@ -96,23 +92,21 @@ class ComponentsPanel(QWidget):
             return None
         return self._entity.components[row]
 
-    def _get_component_library(self) -> list[tuple[str, type[Component]]]:
-        if self._component_library:
-            return self._component_library
-        manager = ResourceManager.instance()
-        return sorted(manager.components.items())
+    def _get_component_library(self) -> list[str]:
+        from termin.entity import ComponentRegistry
+        return ComponentRegistry.instance().list_all()
 
     def _show_add_component_menu(self) -> None:
         if self._entity is None:
             return
 
         menu = QMenu(self)
-        component_library = self._get_component_library()
+        component_names = self._get_component_library()
 
-        for label, cls in component_library:
-            act = QAction(label, self)
+        for name in component_names:
+            act = QAction(name, self)
             act.triggered.connect(
-                lambda _checked=False, c=cls: self._add_component(c)
+                lambda _checked=False, n=name: self._add_component(n)
             )
             menu.addAction(act)
 
@@ -130,14 +124,14 @@ class ComponentsPanel(QWidget):
         remove_action.triggered.connect(self._remove_current_component)
         menu.addAction(remove_action)
 
-        component_library = self._get_component_library()
+        component_names = self._get_component_library()
 
-        if component_library:
+        if component_names:
             add_menu = menu.addMenu("Добавить компонент")
-            for label, cls in component_library:
-                act = QAction(label, self)
+            for name in component_names:
+                act = QAction(name, self)
                 act.triggered.connect(
-                    lambda _checked=False, c=cls: self._add_component(c)
+                    lambda _checked=False, n=name: self._add_component(n)
                 )
                 add_menu.addAction(act)
 
@@ -159,17 +153,21 @@ class ComponentsPanel(QWidget):
         self.set_entity(self._entity)
         self.components_changed.emit()
 
-    def _add_component(self, comp_cls: type[Component]) -> None:
+    def _add_component(self, name: str) -> None:
         if self._entity is None:
             return
+
+        from termin.entity import ComponentRegistry
+
         try:
-            comp = comp_cls()
-        except TypeError:
-            logger.exception("Failed to create component %s", comp_cls)
+            comp = ComponentRegistry.instance().create(name)
+        except Exception:
+            logger.exception("Failed to create component %s", name)
             return
 
         # Apply editor defaults (e.g. default mesh/material for MeshRenderer)
-        comp.setup_editor_defaults()
+        if hasattr(comp, 'setup_editor_defaults'):
+            comp.setup_editor_defaults()
 
         if self._push_undo_command is not None:
             cmd = AddComponentCommand(self._entity, comp)
@@ -373,9 +371,6 @@ class EntityInspector(QWidget):
             self._component_inspector.set_component(None)
 
         self.component_changed.emit()
-
-    def set_component_library(self, library: list[tuple[str, type[Component]]]) -> None:
-        self._components_panel.set_component_library(library)
 
     def _on_component_changed(self) -> None:
         self.component_changed.emit()

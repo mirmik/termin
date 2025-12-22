@@ -272,8 +272,6 @@ class Scene(Identifiable):
             index += 1
         self.entities.insert(index, entity)
         entity.on_added(self)
-        for shader in entity.gather_shaders():
-            self._register_shader(shader)
         self.on_entity_added.emit(entity)
         return entity
 
@@ -284,8 +282,6 @@ class Scene(Identifiable):
             child = child_trans.entity
             if child is None:
                 continue
-            for shader in child.gather_shaders():
-                self._register_shader(shader)
             self.add(child)
         return entity
 

@@ -40,10 +40,15 @@ class Component:
         # Базовый класс сам себя не регистрирует
         if cls is Component:
             return
-        from termin.visualization.core.resources import ResourceManager
 
+        # Register in Python ResourceManager
+        from termin.visualization.core.resources import ResourceManager
         manager = ResourceManager.instance()
         manager.register_component(cls.__name__, cls)
+
+        # Register in C++ ComponentRegistry
+        from termin.entity import ComponentRegistry
+        ComponentRegistry.instance().register_python(cls.__name__, cls)
 
     def __init__(self, enabled: bool = True):
         self.enabled = enabled

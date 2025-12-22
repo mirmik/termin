@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List, Optional, Type, TypeVar, TYPE_CHECKING
+from typing import List, Optional, Type, TypeVar, TYPE_CHECKING
 
 import numpy as np
 
@@ -12,11 +12,9 @@ from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.identifiable import Identifiable
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.core.component import Component, InputComponent
-from termin.visualization.render.render_context import RenderContext
 
 if TYPE_CHECKING:  # pragma: no cover
     from termin.visualization.core.scene import Scene
-    from termin.visualization.render.shader import ShaderProgram
 
 from termin.visualization.core.serialization import COMPONENT_REGISTRY
 
@@ -151,17 +149,6 @@ class Entity(Identifiable):
         for component in self._components:
             if component.enabled:
                 component.update(dt)
-
-    def draw(self, context: RenderContext):
-        if not (self.active and self.visible):
-            return
-        for component in self._components:
-            if component.enabled:
-                component.draw(context)
-
-    def gather_shaders(self) -> Iterable["ShaderProgram"]:
-        for component in self._components:
-            yield from component.required_shaders()
 
     def on_added(self, scene: "Scene"):
         self.scene = scene

@@ -1,0 +1,106 @@
+#include "component_registry.hpp"
+#include "component.hpp"
+#include <stdexcept>
+#include <algorithm>
+
+namespace termin {
+
+ComponentRegistry& ComponentRegistry::instance() {
+    static ComponentRegistry inst;
+    return inst;
+}
+
+void ComponentRegistry::register_native(const std::string& name, NativeFactory factory) {
+    ComponentInfo info;
+    info.name = name;
+    info.is_native = true;
+    info.native_factory = std::move(factory);
+
+    registry_[name] = std::move(info);
+}
+
+void ComponentRegistry::register_python(const std::string& name, py::object cls) {
+    auto it = registry_.find(name);
+    if (it != registry_.end() && it->second.is_native) {
+        // Don't overwrite native components with Python
+        return;
+    }
+
+    ComponentInfo info;
+    info.name = name;
+    info.is_native = false;
+    info.python_class = std::move(cls);
+
+    registry_[name] = std::move(info);
+}
+
+void ComponentRegistry::unregister(const std::string& name) {
+    registry_.erase(name);
+}
+
+py::object ComponentRegistry::create(const std::string& name) const {
+    auto it = registry_.find(name);
+    if (it == registry_.end()) {
+        throw std::runtime_error("Unknown component type: " + name);
+    }
+
+    const auto& info = it->second;
+
+    if (info.is_native) {
+        Component* comp = info.native_factory();
+        comp->is_native = true;
+        return py::cast(comp, py::return_value_policy::take_ownership);
+    } else {
+        return info.python_class();
+    }
+}
+
+bool ComponentRegistry::has(const std::string& name) const {
+    return registry_.count(name) > 0;
+}
+
+const ComponentRegistry::ComponentInfo* ComponentRegistry::get_info(const std::string& name) const {
+    auto it = registry_.find(name);
+    if (it == registry_.end()) {
+        return nullptr;
+    }
+    return &it->second;
+}
+
+std::vector<std::string> ComponentRegistry::list_all() const {
+    std::vector<std::string> result;
+    result.reserve(registry_.size());
+    for (const auto& [name, _] : registry_) {
+        result.push_back(name);
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+std::vector<std::string> ComponentRegistry::list_native() const {
+    std::vector<std::string> result;
+    for (const auto& [name, info] : registry_) {
+        if (info.is_native) {
+            result.push_back(name);
+        }
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+std::vector<std::string> ComponentRegistry::list_python() const {
+    std::vector<std::string> result;
+    for (const auto& [name, info] : registry_) {
+        if (!info.is_native) {
+            result.push_back(name);
+        }
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+void ComponentRegistry::clear() {
+    registry_.clear();
+}
+
+} // namespace termin

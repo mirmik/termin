@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "7f1b8983-cdca-42d3-8902-62b56a6f092c",
+    "uuid": "672d276b-2bc6-4858-9944-b0910e07134d",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -333,15 +333,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            -0.7658929228782654,
-            -0.4835587441921234,
-            -1.444739580154419
+            -0.34264975786209106,
+            -0.055889375507831573,
+            -1.133297085762024
           ],
           "rotation": [
-            -0.14551882644329842,
-            -0.0259208520248754,
-            0.17344048127686323,
-            0.9736892625654858
+            -0.23911762560508354,
+            -0.09904576365747,
+            0.36964381022118065,
+            0.8923990987174202
           ]
         },
         "components": [
@@ -7152,15 +7152,14 @@
   "editor": {
     "camera": {
       "target": [
-        -5.753103635901714,
-        9.465648048841029,
-        -4.830494653786999
+        3.488879770140005,
+        5.989217687345636,
+        -0.32424148386056756
       ],
-      "radius": 11.5,
-      "azimuth": 57.00245337013908,
-      "elevation": 0.30368728984701726
+      "radius": 19.5,
+      "azimuth": 58.465039283310574,
+      "elevation": 0.8168140899333438
     },
-    "selected_entity": "spikyMesh",
     "displays": [
       {
         "name": "Editor",
@@ -7169,7 +7168,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "66bd07a6-4c3b-411e-b639-b4b7b2eeca28",
+            "uuid": "03b1af21-4ddd-47f2-ad1f-e7df889df2a0",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7188,8 +7187,8 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "fb1eea83-e413-4eaf-a4d2-fbe15f0d7adc",
-            "camera_entity": "GameCamera",
+            "uuid": "36a2fea3-b07e-40eb-8d2c-d4303bb47a5b",
+            "camera_entity": "camera",
             "rect": [
               0.0,
               0.0,
@@ -7202,16 +7201,16 @@
       }
     ],
     "expanded_entities": [
-      "entity13",
-      "[Root]",
-      "Glitch",
-      "cube2",
-      "camera",
-      "cube1",
-      "Walls",
-      "Arti",
       "entity12_copy",
-      "EditorEntities"
+      "entity13",
+      "cube1",
+      "[Root]",
+      "camera",
+      "Glitch",
+      "EditorEntities",
+      "cube2",
+      "Walls",
+      "Arti"
     ]
   },
   "resources": {

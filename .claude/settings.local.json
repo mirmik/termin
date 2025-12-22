@@ -31,7 +31,9 @@
       "Bash(cmake --build:*)",
       "Bash(timeout 30 python:*)",
       "Bash(grep:*)",
-      "Bash(cut:*)"
+      "Bash(cut:*)",
+      "Bash(PYTHONPATH=. timeout 10 python:*)",
+      "Bash(PYTHONPATH=. timeout 5 python:*)"
     ]
   }
 }
