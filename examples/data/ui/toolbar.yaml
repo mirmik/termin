@@ -1,0 +1,51 @@
+root:
+  type: Panel
+  name: main_toolbar
+  padding: 8
+  background_color: [0.15, 0.15, 0.15, 0.95]
+  border_radius: 4
+  children:
+    - type: HStack
+      spacing: 6
+      alignment: center
+      children:
+        - type: Button
+          name: btn_wireframe
+          text: Wireframe
+          size: [90, 28]
+          background_color: [0.25, 0.25, 0.25, 1.0]
+          hover_color: [0.35, 0.35, 0.35, 1.0]
+          text_color: [1, 1, 1, 1]
+          font_size: 12
+
+        - type: Button
+          name: btn_shaded
+          text: Shaded
+          size: [70, 28]
+          background_color: [0.25, 0.25, 0.25, 1.0]
+          hover_color: [0.35, 0.35, 0.35, 1.0]
+          text_color: [1, 1, 1, 1]
+          font_size: 12
+
+        - type: Button
+          name: btn_textured
+          text: Textured
+          size: [80, 28]
+          background_color: [0.25, 0.25, 0.25, 1.0]
+          hover_color: [0.35, 0.35, 0.35, 1.0]
+          text_color: [1, 1, 1, 1]
+          font_size: 12
+
+        - type: Separator
+          orientation: vertical
+          color: [0.4, 0.4, 0.4, 1.0]
+          margin: 4
+
+        - type: Button
+          name: btn_play
+          text: Play
+          size: [60, 28]
+          background_color: [0.2, 0.5, 0.2, 1.0]
+          hover_color: [0.3, 0.6, 0.3, 1.0]
+          text_color: [1, 1, 1, 1]
+          font_size: 12

@@ -25,7 +25,9 @@
       "Bash(/media/sf_Shared/termin/termin/colliders/attached.py )",
       "Bash(/media/sf_Shared/termin/termin/colliders/union_collider.py )",
       "Bash(/media/sf_Shared/termin/termin/colliders/raycast_hit.py)",
-      "Bash(./build/temp.linux-x86_64-cpython-310/bin/termin_tests:*)"
+      "Bash(./build/temp.linux-x86_64-cpython-310/bin/termin_tests:*)",
+      "Bash(xargs:*)",
+      "Bash(mkdir:*)"
     ]
   }
 }
