@@ -278,10 +278,16 @@ class OpenGLMeshHandle(MeshHandle):
                 ctx_ptr = "N/A"
 
             created_ctx = getattr(self, '_created_in_ctx', None)
+
+            # Check FBO completeness
+            fbo_status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
+            fbo_complete = fbo_status == gl.GL_FRAMEBUFFER_COMPLETE
+
             print(f"[OpenGLMeshHandle.draw] ERROR STATE:")
             print(f"  self: vao={self._vao}, vbo={self._vbo}, ebo={self._ebo}, idx_count={self._index_count}")
             print(f"  GL state: bound_vao={bound_vao}, bound_ebo={bound_ebo}, bound_vbo={bound_vbo}")
             print(f"  current_program={current_program}, bound_fbo={bound_fbo}")
+            print(f"  FBO status: 0x{fbo_status:X}, complete={fbo_complete}")
             print(f"  created_in_ctx={created_ctx}, current_ctx={ctx_ptr}, MATCH={created_ctx == ctx_ptr}")
             raise
 
