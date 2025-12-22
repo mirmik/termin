@@ -29,14 +29,10 @@ void main()
 SHADOW_FRAG = """
 #version 330 core
 
-out vec4 FragColor;
-
 void main()
 {
-    // Глубина пишется автоматически в depth buffer.
-    // Для отладки можно визуализировать gl_FragCoord.z:
-    float depth = gl_FragCoord.z;
-    FragColor = vec4(depth, depth, depth, 1.0);
+    // Depth-only pass: глубина пишется автоматически в depth buffer.
+    // Никакого color output - shadow FBO не имеет color attachment.
 }
 """
 

@@ -259,8 +259,9 @@ class OpenGLMeshHandle(MeshHandle):
         if pre_error != gl.GL_NO_ERROR:
             print(f"[OpenGLMeshHandle.draw] PRE-EXISTING GL ERROR: {pre_error}")
 
+        import ctypes as ct
         try:
-            gl.glDrawElements(mode, self._index_count, gl.GL_UNSIGNED_INT, ctypes.c_void_p(0))
+            gl.glDrawElements(mode, self._index_count, gl.GL_UNSIGNED_INT, ct.c_void_p(0))
         except Exception as e:
             # Dump state on error
             current_program = gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM)
@@ -271,8 +272,7 @@ class OpenGLMeshHandle(MeshHandle):
 
             # Get actual GL context pointer (Windows)
             try:
-                import ctypes
-                wgl = ctypes.windll.opengl32
+                wgl = ct.windll.opengl32
                 ctx_ptr = wgl.wglGetCurrentContext()
             except:
                 ctx_ptr = "N/A"
