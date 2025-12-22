@@ -1,0 +1,284 @@
+"""
+Profiler panel for the editor.
+
+Dock-виджет с графиком frame time и таблицей секций.
+Включается через View → Profiler (F7).
+"""
+
+from __future__ import annotations
+
+from typing import Dict
+
+from PyQt6 import QtWidgets, QtCore, QtGui
+
+from termin.core.profiler import Profiler
+from termin.editor.profiler.frame_time_graph import FrameTimeGraph
+
+
+class ProfilerPanel(QtWidgets.QDockWidget):
+    """
+    Dock-виджет профайлера.
+
+    Показывает:
+    - График frame time
+    - FPS и общее время кадра
+    - Иерархическую таблицу секций с временами
+    """
+
+    def __init__(self, parent: QtWidgets.QWidget | None = None):
+        super().__init__("Profiler", parent)
+        self.setObjectName("ProfilerPanel")
+
+        self._profiler = Profiler.instance()
+        self._update_timer = QtCore.QTimer(self)
+        self._update_timer.timeout.connect(self._update_display)
+
+        # Кэш для оптимизации обновления таблицы
+        self._last_sections: Dict[str, float] = {}
+
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        """Создаёт UI панели."""
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(widget)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+
+        # Toolbar
+        toolbar = QtWidgets.QHBoxLayout()
+        toolbar.setSpacing(8)
+
+        self._enable_check = QtWidgets.QCheckBox("Enable")
+        self._enable_check.setToolTip("Enable/disable profiling (affects performance when enabled)")
+        self._enable_check.toggled.connect(self._on_enable_toggled)
+        toolbar.addWidget(self._enable_check)
+
+        toolbar.addSpacing(16)
+
+        # Clear button
+        clear_btn = QtWidgets.QPushButton("Clear")
+        clear_btn.setToolTip("Clear profiling history")
+        clear_btn.setFixedWidth(60)
+        clear_btn.clicked.connect(self._on_clear_clicked)
+        toolbar.addWidget(clear_btn)
+
+        toolbar.addStretch()
+
+        # FPS label
+        self._fps_label = QtWidgets.QLabel("-- FPS")
+        self._fps_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self._fps_label.setToolTip("Frames per second (averaged over 60 frames)")
+        toolbar.addWidget(self._fps_label)
+
+        layout.addLayout(toolbar)
+
+        # Graph
+        self._graph = FrameTimeGraph()
+        self._graph.setMinimumHeight(80)
+        self._graph.setMaximumHeight(100)
+        layout.addWidget(self._graph)
+
+        # Table
+        self._table = QtWidgets.QTreeWidget()
+        self._table.setHeaderLabels(["Section", "Time (ms)", "%"])
+        self._table.setColumnWidth(0, 180)
+        self._table.setColumnWidth(1, 70)
+        self._table.setColumnWidth(2, 50)
+        self._table.setAlternatingRowColors(True)
+        self._table.setRootIsDecorated(True)
+        self._table.setIndentation(16)
+
+        # Стиль для progress bar в ячейках
+        self._table.setStyleSheet("""
+            QTreeWidget {
+                background-color: #2d2d2d;
+                alternate-background-color: #323232;
+            }
+            QTreeWidget::item {
+                padding: 2px;
+            }
+            QHeaderView::section {
+                background-color: #3d3d3d;
+                padding: 4px;
+                border: none;
+            }
+        """)
+
+        layout.addWidget(self._table, 1)
+
+        self.setWidget(widget)
+
+        # Минимальный размер
+        self.setMinimumWidth(300)
+        self.setMinimumHeight(200)
+
+    def _on_enable_toggled(self, checked: bool) -> None:
+        """Обработчик включения/выключения профайлера."""
+        self._profiler.enabled = checked
+
+        if checked:
+            self._update_timer.start(100)  # 10 Hz update
+        else:
+            self._update_timer.stop()
+            self._table.clear()
+            self._graph.clear()
+            self._fps_label.setText("-- FPS")
+            self._last_sections.clear()
+
+    def _on_clear_clicked(self) -> None:
+        """Обработчик кнопки Clear."""
+        self._profiler.clear_history()
+        self._graph.clear()
+        self._table.clear()
+        self._last_sections.clear()
+
+    def _update_display(self) -> None:
+        """Обновляет отображение данных профайлера."""
+        if not self._profiler.enabled:
+            return
+
+        avg = self._profiler.average(60)
+        if not avg:
+            return
+
+        # Считаем общее время (только root секции)
+        total = sum(v for k, v in avg.items() if "/" not in k)
+
+        # FPS
+        if total > 0:
+            fps = 1000.0 / total
+            self._fps_label.setText(f"{fps:.0f} FPS ({total:.1f}ms)")
+        else:
+            self._fps_label.setText("-- FPS")
+
+        # Graph
+        self._graph.add_frame(total)
+
+        # Table - обновляем только если данные изменились значительно
+        if self._should_update_table(avg):
+            self._rebuild_table(avg, total)
+            self._last_sections = avg.copy()
+
+    def _should_update_table(self, avg: Dict[str, float]) -> bool:
+        """Проверяет, нужно ли обновлять таблицу."""
+        if len(avg) != len(self._last_sections):
+            return True
+
+        # Проверяем изменение значений более чем на 5%
+        for key, value in avg.items():
+            old_value = self._last_sections.get(key, 0)
+            if old_value == 0:
+                if value > 0.1:  # Новая секция с заметным временем
+                    return True
+            elif abs(value - old_value) / old_value > 0.05:
+                return True
+
+        return False
+
+    def _rebuild_table(self, avg: Dict[str, float], total: float) -> None:
+        """Перестраивает таблицу секций."""
+        # Сохраняем состояние раскрытия
+        expanded_items = self._get_expanded_items()
+
+        self._table.clear()
+
+        # Группируем по иерархии
+        root_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
+
+        # Сортируем: сначала по глубине (меньше = раньше), потом по времени (больше = раньше)
+        sorted_sections = sorted(
+            avg.items(),
+            key=lambda x: (x[0].count("/"), -x[1])
+        )
+
+        for path, ms in sorted_sections:
+            parts = path.split("/")
+            pct = (ms / total * 100) if total > 0 else 0
+
+            # Создаём item
+            item = QtWidgets.QTreeWidgetItem()
+            item.setText(0, parts[-1])
+            item.setText(1, f"{ms:.2f}")
+            item.setText(2, f"{pct:.1f}%")
+            item.setData(0, QtCore.Qt.ItemDataRole.UserRole, path)
+
+            # Выравнивание чисел вправо
+            item.setTextAlignment(1, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
+            item.setTextAlignment(2, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
+
+            # Цвет в зависимости от процента
+            if pct > 50:
+                item.setForeground(1, QtGui.QColor(255, 100, 100))
+            elif pct > 25:
+                item.setForeground(1, QtGui.QColor(255, 200, 100))
+
+            if len(parts) == 1:
+                # Root level
+                self._table.addTopLevelItem(item)
+                root_items[parts[0]] = item
+            else:
+                # Nested - ищем родителя
+                parent_path = "/".join(parts[:-1])
+                parent = root_items.get(parent_path)
+                if parent:
+                    parent.addChild(item)
+                    root_items[path] = item
+                else:
+                    # Родитель не найден - добавляем в root
+                    self._table.addTopLevelItem(item)
+                    root_items[path] = item
+
+        # Восстанавливаем состояние раскрытия
+        self._restore_expanded_items(expanded_items)
+
+    def _get_expanded_items(self) -> set:
+        """Возвращает множество путей раскрытых элементов."""
+        expanded = set()
+
+        def collect(item: QtWidgets.QTreeWidgetItem) -> None:
+            if item.isExpanded():
+                path = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+                if path:
+                    expanded.add(path)
+            for i in range(item.childCount()):
+                collect(item.child(i))
+
+        for i in range(self._table.topLevelItemCount()):
+            collect(self._table.topLevelItem(i))
+
+        return expanded
+
+    def _restore_expanded_items(self, expanded: set) -> None:
+        """Восстанавливает состояние раскрытия элементов."""
+        def restore(item: QtWidgets.QTreeWidgetItem) -> None:
+            path = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+            if path in expanded:
+                item.setExpanded(True)
+            for i in range(item.childCount()):
+                restore(item.child(i))
+
+        # По умолчанию раскрываем все root элементы
+        for i in range(self._table.topLevelItemCount()):
+            item = self._table.topLevelItem(i)
+            if not expanded:  # Если нет сохранённого состояния
+                item.setExpanded(True)
+            else:
+                restore(item)
+
+    def showEvent(self, event: QtGui.QShowEvent) -> None:
+        """При показе панели синхронизируем состояние checkbox."""
+        super().showEvent(event)
+        self._enable_check.setChecked(self._profiler.enabled)
+        if self._profiler.enabled:
+            self._update_timer.start(100)
+
+    def hideEvent(self, event: QtGui.QHideEvent) -> None:
+        """При скрытии панели останавливаем таймер."""
+        super().hideEvent(event)
+        self._update_timer.stop()
+
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        """При закрытии панели останавливаем таймер."""
+        self._update_timer.stop()
+        super().closeEvent(event)

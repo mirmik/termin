@@ -51,8 +51,12 @@ class World:
 
     def update(self, dt: float) -> None:
         """Обновляет все сцены."""
-        for scene in self.scenes:
-            scene.update(dt)
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
+        with profiler.section("World"):
+            for scene in self.scenes:
+                scene.update(dt)
 
     # --- Сериализация ---
 

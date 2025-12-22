@@ -42,6 +42,7 @@ from termin.editor.file_processors import (
     AudioPreLoader,
 )
 from termin.editor.spacemouse_controller import SpaceMouseController
+from termin.editor.profiler import ProfilerPanel
 
 from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.entity import Entity
@@ -110,6 +111,7 @@ class EditorWindow(QMainWindow):
         self._viewport_toolbar: QWidget | None = None
         self._is_fullscreen: bool = False
         self._pre_fullscreen_state: dict | None = None  # Store widget visibility before fullscreen
+        self._profiler_panel: "ProfilerPanel | None" = None
 
         ui_path = os.path.join(os.path.dirname(__file__), "editor.ui")
         uic.loadUi(ui_path, self)
@@ -426,10 +428,12 @@ class EditorWindow(QMainWindow):
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
             on_show_audio_debugger=self._show_audio_debugger,
+            on_toggle_profiler=self._toggle_profiler,
             on_toggle_fullscreen=self._toggle_fullscreen,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._is_fullscreen,
+            is_profiler_visible=self._is_profiler_visible,
         )
 
     def _update_undo_redo_actions(self) -> None:
@@ -522,6 +526,30 @@ class EditorWindow(QMainWindow):
     def _show_audio_debugger(self) -> None:
         """Opens audio debugger dialog."""
         self._dialog_manager.show_audio_debugger()
+
+    def _toggle_profiler(self, checked: bool) -> None:
+        """Toggle profiler panel visibility."""
+        if checked:
+            if self._profiler_panel is None:
+                self._profiler_panel = ProfilerPanel(self)
+                self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._profiler_panel)
+                # Connect visibility changed to update menu checkbox
+                self._profiler_panel.visibilityChanged.connect(self._on_profiler_visibility_changed)
+            self._profiler_panel.show()
+        else:
+            if self._profiler_panel is not None:
+                self._profiler_panel.hide()
+
+    def _is_profiler_visible(self) -> bool:
+        """Returns True if profiler panel is visible."""
+        if self._profiler_panel is None:
+            return False
+        return self._profiler_panel.isVisible()
+
+    def _on_profiler_visibility_changed(self, visible: bool) -> None:
+        """Called when profiler panel visibility changes (e.g., closed via X button)."""
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_profiler_action()
 
     # ----------- editor camera -----------
 

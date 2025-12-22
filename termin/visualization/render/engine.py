@@ -77,51 +77,58 @@ class RenderEngine:
     ) -> None:
         """
         Рендерит набор views на поверхность.
-        
+
         Алгоритм:
         1. Активирует контекст поверхности
         2. Получает размер и display FBO
         3. Для каждого (view, state) выполняет pipeline
         4. Опционально презентует результат (swap buffers)
-        
+
         Параметры:
             surface: Целевая поверхность рендеринга.
             views: Итератор пар (RenderView, ViewportRenderState).
             present: Вызывать ли surface.present() после рендера.
         """
-        self.graphics.ensure_ready()
-        surface.make_current()
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+        profiler.begin_frame()
 
-        width, height = surface.get_size()
-        display_fbo = surface.get_framebuffer()
-        context_key = surface.context_key()
+        with profiler.section("Render"):
+            self.graphics.ensure_ready()
+            surface.make_current()
 
-        # Регистрируем контекст для корректного удаления GPU ресурсов
-        from termin.visualization.platform.backends.opengl import register_context
-        register_context(context_key, surface.make_current)
+            width, height = surface.get_size()
+            display_fbo = surface.get_framebuffer()
+            context_key = surface.context_key()
 
-        for view, state in views:
-            try:
-                self._render_single_view(
-                    view=view,
-                    state=state,
-                    framebuffer_size=(width, height),
-                    display_fbo=display_fbo,
-                    context_key=context_key,
-                )
-            except Exception as e:
-                error_msg = str(e)
-                if error_msg not in self._logged_errors:
-                    self._logged_errors.add(error_msg)
-                    import logging
-                    import traceback
-                    logger = logging.getLogger(__name__)
-                    tb = traceback.format_exc()
-                    logger.error(f"Pipeline error: {e}\n{tb}")
-                    print(f"Pipeline error: {e}\n{tb}")
+            # Регистрируем контекст для корректного удаления GPU ресурсов
+            from termin.visualization.platform.backends.opengl import register_context
+            register_context(context_key, surface.make_current)
 
-        if present:
-            surface.present()
+            for view, state in views:
+                try:
+                    self._render_single_view(
+                        view=view,
+                        state=state,
+                        framebuffer_size=(width, height),
+                        display_fbo=display_fbo,
+                        context_key=context_key,
+                    )
+                except Exception as e:
+                    error_msg = str(e)
+                    if error_msg not in self._logged_errors:
+                        self._logged_errors.add(error_msg)
+                        import logging
+                        import traceback
+                        logger = logging.getLogger(__name__)
+                        tb = traceback.format_exc()
+                        logger.error(f"Pipeline error: {e}\n{tb}")
+                        print(f"Pipeline error: {e}\n{tb}")
+
+            if present:
+                surface.present()
+
+        profiler.end_frame()
 
     def render_single_view(
         self,
@@ -290,6 +297,9 @@ class RenderEngine:
                 print(f"  Light[{i}]: type={lt.type}, dir={lt.direction}, pos={lt.position}")
             print(f"=== end ===\n")
 
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
         for render_pass in schedule:
             # Сброс GL-состояния перед каждым пассом
             self.graphics.reset_state()
@@ -297,17 +307,18 @@ class RenderEngine:
             pass_reads = {name: resources.get(name) for name in render_pass.reads}
             pass_writes = {name: resources.get(name) for name in render_pass.writes}
 
-            render_pass.execute(
-                self.graphics,
-                reads_fbos=pass_reads,
-                writes_fbos=pass_writes,
-                rect=(px, py, pw, ph),
-                scene=scene,
-                camera=view.camera,
-                context_key=context_key,
-                lights=lights,
-                canvas=view.canvas,
-            )
+            with profiler.section(render_pass.pass_name):
+                render_pass.execute(
+                    self.graphics,
+                    reads_fbos=pass_reads,
+                    writes_fbos=pass_writes,
+                    rect=(px, py, pw, ph),
+                    scene=scene,
+                    camera=view.camera,
+                    context_key=context_key,
+                    lights=lights,
+                    canvas=view.canvas,
+                )
 
             # После выполнения пасса обновляем ресурсы в пуле
             # (пасс мог создать новые ресурсы, например ShadowMapArray)

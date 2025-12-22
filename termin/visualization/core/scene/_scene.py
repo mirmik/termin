@@ -425,29 +425,35 @@ class Scene(Identifiable):
     # --- Update loop ---
 
     def update(self, dt: float):
-        if self._pending_start:
-            pending = self._pending_start
-            self._pending_start = []
-            for component in pending:
-                if component._started:
-                    continue
-                if component.enabled:
-                    component.start()
-                else:
-                    # Keep disabled components in pending until enabled
-                    self._pending_start.append(component)
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
+        with profiler.section("Start"):
+            if self._pending_start:
+                pending = self._pending_start
+                self._pending_start = []
+                for component in pending:
+                    if component._started:
+                        continue
+                    if component.enabled:
+                        component.start()
+                    else:
+                        # Keep disabled components in pending until enabled
+                        self._pending_start.append(component)
 
         # Fixed update loop (Unity-style)
-        self._accumulated_time += dt
-        while self._accumulated_time >= self._fixed_timestep:
-            for component in self.fixed_update_list:
-                if component.enabled:
-                    component.fixed_update(self._fixed_timestep)
-            self._accumulated_time -= self._fixed_timestep
+        with profiler.section("FixedUpdate"):
+            self._accumulated_time += dt
+            while self._accumulated_time >= self._fixed_timestep:
+                for component in self.fixed_update_list:
+                    if component.enabled:
+                        component.fixed_update(self._fixed_timestep)
+                self._accumulated_time -= self._fixed_timestep
 
-        for component in self.update_list:
-            if component.enabled:
-                component.update(dt)
+        with profiler.section("Update"):
+            for component in self.update_list:
+                if component.enabled:
+                    component.update(dt)
 
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""

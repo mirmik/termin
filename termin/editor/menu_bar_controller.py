@@ -49,20 +49,24 @@ class MenuBarController:
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
         on_show_audio_debugger: Callable,
+        on_toggle_profiler: Callable,
         on_toggle_fullscreen: Callable,
         # State getters
         can_undo: Callable[[], bool],
         can_redo: Callable[[], bool],
         is_fullscreen: Callable[[], bool],
+        is_profiler_visible: Callable[[], bool],
     ):
         self._can_undo = can_undo
         self._can_redo = can_redo
         self._is_fullscreen = is_fullscreen
+        self._is_profiler_visible = is_profiler_visible
 
         self._action_undo: QAction | None = None
         self._action_redo: QAction | None = None
         self._action_play: QAction | None = None
         self._action_fullscreen: QAction | None = None
+        self._action_profiler: QAction | None = None
 
         self._setup_menu_bar(
             menu_bar,
@@ -87,6 +91,7 @@ class MenuBarController:
             on_show_framegraph_debugger=on_show_framegraph_debugger,
             on_show_resource_manager_viewer=on_show_resource_manager_viewer,
             on_show_audio_debugger=on_show_audio_debugger,
+            on_toggle_profiler=on_toggle_profiler,
             on_toggle_fullscreen=on_toggle_fullscreen,
         )
 
@@ -114,6 +119,7 @@ class MenuBarController:
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
         on_show_audio_debugger: Callable,
+        on_toggle_profiler: Callable,
         on_toggle_fullscreen: Callable,
     ) -> None:
         """Create menu bar structure and connect actions."""
@@ -185,6 +191,13 @@ class MenuBarController:
         settings_action.triggered.connect(on_settings)
 
         # View menu
+        self._action_profiler = view_menu.addAction("Profiler")
+        self._action_profiler.setShortcut("F7")
+        self._action_profiler.setCheckable(True)
+        self._action_profiler.triggered.connect(on_toggle_profiler)
+
+        view_menu.addSeparator()
+
         self._action_fullscreen = view_menu.addAction("Fullscreen")
         self._action_fullscreen.setShortcut("F11")
         self._action_fullscreen.setCheckable(True)
@@ -239,3 +252,8 @@ class MenuBarController:
         """Update fullscreen action checked state."""
         if self._action_fullscreen is not None:
             self._action_fullscreen.setChecked(self._is_fullscreen())
+
+    def update_profiler_action(self) -> None:
+        """Update profiler action checked state."""
+        if self._action_profiler is not None:
+            self._action_profiler.setChecked(self._is_profiler_visible())
