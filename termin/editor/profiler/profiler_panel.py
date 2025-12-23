@@ -11,7 +11,7 @@ from typing import Dict
 
 from PyQt6 import QtWidgets, QtCore, QtGui
 
-from termin.core.profiler import Profiler
+from termin.core.profiler import Profiler, SectionStats
 from termin.editor.profiler.frame_time_graph import FrameTimeGraph
 
 
@@ -34,7 +34,7 @@ class ProfilerPanel(QtWidgets.QDockWidget):
         self._update_timer.timeout.connect(self._update_display)
 
         # Кэш для оптимизации обновления таблицы
-        self._last_sections: Dict[str, float] = {}
+        self._last_sections: Dict[str, SectionStats] = {}
 
         self._build_ui()
 
@@ -86,10 +86,11 @@ class ProfilerPanel(QtWidgets.QDockWidget):
 
         # Table
         self._table = QtWidgets.QTreeWidget()
-        self._table.setHeaderLabels(["Section", "Time (ms)", "%"])
+        self._table.setHeaderLabels(["Section", "Time (ms)", "%", "Count"])
         self._table.setColumnWidth(0, 180)
         self._table.setColumnWidth(1, 70)
         self._table.setColumnWidth(2, 50)
+        self._table.setColumnWidth(3, 50)
         self._table.setAlternatingRowColors(True)
         self._table.setRootIsDecorated(True)
         self._table.setIndentation(16)
@@ -147,12 +148,12 @@ class ProfilerPanel(QtWidgets.QDockWidget):
         if not self._profiler.enabled:
             return
 
-        avg = self._profiler.average(60)
-        if not avg:
+        detailed = self._profiler.detailed_average(60)
+        if not detailed:
             return
 
         # Считаем общее время (только root секции)
-        total = sum(v for k, v in avg.items() if "/" not in k)
+        total = sum(stats.cpu_ms for k, stats in detailed.items() if "/" not in k)
 
         # FPS
         if total > 0:
@@ -165,27 +166,27 @@ class ProfilerPanel(QtWidgets.QDockWidget):
         self._graph.add_frame(total)
 
         # Table - обновляем только если данные изменились значительно
-        if self._should_update_table(avg):
-            self._rebuild_table(avg, total)
-            self._last_sections = avg.copy()
+        if self._should_update_table(detailed):
+            self._rebuild_table(detailed, total)
+            self._last_sections = detailed.copy()
 
-    def _should_update_table(self, avg: Dict[str, float]) -> bool:
+    def _should_update_table(self, detailed: Dict[str, SectionStats]) -> bool:
         """Проверяет, нужно ли обновлять таблицу."""
-        if len(avg) != len(self._last_sections):
+        if len(detailed) != len(self._last_sections):
             return True
 
         # Проверяем изменение значений более чем на 5%
-        for key, value in avg.items():
-            old_value = self._last_sections.get(key, 0)
-            if old_value == 0:
-                if value > 0.1:  # Новая секция с заметным временем
+        for key, stats in detailed.items():
+            old_stats = self._last_sections.get(key)
+            if old_stats is None:
+                if stats.cpu_ms > 0.1:  # Новая секция с заметным временем
                     return True
-            elif abs(value - old_value) / old_value > 0.05:
+            elif old_stats.cpu_ms > 0 and abs(stats.cpu_ms - old_stats.cpu_ms) / old_stats.cpu_ms > 0.05:
                 return True
 
         return False
 
-    def _rebuild_table(self, avg: Dict[str, float], total: float) -> None:
+    def _rebuild_table(self, detailed: Dict[str, SectionStats], total: float) -> None:
         """Перестраивает таблицу секций."""
         # Сохраняем состояние раскрытия
         expanded_items = self._get_expanded_items()
@@ -197,24 +198,27 @@ class ProfilerPanel(QtWidgets.QDockWidget):
 
         # Сортируем: сначала по глубине (меньше = раньше), потом по времени (больше = раньше)
         sorted_sections = sorted(
-            avg.items(),
-            key=lambda x: (x[0].count("/"), -x[1])
+            detailed.items(),
+            key=lambda x: (x[0].count("/"), -x[1].cpu_ms)
         )
 
-        for path, ms in sorted_sections:
+        for path, stats in sorted_sections:
             parts = path.split("/")
-            pct = (ms / total * 100) if total > 0 else 0
+            pct = (stats.cpu_ms / total * 100) if total > 0 else 0
 
             # Создаём item
             item = QtWidgets.QTreeWidgetItem()
             item.setText(0, parts[-1])
-            item.setText(1, f"{ms:.2f}")
+            item.setText(1, f"{stats.cpu_ms:.2f}")
             item.setText(2, f"{pct:.1f}%")
+            # Показываем count только если > 1
+            item.setText(3, str(stats.call_count) if stats.call_count > 1 else "")
             item.setData(0, QtCore.Qt.ItemDataRole.UserRole, path)
 
             # Выравнивание чисел вправо
             item.setTextAlignment(1, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
             item.setTextAlignment(2, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
+            item.setTextAlignment(3, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
 
             # Цвет в зависимости от процента
             if pct > 50:

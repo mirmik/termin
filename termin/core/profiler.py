@@ -35,7 +35,13 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List, Iterator
+from typing import Dict, List, Iterator, NamedTuple
+
+
+class SectionStats(NamedTuple):
+    """Статистика секции профилирования."""
+    cpu_ms: float
+    call_count: int
 
 
 @dataclass
@@ -215,22 +221,41 @@ class Profiler:
             Словарь "путь/секции" -> среднее время в мс.
             Например: {"Render": 8.5, "Render/Shadow": 2.1, "Render/Color": 5.2}
         """
+        detailed = self.detailed_average(frames)
+        return {name: stats.cpu_ms for name, stats in detailed.items()}
+
+    def detailed_average(self, frames: int = 60) -> Dict[str, SectionStats]:
+        """
+        Возвращает детальную статистику по секциям.
+
+        Args:
+            frames: Количество последних кадров для усреднения.
+
+        Returns:
+            Словарь "путь/секции" -> SectionStats(cpu_ms, call_count).
+            call_count — среднее количество вызовов за кадр.
+        """
         if not self._history:
             return {}
 
         recent = self._history[-frames:]
-        totals: Dict[str, List[float]] = {}
+        totals: Dict[str, List[tuple]] = {}  # path -> [(cpu_ms, call_count), ...]
 
         def collect(sections: Dict[str, SectionTiming], prefix: str = "") -> None:
             for name, timing in sections.items():
                 full_path = f"{prefix}{name}" if prefix else name
-                totals.setdefault(full_path, []).append(timing.cpu_ms)
+                totals.setdefault(full_path, []).append((timing.cpu_ms, timing.call_count))
                 collect(timing.children, f"{full_path}/")
 
         for frame in recent:
             collect(frame.sections)
 
-        return {name: sum(times) / len(times) for name, times in totals.items()}
+        result = {}
+        for name, samples in totals.items():
+            avg_ms = sum(s[0] for s in samples) / len(samples)
+            avg_count = sum(s[1] for s in samples) / len(samples)
+            result[name] = SectionStats(cpu_ms=avg_ms, call_count=round(avg_count))
+        return result
 
     def print_report(self, frames: int = 60) -> None:
         """
@@ -239,27 +264,28 @@ class Profiler:
         Args:
             frames: Количество кадров для усреднения.
         """
-        avg = self.average(frames)
-        if not avg:
+        detailed = self.detailed_average(frames)
+        if not detailed:
             print("No profiling data")
             return
 
         # Сортируем: сначала по глубине, потом по времени внутри уровня
-        sorted_sections = sorted(avg.items(), key=lambda x: (x[0].count("/"), -x[1]))
+        sorted_sections = sorted(detailed.items(), key=lambda x: (x[0].count("/"), -x[1].cpu_ms))
 
         # Считаем общее время (только root секции)
-        total = sum(ms for name, ms in sorted_sections if "/" not in name)
+        total = sum(stats.cpu_ms for name, stats in sorted_sections if "/" not in name)
 
         print(f"\n=== Profiler Report (avg {min(frames, len(self._history))} frames) ===")
         if total > 0:
             print(f"Total: {total:.2f}ms ({1000/total:.0f} FPS)")
         print()
 
-        for name, ms in sorted_sections:
+        for name, stats in sorted_sections:
             indent = "  " * name.count("/")
             base_name = name.split("/")[-1]
-            pct = (ms / total * 100) if total > 0 else 0
+            pct = (stats.cpu_ms / total * 100) if total > 0 else 0
             bar = "█" * int(pct / 5)
-            print(f"{indent}{base_name:20} {ms:6.2f}ms {pct:5.1f}% {bar}")
+            count_str = f"x{stats.call_count}" if stats.call_count > 1 else ""
+            print(f"{indent}{base_name:20} {stats.cpu_ms:6.2f}ms {pct:5.1f}% {count_str:>5} {bar}")
 
         print()
