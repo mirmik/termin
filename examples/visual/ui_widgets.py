@@ -93,7 +93,7 @@ def main():
     win.add_viewport(scene, cam)
 
     # Create UI after window (need graphics backend)
-    graphics = win._graphics  # Access internal graphics backend
+    graphics = win.graphics
     font = FontTextureAtlas("examples/data/fonts/Roboto-Regular.ttf", size=24)
 
     ui = UI(graphics, font)

@@ -6,11 +6,12 @@
 #include <vector>
 #include <pybind11/pybind11.h>
 
+#include "component.hpp"
+#include "vtable_utils.hpp"
+
 namespace py = pybind11;
 
 namespace termin {
-
-class Component;
 
 /**
  * Global registry for component types.
@@ -68,13 +69,23 @@ private:
 /**
  * Helper for static registration of C++ components.
  * Used by REGISTER_COMPONENT macro.
+ *
+ * Detects method overrides via vtable inspection (see vtable_utils.hpp).
  */
 template<typename T>
 struct ComponentRegistrar {
     explicit ComponentRegistrar(const char* name) {
-        ComponentRegistry::instance().register_native(name, []() -> Component* {
-            return new T();
-        });
+        bool has_update = component_overrides_update<T>();
+        bool has_fixed_update = component_overrides_fixed_update<T>();
+
+        ComponentRegistry::instance().register_native(name,
+            [name, has_update, has_fixed_update]() -> Component* {
+                T* comp = new T();
+                comp->set_type_name(name);
+                comp->has_update = has_update;
+                comp->has_fixed_update = has_fixed_update;
+                return comp;
+            });
     }
 };
 

@@ -4,12 +4,13 @@
 #include <cmath>
 
 using guard::Approx;
-using termin::geom::GeneralPose3;
-using termin::geom::GeneralTransform3;
-using termin::geom::GeneralTransform3Pool;
-using termin::geom::TransformHandle;
-using termin::geom::Quat;
-using termin::geom::Vec3;
+using termin::GeneralPose3;
+using termin::GeneralTransform3;
+using termin::GeneralTransform3Pool;
+using termin::TransformHandle;
+using termin::Quat;
+using termin::Vec3;
+using termin::Screw3;
 
 // ==================== Basic Tests ====================
 
@@ -300,4 +301,192 @@ TEST_CASE("GeneralTransform3Pool handle_from_ptr")
 
     CHECK_EQ(h.index, h2.index);
     CHECK_EQ(h.generation, h2.generation);
+}
+
+// ==================== Twist (Velocity) Tests ====================
+
+TEST_CASE("GeneralTransform3 local_twist default is zero")
+{
+    GeneralTransform3 t;
+    const auto& twist = t.local_twist();
+    CHECK_EQ(twist.ang.x, 0.0);
+    CHECK_EQ(twist.ang.y, 0.0);
+    CHECK_EQ(twist.ang.z, 0.0);
+    CHECK_EQ(twist.lin.x, 0.0);
+    CHECK_EQ(twist.lin.y, 0.0);
+    CHECK_EQ(twist.lin.z, 0.0);
+}
+
+TEST_CASE("GeneralTransform3 set_local_twist and get")
+{
+    GeneralTransform3 t;
+    Screw3 twist(Vec3{1.0, 2.0, 3.0}, Vec3{4.0, 5.0, 6.0});
+    t.set_local_twist(twist);
+
+    const auto& result = t.local_twist();
+    CHECK_EQ(result.ang.x, 1.0);
+    CHECK_EQ(result.ang.y, 2.0);
+    CHECK_EQ(result.ang.z, 3.0);
+    CHECK_EQ(result.lin.x, 4.0);
+    CHECK_EQ(result.lin.y, 5.0);
+    CHECK_EQ(result.lin.z, 6.0);
+}
+
+TEST_CASE("GeneralTransform3 global_twist without rotation")
+{
+    // At identity pose, local and global twist should be the same
+    GeneralTransform3 t;
+    Screw3 twist(Vec3{1.0, 0.0, 0.0}, Vec3{0.0, 1.0, 0.0});
+    t.set_local_twist(twist);
+
+    Screw3 global = t.global_twist();
+    CHECK_EQ(global.ang.x, Approx(1.0).epsilon(1e-12));
+    CHECK_EQ(global.ang.y, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(global.ang.z, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(global.lin.x, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(global.lin.y, Approx(1.0).epsilon(1e-12));
+    CHECK_EQ(global.lin.z, Approx(0.0).epsilon(1e-12));
+}
+
+TEST_CASE("GeneralTransform3 global_twist with rotation")
+{
+    // Rotate 90 degrees around Z axis
+    GeneralTransform3 t(GeneralPose3::rotate_z(M_PI / 2));
+
+    // Local twist: angular velocity around X, linear velocity along X
+    Screw3 local(Vec3{1.0, 0.0, 0.0}, Vec3{1.0, 0.0, 0.0});
+    t.set_local_twist(local);
+
+    Screw3 global = t.global_twist();
+    // After 90° Z rotation: local X -> global Y
+    CHECK_EQ(global.ang.x, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(global.ang.y, Approx(1.0).epsilon(1e-12));
+    CHECK_EQ(global.ang.z, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(global.lin.x, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(global.lin.y, Approx(1.0).epsilon(1e-12));
+    CHECK_EQ(global.lin.z, Approx(0.0).epsilon(1e-12));
+}
+
+TEST_CASE("GeneralTransform3 set_global_twist")
+{
+    // Rotate 90 degrees around Z axis
+    GeneralTransform3 t(GeneralPose3::rotate_z(M_PI / 2));
+
+    // Set global twist: velocity along X in world
+    Screw3 global(Vec3{1.0, 0.0, 0.0}, Vec3{1.0, 0.0, 0.0});
+    t.set_global_twist(global);
+
+    // After inverse 90° Z rotation: global X -> local -Y
+    const auto& local = t.local_twist();
+    CHECK_EQ(local.ang.x, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(local.ang.y, Approx(-1.0).epsilon(1e-12));
+    CHECK_EQ(local.ang.z, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(local.lin.x, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(local.lin.y, Approx(-1.0).epsilon(1e-12));
+    CHECK_EQ(local.lin.z, Approx(0.0).epsilon(1e-12));
+}
+
+TEST_CASE("GeneralTransform3 twist roundtrip")
+{
+    GeneralTransform3 t(GeneralPose3::rotate_z(0.7) * GeneralPose3::translation(1.0, 2.0, 3.0));
+
+    Screw3 original(Vec3{1.0, 2.0, 3.0}, Vec3{4.0, 5.0, 6.0});
+    t.set_local_twist(original);
+
+    // Get global, then set it back as global
+    Screw3 global = t.global_twist();
+    t.set_global_twist(global);
+
+    // Should get back the original local twist
+    const auto& result = t.local_twist();
+    CHECK_EQ(result.ang.x, Approx(original.ang.x).epsilon(1e-12));
+    CHECK_EQ(result.ang.y, Approx(original.ang.y).epsilon(1e-12));
+    CHECK_EQ(result.ang.z, Approx(original.ang.z).epsilon(1e-12));
+    CHECK_EQ(result.lin.x, Approx(original.lin.x).epsilon(1e-12));
+    CHECK_EQ(result.lin.y, Approx(original.lin.y).epsilon(1e-12));
+    CHECK_EQ(result.lin.z, Approx(original.lin.z).epsilon(1e-12));
+}
+
+TEST_CASE("GeneralTransform3 twist inheritance - child moves with parent")
+{
+    GeneralTransform3 parent;
+    GeneralTransform3 child;
+    parent.add_child(&child);
+
+    // Parent moving along X with angular velocity around Z
+    Screw3 parent_twist(Vec3{0.0, 0.0, 1.0}, Vec3{1.0, 0.0, 0.0});
+    parent.set_local_twist(parent_twist);
+
+    // Child has no local twist (rigidly attached)
+    // Child's global twist should equal parent's
+    Screw3 child_global = child.global_twist();
+    Screw3 parent_global = parent.global_twist();
+
+    CHECK_EQ(child_global.ang.x, Approx(parent_global.ang.x).epsilon(1e-12));
+    CHECK_EQ(child_global.ang.y, Approx(parent_global.ang.y).epsilon(1e-12));
+    CHECK_EQ(child_global.ang.z, Approx(parent_global.ang.z).epsilon(1e-12));
+    CHECK_EQ(child_global.lin.x, Approx(parent_global.lin.x).epsilon(1e-12));
+    CHECK_EQ(child_global.lin.y, Approx(parent_global.lin.y).epsilon(1e-12));
+    CHECK_EQ(child_global.lin.z, Approx(parent_global.lin.z).epsilon(1e-12));
+}
+
+TEST_CASE("GeneralTransform3 twist inheritance - offset child")
+{
+    GeneralTransform3 parent;
+    GeneralTransform3 child(GeneralPose3::translation(1.0, 0.0, 0.0));
+    parent.add_child(&child);
+
+    // Parent rotating around Z axis (at origin)
+    Screw3 parent_twist(Vec3{0.0, 0.0, 1.0}, Vec3{0.0, 0.0, 0.0});
+    parent.set_local_twist(parent_twist);
+
+    // Child is offset 1 unit along X
+    // With parent rotating around Z at ω=1, child should have linear velocity ω×r = (0,0,1)×(1,0,0) = (0,1,0)
+    Screw3 child_global = child.global_twist();
+
+    CHECK_EQ(child_global.ang.z, Approx(1.0).epsilon(1e-12));  // Same angular velocity
+    CHECK_EQ(child_global.lin.x, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(child_global.lin.y, Approx(1.0).epsilon(1e-12));  // Tangential velocity
+    CHECK_EQ(child_global.lin.z, Approx(0.0).epsilon(1e-12));
+}
+
+TEST_CASE("GeneralTransform3 twist inheritance - child adds own velocity")
+{
+    GeneralTransform3 parent;
+    GeneralTransform3 child;
+    parent.add_child(&child);
+
+    // Parent moving along X
+    parent.set_local_twist(Screw3(Vec3::zero(), Vec3{1.0, 0.0, 0.0}));
+    // Child adds velocity along Y (in its local frame = world frame here)
+    child.set_local_twist(Screw3(Vec3::zero(), Vec3{0.0, 2.0, 0.0}));
+
+    Screw3 child_global = child.global_twist();
+
+    // Should be sum of both velocities
+    CHECK_EQ(child_global.lin.x, Approx(1.0).epsilon(1e-12));
+    CHECK_EQ(child_global.lin.y, Approx(2.0).epsilon(1e-12));
+    CHECK_EQ(child_global.lin.z, Approx(0.0).epsilon(1e-12));
+}
+
+TEST_CASE("GeneralTransform3 set_global_twist with parent")
+{
+    GeneralTransform3 parent;
+    GeneralTransform3 child;
+    parent.add_child(&child);
+
+    // Parent moving along X
+    parent.set_local_twist(Screw3(Vec3::zero(), Vec3{1.0, 0.0, 0.0}));
+
+    // Set child's global twist to be same as parent (i.e., moving rigidly)
+    child.set_global_twist(parent.global_twist());
+
+    // Child's local twist should be zero
+    const auto& local = child.local_twist();
+    CHECK_EQ(local.ang.x, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(local.ang.y, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(local.ang.z, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(local.lin.x, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(local.lin.y, Approx(0.0).epsilon(1e-12));
+    CHECK_EQ(local.lin.z, Approx(0.0).epsilon(1e-12));
 }

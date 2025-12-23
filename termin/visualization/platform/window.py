@@ -161,7 +161,6 @@ class Window:
         """
         if not self._backend_window.drives_render():
             self.make_current()
-        scene.ensure_ready(self.graphics)
 
         return self._display.create_viewport(
             scene=scene,

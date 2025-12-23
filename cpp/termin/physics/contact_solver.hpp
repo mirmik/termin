@@ -18,7 +18,7 @@
 namespace termin {
 namespace physics {
 
-using Vec3;
+
 
 struct Contact {
     RigidBody* body_a = nullptr;  // nullptr = статика (земля)

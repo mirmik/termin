@@ -3,9 +3,9 @@
 #include <cmath>
 
 using guard::Approx;
-using termin::geom::GeneralPose3;
-using termin::geom::Quat;
-using termin::geom::Vec3;
+using termin::GeneralPose3;
+using termin::Quat;
+using termin::Vec3;
 
 TEST_CASE("GeneralPose3 identity and inverse")
 {

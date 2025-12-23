@@ -4,11 +4,11 @@
 
 using guard::Approx;
 using namespace termin::colliders;
-using termin::geom::Vec3;
-using termin::geom::Pose3;
-using termin::geom::GeneralPose3;
-using termin::geom::Quat;
-using termin::geom::Ray3;
+using termin::Vec3;
+using termin::Pose3;
+using termin::GeneralPose3;
+using termin::Quat;
+using termin::Ray3;
 
 // ==================== Ray3 tests ====================
 

@@ -4,6 +4,7 @@
 
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry.hpp"
+#include "termin/entity/vtable_utils.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/entity_registry.hpp"
 #include "termin/entity/components/rotator_component.hpp"
@@ -94,10 +95,6 @@ class PyComponent : public Component {
 public:
     using Component::Component;
 
-    const char* type_name() const override {
-        PYBIND11_OVERRIDE_PURE(const char*, Component, type_name);
-    }
-
     void start() override {
         PYBIND11_OVERRIDE(void, Component, start);
     }
@@ -155,12 +152,15 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("start", &Component::start)
         .def("update", &Component::update, py::arg("dt"))
         .def("fixed_update", &Component::fixed_update, py::arg("dt"))
+        .def("on_editor_start", &Component::on_editor_start)
         .def("on_destroy", &Component::on_destroy)
         .def("on_added_to_entity", &Component::on_added_to_entity)
         .def("on_removed_from_entity", &Component::on_removed_from_entity)
         .def_readwrite("enabled", &Component::enabled)
         .def_readonly("is_native", &Component::is_native)
         .def_readwrite("_started", &Component::_started)
+        .def_readonly("has_update", &Component::has_update)
+        .def_readonly("has_fixed_update", &Component::has_fixed_update)
         .def_property("entity",
             [](Component& c) -> py::object {
                 if (c.entity) {
@@ -174,7 +174,16 @@ PYBIND11_MODULE(_entity_native, m) {
                 } else {
                     c.entity = obj.cast<Entity*>();
                 }
-            });
+            })
+        .def("serialize_data", [](Component& c) {
+            return trent_to_py(c.serialize_data());
+        })
+        .def("serialize", [](Component& c) {
+            return trent_to_py(c.serialize());
+        })
+        .def("deserialize_data", [](Component& c, py::object data, py::object) {
+            c.deserialize_data(py_to_trent(data));
+        });
 
     // --- ComponentRegistry ---
     py::class_<ComponentRegistry>(m, "ComponentRegistry")
@@ -598,7 +607,6 @@ PYBIND11_MODULE(_entity_native, m) {
         }, py::arg("new_by_uuid"), py::arg("new_by_pick_id"));
 
     // --- Native Components ---
-    py::class_<CXXRotatorComponent, Component>(m, "CXXRotatorComponent")
-        .def(py::init<>())
+    BIND_NATIVE_COMPONENT(m, CXXRotatorComponent)
         .def_readwrite("speed", &CXXRotatorComponent::speed);
 }

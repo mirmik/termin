@@ -41,6 +41,17 @@ struct GeneralPose3 {
         };
     }
 
+    // Composition with Pose3 (treated as unit scale)
+    GeneralPose3 operator*(const Pose3& other) const {
+        Vec3 scaled_child{scale.x * other.lin.x, scale.y * other.lin.y, scale.z * other.lin.z};
+        Vec3 rotated_child = ang.rotate(scaled_child);
+        return {
+            ang * other.ang,
+            lin + rotated_child,
+            scale  // Pose3 has unit scale, so preserve this->scale
+        };
+    }
+
     // Inverse: S^-1 * R^-1 * T^-1
     GeneralPose3 inverse() const {
         Quat inv_ang = ang.inverse();
@@ -285,6 +296,15 @@ inline GeneralPose3 lerp(const GeneralPose3& a, const GeneralPose3& b, double t)
     };
 }
 
+// Pose3 * GeneralPose3 (Pose3 treated as unit scale)
+inline GeneralPose3 operator*(const Pose3& a, const GeneralPose3& b) {
+    Vec3 rotated_child = a.ang.rotate(b.lin);
+    return {
+        a.ang * b.ang,
+        a.lin + rotated_child,
+        b.scale  // Pose3 has unit scale
+    };
+}
 
 } // namespace termin
 

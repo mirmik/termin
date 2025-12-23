@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cstdint>
+#include "../../trent/trent.h"
 
 namespace termin {
 
@@ -19,32 +20,48 @@ public:
     virtual ~Component() = default;
 
     // Type identification (for serialization)
-    virtual const char* type_name() const = 0;
+    const char* type_name() const { return _type_name; }
+    void set_type_name(const char* name) { _type_name = name; }
 
     // Lifecycle hooks
     virtual void start() {}
     virtual void update(float dt) {}
     virtual void fixed_update(float dt) {}
     virtual void on_destroy() {}
+    virtual void on_editor_start() {}
 
     // Called when added/removed from entity
     virtual void on_added_to_entity() {}
     virtual void on_removed_from_entity() {}
 
+    // Serialization
+    virtual nos::trent serialize_data() const {
+        nos::trent result;
+        result.init(nos::trent_type::dict);  // Empty dict, not nil
+        return result;
+    }
+    virtual void deserialize_data(const nos::trent&) {}
+
+    nos::trent serialize() const {
+        nos::trent result;
+        result["type"] = _type_name;
+        result["data"] = serialize_data();
+        return result;
+    }
+
     // Flags
     bool enabled = true;
     bool is_native = false;  // True for C++ components, false for Python
     bool _started = false;   // True after start() has been called
+    bool has_update = false;        // True if update() is overridden
+    bool has_fixed_update = false;  // True if fixed_update() is overridden
 
     // Owner entity (set by Entity::add_component)
     Entity* entity = nullptr;
 
 protected:
     Component() = default;
+    const char* _type_name = "Component";
 };
-
-// Helper macro for declaring type_name in derived classes
-#define COMPONENT_BODY(TypeName) \
-    const char* type_name() const override { return #TypeName; }
 
 } // namespace termin

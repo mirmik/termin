@@ -11,7 +11,6 @@ from termin.visualization.core.entity import Entity
 from termin.visualization.core.identifiable import Identifiable
 from termin.visualization.core.lighting.light import Light
 from termin.visualization.render.components.light_component import LightComponent
-from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.geombase import Ray3
 from termin.colliders.raycast_hit import RaycastHit
 from termin.collision._collision_native import CollisionWorld
@@ -22,7 +21,6 @@ from .lighting import LightingManager
 
 
 if TYPE_CHECKING:  # pragma: no cover
-    from termin.visualization.render.shader import ShaderProgram
     from termin.visualization.core.mesh_handle import MeshHandle
     from termin.visualization.core.material import Material
 
@@ -46,10 +44,7 @@ class Scene(Identifiable):
         super().__init__(uuid=uuid)
         self.entities: List[Entity] = []
         self.background_color = np.array(background_color, dtype=np.float32)
-        self._shaders_set = set()
-        self._inited = False
         self._input_components: List[InputComponent] = []
-        self._graphics: GraphicsBackend | None = None
         self.colliders = []
         self._collision_world = CollisionWorld()
         self.update_list: List[Component] = []
@@ -385,11 +380,18 @@ class Scene(Identifiable):
         if isinstance(component, InputComponent):
             self._input_components.append(component)
 
-        if is_overrides_method(component, "update", Component):
-            self.update_list.append(component)
-
-        if is_overrides_method(component, "fixed_update", Component):
-            self.fixed_update_list.append(component)
+        # For native C++ components, use flags set by REGISTER_COMPONENT
+        # For Python components, check if method is overridden
+        if component.is_native:
+            if component.has_update:
+                self.update_list.append(component)
+            if component.has_fixed_update:
+                self.fixed_update_list.append(component)
+        else:
+            if is_overrides_method(component, "update", Component):
+                self.update_list.append(component)
+            if is_overrides_method(component, "fixed_update", Component):
+                self.fixed_update_list.append(component)
 
         if not component._started:
             self._pending_start.append(component)
@@ -465,23 +467,6 @@ class Scene(Identifiable):
         for entity in self.entities:
             for component in entity.components:
                 component.on_editor_start()
-
-    # --- Graphics initialization ---
-
-    def ensure_ready(self, graphics: GraphicsBackend):
-        if self._inited:
-            return
-        self._graphics = graphics
-        for shader in list(self._shaders_set):
-            shader.ensure_ready(graphics)
-        self._inited = True
-
-    def _register_shader(self, shader: "ShaderProgram"):
-        if shader in self._shaders_set:
-            return
-        self._shaders_set.add(shader)
-        if self._inited and self._graphics is not None:
-            shader.ensure_ready(self._graphics)
 
     # --- Input dispatch ---
 

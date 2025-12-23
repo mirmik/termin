@@ -36,7 +36,8 @@
       "Bash(PYTHONPATH=. timeout 5 python:*)",
       "Bash(PYTHONPATH=. timeout 30 python -m pytest:*)",
       "Bash(PYTHONPATH=. timeout 60 python -m pytest:*)",
-      "Bash(PYTHONPATH=. timeout 120 python -m pytest:*)"
+      "Bash(PYTHONPATH=. timeout 120 python -m pytest:*)",
+      "Bash(PYTHONPATH=. python3:*)"
     ]
   }
 }

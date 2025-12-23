@@ -8,7 +8,6 @@
 namespace termin {
 namespace collision {
 
-using namespace geom;
 using colliders::Collider;
 
 /// Unique identifier for a contact point (for persistent contacts)

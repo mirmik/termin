@@ -95,6 +95,7 @@ pybind11_add_module(_entity_native
     termin/entity/entity.cpp
     termin/entity/entity_registry.cpp
     termin/entity/component_registry.cpp
+    termin/entity/vtable_utils.cpp
     termin/entity/components/rotator_component.cpp
     trent/trent.cpp
     trent/trent_path.cpp

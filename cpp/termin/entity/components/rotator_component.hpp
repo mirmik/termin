@@ -4,6 +4,7 @@
 #include "../component_registry.hpp"
 #include "../entity.hpp"
 #include "../../geom/geom.hpp"
+#include <iostream>
 
 namespace termin {
 
@@ -13,19 +14,18 @@ namespace termin {
  */
 class CXXRotatorComponent : public Component {
 public:
-    COMPONENT_BODY(CXXRotatorComponent)
-
     float speed = 1.0f;  // radians per second
 
     void update(float dt) override {
+        std::cout << "CXXRotatorComponent::update dt=" << dt << " speed=" << speed << std::endl;
         if (!entity || !entity->transform) return;
 
         auto& pose = entity->transform->_local_pose;
         auto screw = Screw3{
-            Vec3{0.0, 0.0, speed},  
+            Vec3{0.0, 0.0, speed},
             Vec3{0.0, 0.0, 0.0}
         }.scaled(dt);
-        pose = (screw.to_pose() * pose).normalized();
+        pose = (pose * screw.to_pose()).normalized();
         entity->transform->relocate(pose);
     }
 };

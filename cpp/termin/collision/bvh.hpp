@@ -23,7 +23,6 @@
 namespace termin {
 namespace collision {
 
-using namespace geom;
 using namespace colliders;
 
 /// Margin added to AABBs to reduce updates on small movements

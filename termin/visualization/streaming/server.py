@@ -174,9 +174,6 @@ class WebStreamServer:
         # Обновляем сцену
         self.scene.update(1.0 / self.target_fps)
 
-        # Инициализируем сцену если нужно
-        self.scene.ensure_ready(self.world.graphics)
-
         # Создаём RenderView
         view = RenderView(
             scene=self.scene,
