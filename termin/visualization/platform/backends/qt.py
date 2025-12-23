@@ -9,8 +9,7 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 
-from OpenGL import GL
-from OpenGL import GL as gl
+from termin._native.render import OpenGLGraphicsBackend
 
 
 
@@ -103,7 +102,15 @@ class _QtGLWidget(QOpenGLWidget):
 
 
 class QtGLWindowHandle(BackendWindow):
-    def __init__(self, width, height, title, share=None, parent=None):
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        title: str,
+        share=None,
+        parent=None,
+        graphics: Optional[OpenGLGraphicsBackend] = None,
+    ):
         self.app = _qt_app()
 
         self._widget = _QtGLWidget(self, parent=parent)
@@ -113,8 +120,10 @@ class QtGLWindowHandle(BackendWindow):
 
         self._closed = False
         self._user_ptr = None
+        self._graphics = graphics
+        self._window_fb_handle = None
 
-        # Все callback-и окна (их вызывает Window)
+        # Callbacks
         self._framebuffer_callback = None
         self._cursor_callback = None
         self._scroll_callback = None
@@ -187,32 +196,41 @@ class QtGLWindowHandle(BackendWindow):
 
 
     def request_update(self):
-        # Просим Qt перерисовать виджет (это вызовет paintGL)
+        # Ask Qt to repaint the widget (this will call paintGL)
         self._widget.update()
 
-    
     def get_window_framebuffer(self):
         fbo_id = int(self._widget.defaultFramebufferObject())
         width, height = self.framebuffer_size()
-        from termin.visualization.platform.backends.opengl import OpenGLFramebufferHandle
 
-        fb = getattr(self, "_window_fb_handle", None)
-        if fb is None:
-            fb = OpenGLFramebufferHandle((width, height), fbo_id=fbo_id, owns_attachments=False)
-            self._window_fb_handle = fb
-        else:
-            fb.set_external_target(fbo_id, (width, height))
+        if self._window_fb_handle is None and self._graphics is not None:
+            self._window_fb_handle = self._graphics.create_external_framebuffer(fbo_id, width, height)
+        elif self._window_fb_handle is not None:
+            self._window_fb_handle.set_external_target(fbo_id, width, height)
 
-        return fb
+        return self._window_fb_handle
+
+    def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
+        """Set graphics backend for framebuffer creation."""
+        self._graphics = graphics
 
 
 
 
 class QtWindowBackend(WindowBackend):
-    """Window backend, использующий QOpenGLWindow и Qt event loop."""
+    """Window backend using QOpenGLWidget and Qt event loop."""
 
-    def __init__(self, app: Optional[QtWidgets.QApplication] = None):
+    def __init__(
+        self,
+        app: Optional[QtWidgets.QApplication] = None,
+        graphics: Optional[OpenGLGraphicsBackend] = None,
+    ):
         self.app = app or _qt_app()
+        self._graphics = graphics
+
+    def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
+        """Set graphics backend for new windows."""
+        self._graphics = graphics
 
     def create_window(
         self,
@@ -222,10 +240,14 @@ class QtWindowBackend(WindowBackend):
         share: Optional[BackendWindow] = None,
         parent: Optional[QtWidgets.QWidget] = None,
     ) -> QtGLWindowHandle:
-        return QtGLWindowHandle(width, height, title, share=share, parent=parent)
+        return QtGLWindowHandle(
+            width, height, title,
+            share=share,
+            parent=parent,
+            graphics=self._graphics,
+        )
 
     def poll_events(self):
-        # Обрабатываем накопившиеся Qt-события
         self.app.processEvents()
 
     def terminate(self):

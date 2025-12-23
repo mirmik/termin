@@ -1,7 +1,7 @@
 """Shader program - re-export from C++."""
 
 # Re-export C++ classes
-from termin._native import (
+from termin._native.render import (
     ShaderProgram,
     GlslPreprocessor,
     glsl_preprocessor,

@@ -78,6 +78,9 @@ class Window:
         )
         self._backend_window.set_user_pointer(self)
 
+        # Set graphics backend for framebuffer creation
+        self._backend_window.set_graphics(graphics)
+
         # Создаём surface и display
         self._render_surface = WindowRenderSurface(self._backend_window)
         self._display = Display(self._render_surface)

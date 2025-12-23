@@ -219,6 +219,14 @@ public:
         return std::make_unique<OpenGLShadowFramebufferHandle>(width, height);
     }
 
+    /**
+     * Create a handle that wraps an external FBO (e.g., window default FBO).
+     * Does not allocate any resources - useful for window backends.
+     */
+    FramebufferHandlePtr create_external_framebuffer(uint32_t fbo_id, int width, int height) {
+        return OpenGLFramebufferHandle::create_external(fbo_id, width, height);
+    }
+
     // --- Framebuffer operations ---
 
     void bind_framebuffer(FramebufferHandle* fbo) override {

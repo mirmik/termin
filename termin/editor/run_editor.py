@@ -125,10 +125,11 @@ def run_editor():
     app = QApplication(sys.argv)
 
     # Setup graphics backend
-    set_default_graphics_backend(OpenGLGraphicsBackend())
+    graphics = OpenGLGraphicsBackend()
+    set_default_graphics_backend(graphics)
 
     # Create SDL embedded backend for viewport rendering
-    sdl_backend = SDLEmbeddedWindowBackend()
+    sdl_backend = SDLEmbeddedWindowBackend(graphics=graphics)
 
     # Create world and scene
     world = VisualizationWorld()

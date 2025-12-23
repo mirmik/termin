@@ -22,6 +22,30 @@ public:
         create();
     }
 
+    /**
+     * Create a handle that wraps an external FBO (e.g., window default FBO).
+     * Does not allocate any resources.
+     */
+    static std::unique_ptr<OpenGLFramebufferHandle> create_external(
+        uint32_t fbo_id, int width, int height
+    ) {
+        auto handle = std::unique_ptr<OpenGLFramebufferHandle>(
+            new OpenGLFramebufferHandle(fbo_id, width, height, /*external=*/true)
+        );
+        return handle;
+    }
+
+private:
+    // Private constructor for external FBOs
+    OpenGLFramebufferHandle(uint32_t fbo_id, int width, int height, bool /*external*/)
+        : fbo_(fbo_id), color_tex_(0), depth_rb_(0),
+          width_(width), height_(height), samples_(1),
+          owns_attachments_(false), color_ref_(0) {
+        // No create() - external FBO
+    }
+
+public:
+
     ~OpenGLFramebufferHandle() override {
         release();
     }

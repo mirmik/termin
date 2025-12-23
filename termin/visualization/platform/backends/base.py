@@ -306,6 +306,10 @@ class GraphicsBackend(ABC):
 class BackendWindow(ABC):
     """Abstract window wrapper."""
 
+    def set_graphics(self, graphics: "GraphicsBackend") -> None:
+        """Set graphics backend for framebuffer creation."""
+        pass
+
     @abstractmethod
     def get_window_framebuffer(self) -> "FramebufferHandle | None":
         """Return a handle for the default window framebuffer."""

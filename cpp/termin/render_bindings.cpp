@@ -217,11 +217,13 @@ void bind_render(py::module_& m) {
 
     py::class_<MeshHandle, std::unique_ptr<MeshHandle>>(m, "MeshHandle")
         .def("draw", &MeshHandle::draw)
-        .def("release", &MeshHandle::release);
+        .def("release", &MeshHandle::release)
+        .def("delete", &MeshHandle::release);  // Alias for Python interface
 
     py::class_<GPUTextureHandle, std::unique_ptr<GPUTextureHandle>>(m, "GPUTextureHandle")
         .def("bind", &GPUTextureHandle::bind, py::arg("unit") = 0)
         .def("release", &GPUTextureHandle::release)
+        .def("delete", &GPUTextureHandle::release)  // Alias for Python interface
         .def("get_id", &GPUTextureHandle::get_id)
         .def("get_width", &GPUTextureHandle::get_width)
         .def("get_height", &GPUTextureHandle::get_height);
@@ -230,6 +232,7 @@ void bind_render(py::module_& m) {
         .def("resize", static_cast<void (FramebufferHandle::*)(int, int)>(&FramebufferHandle::resize))
         .def("resize", static_cast<void (FramebufferHandle::*)(Size2i)>(&FramebufferHandle::resize))
         .def("release", &FramebufferHandle::release)
+        .def("delete", &FramebufferHandle::release)  // Alias for Python interface
         .def("get_fbo_id", &FramebufferHandle::get_fbo_id)
         .def("get_width", &FramebufferHandle::get_width)
         .def("get_height", &FramebufferHandle::get_height)
@@ -363,6 +366,13 @@ void bind_render(py::module_& m) {
         .def("create_shadow_framebuffer", [](OpenGLGraphicsBackend& self, py::tuple size) {
             return self.create_shadow_framebuffer(size[0].cast<int>(), size[1].cast<int>());
         })
+        // create_external_framebuffer - wraps external FBO without allocating resources
+        .def("create_external_framebuffer", &OpenGLGraphicsBackend::create_external_framebuffer,
+            py::arg("fbo_id"), py::arg("width"), py::arg("height"),
+            "Create handle wrapping an external FBO (e.g., window default FBO)")
+        .def("create_external_framebuffer", [](OpenGLGraphicsBackend& self, uint32_t fbo_id, py::tuple size) {
+            return self.create_external_framebuffer(fbo_id, size[0].cast<int>(), size[1].cast<int>());
+        }, py::arg("fbo_id"), py::arg("size"))
         // blit_framebuffer with 8 ints and with tuple rects
         .def("blit_framebuffer", static_cast<void (OpenGLGraphicsBackend::*)(FramebufferHandle*, FramebufferHandle*, int, int, int, int, int, int, int, int)>(&OpenGLGraphicsBackend::blit_framebuffer))
         .def("blit_framebuffer", [](OpenGLGraphicsBackend& self, FramebufferHandle* src, FramebufferHandle* dst, py::tuple src_rect, py::tuple dst_rect) {

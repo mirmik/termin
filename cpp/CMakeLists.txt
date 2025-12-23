@@ -104,17 +104,60 @@ target_compile_options(_skeleton_native PRIVATE
 # Find OpenGL (needed by _native)
 find_package(OpenGL REQUIRED)
 
-# Unified native module (Mesh3 + Render)
+# Find SDL2 (required)
+if(WIN32)
+    # Check common Windows locations
+    set(SDL2_SEARCH_PATHS
+        "C:/SDL2"
+        "$ENV{SDL2_DIR}"
+        "$ENV{PROGRAMFILES}/SDL2"
+    )
+    # Find SDL2 include directory (parent of SDL2/SDL.h)
+    find_path(SDL2_INCLUDE_DIRS SDL2/SDL.h
+        PATH_SUFFIXES include
+        PATHS ${SDL2_SEARCH_PATHS}
+    )
+    find_library(SDL2_LIBRARIES
+        NAMES SDL2
+        PATH_SUFFIXES lib/x64 lib
+        PATHS ${SDL2_SEARCH_PATHS}
+    )
+    find_library(SDL2MAIN_LIBRARY
+        NAMES SDL2main
+        PATH_SUFFIXES lib/x64 lib
+        PATHS ${SDL2_SEARCH_PATHS}
+    )
+    if(SDL2_INCLUDE_DIRS AND SDL2_LIBRARIES)
+        set(SDL2_FOUND TRUE)
+        if(SDL2MAIN_LIBRARY)
+            list(APPEND SDL2_LIBRARIES ${SDL2MAIN_LIBRARY})
+        endif()
+        message(STATUS "Found SDL2: ${SDL2_INCLUDE_DIRS}")
+    else()
+        message(FATAL_ERROR "SDL2 not found. Set SDL2_DIR or install to C:\\SDL2")
+    endif()
+else()
+    find_package(SDL2 QUIET)
+    if(NOT SDL2_FOUND)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(SDL2 REQUIRED sdl2)
+    endif()
+endif()
+
+# Unified native module (Mesh3 + Render + SDL)
 pybind11_add_module(_native
     termin/bindings.cpp
     termin/mesh_bindings.cpp
     termin/render_bindings.cpp
+    termin/sdl_bindings.cpp
     termin/render/glad/src/glad.c
 )
 target_include_directories(_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
+    ${SDL2_INCLUDE_DIRS}
 )
-target_link_libraries(_native PRIVATE OpenGL::GL)
+target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES})
+
 if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
 endif()

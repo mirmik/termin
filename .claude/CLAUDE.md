@@ -35,3 +35,30 @@ class MyClass:
 value = obj.foo
 do_something(obj.bar)
 ```
+
+### C++ Migration
+
+When migrating Python classes to C++, do not leave Python wrappers. Python modules should contain only re-exports from `termin._native`.
+
+Bad:
+```python
+# Don't wrap C++ classes in Python
+from termin._native import _CppClass
+
+class MyClass:
+    def __init__(self):
+        self._impl = _CppClass()
+
+    def method(self):
+        return self._impl.method()
+```
+
+Good:
+```python
+# Just re-export
+from termin._native import MyClass
+
+__all__ = ["MyClass"]
+```
+
+If additional Python-only functionality is needed (e.g., exception classes), keep it minimal alongside the re-exports.

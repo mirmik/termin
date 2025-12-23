@@ -1,6 +1,6 @@
 """GLSL Preprocessor - re-export from C++."""
 
-from termin._native import (
+from termin._native.render import (
     GlslPreprocessor,
     glsl_preprocessor,
 )

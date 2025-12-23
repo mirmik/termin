@@ -21,7 +21,7 @@ from .qt import QtGLWindowHandle, QtWindowBackend
 from termin.visualization.platform.backends.glfw import GLFWWindowBackend
 
 # Use C++ OpenGLGraphicsBackend
-from termin._native import OpenGLGraphicsBackend
+from termin._native.render import OpenGLGraphicsBackend
 
 # Context management functions (still in Python)
 from termin.visualization.platform.backends.opengl import (
@@ -30,18 +30,15 @@ from termin.visualization.platform.backends.opengl import (
     get_current_context_key,
 )
 
-# Optional SDL backend (requires PySDL2)
-try:
-    from termin.visualization.platform.backends.sdl import SDLWindowBackend, SDLWindowHandle
-    from termin.visualization.platform.backends.sdl_embedded import (
-        SDLEmbeddedWindowBackend,
-        SDLEmbeddedWindowHandle,
-    )
-except ImportError:
-    SDLWindowBackend = None  # type: ignore
-    SDLWindowHandle = None  # type: ignore
-    SDLEmbeddedWindowBackend = None  # type: ignore
-    SDLEmbeddedWindowHandle = None  # type: ignore
+# SDL backend using C++ implementation
+from termin.visualization.platform.backends.sdl import (
+    SDLWindowBackend,
+    SDLWindowHandle,
+)
+from termin.visualization.platform.backends.sdl_embedded import (
+    SDLEmbeddedWindowBackend,
+    SDLEmbeddedWindowHandle,
+)
 
 _default_graphics_backend: Optional[GraphicsBackend] = None
 _default_window_backend: Optional[WindowBackend] = None

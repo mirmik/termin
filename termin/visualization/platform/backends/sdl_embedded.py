@@ -15,6 +15,8 @@ from sdl2 import video
 
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 
+from termin._native.render import OpenGLGraphicsBackend
+
 
 _sdl_initialized = False
 
@@ -77,6 +79,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         height: int = 600,
         title: str = "SDL Viewport",
         share_context: Optional[Any] = None,
+        graphics: Optional[OpenGLGraphicsBackend] = None,
     ):
         _ensure_sdl()
 
@@ -149,6 +152,9 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         # Last known size for resize detection
         self._last_width = width
         self._last_height = height
+
+        # Graphics backend for framebuffer creation
+        self._graphics = graphics
 
     @property
     def native_handle(self) -> int:
@@ -241,16 +247,17 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
     def get_window_framebuffer(self) -> Any:
         width, height = self.framebuffer_size()
-        from termin.visualization.platform.backends.opengl import OpenGLFramebufferHandle
 
-        if self._window_fb_handle is None:
-            self._window_fb_handle = OpenGLFramebufferHandle(
-                (width, height), fbo_id=0, owns_attachments=False
-            )
-        else:
-            self._window_fb_handle.set_external_target(0, (width, height))
+        if self._window_fb_handle is None and self._graphics is not None:
+            self._window_fb_handle = self._graphics.create_external_framebuffer(0, width, height)
+        elif self._window_fb_handle is not None:
+            self._window_fb_handle.set_external_target(0, width, height)
 
         return self._window_fb_handle
+
+    def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
+        """Set graphics backend for framebuffer creation."""
+        self._graphics = graphics
 
     def get_window_id(self) -> int:
         """Get SDL window ID for event routing."""
@@ -326,10 +333,15 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 class SDLEmbeddedWindowBackend(WindowBackend):
     """SDL2 backend for creating windows embeddable in Qt."""
 
-    def __init__(self):
+    def __init__(self, graphics: Optional[OpenGLGraphicsBackend] = None):
         _ensure_sdl()
         self._windows: dict[int, SDLEmbeddedWindowHandle] = {}
         self._primary_window: Optional[SDLEmbeddedWindowHandle] = None
+        self._graphics = graphics
+
+    def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
+        """Set graphics backend for new windows."""
+        self._graphics = graphics
 
     def create_embedded_window(
         self, width: int = 800, height: int = 600, title: str = "SDL Viewport"
@@ -347,7 +359,11 @@ class SDLEmbeddedWindowBackend(WindowBackend):
             # Make primary context current before creating shared context
             self._primary_window.make_current()
 
-        window = SDLEmbeddedWindowHandle(width, height, title, share_context=share_context)
+        window = SDLEmbeddedWindowHandle(
+            width, height, title,
+            share_context=share_context,
+            graphics=self._graphics,
+        )
         self._windows[window.get_window_id()] = window
 
         # First window becomes the primary

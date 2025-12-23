@@ -8,7 +8,7 @@ import glfw
 
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 
-from OpenGL import GL as gl
+from termin._native.render import OpenGLGraphicsBackend
 
 
 def _ensure_glfw():
@@ -48,7 +48,14 @@ def _translate_key(key: int) -> Key:
 
 
 class GLFWWindowHandle(BackendWindow):
-    def __init__(self, width: int, height: int, title: str, share: Optional[BackendWindow] = None):
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        title: str,
+        share: Optional[BackendWindow] = None,
+        graphics: Optional[OpenGLGraphicsBackend] = None,
+    ):
         _ensure_glfw()
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
@@ -60,6 +67,9 @@ class GLFWWindowHandle(BackendWindow):
         if not self._window:
             raise RuntimeError("Failed to create GLFW window")
         glfw.make_context_current(self._window)
+
+        self._graphics = graphics
+        self._window_fb_handle = None
 
     def close(self):
         if self._window:
@@ -117,30 +127,41 @@ class GLFWWindowHandle(BackendWindow):
         glfw.set_key_callback(self._window, wrapper)
 
     def request_update(self):
-        # GLFW не имеет встроенного механизма для запроса перерисовки окна,
-        # обычно это делается в основном цикле приложения.
+        # GLFW uses pull model
         pass
 
     def get_window_framebuffer(self):
         width, height = self.framebuffer_size()
-        from termin.visualization.platform.backends.opengl import OpenGLFramebufferHandle
 
-        fb = getattr(self, "_window_fb_handle", None)
-        if fb is None:
-            fb = OpenGLFramebufferHandle((width, height), fbo_id=0, owns_attachments=False)
-            self._window_fb_handle = fb
-        else:
-            fb.set_external_target(0, (width, height))
+        if self._window_fb_handle is None and self._graphics is not None:
+            self._window_fb_handle = self._graphics.create_external_framebuffer(0, width, height)
+        elif self._window_fb_handle is not None:
+            self._window_fb_handle.set_external_target(0, width, height)
 
-        return fb
+        return self._window_fb_handle
+
+    def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
+        """Set graphics backend for framebuffer creation."""
+        self._graphics = graphics
 
 
 class GLFWWindowBackend(WindowBackend):
-    def __init__(self):
+    def __init__(self, graphics: Optional[OpenGLGraphicsBackend] = None):
         _ensure_glfw()
+        self._graphics = graphics
 
-    def create_window(self, width: int, height: int, title: str, share: Optional[BackendWindow] = None) -> GLFWWindowHandle:
-        return GLFWWindowHandle(width, height, title, share=share)
+    def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
+        """Set graphics backend for new windows."""
+        self._graphics = graphics
+
+    def create_window(
+        self,
+        width: int,
+        height: int,
+        title: str,
+        share: Optional[BackendWindow] = None,
+    ) -> GLFWWindowHandle:
+        return GLFWWindowHandle(width, height, title, share=share, graphics=self._graphics)
 
     def poll_events(self):
         glfw.poll_events()
