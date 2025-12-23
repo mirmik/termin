@@ -2,7 +2,7 @@
 MeshInspector — inspector panel for mesh files.
 
 Displays mesh information: vertex count, triangle count, bounds, etc.
-Also allows editing import settings (scale, axis mapping) via .spec files.
+Also allows editing import settings (scale, axis mapping) via .meta files.
 """
 
 from __future__ import annotations
@@ -226,7 +226,7 @@ class MeshInspector(QWidget):
             self._reset_spec_fields()
 
     def _load_spec_from_file(self, mesh_path: str) -> None:
-        """Load spec settings from .spec file."""
+        """Load spec settings from .meta file."""
         from termin.loaders.mesh_spec import MeshSpec
 
         spec = MeshSpec.for_mesh_file(mesh_path)

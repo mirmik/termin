@@ -9,7 +9,7 @@ NOTE: This class has some deviations from the standard DataAsset pattern:
 1. from_file() reads content immediately instead of lazy loading.
    Standard pattern defers reading until .data is accessed.
 
-2. UUID is stored inside the .prefab JSON file, not in a separate .spec file.
+2. UUID is stored inside the .prefab JSON file, not in a separate .meta file.
    This requires manual UUID extraction in _parse_content().
 
 3. _on_loaded() auto-saves the file if UUID was missing.

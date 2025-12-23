@@ -16,7 +16,7 @@ class MeshSpec:
     """
     Import settings for mesh files.
 
-    Stored as .spec file next to the mesh (e.g., model.stl.spec).
+    Stored as .meta file next to the mesh (e.g., model.stl.meta).
     """
 
     # Scale factor applied to all vertices
@@ -53,7 +53,12 @@ class MeshSpec:
 
     @classmethod
     def for_mesh_file(cls, mesh_path: str | Path) -> "MeshSpec":
-        """Load spec for a mesh file (looks for mesh_path.spec)."""
+        """Load spec for a mesh file (looks for mesh_path.meta or .spec)."""
+        # Try .meta first (new format)
+        meta_path = Path(str(mesh_path) + ".meta")
+        if meta_path.exists():
+            return cls.load(meta_path)
+        # Fallback to .spec (old format)
         spec_path = Path(str(mesh_path) + ".spec")
         return cls.load(spec_path)
 
@@ -71,9 +76,17 @@ class MeshSpec:
             json.dump(data, f, indent=2)
 
     def save_for_mesh(self, mesh_path: str | Path) -> None:
-        """Save spec next to mesh file."""
-        spec_path = Path(str(mesh_path) + ".spec")
-        self.save(spec_path)
+        """Save spec next to mesh file (.meta format)."""
+        import os
+        meta_path = Path(str(mesh_path) + ".meta")
+        self.save(meta_path)
+        # Remove old .spec if exists (migration)
+        old_spec = Path(str(mesh_path) + ".spec")
+        if old_spec.exists():
+            try:
+                os.remove(old_spec)
+            except Exception:
+                pass
 
     def apply_to_vertices(self, vertices: np.ndarray) -> np.ndarray:
         """

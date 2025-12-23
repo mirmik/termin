@@ -2,7 +2,7 @@
 GLBInspector - inspector panel for GLB files.
 
 Displays GLB information: meshes, textures, animations, skeleton.
-Allows editing import settings including normalize scale via .spec files.
+Allows editing import settings including normalize scale via .meta files.
 """
 
 from __future__ import annotations
@@ -291,7 +291,7 @@ class GLBInspector(QWidget):
         return None
 
     def _load_spec_from_file(self, glb_path: str) -> None:
-        """Load spec settings from .glb.spec file."""
+        """Load spec settings from .glb.meta file."""
         from termin.editor.project_file_watcher import FilePreLoader
 
         spec_data = FilePreLoader.read_spec_file(glb_path)

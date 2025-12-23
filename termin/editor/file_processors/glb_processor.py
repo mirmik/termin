@@ -8,7 +8,7 @@ from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
 
 
 class GLBPreLoader(FilePreLoader):
-    """Pre-loads GLB files - reads content and UUID from spec."""
+    """Pre-loads GLB files - reads content and UUID from meta file."""
 
     @property
     def priority(self) -> int:

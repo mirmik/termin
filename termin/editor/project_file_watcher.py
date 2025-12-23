@@ -34,7 +34,7 @@ class PreLoadResult:
     path: str  # path to main file
     content: str | bytes | None = None  # file content (text or bytes)
     uuid: str | None = None  # UUID if found in file
-    spec_data: dict | None = None  # data from .spec file if exists
+    spec_data: dict | None = None  # data from .meta file if exists
     extra: dict = field(default_factory=dict)  # additional data
 
 
@@ -108,30 +108,42 @@ class FilePreLoader(ABC):
     @staticmethod
     def read_spec_file(path: str) -> dict | None:
         """
-        Read .spec file for a resource.
+        Read .meta file for a resource (with .spec fallback for migration).
 
         Args:
             path: Path to main resource file (e.g., "texture.png")
 
         Returns:
-            Spec data dict or None if spec file doesn't exist.
+            Spec data dict or None if meta file doesn't exist.
         """
         import json
 
-        spec_path = path + ".spec"
-        if not os.path.exists(spec_path):
-            return None
+        # Try .meta first (new format)
+        meta_path = path + ".meta"
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
 
-        try:
-            with open(spec_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return None
+        # Fallback to .spec (old format, for migration)
+        spec_path = path + ".spec"
+        if os.path.exists(spec_path):
+            try:
+                with open(spec_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+
+        return None
 
     @staticmethod
     def write_spec_file(path: str, data: dict) -> bool:
         """
-        Write .spec file for a resource.
+        Write .meta file for a resource.
+
+        Also removes old .spec file if it exists (automatic migration).
 
         Args:
             path: Path to main resource file (e.g., "texture.png")
@@ -142,10 +154,19 @@ class FilePreLoader(ABC):
         """
         import json
 
-        spec_path = path + ".spec"
+        meta_path = path + ".meta"
         try:
-            with open(spec_path, "w", encoding="utf-8") as f:
+            with open(meta_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+
+            # Remove old .spec file if exists (migration)
+            old_spec_path = path + ".spec"
+            if os.path.exists(old_spec_path):
+                try:
+                    os.remove(old_spec_path)
+                except Exception:
+                    pass
+
             return True
         except Exception:
             return False
@@ -213,7 +234,7 @@ class FilePreLoader(ABC):
 
     def on_spec_changed(self, spec_path: str, resource_path: str) -> None:
         """
-        Called when a .spec file for a resource changes.
+        Called when a .meta file for a resource changes.
         Triggers reload of the main resource.
         """
         if os.path.exists(resource_path):
@@ -391,8 +412,8 @@ class ProjectFileWatcher:
                 if ext in self._processors:
                     priority = self._processors[ext].priority
                     pending_files.append((priority, file_path, ext))
-                # Also queue .spec files for known resource types
-                elif ext == ".spec":
+                # Also queue .meta/.spec files for known resource types
+                elif ext in (".meta", ".spec"):
                     base_ext = self._get_spec_base_ext(file_path)
                     if base_ext and base_ext in self._processors:
                         priority = self._processors[base_ext].priority
@@ -407,15 +428,15 @@ class ProjectFileWatcher:
 
     def _get_spec_base_ext(self, path: str) -> str | None:
         """
-        For a .spec file, return the base file's extension.
+        For a .meta or .spec file, return the base file's extension.
 
-        Example: "model.stl.spec" -> ".stl", "image.png.spec" -> ".png"
-        Returns None if not a spec file or base extension unknown.
+        Example: "model.stl.meta" -> ".stl", "image.png.spec" -> ".png"
+        Returns None if not a meta/spec file or base extension unknown.
         """
-        if not path.endswith(".spec"):
-            return None
-        base_path = path[:-5]  # Remove ".spec"
-        return os.path.splitext(base_path)[1].lower() or None
+        if path.endswith(".meta") or path.endswith(".spec"):
+            base_path = path[:-5]  # Remove ".meta" or ".spec"
+            return os.path.splitext(base_path)[1].lower() or None
+        return None
 
     def _add_file(self, path: str) -> None:
         """Add a file to watching and notify processor."""
@@ -428,17 +449,17 @@ class ProjectFileWatcher:
 
         ext = os.path.splitext(path)[1].lower()
 
-        # Handle .spec files specially
-        if ext == ".spec":
+        # Handle .meta/.spec files specially
+        if ext in (".meta", ".spec"):
             base_ext = self._get_spec_base_ext(path)
             if base_ext:
                 processor = self._processors.get(base_ext)
                 if processor is not None:
-                    resource_path = path[:-5]
+                    resource_path = path[:-5]  # Remove ".meta" or ".spec"
                     try:
                         processor.on_spec_changed(path, resource_path)
                     except Exception as e:
-                        print(f"[ProjectFileWatcher] Error processing spec {path}: {e}")
+                        print(f"[ProjectFileWatcher] Error processing meta {path}: {e}")
             return
 
         processor = self._processors.get(ext)
@@ -449,12 +470,12 @@ class ProjectFileWatcher:
                 print(f"[ProjectFileWatcher] Error processing {path}: {e}")
 
     def _should_watch_file(self, path: str) -> bool:
-        """Check if file should be watched (resource or spec file)."""
+        """Check if file should be watched (resource or meta file)."""
         ext = os.path.splitext(path)[1].lower()
         if ext in self._processors:
             return True
-        # Also watch .spec files for known resource types
-        if ext == ".spec":
+        # Also watch .meta/.spec files for known resource types
+        if ext in (".meta", ".spec"):
             base_ext = self._get_spec_base_ext(path)
             return base_ext is not None and base_ext in self._processors
         return False
@@ -510,17 +531,17 @@ class ProjectFileWatcher:
         """Handle file modification (actual processing)."""
         ext = os.path.splitext(path)[1].lower()
 
-        # Handle .spec files specially
-        if ext == ".spec":
+        # Handle .meta/.spec files specially
+        if ext in (".meta", ".spec"):
             base_ext = self._get_spec_base_ext(path)
             if base_ext:
                 processor = self._processors.get(base_ext)
                 if processor is not None:
-                    resource_path = path[:-5]
+                    resource_path = path[:-5]  # Remove ".meta" or ".spec"
                     try:
                         processor.on_spec_changed(path, resource_path)
                     except Exception as e:
-                        print(f"[ProjectFileWatcher] Error processing spec {path}: {e}")
+                        print(f"[ProjectFileWatcher] Error processing meta {path}: {e}")
             return
 
         processor = self._processors.get(ext)

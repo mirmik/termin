@@ -27,7 +27,7 @@ class GlslPreLoader(FilePreLoader):
         """
         Pre-load GLSL file: read UUID from spec (lazy loading).
         """
-        # Read UUID from .spec file
+        # Read UUID from .meta file
         spec_data = self.read_spec_file(path)
         uuid = spec_data.get("uuid") if spec_data else None
 

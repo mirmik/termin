@@ -2,7 +2,7 @@
 TextureInspector — inspector panel for texture files.
 
 Displays texture information: resolution, format, file size, etc.
-Allows editing import settings (flip_y) via .spec files.
+Allows editing import settings (flip_y) via .meta files.
 """
 
 from __future__ import annotations
