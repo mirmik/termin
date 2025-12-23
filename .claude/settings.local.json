@@ -44,7 +44,11 @@
       "Bash(nm:*)",
       "Bash(gdb:*)",
       "Bash(python3:*)",
-      "Bash(PYTHONPATH=. timeout 15 python:*)"
+      "Bash(PYTHONPATH=. timeout 15 python:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(glad:*)",
+      "Bash(sudo apt-get install:*)"
     ]
   }
 }

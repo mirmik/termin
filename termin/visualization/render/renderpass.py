@@ -3,23 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from termin.visualization.render._render_native import RenderState
+
 if TYPE_CHECKING:
     from termin.visualization.core.material import Material
-
-
-@dataclass
-class RenderState:
-    """
-    Полное состояние, никаких "None".
-    Это "каким хочешь видеть рендер сейчас".
-    """
-    polygon_mode: str = "fill"     # fill / line
-    cull: bool = True
-    depth_test: bool = True
-    depth_write: bool = True
-    blend: bool = False
-    blend_src: str = "src_alpha"
-    blend_dst: str = "one_minus_src_alpha"
 
 
 @dataclass

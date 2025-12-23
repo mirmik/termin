@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(termin_native LANGUAGES CXX)
+project(termin_native LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -123,6 +123,25 @@ target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
+# Find OpenGL
+find_package(OpenGL REQUIRED)
+
+# Render native module (GraphicsBackend, OpenGL implementation)
+pybind11_add_module(_render_native
+    termin/render_bindings.cpp
+    termin/render/glad/src/glad.c
+)
+target_include_directories(_render_native PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
+)
+target_link_libraries(_render_native PRIVATE OpenGL::GL)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(_render_native PRIVATE ${CMAKE_DL_LIBS})
+endif()
+target_compile_options(_render_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
 # ---------------- Tests ----------------
 enable_testing()
 
@@ -185,3 +204,4 @@ install(TARGETS _lighting_native DESTINATION ${CMAKE_INSTALL_PREFIX}/lighting)
 install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)
 install(TARGETS _mesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/mesh)
 install(TARGETS _entity_native DESTINATION ${CMAKE_INSTALL_PREFIX}/entity)
+install(TARGETS _render_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/render)
