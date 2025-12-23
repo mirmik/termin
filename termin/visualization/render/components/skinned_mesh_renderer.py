@@ -103,11 +103,6 @@ class SkinnedMeshRenderer(MeshRenderer):
             if self._skeleton_controller is None:
                 self._skeleton_controller = self.entity.get_component(SkeletonController)
 
-        if self._DEBUG_LIFECYCLE:
-            print(f"[SkinnedMeshRenderer.start] entity={self.entity.name if self.entity else 'None'}")
-            print(f"  skeleton_controller={self._skeleton_controller is not None}")
-            if self._skeleton_controller:
-                print(f"  skeleton_instance={self._skeleton_controller.skeleton_instance is not None}")
 
     def on_editor_start(self):
         """Called when scene starts in editor mode. Refresh bone matrices from skeleton."""

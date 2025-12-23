@@ -101,9 +101,24 @@ target_compile_options(_skeleton_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Mesh native module (Mesh3)
-pybind11_add_module(_mesh_native termin/mesh_bindings.cpp)
-target_compile_options(_mesh_native PRIVATE
+# Find OpenGL (needed by _native)
+find_package(OpenGL REQUIRED)
+
+# Unified native module (Mesh3 + Render)
+pybind11_add_module(_native
+    termin/bindings.cpp
+    termin/mesh_bindings.cpp
+    termin/render_bindings.cpp
+    termin/render/glad/src/glad.c
+)
+target_include_directories(_native PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
+)
+target_link_libraries(_native PRIVATE OpenGL::GL)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
+endif()
+target_compile_options(_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
@@ -120,25 +135,6 @@ pybind11_add_module(_entity_native
     trent/string_ext.cpp
 )
 target_compile_options(_entity_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Find OpenGL
-find_package(OpenGL REQUIRED)
-
-# Render native module (GraphicsBackend, OpenGL implementation)
-pybind11_add_module(_render_native
-    termin/render_bindings.cpp
-    termin/render/glad/src/glad.c
-)
-target_include_directories(_render_native PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
-)
-target_link_libraries(_render_native PRIVATE OpenGL::GL)
-if(UNIX AND NOT APPLE)
-    target_link_libraries(_render_native PRIVATE ${CMAKE_DL_LIBS})
-endif()
-target_compile_options(_render_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
@@ -202,6 +198,5 @@ install(TARGETS _collision_native DESTINATION ${CMAKE_INSTALL_PREFIX}/collision)
 install(TARGETS _animation_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/animation)
 install(TARGETS _lighting_native DESTINATION ${CMAKE_INSTALL_PREFIX}/lighting)
 install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)
-install(TARGETS _mesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/mesh)
 install(TARGETS _entity_native DESTINATION ${CMAKE_INSTALL_PREFIX}/entity)
-install(TARGETS _render_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/render)
+install(TARGETS _native DESTINATION ${CMAKE_INSTALL_PREFIX})

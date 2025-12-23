@@ -144,6 +144,12 @@ public:
         GLint loc = get_uniform_location(name);
         if (loc >= 0) {
             glUniformMatrix4fv(loc, count, transpose ? GL_TRUE : GL_FALSE, data);
+        } else {
+            static int warn_count = 0;
+            if (warn_count < 3) {
+                warn_count++;
+                printf("[WARNING] set_uniform_matrix4_array: uniform '%s' not found (loc=%d)\n", name, loc);
+            }
         }
     }
 

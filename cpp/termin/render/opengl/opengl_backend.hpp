@@ -2,8 +2,11 @@
 
 #include <glad/glad.h>
 #include <array>
+#include <cstring>
 #include <memory>
+#include <stdexcept>
 #include <unordered_map>
+#include <vector>
 
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/opengl/opengl_shader.hpp"
@@ -39,6 +42,14 @@ public:
 
     void ensure_ready() override {
         if (initialized_) return;
+
+        // Initialize GLAD if not already done
+        if (!glad_initialized_) {
+            if (!gladLoadGL()) {
+                throw std::runtime_error("Failed to initialize GLAD");
+            }
+            glad_initialized_ = true;
+        }
 
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
@@ -267,9 +278,35 @@ public:
         return depth;
     }
 
+    bool read_depth_buffer(FramebufferHandle* fbo, float* out_data) override {
+        if (fbo == nullptr || out_data == nullptr) return false;
+
+        int width = fbo->get_width();
+        int height = fbo->get_height();
+        if (width <= 0 || height <= 0) return false;
+
+        bind_framebuffer(fbo);
+
+        // Read into temporary buffer (OpenGL origin is bottom-left)
+        std::vector<float> temp(width * height);
+        glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, temp.data());
+
+        // Flip vertically to top-left origin
+        for (int y = 0; y < height; ++y) {
+            int src_row = height - 1 - y;
+            std::memcpy(
+                out_data + y * width,
+                temp.data() + src_row * width,
+                width * sizeof(float)
+            );
+        }
+
+        return true;
+    }
+
     // --- UI drawing ---
 
-    void draw_ui_vertices(int context_key, const float* vertices, int vertex_count) override {
+    void draw_ui_vertices(int64_t context_key, const float* vertices, int vertex_count) override {
         auto& [vao, vbo] = get_ui_buffers(context_key);
 
         glBindVertexArray(vao);
@@ -284,19 +321,27 @@ public:
         glBindVertexArray(0);
     }
 
-    void draw_ui_textured_quad(int context_key) override {
+    void draw_ui_textured_quad(int64_t context_key) override {
         static const float fs_verts[] = {
             -1, -1, 0, 0,
              1, -1, 1, 0,
             -1,  1, 0, 1,
              1,  1, 1, 1
         };
+        draw_ui_textured_quad_impl(context_key, fs_verts, 4);
+    }
 
+    void draw_ui_textured_quad(int64_t context_key, const float* vertices, int vertex_count) {
+        draw_ui_textured_quad_impl(context_key, vertices, vertex_count);
+    }
+
+private:
+    void draw_ui_textured_quad_impl(int64_t context_key, const float* vertices, int vertex_count) {
         auto& [vao, vbo] = get_ui_buffers(context_key);
 
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(fs_verts), fs_verts, GL_DYNAMIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, vertex_count * 4 * sizeof(float), vertices, GL_DYNAMIC_DRAW);
 
         constexpr GLsizei stride = 4 * sizeof(float);
         glEnableVertexAttribArray(0);
@@ -304,12 +349,11 @@ public:
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(2 * sizeof(float)));
 
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, vertex_count);
         glBindVertexArray(0);
     }
 
-private:
-    std::pair<GLuint, GLuint>& get_ui_buffers(int context_key) {
+    std::pair<GLuint, GLuint>& get_ui_buffers(int64_t context_key) {
         auto it = ui_buffers_.find(context_key);
         if (it != ui_buffers_.end()) {
             return it->second;
@@ -323,7 +367,10 @@ private:
     }
 
     bool initialized_;
-    std::unordered_map<int, std::pair<GLuint, GLuint>> ui_buffers_;
+    std::unordered_map<int64_t, std::pair<GLuint, GLuint>> ui_buffers_;
+
+    // Static flag for GLAD initialization (shared across all backends)
+    static inline bool glad_initialized_ = false;
 };
 
 } // namespace termin

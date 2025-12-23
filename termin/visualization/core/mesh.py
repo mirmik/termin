@@ -270,7 +270,7 @@ class Mesh2Drawable:
         handle.draw()
 
     def delete(self):
-        from termin.visualization.platform.backends.opengl import (
+        from termin.visualization.platform.backends import (
             get_context_make_current,
             get_current_context_key,
         )

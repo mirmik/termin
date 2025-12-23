@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from termin.visualization.render._render_native import RenderState
+from termin._native import RenderState
 
 if TYPE_CHECKING:
     from termin.visualization.core.material import Material

@@ -101,7 +101,7 @@ class RenderEngine:
             context_key = surface.context_key()
 
             # Регистрируем контекст для корректного удаления GPU ресурсов
-            from termin.visualization.platform.backends.opengl import register_context
+            from termin.visualization.platform.backends import register_context
             register_context(context_key, surface.make_current)
 
             for view, state in views:

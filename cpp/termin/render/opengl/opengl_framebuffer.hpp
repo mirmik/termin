@@ -18,7 +18,7 @@ public:
     OpenGLFramebufferHandle(int width, int height, int samples = 1)
         : fbo_(0), color_tex_(0), depth_rb_(0),
           width_(width), height_(height), samples_(samples),
-          color_ref_(0) {
+          owns_attachments_(true), color_ref_(0) {
         create();
     }
 
@@ -30,6 +30,12 @@ public:
         if (width == width_ && height == height_ && fbo_ != 0) {
             return;
         }
+        if (!owns_attachments_) {
+            // External target - just update size
+            width_ = width;
+            height_ = height;
+            return;
+        }
         release();
         width_ = width;
         height_ = height;
@@ -37,6 +43,10 @@ public:
     }
 
     void release() override {
+        if (!owns_attachments_) {
+            fbo_ = 0;
+            return;
+        }
         if (fbo_ != 0) {
             glDeleteFramebuffers(1, &fbo_);
             fbo_ = 0;
@@ -49,6 +59,16 @@ public:
             glDeleteRenderbuffers(1, &depth_rb_);
             depth_rb_ = 0;
         }
+    }
+
+    void set_external_target(uint32_t fbo_id, int width, int height) override {
+        release();
+        owns_attachments_ = false;
+        fbo_ = fbo_id;
+        width_ = width;
+        height_ = height;
+        color_tex_ = 0;
+        depth_rb_ = 0;
     }
 
     uint32_t get_fbo_id() const override { return fbo_; }
@@ -114,6 +134,7 @@ private:
     int width_;
     int height_;
     int samples_;
+    bool owns_attachments_;
     OpenGLTextureRef color_ref_;
 };
 
@@ -125,7 +146,7 @@ class OpenGLShadowFramebufferHandle : public FramebufferHandle {
 public:
     OpenGLShadowFramebufferHandle(int width, int height)
         : fbo_(0), depth_tex_(0), width_(width), height_(height),
-          depth_ref_(0) {
+          owns_attachments_(true), depth_ref_(0) {
         create();
     }
 
@@ -137,6 +158,11 @@ public:
         if (width == width_ && height == height_ && fbo_ != 0) {
             return;
         }
+        if (!owns_attachments_) {
+            width_ = width;
+            height_ = height;
+            return;
+        }
         release();
         width_ = width;
         height_ = height;
@@ -144,6 +170,10 @@ public:
     }
 
     void release() override {
+        if (!owns_attachments_) {
+            fbo_ = 0;
+            return;
+        }
         if (fbo_ != 0) {
             glDeleteFramebuffers(1, &fbo_);
             fbo_ = 0;
@@ -152,6 +182,15 @@ public:
             glDeleteTextures(1, &depth_tex_);
             depth_tex_ = 0;
         }
+    }
+
+    void set_external_target(uint32_t fbo_id, int width, int height) override {
+        release();
+        owns_attachments_ = false;
+        fbo_ = fbo_id;
+        width_ = width;
+        height_ = height;
+        depth_tex_ = 0;
     }
 
     uint32_t get_fbo_id() const override { return fbo_; }
@@ -213,6 +252,7 @@ private:
     GLuint depth_tex_;
     int width_;
     int height_;
+    bool owns_attachments_;
     OpenGLTextureRef depth_ref_;
 };
 

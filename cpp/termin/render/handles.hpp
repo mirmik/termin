@@ -4,6 +4,8 @@
 #include <array>
 #include <memory>
 
+#include "termin/render/types.hpp"
+
 namespace termin {
 
 /**
@@ -62,11 +64,24 @@ public:
     virtual void resize(int width, int height) = 0;
     virtual void release() = 0;
 
+    /**
+     * Rebind to an externally managed FBO (e.g., Qt's default framebuffer).
+     * The handle will not own or delete the FBO.
+     */
+    virtual void set_external_target(uint32_t fbo_id, int width, int height) = 0;
+
     virtual uint32_t get_fbo_id() const = 0;
     virtual int get_width() const = 0;
     virtual int get_height() const = 0;
     virtual int get_samples() const = 0;
     virtual bool is_msaa() const = 0;
+
+    // Convenience methods
+    Size2i get_size() const { return Size2i(get_width(), get_height()); }
+    void resize(Size2i size) { resize(size.width, size.height); }
+    void set_external_target(uint32_t fbo_id, Size2i size) {
+        set_external_target(fbo_id, size.width, size.height);
+    }
 
     virtual GPUTextureHandle* color_texture() = 0;
     virtual GPUTextureHandle* depth_texture() = 0;

@@ -48,7 +48,8 @@
       "Bash(pip install:*)",
       "Bash(pip3 install:*)",
       "Bash(glad:*)",
-      "Bash(sudo apt-get install:*)"
+      "Bash(sudo apt-get install:*)",
+      "Bash(QT_QPA_PLATFORM=offscreen PYTHONPATH=. timeout 10 python:*)"
     ]
   }
 }

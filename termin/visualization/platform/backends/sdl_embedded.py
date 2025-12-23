@@ -173,9 +173,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
     def make_current(self) -> None:
         if self._window is not None and self._gl_context is not None:
-            result = video.SDL_GL_MakeCurrent(self._window, self._gl_context)
-            if result != 0:
-                print(f"SDL_GL_MakeCurrent failed: {sdl2.SDL_GetError()}")
+            video.SDL_GL_MakeCurrent(self._window, self._gl_context)
 
     def swap_buffers(self) -> None:
         if self._window is not None:

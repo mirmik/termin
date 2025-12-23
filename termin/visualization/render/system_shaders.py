@@ -115,7 +115,7 @@ class SystemShaderRegistry:
         Returns:
             Compiled ShaderProgram ready for use
         """
-        from termin.visualization.platform.backends.opengl import get_current_context_key
+        from termin.visualization.platform.backends import get_current_context_key
 
         context_key = get_current_context_key()
         if context_key is None:

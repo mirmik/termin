@@ -154,8 +154,6 @@ class SkeletonInstance:
             # Transform to skeleton-local space, then apply inverse bind
             self._bone_matrices[bone.index] = skeleton_world_inv @ bone_world @ bone.inverse_bind_matrix
 
-    _DEBUG_MATRICES = False
-    _debug_matrix_frame = 0
 
     def get_bone_matrices(self) -> np.ndarray:
         """

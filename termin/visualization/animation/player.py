@@ -114,12 +114,8 @@ class AnimationPlayer(Component):
 
         from termin.visualization.render.components.skeleton_controller import SkeletonController
         skeleton_controller = self.entity.get_component(SkeletonController)
-        if self._DEBUG_LIFECYCLE:
-            print(f"  [_acquire_skeleton] skeleton_controller={skeleton_controller is not None}")
         if skeleton_controller is not None:
             self._target_skeleton = skeleton_controller.skeleton_instance
-            if self._DEBUG_LIFECYCLE:
-                print(f"  [_acquire_skeleton] skeleton_instance={self._target_skeleton is not None}")
 
     @property
     def target_skeleton(self) -> "SkeletonInstance | None":
@@ -181,7 +177,7 @@ class AnimationPlayer(Component):
         if self._DEBUG_UPDATE and AnimationPlayer._debug_frame_count < 3:
             AnimationPlayer._debug_frame_count += 1
             print(f"[AnimationPlayer.update] clip={self.current.name!r}, duration={self.current.duration:.3f}s, time={self.time:.3f}")
-            print(f"  channels={len(sample)}, target_skeleton={self._target_skeleton is not None}")
+            print(f"  channels={len(sample)}, target_skeleton={self._target_skeleton is not None}, skeleton_id={id(self._target_skeleton) if self._target_skeleton else 0}")
             for name, data in list(sample.items())[:3]:
                 tr, rot, sc = data
                 print(f"  {name}: tr={tr}, rot={rot}")

@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from termin.visualization.platform.backends.opengl import OpenGLGraphicsBackend
+from termin.visualization.platform.backends import OpenGLGraphicsBackend
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.camera import PerspectiveCameraComponent
 from termin.visualization.render.framegraph import RenderPipeline, ResourceSpec

@@ -19,7 +19,16 @@ from .nop_graphics import NOPGraphicsBackend
 from .nop_window import NOPWindowBackend
 from .qt import QtGLWindowHandle, QtWindowBackend
 from termin.visualization.platform.backends.glfw import GLFWWindowBackend
-from termin.visualization.platform.backends.opengl import OpenGLGraphicsBackend
+
+# Use C++ OpenGLGraphicsBackend
+from termin._native import OpenGLGraphicsBackend
+
+# Context management functions (still in Python)
+from termin.visualization.platform.backends.opengl import (
+    register_context,
+    get_context_make_current,
+    get_current_context_key,
+)
 
 # Optional SDL backend (requires PySDL2)
 try:
@@ -77,8 +86,8 @@ __all__ = [
     "get_default_graphics_backend",
     "set_default_window_backend",
     "get_default_window_backend",
-    "NOPGraphicsBackend",   # <-- экспортируем
-    "NOPWindowBackend",     # <-- экспортируем
+    "NOPGraphicsBackend",
+    "NOPWindowBackend",
     "QtWindowBackend",
     "QtGLWindowHandle",
     "GLFWWindowBackend",
@@ -87,4 +96,8 @@ __all__ = [
     "SDLEmbeddedWindowBackend",
     "SDLEmbeddedWindowHandle",
     "OpenGLGraphicsBackend",
+    # Context management
+    "register_context",
+    "get_context_make_current",
+    "get_current_context_key",
 ]

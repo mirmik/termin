@@ -1,15 +1,16 @@
-#include <pybind11/pybind11.h>
+#include "mesh_bindings.hpp"
+
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
 #include "termin/mesh/mesh3.hpp"
+#include "termin/mesh/skinned_mesh3.hpp"
 
 namespace py = pybind11;
-using namespace termin;
 
-PYBIND11_MODULE(_mesh_native, m) {
-    m.doc() = "Native C++ mesh module for termin";
+namespace termin {
 
+void bind_mesh(py::module_& m) {
     py::class_<Mesh3>(m, "Mesh3")
         .def(py::init<>())
         .def(py::init([](py::array_t<float> vertices, py::array_t<uint32_t> triangles,
@@ -431,4 +432,227 @@ PYBIND11_MODULE(_mesh_native, m) {
             return "<Mesh3 vertices=" + std::to_string(m.get_vertex_count()) +
                    " triangles=" + std::to_string(m.get_face_count()) + ">";
         });
+
+    // SkinnedMesh3 - extends Mesh3 with skeletal animation data
+    py::class_<SkinnedMesh3, Mesh3>(m, "SkinnedMesh3")
+        .def(py::init<>())
+        .def(py::init([](py::array_t<float> vertices, py::array_t<uint32_t> triangles,
+                         py::object uvs_obj, py::object normals_obj,
+                         py::object joint_indices_obj, py::object joint_weights_obj,
+                         py::object source_path_obj) {
+            SkinnedMesh3 mesh;
+
+            // Copy vertices (Nx3 -> flattened)
+            auto v_buf = vertices.unchecked<2>();
+            size_t num_verts = v_buf.shape(0);
+            mesh.vertices.resize(num_verts * 3);
+            for (size_t i = 0; i < num_verts; ++i) {
+                mesh.vertices[i * 3] = v_buf(i, 0);
+                mesh.vertices[i * 3 + 1] = v_buf(i, 1);
+                mesh.vertices[i * 3 + 2] = v_buf(i, 2);
+            }
+
+            // Copy triangles (Mx3 -> flattened)
+            auto t_buf = triangles.unchecked<2>();
+            size_t num_tris = t_buf.shape(0);
+            mesh.indices.resize(num_tris * 3);
+            for (size_t i = 0; i < num_tris; ++i) {
+                mesh.indices[i * 3] = t_buf(i, 0);
+                mesh.indices[i * 3 + 1] = t_buf(i, 1);
+                mesh.indices[i * 3 + 2] = t_buf(i, 2);
+            }
+
+            // Optional UVs (Nx2)
+            if (!uvs_obj.is_none()) {
+                auto uv_arr = uvs_obj.cast<py::array_t<float>>();
+                auto uv_buf = uv_arr.unchecked<2>();
+                size_t n = uv_buf.shape(0);
+                mesh.uvs.resize(n * 2);
+                for (size_t i = 0; i < n; ++i) {
+                    mesh.uvs[i * 2] = uv_buf(i, 0);
+                    mesh.uvs[i * 2 + 1] = uv_buf(i, 1);
+                }
+            }
+
+            // Optional vertex normals (Nx3)
+            if (!normals_obj.is_none()) {
+                auto n_arr = normals_obj.cast<py::array_t<float>>();
+                auto n_buf = n_arr.unchecked<2>();
+                size_t n = n_buf.shape(0);
+                mesh.vertex_normals.resize(n * 3);
+                for (size_t i = 0; i < n; ++i) {
+                    mesh.vertex_normals[i * 3] = n_buf(i, 0);
+                    mesh.vertex_normals[i * 3 + 1] = n_buf(i, 1);
+                    mesh.vertex_normals[i * 3 + 2] = n_buf(i, 2);
+                }
+            }
+
+            // Joint indices (Nx4)
+            if (!joint_indices_obj.is_none()) {
+                auto ji_arr = joint_indices_obj.cast<py::array_t<float>>();
+                auto ji_buf = ji_arr.unchecked<2>();
+                size_t n = ji_buf.shape(0);
+                mesh.joint_indices.resize(n * 4);
+                for (size_t i = 0; i < n; ++i) {
+                    mesh.joint_indices[i * 4] = ji_buf(i, 0);
+                    mesh.joint_indices[i * 4 + 1] = ji_buf(i, 1);
+                    mesh.joint_indices[i * 4 + 2] = ji_buf(i, 2);
+                    mesh.joint_indices[i * 4 + 3] = ji_buf(i, 3);
+                }
+            } else {
+                mesh.init_default_skinning();
+            }
+
+            // Joint weights (Nx4)
+            if (!joint_weights_obj.is_none()) {
+                auto jw_arr = joint_weights_obj.cast<py::array_t<float>>();
+                auto jw_buf = jw_arr.unchecked<2>();
+                size_t n = jw_buf.shape(0);
+                mesh.joint_weights.resize(n * 4);
+                for (size_t i = 0; i < n; ++i) {
+                    mesh.joint_weights[i * 4] = jw_buf(i, 0);
+                    mesh.joint_weights[i * 4 + 1] = jw_buf(i, 1);
+                    mesh.joint_weights[i * 4 + 2] = jw_buf(i, 2);
+                    mesh.joint_weights[i * 4 + 3] = jw_buf(i, 3);
+                }
+            }
+
+            // Optional source path
+            if (!source_path_obj.is_none()) {
+                mesh.source_path = source_path_obj.cast<std::string>();
+            }
+
+            return mesh;
+        }),
+             py::arg("vertices"),
+             py::arg("triangles"),
+             py::arg("uvs") = py::none(),
+             py::arg("vertex_normals") = py::none(),
+             py::arg("joint_indices") = py::none(),
+             py::arg("joint_weights") = py::none(),
+             py::arg("source_path") = py::none())
+
+        // Joint indices property (Nx4)
+        .def_property("joint_indices",
+            [](const SkinnedMesh3& m) -> py::object {
+                if (m.joint_indices.empty()) return py::none();
+                size_t n = m.joint_indices.size() / 4;
+                auto result = py::array_t<float>({n, size_t(4)});
+                auto buf = result.mutable_unchecked<2>();
+                for (size_t i = 0; i < n; ++i) {
+                    buf(i, 0) = m.joint_indices[i * 4];
+                    buf(i, 1) = m.joint_indices[i * 4 + 1];
+                    buf(i, 2) = m.joint_indices[i * 4 + 2];
+                    buf(i, 3) = m.joint_indices[i * 4 + 3];
+                }
+                return result;
+            },
+            [](SkinnedMesh3& m, py::object obj) {
+                if (obj.is_none()) {
+                    m.joint_indices.clear();
+                    return;
+                }
+                auto arr = obj.cast<py::array_t<float>>();
+                auto buf = arr.unchecked<2>();
+                size_t n = buf.shape(0);
+                m.joint_indices.resize(n * 4);
+                for (size_t i = 0; i < n; ++i) {
+                    m.joint_indices[i * 4] = buf(i, 0);
+                    m.joint_indices[i * 4 + 1] = buf(i, 1);
+                    m.joint_indices[i * 4 + 2] = buf(i, 2);
+                    m.joint_indices[i * 4 + 3] = buf(i, 3);
+                }
+            })
+
+        // Joint weights property (Nx4)
+        .def_property("joint_weights",
+            [](const SkinnedMesh3& m) -> py::object {
+                if (m.joint_weights.empty()) return py::none();
+                size_t n = m.joint_weights.size() / 4;
+                auto result = py::array_t<float>({n, size_t(4)});
+                auto buf = result.mutable_unchecked<2>();
+                for (size_t i = 0; i < n; ++i) {
+                    buf(i, 0) = m.joint_weights[i * 4];
+                    buf(i, 1) = m.joint_weights[i * 4 + 1];
+                    buf(i, 2) = m.joint_weights[i * 4 + 2];
+                    buf(i, 3) = m.joint_weights[i * 4 + 3];
+                }
+                return result;
+            },
+            [](SkinnedMesh3& m, py::object obj) {
+                if (obj.is_none()) {
+                    m.joint_weights.clear();
+                    return;
+                }
+                auto arr = obj.cast<py::array_t<float>>();
+                auto buf = arr.unchecked<2>();
+                size_t n = buf.shape(0);
+                m.joint_weights.resize(n * 4);
+                for (size_t i = 0; i < n; ++i) {
+                    m.joint_weights[i * 4] = buf(i, 0);
+                    m.joint_weights[i * 4 + 1] = buf(i, 1);
+                    m.joint_weights[i * 4 + 2] = buf(i, 2);
+                    m.joint_weights[i * 4 + 3] = buf(i, 3);
+                }
+            })
+
+        .def("has_skinning", &SkinnedMesh3::has_skinning)
+        .def("normalize_weights", &SkinnedMesh3::normalize_weights)
+
+        // get_vertex_layout for create_mesh compatibility
+        .def("get_vertex_layout", [](const SkinnedMesh3& m) {
+            // Import VertexLayout, VertexAttribute from Python
+            py::module_ mesh_mod = py::module_::import("termin.mesh.mesh");
+            py::object VertexLayout = mesh_mod.attr("VertexLayout");
+            py::object VertexAttribute = mesh_mod.attr("VertexAttribute");
+            py::object VertexAttribType = mesh_mod.attr("VertexAttribType");
+            py::object FLOAT32 = VertexAttribType.attr("FLOAT32");
+
+            // Create layout: pos(3) + normal(3) + uv(2) + joints(4) + weights(4) = 64 bytes
+            py::list attrs;
+            attrs.append(VertexAttribute("position", 3, FLOAT32, 0));
+            attrs.append(VertexAttribute("normal", 3, FLOAT32, 12));
+            attrs.append(VertexAttribute("uv", 2, FLOAT32, 24));
+            attrs.append(VertexAttribute("joints", 4, FLOAT32, 32));
+            attrs.append(VertexAttribute("weights", 4, FLOAT32, 48));
+
+            return VertexLayout(64, attrs);
+        })
+
+        // Override interleaved_buffer for skinned mesh (16 floats per vertex)
+        .def("interleaved_buffer", [](const SkinnedMesh3& m) {
+            auto buf = m.build_interleaved_buffer();
+            size_t n = m.get_vertex_count();
+            auto result = py::array_t<float>({n, size_t(16)});
+            auto out = result.mutable_unchecked<2>();
+            for (size_t i = 0; i < n; ++i) {
+                for (size_t j = 0; j < 16; ++j) {
+                    out(i, j) = buf[i * 16 + j];
+                }
+            }
+            return result;
+        })
+
+        .def("build_interleaved_buffer", [](const SkinnedMesh3& m) {
+            auto buf = m.build_interleaved_buffer();
+            size_t n = m.get_vertex_count();
+            auto result = py::array_t<float>({n, size_t(16)});
+            auto out = result.mutable_unchecked<2>();
+            for (size_t i = 0; i < n; ++i) {
+                for (size_t j = 0; j < 16; ++j) {
+                    out(i, j) = buf[i * 16 + j];
+                }
+            }
+            return result;
+        })
+
+        .def("copy", &SkinnedMesh3::copy)
+
+        .def("__repr__", [](const SkinnedMesh3& m) {
+            return "<SkinnedMesh3 vertices=" + std::to_string(m.get_vertex_count()) +
+                   " triangles=" + std::to_string(m.get_face_count()) +
+                   " skinning=" + (m.has_skinning() ? "yes" : "no") + ">";
+        });
 }
+
+} // namespace termin
