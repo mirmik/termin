@@ -14,7 +14,7 @@ from termin.visualization.core.picking import id_to_rgb, rgb_to_id
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.serialization import COMPONENT_REGISTRY, serializable
-from termin.visualization.core.lighting import Light, LightSample, LightShadowParams, LightType, AttenuationCoefficients
+from termin.lighting import Light, LightSample, LightShadowParams, LightType, AttenuationCoefficients
 
 # Display, Viewport, World, Visualization импортируются лениво через __getattr__
 # чтобы избежать циклического импорта с platform.window

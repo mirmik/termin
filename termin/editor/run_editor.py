@@ -27,7 +27,7 @@ from termin.visualization.platform.backends import (
 from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.components.light_component import LightComponent
-from termin.visualization.core.lighting import LightType, LightShadowParams
+from termin.lighting import LightType, LightShadowParams
 
 
 def build_scene(world):

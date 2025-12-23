@@ -6,7 +6,7 @@ from typing import Sequence
 
 import numpy as np
 
-from termin.visualization.core.lighting import Light, LightType
+from termin.lighting import Light, LightType
 from termin.visualization.render.shader import ShaderProgram
 
 # Максимальное число источников, поддерживаемых дефолтным forward-проходом.

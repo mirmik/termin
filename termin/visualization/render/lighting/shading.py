@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from termin.visualization.core.lighting import LightSample
+from termin.lighting import LightSample
 
 
 def _normalize(vec: np.ndarray) -> np.ndarray:

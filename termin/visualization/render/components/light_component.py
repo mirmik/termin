@@ -7,7 +7,7 @@ import numpy as np
 from termin.visualization.core.component import Component
 from termin.visualization.core.serialization import COMPONENT_REGISTRY
 from termin.editor.inspect_field import InspectField
-from termin.visualization.core.lighting import LightType, Light, LightShadowParams
+from termin.lighting import LightType, Light, LightShadowParams
 
 
 class LightComponent(Component):
