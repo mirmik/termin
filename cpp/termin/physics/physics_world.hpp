@@ -26,9 +26,9 @@
 namespace termin {
 namespace physics {
 
-using geom::Vec3;
-using geom::Pose3;
-using geom::GeneralPose3;
+using Vec3;
+using Pose3;
+using GeneralPose3;
 using collision::CollisionWorld;
 using collision::ContactManifold;
 using colliders::Collider;

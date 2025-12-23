@@ -6,7 +6,7 @@
 #include <cmath>
 
 namespace termin {
-namespace geom {
+
 
 /**
  * Axis-Aligned Bounding Box in 3D space.
@@ -127,5 +127,5 @@ struct AABB {
     }
 };
 
-} // namespace geom
+
 } // namespace termin

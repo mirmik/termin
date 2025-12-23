@@ -3,14 +3,12 @@
 #include <string>
 #include <unordered_map>
 #include <cstdint>
+#include <utility>
 
 namespace termin {
 
 class Entity;
-
-namespace geom {
-    struct GeneralTransform3;
-}
+struct GeneralTransform3;
 
 /**
  * Global registry for entity lookup by UUID, pick_id, and transform.
@@ -34,10 +32,17 @@ public:
     Entity* get_by_pick_id(uint32_t pick_id) const;
 
     // Lookup by transform (for parent/children resolution)
-    Entity* get_by_transform(geom::GeneralTransform3* transform) const;
+    Entity* get_by_transform(GeneralTransform3* transform) const;
 
     // Clear all (for testing)
     void clear();
+
+    // Swap registries (for game mode transition)
+    // Returns the old registries as a pair
+    std::pair<std::unordered_map<std::string, Entity*>,
+              std::unordered_map<uint32_t, Entity*>>
+    swap_registries(std::unordered_map<std::string, Entity*> new_by_uuid,
+                    std::unordered_map<uint32_t, Entity*> new_by_pick_id);
 
     // Stats
     size_t entity_count() const { return by_uuid_.size(); }
@@ -49,7 +54,7 @@ private:
 
     std::unordered_map<std::string, Entity*> by_uuid_;
     std::unordered_map<uint32_t, Entity*> by_pick_id_;
-    std::unordered_map<geom::GeneralTransform3*, Entity*> by_transform_;
+    std::unordered_map<GeneralTransform3*, Entity*> by_transform_;
 };
 
 } // namespace termin

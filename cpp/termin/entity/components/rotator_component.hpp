@@ -3,6 +3,7 @@
 #include "../component.hpp"
 #include "../component_registry.hpp"
 #include "../entity.hpp"
+#include "../../geom/geom.hpp"
 
 namespace termin {
 
@@ -20,11 +21,12 @@ public:
         if (!entity || !entity->transform) return;
 
         auto& pose = entity->transform->_local_pose;
-        // Rotate around Z axis
-        double angle = speed * dt;
-        geom::Quat delta = geom::Quat::from_axis_angle({0, 0, 1}, angle);
-        pose.ang = delta * pose.ang;
-        entity->transform->_mark_dirty();
+        auto screw = Screw3{
+            Vec3{0.0, 0.0, speed},  
+            Vec3{0.0, 0.0, 0.0}
+        }.scaled(dt);
+        pose = (screw.to_pose() * pose).normalized();
+        entity->transform->relocate(pose);
     }
 };
 

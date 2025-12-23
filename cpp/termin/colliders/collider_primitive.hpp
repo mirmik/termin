@@ -21,8 +21,6 @@
 namespace termin {
 namespace colliders {
 
-using geom::GeneralPose3;
-using geom::Pose3;
 
 /**
  * Базовый класс для геометрических примитивов.

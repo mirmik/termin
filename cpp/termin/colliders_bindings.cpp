@@ -9,9 +9,8 @@
 
 namespace py = pybind11;
 using namespace termin;
-using namespace termin::geom;
+using namespace termin;
 using namespace termin::colliders;
-using geom::GeneralTransform3;
 
 PYBIND11_MODULE(_colliders_native, m) {
     m.doc() = "Native C++ colliders module for termin";

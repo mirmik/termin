@@ -12,8 +12,8 @@ namespace animation {
  * Any of translation/rotation/scale can be nullopt if not animated.
  */
 struct AnimationChannelSample {
-    std::optional<geom::Vec3> translation;
-    std::optional<geom::Quat> rotation;
+    std::optional<Vec3> translation;
+    std::optional<Quat> rotation;
     std::optional<double> scale;
 };
 

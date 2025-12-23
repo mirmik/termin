@@ -7,7 +7,7 @@
 
 namespace py = pybind11;
 using namespace termin;
-using namespace termin::geom;
+using namespace termin;
 using namespace termin::collision;
 using namespace termin::colliders;
 

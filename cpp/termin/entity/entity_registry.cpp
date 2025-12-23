@@ -61,7 +61,7 @@ Entity* EntityRegistry::get_by_pick_id(uint32_t pick_id) const {
     return (it != by_pick_id_.end()) ? it->second : nullptr;
 }
 
-Entity* EntityRegistry::get_by_transform(geom::GeneralTransform3* transform) const {
+Entity* EntityRegistry::get_by_transform(GeneralTransform3* transform) const {
     if (!transform) return nullptr;
     auto it = by_transform_.find(transform);
     return (it != by_transform_.end()) ? it->second : nullptr;
@@ -71,6 +71,27 @@ void EntityRegistry::clear() {
     by_uuid_.clear();
     by_pick_id_.clear();
     by_transform_.clear();
+}
+
+std::pair<std::unordered_map<std::string, Entity*>,
+          std::unordered_map<uint32_t, Entity*>>
+EntityRegistry::swap_registries(std::unordered_map<std::string, Entity*> new_by_uuid,
+                                std::unordered_map<uint32_t, Entity*> new_by_pick_id) {
+    auto old_by_uuid = std::move(by_uuid_);
+    auto old_by_pick_id = std::move(by_pick_id_);
+
+    by_uuid_ = std::move(new_by_uuid);
+    by_pick_id_ = std::move(new_by_pick_id);
+
+    // Also need to rebuild by_transform_ from the new by_uuid_
+    by_transform_.clear();
+    for (auto& [uuid, entity] : by_uuid_) {
+        if (entity && entity->transform) {
+            by_transform_[entity->transform.get()] = entity;
+        }
+    }
+
+    return {std::move(old_by_uuid), std::move(old_by_pick_id)};
 }
 
 } // namespace termin

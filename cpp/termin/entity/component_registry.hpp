@@ -47,6 +47,7 @@ public:
     // Queries
     bool has(const std::string& name) const;
     const ComponentInfo* get_info(const std::string& name) const;
+    py::object get_class(const std::string& name) const;
 
     // Listing
     std::vector<std::string> list_all() const;

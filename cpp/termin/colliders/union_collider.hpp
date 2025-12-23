@@ -12,9 +12,6 @@
 namespace termin {
 namespace colliders {
 
-using geom::Vec3;
-using geom::Pose3;
-using geom::AABB;
 
 /**
  * Коллайдер, представляющий объединение нескольких коллайдеров.

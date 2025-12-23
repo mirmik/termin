@@ -4,7 +4,7 @@
 #include <array>
 
 namespace termin {
-namespace geom {
+
 
 struct Vec3 {
     double x, y, z;
@@ -54,5 +54,5 @@ struct Vec3 {
 
 inline Vec3 operator*(double s, const Vec3& v) { return v * s; }
 
-} // namespace geom
+
 } // namespace termin

@@ -18,9 +18,6 @@
 namespace termin {
 namespace colliders {
 
-using geom::Vec3;
-using geom::Ray3;
-using geom::AABB;
 
 // ==================== Результаты запросов ====================
 

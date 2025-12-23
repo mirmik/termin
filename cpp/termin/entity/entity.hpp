@@ -28,7 +28,7 @@ public:
     std::string name;
 
     // Transform (owned)
-    std::unique_ptr<geom::GeneralTransform3> transform;
+    std::unique_ptr<GeneralTransform3> transform;
 
     // Flags
     bool visible = true;
@@ -50,7 +50,7 @@ public:
 
     // Constructors
     Entity(const std::string& name = "entity", const std::string& uuid = "");
-    Entity(const geom::GeneralPose3& pose, const std::string& name = "entity", const std::string& uuid = "");
+    Entity(const GeneralPose3& pose, const std::string& name = "entity", const std::string& uuid = "");
 
     ~Entity();
 
@@ -88,19 +88,19 @@ public:
 
     // --- Transform shortcuts ---
 
-    const geom::GeneralPose3& global_pose() const {
+    const GeneralPose3& global_pose() const {
         return transform->global_pose();
     }
 
-    void relocate(const geom::GeneralPose3& pose) {
+    void relocate(const GeneralPose3& pose) {
         transform->relocate(pose);
     }
 
-    void relocate(const geom::Pose3& pose) {
+    void relocate(const Pose3& pose) {
         transform->relocate(pose);
     }
 
-    void relocate_global(const geom::GeneralPose3& pose) {
+    void relocate_global(const GeneralPose3& pose) {
         transform->relocate_global(pose);
     }
 

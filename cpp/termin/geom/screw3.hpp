@@ -5,7 +5,7 @@
 #include <cmath>
 
 namespace termin {
-namespace geom {
+
 
 struct Screw3 {
     Vec3 ang;  // Angular part (omega)
@@ -153,5 +153,5 @@ struct Screw3 {
 
 inline Screw3 operator*(double k, const Screw3& s) { return s * k; }
 
-} // namespace geom
+
 } // namespace termin

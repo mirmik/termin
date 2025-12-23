@@ -75,12 +75,12 @@ public:
     }
 
 private:
-    geom::Vec3 sample_translation(double t) const {
-        return sample_keys_linear<geom::Vec3>(
+    Vec3 sample_translation(double t) const {
+        return sample_keys_linear<Vec3>(
             translation_keys, t,
             [](const AnimationKeyframe& k) { return *k.translation; },
-            [](const geom::Vec3& a, const geom::Vec3& b, double alpha) {
-                return geom::Vec3{
+            [](const Vec3& a, const Vec3& b, double alpha) {
+                return Vec3{
                     a.x * (1.0 - alpha) + b.x * alpha,
                     a.y * (1.0 - alpha) + b.y * alpha,
                     a.z * (1.0 - alpha) + b.z * alpha
@@ -89,11 +89,11 @@ private:
         );
     }
 
-    geom::Quat sample_rotation(double t) const {
-        return sample_keys_linear<geom::Quat>(
+    Quat sample_rotation(double t) const {
+        return sample_keys_linear<Quat>(
             rotation_keys, t,
             [](const AnimationKeyframe& k) { return *k.rotation; },
-            [](const geom::Quat& a, const geom::Quat& b, double alpha) {
+            [](const Quat& a, const Quat& b, double alpha) {
                 return quat_slerp(a, b, alpha);
             }
         );
@@ -150,21 +150,21 @@ private:
         return interpolate(get_value(k1), get_value(k2), alpha);
     }
 
-    static geom::Quat quat_slerp(const geom::Quat& a, const geom::Quat& b, double t) {
+    static Quat quat_slerp(const Quat& a, const Quat& b, double t) {
         // Compute dot product
         double dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 
         // If dot is negative, negate one quaternion to take shorter path
-        geom::Quat b_adj = b;
+        Quat b_adj = b;
         if (dot < 0.0) {
-            b_adj = geom::Quat{-b.x, -b.y, -b.z, -b.w};
+            b_adj = Quat{-b.x, -b.y, -b.z, -b.w};
             dot = -dot;
         }
 
         // If quaternions are very close, use linear interpolation
         constexpr double DOT_THRESHOLD = 0.9995;
         if (dot > DOT_THRESHOLD) {
-            geom::Quat result{
+            Quat result{
                 a.x + t * (b_adj.x - a.x),
                 a.y + t * (b_adj.y - a.y),
                 a.z + t * (b_adj.z - a.z),
@@ -191,7 +191,7 @@ private:
         double s0 = std::cos(theta) - dot * sin_theta / sin_theta_0;
         double s1 = sin_theta / sin_theta_0;
 
-        return geom::Quat{
+        return Quat{
             s0 * a.x + s1 * b_adj.x,
             s0 * a.y + s1 * b_adj.y,
             s0 * a.z + s1 * b_adj.z,

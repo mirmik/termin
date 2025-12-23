@@ -20,9 +20,6 @@
 namespace termin {
 namespace physics {
 
-using geom::Vec3;
-using geom::Quat;
-using geom::Pose3;
 
 class RigidBody {
 public:

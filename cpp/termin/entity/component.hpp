@@ -24,6 +24,7 @@ public:
     // Lifecycle hooks
     virtual void start() {}
     virtual void update(float dt) {}
+    virtual void fixed_update(float dt) {}
     virtual void on_destroy() {}
 
     // Called when added/removed from entity
@@ -33,6 +34,7 @@ public:
     // Flags
     bool enabled = true;
     bool is_native = false;  // True for C++ components, false for Python
+    bool _started = false;   // True after start() has been called
 
     // Owner entity (set by Entity::add_component)
     Entity* entity = nullptr;

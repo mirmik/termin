@@ -13,7 +13,6 @@
 namespace termin {
 namespace voxels {
 
-using geom::Vec3;
 
 // Hash for tuple<int,int,int>
 struct ChunkKeyHash {

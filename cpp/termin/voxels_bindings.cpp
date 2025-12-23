@@ -6,7 +6,7 @@
 
 namespace py = pybind11;
 using namespace termin::voxels;
-using namespace termin::geom;
+using namespace termin;
 
 // Helper: numpy array to vector of Vec3
 std::vector<Vec3> numpy_to_vec3_vector(py::array_t<double> arr) {

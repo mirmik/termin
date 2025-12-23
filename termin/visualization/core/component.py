@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterable, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
     from termin.visualization.core.scene import Scene
     from termin.visualization.render.render_context import RenderContext
-    from termin.visualization.render.shader import ShaderProgram
 
 from termin.editor.inspect_field import InspectField
+from termin.entity import Component as _NativeComponent
 
 
-class Component:
+class Component(_NativeComponent):
     """
     Base class for all entity components.
 
@@ -51,13 +51,9 @@ class Component:
         ComponentRegistry.instance().register_python(cls.__name__, cls)
 
     def __init__(self, enabled: bool = True):
+        super().__init__()
         self.enabled = enabled
-        self.entity: Optional["Entity"] = None
         self._started = False
-
-    def required_shaders(self) -> Iterable["ShaderProgram"]:
-        """Return shaders that must be compiled before rendering."""
-        return ()
 
     def on_added(self, scene: "Scene"):
         """Called immediately when the component is added to an active scene."""

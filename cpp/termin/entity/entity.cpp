@@ -39,19 +39,22 @@ std::string generate_uuid() {
 Entity::Entity(const std::string& name_, const std::string& uuid_)
     : uuid(uuid_.empty() ? generate_uuid() : uuid_)
     , name(name_)
-    , transform(std::make_unique<geom::GeneralTransform3>())
+    , transform(std::make_unique<GeneralTransform3>())
     , scene(py::none()) {
 
+    // Set back-pointer from transform to entity
+    transform->entity = this;
     // Register in global registry
     EntityRegistry::instance().register_entity(this);
 }
 
-Entity::Entity(const geom::GeneralPose3& pose, const std::string& name_, const std::string& uuid_)
+Entity::Entity(const GeneralPose3& pose, const std::string& name_, const std::string& uuid_)
     : uuid(uuid_.empty() ? generate_uuid() : uuid_)
     , name(name_)
-    , transform(std::make_unique<geom::GeneralTransform3>(pose))
+    , transform(std::make_unique<GeneralTransform3>(pose))
     , scene(py::none()) {
 
+    transform->entity = this;
     EntityRegistry::instance().register_entity(this);
 }
 
@@ -85,6 +88,11 @@ Entity::Entity(Entity&& other) noexcept
     , components(std::move(other.components))
     , _pick_id(other._pick_id)
     , _pick_id_computed(other._pick_id_computed) {
+
+    // Update transform->entity pointer
+    if (transform) {
+        transform->entity = this;
+    }
 
     // Update component->entity pointers
     for (Component* comp : components) {
@@ -120,6 +128,11 @@ Entity& Entity::operator=(Entity&& other) noexcept {
         components = std::move(other.components);
         _pick_id = other._pick_id;
         _pick_id_computed = other._pick_id_computed;
+
+        // Update transform->entity pointer
+        if (transform) {
+            transform->entity = this;
+        }
 
         for (Component* comp : components) {
             comp->entity = this;
@@ -172,10 +185,9 @@ void Entity::add_component(Component* component) {
     components.push_back(component);
     component->on_added_to_entity();
 
-    // If we're in a scene, notify component
-    if (!scene.is_none()) {
-        component->start();
-    }
+    // Note: start() is NOT called here anymore.
+    // The Python binding handles the full lifecycle:
+    // 1) register_component, 2) on_added(scene), 3) start()
 }
 
 void Entity::remove_component(Component* component) {
@@ -207,20 +219,20 @@ void Entity::set_parent(Entity* parent_entity) {
 }
 
 Entity* Entity::parent() const {
-    geom::GeneralTransform3* parent_transform = transform->parent;
+    GeneralTransform3* parent_transform = transform->parent;
     if (!parent_transform) return nullptr;
 
-    // Find entity that owns this transform via registry lookup
-    // For now we use a simple search - could optimize with back-pointer
-    return EntityRegistry::instance().get_by_transform(parent_transform);
+    // Use back-pointer directly instead of registry lookup
+    return parent_transform->entity;
 }
 
 std::vector<Entity*> Entity::children() const {
     std::vector<Entity*> result;
     result.reserve(transform->children.size());
 
-    for (geom::GeneralTransform3* child_transform : transform->children) {
-        Entity* child_entity = EntityRegistry::instance().get_by_transform(child_transform);
+    for (GeneralTransform3* child_transform : transform->children) {
+        // Use back-pointer directly instead of registry lookup
+        Entity* child_entity = child_transform->entity;
         if (child_entity) {
             result.push_back(child_entity);
         }
@@ -339,7 +351,7 @@ Entity* Entity::deserialize(const nos::trent& data) {
     // Restore pose
     const nos::trent* pose_ptr = data.get(nos::trent_path("pose"));
     if (pose_ptr && pose_ptr->is_dict()) {
-        geom::GeneralPose3 pose;
+        GeneralPose3 pose;
 
         const nos::trent* pos = pose_ptr->get(nos::trent_path("position"));
         if (pos && pos->is_list() && pos->as_list().size() >= 3) {
@@ -366,18 +378,8 @@ Entity* Entity::deserialize(const nos::trent& data) {
         ent->transform->set_local_pose(pose);
     }
 
-    // Components will be handled by Python wrapper
-
-    // Children
-    const nos::trent* children_ptr = data.get(nos::trent_path("children"));
-    if (children_ptr && children_ptr->is_list()) {
-        for (const auto& child_data : children_ptr->as_list()) {
-            Entity* child = Entity::deserialize(child_data);
-            if (child) {
-                child->set_parent(ent);
-            }
-        }
-    }
+    // Components and children are handled by Python binding
+    // to ensure proper component deserialization
 
     return ent;
 }

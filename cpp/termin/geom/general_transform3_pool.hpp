@@ -6,7 +6,7 @@
 #include "general_transform3.hpp"
 
 namespace termin {
-namespace geom {
+
 
 struct TransformHandle {
     uint32_t index = UINT32_MAX;
@@ -186,5 +186,5 @@ private:
     }
 };
 
-} // namespace geom
+
 } // namespace termin

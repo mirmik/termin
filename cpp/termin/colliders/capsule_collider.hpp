@@ -227,7 +227,7 @@ inline RayHit CapsuleCollider::closest_to_ray(const Ray3& ray) const {
 
     // Вырожденная капсула → сфера
     if (length < 1e-10) {
-        SphereCollider sphere(R, GeneralPose3(geom::Quat::identity(), A, Vec3(1,1,1)));
+        SphereCollider sphere(R, GeneralPose3(Quat::identity(), A, Vec3(1,1,1)));
         return sphere.closest_to_ray(ray);
     }
 

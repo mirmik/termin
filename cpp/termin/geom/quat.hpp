@@ -4,7 +4,7 @@
 #include <cmath>
 
 namespace termin {
-namespace geom {
+
 
 struct Quat {
     double x, y, z, w;  // (x, y, z, w) format
@@ -144,5 +144,5 @@ inline Quat slerp(const Quat& q1, Quat q2, double t) {
     };
 }
 
-} // namespace geom
+
 } // namespace termin

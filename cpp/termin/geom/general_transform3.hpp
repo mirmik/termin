@@ -7,7 +7,11 @@
 #include "general_pose3.hpp"
 
 namespace termin {
-namespace geom {
+
+// Forward declaration
+class Entity;
+
+
 
 struct GeneralTransform3 {
     // Core data
@@ -17,6 +21,9 @@ struct GeneralTransform3 {
     // Hierarchy (raw pointers, non-owning)
     GeneralTransform3* parent = nullptr;
     std::vector<GeneralTransform3*> children;
+
+    // Back-pointer to owning entity (non-owning, set by Entity)
+    Entity* entity = nullptr;
 
     // Cached global pose
     mutable GeneralPose3 _cached_global_pose;
@@ -291,5 +298,5 @@ struct GeneralTransform3 {
     }
 };
 
-} // namespace geom
+
 } // namespace termin

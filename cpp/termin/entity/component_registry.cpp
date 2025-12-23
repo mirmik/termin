@@ -67,6 +67,24 @@ const ComponentRegistry::ComponentInfo* ComponentRegistry::get_info(const std::s
     return &it->second;
 }
 
+py::object ComponentRegistry::get_class(const std::string& name) const {
+    auto it = registry_.find(name);
+    if (it == registry_.end()) {
+        return py::none();
+    }
+
+    const auto& info = it->second;
+    if (info.is_native) {
+        // For native components, create an instance and return its type
+        Component* comp = info.native_factory();
+        comp->is_native = true;
+        py::object py_comp = py::cast(comp, py::return_value_policy::take_ownership);
+        return py::type::of(py_comp);
+    } else {
+        return info.python_class;
+    }
+}
+
 std::vector<std::string> ComponentRegistry::list_all() const {
     std::vector<std::string> result;
     result.reserve(registry_.size());

@@ -382,9 +382,6 @@ class Scene(Identifiable):
         if isinstance(component, LightComponent):
             self._lighting.register_light_component(component)
 
-        for shader in component.required_shaders():
-            self._register_shader(shader)
-
         if isinstance(component, InputComponent):
             self._input_components.append(component)
 

@@ -13,14 +13,14 @@ namespace animation {
  */
 struct AnimationKeyframe {
     double time = 0.0;
-    std::optional<geom::Vec3> translation;
-    std::optional<geom::Quat> rotation;
+    std::optional<Vec3> translation;
+    std::optional<Quat> rotation;
     std::optional<double> scale;
 
     AnimationKeyframe() = default;
     AnimationKeyframe(double t) : time(t) {}
-    AnimationKeyframe(double t, geom::Vec3 tr) : time(t), translation(tr) {}
-    AnimationKeyframe(double t, geom::Quat rot) : time(t), rotation(rot) {}
+    AnimationKeyframe(double t, Vec3 tr) : time(t), translation(tr) {}
+    AnimationKeyframe(double t, Quat rot) : time(t), rotation(rot) {}
     AnimationKeyframe(double t, double sc) : time(t), scale(sc) {}
 };
 

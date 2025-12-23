@@ -6,7 +6,7 @@
 #include <algorithm>
 
 namespace termin {
-namespace geom {
+
 
 struct Pose3 {
     Quat ang;  // Rotation (quaternion)
@@ -236,5 +236,5 @@ inline Pose3 lerp(const Pose3& p1, const Pose3& p2, double t) {
     };
 }
 
-} // namespace geom
+
 } // namespace termin

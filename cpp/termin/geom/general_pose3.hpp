@@ -6,7 +6,7 @@
 #include "pose3.hpp"
 
 namespace termin {
-namespace geom {
+
 
 struct GeneralPose3 {
     Quat ang;   // Rotation quaternion (x, y, z, w)
@@ -285,6 +285,6 @@ inline GeneralPose3 lerp(const GeneralPose3& a, const GeneralPose3& b, double t)
     };
 }
 
-} // namespace geom
+
 } // namespace termin
 

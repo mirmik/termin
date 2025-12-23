@@ -23,8 +23,6 @@
 namespace termin {
 namespace colliders {
 
-using geom::GeneralPose3;
-using geom::GeneralTransform3;
 
 /**
  * Коллайдер, привязанный к GeneralTransform3.

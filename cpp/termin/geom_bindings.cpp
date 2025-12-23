@@ -7,7 +7,7 @@
 
 namespace py = pybind11;
 using namespace termin;
-using namespace termin::geom;
+using namespace termin;
 
 // Helper to create numpy array from Vec3
 static py::array_t<double> vec3_to_numpy(const Vec3& v) {
@@ -787,16 +787,47 @@ PYBIND11_MODULE(_geom_native, m) {
             [](GeneralTransform3& self) { return self.parent; },
             py::return_value_policy::reference)
         .def_property_readonly("children",
-            [](GeneralTransform3& self) -> std::vector<GeneralTransform3*>& { return self.children; },
-            py::return_value_policy::reference)
+            [](GeneralTransform3& self) -> py::list {
+                py::list result;
+                for (GeneralTransform3* child : self.children) {
+                    py::object py_child = py::cast(child, py::return_value_policy::reference);
+                    // If child has C++ entity pointer but no _entity attr, try to set it
+                    if (child->entity != nullptr && !py::hasattr(py_child, "_entity")) {
+                        // Try to find the entity in Python - use capsule workaround
+                        // Store the pointer as a capsule for later resolution
+                        py_child.attr("_entity_ptr") = py::capsule(child->entity, "Entity*");
+                    }
+                    result.append(py_child);
+                }
+                return result;
+            })
 
-        // entity attribute (stored as Python object)
+        // entity back-pointer
+        // C++ code uses self.entity field directly
+        // Python getter uses _entity attribute (set by entity_bindings), with fallback to C++ field
         .def_property("entity",
             [](GeneralTransform3& self) -> py::object {
-                // Store entity as a Python attribute on the object
                 py::object py_self = py::cast(&self, py::return_value_policy::reference);
+                // First check _entity Python attribute
                 if (py::hasattr(py_self, "_entity")) {
                     return py_self.attr("_entity");
+                }
+                // Fallback: check C++ entity pointer and use EntityRegistry to find Python object
+                if (self.entity != nullptr) {
+                    try {
+                        // Import _entity_native to get EntityRegistry
+                        py::module_ entity_module = py::module_::import("termin.entity._entity_native");
+                        py::object registry = entity_module.attr("EntityRegistry").attr("instance")();
+                        // Get entity by transform pointer
+                        py::object entity = registry.attr("get_by_transform")(py::cast(&self, py::return_value_policy::reference));
+                        if (!entity.is_none()) {
+                            // Cache it for next access
+                            py_self.attr("_entity") = entity;
+                            return entity;
+                        }
+                    } catch (...) {
+                        // Module not loaded yet, ignore
+                    }
                 }
                 return py::none();
             },

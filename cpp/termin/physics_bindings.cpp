@@ -8,7 +8,7 @@
 
 namespace py = pybind11;
 using namespace termin;
-using namespace termin::geom;
+using namespace termin;
 using namespace termin::physics;
 
 PYBIND11_MODULE(_physics_native, m) {

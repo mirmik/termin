@@ -4,7 +4,7 @@
 #include <cmath>
 
 namespace termin {
-namespace geom {
+
 
 /**
  * Луч в 3D пространстве.
@@ -32,5 +32,5 @@ struct Ray3 {
     }
 };
 
-} // namespace geom
+
 } // namespace termin

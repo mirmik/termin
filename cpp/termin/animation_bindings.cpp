@@ -7,7 +7,7 @@
 namespace py = pybind11;
 using namespace termin;
 using namespace termin::animation;
-using namespace termin::geom;
+using namespace termin;
 
 // Helper: numpy array (3,) -> Vec3
 static Vec3 numpy_to_vec3(py::array_t<double> arr) {

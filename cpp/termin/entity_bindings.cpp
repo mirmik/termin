@@ -12,7 +12,7 @@
 
 namespace py = pybind11;
 using namespace termin;
-using namespace termin::geom;
+using namespace termin;
 
 // --- trent <-> Python conversion ---
 
@@ -106,6 +106,10 @@ public:
         PYBIND11_OVERRIDE(void, Component, update, dt);
     }
 
+    void fixed_update(float dt) override {
+        PYBIND11_OVERRIDE(void, Component, fixed_update, dt);
+    }
+
     void on_destroy() override {
         PYBIND11_OVERRIDE(void, Component, on_destroy);
     }
@@ -150,11 +154,13 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("type_name", &Component::type_name)
         .def("start", &Component::start)
         .def("update", &Component::update, py::arg("dt"))
+        .def("fixed_update", &Component::fixed_update, py::arg("dt"))
         .def("on_destroy", &Component::on_destroy)
         .def("on_added_to_entity", &Component::on_added_to_entity)
         .def("on_removed_from_entity", &Component::on_removed_from_entity)
         .def_readwrite("enabled", &Component::enabled)
         .def_readonly("is_native", &Component::is_native)
+        .def_readwrite("_started", &Component::_started)
         .def_property("entity",
             [](Component& c) -> py::object {
                 if (c.entity) {
@@ -187,28 +193,48 @@ PYBIND11_MODULE(_entity_native, m) {
     py::class_<Entity>(m, "Entity")
         .def(py::init<const std::string&, const std::string&>(),
              py::arg("name") = "entity", py::arg("uuid") = "")
-        .def(py::init([](py::object pose, const std::string& name, const std::string& uuid) {
+        .def(py::init([](py::object pose, const std::string& name, int priority,
+                        bool pickable, bool selectable, bool serializable,
+                        int layer, uint64_t flags, const std::string& uuid) {
+            Entity* ent;
             if (pose.is_none()) {
-                return new Entity(name, uuid);
-            }
-            // Extract GeneralPose3 from Python object
-            GeneralPose3 gpose;
-            if (py::hasattr(pose, "lin") && py::hasattr(pose, "ang")) {
-                auto lin = pose.attr("lin").cast<py::array_t<double>>();
-                auto ang = pose.attr("ang").cast<py::array_t<double>>();
-                gpose.lin = numpy_to_vec3(lin);
-                gpose.ang = numpy_to_quat(ang);
-                if (py::hasattr(pose, "scale")) {
-                    auto scale = pose.attr("scale").cast<py::array_t<double>>();
-                    gpose.scale = numpy_to_vec3(scale);
+                ent = new Entity(name, uuid);
+            } else {
+                // Extract GeneralPose3 from Python object
+                GeneralPose3 gpose;
+                if (py::hasattr(pose, "lin") && py::hasattr(pose, "ang")) {
+                    auto lin = pose.attr("lin").cast<py::array_t<double>>();
+                    auto ang = pose.attr("ang").cast<py::array_t<double>>();
+                    gpose.lin = numpy_to_vec3(lin);
+                    gpose.ang = numpy_to_quat(ang);
+                    if (py::hasattr(pose, "scale")) {
+                        auto scale = pose.attr("scale").cast<py::array_t<double>>();
+                        gpose.scale = numpy_to_vec3(scale);
+                    }
                 }
+                ent = new Entity(gpose, name, uuid);
             }
-            return new Entity(gpose, name, uuid);
-        }), py::arg("pose") = py::none(), py::arg("name") = "entity", py::arg("uuid") = "")
+            // Set additional attributes
+            ent->priority = priority;
+            ent->pickable = pickable;
+            ent->selectable = selectable;
+            ent->serializable = serializable;
+            ent->layer = static_cast<uint64_t>(layer);
+            ent->flags = flags;
+            return ent;
+        }), py::arg("pose") = py::none(), py::arg("name") = "entity",
+            py::arg("priority") = 0, py::arg("pickable") = true,
+            py::arg("selectable") = true, py::arg("serializable") = true,
+            py::arg("layer") = 0, py::arg("flags") = 0, py::arg("uuid") = "")
 
         // Identity
         .def_readwrite("uuid", &Entity::uuid)
         .def_readwrite("name", &Entity::name)
+        .def_property_readonly("runtime_id", [](Entity& e) -> uint64_t {
+            // 64-bit hash of uuid for fast runtime lookup
+            std::hash<std::string> hasher;
+            return hasher(e.uuid);
+        })
 
         // Flags
         .def_readwrite("visible", &Entity::visible)
@@ -228,9 +254,14 @@ PYBIND11_MODULE(_entity_native, m) {
         .def_property_readonly("pick_id", &Entity::pick_id)
 
         // Transform access
-        .def_property_readonly("transform", [](Entity& e) {
-            return e.transform.get();
-        }, py::return_value_policy::reference)
+        .def_property_readonly("transform", [](Entity& e) -> py::object {
+            GeneralTransform3* t = e.transform.get();
+            py::object py_transform = py::cast(t, py::return_value_policy::reference);
+            py::object py_entity = py::cast(&e, py::return_value_policy::reference);
+            // Set _entity attribute for Python code compatibility
+            py_transform.attr("_entity") = py_entity;
+            return py_transform;
+        })
 
         // Pose shortcuts
         .def("global_pose", [](Entity& e) {
@@ -248,21 +279,97 @@ PYBIND11_MODULE(_entity_native, m) {
             auto buf = result.mutable_unchecked<2>();
             double m[16];
             e.model_matrix(m);
-            // Convert column-major to numpy row-major
+            // matrix4() already produces row-major, copy directly
             for (int i = 0; i < 4; ++i) {
                 for (int j = 0; j < 4; ++j) {
-                    buf(i, j) = m[j * 4 + i];
+                    buf(i, j) = m[i * 4 + j];
                 }
             }
             return result;
         })
 
+        .def("inverse_model_matrix", [](Entity& e) {
+            // Get global pose and compute inverse matrix
+            const GeneralPose3& gp = e.global_pose();
+            auto result = py::array_t<double>({4, 4});
+            auto buf = result.mutable_unchecked<2>();
+            double m[16];
+            gp.inverse_matrix4(m);
+            // inverse_matrix4() already produces row-major, copy directly
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    buf(i, j) = m[i * 4 + j];
+                }
+            }
+            return result;
+        })
+
+        .def("set_visible", [](Entity& e, bool flag) {
+            e.visible = flag;
+            for (Entity* child : e.children()) {
+                py::cast(child, py::return_value_policy::reference).attr("set_visible")(flag);
+            }
+        }, py::arg("flag"))
+
+        .def("is_pickable", [](Entity& e) {
+            return e.pickable && e.visible && e.active;
+        })
+
+        .def_static("lookup_by_pick_id", [](uint32_t pid) -> Entity* {
+            return EntityRegistry::instance().get_by_pick_id(pid);
+        }, py::arg("pick_id"), py::return_value_policy::reference)
+
         // Component management
-        .def("add_component", &Entity::add_component, py::arg("component"),
-             py::keep_alive<1, 2>())  // Entity keeps component alive
-        .def("remove_component", &Entity::remove_component, py::arg("component"))
+        .def("add_component", [](Entity& e, Component* component) {
+            e.add_component(component);
+            // If entity is in a scene, do lifecycle: register, on_added
+            // Note: start() is NOT called here - Scene.update() handles it via _pending_start
+            if (!e.scene.is_none()) {
+                py::object py_comp = py::cast(component, py::return_value_policy::reference);
+                if (py::hasattr(e.scene, "register_component")) {
+                    e.scene.attr("register_component")(py_comp);
+                }
+                if (py::hasattr(py_comp, "on_added")) {
+                    py_comp.attr("on_added")(e.scene);
+                }
+            }
+            return component;
+        }, py::arg("component"), py::keep_alive<1, 2>(), py::return_value_policy::reference)
+        .def("remove_component", [](Entity& e, Component* component) {
+            // Unregister from scene before removing
+            if (!e.scene.is_none()) {
+                py::object py_comp = py::cast(component, py::return_value_policy::reference);
+                if (py::hasattr(e.scene, "unregister_component")) {
+                    e.scene.attr("unregister_component")(py_comp);
+                }
+                if (py::hasattr(py_comp, "on_removed")) {
+                    py_comp.attr("on_removed")();
+                }
+            }
+            e.remove_component(component);
+        }, py::arg("component"))
         .def("get_component_by_type", &Entity::get_component_by_type,
              py::arg("type_name"), py::return_value_policy::reference)
+        .def("get_component", [](Entity& e, py::object type_class) -> py::object {
+            // Get component by Python type class (like Unity's GetComponent<T>())
+            for (Component* comp : e.components) {
+                py::object py_comp = py::cast(comp, py::return_value_policy::reference);
+                if (py::isinstance(py_comp, type_class)) {
+                    return py_comp;
+                }
+            }
+            return py::none();
+        }, py::arg("component_type"))
+        .def("find_component", [](Entity& e, py::object type_class) -> py::object {
+            // Get component by Python type class, raise if not found
+            for (Component* comp : e.components) {
+                py::object py_comp = py::cast(comp, py::return_value_policy::reference);
+                if (py::isinstance(py_comp, type_class)) {
+                    return py_comp;
+                }
+            }
+            throw std::runtime_error("Component not found");
+        }, py::arg("component_type"))
         .def_property_readonly("components", [](Entity& e) {
             py::list result;
             for (Component* c : e.components) {
@@ -281,6 +388,37 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("update", &Entity::update, py::arg("dt"))
         .def("on_added_to_scene", &Entity::on_added_to_scene, py::arg("scene"))
         .def("on_removed_from_scene", &Entity::on_removed_from_scene)
+        // Visualization-compatible lifecycle (registers components with scene)
+        // Note: start() is NOT called here - Scene.update() handles that via _pending_start
+        .def("on_added", [](Entity& e, py::object scene) {
+            e.scene = scene;
+
+            // Register components with scene and call on_added
+            for (Component* comp : e.components) {
+                py::object py_comp = py::cast(comp, py::return_value_policy::reference);
+                if (py::hasattr(scene, "register_component")) {
+                    scene.attr("register_component")(py_comp);
+                }
+                if (py::hasattr(py_comp, "on_added")) {
+                    py_comp.attr("on_added")(scene);
+                }
+            }
+        }, py::arg("scene"))
+        .def("on_removed", [](Entity& e) {
+            py::object scene = e.scene;
+            // Unregister components from scene if scene has unregister_component
+            if (!scene.is_none() && py::hasattr(scene, "unregister_component")) {
+                for (Component* comp : e.components) {
+                    py::object py_comp = py::cast(comp, py::return_value_policy::reference);
+                    scene.attr("unregister_component")(py_comp);
+                    // Call component.on_removed() if it exists
+                    if (py::hasattr(py_comp, "on_removed")) {
+                        py_comp.attr("on_removed")();
+                    }
+                }
+            }
+            e.on_removed_from_scene();
+        })
 
         // Serialization
         .def_readwrite("serializable", &Entity::serializable)
@@ -289,15 +427,110 @@ PYBIND11_MODULE(_entity_native, m) {
             if (data.is_nil()) {
                 return py::none();
             }
-            return trent_to_py(data);
+            py::dict result = trent_to_py(data).cast<py::dict>();
+
+            // Serialize components by calling their Python serialize() methods
+            py::list comp_list;
+            for (Component* comp : e.components) {
+                py::object py_comp = py::cast(comp, py::return_value_policy::reference);
+                if (py::hasattr(py_comp, "serialize")) {
+                    py::object comp_data = py_comp.attr("serialize")();
+                    if (!comp_data.is_none()) {
+                        comp_list.append(comp_data);
+                    }
+                }
+            }
+            result["components"] = comp_list;
+
+            // Serialize children recursively
+            py::list children_list;
+            for (Entity* child : e.children()) {
+                if (child->serializable) {
+                    py::object child_obj = py::cast(child, py::return_value_policy::reference);
+                    py::object child_data = child_obj.attr("serialize")();
+                    if (!child_data.is_none()) {
+                        children_list.append(child_data);
+                    }
+                }
+            }
+            result["children"] = children_list;
+
+            return result;
         })
-        .def_static("deserialize", [](py::object data) -> Entity* {
+        .def_static("deserialize", [](py::object data, py::object context) -> py::object {
             if (data.is_none()) {
-                return nullptr;
+                return py::none();
             }
             nos::trent tdata = py_to_trent(data);
-            return Entity::deserialize(tdata);
-        }, py::arg("data"), py::return_value_policy::take_ownership);
+            Entity* ent = Entity::deserialize(tdata);
+            if (!ent) {
+                return py::none();
+            }
+
+            // Create Python wrapper with ownership - use this throughout
+            py::object py_ent = py::cast(ent, py::return_value_policy::take_ownership);
+            py::dict data_dict = data.cast<py::dict>();
+
+            // Deserialize components
+            if (data_dict.contains("components")) {
+                py::list comp_list = data_dict["components"].cast<py::list>();
+                for (auto item : comp_list) {
+                    py::dict comp_data = item.cast<py::dict>();
+                    if (!comp_data.contains("type")) {
+                        continue;
+                    }
+                    std::string comp_type = comp_data["type"].cast<std::string>();
+
+                    // Get component class from registry
+                    ComponentRegistry& reg = ComponentRegistry::instance();
+                    if (!reg.has(comp_type)) {
+                        continue;
+                    }
+
+                    // Get the component class
+                    py::object comp_class = reg.get_class(comp_type);
+                    if (comp_class.is_none()) {
+                        continue;
+                    }
+
+                    // Get component data
+                    py::object comp_inner = comp_data.contains("data")
+                        ? comp_data["data"]
+                        : py::dict();
+
+                    // Use deserialize classmethod if available, otherwise create and deserialize_data
+                    py::object py_comp;
+                    if (py::hasattr(comp_class, "deserialize")) {
+                        py_comp = comp_class.attr("deserialize")(comp_inner, context);
+                    } else {
+                        py_comp = comp_class();
+                        if (py::hasattr(py_comp, "deserialize_data")) {
+                            py_comp.attr("deserialize_data")(comp_inner, context);
+                        }
+                    }
+
+                    // Call add_component through Python to trigger keep_alive
+                    py_ent.attr("add_component")(py_comp);
+                }
+            }
+
+            // Deserialize children recursively
+            if (data_dict.contains("children")) {
+                py::list children_list = data_dict["children"].cast<py::list>();
+                // Get the Entity class to call deserialize recursively
+                py::type entity_class = py::type::of(py_ent);
+
+                for (auto child_item : children_list) {
+                    py::object child_obj = entity_class.attr("deserialize")(child_item, context);
+                    if (!child_obj.is_none()) {
+                        // Call set_parent through Python binding to trigger keep_alive
+                        child_obj.attr("set_parent")(py_ent);
+                    }
+                }
+            }
+
+            return py_ent;
+        }, py::arg("data"), py::arg("context") = py::none());
 
     // --- EntityRegistry ---
     py::class_<EntityRegistry>(m, "EntityRegistry")
@@ -306,8 +539,63 @@ PYBIND11_MODULE(_entity_native, m) {
              py::return_value_policy::reference)
         .def("get_by_pick_id", &EntityRegistry::get_by_pick_id, py::arg("pick_id"),
              py::return_value_policy::reference)
+        .def("get_by_transform", [](EntityRegistry& reg, py::object transform) -> py::object {
+            // Get Entity by transform pointer
+            GeneralTransform3* t = transform.cast<GeneralTransform3*>();
+            Entity* ent = reg.get_by_transform(t);
+            if (ent == nullptr) {
+                return py::none();
+            }
+            return py::cast(ent, py::return_value_policy::reference);
+        }, py::arg("transform"))
         .def("clear", &EntityRegistry::clear)
-        .def_property_readonly("entity_count", &EntityRegistry::entity_count);
+        .def_property_readonly("entity_count", &EntityRegistry::entity_count)
+        .def("swap_registries", [](EntityRegistry& reg, py::object new_by_uuid, py::object new_by_pick_id) {
+            // Convert Python dicts to C++ maps
+            std::unordered_map<std::string, Entity*> cpp_by_uuid;
+            std::unordered_map<uint32_t, Entity*> cpp_by_pick_id;
+
+            // new_by_uuid: dict[str, Entity] or WeakValueDictionary
+            if (!new_by_uuid.is_none()) {
+                for (auto item : new_by_uuid.attr("items")()) {
+                    auto pair = item.cast<py::tuple>();
+                    std::string uuid = pair[0].cast<std::string>();
+                    Entity* ent = pair[1].cast<Entity*>();
+                    cpp_by_uuid[uuid] = ent;
+                }
+            }
+
+            // new_by_pick_id: dict[int, Entity]
+            if (!new_by_pick_id.is_none()) {
+                for (auto item : new_by_pick_id.attr("items")()) {
+                    auto pair = item.cast<py::tuple>();
+                    uint32_t pick_id = pair[0].cast<uint32_t>();
+                    Entity* ent = pair[1].cast<Entity*>();
+                    cpp_by_pick_id[pick_id] = ent;
+                }
+            }
+
+            // Perform the swap
+            auto [old_by_uuid, old_by_pick_id] = reg.swap_registries(
+                std::move(cpp_by_uuid), std::move(cpp_by_pick_id));
+
+            // Convert old registries back to Python dicts
+            py::dict py_old_by_uuid;
+            for (auto& [uuid, ent] : old_by_uuid) {
+                if (ent) {
+                    py_old_by_uuid[py::str(uuid)] = py::cast(ent, py::return_value_policy::reference);
+                }
+            }
+
+            py::dict py_old_by_pick_id;
+            for (auto& [pick_id, ent] : old_by_pick_id) {
+                if (ent) {
+                    py_old_by_pick_id[py::int_(pick_id)] = py::cast(ent, py::return_value_policy::reference);
+                }
+            }
+
+            return py::make_tuple(py_old_by_uuid, py_old_by_pick_id);
+        }, py::arg("new_by_uuid"), py::arg("new_by_pick_id"));
 
     // --- Native Components ---
     py::class_<CXXRotatorComponent, Component>(m, "CXXRotatorComponent")
