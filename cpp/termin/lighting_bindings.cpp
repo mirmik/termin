@@ -39,6 +39,39 @@ PYBIND11_MODULE(_lighting_native, m) {
     // Import geom module to register Vec3 type
     py::module_::import("termin.geombase._geom_native");
 
+    // ShadowSettings - scene-wide shadow rendering settings
+    py::class_<ShadowSettings>(m, "ShadowSettings")
+        .def(py::init<>())
+        .def(py::init<int, double, double>(),
+             py::arg("method") = ShadowSettings::METHOD_PCF,
+             py::arg("softness") = 1.0,
+             py::arg("bias") = 0.005)
+        .def_readwrite("method", &ShadowSettings::method)
+        .def_readwrite("softness", &ShadowSettings::softness)
+        .def_readwrite("bias", &ShadowSettings::bias)
+        .def_readonly_static("METHOD_HARD", &ShadowSettings::METHOD_HARD)
+        .def_readonly_static("METHOD_PCF", &ShadowSettings::METHOD_PCF)
+        .def_readonly_static("METHOD_POISSON", &ShadowSettings::METHOD_POISSON)
+        .def("serialize", [](const ShadowSettings& s) {
+            py::dict d;
+            d["method"] = s.method;
+            d["softness"] = s.softness;
+            d["bias"] = s.bias;
+            return d;
+        })
+        .def("load_from_data", [](ShadowSettings& s, py::dict data) {
+            if (data.contains("method")) s.method = data["method"].cast<int>();
+            if (data.contains("softness")) s.softness = data["softness"].cast<double>();
+            if (data.contains("bias")) s.bias = data["bias"].cast<double>();
+        }, py::arg("data"))
+        .def("__repr__", [](const ShadowSettings& s) {
+            const char* method_names[] = {"Hard", "PCF 5x5", "Poisson"};
+            const char* method_name = (s.method >= 0 && s.method <= 2) ? method_names[s.method] : "Unknown";
+            return "ShadowSettings(method=" + std::string(method_name) +
+                   ", softness=" + std::to_string(s.softness) +
+                   ", bias=" + std::to_string(s.bias) + ")";
+        });
+
     // AttenuationCoefficients
     py::class_<AttenuationCoefficients>(m, "AttenuationCoefficients")
         .def(py::init<>())
@@ -69,6 +102,17 @@ PYBIND11_MODULE(_lighting_native, m) {
         .value("DIRECTIONAL", LightType::Directional)
         .value("POINT", LightType::Point)
         .value("SPOT", LightType::Spot);
+
+    // Helper to create LightType from string or int
+    m.def("light_type_from_value", [](py::object value) -> LightType {
+        if (py::isinstance<py::str>(value)) {
+            return light_type_from_string(value.cast<std::string>());
+        }
+        if (py::isinstance<LightType>(value)) {
+            return value.cast<LightType>();
+        }
+        return static_cast<LightType>(value.cast<int>());
+    }, py::arg("value"), "Create LightType from string, int, or LightType");
 
     // LightShadowParams
     py::class_<LightShadowParams>(m, "LightShadowParams")
@@ -102,6 +146,36 @@ PYBIND11_MODULE(_lighting_native, m) {
     // Light
     py::class_<Light>(m, "Light")
         .def(py::init<>())
+        .def(py::init([](LightType type, py::object color, double intensity,
+                         py::object direction, py::object position,
+                         py::object range, double inner_angle, double outer_angle,
+                         const AttenuationCoefficients& attenuation,
+                         const LightShadowParams& shadows, const std::string& name) {
+            Light l;
+            l.type = type;
+            if (!color.is_none()) l.color = numpy_to_vec3(color);
+            l.intensity = intensity;
+            if (!direction.is_none()) l.direction = numpy_to_vec3(direction).normalized();
+            if (!position.is_none()) l.position = numpy_to_vec3(position);
+            if (!range.is_none()) l.range = range.cast<double>();
+            l.inner_angle = inner_angle;
+            l.outer_angle = outer_angle;
+            l.attenuation = attenuation;
+            l.shadows = shadows;
+            l.name = name;
+            return l;
+        }),
+             py::arg("type") = LightType::Directional,
+             py::arg("color") = py::none(),
+             py::arg("intensity") = 1.0,
+             py::arg("direction") = py::none(),
+             py::arg("position") = py::none(),
+             py::arg("range") = py::none(),
+             py::arg("inner_angle") = 15.0 * M_PI / 180.0,
+             py::arg("outer_angle") = 30.0 * M_PI / 180.0,
+             py::arg("attenuation") = AttenuationCoefficients(),
+             py::arg("shadows") = LightShadowParams(),
+             py::arg("name") = "")
         .def_readwrite("type", &Light::type)
         .def_property("color",
             [](const Light& l) { return vec3_to_numpy(l.color); },

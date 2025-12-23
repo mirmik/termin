@@ -17,7 +17,6 @@ public:
     float speed = 1.0f;  // radians per second
 
     void update(float dt) override {
-        std::cout << "CXXRotatorComponent::update dt=" << dt << " speed=" << speed << std::endl;
         if (!entity || !entity->transform) return;
 
         auto& pose = entity->transform->_local_pose;

@@ -12,7 +12,7 @@ from termin.geombase import GeneralPose3
 from .clip import AnimationClip
 
 if TYPE_CHECKING:
-    from termin.skeleton.skeleton import SkeletonInstance
+    from termin.skeleton import SkeletonInstance
 
 
 class AnimationPlayer(Component):

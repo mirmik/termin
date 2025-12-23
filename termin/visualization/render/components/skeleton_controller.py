@@ -9,7 +9,7 @@ from termin.visualization.core.component import Component
 from termin.visualization.core.entity_handle import EntityHandle
 
 if TYPE_CHECKING:
-    from termin.skeleton.skeleton import SkeletonData, SkeletonInstance
+    from termin.skeleton import SkeletonData, SkeletonInstance
     from termin.visualization.core.entity import Entity
 
 
@@ -90,7 +90,7 @@ class SkeletonController(Component):
         if self._skeleton_instance is None and self._skeleton_data is not None:
             bone_entities = self._resolve_bone_entities()
             if bone_entities is not None:
-                from termin.skeleton.skeleton import SkeletonInstance
+                from termin.skeleton import SkeletonInstance
                 self._skeleton_instance = SkeletonInstance(
                     self._skeleton_data,
                     bone_entities=bone_entities,

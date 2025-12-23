@@ -58,6 +58,8 @@ class CMakeBuildExt(build_ext):
             ("visualization/animation", "_animation_native"),
             ("entity", "_entity_native"),
             ("lighting", "_lighting_native"),
+            ("skeleton", "_skeleton_native"),
+            ("mesh", "_mesh_native"),
         ]
         for subdir, module_name in module_mappings:
             dst_dir = Path(directory) / "termin" / subdir
@@ -130,6 +132,8 @@ if __name__ == "__main__":
             Extension("termin.visualization.animation._animation_native", sources=[]),
             Extension("termin.entity._entity_native", sources=[]),
             Extension("termin.lighting._lighting_native", sources=[]),
+            Extension("termin.skeleton._skeleton_native", sources=[]),
+            Extension("termin.mesh._mesh_native", sources=[]),
             Extension("termin.tests._cpp_tests", sources=[]),
         ],
         cmdclass={"build_ext": CMakeBuildExt},

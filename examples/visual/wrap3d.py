@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from termin.geombase import Pose3
-from termin.mesh.mesh import UVSphereMesh, Mesh, Mesh3
+from termin.mesh.mesh import UVSphereMesh, Mesh, Mesh3, mesh3_from_convex_hull
 from termin.visualization import (
     Entity,
     MeshDrawable,
@@ -40,7 +40,7 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
         [2, 2, -1],
         [-2, 2, -1],
     ])
-    mesh = Mesh3.from_convex_hull(mesh)
+    mesh = mesh3_from_convex_hull(mesh)
 
     drawable = MeshDrawable(mesh)
 

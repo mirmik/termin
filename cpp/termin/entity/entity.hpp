@@ -7,6 +7,7 @@
 #include <functional>
 #include <pybind11/pybind11.h>
 #include "../geom/general_transform3.hpp"
+#include "../core/identifiable.hpp"
 #include "../../trent/trent.h"
 
 namespace py = pybind11;
@@ -20,11 +21,12 @@ class Component;
  *
  * Unity-like architecture: Entity holds Components,
  * has a transform hierarchy, and belongs to a Scene.
+ *
+ * Inherits from Identifiable for uuid and runtime_id.
  */
-class Entity {
+class Entity : public Identifiable {
 public:
-    // Identity
-    std::string uuid;
+    // Name (uuid comes from Identifiable)
     std::string name;
 
     // Transform (owned)

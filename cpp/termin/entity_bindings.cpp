@@ -239,10 +239,8 @@ PYBIND11_MODULE(_entity_native, m) {
         // Identity
         .def_readwrite("uuid", &Entity::uuid)
         .def_readwrite("name", &Entity::name)
-        .def_property_readonly("runtime_id", [](Entity& e) -> uint64_t {
-            // 64-bit hash of uuid for fast runtime lookup
-            std::hash<std::string> hasher;
-            return hasher(e.uuid);
+        .def_property_readonly("runtime_id", [](const Entity& e) -> uint64_t {
+            return e.runtime_id;  // Cached in Identifiable base class
         })
 
         // Flags

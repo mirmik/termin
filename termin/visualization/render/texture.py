@@ -295,3 +295,14 @@ def get_dummy_shadow_texture() -> _DummyShadowTexture:
         _dummy_shadow_texture = _DummyShadowTexture()
 
     return _dummy_shadow_texture
+
+
+def reset_dummy_shadow_texture() -> None:
+    """
+    Reset the global dummy shadow texture.
+
+    Call this when OpenGL context changes (e.g., between tests)
+    to ensure the texture is recreated in the new context.
+    """
+    global _dummy_shadow_texture
+    _dummy_shadow_texture = None

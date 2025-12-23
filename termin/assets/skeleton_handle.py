@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from termin.assets.resource_handle import ResourceHandle
 
 if TYPE_CHECKING:
-    from termin.skeleton.skeleton import SkeletonData
+    from termin.skeleton import SkeletonData
     from termin.assets.skeleton_asset import SkeletonAsset
 
 

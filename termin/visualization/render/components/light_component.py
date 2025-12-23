@@ -7,7 +7,7 @@ import numpy as np
 from termin.visualization.core.component import Component
 from termin.visualization.core.serialization import COMPONENT_REGISTRY
 from termin.editor.inspect_field import InspectField
-from termin.lighting import LightType, Light, LightShadowParams
+from termin.lighting import LightType, Light, LightShadowParams, light_type_from_value
 
 
 class LightComponent(Component):
@@ -91,7 +91,7 @@ class LightComponent(Component):
     @classmethod
     def deserialize(cls, data, context=None):
         """Десериализует компонент из словаря."""
-        light_type = LightType(data.get("light_type", LightType.DIRECTIONAL.value))
+        light_type = light_type_from_value(data.get("light_type", 0))
         color = data.get("color", (1.0, 1.0, 1.0))
         intensity = data.get("intensity", 1.0)
         shadows = LightShadowParams(

@@ -9,8 +9,7 @@ from termin.geombase import Pose3
 from termin.geombase import GeneralPose3
 from termin.mesh.mesh import Mesh3
 from termin.mesh.skinned_mesh import SkinnedMesh3
-from termin.skeleton.bone import Bone
-from termin.skeleton.skeleton import SkeletonData, SkeletonInstance
+from termin.skeleton import Bone, SkeletonData, SkeletonInstance
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.render.components.mesh_renderer import MeshRenderer

@@ -209,7 +209,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         """Fill all child assets with extracted data from loaded GLB."""
         from termin.loaders.glb_instantiator import _glb_mesh_to_mesh3
         from termin.visualization.animation.clip import clip_from_glb
-        from termin.skeleton.skeleton import SkeletonData
+        from termin.skeleton import SkeletonData
 
         glb_mesh_names = {m.name for m in self._data.meshes}
 

@@ -6,6 +6,8 @@ from termin.lighting._lighting_native import (
     LightSample,
     LightShadowParams,
     LightType,
+    ShadowSettings,
+    light_type_from_value,
 )
 
 __all__ = [
@@ -14,4 +16,6 @@ __all__ = [
     "LightSample",
     "LightShadowParams",
     "LightType",
+    "ShadowSettings",
+    "light_type_from_value",
 ]

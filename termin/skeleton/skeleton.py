@@ -1,108 +1,13 @@
-"""Skeleton data and runtime instance classes."""
+"""Skeleton runtime instance class."""
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import List, TYPE_CHECKING
 
 import numpy as np
 
-from .bone import Bone
-
-
-class SkeletonData:
-    """
-    Immutable skeleton definition (bones hierarchy and inverse bind matrices).
-
-    This is the "template" loaded from GLB/FBX files.
-    SkeletonInstance holds mutable runtime state.
-    """
-
-    def __init__(
-        self,
-        bones: List[Bone],
-        root_bone_indices: List[int] | None = None,
-    ):
-        """
-        Initialize skeleton data.
-
-        Args:
-            bones: List of bones, ordered so that parents come before children
-            root_bone_indices: Indices of root bones (computed if not provided)
-        """
-        self.bones = bones
-        self._bone_name_map: Dict[str, int] = {b.name: b.index for b in bones}
-
-        # Compute root bones if not provided
-        if root_bone_indices is not None:
-            self.root_bone_indices = root_bone_indices
-        else:
-            self.root_bone_indices = [b.index for b in bones if b.is_root]
-
-    def get_bone_by_name(self, name: str) -> Bone | None:
-        """Find bone by name."""
-        idx = self._bone_name_map.get(name)
-        return self.bones[idx] if idx is not None else None
-
-    def get_bone_index(self, name: str) -> int:
-        """Get bone index by name. Returns -1 if not found."""
-        return self._bone_name_map.get(name, -1)
-
-    def get_bone_count(self) -> int:
-        """Number of bones in skeleton."""
-        return len(self.bones)
-
-    def serialize(self) -> dict:
-        """Serialize skeleton data to dict."""
-        return {
-            "bones": [b.serialize() for b in self.bones],
-            "root_bone_indices": self.root_bone_indices,
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict) -> "SkeletonData":
-        """Deserialize skeleton data from dict."""
-        bones = [Bone.deserialize(b) for b in data["bones"]]
-        return cls(
-            bones=bones,
-            root_bone_indices=data.get("root_bone_indices"),
-        )
-
-    @classmethod
-    def from_glb_skin(cls, skin, nodes: List) -> "SkeletonData":
-        """
-        Create SkeletonData from GLB skin data.
-
-        Args:
-            skin: GLBSkinData with joint indices and inverse bind matrices
-            nodes: List of GLBNodeData for all nodes in the scene
-        """
-        bones = []
-
-        for bone_idx, node_idx in enumerate(skin.joint_node_indices):
-            node = nodes[node_idx]
-
-            # Find parent bone by checking which bone contains this node as child
-            parent_bone_idx = -1
-            for other_bone_idx, other_node_idx in enumerate(skin.joint_node_indices):
-                if node_idx in nodes[other_node_idx].children:
-                    parent_bone_idx = other_bone_idx
-                    break
-
-            bone = Bone(
-                name=node.name,
-                index=bone_idx,
-                parent_index=parent_bone_idx,
-                inverse_bind_matrix=skin.inverse_bind_matrices[bone_idx],
-                bind_translation=node.translation.copy(),
-                bind_rotation=node.rotation.copy(),
-                bind_scale=node.scale.copy(),
-            )
-            bones.append(bone)
-
-        return cls(bones=bones)
-
-    def __repr__(self) -> str:
-        return f"<SkeletonData bones={len(self.bones)} roots={len(self.root_bone_indices)}>"
+if TYPE_CHECKING:
+    from termin.skeleton._skeleton_native import SkeletonData
 
 
 class SkeletonInstance:
@@ -126,7 +31,7 @@ class SkeletonInstance:
 
     def __init__(
         self,
-        skeleton_data: SkeletonData,
+        skeleton_data: "SkeletonData",
         bone_entities: List = None,
         skeleton_root_entity=None,
     ):
@@ -154,7 +59,7 @@ class SkeletonInstance:
             self._bone_matrices[i] = np.eye(4, dtype=np.float32)
 
     @property
-    def skeleton_data(self) -> SkeletonData:
+    def skeleton_data(self) -> "SkeletonData":
         """Get the skeleton template."""
         return self._data
 

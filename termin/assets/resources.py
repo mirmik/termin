@@ -22,7 +22,7 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.assets.navmesh_asset import NavMeshAsset
     from termin.visualization.animation.clip import AnimationClip
     from termin.assets.animation_clip_asset import AnimationClipAsset
-    from termin.skeleton.skeleton import SkeletonData
+    from termin.skeleton import SkeletonData
     from termin.assets.skeleton_asset import SkeletonAsset
     from termin.assets.prefab_asset import PrefabAsset
     from termin.kinematic.general_transform import GeneralTransform3

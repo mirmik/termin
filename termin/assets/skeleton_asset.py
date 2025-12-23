@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from termin.assets.data_asset import DataAsset
 
 if TYPE_CHECKING:
-    from .skeleton import SkeletonData
+    from termin.skeleton import SkeletonData
 
 
 class SkeletonAsset(DataAsset["SkeletonData"]):
@@ -80,7 +80,7 @@ class SkeletonAsset(DataAsset["SkeletonData"]):
     @classmethod
     def deserialize(cls, data: dict) -> "SkeletonAsset":
         """Deserialize skeleton asset from dict."""
-        from .skeleton import SkeletonData
+        from termin.skeleton import SkeletonData
 
         skeleton_data = None
         if "skeleton_data" in data:

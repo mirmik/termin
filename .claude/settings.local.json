@@ -42,7 +42,9 @@
       "Bash(timeout 10 python3:*)",
       "Bash(ldd:*)",
       "Bash(nm:*)",
-      "Bash(gdb:*)"
+      "Bash(gdb:*)",
+      "Bash(python3:*)",
+      "Bash(PYTHONPATH=. timeout 15 python:*)"
     ]
   }
 }

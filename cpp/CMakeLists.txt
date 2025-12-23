@@ -95,6 +95,18 @@ target_compile_options(_lighting_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
+# Skeleton native module (Bone, SkeletonData)
+pybind11_add_module(_skeleton_native termin/skeleton_bindings.cpp)
+target_compile_options(_skeleton_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
+# Mesh native module (Mesh3)
+pybind11_add_module(_mesh_native termin/mesh_bindings.cpp)
+target_compile_options(_mesh_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
 # Entity native module (Entity, Component, registries)
 pybind11_add_module(_entity_native
     termin/entity_bindings.cpp
@@ -170,4 +182,6 @@ install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/voxels)
 install(TARGETS _collision_native DESTINATION ${CMAKE_INSTALL_PREFIX}/collision)
 install(TARGETS _animation_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/animation)
 install(TARGETS _lighting_native DESTINATION ${CMAKE_INSTALL_PREFIX}/lighting)
+install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)
+install(TARGETS _mesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/mesh)
 install(TARGETS _entity_native DESTINATION ${CMAKE_INSTALL_PREFIX}/entity)

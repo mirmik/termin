@@ -3,41 +3,11 @@
 #include "entity_registry.hpp"
 #include <algorithm>
 #include <iostream>
-#include <random>
-#include <sstream>
-#include <iomanip>
 
 namespace termin {
 
-namespace {
-
-// Generate UUID v4
-std::string generate_uuid() {
-    static std::random_device rd;
-    static std::mt19937_64 gen(rd());
-    static std::uniform_int_distribution<uint64_t> dist;
-
-    uint64_t a = dist(gen);
-    uint64_t b = dist(gen);
-
-    // Set version (4) and variant bits
-    a = (a & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
-    b = (b & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
-
-    std::ostringstream ss;
-    ss << std::hex << std::setfill('0');
-    ss << std::setw(8) << ((a >> 32) & 0xFFFFFFFF) << "-";
-    ss << std::setw(4) << ((a >> 16) & 0xFFFF) << "-";
-    ss << std::setw(4) << (a & 0xFFFF) << "-";
-    ss << std::setw(4) << ((b >> 48) & 0xFFFF) << "-";
-    ss << std::setw(12) << (b & 0xFFFFFFFFFFFFULL);
-    return ss.str();
-}
-
-} // anonymous namespace
-
 Entity::Entity(const std::string& name_, const std::string& uuid_)
-    : uuid(uuid_.empty() ? generate_uuid() : uuid_)
+    : Identifiable(uuid_)
     , name(name_)
     , transform(std::make_unique<GeneralTransform3>())
     , scene(py::none()) {
@@ -49,7 +19,7 @@ Entity::Entity(const std::string& name_, const std::string& uuid_)
 }
 
 Entity::Entity(const GeneralPose3& pose, const std::string& name_, const std::string& uuid_)
-    : uuid(uuid_.empty() ? generate_uuid() : uuid_)
+    : Identifiable(uuid_)
     , name(name_)
     , transform(std::make_unique<GeneralTransform3>(pose))
     , scene(py::none()) {
@@ -74,7 +44,7 @@ Entity::~Entity() {
 }
 
 Entity::Entity(Entity&& other) noexcept
-    : uuid(std::move(other.uuid))
+    : Identifiable(std::move(other))
     , name(std::move(other.name))
     , transform(std::move(other.transform))
     , visible(other.visible)
@@ -114,7 +84,7 @@ Entity& Entity::operator=(Entity&& other) noexcept {
             }
         }
 
-        uuid = std::move(other.uuid);
+        Identifiable::operator=(std::move(other));
         name = std::move(other.name);
         transform = std::move(other.transform);
         visible = other.visible;

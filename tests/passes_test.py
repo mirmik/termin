@@ -76,9 +76,6 @@ class TestPasses(unittest.TestCase):
             material = ColorMaterial(color=(1.0, 0.0, 0.0, 1.0))
             cube.add_component(MeshRenderer(CubeMesh(), material=material))
 
-            # Подготавливаем сцену (загрузка мешей/текстур)
-            scene.ensure_ready(graphics)
-
             # Создаём pipeline: ColorPass -> PresentToScreenPass
             color_pass = ColorPass(
                 input_res="empty",
@@ -205,9 +202,6 @@ class TestPasses(unittest.TestCase):
                 up=Vec3(0.0, 0.0, 1.0)
             ))
 
-            # Подготовка сцены
-            scene.ensure_ready(graphics)
-
             # --- DepthPass ---
             from termin.visualization.render.framegraph.passes.depth import DepthPass
 
@@ -267,9 +261,11 @@ class TestPasses(unittest.TestCase):
         """
         from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
         from termin.visualization.core.material import Material
+        from termin.visualization.render.texture import reset_dummy_shadow_texture
 
-        # Сбрасываем кэш шейдеров (они могут быть невалидны после предыдущих тестов)
+        # Сбрасываем кэш (они могут быть невалидны после предыдущих тестов)
         PresentToScreenPass._shader = None
+        reset_dummy_shadow_texture()
 
         # Создаём headless OpenGL контекст
         context = self._create_headless_or_skip()
@@ -364,9 +360,6 @@ void main() {
             cube = Entity(name="cube")
             scene.add(cube)
             cube.add_component(MeshRenderer(CubeMesh(), material=material))
-
-            # Подготавливаем сцену
-            scene.ensure_ready(graphics)
 
             # --- Тест 1: ColorPass с phase_mark="opaque" должен дать красный куб ---
 
@@ -475,9 +468,11 @@ void main() {
         """
         from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
         from termin.visualization.core.material import Material
+        from termin.visualization.render.texture import reset_dummy_shadow_texture
 
-        # Сбрасываем кэш шейдеров (они могут быть невалидны после предыдущих тестов)
+        # Сбрасываем кэш (они могут быть невалидны после предыдущих тестов)
         PresentToScreenPass._shader = None
+        reset_dummy_shadow_texture()
 
         # Создаём headless OpenGL контекст
         context = self._create_headless_or_skip()
@@ -557,9 +552,6 @@ void main() {
                 cube = Entity(name="cube")
                 scene.add(cube)
                 cube.add_component(MeshRenderer(CubeMesh(), material=material))
-
-                # Подготавливаем сцену
-                scene.ensure_ready(graphics)
 
                 # Pipeline с phase_mark="opaque"
                 color_pass = ColorPass(

@@ -2,7 +2,8 @@
 
 import numpy as np
 
-from .mesh import Mesh3, VertexLayout, VertexAttribute, VertexAttribType
+from termin.mesh._mesh_native import Mesh3
+from .mesh import VertexLayout, VertexAttribute, VertexAttribType
 
 
 class SkinnedMesh3(Mesh3):
@@ -67,6 +68,7 @@ class SkinnedMesh3(Mesh3):
             self.joint_weights[:, 0] = 1.0
 
         self._validate_skinning_data()
+        self._inter = None  # Cache for interleaved buffer
 
     def _validate_skinning_data(self):
         """Validate skinning arrays have correct shapes."""
@@ -129,6 +131,12 @@ class SkinnedMesh3(Mesh3):
         weights = self.joint_weights.astype(np.float32)
 
         return np.hstack([pos, normals, uvs, joints, weights])
+
+    def interleaved_buffer(self) -> np.ndarray:
+        """Get cached interleaved buffer."""
+        if self._inter is None:
+            self._inter = self.build_interleaved_buffer()
+        return self._inter
 
     def get_vertex_layout(self) -> VertexLayout:
         """

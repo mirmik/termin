@@ -16,44 +16,15 @@ from typing import List, TYPE_CHECKING
 
 import numpy as np
 
+from termin.lighting import ShadowSettings
+
 if TYPE_CHECKING:
     from termin.lighting import Light
     from termin.visualization.render.components.light_component import LightComponent
 
 
-class ShadowSettings:
-    """
-    Shadow rendering settings.
-
-    Attributes:
-        method: Shadow sampling method (0=hard, 1=pcf, 2=poisson)
-        softness: Sampling radius multiplier (0=sharp, 1=default, >1=softer)
-        bias: Depth bias to prevent shadow acne
-    """
-
-    # Method constants
-    METHOD_HARD = 0
-    METHOD_PCF = 1
-    METHOD_POISSON = 2
-
-    METHOD_NAMES = ["Hard", "PCF 5x5", "Poisson"]
-
-    def __init__(self):
-        self.method: int = self.METHOD_PCF
-        self.softness: float = 1.0
-        self.bias: float = 0.005
-
-    def serialize(self) -> dict:
-        return {
-            "method": self.method,
-            "softness": self.softness,
-            "bias": self.bias,
-        }
-
-    def load_from_data(self, data: dict) -> None:
-        self.method = data.get("method", self.METHOD_PCF)
-        self.softness = data.get("softness", 1.0)
-        self.bias = data.get("bias", 0.005)
+# Add METHOD_NAMES for UI compatibility
+ShadowSettings.METHOD_NAMES = ["Hard", "PCF 5x5", "Poisson"]
 
 
 class LightingManager:

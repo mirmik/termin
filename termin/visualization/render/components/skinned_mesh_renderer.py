@@ -16,7 +16,7 @@ from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.drawable import GeometryDrawCall
 
 if TYPE_CHECKING:
-    from termin.skeleton.skeleton import SkeletonInstance
+    from termin.skeleton import SkeletonInstance
     from termin.visualization.render.components.skeleton_controller import SkeletonController
 
 
