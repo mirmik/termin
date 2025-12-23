@@ -17,7 +17,7 @@ from typing import List, TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from termin.visualization.core.lighting.light import Light
+    from termin.visualization.core.lighting import Light
     from termin.visualization.render.components.light_component import LightComponent
 
 

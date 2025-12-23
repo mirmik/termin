@@ -9,7 +9,7 @@ import numpy as np
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.identifiable import Identifiable
-from termin.visualization.core.lighting.light import Light
+from termin.visualization.core.lighting import Light
 from termin.visualization.render.components.light_component import LightComponent
 from termin.geombase import Ray3
 from termin.colliders.raycast_hit import RaycastHit

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, List
 
-from termin.visualization.core.lighting.light import Light, LightType
+from termin.visualization.core.lighting import Light, LightType
 
 
 @dataclass

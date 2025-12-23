@@ -23,7 +23,7 @@ from termin.visualization.platform.backends import (
 )
 from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.components.light_component import LightComponent
-from termin.visualization.core.lighting.light import LightType, LightShadowParams
+from termin.visualization.core.lighting import LightType, LightShadowParams
 
 from termin.physics import RigidBodyComponent, PhysicsWorldComponent
 

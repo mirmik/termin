@@ -30,7 +30,7 @@ from termin.visualization.render.shadow.shadow_camera import (
     build_shadow_projection_matrix,
     fit_shadow_frustum_to_camera,
 )
-from termin.visualization.core.lighting.light import Light, LightType
+from termin.visualization.core.lighting import Light, LightType
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
