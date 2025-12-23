@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cstdint>
 #include "general_pose3.hpp"
-#include "screw3.hpp"
 
 namespace termin {
 
@@ -29,10 +28,6 @@ struct GeneralTransform3 {
     // Cached global pose
     mutable GeneralPose3 _cached_global_pose;
     mutable bool _dirty = true;
-
-    // Velocity (twist) in body's local frame
-    // This is the absolute spatial velocity, just expressed in local coordinates
-    Screw3 _local_twist;
 
     // Version tracking for change propagation
     uint32_t _version_for_walking_to_proximal = 0;
@@ -74,7 +69,6 @@ struct GeneralTransform3 {
         , children(std::move(other.children))
         , _cached_global_pose(std::move(other._cached_global_pose))
         , _dirty(other._dirty)
-        , _local_twist(other._local_twist)
         , _version_for_walking_to_proximal(other._version_for_walking_to_proximal)
         , _version_for_walking_to_distal(other._version_for_walking_to_distal)
         , _version_only_my(other._version_only_my) {
@@ -106,7 +100,6 @@ struct GeneralTransform3 {
             children = std::move(other.children);
             _cached_global_pose = std::move(other._cached_global_pose);
             _dirty = other._dirty;
-            _local_twist = other._local_twist;
             _version_for_walking_to_proximal = other._version_for_walking_to_proximal;
             _version_for_walking_to_distal = other._version_for_walking_to_distal;
             _version_only_my = other._version_only_my;
@@ -223,51 +216,6 @@ struct GeneralTransform3 {
         Vec3 current_global_scale = global_pose().scale;
         GeneralPose3 gpose(pose.ang, pose.lin, current_global_scale);
         relocate_global(gpose);
-    }
-
-    // --- Twist (velocity) accessors ---
-    // Twist inheritance mirrors pose inheritance:
-    // - _local_twist is velocity relative to parent, in body's local frame
-    // - global_twist() includes parent's velocity contribution
-
-    const Screw3& local_twist() const { return _local_twist; }
-
-    void set_local_twist(const Screw3& twist) {
-        _local_twist = twist;
-    }
-
-    Screw3 global_twist() const {
-        Pose3 pose = global_pose().to_pose3();
-
-        // Local velocity transformed to world (rotation only, no position effect)
-        Screw3 local_in_world = _local_twist.transform_by(pose);
-
-        if (!parent) {
-            return local_in_world;
-        }
-
-        // Transport parent's velocity to child's position
-        Screw3 parent_global = parent->global_twist();
-        Vec3 arm = pose.lin - parent->global_pose().lin;
-        Screw3 inherited_at_child = parent_global.adjoint(arm);
-
-        return inherited_at_child + local_in_world;
-    }
-
-    void set_global_twist(const Screw3& world_twist) {
-        Pose3 pose = global_pose().to_pose3();
-
-        // Compute inherited contribution at child's position
-        Screw3 inherited_at_child = Screw3::zero();
-        if (parent) {
-            Screw3 parent_global = parent->global_twist();
-            Vec3 arm = pose.lin - parent->global_pose().lin;
-            inherited_at_child = parent_global.adjoint(arm);
-        }
-
-        // Subtract inherited and inverse-rotate to local frame
-        Screw3 local_in_world = world_twist - inherited_at_child;
-        _local_twist = local_in_world.inverse_transform_by(pose);
     }
 
     // --- Dirty tracking ---

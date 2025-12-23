@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+import warnings
 import numpy as np
 
 from termin.visualization.core.component import Component
@@ -86,6 +87,9 @@ class FEMRigidBodyComponent(Component):
         """Зарегистрировать тело в FEM мире."""
         self._fem_world = world
 
+        # Проверяем scale у предков
+        self._validate_ancestor_scales()
+
         # Создать инерцию
         inertia = SpatialInertia3D(
             mass=self.mass,
@@ -129,6 +133,24 @@ class FEMRigidBodyComponent(Component):
             ang=fem_pose.ang,
         )
         self.entity.transform.relocate_global(new_pose)
+
+    def _validate_ancestor_scales(self):
+        """Проверить, что у предков нет non-identity scale."""
+        if self.entity is None:
+            return
+
+        t = self.entity.transform.parent
+        while t is not None:
+            scale = t.local_pose().scale
+            if not np.allclose(scale, [1.0, 1.0, 1.0], atol=1e-6):
+                warnings.warn(
+                    f"FEMRigidBodyComponent on '{self.entity.name}' has ancestor "
+                    f"'{t.name}' with scale {scale}. Physics may behave incorrectly.",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
+                break
+            t = t.parent
 
     # --- Вспомогательные фабрики для инерции ---
 

@@ -69,7 +69,11 @@ PYBIND11_MODULE(_colliders_native, m) {
         .def("center", &Collider::center)
         .def("aabb", &Collider::aabb)
         .def("closest_to_ray", &Collider::closest_to_ray, py::arg("ray"))
-        .def("closest_to_collider", &Collider::closest_to_collider, py::arg("other"));
+        .def("closest_to_collider", &Collider::closest_to_collider, py::arg("other"))
+        // Velocity hints for physics systems
+        .def_readwrite("linear_velocity", &Collider::linear_velocity)
+        .def_readwrite("angular_velocity", &Collider::angular_velocity)
+        .def("point_velocity", &Collider::point_velocity, py::arg("world_point"));
 
     // ==================== ColliderPrimitive ====================
 

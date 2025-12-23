@@ -198,6 +198,9 @@ public:
 
         // 6. Позиционная коррекция
         solver_.solve_positions();
+
+        // 7. Синхронизируем скорости в коллайдеры (для других систем)
+        sync_collider_velocities();
     }
 
     const std::vector<Contact>& contacts() const { return contacts_; }
@@ -207,6 +210,19 @@ public:
     const std::vector<RigidBody>& bodies() const { return bodies_; }
 
 private:
+    /**
+     * Синхронизировать скорости из RigidBody в коллайдеры.
+     * Это позволяет другим системам (FEM, анимация) читать скорости.
+     */
+    void sync_collider_velocities() {
+        for (auto& [body_idx, collider] : body_to_collider_) {
+            if (body_idx >= bodies_.size()) continue;
+            const RigidBody& body = bodies_[body_idx];
+            collider->linear_velocity = body.linear_velocity;
+            collider->angular_velocity = body.angular_velocity;
+        }
+    }
+
     /**
      * Синхронизировать позы коллайдеров с телами и обновить BVH.
      *
@@ -270,6 +286,8 @@ private:
                     Contact c;
                     c.body_a = body_a;
                     c.body_b = body_b;
+                    c.collider_a = m.collider_a;
+                    c.collider_b = m.collider_b;
                     c.point = cp.position;
                     c.normal = m.normal;
                     c.penetration = -cp.penetration;  // ContactManifold: negative = penetrating
@@ -302,6 +320,8 @@ private:
                     Contact c;
                     c.body_a = nullptr;  // Земля
                     c.body_b = &body;
+                    c.collider_a = nullptr;
+                    c.collider_b = collider;
                     c.point = Vec3(corner.x, corner.y, ground_height);
                     c.normal = ground_normal;
                     c.penetration = ground_height - corner.z;
@@ -315,6 +335,8 @@ private:
                 Contact c;
                 c.body_a = nullptr;
                 c.body_b = &body;
+                c.collider_a = nullptr;
+                c.collider_b = collider;
                 c.point = Vec3(center.x, center.y, ground_height);
                 c.normal = ground_normal;
                 c.penetration = ground_height - bottom;

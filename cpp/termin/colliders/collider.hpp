@@ -75,6 +75,20 @@ class Collider {
 public:
     virtual ~Collider() = default;
 
+    // --- Velocity hints for physics systems ---
+    // These are set by physics solvers and can be read by other systems.
+    // For colliders without RigidBody, these can be set manually or computed from position deltas.
+    Vec3 linear_velocity{0, 0, 0};
+    Vec3 angular_velocity{0, 0, 0};
+
+    /**
+     * Compute velocity at a specific world point (includes angular contribution).
+     */
+    Vec3 point_velocity(const Vec3& world_point) const {
+        Vec3 r = world_point - center();
+        return linear_velocity + angular_velocity.cross(r);
+    }
+
     /**
      * Тип коллайдера.
      */

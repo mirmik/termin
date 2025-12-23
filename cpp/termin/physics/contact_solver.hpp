@@ -11,6 +11,7 @@
  */
 
 #include "../geom/vec3.hpp"
+#include "../colliders/collider.hpp"
 #include "rigid_body.hpp"
 #include <algorithm>
 #include <cmath>
@@ -18,11 +19,13 @@
 namespace termin {
 namespace physics {
 
-
+using colliders::Collider;
 
 struct Contact {
     RigidBody* body_a = nullptr;  // nullptr = статика (земля)
     RigidBody* body_b = nullptr;
+    Collider* collider_a = nullptr;  // Для скоростей (если body == nullptr)
+    Collider* collider_b = nullptr;
     Vec3 point;
     Vec3 normal;
     double penetration = 0;
@@ -141,8 +144,22 @@ private:
     }
 
     Vec3 relative_velocity(const Contact& c) const {
-        Vec3 v_b = c.body_b ? c.body_b->point_velocity(c.point) : Vec3();
-        Vec3 v_a = c.body_a ? c.body_a->point_velocity(c.point) : Vec3();
+        // Скорость тела B в точке контакта
+        Vec3 v_b;
+        if (c.body_b) {
+            v_b = c.body_b->point_velocity(c.point);
+        } else if (c.collider_b) {
+            v_b = c.collider_b->point_velocity(c.point);
+        }
+
+        // Скорость тела A в точке контакта
+        Vec3 v_a;
+        if (c.body_a) {
+            v_a = c.body_a->point_velocity(c.point);
+        } else if (c.collider_a) {
+            v_a = c.collider_a->point_velocity(c.point);
+        }
+
         return v_b - v_a;
     }
 

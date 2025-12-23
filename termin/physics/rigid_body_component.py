@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
+import warnings
 import numpy as np
 
 from termin.visualization.core.component import Component
@@ -81,11 +82,32 @@ class RigidBodyComponent(Component):
         if self.entity is None:
             return
 
+        # Проверяем scale у предков
+        self._validate_ancestor_scales()
+
         # Определяем размеры коллайдера из меша сущности
         self._half_extents = self._compute_half_extents()
 
         # Ищем PhysicsWorldComponent в сцене и регистрируемся
         self._find_and_register_with_physics_world(self.entity.scene)
+
+    def _validate_ancestor_scales(self):
+        """Проверить, что у предков нет non-identity scale."""
+        if self.entity is None:
+            return
+
+        t = self.entity.transform.parent
+        while t is not None:
+            scale = t.local_pose().scale
+            if not np.allclose(scale, [1.0, 1.0, 1.0], atol=1e-6):
+                warnings.warn(
+                    f"RigidBodyComponent on '{self.entity.name}' has ancestor "
+                    f"'{t.name}' with scale {scale}. Physics may behave incorrectly.",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
+                break
+            t = t.parent
 
     def _compute_half_extents(self) -> np.ndarray:
         """Вычислить half_extents из меша или коллайдера сущности."""
