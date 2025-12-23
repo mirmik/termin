@@ -6,3 +6,5 @@ pyassimp
 scipy
 PyQt6>=6.4
 PyYAML>=6.0
+pysdl2
+pysdl2-dll

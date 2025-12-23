@@ -57,6 +57,7 @@ class CMakeBuildExt(build_ext):
             ("collision", "_collision_native"),
             ("visualization/animation", "_animation_native"),
             ("entity", "_entity_native"),
+            ("lighting", "_lighting_native"),
         ]
         for subdir, module_name in module_mappings:
             dst_dir = Path(directory) / "termin" / subdir
@@ -96,6 +97,7 @@ if __name__ == "__main__":
                 "utils/*",
                 "geomalgo/*",
                 "linalg/*",
+                "lighting/*",
                 "robot/*",
                 "loaders/*",
                 "visualization/*",
@@ -127,6 +129,7 @@ if __name__ == "__main__":
             Extension("termin.collision._collision_native", sources=[]),
             Extension("termin.visualization.animation._animation_native", sources=[]),
             Extension("termin.entity._entity_native", sources=[]),
+            Extension("termin.lighting._lighting_native", sources=[]),
             Extension("termin.tests._cpp_tests", sources=[]),
         ],
         cmdclass={"build_ext": CMakeBuildExt},
