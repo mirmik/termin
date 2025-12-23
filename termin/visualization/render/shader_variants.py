@@ -180,7 +180,7 @@ def _register_default_transforms(registry: ShaderVariantRegistry) -> None:
             vertex_source=skinned_vert,
             fragment_source=shader.fragment_source,
             geometry_source=shader.geometry_source,
-            source_path=f"{shader.source_path}:skinned" if shader.source_path else None,
+            source_path=f"{shader.source_path}:skinned" if shader.source_path else "",
         )
 
     registry.register_transform(ShaderVariantOp.SKINNING, skinning_transform)

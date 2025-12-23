@@ -9,6 +9,12 @@
 
 namespace termin {
 
+// Helper to convert byte offset to void* for glVertexAttribPointer
+// Avoids MSVC warning C4312 about int to void* conversion on 64-bit
+inline const void* gl_offset(size_t offset) {
+    return reinterpret_cast<const void*>(offset);
+}
+
 /**
  * Draw mode for mesh rendering.
  */
@@ -77,15 +83,15 @@ private:
 
         // Position: location 0
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(0));
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, gl_offset(0));
 
         // Normal: location 1
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(3 * sizeof(float)));
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, gl_offset(3 * sizeof(float)));
 
         // UV: location 2
         glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(6 * sizeof(float)));
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, gl_offset(6 * sizeof(float)));
 
         glBindVertexArray(0);
     }
@@ -149,30 +155,30 @@ public:
 
         // Position: location 0
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, position_size, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(position_offset));
+        glVertexAttribPointer(0, position_size, GL_FLOAT, GL_FALSE, stride, gl_offset(position_offset));
 
         // Normal: location 1 (optional)
         if (has_normal) {
             glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(normal_offset));
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, gl_offset(normal_offset));
         }
 
         // UV: location 2 (optional)
         if (has_uv) {
             glEnableVertexAttribArray(2);
-            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(uv_offset));
+            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, gl_offset(uv_offset));
         }
 
         // Joints: location 3 (optional, for skinning)
         if (has_joints) {
             glEnableVertexAttribArray(3);
-            glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(joints_offset));
+            glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, gl_offset(joints_offset));
         }
 
         // Weights: location 4 (optional, for skinning)
         if (has_weights) {
             glEnableVertexAttribArray(4);
-            glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(weights_offset));
+            glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, stride, gl_offset(weights_offset));
         }
 
         glBindVertexArray(0);

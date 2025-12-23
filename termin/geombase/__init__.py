@@ -14,6 +14,7 @@
 from ._geom_native import (
     Vec3,
     Quat,
+    Mat44,
     Pose3,
     GeneralPose3,
     GeneralTransform3,
@@ -29,6 +30,7 @@ from termin.colliders._colliders_native import Ray3
 __all__ = [
     'Vec3',
     'Quat',
+    'Mat44',
     'Pose2',
     'Pose3',
     'GeneralPose3',

@@ -46,6 +46,9 @@ class GlslAsset(DataAsset[str]):
             uuid: Existing UUID or None to generate new one
         """
         super().__init__(data=source, name=name, source_path=source_path, uuid=uuid)
+        # Register with C++ preprocessor if source was provided at init
+        if source is not None:
+            self._register_in_preprocessor()
 
     @property
     def source(self) -> str | None:
@@ -54,12 +57,31 @@ class GlslAsset(DataAsset[str]):
 
     @source.setter
     def source(self, value: str | None) -> None:
-        """Set source and bump version."""
+        """Set source, bump version, and register in C++ preprocessor."""
         self.data = value
+        if value is not None:
+            self._register_in_preprocessor()
 
     def _parse_content(self, content: str) -> str | None:
         """Parse GLSL content (just return as-is, it's raw GLSL)."""
         return content
+
+    def _on_loaded(self) -> None:
+        """Register include with C++ preprocessor after loading."""
+        self._register_in_preprocessor()
+
+    def _register_in_preprocessor(self) -> None:
+        """Register this GLSL source with the C++ preprocessor."""
+        if self._data is None:
+            return
+
+        try:
+            from termin._native import glsl_preprocessor
+            glsl_preprocessor().register_include(self._name, self._data)
+            self._registered_in_preprocessor = True
+        except ImportError:
+            # C++ bindings not available (e.g., during testing)
+            pass
 
     @classmethod
     def from_file(cls, path: str | Path, name: str | None = None) -> "GlslAsset":

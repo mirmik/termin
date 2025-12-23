@@ -1,116 +1,41 @@
-"""
-GLSL Preprocessor with #include support.
+"""GLSL Preprocessor - re-export from C++."""
 
-Processes #include directives in GLSL source code by resolving
-include names through ResourceManager's glsl registry.
-
-Usage:
-    from termin.visualization.render.glsl_preprocessor import preprocess_glsl
-
-    processed_source = preprocess_glsl(source, "my_shader.vert")
-"""
-
-from __future__ import annotations
-
-import re
-from typing import Set
-
-
-# Pattern for #include "name" or #include <name>
-# Captures the include name without quotes/brackets
-_INCLUDE_PATTERN = re.compile(
-    r'^\s*#\s*include\s+[<"]([^>"]+)[>"]',
-    re.MULTILINE
+from termin._native import (
+    GlslPreprocessor,
+    glsl_preprocessor,
 )
 
 
 class GlslPreprocessorError(Exception):
     """Error during GLSL preprocessing."""
-    pass
 
 
-def preprocess_glsl(
-    source: str,
-    source_name: str = "<unknown>",
-    included: Set[str] | None = None,
-) -> str:
+def preprocess_glsl(source: str, source_name: str = "<unknown>") -> str:
     """
     Preprocess GLSL source, resolving #include directives.
 
-    Looks up include names in ResourceManager.glsl registry.
-    Recursively processes includes in included files.
-    Detects and reports circular includes.
+    Uses the global C++ preprocessor instance.
+    Include files must be registered via glsl_preprocessor().register_include().
 
     Args:
         source: GLSL source code
-        source_name: Name of the source file (for error messages)
-        included: Set of already included names (for cycle detection)
+        source_name: Name for error messages
 
     Returns:
-        Processed GLSL source with includes resolved
-
-    Raises:
-        GlslPreprocessorError: If include not found or circular include detected
-
-    Example:
-        # In shader:
-        #include "shadows"
-        #include "lighting"
-
-        # Resolves to content from ResourceManager.glsl.get("shadows") etc.
+        Processed source with includes resolved
     """
-    if included is None:
-        included = set()
-
-    # Find all #include directives
-    def replace_include(match: re.Match) -> str:
-        include_name = match.group(1)
-
-        # Strip .glsl suffix for registry lookup (files are registered without extension)
-        lookup_name = include_name
-        if lookup_name.endswith(".glsl"):
-            lookup_name = lookup_name[:-5]
-
-        # Check for circular include
-        if lookup_name in included:
-            raise GlslPreprocessorError(
-                f"Circular include detected: '{include_name}' "
-                f"(included from '{source_name}')"
-            )
-
-        # Get include source from ResourceManager
-        from termin.visualization.core.resources import ResourceManager
-        rm = ResourceManager.instance()
-
-        include_source = rm.get_glsl(lookup_name)
-        if include_source is None:
-            raise GlslPreprocessorError(
-                f"GLSL include not found: '{include_name}' "
-                f"(included from '{source_name}')\n"
-                f"Make sure the file is in your project's stdlib/glsl/ "
-                f"or standard library is deployed."
-            )
-
-        # Recursively preprocess the included source
-        new_included = included | {lookup_name}
-        processed = preprocess_glsl(
-            include_source,
-            source_name=include_name,
-            included=new_included,
-        )
-
-        # Add markers for debugging
-        return (
-            f"// === BEGIN INCLUDE: {include_name} ===\n"
-            f"{processed}\n"
-            f"// === END INCLUDE: {include_name} ==="
-        )
-
-    # Replace all includes
-    result = _INCLUDE_PATTERN.sub(replace_include, source)
-    return result
+    return glsl_preprocessor().preprocess(source, source_name)
 
 
 def has_includes(source: str) -> bool:
     """Check if source contains any #include directives."""
-    return bool(_INCLUDE_PATTERN.search(source))
+    return GlslPreprocessor.has_includes(source)
+
+
+__all__ = [
+    "GlslPreprocessor",
+    "GlslPreprocessorError",
+    "glsl_preprocessor",
+    "preprocess_glsl",
+    "has_includes",
+]

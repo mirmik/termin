@@ -124,7 +124,7 @@ class MaterialPhase:
         shader = ShaderProgram(
             vertex_source=data["shader"]["vertex"],
             fragment_source=data["shader"]["fragment"],
-            geometry_source=data["shader"].get("geometry"),
+            geometry_source=data["shader"].get("geometry") or "",
         )
 
         rs_data = data.get("render_state", {})
@@ -204,7 +204,7 @@ class MaterialPhase:
         shader = ShaderProgram(
             vertex_source=vs,
             fragment_source=fs,
-            geometry_source=gs,
+            geometry_source=gs or "",
         )
 
         # 2. Собираем RenderState из gl-флагов
@@ -304,7 +304,9 @@ class Material:
         shader_name: str = "DefaultShader",
     ):
         if shader is None:
-            shader = ShaderProgram.default_shader()
+            # Import here to avoid circular import
+            from termin.visualization.render.materials.default_material import default_shader
+            shader = default_shader()
 
         if color is not None:
             base_color = _rgba(color)

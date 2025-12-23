@@ -2,11 +2,15 @@
 
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
+#include <fstream>
+#include <sstream>
 
 #include "termin/mesh/mesh3.hpp"
 #include "termin/render/render.hpp"
 #include "termin/render/types.hpp"
 #include "termin/render/opengl/opengl_mesh.hpp"
+#include "termin/render/shader_program.hpp"
+#include "termin/camera/camera.hpp"
 
 namespace py = pybind11;
 
@@ -483,6 +487,218 @@ void bind_render(py::module_& m) {
                 actual_mode
             );
         }, py::arg("mesh"), py::arg("mode") = DrawMode::Triangles);
+
+    // --- GlslPreprocessor ---
+
+    py::class_<GlslPreprocessor>(m, "GlslPreprocessor")
+        .def(py::init<>())
+        .def("register_include", &GlslPreprocessor::register_include,
+            py::arg("name"), py::arg("source"),
+            "Register an include file")
+        .def("has_include", &GlslPreprocessor::has_include)
+        .def("get_include", [](const GlslPreprocessor& pp, const std::string& name) -> py::object {
+            const std::string* src = pp.get_include(name);
+            return src ? py::cast(*src) : py::none();
+        })
+        .def("clear", &GlslPreprocessor::clear)
+        .def("size", &GlslPreprocessor::size)
+        .def_static("has_includes", &GlslPreprocessor::has_includes)
+        .def("preprocess", &GlslPreprocessor::preprocess,
+            py::arg("source"), py::arg("source_name") = "<unknown>",
+            "Preprocess GLSL source, resolving #include directives");
+
+    // Global preprocessor instance
+    m.def("glsl_preprocessor", &glsl_preprocessor, py::return_value_policy::reference,
+        "Get the global GLSL preprocessor instance");
+
+    // --- ShaderProgram ---
+
+    py::class_<ShaderProgram>(m, "ShaderProgram")
+        .def(py::init<>())
+        .def(py::init<std::string, std::string, std::string, std::string>(),
+            py::arg("vertex_source"),
+            py::arg("fragment_source"),
+            py::arg("geometry_source") = "",
+            py::arg("source_path") = "")
+        .def_property_readonly("vertex_source", &ShaderProgram::vertex_source)
+        .def_property_readonly("fragment_source", &ShaderProgram::fragment_source)
+        .def_property_readonly("geometry_source", &ShaderProgram::geometry_source)
+        .def_property_readonly("source_path", &ShaderProgram::source_path)
+        .def_property_readonly("is_compiled", &ShaderProgram::is_compiled)
+        .def("ensure_ready", [](ShaderProgram& self, OpenGLGraphicsBackend& backend) {
+            self.ensure_ready([&backend](const char* v, const char* f, const char* g) {
+                return backend.create_shader(v, f, g);
+            });
+        }, py::arg("graphics"), "Compile shader using graphics backend")
+        .def("set_handle", &ShaderProgram::set_handle)
+        .def("use", &ShaderProgram::use)
+        .def("stop", &ShaderProgram::stop)
+        .def("release", &ShaderProgram::release)
+        .def("set_uniform_int", &ShaderProgram::set_uniform_int)
+        .def("set_uniform_float", &ShaderProgram::set_uniform_float)
+        .def("set_uniform_vec2", py::overload_cast<const char*, float, float>(&ShaderProgram::set_uniform_vec2))
+        .def("set_uniform_vec2", [](ShaderProgram& self, const char* name, py::array_t<float> v) {
+            auto buf = v.unchecked<1>();
+            self.set_uniform_vec2(name, buf(0), buf(1));
+        })
+        .def("set_uniform_vec3", py::overload_cast<const char*, float, float, float>(&ShaderProgram::set_uniform_vec3))
+        .def("set_uniform_vec3", py::overload_cast<const char*, const Vec3&>(&ShaderProgram::set_uniform_vec3))
+        .def("set_uniform_vec3", [](ShaderProgram& self, const char* name, py::array_t<float> v) {
+            auto buf = v.unchecked<1>();
+            self.set_uniform_vec3(name, buf(0), buf(1), buf(2));
+        })
+        .def("set_uniform_vec4", py::overload_cast<const char*, float, float, float, float>(&ShaderProgram::set_uniform_vec4))
+        .def("set_uniform_vec4", [](ShaderProgram& self, const char* name, py::array_t<float> v) {
+            auto buf = v.unchecked<1>();
+            self.set_uniform_vec4(name, buf(0), buf(1), buf(2), buf(3));
+        })
+        .def("set_uniform_matrix4", [](ShaderProgram& self, const char* name, py::array matrix, bool transpose) {
+            auto buf = matrix.request();
+            if (buf.ndim != 2 || buf.shape[0] != 4 || buf.shape[1] != 4) {
+                throw std::runtime_error("Matrix must be 4x4");
+            }
+            // Convert to float if needed
+            auto float_matrix = py::array_t<float>::ensure(matrix);
+            self.set_uniform_matrix4(name, static_cast<float*>(float_matrix.request().ptr), transpose);
+        }, py::arg("name"), py::arg("matrix"), py::arg("transpose") = true)
+        .def("set_uniform_matrix4", [](ShaderProgram& self, const char* name, const Mat44& m, bool transpose) {
+            self.set_uniform_matrix4(name, m, transpose);
+        }, py::arg("name"), py::arg("matrix"), py::arg("transpose") = true)
+        .def("set_uniform_matrix4_array", [](ShaderProgram& self, const char* name, py::array matrices, int count, bool transpose) {
+            auto buf = matrices.request();
+            auto float_matrices = py::array_t<float>::ensure(matrices);
+            self.set_uniform_matrix4_array(name, static_cast<float*>(float_matrices.request().ptr), count, transpose);
+        }, py::arg("name"), py::arg("matrices"), py::arg("count"), py::arg("transpose") = true)
+        .def("set_uniform_auto", [](ShaderProgram& self, const char* name, py::object value) {
+            // Automatic type inference for uniforms
+            if (py::isinstance<py::array>(value) || py::isinstance<py::list>(value) || py::isinstance<py::tuple>(value)) {
+                auto arr = py::array_t<float>::ensure(value);
+                auto buf = arr.request();
+
+                if (buf.ndim == 2 && buf.shape[0] == 4 && buf.shape[1] == 4) {
+                    self.set_uniform_matrix4(name, static_cast<float*>(buf.ptr), true);
+                } else if (buf.ndim == 1) {
+                    auto data = static_cast<float*>(buf.ptr);
+                    if (buf.size == 2) {
+                        self.set_uniform_vec2(name, data[0], data[1]);
+                    } else if (buf.size == 3) {
+                        self.set_uniform_vec3(name, data[0], data[1], data[2]);
+                    } else if (buf.size == 4) {
+                        self.set_uniform_vec4(name, data[0], data[1], data[2], data[3]);
+                    } else {
+                        throw std::runtime_error("Unsupported uniform array size: " + std::to_string(buf.size));
+                    }
+                } else {
+                    throw std::runtime_error("Unsupported uniform array shape");
+                }
+            } else if (py::isinstance<py::bool_>(value)) {
+                self.set_uniform_int(name, value.cast<bool>() ? 1 : 0);
+            } else if (py::isinstance<py::int_>(value)) {
+                self.set_uniform_int(name, value.cast<int>());
+            } else {
+                self.set_uniform_float(name, value.cast<float>());
+            }
+        }, py::arg("name"), py::arg("value"), "Set uniform with automatic type inference")
+        .def("delete", &ShaderProgram::release)
+        .def("direct_serialize", [](const ShaderProgram& prog) -> py::dict {
+            py::dict result;
+            if (!prog.source_path().empty()) {
+                result["type"] = "path";
+                result["path"] = prog.source_path();
+            } else {
+                result["type"] = "inline";
+                result["vertex"] = prog.vertex_source();
+                result["fragment"] = prog.fragment_source();
+                if (!prog.geometry_source().empty()) {
+                    result["geometry"] = prog.geometry_source();
+                }
+            }
+            return result;
+        })
+        .def_static("direct_deserialize", [](py::dict data) {
+            std::string source_path;
+            if (data.contains("type") && data["type"].cast<std::string>() == "path") {
+                source_path = data["path"].cast<std::string>();
+            }
+            return ShaderProgram(
+                data["vertex"].cast<std::string>(),
+                data["fragment"].cast<std::string>(),
+                data.contains("geometry") ? data["geometry"].cast<std::string>() : "",
+                source_path
+            );
+        })
+        .def_static("from_files", [](const std::string& vertex_path, const std::string& fragment_path) {
+            auto read_file = [](const std::string& path) -> std::string {
+                std::ifstream file(path);
+                if (!file) {
+                    throw std::runtime_error("Cannot open file: " + path);
+                }
+                std::stringstream buffer;
+                buffer << file.rdbuf();
+                return buffer.str();
+            };
+            return ShaderProgram(
+                read_file(vertex_path),
+                read_file(fragment_path),
+                "",
+                vertex_path
+            );
+        }, py::arg("vertex_path"), py::arg("fragment_path"), "Load shader from files")
+        .def("__repr__", [](const ShaderProgram& prog) -> std::string {
+            std::string path = prog.source_path().empty() ? "<inline>" : prog.source_path();
+            return "<ShaderProgram " + path + (prog.is_compiled() ? " compiled>" : " not compiled>");
+        });
+
+    // --- Camera ---
+
+    py::enum_<CameraProjection>(m, "CameraProjection")
+        .value("Perspective", CameraProjection::Perspective)
+        .value("Orthographic", CameraProjection::Orthographic);
+
+    py::class_<Camera>(m, "Camera")
+        .def(py::init<>())
+        .def_readwrite("projection_type", &Camera::projection_type)
+        .def_readwrite("near", &Camera::near)
+        .def_readwrite("far", &Camera::far)
+        .def_readwrite("fov_y", &Camera::fov_y)
+        .def_readwrite("aspect", &Camera::aspect)
+        .def_readwrite("ortho_left", &Camera::ortho_left)
+        .def_readwrite("ortho_right", &Camera::ortho_right)
+        .def_readwrite("ortho_bottom", &Camera::ortho_bottom)
+        .def_readwrite("ortho_top", &Camera::ortho_top)
+        .def_static("perspective", &Camera::perspective,
+            py::arg("fov_y_rad"), py::arg("aspect"),
+            py::arg("near") = 0.1, py::arg("far") = 100.0,
+            "Create perspective camera (FOV in radians)")
+        .def_static("perspective_deg", &Camera::perspective_deg,
+            py::arg("fov_y_deg"), py::arg("aspect"),
+            py::arg("near") = 0.1, py::arg("far") = 100.0,
+            "Create perspective camera (FOV in degrees)")
+        .def_static("orthographic", &Camera::orthographic,
+            py::arg("left"), py::arg("right"),
+            py::arg("bottom"), py::arg("top"),
+            py::arg("near") = 0.1, py::arg("far") = 100.0,
+            "Create orthographic camera")
+        .def("projection_matrix", &Camera::projection_matrix,
+            "Get projection matrix (Y-forward, Z-up)")
+        .def_static("view_matrix", &Camera::view_matrix,
+            py::arg("position"), py::arg("rotation"),
+            "Compute view matrix from camera world pose")
+        .def_static("view_matrix_look_at", &Camera::view_matrix_look_at,
+            py::arg("eye"), py::arg("target"),
+            py::arg("up") = Vec3::unit_z(),
+            "Compute view matrix using look-at")
+        .def("set_aspect", &Camera::set_aspect, py::arg("aspect"))
+        .def("set_fov", &Camera::set_fov, py::arg("fov_rad"))
+        .def("set_fov_deg", &Camera::set_fov_deg, py::arg("fov_deg"))
+        .def("get_fov_deg", &Camera::get_fov_deg)
+        .def("__repr__", [](const Camera& cam) -> std::string {
+            if (cam.projection_type == CameraProjection::Perspective) {
+                return "<Camera perspective fov=" + std::to_string(cam.get_fov_deg()) + "deg>";
+            } else {
+                return "<Camera orthographic>";
+            }
+        });
 }
 
 } // namespace termin
