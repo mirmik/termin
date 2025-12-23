@@ -89,6 +89,12 @@ target_compile_options(_animation_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
+# Lighting native module (Light, AttenuationCoefficients)
+pybind11_add_module(_lighting_native termin/lighting_bindings.cpp)
+target_compile_options(_lighting_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
 # Entity native module (Entity, Component, registries)
 pybind11_add_module(_entity_native
     termin/entity_bindings.cpp
@@ -163,4 +169,5 @@ install(TARGETS _physics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/physics)
 install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/voxels)
 install(TARGETS _collision_native DESTINATION ${CMAKE_INSTALL_PREFIX}/collision)
 install(TARGETS _animation_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/animation)
+install(TARGETS _lighting_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/core/lighting)
 install(TARGETS _entity_native DESTINATION ${CMAKE_INSTALL_PREFIX}/entity)

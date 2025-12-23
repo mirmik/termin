@@ -79,11 +79,9 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         """Get or create child MeshAssets with UUIDs from spec via ResourceManager."""
         from termin.assets.resources import ResourceManager
 
-        print(f"[GLBAsset._create_mesh_assets] {self._name}: mesh_uuids={mesh_uuids}")
         rm = ResourceManager.instance()
         for mesh_name, mesh_uuid in mesh_uuids.items():
             full_name = f"{self._name}_{mesh_name}"
-            print(f"[GLBAsset._create_mesh_assets]   creating: full_name={full_name}, uuid={mesh_uuid}")
             asset = rm.get_or_create_mesh_asset(
                 name=full_name,
                 source_path=str(self._source_path) if self._source_path else None,
@@ -91,7 +89,6 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                 parent=self,
                 parent_key=mesh_name,
             )
-            print(f"[GLBAsset._create_mesh_assets]   result asset: {asset}, asset.uuid={asset.uuid}")
             self._mesh_assets[mesh_name] = asset
 
     def _create_skeleton_assets(self, skeleton_uuids: Dict[str, str]) -> None:
@@ -215,20 +212,14 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         from termin.skeleton.skeleton import SkeletonData
 
         glb_mesh_names = {m.name for m in self._data.meshes}
-        mesh_asset_keys = set(self._mesh_assets.keys())
-        print(f"[GLBAsset] _populate_child_assets: mesh_asset_keys={mesh_asset_keys}")
-        print(f"[GLBAsset] _populate_child_assets: glb_mesh_names={glb_mesh_names}")
 
         # Populate mesh assets
         for mesh_name, asset in self._mesh_assets.items():
             if asset._data is None:
-                if mesh_name not in glb_mesh_names:
-                    print(f"[GLBAsset] WARNING: mesh '{mesh_name}' not found in GLB. Available: {glb_mesh_names}")
                 for glb_mesh in self._data.meshes:
                     if glb_mesh.name == mesh_name:
                         asset._data = _glb_mesh_to_mesh3(glb_mesh)
                         asset._loaded = True
-                        print(f"[GLBAsset] Populated mesh '{mesh_name}' -> _loaded=True")
                         break
 
         # Populate skeleton assets

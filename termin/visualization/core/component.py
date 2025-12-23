@@ -251,27 +251,19 @@ class Component(_NativeComponent):
                         uuid = value.get("uuid")
                         name = value.get("name")
                         if uuid:
-                            print(f"[Component.deserialize] {cls.__name__}.{key}: looking up {resource_kind} by uuid={uuid}")
                             handle = rm.get_handle_by_uuid(resource_kind, uuid)
-                            print(f"[Component.deserialize]   result: {handle}")
                         elif name:
-                            print(f"[Component.deserialize] {cls.__name__}.{key}: looking up {resource_kind} by name={name}")
                             accessors = rm.get_handle_accessors(resource_kind)
                             if accessors:
                                 handle = accessors.get_by_name(name)
-                            print(f"[Component.deserialize]   result: {handle}")
                     elif isinstance(value, str):
                         # Legacy: name as string
-                        print(f"[Component.deserialize] {cls.__name__}.{key}: looking up {resource_kind} by legacy name={value}")
                         accessors = rm.get_handle_accessors(resource_kind)
                         if accessors:
                             handle = accessors.get_by_name(value)
-                        print(f"[Component.deserialize]   result: {handle}")
 
                     if handle is not None and field.setter:
                         field.setter(obj, handle)
-                    else:
-                        print(f"[Component.deserialize] WARNING: {cls.__name__}.{key}: handle is None or no setter!")
                     continue
 
                 # Legacy resource kinds (raw resource objects)

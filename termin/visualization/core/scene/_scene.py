@@ -530,8 +530,6 @@ class Scene(Identifiable):
         Returns:
             Number of loaded entities
         """
-        print(f"[Scene.load_from_data] loading scene...")
-
         if update_settings:
             self.background_color = np.asarray(
                 data.get("background_color", [0.05, 0.05, 0.08, 1.0]),
@@ -545,13 +543,9 @@ class Scene(Identifiable):
 
         loaded_count = 0
         entities_data = data.get("entities", [])
-        print(f"[Scene.load_from_data]   loading {len(entities_data)} entities...")
         for ent_data in entities_data:
-            ent_name = ent_data.get("name", "unnamed")
-            print(f"[Scene.load_from_data]   deserializing entity: {ent_name}")
             ent = Entity.deserialize(ent_data, context)
             self.add(ent)
             loaded_count += 1
 
-        print(f"[Scene.load_from_data]   loaded {loaded_count} entities")
         return loaded_count

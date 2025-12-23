@@ -798,12 +798,8 @@ class ResourceManager:
         """Register GLB from PreLoadResult."""
         from termin.assets.glb_asset import GLBAsset
 
-        print(f"[ResourceManager._register_glb_file] name={name}, path={result.path}")
-        print(f"[ResourceManager._register_glb_file]   spec_data={result.spec_data}")
-
         # Check if already registered by name
         if name in self._glb_assets:
-            print(f"[ResourceManager._register_glb_file]   already registered, skipping")
             return
 
         # Try to find existing Asset by UUID
@@ -820,13 +816,10 @@ class ResourceManager:
                 name=name,
                 source_path=result.path,
             )
-            print(f"[ResourceManager._register_glb_file]   created new GLBAsset")
 
         # Parse spec to set UUID, settings, and CREATE CHILD ASSETS
-        print(f"[ResourceManager._register_glb_file]   calling parse_spec...")
         asset.parse_spec(result.spec_data)
         self._assets_by_uuid[asset.uuid] = asset
-        print(f"[ResourceManager._register_glb_file]   asset.uuid={asset.uuid}")
 
         # Register by name (lazy loading - don't load content yet)
         self._glb_assets[name] = asset
@@ -836,19 +829,13 @@ class ResourceManager:
 
     def _register_glb_child_assets(self, glb_asset: "GLBAsset") -> None:
         """Register child assets from GLBAsset (meshes, skeletons, animations)."""
-        print(f"[ResourceManager._register_glb_child_assets] glb={glb_asset.name}")
-
         # Register mesh assets
         mesh_assets = glb_asset.get_mesh_assets()
-        print(f"[ResourceManager._register_glb_child_assets]   mesh_assets keys: {list(mesh_assets.keys())}")
         for mesh_name, mesh_asset in mesh_assets.items():
             full_name = mesh_asset.name
-            print(f"[ResourceManager._register_glb_child_assets]   registering mesh: {full_name}, uuid={mesh_asset.uuid}")
             if full_name not in self._mesh_assets:
                 self._mesh_assets[full_name] = mesh_asset
                 self._assets_by_uuid[mesh_asset.uuid] = mesh_asset
-            else:
-                print(f"[ResourceManager._register_glb_child_assets]     already exists in _mesh_assets")
 
         # Register skeleton assets
         for skeleton_key, skeleton_asset in glb_asset.get_skeleton_assets().items():
@@ -1998,12 +1985,7 @@ class ResourceManager:
             Handle instance or None if not found
         """
         if kind == "mesh":
-            print(f"[ResourceManager.get_handle_by_uuid] kind=mesh, uuid={uuid}")
-            print(f"[ResourceManager.get_handle_by_uuid]   registered mesh assets: {list(self._mesh_assets.keys())}")
-            print(f"[ResourceManager.get_handle_by_uuid]   uuid in _assets_by_uuid: {uuid in self._assets_by_uuid}")
-            result = self.get_mesh_by_uuid(uuid)
-            print(f"[ResourceManager.get_handle_by_uuid]   result: {result}")
-            return result
+            return self.get_mesh_by_uuid(uuid)
 
         if kind == "material":
             from termin.assets.material_handle import MaterialHandle
