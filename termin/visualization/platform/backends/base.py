@@ -85,8 +85,8 @@ class MeshHandle(ABC):
         ...
 
 
-class TextureHandle(ABC):
-    """Backend texture object."""
+class GPUTextureHandle(ABC):
+    """Backend GPU texture object."""
 
     @abstractmethod
     def bind(self, unit: int = 0):
@@ -104,8 +104,8 @@ class FramebufferHandle(ABC):
         ...
 
     @abstractmethod
-    def color_texture(self) -> TextureHandle:
-        """TextureHandle for color attachment."""
+    def color_texture(self) -> GPUTextureHandle:
+        """GPUTextureHandle for color attachment."""
         ...
 
     @abstractmethod
@@ -189,7 +189,7 @@ class GraphicsBackend(ABC):
         ...
 
     @abstractmethod
-    def create_texture(self, image_data, size: Tuple[int, int], channels: int = 4, mipmap: bool = True, clamp: bool = False) -> TextureHandle:
+    def create_texture(self, image_data, size: Tuple[int, int], channels: int = 4, mipmap: bool = True, clamp: bool = False) -> GPUTextureHandle:
         ...
 
     @abstractmethod

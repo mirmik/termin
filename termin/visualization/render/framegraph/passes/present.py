@@ -18,7 +18,7 @@ def _get_texture_from_resource(resource, shadow_map_index: int = 0):
         shadow_map_index: индекс shadow map для ShadowMapArrayResource
 
     Returns:
-        TextureHandle или None
+        GPUTextureHandle или None
     """
     if resource is None:
         return None

@@ -12,7 +12,7 @@ from .base import (
     MeshHandle,
     MouseButton,
     ShaderHandle,
-    TextureHandle,
+    GPUTextureHandle,
     WindowBackend,
 )
 
@@ -61,7 +61,7 @@ class NOPMeshHandle(MeshHandle):
         pass
 
 
-class NOPTextureHandle(TextureHandle):
+class NOPGPUTextureHandle(GPUTextureHandle):
     """Текстура-заглушка."""
 
     def bind(self, unit: int = 0):
@@ -77,12 +77,12 @@ class NOPFramebufferHandle(FramebufferHandle):
     def __init__(self, size: Tuple[int, int]):
         self._size = size
         # Отдаём какую-то текстуру, чтобы postprocess не падал
-        self._color_tex = NOPTextureHandle()
+        self._color_tex = NOPGPUTextureHandle()
 
     def resize(self, size: Tuple[int, int]):
         self._size = size
 
-    def color_texture(self) -> TextureHandle:
+    def color_texture(self) -> GPUTextureHandle:
         return self._color_tex
 
     def delete(self):
@@ -162,8 +162,8 @@ class NOPGraphicsBackend(GraphicsBackend):
         channels: int = 4,
         mipmap: bool = True,
         clamp: bool = False,
-    ) -> TextureHandle:
-        return NOPTextureHandle()
+    ) -> GPUTextureHandle:
+        return NOPGPUTextureHandle()
 
     def draw_ui_vertices(self, context_key: int, vertices):
         # Ничего не рисуем

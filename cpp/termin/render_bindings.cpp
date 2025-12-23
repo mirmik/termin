@@ -112,12 +112,12 @@ PYBIND11_MODULE(_render_native, m) {
         .def("draw", &MeshHandle::draw)
         .def("release", &MeshHandle::release);
 
-    py::class_<TextureHandle, std::shared_ptr<TextureHandle>>(m, "TextureHandle")
-        .def("bind", &TextureHandle::bind, py::arg("unit") = 0)
-        .def("release", &TextureHandle::release)
-        .def("get_id", &TextureHandle::get_id)
-        .def("get_width", &TextureHandle::get_width)
-        .def("get_height", &TextureHandle::get_height);
+    py::class_<GPUTextureHandle, std::shared_ptr<GPUTextureHandle>>(m, "GPUTextureHandle")
+        .def("bind", &GPUTextureHandle::bind, py::arg("unit") = 0)
+        .def("release", &GPUTextureHandle::release)
+        .def("get_id", &GPUTextureHandle::get_id)
+        .def("get_width", &GPUTextureHandle::get_width)
+        .def("get_height", &GPUTextureHandle::get_height);
 
     py::class_<FramebufferHandle, std::shared_ptr<FramebufferHandle>>(m, "FramebufferHandle")
         .def("resize", &FramebufferHandle::resize)

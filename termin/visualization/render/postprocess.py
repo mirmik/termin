@@ -9,7 +9,7 @@ from termin.visualization.render.shader import ShaderProgram
 from termin.visualization.platform.backends.base import (
     FramebufferHandle,
     GraphicsBackend,
-    TextureHandle,
+    GPUTextureHandle,
 )
 from termin.visualization.render.framegraph import RenderFramePass, blit_fbo_to_fbo
 from termin.visualization.render.framegraph.passes.present import _get_texture_from_resource
@@ -119,13 +119,13 @@ class PostEffect:
         self,
         gfx: "GraphicsBackend",
         context_key: int,
-        color_tex: "TextureHandle",
-        extra_textures: dict[str, "TextureHandle"],
+        color_tex: "GPUTextureHandle",
+        extra_textures: dict[str, "GPUTextureHandle"],
         size: tuple[int, int],
     ):
         """
         color_tex      – текущая цветовая текстура (что пришло с предыдущего шага).
-        extra_textures – карта имя_ресурса -> TextureHandle (id, depth, normals...).
+        extra_textures – карта имя_ресурса -> GPUTextureHandle (id, depth, normals...).
         size           – (width, height) целевого буфера.
 
         Эффект внутри сам:
@@ -292,7 +292,7 @@ class PostProcessPass(RenderFramePass):
             if callable(req):
                 required_resources |= set(req())
 
-        extra_textures: dict[str, "TextureHandle"] = {}
+        extra_textures: dict[str, "GPUTextureHandle"] = {}
         for res_name in required_resources:
             fb = reads_fbos.get(res_name)
             if fb is None:

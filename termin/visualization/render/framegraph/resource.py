@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, List, Tuple
 import numpy as np
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import FramebufferHandle, TextureHandle
+    from termin.visualization.platform.backends.base import FramebufferHandle, GPUTextureHandle
 
 
 class FrameGraphResource(ABC):
@@ -60,11 +60,11 @@ class SingleFBO(FrameGraphResource):
     def resource_type(self) -> str:
         return "fbo"
 
-    def color_texture(self) -> "TextureHandle":
+    def color_texture(self) -> "GPUTextureHandle":
         """Возвращает color attachment как текстуру."""
         return self.fbo.color_texture()
 
-    def depth_texture(self) -> "TextureHandle | None":
+    def depth_texture(self) -> "GPUTextureHandle | None":
         """Возвращает depth attachment как текстуру (если есть)."""
         return self.fbo.depth_texture()
 
@@ -100,7 +100,7 @@ class ShadowMapArrayEntry:
     light_space_matrix: np.ndarray
     light_index: int
 
-    def texture(self) -> "TextureHandle":
+    def texture(self) -> "GPUTextureHandle":
         """Возвращает color-текстуру FBO."""
         return self.fbo.color_texture()
 

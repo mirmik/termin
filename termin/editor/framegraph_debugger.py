@@ -13,7 +13,7 @@ from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.visualization.render.shader import ShaderProgram
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import TextureHandle
+    from termin.visualization.platform.backends.base import GPUTextureHandle
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 
 
@@ -33,7 +33,7 @@ class ResourceHandler(ABC):
     """
 
     @abstractmethod
-    def get_texture(self, resource, context: dict) -> "TextureHandle | None":
+    def get_texture(self, resource, context: dict) -> "GPUTextureHandle | None":
         """
         Извлекает текстуру из ресурса для отображения.
 
@@ -42,7 +42,7 @@ class ResourceHandler(ABC):
             context: контекст с дополнительной информацией (например, индекс shadow map)
 
         Returns:
-            TextureHandle или None
+            GPUTextureHandle или None
         """
         pass
 
@@ -79,7 +79,7 @@ class SingleFBOHandler(ResourceHandler):
     Не требует дополнительных UI элементов управления.
     """
 
-    def get_texture(self, resource, context: dict) -> "TextureHandle | None":
+    def get_texture(self, resource, context: dict) -> "GPUTextureHandle | None":
         """Возвращает color_texture из SingleFBO."""
         if resource is None:
             return None
@@ -112,7 +112,7 @@ class ShadowMapArrayHandler(ResourceHandler):
         """Устанавливает callback для уведомления об изменении индекса."""
         self._on_index_changed = callback
 
-    def get_texture(self, resource, context: dict) -> "TextureHandle | None":
+    def get_texture(self, resource, context: dict) -> "GPUTextureHandle | None":
         """
         Возвращает текстуру из выбранного entry в ShadowMapArray.
 
@@ -395,7 +395,7 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         Извлекает текстуру из текущего ресурса используя соответствующий обработчик.
 
         Returns:
-            TextureHandle или None
+            GPUTextureHandle или None
         """
         resource = self._current_resource()
         if resource is None:

@@ -15,9 +15,9 @@ from termin.mesh.mesh import Mesh, VertexAttribType
 from termin.visualization.platform.backends.base import (
     FramebufferHandle,
     GraphicsBackend,
+    GPUTextureHandle,
     MeshHandle,
     ShaderHandle,
-    TextureHandle,
 )
 
 _OPENGL_INITED = False
@@ -282,7 +282,7 @@ class OpenGLMeshHandle(MeshHandle):
         self._vao = self._vbo = self._ebo = None
 
 
-class OpenGLTextureHandle(TextureHandle):
+class OpenGLTextureHandle(GPUTextureHandle):
     def __init__(self, image_data: np.ndarray, size: Tuple[int, int], channels: int = 4, mipmap: bool = True, clamp: bool = False):
         self._handle: int | None = None
         self._channels = channels
@@ -525,7 +525,7 @@ class OpenGLGraphicsBackend(GraphicsBackend):
     def create_mesh(self, mesh: Mesh) -> MeshHandle:
         return OpenGLMeshHandle(mesh)
 
-    def create_texture(self, image_data, size: Tuple[int, int], channels: int = 4, mipmap: bool = True, clamp: bool = False) -> TextureHandle:
+    def create_texture(self, image_data, size: Tuple[int, int], channels: int = 4, mipmap: bool = True, clamp: bool = False) -> GPUTextureHandle:
         return OpenGLTextureHandle(image_data, size, channels=channels, mipmap=mipmap, clamp=clamp)
 
     def draw_ui_vertices(self, context_key: int, vertices):
@@ -637,7 +637,7 @@ class OpenGLGraphicsBackend(GraphicsBackend):
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
 
-class _OpenGLColorTextureHandle(TextureHandle):
+class _OpenGLColorTextureHandle(GPUTextureHandle):
     """
     Лёгкая обёртка над уже созданной GL-текстурой.
     Жизненный цикл управляется фреймбуфером, delete() ничего не делает.
@@ -790,7 +790,7 @@ class OpenGLFramebufferHandle(FramebufferHandle):
         self._size = size
         self._create()
 
-    def color_texture(self) -> TextureHandle:
+    def color_texture(self) -> GPUTextureHandle:
         return self._color_handle
 
     def delete(self):
@@ -808,7 +808,7 @@ class OpenGLFramebufferHandle(FramebufferHandle):
             self._depth_rb = None
 
 
-class _OpenGLDepthTextureHandle(TextureHandle):
+class _OpenGLDepthTextureHandle(GPUTextureHandle):
     """
     Обёртка над depth texture для shadow mapping.
     Настроена для hardware PCF (sampler2DShadow).
@@ -907,11 +907,11 @@ class OpenGLShadowFramebufferHandle(FramebufferHandle):
         self._size = size
         self._create()
 
-    def color_texture(self) -> TextureHandle:
+    def color_texture(self) -> GPUTextureHandle:
         """Для shadow FBO возвращаем depth texture."""
         return self._depth_handle
 
-    def depth_texture(self) -> TextureHandle:
+    def depth_texture(self) -> GPUTextureHandle:
         """Возвращает depth texture для shadow sampling."""
         return self._depth_handle
 

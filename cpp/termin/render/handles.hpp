@@ -38,11 +38,11 @@ public:
 };
 
 /**
- * Abstract texture handle.
+ * Abstract GPU texture handle.
  */
-class TextureHandle {
+class GPUTextureHandle {
 public:
-    virtual ~TextureHandle() = default;
+    virtual ~GPUTextureHandle() = default;
 
     virtual void bind(int unit = 0) = 0;
     virtual void release() = 0;
@@ -68,8 +68,8 @@ public:
     virtual int get_samples() const = 0;
     virtual bool is_msaa() const = 0;
 
-    virtual TextureHandle* color_texture() = 0;
-    virtual TextureHandle* depth_texture() = 0;
+    virtual GPUTextureHandle* color_texture() = 0;
+    virtual GPUTextureHandle* depth_texture() = 0;
 };
 
 /**
@@ -77,7 +77,7 @@ public:
  */
 using ShaderHandlePtr = std::unique_ptr<ShaderHandle>;
 using MeshHandlePtr = std::unique_ptr<MeshHandle>;
-using TextureHandlePtr = std::unique_ptr<TextureHandle>;
+using GPUTextureHandlePtr = std::unique_ptr<GPUTextureHandle>;
 using FramebufferHandlePtr = std::unique_ptr<FramebufferHandle>;
 
 } // namespace termin

@@ -189,7 +189,7 @@ public:
         return std::make_unique<OpenGLMeshHandle>(mesh);
     }
 
-    TextureHandlePtr create_texture(
+    GPUTextureHandlePtr create_texture(
         const uint8_t* data,
         int width,
         int height,

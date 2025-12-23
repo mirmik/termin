@@ -57,12 +57,12 @@ public:
     int get_samples() const override { return samples_; }
     bool is_msaa() const override { return samples_ > 1; }
 
-    TextureHandle* color_texture() override {
+    GPUTextureHandle* color_texture() override {
         color_ref_.set_tex_id(color_tex_);
         return &color_ref_;
     }
 
-    TextureHandle* depth_texture() override {
+    GPUTextureHandle* depth_texture() override {
         return nullptr;  // Depth is renderbuffer, not texture
     }
 
@@ -160,12 +160,12 @@ public:
     int get_samples() const override { return 1; }
     bool is_msaa() const override { return false; }
 
-    TextureHandle* color_texture() override {
+    GPUTextureHandle* color_texture() override {
         // Shadow FBO has no color, return depth texture
         return depth_texture();
     }
 
-    TextureHandle* depth_texture() override {
+    GPUTextureHandle* depth_texture() override {
         depth_ref_.set_tex_id(depth_tex_);
         return &depth_ref_;
     }

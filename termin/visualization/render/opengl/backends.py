@@ -15,10 +15,10 @@ from termin.mesh.mesh import Mesh, VertexAttribType
 from termin.visualization.platform.backends.base import (
     FramebufferHandle,
     GraphicsBackend,
+    GPUTextureHandle,
     MeshHandle,
     PolylineHandle,
     ShaderHandle,
-    TextureHandle,
 )
 
 __all__ = [

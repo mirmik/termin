@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
 import os
-from termin.visualization.platform.backends.base import GraphicsBackend, TextureHandle
+from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
 
 class FontTextureAtlas:
     def __init__(self, path: str, size: int = 32):
@@ -12,18 +12,18 @@ class FontTextureAtlas:
         self.font = ImageFont.truetype(path, size)
         self.size = size
         self.glyphs = {}
-        self._handles: dict[int | None, TextureHandle] = {}
+        self._handles: dict[int | None, GPUTextureHandle] = {}
         self._atlas_data = None
         self.tex_w = 0
         self.tex_h = 0
         self._build_atlas()
 
     @property
-    def texture(self) -> TextureHandle | None:
+    def texture(self) -> GPUTextureHandle | None:
         """Backend texture handle (uploaded lazily once a context exists)."""
         return self._handles.get(None)
 
-    def ensure_texture(self, graphics: GraphicsBackend, context_key: int | None = None) -> TextureHandle:
+    def ensure_texture(self, graphics: GraphicsBackend, context_key: int | None = None) -> GPUTextureHandle:
         """Uploads atlas into the current graphics backend if not done yet."""
         handle = self._handles.get(context_key)
         if handle is None:
@@ -94,7 +94,7 @@ class FontTextureAtlas:
         # Keep CPU-side atlas; upload to GPU later when a graphics context is guaranteed.
         self._atlas_data = np.array(atlas, dtype=np.uint8)
 
-    def _upload_texture(self, graphics: GraphicsBackend) -> TextureHandle:
+    def _upload_texture(self, graphics: GraphicsBackend) -> GPUTextureHandle:
         if self._atlas_data is None:
             raise RuntimeError("Font atlas data is missing; cannot upload texture.")
         return graphics.create_texture(self._atlas_data, (self.tex_w, self.tex_h), channels=1, mipmap=False, clamp=True)

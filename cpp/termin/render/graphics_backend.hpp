@@ -67,7 +67,7 @@ public:
 
     virtual MeshHandlePtr create_mesh(const Mesh3& mesh) = 0;
 
-    virtual TextureHandlePtr create_texture(
+    virtual GPUTextureHandlePtr create_texture(
         const uint8_t* data,
         int width,
         int height,

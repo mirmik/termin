@@ -7,7 +7,7 @@
 
 namespace termin {
 
-class OpenGLTextureHandle : public TextureHandle {
+class OpenGLTextureHandle : public GPUTextureHandle {
 public:
     OpenGLTextureHandle(
         const uint8_t* data,
@@ -85,7 +85,7 @@ private:
  * Lightweight wrapper over existing GL texture.
  * Does not own the texture - release() is a no-op.
  */
-class OpenGLTextureRef : public TextureHandle {
+class OpenGLTextureRef : public GPUTextureHandle {
 public:
     explicit OpenGLTextureRef(GLuint tex_id, int width = 0, int height = 0)
         : tex_id_(tex_id), width_(width), height_(height) {}

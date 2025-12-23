@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.base import GraphicsBackend, TextureHandle as GPUTextureHandle
+    from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
     from termin.visualization.render.texture_data import TextureData
 
 
