@@ -79,9 +79,11 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         """Get or create child MeshAssets with UUIDs from spec via ResourceManager."""
         from termin.assets.resources import ResourceManager
 
+        print(f"[GLBAsset._create_mesh_assets] {self._name}: mesh_uuids={mesh_uuids}")
         rm = ResourceManager.instance()
         for mesh_name, mesh_uuid in mesh_uuids.items():
             full_name = f"{self._name}_{mesh_name}"
+            print(f"[GLBAsset._create_mesh_assets]   creating: full_name={full_name}, uuid={mesh_uuid}")
             asset = rm.get_or_create_mesh_asset(
                 name=full_name,
                 source_path=str(self._source_path) if self._source_path else None,
@@ -89,6 +91,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                 parent=self,
                 parent_key=mesh_name,
             )
+            print(f"[GLBAsset._create_mesh_assets]   result asset: {asset}, asset.uuid={asset.uuid}")
             self._mesh_assets[mesh_name] = asset
 
     def _create_skeleton_assets(self, skeleton_uuids: Dict[str, str]) -> None:

@@ -26,9 +26,12 @@ class GLBPreLoader(FilePreLoader):
         """
         Pre-load GLB file: only read UUID from spec (lazy loading).
         """
+        print(f"[GLBPreLoader.preload] path={path}")
         # Read spec file (may contain uuid, normalize_scale, etc.)
         spec_data = self.read_spec_file(path)
         uuid = spec_data.get("uuid") if spec_data else None
+        print(f"[GLBPreLoader.preload]   spec_data={spec_data}")
+        print(f"[GLBPreLoader.preload]   uuid={uuid}")
 
         return PreLoadResult(
             resource_type=self.resource_type,
