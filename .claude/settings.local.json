@@ -54,7 +54,8 @@
       "Bash(pkg-config:*)",
       "Bash(PYTHONPATH=. python:*)",
       "Bash(done)",
-      "Bash(PYTHONPATH=. timeout 30 python:*)"
+      "Bash(PYTHONPATH=. timeout 30 python:*)",
+      "Bash(g++:*)"
     ]
   }
 }

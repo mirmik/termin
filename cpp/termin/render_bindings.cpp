@@ -14,6 +14,9 @@
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/shadow_camera.hpp"
 #include "termin/render/immediate_renderer.hpp"
+#include "termin/render/frame_pass.hpp"
+#include "termin/render/frame_graph.hpp"
+#include "termin/render/render_context.hpp"
 #include "termin/camera/camera.hpp"
 
 namespace py = pybind11;
@@ -1356,6 +1359,143 @@ void bind_render(py::module_& m) {
         // Properties
         .def_property_readonly("line_count", &ImmediateRenderer::line_count)
         .def_property_readonly("triangle_count", &ImmediateRenderer::triangle_count);
+
+    // ========== Frame Pass System ==========
+
+    // FramePass base class
+    py::class_<FramePass>(m, "FramePass")
+        .def(py::init<>())
+        .def(py::init<std::string, std::set<std::string>, std::set<std::string>>(),
+             py::arg("pass_name"),
+             py::arg("reads") = std::set<std::string>{},
+             py::arg("writes") = std::set<std::string>{})
+        .def_readwrite("pass_name", &FramePass::pass_name)
+        .def_readwrite("reads", &FramePass::reads)
+        .def_readwrite("writes", &FramePass::writes)
+        .def_readwrite("enabled", &FramePass::enabled)
+        .def("get_inplace_aliases", &FramePass::get_inplace_aliases)
+        .def("is_inplace", &FramePass::is_inplace)
+        .def("get_internal_symbols", &FramePass::get_internal_symbols)
+        .def("set_debug_internal_point", &FramePass::set_debug_internal_point)
+        .def("clear_debug_internal_point", &FramePass::clear_debug_internal_point)
+        .def("get_debug_internal_point", &FramePass::get_debug_internal_point)
+        .def("required_resources", &FramePass::required_resources)
+        .def("__repr__", [](const FramePass& p) {
+            return "<FramePass '" + p.pass_name + "'>";
+        });
+
+    // FrameGraph errors
+    py::register_exception<FrameGraphError>(m, "FrameGraphError");
+    py::register_exception<FrameGraphMultiWriterError>(m, "FrameGraphMultiWriterError");
+    py::register_exception<FrameGraphCycleError>(m, "FrameGraphCycleError");
+
+    // FrameGraph
+    py::class_<FrameGraph>(m, "FrameGraph")
+        .def(py::init([](py::list passes) {
+            std::vector<FramePass*> pass_ptrs;
+            for (auto item : passes) {
+                pass_ptrs.push_back(item.cast<FramePass*>());
+            }
+            return FrameGraph(pass_ptrs);
+        }), py::arg("passes"))
+        .def("build_schedule", [](FrameGraph& self) {
+            auto schedule = self.build_schedule();
+            py::list result;
+            for (auto* p : schedule) {
+                result.append(py::cast(p, py::return_value_policy::reference));
+            }
+            return result;
+        })
+        .def("canonical_resource", &FrameGraph::canonical_resource)
+        .def("fbo_alias_groups", &FrameGraph::fbo_alias_groups);
+
+    // RenderContext
+    py::class_<RenderContext>(m, "RenderContext")
+        .def(py::init<>())
+        .def_readwrite("context_key", &RenderContext::context_key)
+        .def_readwrite("phase", &RenderContext::phase)
+        // view matrix
+        .def_property("view",
+            [](const RenderContext& self) {
+                py::array_t<float> result({4, 4});
+                auto buf = result.mutable_unchecked<2>();
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        buf(row, col) = self.view.data[col * 4 + row];
+                    }
+                }
+                return result;
+            },
+            [](RenderContext& self, py::array_t<float> arr) {
+                auto buf = arr.unchecked<2>();
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        self.view.data[col * 4 + row] = buf(row, col);
+                    }
+                }
+            }
+        )
+        // projection matrix
+        .def_property("projection",
+            [](const RenderContext& self) {
+                py::array_t<float> result({4, 4});
+                auto buf = result.mutable_unchecked<2>();
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        buf(row, col) = self.projection.data[col * 4 + row];
+                    }
+                }
+                return result;
+            },
+            [](RenderContext& self, py::array_t<float> arr) {
+                auto buf = arr.unchecked<2>();
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        self.projection.data[col * 4 + row] = buf(row, col);
+                    }
+                }
+            }
+        )
+        // model matrix
+        .def_property("model",
+            [](const RenderContext& self) {
+                py::array_t<float> result({4, 4});
+                auto buf = result.mutable_unchecked<2>();
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        buf(row, col) = self.model.data[col * 4 + row];
+                    }
+                }
+                return result;
+            },
+            [](RenderContext& self, py::array_t<float> arr) {
+                auto buf = arr.unchecked<2>();
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        self.model.data[col * 4 + row] = buf(row, col);
+                    }
+                }
+            }
+        )
+        .def("set_model", [](RenderContext& self, py::array_t<float> arr) {
+            auto buf = arr.unchecked<2>();
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    self.model.data[col * 4 + row] = buf(row, col);
+                }
+            }
+        })
+        .def("mvp", [](const RenderContext& self) {
+            Mat44f mvp = self.mvp();
+            py::array_t<float> result({4, 4});
+            auto buf = result.mutable_unchecked<2>();
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    buf(row, col) = mvp.data[col * 4 + row];
+                }
+            }
+            return result;
+        });
 }
 
 } // namespace termin
