@@ -23,15 +23,18 @@ void MaterialPhase::apply(
     shader->use();
 
     // Upload MVP matrices
-    shader->set_uniform_matrix4("u_model", model);
-    shader->set_uniform_matrix4("u_view", view);
-    shader->set_uniform_matrix4("u_projection", projection);
+    // Matrices are already in column-major format (converted in bindings), so transpose=false
+    shader->set_uniform_matrix4("u_model", model, false);
+    shader->set_uniform_matrix4("u_view", view, false);
+    shader->set_uniform_matrix4("u_projection", projection, false);
 
     // Bind textures
-    // Note: TextureGPU::bind() requires graphics backend and texture data,
-    // which we don't have here. For now, skip texture binding in C++ Material.
-    // Python Material handles texture binding correctly.
-    // TODO: Pass TextureData through MaterialPhase for proper binding
+    int texture_unit = 0;
+    for (const auto& [name, texture] : textures) {
+        texture.bind(graphics, texture_unit, context_key);
+        shader->set_uniform_int(name.c_str(), texture_unit);
+        ++texture_unit;
+    }
 
     // Upload uniforms
     for (const auto& [name, value] : uniforms) {
@@ -53,7 +56,8 @@ void MaterialPhase::apply(
                     static_cast<float>(val.z),
                     static_cast<float>(val.w));
             } else if constexpr (std::is_same_v<T, Mat44f>) {
-                shader->set_uniform_matrix4(name.c_str(), val);
+                // Matrices in uniforms are expected to be in column-major format
+                shader->set_uniform_matrix4(name.c_str(), val, false);
             } else if constexpr (std::is_same_v<T, std::vector<float>>) {
                 // Arrays - handled based on size
                 if (val.size() == 2) {

@@ -53,8 +53,18 @@ find_package(pybind11 CONFIG REQUIRED)
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-# Geom native module (Vec3, Quat, Pose3, Screw3, GeneralPose3)
-pybind11_add_module(_geom_native termin/geom_bindings.cpp)
+# Geom native module (Vec3, Quat, Pose3, Screw3, GeneralPose3, Transform, AABB)
+pybind11_add_module(_geom_native
+    termin/bindings/geom/geom_module.cpp
+    termin/bindings/geom/vec3.cpp
+    termin/bindings/geom/quat.cpp
+    termin/bindings/geom/mat44.cpp
+    termin/bindings/geom/pose3.cpp
+    termin/bindings/geom/general_pose3.cpp
+    termin/bindings/geom/screw3.cpp
+    termin/bindings/geom/transform.cpp
+    termin/bindings/geom/aabb.cpp
+)
 target_compile_options(_geom_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -143,7 +153,20 @@ endif()
 pybind11_add_module(_native
     termin/bindings.cpp
     termin/mesh_bindings.cpp
-    termin/render_bindings.cpp
+    termin/bindings/render/render_module.cpp
+    termin/bindings/render/types.cpp
+    termin/bindings/render/graphics_backend.cpp
+    termin/bindings/render/shader.cpp
+    termin/bindings/render/shader_parser.cpp
+    termin/bindings/render/camera.cpp
+    termin/bindings/render/shadow.cpp
+    termin/bindings/render/resource_spec.cpp
+    termin/bindings/render/immediate.cpp
+    termin/bindings/render/frame_pass.cpp
+    termin/bindings/render/material.cpp
+    termin/bindings/render/drawable.cpp
+    termin/bindings/render/gpu.cpp
+    termin/bindings/render/renderers.cpp
     termin/sdl_bindings.cpp
     termin/entity_bindings.cpp
     termin/scene_bindings.cpp
