@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "766c0201-016a-46ba-a5de-f39e62eb2145",
+    "uuid": "1f7d5602-0e01-40a7-bdad-c0644f58594e",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -1693,6 +1693,9 @@
                   "enabled": true,
                   "mesh": {
                     "uuid": "c6513438-2b62-4d41-ab65-d7371067cd14"
+                  },
+                  "material": {
+                    "uuid": "00000000-0000-0000-0002-000000000001"
                   },
                   "override_material": false,
                   "cast_shadow": true
@@ -7228,10 +7231,11 @@
         7.329275131225586,
         -0.4403475224971771
       ],
-      "radius": 14.5,
-      "azimuth": 57.864646020624626,
-      "elevation": 0.46425758103049025
+      "radius": 11.5,
+      "azimuth": 57.63426255936139,
+      "elevation": 0.28972465583105755
     },
+    "selected_entity": "mens_trouser_f_elv_chrMesh",
     "displays": [
       {
         "name": "Editor",
@@ -7240,7 +7244,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "41d3c7d7-f06b-450a-8824-8b42cf7e7f81",
+            "uuid": "824e6768-6af4-436d-8637-44f1f59bf9dd",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7259,7 +7263,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "fcdc8377-ffea-40af-8d7f-cacfb58d69c0",
+            "uuid": "c4eb64ed-18f4-49a9-8bd9-4df0da9d19fd",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7273,16 +7277,16 @@
       }
     ],
     "expanded_entities": [
+      "Arti",
       "entity12_copy",
-      "cube1",
-      "cube2",
+      "entity13",
+      "Walls",
       "EditorEntities",
+      "[Root]",
       "Glitch",
       "camera",
-      "Walls",
-      "entity13",
-      "[Root]",
-      "Arti"
+      "cube1",
+      "cube2"
     ]
   },
   "resources": {
