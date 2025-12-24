@@ -666,7 +666,8 @@ PYBIND11_MODULE(_geom_native, m) {
                 up
             );
         }, py::arg("eye"), py::arg("target"), py::arg("up_vec") = py::none())
-        .def_static("lerp", py::overload_cast<const GeneralPose3&, const GeneralPose3&, double>(&lerp),
+        .def_static("lerp",
+                    static_cast<GeneralPose3 (*)(const GeneralPose3&, const GeneralPose3&, double)>(&lerp),
                     "Linear interpolation between GeneralPose3 (with scale)")
         .def_static("from_matrix", [](py::array_t<double> mat) {
             auto buf = mat.unchecked<2>();
