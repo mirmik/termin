@@ -28,23 +28,23 @@ def test_parse_render_state_directives():
     )
 
     parsed = parse_shader_text(shader_text)
-    assert parsed["program"] == "demo"
-    assert len(parsed["phases"]) == 1
+    assert parsed.program == "demo"
+    assert len(parsed.phases) == 1
 
-    phase = parsed["phases"][0]
-    assert phase["phase_mark"] == "main"
-    assert phase["priority"] == 3
-    assert phase["glDepthMask"] is False
-    assert phase["glDepthTest"] is True
-    assert phase["glBlend"] is True
-    assert phase["glCull"] is False
-    assert phase["stages"]["vertex"] == "void main() {}\n"
+    phase = parsed.phases[0]
+    assert phase.phase_mark == "main"
+    assert phase.priority == 3
+    assert phase.gl_depth_mask is False
+    assert phase.gl_depth_test is True
+    assert phase.gl_blend is True
+    assert phase.gl_cull is False
+    assert phase.stages["vertex"].source == "void main() {}\n"
 
 
 def test_render_state_directives_require_phase():
     directives = ("@glDepthTest true", "@glBlend true", "@glCull true")
     for directive in directives:
-        with pytest.raises(ValueError):
+        with pytest.raises(RuntimeError):
             parse_shader_text(f"{directive}\n")
 
 
@@ -52,7 +52,7 @@ def test_render_state_directives_require_value():
     directives = ("@glDepthTest", "@glBlend", "@glCull")
     shader_body = "\n".join(["@phase main", "{directive}", "@endphase"])
     for directive in directives:
-        with pytest.raises(ValueError):
+        with pytest.raises(RuntimeError):
             parse_shader_text(shader_body.format(directive=directive))
 
 
@@ -86,27 +86,27 @@ def test_parse_multiple_phases_and_stages():
     )
 
     parsed = parse_shader_text(shader_text)
-    assert parsed["program"] == "composite"
-    assert len(parsed["phases"]) == 2
+    assert parsed.program == "composite"
+    assert len(parsed.phases) == 2
 
-    geometry = parsed["phases"][0]
-    assert geometry["phase_mark"] == "geometry"
-    assert geometry["priority"] == 1
-    assert geometry["glDepthTest"] is True
-    assert geometry["glDepthMask"] is None
-    assert geometry["glBlend"] is None
-    assert geometry["glCull"] is None
-    assert geometry["stages"]["vertex"] == "// vertex stage\nvoid main() {}\n"
-    assert geometry["stages"]["fragment"] == "// fragment stage\nvoid main() {\n  gl_FragColor = vec4(1.0);\n}\n"
+    geometry = parsed.phases[0]
+    assert geometry.phase_mark == "geometry"
+    assert geometry.priority == 1
+    assert geometry.gl_depth_test is True
+    assert geometry.gl_depth_mask is None
+    assert geometry.gl_blend is None
+    assert geometry.gl_cull is None
+    assert geometry.stages["vertex"].source == "// vertex stage\nvoid main() {}\n"
+    assert geometry.stages["fragment"].source == "// fragment stage\nvoid main() {\n  gl_FragColor = vec4(1.0);\n}\n"
 
-    overlay = parsed["phases"][1]
-    assert overlay["phase_mark"] == "overlay"
-    assert overlay["priority"] == 0  # default value
-    assert overlay["glDepthMask"] is False
-    assert overlay["glDepthTest"] is False
-    assert overlay["glBlend"] is True
-    assert overlay["glCull"] is None
-    assert overlay["stages"]["vertex"] == "// overlay vertex\n"
+    overlay = parsed.phases[1]
+    assert overlay.phase_mark == "overlay"
+    assert overlay.priority == 0  # default value
+    assert overlay.gl_depth_mask is False
+    assert overlay.gl_depth_test is False
+    assert overlay.gl_blend is True
+    assert overlay.gl_cull is None
+    assert overlay.stages["vertex"].source == "// overlay vertex\n"
 
 
 def test_tree_builders_have_uniform_signature():
@@ -196,21 +196,21 @@ def test_parse_property_in_phase():
     ])
 
     parsed = parse_shader_text(shader_text)
-    phase = parsed["phases"][0]
+    phase = parsed.phases[0]
 
-    assert len(phase["uniforms"]) == 3
+    assert len(phase.uniforms) == 3
 
-    u_roughness = phase["uniforms"][0]
+    u_roughness = phase.uniforms[0]
     assert isinstance(u_roughness, MaterialProperty)
     assert u_roughness.name == "u_roughness"
     assert u_roughness.default == 0.5
 
-    u_color = phase["uniforms"][1]
+    u_color = phase.uniforms[1]
     assert u_color.name == "u_color"
     assert u_color.property_type == "Color"
     assert u_color.default == (1.0, 0.0, 0.0, 1.0)
 
-    u_metallic = phase["uniforms"][2]
+    u_metallic = phase.uniforms[2]
     assert u_metallic.name == "u_metallic"
     assert u_metallic.range_min == 0.0
     assert u_metallic.range_max == 1.0
@@ -231,7 +231,7 @@ def test_shader_phase_from_tree_with_properties():
     ])
 
     parsed = parse_shader_text(shader_text)
-    phase = ShaderPhase.from_tree(parsed["phases"][0])
+    phase = ShaderPhase.from_tree(parsed.phases[0])
 
     assert len(phase.uniforms) == 1
     assert phase.uniforms[0].name == "u_value"
@@ -240,5 +240,5 @@ def test_shader_phase_from_tree_with_properties():
 
 def test_property_requires_phase():
     """@property вне @phase должен бросить ошибку."""
-    with pytest.raises(ValueError, match="@property вне @phase"):
+    with pytest.raises(RuntimeError, match="@property outside @phase"):
         parse_shader_text("@property Float u_value = 0.5")

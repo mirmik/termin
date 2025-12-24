@@ -139,7 +139,7 @@ else()
     endif()
 endif()
 
-# Unified native module (Mesh3 + Render + SDL + Entity + Scene + Skeleton + Inspect)
+# Unified native module (Mesh3 + Render + SDL + Entity + Scene + Skeleton + Inspect + Assets)
 pybind11_add_module(_native
     termin/bindings.cpp
     termin/mesh_bindings.cpp
@@ -149,6 +149,8 @@ pybind11_add_module(_native
     termin/scene_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
+    termin/assets/assets_bindings.cpp
+    termin/render/shader_parser.cpp
     termin/entity/entity.cpp
     termin/entity/entity_registry.cpp
     termin/entity/component_registry.cpp

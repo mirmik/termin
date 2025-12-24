@@ -7,6 +7,7 @@
 #include "scene_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
+#include "assets/assets_bindings.hpp"
 
 namespace py = pybind11;
 
@@ -21,6 +22,7 @@ PYBIND11_MODULE(_native, m) {
     auto scene_module = m.def_submodule("scene", "Scene module");
     auto skeleton_module = m.def_submodule("skeleton", "Skeleton module");
     auto inspect_module = m.def_submodule("inspect", "Inspect module");
+    auto assets_module = m.def_submodule("assets", "Assets module");
 
     termin::bind_mesh(mesh_module);
     termin::bind_render(render_module);
@@ -29,4 +31,5 @@ PYBIND11_MODULE(_native, m) {
     termin::bind_scene(scene_module);
     termin::bind_skeleton(skeleton_module);
     termin::bind_inspect(inspect_module);
+    termin::bind_assets(assets_module);
 }
