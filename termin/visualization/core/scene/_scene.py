@@ -319,9 +319,17 @@ class Scene(_NativeScene):
     def on_entity_added(self) -> Event[Entity]:
         return self._on_entity_added
 
+    @on_entity_added.setter
+    def on_entity_added(self, value: Event[Entity]):
+        pass  # __iadd__ modifies in place, setter is no-op
+
     @property
     def on_entity_removed(self) -> Event[Entity]:
         return self._on_entity_removed
+
+    @on_entity_removed.setter
+    def on_entity_removed(self, value: Event[Entity]):
+        pass  # __iadd__ modifies in place, setter is no-op
 
     def find_entity_by_uuid(self, uuid: str) -> Entity | None:
         """
