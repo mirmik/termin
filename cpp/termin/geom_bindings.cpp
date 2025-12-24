@@ -476,7 +476,8 @@ PYBIND11_MODULE(_geom_native, m) {
                    std::to_string(p.lin.z) + "))";
         });
 
-    m.def("lerp", py::overload_cast<const Pose3&, const Pose3&, double>(&lerp),
+    m.def("lerp",
+          static_cast<Pose3 (*)(const Pose3&, const Pose3&, double)>(&lerp),
           "Linear interpolation between poses");
 
     // GeneralPose3
