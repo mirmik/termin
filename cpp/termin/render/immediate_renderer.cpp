@@ -1,0 +1,662 @@
+#include "immediate_renderer.hpp"
+#include "glad/include/glad/glad.h"
+
+#include <cmath>
+#include <algorithm>
+
+// MSVC doesn't define M_PI by default
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+namespace termin {
+
+namespace {
+
+const char* IMMEDIATE_VERT = R"(
+#version 330 core
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec4 a_color;
+
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+out vec4 v_color;
+
+void main() {
+    v_color = a_color;
+    gl_Position = u_projection * u_view * vec4(a_position, 1.0);
+}
+)";
+
+const char* IMMEDIATE_FRAG = R"(
+#version 330 core
+in vec4 v_color;
+out vec4 fragColor;
+
+void main() {
+    fragColor = v_color;
+}
+)";
+
+uint32_t compile_shader(GLenum type, const char* source) {
+    uint32_t shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, nullptr);
+    glCompileShader(shader);
+
+    int success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        char log[512];
+        glGetShaderInfoLog(shader, 512, nullptr, log);
+        glDeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+
+uint32_t create_shader_program(const char* vert_src, const char* frag_src) {
+    uint32_t vert = compile_shader(GL_VERTEX_SHADER, vert_src);
+    if (!vert) return 0;
+
+    uint32_t frag = compile_shader(GL_FRAGMENT_SHADER, frag_src);
+    if (!frag) {
+        glDeleteShader(vert);
+        return 0;
+    }
+
+    uint32_t program = glCreateProgram();
+    glAttachShader(program, vert);
+    glAttachShader(program, frag);
+    glLinkProgram(program);
+
+    glDeleteShader(vert);
+    glDeleteShader(frag);
+
+    int success;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        glDeleteProgram(program);
+        return 0;
+    }
+
+    return program;
+}
+
+} // anonymous namespace
+
+
+ImmediateRenderer::~ImmediateRenderer() {
+    if (_shader_program) glDeleteProgram(_shader_program);
+    if (_line_vao) glDeleteVertexArrays(1, &_line_vao);
+    if (_line_vbo) glDeleteBuffers(1, &_line_vbo);
+    if (_tri_vao) glDeleteVertexArrays(1, &_tri_vao);
+    if (_tri_vbo) glDeleteBuffers(1, &_tri_vbo);
+}
+
+ImmediateRenderer::ImmediateRenderer(ImmediateRenderer&& other) noexcept
+    : line_vertices(std::move(other.line_vertices))
+    , tri_vertices(std::move(other.tri_vertices))
+    , _shader_program(other._shader_program)
+    , _line_vao(other._line_vao)
+    , _line_vbo(other._line_vbo)
+    , _tri_vao(other._tri_vao)
+    , _tri_vbo(other._tri_vbo)
+    , _initialized(other._initialized)
+    , _u_view_loc(other._u_view_loc)
+    , _u_proj_loc(other._u_proj_loc)
+{
+    other._shader_program = 0;
+    other._line_vao = 0;
+    other._line_vbo = 0;
+    other._tri_vao = 0;
+    other._tri_vbo = 0;
+    other._initialized = false;
+}
+
+ImmediateRenderer& ImmediateRenderer::operator=(ImmediateRenderer&& other) noexcept {
+    if (this != &other) {
+        // Clean up existing resources
+        if (_shader_program) glDeleteProgram(_shader_program);
+        if (_line_vao) glDeleteVertexArrays(1, &_line_vao);
+        if (_line_vbo) glDeleteBuffers(1, &_line_vbo);
+        if (_tri_vao) glDeleteVertexArrays(1, &_tri_vao);
+        if (_tri_vbo) glDeleteBuffers(1, &_tri_vbo);
+
+        // Move from other
+        line_vertices = std::move(other.line_vertices);
+        tri_vertices = std::move(other.tri_vertices);
+        _shader_program = other._shader_program;
+        _line_vao = other._line_vao;
+        _line_vbo = other._line_vbo;
+        _tri_vao = other._tri_vao;
+        _tri_vbo = other._tri_vbo;
+        _initialized = other._initialized;
+        _u_view_loc = other._u_view_loc;
+        _u_proj_loc = other._u_proj_loc;
+
+        other._shader_program = 0;
+        other._line_vao = 0;
+        other._line_vbo = 0;
+        other._tri_vao = 0;
+        other._tri_vbo = 0;
+        other._initialized = false;
+    }
+    return *this;
+}
+
+void ImmediateRenderer::begin() {
+    line_vertices.clear();
+    tri_vertices.clear();
+}
+
+void ImmediateRenderer::_add_vertex(std::vector<float>& buffer, const Vec3& pos, const Color4& color) {
+    buffer.push_back(static_cast<float>(pos.x));
+    buffer.push_back(static_cast<float>(pos.y));
+    buffer.push_back(static_cast<float>(pos.z));
+    buffer.push_back(color.r);
+    buffer.push_back(color.g);
+    buffer.push_back(color.b);
+    buffer.push_back(color.a);
+}
+
+std::pair<Vec3, Vec3> ImmediateRenderer::_build_basis(const Vec3& axis) {
+    Vec3 up{0.0, 0.0, 1.0};
+    if (std::abs(axis.dot(up)) > 0.99) {
+        up = Vec3{0.0, 1.0, 0.0};
+    }
+    Vec3 tangent = axis.cross(up).normalized();
+    Vec3 bitangent = axis.cross(tangent);
+    return {tangent, bitangent};
+}
+
+// ============================================================
+// Basic primitives
+// ============================================================
+
+void ImmediateRenderer::line(const Vec3& start, const Vec3& end, const Color4& color) {
+    _add_vertex(line_vertices, start, color);
+    _add_vertex(line_vertices, end, color);
+}
+
+void ImmediateRenderer::triangle(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Color4& color) {
+    _add_vertex(tri_vertices, p0, color);
+    _add_vertex(tri_vertices, p1, color);
+    _add_vertex(tri_vertices, p2, color);
+}
+
+void ImmediateRenderer::quad(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Vec3& p3, const Color4& color) {
+    triangle(p0, p1, p2, color);
+    triangle(p0, p2, p3, color);
+}
+
+// ============================================================
+// Wireframe primitives
+// ============================================================
+
+void ImmediateRenderer::polyline(const std::vector<Vec3>& points, const Color4& color, bool closed) {
+    if (points.size() < 2) return;
+    for (size_t i = 0; i < points.size() - 1; ++i) {
+        line(points[i], points[i + 1], color);
+    }
+    if (closed && points.size() > 2) {
+        line(points.back(), points.front(), color);
+    }
+}
+
+void ImmediateRenderer::circle(
+    const Vec3& center,
+    const Vec3& normal,
+    double radius,
+    const Color4& color,
+    int segments
+) {
+    Vec3 norm = normal.normalized();
+    auto [tangent, bitangent] = _build_basis(norm);
+
+    std::vector<Vec3> points;
+    points.reserve(segments);
+
+    for (int i = 0; i < segments; ++i) {
+        double angle = 2.0 * M_PI * i / segments;
+        Vec3 point = center + (tangent * std::cos(angle) + bitangent * std::sin(angle)) * radius;
+        points.push_back(point);
+    }
+
+    polyline(points, color, true);
+}
+
+void ImmediateRenderer::arrow(
+    const Vec3& origin,
+    const Vec3& direction,
+    double length,
+    const Color4& color,
+    double head_length,
+    double head_width
+) {
+    Vec3 dir = direction.normalized();
+    Vec3 tip = origin + dir * length;
+    Vec3 head_base = tip - dir * (length * head_length);
+
+    // Shaft
+    line(origin, head_base, color);
+
+    // Head (4 lines)
+    auto [right, up] = _build_basis(dir);
+
+    double hw = length * head_width;
+    Vec3 p1 = head_base + right * hw;
+    Vec3 p2 = head_base - right * hw;
+    Vec3 p3 = head_base + up * hw;
+    Vec3 p4 = head_base - up * hw;
+
+    line(tip, p1, color);
+    line(tip, p2, color);
+    line(tip, p3, color);
+    line(tip, p4, color);
+}
+
+void ImmediateRenderer::box(const Vec3& min_pt, const Vec3& max_pt, const Color4& color) {
+    // 8 corners
+    Vec3 corners[8] = {
+        {min_pt.x, min_pt.y, min_pt.z},
+        {max_pt.x, min_pt.y, min_pt.z},
+        {max_pt.x, max_pt.y, min_pt.z},
+        {min_pt.x, max_pt.y, min_pt.z},
+        {min_pt.x, min_pt.y, max_pt.z},
+        {max_pt.x, min_pt.y, max_pt.z},
+        {max_pt.x, max_pt.y, max_pt.z},
+        {min_pt.x, max_pt.y, max_pt.z},
+    };
+
+    // 12 edges
+    int edges[12][2] = {
+        {0, 1}, {1, 2}, {2, 3}, {3, 0},  // bottom
+        {4, 5}, {5, 6}, {6, 7}, {7, 4},  // top
+        {0, 4}, {1, 5}, {2, 6}, {3, 7},  // vertical
+    };
+
+    for (auto& e : edges) {
+        line(corners[e[0]], corners[e[1]], color);
+    }
+}
+
+void ImmediateRenderer::cylinder_wireframe(
+    const Vec3& start,
+    const Vec3& end,
+    double radius,
+    const Color4& color,
+    int segments
+) {
+    Vec3 axis = end - start;
+    double length = axis.norm();
+    if (length < 1e-6) return;
+    axis = axis / length;
+
+    // Circles at ends
+    circle(start, axis, radius, color, segments);
+    circle(end, axis, radius, color, segments);
+
+    // Connecting lines
+    auto [tangent, bitangent] = _build_basis(axis);
+
+    for (int i = 0; i < 4; ++i) {
+        double angle = 2.0 * M_PI * i / 4;
+        Vec3 offset = (tangent * std::cos(angle) + bitangent * std::sin(angle)) * radius;
+        line(start + offset, end + offset, color);
+    }
+}
+
+void ImmediateRenderer::sphere_wireframe(
+    const Vec3& center,
+    double radius,
+    const Color4& color,
+    int segments
+) {
+    // 3 orthogonal circles
+    circle(center, Vec3{0, 0, 1}, radius, color, segments);
+    circle(center, Vec3{0, 1, 0}, radius, color, segments);
+    circle(center, Vec3{1, 0, 0}, radius, color, segments);
+}
+
+void ImmediateRenderer::capsule_wireframe(
+    const Vec3& start,
+    const Vec3& end,
+    double radius,
+    const Color4& color,
+    int segments
+) {
+    Vec3 axis = end - start;
+    double length = axis.norm();
+    if (length < 1e-6) {
+        sphere_wireframe(start, radius, color, segments);
+        return;
+    }
+    axis = axis / length;
+
+    auto [tangent, bitangent] = _build_basis(axis);
+
+    // Circles at ends
+    circle(start, axis, radius, color, segments);
+    circle(end, axis, radius, color, segments);
+
+    // Connecting lines
+    for (int i = 0; i < 4; ++i) {
+        double angle = 2.0 * M_PI * i / 4;
+        Vec3 offset = (tangent * std::cos(angle) + bitangent * std::sin(angle)) * radius;
+        line(start + offset, end + offset, color);
+    }
+
+    // Hemisphere arcs
+    int half_segments = segments / 2;
+
+    for (const Vec3* basis_vec : {&tangent, &bitangent}) {
+        // Arc at start
+        std::vector<Vec3> points_start;
+        points_start.reserve(half_segments + 1);
+        for (int i = 0; i <= half_segments; ++i) {
+            double angle = M_PI * i / half_segments;
+            Vec3 pt = start + (*basis_vec * std::cos(angle) - axis * std::sin(angle)) * radius;
+            points_start.push_back(pt);
+        }
+        polyline(points_start, color);
+
+        // Arc at end
+        std::vector<Vec3> points_end;
+        points_end.reserve(half_segments + 1);
+        for (int i = 0; i <= half_segments; ++i) {
+            double angle = M_PI * i / half_segments;
+            Vec3 pt = end + (*basis_vec * std::cos(angle) + axis * std::sin(angle)) * radius;
+            points_end.push_back(pt);
+        }
+        polyline(points_end, color);
+    }
+}
+
+// ============================================================
+// Solid primitives
+// ============================================================
+
+void ImmediateRenderer::cylinder_solid(
+    const Vec3& start,
+    const Vec3& end,
+    double radius,
+    const Color4& color,
+    int segments,
+    bool caps
+) {
+    Vec3 axis = end - start;
+    double length = axis.norm();
+    if (length < 1e-6) return;
+    axis = axis / length;
+
+    auto [tangent, bitangent] = _build_basis(axis);
+
+    // Generate ring points
+    std::vector<Vec3> ring_start, ring_end;
+    ring_start.reserve(segments);
+    ring_end.reserve(segments);
+
+    for (int i = 0; i < segments; ++i) {
+        double angle = 2.0 * M_PI * i / segments;
+        Vec3 offset = (tangent * std::cos(angle) + bitangent * std::sin(angle)) * radius;
+        ring_start.push_back(start + offset);
+        ring_end.push_back(end + offset);
+    }
+
+    // Side triangles
+    for (int i = 0; i < segments; ++i) {
+        int j = (i + 1) % segments;
+        triangle(ring_start[i], ring_end[i], ring_end[j], color);
+        triangle(ring_start[i], ring_end[j], ring_start[j], color);
+    }
+
+    // Caps
+    if (caps) {
+        for (int i = 0; i < segments; ++i) {
+            int j = (i + 1) % segments;
+            triangle(start, ring_start[j], ring_start[i], color);
+            triangle(end, ring_end[i], ring_end[j], color);
+        }
+    }
+}
+
+void ImmediateRenderer::cone_solid(
+    const Vec3& base,
+    const Vec3& tip,
+    double radius,
+    const Color4& color,
+    int segments,
+    bool cap
+) {
+    Vec3 axis = tip - base;
+    double length = axis.norm();
+    if (length < 1e-6) return;
+    axis = axis / length;
+
+    auto [tangent, bitangent] = _build_basis(axis);
+
+    // Generate base ring points
+    std::vector<Vec3> ring;
+    ring.reserve(segments);
+    for (int i = 0; i < segments; ++i) {
+        double angle = 2.0 * M_PI * i / segments;
+        Vec3 offset = (tangent * std::cos(angle) + bitangent * std::sin(angle)) * radius;
+        ring.push_back(base + offset);
+    }
+
+    // Side triangles
+    for (int i = 0; i < segments; ++i) {
+        int j = (i + 1) % segments;
+        triangle(ring[i], tip, ring[j], color);
+    }
+
+    // Base cap
+    if (cap) {
+        for (int i = 0; i < segments; ++i) {
+            int j = (i + 1) % segments;
+            triangle(base, ring[j], ring[i], color);
+        }
+    }
+}
+
+void ImmediateRenderer::torus_solid(
+    const Vec3& center,
+    const Vec3& axis,
+    double major_radius,
+    double minor_radius,
+    const Color4& color,
+    int major_segments,
+    int minor_segments
+) {
+    Vec3 ax = axis.normalized();
+    auto [tangent, bitangent] = _build_basis(ax);
+
+    // Generate torus vertices
+    std::vector<std::vector<Vec3>> vertices(major_segments);
+
+    for (int i = 0; i < major_segments; ++i) {
+        double theta = 2.0 * M_PI * i / major_segments;
+        Vec3 ring_center = center + (tangent * std::cos(theta) + bitangent * std::sin(theta)) * major_radius;
+        Vec3 radial = tangent * std::cos(theta) + bitangent * std::sin(theta);
+
+        vertices[i].reserve(minor_segments);
+        for (int j = 0; j < minor_segments; ++j) {
+            double phi = 2.0 * M_PI * j / minor_segments;
+            Vec3 point = ring_center + (radial * std::cos(phi) + ax * std::sin(phi)) * minor_radius;
+            vertices[i].push_back(point);
+        }
+    }
+
+    // Generate triangles
+    for (int i = 0; i < major_segments; ++i) {
+        int i_next = (i + 1) % major_segments;
+        for (int j = 0; j < minor_segments; ++j) {
+            int j_next = (j + 1) % minor_segments;
+            const Vec3& p00 = vertices[i][j];
+            const Vec3& p10 = vertices[i_next][j];
+            const Vec3& p01 = vertices[i][j_next];
+            const Vec3& p11 = vertices[i_next][j_next];
+            triangle(p00, p10, p11, color);
+            triangle(p00, p11, p01, color);
+        }
+    }
+}
+
+void ImmediateRenderer::arrow_solid(
+    const Vec3& origin,
+    const Vec3& direction,
+    double length,
+    const Color4& color,
+    double shaft_radius,
+    double head_radius,
+    double head_length_ratio,
+    int segments
+) {
+    double dir_len = direction.norm();
+    if (dir_len < 1e-6) return;
+    Vec3 dir = direction / dir_len;
+
+    double head_length = length * head_length_ratio;
+    double shaft_length = length - head_length;
+
+    Vec3 shaft_end = origin + dir * shaft_length;
+    Vec3 tip = origin + dir * length;
+
+    // Shaft cylinder
+    cylinder_solid(origin, shaft_end, shaft_radius, color, segments, true);
+    // Head cone
+    cone_solid(shaft_end, tip, head_radius, color, segments, true);
+}
+
+// ============================================================
+// Rendering
+// ============================================================
+
+void ImmediateRenderer::_ensure_initialized() {
+    if (_initialized) return;
+
+    // Check if OpenGL context is available
+    if (!glCreateShader) {
+        // OpenGL not loaded, skip initialization
+        return;
+    }
+
+    _shader_program = create_shader_program(IMMEDIATE_VERT, IMMEDIATE_FRAG);
+    if (!_shader_program) return;
+
+    _u_view_loc = glGetUniformLocation(_shader_program, "u_view");
+    _u_proj_loc = glGetUniformLocation(_shader_program, "u_projection");
+
+    // Line VAO/VBO
+    glGenVertexArrays(1, &_line_vao);
+    glGenBuffers(1, &_line_vbo);
+
+    glBindVertexArray(_line_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, _line_vbo);
+
+    GLsizei stride = 7 * sizeof(float);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    // Triangle VAO/VBO
+    glGenVertexArrays(1, &_tri_vao);
+    glGenBuffers(1, &_tri_vbo);
+
+    glBindVertexArray(_tri_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, _tri_vbo);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    _initialized = true;
+}
+
+void ImmediateRenderer::flush(
+    const Mat44& view_matrix,
+    const Mat44& proj_matrix,
+    bool depth_test,
+    bool blend
+) {
+    if (line_vertices.empty() && tri_vertices.empty()) return;
+
+    _ensure_initialized();
+    if (!_initialized) return;
+
+    // Setup state
+    if (depth_test) {
+        glEnable(GL_DEPTH_TEST);
+    } else {
+        glDisable(GL_DEPTH_TEST);
+    }
+
+    if (blend) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+
+    glDisable(GL_CULL_FACE);
+
+    // Use shader
+    glUseProgram(_shader_program);
+
+    // Set uniforms (Mat44 is column-major, same as OpenGL)
+    // Convert double to float for OpenGL
+    float view_f[16], proj_f[16];
+    for (int i = 0; i < 16; ++i) {
+        view_f[i] = static_cast<float>(view_matrix.data[i]);
+        proj_f[i] = static_cast<float>(proj_matrix.data[i]);
+    }
+    glUniformMatrix4fv(_u_view_loc, 1, GL_FALSE, view_f);
+    glUniformMatrix4fv(_u_proj_loc, 1, GL_FALSE, proj_f);
+
+    // Draw lines
+    if (!line_vertices.empty()) {
+        glBindVertexArray(_line_vao);
+        glBindBuffer(GL_ARRAY_BUFFER, _line_vbo);
+        glBufferData(GL_ARRAY_BUFFER,
+                     line_vertices.size() * sizeof(float),
+                     line_vertices.data(),
+                     GL_DYNAMIC_DRAW);
+
+        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(line_vertices.size() / 7));
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+
+    // Draw triangles
+    if (!tri_vertices.empty()) {
+        glBindVertexArray(_tri_vao);
+        glBindBuffer(GL_ARRAY_BUFFER, _tri_vbo);
+        glBufferData(GL_ARRAY_BUFFER,
+                     tri_vertices.size() * sizeof(float),
+                     tri_vertices.data(),
+                     GL_DYNAMIC_DRAW);
+
+        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(tri_vertices.size() / 7));
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+
+    // Restore state
+    glEnable(GL_CULL_FACE);
+    if (!blend) {
+        glDisable(GL_BLEND);
+    }
+
+    glUseProgram(0);
+}
+
+} // namespace termin

@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "1f7d5602-0e01-40a7-bdad-c0644f58594e",
+    "uuid": "e5e5e82c-ac9c-4122-96ea-536cbd408c80",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -7162,7 +7162,9 @@
           },
           {
             "type": "CXXRotatorComponent",
-            "data": {}
+            "data": {
+              "speed": 1
+            }
           },
           {
             "data": {
@@ -7232,8 +7234,8 @@
         -0.4403475224971771
       ],
       "radius": 11.5,
-      "azimuth": 57.63426255936139,
-      "elevation": 0.28972465583105755
+      "azimuth": 58.12644540842382,
+      "elevation": 0.575958653158128
     },
     "selected_entity": "mens_trouser_f_elv_chrMesh",
     "displays": [
@@ -7244,7 +7246,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "824e6768-6af4-436d-8637-44f1f59bf9dd",
+            "uuid": "abcfe8b3-bac3-4fab-8433-24678dc66aaf",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7263,7 +7265,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "c4eb64ed-18f4-49a9-8bd9-4df0da9d19fd",
+            "uuid": "55eac2a0-b33f-44cd-aca1-9d2ca72cd867",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7277,15 +7279,15 @@
       }
     ],
     "expanded_entities": [
-      "Arti",
-      "entity12_copy",
+      "cube1",
       "entity13",
-      "Walls",
       "EditorEntities",
-      "[Root]",
+      "Walls",
       "Glitch",
       "camera",
-      "cube1",
+      "Arti",
+      "[Root]",
+      "entity12_copy",
       "cube2"
     ]
   },

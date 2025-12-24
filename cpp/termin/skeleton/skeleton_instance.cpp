@@ -3,6 +3,8 @@
 #include "termin/geom/general_transform3.hpp"
 #include "termin/geom/general_pose3.hpp"
 
+#include <cstring>
+
 namespace termin {
 
 SkeletonInstance::SkeletonInstance(
@@ -132,7 +134,10 @@ void SkeletonInstance::update() {
 
 void SkeletonInstance::get_bone_matrices_float(float* out) const {
     for (size_t i = 0; i < _bone_matrices.size(); ++i) {
-        _bone_matrices[i].to_float_array(out + i * 16);
+        // Mat44 stores double, convert to float
+        for (int j = 0; j < 16; ++j) {
+            out[i * 16 + j] = static_cast<float>(_bone_matrices[i].data[j]);
+        }
     }
 }
 

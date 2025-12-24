@@ -41,8 +41,8 @@ class DummyContext:
 
 
 def test_material_serialize_deserialize():
-    shader = ShaderProgram("vs", "fs")
-    shader.source_path = "shaders/basic.glsl"
+    # source_path is passed via constructor (read-only property after creation)
+    shader = ShaderProgram("vs", "fs", geometry_source="", source_path="shaders/basic.glsl")
 
     m = Material(
         shader=shader,

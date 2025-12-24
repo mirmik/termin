@@ -151,6 +151,8 @@ pybind11_add_module(_native
     termin/inspect_bindings.cpp
     termin/assets/assets_bindings.cpp
     termin/render/shader_parser.cpp
+    termin/render/shadow_camera.cpp
+    termin/render/immediate_renderer.cpp
     termin/entity/entity.cpp
     termin/entity/entity_registry.cpp
     termin/entity/component_registry.cpp

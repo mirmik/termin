@@ -30,6 +30,9 @@ def collect_example_modules():
         if file.stem == "qt_embed":
             # Qt-пример требует полноценной оконной среды, пропускаем в автоматических тестах.
             continue
+        if file.stem == "sdl_cube":
+            # SDL-пример явно создаёт SDLWindowBackend, несовместимый с NOP-бэкендами.
+            continue
         modname = "examples.visual." + file.stem
         modules.append(modname)
 

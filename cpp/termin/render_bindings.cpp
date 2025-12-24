@@ -11,6 +11,9 @@
 #include "termin/render/opengl/opengl_mesh.hpp"
 #include "termin/render/shader_program.hpp"
 #include "termin/render/shader_parser.hpp"
+#include "termin/render/resource_spec.hpp"
+#include "termin/render/shadow_camera.hpp"
+#include "termin/render/immediate_renderer.hpp"
 #include "termin/camera/camera.hpp"
 
 namespace py = pybind11;
@@ -886,6 +889,473 @@ void bind_render(py::module_& m) {
     m.def("parse_property_directive", &parse_property_directive,
           py::arg("line"),
           "Parse @property directive line");
+
+    // ========== ResourceSpec ==========
+
+    py::class_<ResourceSpec>(m, "ResourceSpec")
+        .def(py::init<>())
+        .def(py::init<std::string, std::string>(),
+             py::arg("resource"),
+             py::arg("resource_type") = "fbo")
+        // Full constructor
+        .def(py::init([](
+            const std::string& resource,
+            const std::string& resource_type,
+            py::object size,
+            py::object clear_color,
+            py::object clear_depth,
+            py::object format,
+            int samples
+        ) {
+            ResourceSpec spec;
+            spec.resource = resource;
+            spec.resource_type = resource_type;
+            spec.samples = samples;
+
+            if (!size.is_none()) {
+                auto t = size.cast<py::tuple>();
+                spec.size = std::make_pair(t[0].cast<int>(), t[1].cast<int>());
+            }
+            if (!clear_color.is_none()) {
+                auto t = clear_color.cast<py::tuple>();
+                spec.clear_color = std::array<double, 4>{
+                    t[0].cast<double>(), t[1].cast<double>(),
+                    t[2].cast<double>(), t[3].cast<double>()
+                };
+            }
+            if (!clear_depth.is_none()) {
+                spec.clear_depth = clear_depth.cast<float>();
+            }
+            if (!format.is_none()) {
+                spec.format = format.cast<std::string>();
+            }
+            return spec;
+        }),
+            py::arg("resource"),
+            py::arg("resource_type") = "fbo",
+            py::arg("size") = py::none(),
+            py::arg("clear_color") = py::none(),
+            py::arg("clear_depth") = py::none(),
+            py::arg("format") = py::none(),
+            py::arg("samples") = 1
+        )
+        .def_readwrite("resource", &ResourceSpec::resource)
+        .def_readwrite("resource_type", &ResourceSpec::resource_type)
+        .def_readwrite("samples", &ResourceSpec::samples)
+        // size property: optional<pair<int,int>> <-> tuple or None
+        .def_property("size",
+            [](const ResourceSpec& self) -> py::object {
+                if (self.size) {
+                    return py::make_tuple(self.size->first, self.size->second);
+                }
+                return py::none();
+            },
+            [](ResourceSpec& self, py::object val) {
+                if (val.is_none()) {
+                    self.size = std::nullopt;
+                } else {
+                    auto t = val.cast<py::tuple>();
+                    self.size = std::make_pair(t[0].cast<int>(), t[1].cast<int>());
+                }
+            }
+        )
+        // clear_color property: optional<array<float,4>> <-> tuple or None
+        .def_property("clear_color",
+            [](const ResourceSpec& self) -> py::object {
+                if (self.clear_color) {
+                    auto& c = *self.clear_color;
+                    return py::make_tuple(c[0], c[1], c[2], c[3]);
+                }
+                return py::none();
+            },
+            [](ResourceSpec& self, py::object val) {
+                if (val.is_none()) {
+                    self.clear_color = std::nullopt;
+                } else {
+                    auto t = val.cast<py::tuple>();
+                    self.clear_color = std::array<double, 4>{
+                        t[0].cast<double>(), t[1].cast<double>(),
+                        t[2].cast<double>(), t[3].cast<double>()
+                    };
+                }
+            }
+        )
+        // clear_depth property: optional<float> <-> float or None
+        .def_property("clear_depth",
+            [](const ResourceSpec& self) -> py::object {
+                if (self.clear_depth) {
+                    return py::cast(*self.clear_depth);
+                }
+                return py::none();
+            },
+            [](ResourceSpec& self, py::object val) {
+                if (val.is_none()) {
+                    self.clear_depth = std::nullopt;
+                } else {
+                    self.clear_depth = val.cast<float>();
+                }
+            }
+        )
+        // format property: optional<string> <-> str or None
+        .def_property("format",
+            [](const ResourceSpec& self) -> py::object {
+                if (self.format) {
+                    return py::cast(*self.format);
+                }
+                return py::none();
+            },
+            [](ResourceSpec& self, py::object val) {
+                if (val.is_none()) {
+                    self.format = std::nullopt;
+                } else {
+                    self.format = val.cast<std::string>();
+                }
+            }
+        )
+        // serialize() method - returns lists for JSON compatibility
+        .def("serialize", [](const ResourceSpec& self) -> py::dict {
+            py::dict data;
+            data["resource"] = self.resource;
+            data["resource_type"] = self.resource_type;
+            if (self.size) {
+                py::list size_list;
+                size_list.append(self.size->first);
+                size_list.append(self.size->second);
+                data["size"] = size_list;
+            }
+            if (self.clear_color) {
+                auto& c = *self.clear_color;
+                py::list color_list;
+                color_list.append(c[0]);
+                color_list.append(c[1]);
+                color_list.append(c[2]);
+                color_list.append(c[3]);
+                data["clear_color"] = color_list;
+            }
+            if (self.clear_depth) {
+                data["clear_depth"] = *self.clear_depth;
+            }
+            if (self.format) {
+                data["format"] = *self.format;
+            }
+            if (self.samples != 1) {
+                data["samples"] = self.samples;
+            }
+            return data;
+        })
+        // deserialize() classmethod - handles both list and tuple
+        .def_static("deserialize", [](py::dict data) -> ResourceSpec {
+            ResourceSpec spec;
+            spec.resource = data.contains("resource") ?
+                data["resource"].cast<std::string>() : "";
+            spec.resource_type = data.contains("resource_type") ?
+                data["resource_type"].cast<std::string>() : "fbo";
+            spec.samples = data.contains("samples") ?
+                data["samples"].cast<int>() : 1;
+
+            if (data.contains("size")) {
+                py::object size_obj = data["size"];
+                spec.size = std::make_pair(
+                    size_obj[py::int_(0)].cast<int>(),
+                    size_obj[py::int_(1)].cast<int>()
+                );
+            }
+            if (data.contains("clear_color")) {
+                py::object color_obj = data["clear_color"];
+                spec.clear_color = std::array<double, 4>{
+                    color_obj[py::int_(0)].cast<double>(),
+                    color_obj[py::int_(1)].cast<double>(),
+                    color_obj[py::int_(2)].cast<double>(),
+                    color_obj[py::int_(3)].cast<double>()
+                };
+            }
+            if (data.contains("clear_depth")) {
+                spec.clear_depth = data["clear_depth"].cast<float>();
+            }
+            if (data.contains("format")) {
+                spec.format = data["format"].cast<std::string>();
+            }
+            return spec;
+        }, py::arg("data"));
+
+    // ========== Shadow Camera ==========
+
+    py::class_<ShadowCameraParams>(m, "ShadowCameraParams")
+        .def(py::init<>())
+        .def(py::init([](
+            py::array_t<double> light_direction,
+            py::object ortho_bounds,
+            double ortho_size,
+            double near,
+            double far,
+            py::object center
+        ) {
+            auto dir_buf = light_direction.request();
+            Vec3 light_dir{
+                static_cast<double*>(dir_buf.ptr)[0],
+                static_cast<double*>(dir_buf.ptr)[1],
+                static_cast<double*>(dir_buf.ptr)[2]
+            };
+
+            std::optional<std::array<float, 4>> bounds;
+            if (!ortho_bounds.is_none()) {
+                auto t = ortho_bounds.cast<py::tuple>();
+                bounds = std::array<float, 4>{
+                    static_cast<float>(t[0].cast<double>()),
+                    static_cast<float>(t[1].cast<double>()),
+                    static_cast<float>(t[2].cast<double>()),
+                    static_cast<float>(t[3].cast<double>())
+                };
+            }
+
+            Vec3 c{0, 0, 0};
+            if (!center.is_none()) {
+                auto arr = center.cast<py::array_t<double>>();
+                auto buf = arr.request();
+                c = Vec3{
+                    static_cast<double*>(buf.ptr)[0],
+                    static_cast<double*>(buf.ptr)[1],
+                    static_cast<double*>(buf.ptr)[2]
+                };
+            }
+
+            return ShadowCameraParams(light_dir, bounds, static_cast<float>(ortho_size), static_cast<float>(near), static_cast<float>(far), c);
+        }),
+            py::arg("light_direction"),
+            py::arg("ortho_bounds") = py::none(),
+            py::arg("ortho_size") = 20.0,
+            py::arg("near") = 0.1,
+            py::arg("far") = 100.0,
+            py::arg("center") = py::none()
+        )
+        // Properties
+        .def_property("light_direction",
+            [](const ShadowCameraParams& self) {
+                return py::array_t<double>({3}, {sizeof(double)},
+                    &self.light_direction.x);
+            },
+            [](ShadowCameraParams& self, py::array_t<double> arr) {
+                auto buf = arr.request();
+                auto* ptr = static_cast<double*>(buf.ptr);
+                self.light_direction = Vec3{ptr[0], ptr[1], ptr[2]}.normalized();
+            }
+        )
+        .def_property("ortho_bounds",
+            [](const ShadowCameraParams& self) -> py::object {
+                if (self.ortho_bounds) {
+                    auto& b = *self.ortho_bounds;
+                    return py::make_tuple(b[0], b[1], b[2], b[3]);
+                }
+                return py::none();
+            },
+            [](ShadowCameraParams& self, py::object val) {
+                if (val.is_none()) {
+                    self.ortho_bounds = std::nullopt;
+                } else {
+                    auto t = val.cast<py::tuple>();
+                    self.ortho_bounds = std::array<float, 4>{
+                        static_cast<float>(t[0].cast<double>()),
+                        static_cast<float>(t[1].cast<double>()),
+                        static_cast<float>(t[2].cast<double>()),
+                        static_cast<float>(t[3].cast<double>())
+                    };
+                }
+            }
+        )
+        .def_readwrite("ortho_size", &ShadowCameraParams::ortho_size)
+        .def_readwrite("near", &ShadowCameraParams::near)
+        .def_readwrite("far", &ShadowCameraParams::far)
+        .def_property("center",
+            [](const ShadowCameraParams& self) {
+                return py::array_t<double>({3}, {sizeof(double)}, &self.center.x);
+            },
+            [](ShadowCameraParams& self, py::array_t<double> arr) {
+                auto buf = arr.request();
+                auto* ptr = static_cast<double*>(buf.ptr);
+                self.center = Vec3{ptr[0], ptr[1], ptr[2]};
+            }
+        );
+
+    // Shadow camera functions
+    // Note: Mat44.data is column-major flat array: data[col*4 + row]
+    // Python numpy uses row-major by default, so we need to transpose
+
+    m.def("build_shadow_view_matrix", [](const ShadowCameraParams& params) {
+        Mat44f mat = build_shadow_view_matrix(params);
+        py::array_t<double> result({4, 4});
+        auto buf = result.mutable_unchecked<2>();
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                // Mat44f is column-major: data[col*4 + row], convert to double
+                buf(row, col) = static_cast<double>(mat.data[col * 4 + row]);
+            }
+        }
+        return result;
+    }, py::arg("params"), "Build view matrix for shadow camera");
+
+    m.def("build_shadow_projection_matrix", [](const ShadowCameraParams& params) {
+        Mat44f mat = build_shadow_projection_matrix(params);
+        py::array_t<double> result({4, 4});
+        auto buf = result.mutable_unchecked<2>();
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                buf(row, col) = static_cast<double>(mat.data[col * 4 + row]);
+            }
+        }
+        return result;
+    }, py::arg("params"), "Build orthographic projection matrix for shadow camera");
+
+    m.def("compute_light_space_matrix", [](const ShadowCameraParams& params) {
+        Mat44f mat = compute_light_space_matrix(params);
+        py::array_t<double> result({4, 4});
+        auto buf = result.mutable_unchecked<2>();
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                buf(row, col) = static_cast<double>(mat.data[col * 4 + row]);
+            }
+        }
+        return result;
+    }, py::arg("params"), "Compute combined light space matrix (projection * view)");
+
+    m.def("compute_frustum_corners", [](py::array_t<double> view, py::array_t<double> proj) {
+        auto view_buf = view.unchecked<2>();
+        auto proj_buf = proj.unchecked<2>();
+
+        Mat44f view_mat, proj_mat;
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                // Python row-major to C++ column-major, double to float
+                view_mat.data[col * 4 + row] = static_cast<float>(view_buf(row, col));
+                proj_mat.data[col * 4 + row] = static_cast<float>(proj_buf(row, col));
+            }
+        }
+
+        auto corners = compute_frustum_corners(view_mat, proj_mat);
+
+        py::array_t<double> result({8, 3});
+        auto buf = result.mutable_unchecked<2>();
+        for (int i = 0; i < 8; ++i) {
+            buf(i, 0) = corners[i].x;
+            buf(i, 1) = corners[i].y;
+            buf(i, 2) = corners[i].z;
+        }
+        return result;
+    }, py::arg("view_matrix"), py::arg("projection_matrix"),
+       "Compute 8 corners of view frustum in world space");
+
+    m.def("fit_shadow_frustum_to_camera", [](
+        py::array_t<double> view,
+        py::array_t<double> proj,
+        py::array_t<double> light_direction,
+        double padding,
+        int shadow_map_resolution,
+        bool stabilize,
+        double caster_offset
+    ) {
+        auto view_buf = view.unchecked<2>();
+        auto proj_buf = proj.unchecked<2>();
+        auto dir_buf = light_direction.request();
+
+        Mat44f view_mat, proj_mat;
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                // Python row-major to C++ column-major, double to float
+                view_mat.data[col * 4 + row] = static_cast<float>(view_buf(row, col));
+                proj_mat.data[col * 4 + row] = static_cast<float>(proj_buf(row, col));
+            }
+        }
+
+        auto* dir_ptr = static_cast<double*>(dir_buf.ptr);
+        Vec3 light_dir{dir_ptr[0], dir_ptr[1], dir_ptr[2]};
+
+        return fit_shadow_frustum_to_camera(
+            view_mat, proj_mat, light_dir,
+            static_cast<float>(padding), shadow_map_resolution, stabilize, static_cast<float>(caster_offset)
+        );
+    },
+        py::arg("view_matrix"),
+        py::arg("projection_matrix"),
+        py::arg("light_direction"),
+        py::arg("padding") = 1.0,
+        py::arg("shadow_map_resolution") = 1024,
+        py::arg("stabilize") = true,
+        py::arg("caster_offset") = 50.0,
+        "Fit shadow camera to view frustum"
+    );
+
+    // --- ImmediateRenderer ---
+    py::class_<ImmediateRenderer>(m, "ImmediateRenderer")
+        .def(py::init<>())
+        .def("begin", &ImmediateRenderer::begin,
+             "Clear all accumulated primitives")
+        // Basic primitives
+        .def("line", &ImmediateRenderer::line,
+             py::arg("start"), py::arg("end"), py::arg("color"))
+        .def("triangle", &ImmediateRenderer::triangle,
+             py::arg("p0"), py::arg("p1"), py::arg("p2"), py::arg("color"))
+        .def("quad", &ImmediateRenderer::quad,
+             py::arg("p0"), py::arg("p1"), py::arg("p2"), py::arg("p3"), py::arg("color"))
+        // Wireframe
+        .def("polyline", &ImmediateRenderer::polyline,
+             py::arg("points"), py::arg("color"), py::arg("closed") = false)
+        .def("circle", &ImmediateRenderer::circle,
+             py::arg("center"), py::arg("normal"), py::arg("radius"), py::arg("color"),
+             py::arg("segments") = 32)
+        .def("arrow", &ImmediateRenderer::arrow,
+             py::arg("origin"), py::arg("direction"), py::arg("length"), py::arg("color"),
+             py::arg("head_length") = 0.2, py::arg("head_width") = 0.1)
+        .def("box", &ImmediateRenderer::box,
+             py::arg("min_pt"), py::arg("max_pt"), py::arg("color"))
+        .def("cylinder_wireframe", &ImmediateRenderer::cylinder_wireframe,
+             py::arg("start"), py::arg("end"), py::arg("radius"), py::arg("color"),
+             py::arg("segments") = 16)
+        .def("sphere_wireframe", &ImmediateRenderer::sphere_wireframe,
+             py::arg("center"), py::arg("radius"), py::arg("color"),
+             py::arg("segments") = 16)
+        .def("capsule_wireframe", &ImmediateRenderer::capsule_wireframe,
+             py::arg("start"), py::arg("end"), py::arg("radius"), py::arg("color"),
+             py::arg("segments") = 16)
+        // Solid
+        .def("cylinder_solid", &ImmediateRenderer::cylinder_solid,
+             py::arg("start"), py::arg("end"), py::arg("radius"), py::arg("color"),
+             py::arg("segments") = 16, py::arg("caps") = true)
+        .def("cone_solid", &ImmediateRenderer::cone_solid,
+             py::arg("base"), py::arg("tip"), py::arg("radius"), py::arg("color"),
+             py::arg("segments") = 16, py::arg("cap") = true)
+        .def("torus_solid", &ImmediateRenderer::torus_solid,
+             py::arg("center"), py::arg("axis"), py::arg("major_radius"), py::arg("minor_radius"),
+             py::arg("color"), py::arg("major_segments") = 32, py::arg("minor_segments") = 12)
+        .def("arrow_solid", &ImmediateRenderer::arrow_solid,
+             py::arg("origin"), py::arg("direction"), py::arg("length"), py::arg("color"),
+             py::arg("shaft_radius") = 0.03, py::arg("head_radius") = 0.06,
+             py::arg("head_length_ratio") = 0.25, py::arg("segments") = 16)
+        // Rendering
+        // Note: graphics parameter is ignored (C++ initializes OpenGL resources itself)
+        // but kept for backward compatibility with existing Python callers
+        .def("flush", [](ImmediateRenderer& self,
+                         py::object /*graphics*/,
+                         py::array_t<double> view,
+                         py::array_t<double> proj,
+                         bool depth_test,
+                         bool blend) {
+            auto view_buf = view.unchecked<2>();
+            auto proj_buf = proj.unchecked<2>();
+
+            Mat44 view_mat, proj_mat;
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    view_mat.data[col * 4 + row] = view_buf(row, col);
+                    proj_mat.data[col * 4 + row] = proj_buf(row, col);
+                }
+            }
+
+            self.flush(view_mat, proj_mat, depth_test, blend);
+        },
+             py::arg("graphics"), py::arg("view_matrix"), py::arg("proj_matrix"),
+             py::arg("depth_test") = true, py::arg("blend") = true)
+        // Properties
+        .def_property_readonly("line_count", &ImmediateRenderer::line_count)
+        .def_property_readonly("triangle_count", &ImmediateRenderer::triangle_count);
 }
 
 } // namespace termin

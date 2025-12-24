@@ -154,10 +154,14 @@ public:
         require_handle()->set_uniform_matrix4(name, data, transpose);
     }
 
+    void set_uniform_matrix4(const char* name, const Mat44f& m, bool transpose = true) {
+        // Mat44f stores float directly, pass the data pointer
+        require_handle()->set_uniform_matrix4(name, m.data, transpose);
+    }
+
     void set_uniform_matrix4(const char* name, const Mat44& m, bool transpose = true) {
-        float data[16];
-        m.to_float_array(data);
-        require_handle()->set_uniform_matrix4(name, data, transpose);
+        // Mat44 stores double, convert to float
+        require_handle()->set_uniform_matrix4(name, m.to_float().data, transpose);
     }
 
     void set_uniform_matrix4_array(const char* name, const float* data, int count, bool transpose = true) {
