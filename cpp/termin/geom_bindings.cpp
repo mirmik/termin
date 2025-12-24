@@ -714,7 +714,7 @@ PYBIND11_MODULE(_geom_native, m) {
         });
 
     m.def("lerp_general_pose3",
-          py::overload_cast<const GeneralPose3&, const GeneralPose3&, double>(&lerp),
+          static_cast<GeneralPose3 (*)(const GeneralPose3&, const GeneralPose3&, double)>(&lerp),
           "Linear interpolation between GeneralPose3 (with scale)");
 
     // Screw3
