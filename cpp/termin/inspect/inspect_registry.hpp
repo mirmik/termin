@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <functional>
 #include <pybind11/pybind11.h>
+#include "../../trent/trent.h"
 
 namespace py = pybind11;
 
@@ -110,6 +111,74 @@ public:
             }
         }
         throw py::attribute_error("Field not found: " + field_path);
+    }
+
+    /**
+     * Serialize all inspect fields to trent dict.
+     */
+    nos::trent serialize_all(void* obj, const std::string& type_name) const {
+        nos::trent result;
+        result.init(nos::trent_type::dict);
+
+        for (const auto& f : fields(type_name)) {
+            py::object val = f.getter(obj);
+            result[f.path] = py_to_trent(val);
+        }
+        return result;
+    }
+
+    /**
+     * Deserialize all inspect fields from trent dict.
+     */
+    void deserialize_all(void* obj, const std::string& type_name, const nos::trent& data) {
+        if (!data.is_dict()) return;
+
+        for (const auto& f : fields(type_name)) {
+            if (data.contains(f.path)) {
+                py::object val = trent_to_py(data[f.path]);
+                f.setter(obj, val);
+            }
+        }
+    }
+
+private:
+    static nos::trent py_to_trent(py::object obj) {
+        if (obj.is_none()) {
+            return nos::trent::nil();
+        }
+        if (py::isinstance<py::bool_>(obj)) {
+            return nos::trent(obj.cast<bool>());
+        }
+        if (py::isinstance<py::int_>(obj)) {
+            return nos::trent(static_cast<double>(obj.cast<int64_t>()));
+        }
+        if (py::isinstance<py::float_>(obj)) {
+            return nos::trent(obj.cast<double>());
+        }
+        if (py::isinstance<py::str>(obj)) {
+            return nos::trent(obj.cast<std::string>());
+        }
+        return nos::trent::nil();
+    }
+
+    static py::object trent_to_py(const nos::trent& t) {
+        switch (t.get_type()) {
+            case nos::trent_type::nil:
+                return py::none();
+            case nos::trent_type::boolean:
+                return py::bool_(t.as_bool());
+            case nos::trent_type::numer: {
+                double val = t.as_numer();
+                if (val == static_cast<int64_t>(val)) {
+                    return py::int_(static_cast<int64_t>(val));
+                }
+                return py::float_(val);
+            }
+            case nos::trent_type::string:
+                return py::str(t.as_string());
+            default:
+                return py::none();
+        }
     }
 };
 

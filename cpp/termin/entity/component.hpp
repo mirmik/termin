@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include "../../trent/trent.h"
+#include "../inspect/inspect_registry.hpp"
 
 namespace termin {
 
@@ -34,13 +35,20 @@ public:
     virtual void on_added_to_entity() {}
     virtual void on_removed_from_entity() {}
 
-    // Serialization
+    // Serialization - uses InspectRegistry for INSPECT_FIELD properties
     virtual nos::trent serialize_data() const {
-        nos::trent result;
-        result.init(nos::trent_type::dict);  // Empty dict, not nil
-        return result;
+        return InspectRegistry::instance().serialize_all(
+            const_cast<void*>(static_cast<const void*>(this)),
+            _type_name
+        );
     }
-    virtual void deserialize_data(const nos::trent&) {}
+    virtual void deserialize_data(const nos::trent& data) {
+        InspectRegistry::instance().deserialize_all(
+            static_cast<void*>(this),
+            _type_name,
+            data
+        );
+    }
 
     nos::trent serialize() const {
         nos::trent result;
