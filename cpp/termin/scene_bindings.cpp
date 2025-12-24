@@ -50,8 +50,13 @@ void bind_scene(py::module_& m) {
         .def("remove", &Scene::remove, py::arg("entity"))
         .def("find_entity_by_uuid", &Scene::find_entity_by_uuid,
              py::arg("uuid"), py::return_value_policy::reference)
-        .def_property_readonly("entities", &Scene::get_entities,
-                               py::return_value_policy::reference)
+        .def_property_readonly("entities", [](Scene& s) {
+            py::list result;
+            for (Entity* e : s.get_entities()) {
+                result.append(py::cast(e, py::return_value_policy::reference));
+            }
+            return result;
+        })
         .def("entity_count", &Scene::entity_count)
 
         // Component registration
