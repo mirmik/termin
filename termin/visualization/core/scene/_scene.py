@@ -42,7 +42,8 @@ class Scene(_NativeScene):
         uuid: str | None = None,
     ):
         super().__init__(uuid or "")
-        # C++ Scene handles: entities, uuid, basic lighting/skybox fields
+        # Python-side entity list (C++ entities property has RTTI issues on Windows)
+        self._entities: List[Entity] = []
         # Background color with alpha (C++ only has RGB)
         self._background_color = np.array(background_color, dtype=np.float32)
         self._input_components: List[InputComponent] = []
@@ -276,10 +277,21 @@ class Scene(_NativeScene):
 
     # --- Entity management ---
 
+    @property
+    def entities(self) -> List[Entity]:
+        """Get all entities in the scene."""
+        return self._entities
+
     def add_non_recurse(self, entity: Entity) -> Entity:
         """Add entity to the scene, keeping the entities list sorted by priority."""
-        # Use C++ method for entity management (sorted insert)
-        _NativeScene.add_non_recurse(self, entity)
+        # Insert sorted by priority (Python-side list)
+        idx = 0
+        for i, e in enumerate(self._entities):
+            if e.priority > entity.priority:
+                idx = i
+                break
+            idx = i + 1
+        self._entities.insert(idx, entity)
         # Python-specific: set scene reference and emit Event
         entity.on_added(self)
         self._on_entity_added.emit(entity)
@@ -296,8 +308,9 @@ class Scene(_NativeScene):
         return entity
 
     def remove(self, entity: Entity):
-        # Use C++ method for entity management
-        _NativeScene.remove(self, entity)
+        # Remove from Python list
+        if entity in self._entities:
+            self._entities.remove(entity)
         # Python-specific: emit Event and cleanup
         self._on_entity_removed.emit(entity)
         entity.on_removed()
