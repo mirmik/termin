@@ -1,0 +1,47 @@
+{
+  "uuid": "e4286707-26e4-4b99-b689-8b562815b57c",
+  "resources": {
+    "meshes": {
+      "male_muscle_13290.003": "8bd09416-9c7e-4e78-bda1-641d3482e506",
+      "gymuniform": "786bb9bf-0e64-4dca-afec-d62b3dc9feae",
+      "jammers3": "287cc28b-657b-429c-9d00-e69195cb1887",
+      "low-poly.002": "ed833ccb-7339-4d23-94d2-07d21d3e7b08",
+      "male_muscle_13290.002": "f5ec0c5a-99cb-4bd8-a424-953aa97bf6b7",
+      "male_muscle_13290": "7b49ace0-9ca3-42f4-a911-fcf77a6cbd3c",
+      "MC-SciFi-Armor_Helios": "507bd6b6-819a-4ebb-92bf-a167f42ac354",
+      "mens_shirt_untuck_elvbhp1f.002": "6432a38a-882f-4c5c-8e47-a800cb44cc3e",
+      "mens_shirt_untuck_elvbhp1f": "0cb882c2-d41b-4ebe-b500-72dd04b63e90",
+      "mens_tanks_elv1f": "282bd2fd-dcd6-42ff-a07d-f76aaa11cec9",
+      "mens_trouser_f_elv_chr.002": "c6513438-2b62-4d41-ab65-d7371067cd14",
+      "mind_eyebrows_14.002": "b7de39e1-9b44-4358-ac3f-40dffc2ca401",
+      "mind_eyelashes_03.002": "35f6c7a0-80f6-437e-9c89-04c71d55e4cc",
+      "shoes06.002": "82ff9fa0-28ad-41fc-8007-54cda380f60c",
+      "spiky.002": "f995496f-6565-44b6-9df1-99b10b48ca81"
+    },
+    "animations": {
+      "A": "d2ccc07e-eae7-4dfd-bd58-57421cf9da55",
+      "Breakdance": "872dc4d7-8cea-4545-972e-ec56b78e483c",
+      "CroachIdle": "3e57fb7a-9883-4b55-9ea2-b7ef20b36809",
+      "CroachWalk": "de42581b-783c-472c-a76e-b91b2fc2c0d6",
+      "Crow": "d26c236f-cfba-405b-bdc3-8cc867d7e9a5",
+      "Dance1": "48bd223c-be0d-48be-be4f-c431ea5b6809",
+      "Dance2": "0ec904f6-32ca-4549-8eed-dbb058de37b1",
+      "Dance3": "4f6c8fe4-84ed-4161-80a0-ac1be976aa7e",
+      "Dance4": "5fb119c1-7b0e-4595-8ebb-4afad5707d6f",
+      "Dance5": "f70beb73-114e-4e82-95ce-4252871b4e0a",
+      "Death": "3664add3-6497-4a45-bd59-409d7cdbf18a",
+      "Idle": "f9da6bd5-6767-4b49-b1c0-8cca7b382927",
+      "LeanStandLeft": "190ec4e8-13d9-411d-a22b-51e5f7d0569e",
+      "LeanStandRight": "e948fb08-eb17-4b67-ad07-169c21c4bb0a",
+      "Run": "476f1025-a4f9-4ea3-b7db-89a2f2ba872f",
+      "Shoot": "d62aec7b-0af7-4a90-ae4b-bde685a729db",
+      "Walk": "8af80f7c-d7e7-4a9b-a385-0f3145b51cc5"
+    },
+    "skeletons": {
+      "skeleton": "49cf1726-b337-44ec-b171-7ed5cb4c9ced"
+    }
+  },
+  "normalize_scale": true,
+  "convert_to_z_up": true,
+  "blender_z_up_fix": true
+}

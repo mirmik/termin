@@ -416,6 +416,7 @@ class EditorWindow(QMainWindow):
             on_load_material=self._load_material_from_file,
             on_load_components=self._load_components_from_file,
             on_deploy_stdlib=self._deploy_stdlib,
+            on_migrate_spec_to_meta=self._migrate_spec_to_meta,
             on_exit=self.close,
             on_undo=self.undo,
             on_redo=self.redo,
@@ -1525,6 +1526,63 @@ class EditorWindow(QMainWindow):
                 "Deployment Failed",
                 f"Failed to deploy standard library:\n{e}",
             )
+
+    def _migrate_spec_to_meta(self) -> None:
+        """Rename all .spec files to .meta in the current project."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        # Get project path
+        project_path = None
+        if self.project_browser is not None and self.project_browser._root_path:
+            project_path = self.project_browser._root_path
+
+        if not project_path:
+            QMessageBox.warning(
+                self,
+                "No Project",
+                "No project is currently open.\n\n"
+                "Open a project first to migrate .spec files.",
+            )
+            return
+
+        # Find all .spec files
+        spec_files = list(project_path.rglob("*.spec"))
+
+        if not spec_files:
+            QMessageBox.information(
+                self,
+                "No Files to Migrate",
+                "No .spec files found in the project.",
+            )
+            return
+
+        # Migrate
+        migrated = 0
+        errors = []
+
+        for spec_path in spec_files:
+            meta_path = spec_path.with_suffix(".meta")
+            try:
+                spec_path.rename(meta_path)
+                migrated += 1
+            except Exception as e:
+                errors.append(f"{spec_path.name}: {e}")
+
+        # Report
+        if errors:
+            QMessageBox.warning(
+                self,
+                "Migration Completed with Errors",
+                f"Migrated {migrated} files.\n\n"
+                f"Errors ({len(errors)}):\n" + "\n".join(errors[:10]),
+            )
+        else:
+            QMessageBox.information(
+                self,
+                "Migration Complete",
+                f"Successfully migrated {migrated} .spec files to .meta.",
+            )
+            print(f"[Editor] Migrated {migrated} .spec files to .meta")
 
     # ----------- WorldPersistence колбэки -----------
 

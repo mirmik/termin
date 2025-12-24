@@ -37,6 +37,7 @@ class MenuBarController:
         on_load_material: Callable,
         on_load_components: Callable,
         on_deploy_stdlib: Callable,
+        on_migrate_spec_to_meta: Callable,
         on_exit: Callable,
         on_undo: Callable,
         on_redo: Callable,
@@ -79,6 +80,7 @@ class MenuBarController:
             on_load_material=on_load_material,
             on_load_components=on_load_components,
             on_deploy_stdlib=on_deploy_stdlib,
+            on_migrate_spec_to_meta=on_migrate_spec_to_meta,
             on_exit=on_exit,
             on_undo=on_undo,
             on_redo=on_redo,
@@ -107,6 +109,7 @@ class MenuBarController:
         on_load_material: Callable,
         on_load_components: Callable,
         on_deploy_stdlib: Callable,
+        on_migrate_spec_to_meta: Callable,
         on_exit: Callable,
         on_undo: Callable,
         on_redo: Callable,
@@ -169,6 +172,9 @@ class MenuBarController:
 
         deploy_stdlib_action = file_menu.addAction("Deploy Standard Library...")
         deploy_stdlib_action.triggered.connect(on_deploy_stdlib)
+
+        migrate_spec_action = file_menu.addAction("Migrate .spec to .meta")
+        migrate_spec_action.triggered.connect(on_migrate_spec_to_meta)
 
         file_menu.addSeparator()
 
