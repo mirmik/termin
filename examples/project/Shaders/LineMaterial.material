@@ -2,14 +2,14 @@
   "uuid": "e2c8d676-0d1a-4c70-bdad-0ede59a7fb61",
   "shader": "LineShader3",
   "uniforms": {
-    "u_width": 0.05,
+    "u_width": 0.05000000074505806,
     "u_color": [
       1.0,
       1.0,
       1.0,
       1.0
     ],
-    "u_ambient": 0.1,
+    "u_ambient": 0.10000000149011612,
     "u_shininess": 32.0
   }
 }

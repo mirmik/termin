@@ -5,6 +5,8 @@
 #include <unordered_set>
 #include <regex>
 #include <stdexcept>
+#include <sstream>
+#include <iostream>
 
 namespace termin {
 

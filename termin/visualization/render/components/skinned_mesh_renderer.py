@@ -14,6 +14,7 @@ from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.resources import ResourceManager
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.drawable import GeometryDrawCall
+from termin._native.render import SkinnedMeshRenderer as CppSkinnedMeshRenderer
 
 if TYPE_CHECKING:
     from termin.skeleton import SkeletonInstance
@@ -30,8 +31,11 @@ class SkinnedMeshRenderer(MeshRenderer):
     - Automatic upload of u_bone_matrices uniform before drawing
     """
 
+    # Define inspect_fields directly (C++ MeshRenderer doesn't have this attribute)
     inspect_fields = {
-        **MeshRenderer.inspect_fields,
+        "_mesh_handle": InspectField(path="_mesh_handle", label="Mesh", kind="mesh_handle"),
+        "_material_handle": InspectField(path="_material_handle", label="Material", kind="material_handle"),
+        "cast_shadow": InspectField(path="cast_shadow", label="Cast Shadow", kind="bool"),
         # skeleton_controller is typically set programmatically, not in inspector
     }
 

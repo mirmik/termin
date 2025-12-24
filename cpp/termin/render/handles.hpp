@@ -31,9 +31,9 @@ public:
 /**
  * Abstract mesh buffer handle (VAO/VBO/EBO).
  */
-class MeshHandle {
+class GPUMeshHandle {
 public:
-    virtual ~MeshHandle() = default;
+    virtual ~GPUMeshHandle() = default;
 
     virtual void draw() = 0;
     virtual void release() = 0;
@@ -91,7 +91,7 @@ public:
  * Unique pointer types for handles.
  */
 using ShaderHandlePtr = std::unique_ptr<ShaderHandle>;
-using MeshHandlePtr = std::unique_ptr<MeshHandle>;
+using GPUMeshHandlePtr = std::unique_ptr<GPUMeshHandle>;
 using GPUTextureHandlePtr = std::unique_ptr<GPUTextureHandle>;
 using FramebufferHandlePtr = std::unique_ptr<FramebufferHandle>;
 

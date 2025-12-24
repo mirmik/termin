@@ -1,0 +1,206 @@
+#include "mesh_renderer.hpp"
+
+#include <algorithm>
+#include <pybind11/pybind11.h>
+
+namespace py = pybind11;
+
+namespace termin {
+
+MeshRenderer::MeshRenderer() {
+    _type_name = "MeshRenderer";
+    is_native = true;
+}
+
+void MeshRenderer::set_mesh(const MeshHandle& handle) {
+    mesh = handle;
+}
+
+void MeshRenderer::set_mesh_by_name(const std::string& name) {
+    mesh = MeshHandle::from_name(name);
+}
+
+Material* MeshRenderer::get_material() const {
+    if (_override_material && _overridden_material != nullptr) {
+        return _overridden_material;
+    }
+    // Returns nullptr if material is Python-based (not C++ Material)
+    return material.get();
+}
+
+Material* MeshRenderer::get_base_material() const {
+    // Returns nullptr if material is Python-based (not C++ Material)
+    return material.get();
+}
+
+void MeshRenderer::set_material(Material* mat) {
+    if (mat == nullptr) {
+        material = MaterialHandle();
+    } else {
+        material = MaterialHandle::from_direct(mat);
+    }
+
+    if (_override_material) {
+        recreate_overridden_material();
+    }
+}
+
+void MeshRenderer::set_material_handle(const MaterialHandle& handle) {
+    material = handle;
+
+    if (_override_material) {
+        recreate_overridden_material();
+    }
+}
+
+void MeshRenderer::set_material_by_name(const std::string& name) {
+    material = MaterialHandle::from_name(name);
+
+    if (_override_material) {
+        recreate_overridden_material();
+    }
+}
+
+void MeshRenderer::set_override_material(bool value) {
+    if (value == _override_material) {
+        return;
+    }
+
+    _override_material = value;
+
+    if (value) {
+        recreate_overridden_material();
+    } else {
+        delete _overridden_material;
+        _overridden_material = nullptr;
+    }
+}
+
+void MeshRenderer::recreate_overridden_material() {
+    delete _overridden_material;
+    _overridden_material = nullptr;
+
+    Material* base = material.get_material_or_none();
+    if (base != nullptr) {
+        // Create a copy
+        _overridden_material = new Material(base->copy());
+        _overridden_material->name = base->name + "_override";
+    }
+}
+
+std::set<std::string> MeshRenderer::phase_marks() const {
+    std::set<std::string> marks;
+
+    // Try C++ Material first
+    Material* mat = material.get();
+    if (mat != nullptr) {
+        for (const auto& phase : mat->phases) {
+            marks.insert(phase.phase_mark);
+        }
+    } else {
+        // Try Python Material via asset
+        try {
+            py::object asset = material.asset;
+            if (!asset.is_none()) {
+                py::object res = asset.attr("resource");
+                if (!res.is_none() && py::hasattr(res, "phases")) {
+                    py::list phases = res.attr("phases");
+                    for (auto phase : phases) {
+                        std::string phase_mark = phase.attr("phase_mark").cast<std::string>();
+                        marks.insert(phase_mark);
+                    }
+                }
+            }
+        } catch (const py::error_already_set&) {
+            // Ignore errors when accessing Python material
+        }
+    }
+
+    if (cast_shadow) {
+        marks.insert("shadow");
+    }
+
+    return marks;
+}
+
+void MeshRenderer::draw_geometry(const RenderContext& context, const std::string& geometry_id) {
+    Mesh3* mesh_data = mesh.get();
+    MeshGPU* gpu = mesh.gpu();
+    if (mesh_data == nullptr || gpu == nullptr) {
+        return;
+    }
+    gpu->draw(context, *mesh_data, mesh.version());
+}
+
+std::vector<MaterialPhase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {
+    Material* mat = get_material();
+    if (mat == nullptr) {
+        return {};
+    }
+
+    std::vector<MaterialPhase*> result;
+    for (auto& phase : mat->phases) {
+        if (phase.phase_mark == phase_mark) {
+            result.push_back(&phase);
+        }
+    }
+
+    std::sort(result.begin(), result.end(), [](MaterialPhase* a, MaterialPhase* b) {
+        return a->priority < b->priority;
+    });
+
+    return result;
+}
+
+std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string& phase_mark) {
+    Material* mat = get_material();
+    if (mat == nullptr) {
+        return {};
+    }
+
+    std::vector<GeometryDrawCall> result;
+    for (auto& phase : mat->phases) {
+        if (phase_mark.empty() || phase.phase_mark == phase_mark) {
+            result.emplace_back(&phase, "");
+        }
+    }
+
+    std::sort(result.begin(), result.end(), [](const GeometryDrawCall& a, const GeometryDrawCall& b) {
+        return a.phase->priority < b.phase->priority;
+    });
+
+    return result;
+}
+
+// py::dict MeshRenderer::serialize_data_py() const {
+//     py::dict data;
+
+//     data["mesh_handle"] = _mesh_handle.serialize();
+//     data["material_handle"] = _material_handle.serialize();
+//     data["cast_shadow"] = cast_shadow;
+//     data["override_material"] = _override_material;
+
+//     return data;
+// }
+
+// void MeshRenderer::deserialize_data_py(const py::dict& data) {
+//     if (data.contains("mesh_handle")) {
+//         py::dict mesh_data = data["mesh_handle"].cast<py::dict>();
+//         _mesh_handle = MeshHandle::deserialize(mesh_data);
+//     }
+
+//     if (data.contains("material_handle")) {
+//         py::dict mat_data = data["material_handle"].cast<py::dict>();
+//         _material_handle = MaterialHandle::deserialize(mat_data);
+//     }
+
+//     if (data.contains("cast_shadow")) {
+//         cast_shadow = data["cast_shadow"].cast<bool>();
+//     }
+
+//     if (data.contains("override_material")) {
+//         set_override_material(data["override_material"].cast<bool>());
+//     }
+// }
+
+} // namespace termin

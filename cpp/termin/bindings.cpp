@@ -25,9 +25,9 @@ PYBIND11_MODULE(_native, m) {
     auto assets_module = m.def_submodule("assets", "Assets module");
 
     termin::bind_mesh(mesh_module);
+    termin::bind_entity(entity_module);  // Must be before render (MeshRenderer inherits Component)
     termin::bind_render(render_module);
     termin::bind_sdl(platform_module);
-    termin::bind_entity(entity_module);
     termin::bind_scene(scene_module);
     termin::bind_skeleton(skeleton_module);
     termin::bind_inspect(inspect_module);

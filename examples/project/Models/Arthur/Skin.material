@@ -2,15 +2,15 @@
   "uuid": "70a7a1ff-f679-48ba-a6b7-a12de5b65a14",
   "shader": "PBRShader",
   "uniforms": {
+    "u_metallic": 0.0,
     "u_color": [
       1.0,
       1.0,
       1.0,
       1.0
     ],
-    "u_metallic": 0.0,
-    "u_roughness": 0.7,
-    "u_ambient": 0.1,
+    "u_roughness": 0.699999988079071,
+    "u_ambient": 0.10000000149011612,
     "u_shininess": 32.0
   }
 }

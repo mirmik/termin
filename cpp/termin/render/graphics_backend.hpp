@@ -70,7 +70,7 @@ public:
         const char* geometry_source = nullptr
     ) = 0;
 
-    virtual MeshHandlePtr create_mesh(const Mesh3& mesh) = 0;
+    virtual GPUMeshHandlePtr create_mesh(const Mesh3& mesh) = 0;
 
     virtual GPUTextureHandlePtr create_texture(
         const uint8_t* data,

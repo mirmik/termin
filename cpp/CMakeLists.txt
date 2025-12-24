@@ -149,10 +149,17 @@ pybind11_add_module(_native
     termin/scene_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
+    termin/inspect/inspect_registry.cpp
     termin/assets/assets_bindings.cpp
+    termin/assets/handles.cpp
     termin/render/shader_parser.cpp
     termin/render/shadow_camera.cpp
     termin/render/immediate_renderer.cpp
+    termin/render/material.cpp
+    termin/render/mesh_gpu.cpp
+    termin/render/texture_gpu.cpp
+    termin/render/skinned_mesh_renderer.cpp
+    termin/render/mesh_renderer.cpp
     termin/entity/entity.cpp
     termin/entity/entity_registry.cpp
     termin/entity/component_registry.cpp

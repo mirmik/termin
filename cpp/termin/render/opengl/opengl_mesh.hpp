@@ -23,7 +23,7 @@ enum class DrawMode {
     Lines
 };
 
-class OpenGLMeshHandle : public MeshHandle {
+class OpenGLMeshHandle : public GPUMeshHandle {
 public:
     OpenGLMeshHandle(const Mesh3& mesh, DrawMode mode = DrawMode::Triangles)
         : vao_(0), vbo_(0), ebo_(0), index_count_(0), draw_mode_(mode) {
@@ -107,7 +107,7 @@ private:
  * Generic mesh handle for raw vertex data with custom layout.
  * Used for Mesh2, SkinnedMesh3, and other Python mesh types.
  */
-class OpenGLRawMeshHandle : public MeshHandle {
+class OpenGLRawMeshHandle : public GPUMeshHandle {
 public:
     /**
      * Create mesh from raw data.

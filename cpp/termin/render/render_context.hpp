@@ -1,27 +1,18 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
-#include <variant>
+
+#include <pybind11/pybind11.h>
 
 #include "termin/geom/mat44.hpp"
-#include "termin/geom/vec3.hpp"
+
+namespace py = pybind11;
 
 namespace termin {
 
 // Forward declarations
 class GraphicsBackend;
-class ShaderHandle;
-
-/**
- * Extra uniform value types.
- */
-using UniformValue = std::variant<
-    int,
-    float,
-    Vec3,
-    Mat44f
->;
+class ShaderProgram;
 
 /**
  * Render context passed to components during rendering.
@@ -33,6 +24,12 @@ struct RenderContext {
     // View and projection matrices
     Mat44f view;
     Mat44f projection;
+
+    // Camera (py::object - can be C++ Camera or Python CameraComponent)
+    py::object camera;
+
+    // Scene (stored as py::object - not migrated to C++ yet)
+    py::object scene;
 
     // Context key for VAO/shader caching
     int64_t context_key = 0;
@@ -46,11 +43,14 @@ struct RenderContext {
     // Model matrix (set by pass before drawing each entity)
     Mat44f model = Mat44f::identity();
 
-    // Currently bound shader (for setting additional uniforms)
-    ShaderHandle* current_shader = nullptr;
+    // Shadow mapping data (stored as py::object - not migrated to C++ yet)
+    py::object shadow_data;
 
-    // Extra uniforms to copy when switching shader variants
-    std::unordered_map<std::string, UniformValue> extra_uniforms;
+    // Currently bound shader (for setting additional uniforms)
+    ShaderProgram* current_shader = nullptr;
+
+    // Extra uniforms to copy when switching shader variants (py::dict in Python)
+    py::object extra_uniforms;
 
     // Helper to set model matrix
     void set_model(const Mat44f& m) { model = m; }

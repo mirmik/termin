@@ -183,12 +183,12 @@ def register_builtin_shaders(rm: "ResourceManager") -> None:
 def register_builtin_materials(rm: "ResourceManager") -> None:
     """Register built-in materials."""
     from termin.visualization.core.material import Material
-    from termin.visualization.render.texture import get_white_texture
+    from termin.visualization.core.texture_handle import get_white_texture_handle
 
     # Ensure shaders are registered
     register_builtin_shaders(rm)
 
-    white_tex = get_white_texture()
+    white_tex = get_white_texture_handle()
 
     # DefaultMaterial (Blinn-Phong)
     if "DefaultMaterial" not in rm.materials:

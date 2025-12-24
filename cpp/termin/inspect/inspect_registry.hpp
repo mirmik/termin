@@ -11,6 +11,10 @@ namespace py = pybind11;
 
 namespace termin {
 
+// Forward declarations for handle types
+class MeshHandle;
+class MaterialHandle;
+
 /**
  * Metadata for an inspectable field.
  */
@@ -69,6 +73,35 @@ public:
     }
 
     /**
+     * Register a field with custom getter/setter functions.
+     */
+    template<typename C, typename T>
+    void add_with_callbacks(
+        const char* type_name,
+        const char* path,
+        const char* label,
+        const char* kind,
+        std::function<T&(C*)> getter,
+        std::function<void(C*, const T&)> setter
+    ) {
+        _fields[type_name].push_back({
+            .type_name = type_name,
+            .path = path,
+            .label = label,
+            .kind = kind,
+            .min = 0.0,
+            .max = 1.0,
+            .step = 0.01,
+            .getter = [getter](void* obj) -> py::object {
+                return py::cast(getter(static_cast<C*>(obj)));
+            },
+            .setter = [setter](void* obj, py::object val) {
+                setter(static_cast<C*>(obj), val.cast<T>());
+            }
+        });
+    }
+
+    /**
      * Get all fields for a type.
      */
     const std::vector<InspectFieldInfo>& fields(const std::string& type_name) const {
@@ -122,7 +155,7 @@ public:
 
         for (const auto& f : fields(type_name)) {
             py::object val = f.getter(obj);
-            result[f.path] = py_to_trent(val);
+            result[f.path] = py_to_trent_with_kind(val, f.kind);
         }
         return result;
     }
@@ -135,7 +168,7 @@ public:
 
         for (const auto& f : fields(type_name)) {
             if (data.contains(f.path)) {
-                py::object val = trent_to_py(data[f.path]);
+                py::object val = trent_to_py_with_kind(data[f.path], f.kind);
                 f.setter(obj, val);
             }
         }
@@ -160,6 +193,39 @@ private:
         }
         return nos::trent::nil();
     }
+
+    static nos::trent py_dict_to_trent(py::dict d) {
+        nos::trent result;
+        result.init(nos::trent_type::dict);
+        for (auto& item : d) {
+            std::string key = py::str(item.first).cast<std::string>();
+            result[key] = py_to_trent(py::reinterpret_borrow<py::object>(item.second));
+        }
+        return result;
+    }
+
+    static py::dict trent_to_py_dict(const nos::trent& t) {
+        py::dict result;
+        if (!t.is_dict()) return result;
+        for (const auto& [key, val] : t.as_dict()) {
+            result[py::str(key)] = trent_to_py(val);
+        }
+        return result;
+    }
+
+    static nos::trent py_to_trent_with_kind(py::object obj, const std::string& kind) {
+        // Handle types serialize to dict
+        if (kind == "mesh" || kind == "material") {
+            if (py::hasattr(obj, "serialize")) {
+                py::dict d = obj.attr("serialize")();
+                return py_dict_to_trent(d);
+            }
+            return nos::trent::nil();
+        }
+        return py_to_trent(obj);
+    }
+
+    static py::object trent_to_py_with_kind(const nos::trent& t, const std::string& kind);
 
     static py::object trent_to_py(const nos::trent& t) {
         switch (t.get_type()) {
@@ -194,6 +260,25 @@ struct InspectFieldRegistrar {
     }
 };
 
+/**
+ * Helper for callback-based registration.
+ */
+template<typename C, typename T>
+struct InspectFieldCallbackRegistrar {
+    InspectFieldCallbackRegistrar(
+        const char* type_name,
+        const char* path,
+        const char* label,
+        const char* kind,
+        std::function<T&(C*)> getter,
+        std::function<void(C*, const T&)> setter
+    ) {
+        InspectRegistry::instance().add_with_callbacks<C, T>(
+            type_name, path, label, kind, getter, setter
+        );
+    }
+};
+
 } // namespace termin
 
 /**
@@ -209,3 +294,15 @@ struct InspectFieldRegistrar {
 #define INSPECT_FIELD(cls, field, label, kind, ...) \
     inline static ::termin::InspectFieldRegistrar<cls, decltype(cls::field)> \
         _inspect_reg_##field{&cls::field, #cls, #field, label, kind, ##__VA_ARGS__};
+
+/**
+ * Macro to register a field with custom getter/setter.
+ *
+ * Usage:
+ *   INSPECT_FIELD_CALLBACK(MeshRenderer, MeshHandle, mesh, "Mesh", "mesh_handle",
+ *       [](auto* self) -> MeshHandle& { return self->_mesh_handle; },
+ *       [](auto* self, const MeshHandle& h) { self->set_mesh(h); })
+ */
+#define INSPECT_FIELD_CALLBACK(cls, type, name, label, kind, getter_fn, setter_fn) \
+    inline static ::termin::InspectFieldCallbackRegistrar<cls, type> \
+        _inspect_reg_##name{#cls, #name, label, kind, getter_fn, setter_fn};

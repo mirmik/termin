@@ -128,7 +128,7 @@ class TextureAsset(DataAsset[TextureData]):
             flip_x=self._flip_x,
             flip_y=self._flip_y,
             transpose=self._transpose,
-            source_path=str(self._source_path) if self._source_path else None,
+            source_path=str(self._source_path) if self._source_path else "",
         )
 
     # --- Factory methods ---

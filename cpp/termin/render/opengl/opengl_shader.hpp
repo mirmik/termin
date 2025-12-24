@@ -144,6 +144,15 @@ public:
         GLint loc = get_uniform_location(name);
         if (loc >= 0) {
             glUniformMatrix4fv(loc, count, transpose ? GL_TRUE : GL_FALSE, data);
+            // Debug: check first matrix
+            static int debug_count = 0;
+            if (debug_count < 3 && count > 0) {
+                debug_count++;
+                printf("[DEBUG] set_uniform_matrix4_array: '%s' loc=%d count=%d transpose=%d\n",
+                       name, loc, count, transpose);
+                printf("  first matrix[0]=%f [5]=%f [10]=%f [15]=%f\n",
+                       data[0], data[5], data[10], data[15]);
+            }
         } else {
             static int warn_count = 0;
             if (warn_count < 3) {

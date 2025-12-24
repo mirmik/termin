@@ -26,8 +26,8 @@ def test_material_phase_serialize_deserialize():
         priority=10,
         color=np.array([1.0, 0.5, 0.25, 1.0], dtype=np.float32),
     )
-    phase.uniforms["test_float"] = 1.5
-    phase.uniforms["test_vec"] = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+    phase.set_param("test_float", 1.5)
+    phase.set_param("test_vec", np.array([1.0, 2.0, 3.0], dtype=np.float32))
 
     data = phase.serialize()
 
@@ -90,7 +90,7 @@ def test_material_serialize_inline():
         color=np.array([1.0, 0.5, 0.2, 1.0], dtype=np.float32),
         name="test_material",
     )
-    mat.uniforms["roughness"] = 0.5
+    mat.set_param("roughness", 0.5)
 
     data = mat.serialize()
 
