@@ -1,14 +1,10 @@
 """
-Entity and Component system with C++ backend.
+Entity and Component system.
 
-Both C++ and Python components are supported:
-- C++ components use REGISTER_COMPONENT macro
-- Python components inherit from Component (auto-registered)
+Re-exports from C++ backend and visualization.core.component.
 """
 
-from __future__ import annotations
-
-from termin.entity._entity_native import (
+from termin._native.entity import (
     Entity,
     Component as _NativeComponent,
     ComponentRegistry,
@@ -16,35 +12,15 @@ from termin.entity._entity_native import (
     CXXRotatorComponent,
 )
 
-
-class Component(_NativeComponent):
-    """
-    Base class for Python components.
-
-    Subclasses are automatically registered with ComponentRegistry.
-    Override type_name(), start(), update(dt), on_destroy() as needed.
-    """
-
-    def __init_subclass__(cls, **kwargs):
-        """Auto-register subclass with ComponentRegistry."""
-        super().__init_subclass__(**kwargs)
-
-        # Skip abstract classes (those with abstract methods)
-        if getattr(cls, '__abstractmethods__', None):
-            return
-
-        # Register with C++ ComponentRegistry
-        ComponentRegistry.instance().register_python(cls.__name__, cls)
-
-    def type_name(self) -> str:
-        """Return component type name for serialization."""
-        return self.__class__.__name__
-
+# Full-featured Component with serialization and inspector support
+from termin.visualization.core.component import Component, InputComponent
 
 __all__ = [
     "Component",
+    "InputComponent",
     "Entity",
     "ComponentRegistry",
     "EntityRegistry",
     "CXXRotatorComponent",
+    "_NativeComponent",
 ]

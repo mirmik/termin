@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from termin.visualization.render.render_context import RenderContext
 
 from termin.editor.inspect_field import InspectField
-from termin.entity import Component as _NativeComponent
+from termin._native.entity import Component as _NativeComponent, ComponentRegistry
 
 
 class Component(_NativeComponent):
@@ -47,7 +47,6 @@ class Component(_NativeComponent):
         manager.register_component(cls.__name__, cls)
 
         # Register in C++ ComponentRegistry
-        from termin.entity import ComponentRegistry
         ComponentRegistry.instance().register_python(cls.__name__, cls)
 
     def __init__(self, enabled: bool = True):

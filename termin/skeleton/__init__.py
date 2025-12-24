@@ -1,7 +1,6 @@
 """Skeleton module for skeletal animation support."""
 
-from termin.skeleton._skeleton_native import Bone, SkeletonData
-from termin.skeleton.skeleton import SkeletonInstance
+from termin._native.skeleton import Bone, SkeletonData, SkeletonInstance
 from termin.skeleton.skeleton_asset import SkeletonAsset
 
 __all__ = [

@@ -201,7 +201,7 @@ class AnimationPlayer(Component):
             sc = channel_data[2]  # scale (float or None)
 
             # Check if bone exists before setting
-            bone_idx = self._target_skeleton._data.get_bone_index(channel_name)
+            bone_idx = self._target_skeleton.skeleton_data.get_bone_index(channel_name)
             if bone_idx >= 0:
                 found_count += 1
 
@@ -215,7 +215,7 @@ class AnimationPlayer(Component):
 
         if self._DEBUG_UPDATE and AnimationPlayer._debug_skeleton_frame < 3:
             AnimationPlayer._debug_skeleton_frame += 1
-            skeleton_bones = [b.name for b in self._target_skeleton._data.bones[:5]]
+            skeleton_bones = [b.name for b in self._target_skeleton.skeleton_data.bones[:5]]
             sample_channels = list(sample.keys())[:5]
             print(f"[_update_skeleton] found {found_count}/{len(sample)} channels matching bones")
             print(f"  skeleton bones[:5]: {skeleton_bones}")

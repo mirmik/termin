@@ -51,7 +51,8 @@
       "Bash(sudo apt-get install:*)",
       "Bash(QT_QPA_PLATFORM=offscreen PYTHONPATH=. timeout 10 python:*)",
       "Bash(PYTHONPATH=. timeout 20 python:*)",
-      "Bash(pkg-config:*)"
+      "Bash(pkg-config:*)",
+      "Bash(PYTHONPATH=. python:*)"
     ]
   }
 }

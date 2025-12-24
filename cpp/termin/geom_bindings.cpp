@@ -877,8 +877,8 @@ PYBIND11_MODULE(_geom_native, m) {
                 // Fallback: check C++ entity pointer and use EntityRegistry to find Python object
                 if (self.entity != nullptr) {
                     try {
-                        // Import _entity_native to get EntityRegistry
-                        py::module_ entity_module = py::module_::import("termin.entity._entity_native");
+                        // Import entity module to get EntityRegistry
+                        py::module_ entity_module = py::module_::import("termin._native.entity");
                         py::object registry = entity_module.attr("EntityRegistry").attr("instance")();
                         // Get entity by transform pointer
                         py::object entity = registry.attr("get_by_transform")(py::cast(&self, py::return_value_policy::reference));

@@ -36,6 +36,32 @@ value = obj.foo
 do_something(obj.bar)
 ```
 
+### C++ Class Layout
+
+All fields (public, protected, private) must be declared at the top of the class, before any methods. Group fields first, then methods.
+
+```cpp
+class MyClass {
+public:
+    // Public fields first
+    int public_field = 0;
+    std::string name;
+
+private:
+    // Private fields
+    int _private_field = 0;
+    bool _initialized = false;
+
+public:
+    // Then methods
+    MyClass();
+    void do_something();
+
+private:
+    void _helper();
+};
+```
+
 ### C++ Migration
 
 When migrating Python classes to C++, do not leave Python wrappers. Python modules should contain only re-exports from `termin._native`.

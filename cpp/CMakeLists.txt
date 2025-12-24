@@ -95,11 +95,6 @@ target_compile_options(_lighting_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Skeleton native module (Bone, SkeletonData)
-pybind11_add_module(_skeleton_native termin/skeleton_bindings.cpp)
-target_compile_options(_skeleton_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
 
 # Find OpenGL (needed by _native)
 find_package(OpenGL REQUIRED)
@@ -144,13 +139,26 @@ else()
     endif()
 endif()
 
-# Unified native module (Mesh3 + Render + SDL)
+# Unified native module (Mesh3 + Render + SDL + Entity + Scene + Skeleton)
 pybind11_add_module(_native
     termin/bindings.cpp
     termin/mesh_bindings.cpp
     termin/render_bindings.cpp
     termin/sdl_bindings.cpp
+    termin/entity_bindings.cpp
+    termin/scene_bindings.cpp
+    termin/skeleton_bindings.cpp
+    termin/entity/entity.cpp
+    termin/entity/entity_registry.cpp
+    termin/entity/component_registry.cpp
+    termin/entity/vtable_utils.cpp
+    termin/entity/components/rotator_component.cpp
+    termin/scene/scene.cpp
+    termin/skeleton/skeleton_instance.cpp
     termin/render/glad/src/glad.c
+    trent/trent.cpp
+    trent/trent_path.cpp
+    trent/string_ext.cpp
 )
 target_include_directories(_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
@@ -162,22 +170,6 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
 endif()
 target_compile_options(_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Entity native module (Entity, Component, registries)
-pybind11_add_module(_entity_native
-    termin/entity_bindings.cpp
-    termin/entity/entity.cpp
-    termin/entity/entity_registry.cpp
-    termin/entity/component_registry.cpp
-    termin/entity/vtable_utils.cpp
-    termin/entity/components/rotator_component.cpp
-    trent/trent.cpp
-    trent/trent_path.cpp
-    trent/string_ext.cpp
-)
-target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
@@ -240,6 +232,4 @@ install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/voxels)
 install(TARGETS _collision_native DESTINATION ${CMAKE_INSTALL_PREFIX}/collision)
 install(TARGETS _animation_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/animation)
 install(TARGETS _lighting_native DESTINATION ${CMAKE_INSTALL_PREFIX}/lighting)
-install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)
-install(TARGETS _entity_native DESTINATION ${CMAKE_INSTALL_PREFIX}/entity)
 install(TARGETS _native DESTINATION ${CMAKE_INSTALL_PREFIX})

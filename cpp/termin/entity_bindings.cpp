@@ -142,8 +142,9 @@ static Quat numpy_to_quat(py::array_t<double> arr) {
     return Quat{buf(0), buf(1), buf(2), buf(3)};
 }
 
-PYBIND11_MODULE(_entity_native, m) {
-    m.doc() = "Native C++ entity/component system for termin";
+namespace termin {
+
+void bind_entity(py::module_& m) {
 
     // --- Component ---
     py::class_<Component, PyComponent>(m, "Component")
@@ -608,3 +609,5 @@ PYBIND11_MODULE(_entity_native, m) {
     BIND_NATIVE_COMPONENT(m, CXXRotatorComponent)
         .def_readwrite("speed", &CXXRotatorComponent::speed);
 }
+
+} // namespace termin

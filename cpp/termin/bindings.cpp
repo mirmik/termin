@@ -3,6 +3,9 @@
 #include "mesh_bindings.hpp"
 #include "render_bindings.hpp"
 #include "sdl_bindings.hpp"
+#include "entity_bindings.hpp"
+#include "scene_bindings.hpp"
+#include "skeleton_bindings.hpp"
 
 namespace py = pybind11;
 
@@ -13,8 +16,14 @@ PYBIND11_MODULE(_native, m) {
     auto mesh_module = m.def_submodule("mesh", "Mesh module");
     auto render_module = m.def_submodule("render", "Render module");
     auto platform_module = m.def_submodule("platform", "Platform module");
+    auto entity_module = m.def_submodule("entity", "Entity module");
+    auto scene_module = m.def_submodule("scene", "Scene module");
+    auto skeleton_module = m.def_submodule("skeleton", "Skeleton module");
 
     termin::bind_mesh(mesh_module);
     termin::bind_render(render_module);
     termin::bind_sdl(platform_module);
+    termin::bind_entity(entity_module);
+    termin::bind_scene(scene_module);
+    termin::bind_skeleton(skeleton_module);
 }
