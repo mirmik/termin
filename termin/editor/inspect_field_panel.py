@@ -24,13 +24,38 @@ if TYPE_CHECKING:
     from termin.visualization.core.resources import ResourceManager
 
 
-def _collect_inspect_fields(cls: type) -> dict[str, InspectField]:
-    """Collect inspect_fields from class hierarchy (base classes first)."""
+def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
+    """Collect inspect_fields from class hierarchy (base classes first) and C++ registry."""
     result = {}
+
+    # Collect from Python class hierarchy
+    cls = obj.__class__
     for klass in reversed(cls.__mro__):
         fields = getattr(klass, "inspect_fields", None)
         if fields:
             result.update(fields)
+
+    # Collect from C++ InspectRegistry
+    try:
+        from termin._native.inspect import InspectRegistry
+        registry = InspectRegistry.instance()
+        type_name = cls.__name__
+        cpp_fields = registry.fields(type_name)
+        for info in cpp_fields:
+            # Create InspectField wrapper that delegates to registry
+            result[info.path] = InspectField(
+                path=info.path,
+                label=info.label,
+                kind=info.kind,
+                min=info.min,
+                max=info.max,
+                step=info.step,
+                getter=lambda o, p=info.path: registry.get(o, p),
+                setter=lambda o, v, p=info.path: registry.set(o, p, v),
+            )
+    except (ImportError, RuntimeError):
+        pass  # C++ module not available or no fields registered
+
     return result
 
 
@@ -84,7 +109,7 @@ class InspectFieldPanel(QWidget):
         if target is None:
             return
 
-        fields = _collect_inspect_fields(target.__class__)
+        fields = _collect_inspect_fields(target)
         if not fields:
             return
 

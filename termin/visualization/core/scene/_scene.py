@@ -8,7 +8,7 @@ import numpy as np
 
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
-from termin.visualization.core.identifiable import Identifiable
+from termin._native.scene import Scene as _NativeScene
 from termin.lighting import Light
 from termin.visualization.render.components.light_component import LightComponent
 from termin.geombase import Ray3
@@ -33,7 +33,7 @@ def is_overrides_method(obj, method_name, base_class):
     return getattr(obj.__class__, method_name) is not getattr(base_class, method_name)
 
 
-class Scene(Identifiable):
+class Scene(_NativeScene):
     """Container for renderable entities and lighting data."""
 
     def __init__(
@@ -41,9 +41,10 @@ class Scene(Identifiable):
         background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0),
         uuid: str | None = None,
     ):
-        super().__init__(uuid=uuid)
-        self.entities: List[Entity] = []
-        self.background_color = np.array(background_color, dtype=np.float32)
+        super().__init__(uuid or "")
+        # C++ Scene handles: entities, uuid, basic lighting/skybox fields
+        # Background color with alpha (C++ only has RGB)
+        self._background_color = np.array(background_color, dtype=np.float32)
         self._input_components: List[InputComponent] = []
         self.colliders = []
         self._collision_world = CollisionWorld()
@@ -65,9 +66,24 @@ class Scene(Identifiable):
         self.layer_names: dict[int, str] = {}  # 0-63
         self.flag_names: dict[int, str] = {}   # 0-63 (bit index)
 
-        # Entity lifecycle events
-        self.on_entity_added: Event[Entity] = Event()
-        self.on_entity_removed: Event[Entity] = Event()
+        # Entity lifecycle events (Python Event objects)
+        # Note: C++ Scene also has on_entity_added/removed as py::object callbacks
+        # We override them with None to disable C++ event emission
+        # Python handles events via Event.emit() in add/remove methods
+        _NativeScene.on_entity_added.__set__(self, None)
+        _NativeScene.on_entity_removed.__set__(self, None)
+        self._on_entity_added: Event[Entity] = Event()
+        self._on_entity_removed: Event[Entity] = Event()
+
+    # --- Background color (with alpha, C++ only has RGB) ---
+
+    @property
+    def background_color(self) -> np.ndarray:
+        return self._background_color
+
+    @background_color.setter
+    def background_color(self, value):
+        self._background_color = np.asarray(value, dtype=np.float32)
 
     # --- Skybox delegation (backward compatibility) ---
 
@@ -262,12 +278,11 @@ class Scene(Identifiable):
 
     def add_non_recurse(self, entity: Entity) -> Entity:
         """Add entity to the scene, keeping the entities list sorted by priority."""
-        index = 0
-        while index < len(self.entities) and self.entities[index].priority <= entity.priority:
-            index += 1
-        self.entities.insert(index, entity)
+        # Use C++ method for entity management (sorted insert)
+        _NativeScene.add_non_recurse(self, entity)
+        # Python-specific: set scene reference and emit Event
         entity.on_added(self)
-        self.on_entity_added.emit(entity)
+        self._on_entity_added.emit(entity)
         return entity
 
     def add(self, entity: Entity) -> Entity:
@@ -281,9 +296,19 @@ class Scene(Identifiable):
         return entity
 
     def remove(self, entity: Entity):
-        self.entities.remove(entity)
-        self.on_entity_removed.emit(entity)
+        # Use C++ method for entity management
+        _NativeScene.remove(self, entity)
+        # Python-specific: emit Event and cleanup
+        self._on_entity_removed.emit(entity)
         entity.on_removed()
+
+    @property
+    def on_entity_added(self) -> Event[Entity]:
+        return self._on_entity_added
+
+    @property
+    def on_entity_removed(self) -> Event[Entity]:
+        return self._on_entity_removed
 
     def find_entity_by_uuid(self, uuid: str) -> Entity | None:
         """

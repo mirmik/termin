@@ -4,6 +4,7 @@
 #include "../component_registry.hpp"
 #include "../entity.hpp"
 #include "../../geom/geom.hpp"
+#include "../../inspect/inspect_registry.hpp"
 #include <iostream>
 
 namespace termin {
@@ -15,6 +16,8 @@ namespace termin {
 class CXXRotatorComponent : public Component {
 public:
     float speed = 1.0f;  // radians per second
+
+    INSPECT_FIELD(CXXRotatorComponent, speed, "Speed", "float", 0.0, 10.0, 0.1)
 
     void update(float dt) override {
         if (!entity || !entity->transform) return;
