@@ -51,6 +51,15 @@ public:
         return non_empty_count_;
     }
 
+    inline void fill(uint8_t value) {
+        data_.fill(value);
+        non_empty_count_ = (value != VOXEL_EMPTY) ? CHUNK_VOLUME : 0;
+    }
+
+    inline void clear() {
+        fill(VOXEL_EMPTY);
+    }
+
     // Iterator over non-empty voxels: returns (local_x, local_y, local_z, type)
     std::vector<std::tuple<int, int, int, uint8_t>> iter_non_empty() const {
         std::vector<std::tuple<int, int, int, uint8_t>> result;

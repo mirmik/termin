@@ -6,6 +6,9 @@
 #include <queue>
 #include <cmath>
 #include <algorithm>
+#include <optional>
+#include <string>
+#include <climits>
 
 #include "termin/voxels/voxel_chunk.hpp"
 #include "termin/geom/vec3.hpp"
@@ -128,8 +131,15 @@ inline Vec3 compute_triangle_normal(const Vec3& v0, const Vec3& v1, const Vec3& 
 
 class VoxelGrid {
 public:
-    VoxelGrid(double cell_size = 0.25, Vec3 origin = Vec3::zero())
-        : cell_size_(cell_size), origin_(origin) {}
+    VoxelGrid(double cell_size = 0.25, Vec3 origin = Vec3::zero(),
+              const std::string& name = "", const std::string& source_path = "")
+        : cell_size_(cell_size), origin_(origin), name_(name), source_path_(source_path) {}
+
+    // Name and source path
+    const std::string& name() const { return name_; }
+    void set_name(const std::string& name) { name_ = name; }
+    const std::string& source_path() const { return source_path_; }
+    void set_source_path(const std::string& path) { source_path_ = path; }
 
     // Coordinate transforms
     std::tuple<int, int, int> world_to_voxel(const Vec3& world_pos) const {
@@ -484,9 +494,119 @@ public:
         return surface_normals_.count({vx, vy, vz}) > 0;
     }
 
+    void add_surface_normal(int vx, int vy, int vz, const Vec3& normal) {
+        surface_normals_[{vx, vy, vz}].push_back(normal);
+    }
+
+    void set_surface_normals(int vx, int vy, int vz, const std::vector<Vec3>& normals) {
+        surface_normals_[{vx, vy, vz}] = normals;
+    }
+
+    // ========================================================================
+    // World coordinate convenience methods
+    // ========================================================================
+
+    uint8_t get_at_world(const Vec3& world_pos) const {
+        auto [vx, vy, vz] = world_to_voxel(world_pos);
+        return get(vx, vy, vz);
+    }
+
+    void set_at_world(const Vec3& world_pos, uint8_t value) {
+        auto [vx, vy, vz] = world_to_voxel(world_pos);
+        set(vx, vy, vz, value);
+    }
+
+    // ========================================================================
+    // Chunk access
+    // ========================================================================
+
+    VoxelChunk* get_chunk(int cx, int cy, int cz) {
+        auto it = chunks_.find({cx, cy, cz});
+        return it != chunks_.end() ? &it->second : nullptr;
+    }
+
+    const VoxelChunk* get_chunk(int cx, int cy, int cz) const {
+        auto it = chunks_.find({cx, cy, cz});
+        return it != chunks_.end() ? &it->second : nullptr;
+    }
+
+    std::vector<std::pair<ChunkKey, const VoxelChunk*>> iter_chunks() const {
+        std::vector<std::pair<ChunkKey, const VoxelChunk*>> result;
+        result.reserve(chunks_.size());
+        for (const auto& [key, chunk] : chunks_) {
+            result.emplace_back(key, &chunk);
+        }
+        return result;
+    }
+
+    // ========================================================================
+    // Bounds
+    // ========================================================================
+
+    std::optional<std::pair<VoxelKey, VoxelKey>> bounds() const {
+        if (chunks_.empty()) return std::nullopt;
+
+        int min_cx = INT_MAX, min_cy = INT_MAX, min_cz = INT_MAX;
+        int max_cx = INT_MIN, max_cy = INT_MIN, max_cz = INT_MIN;
+
+        for (const auto& [key, chunk] : chunks_) {
+            min_cx = std::min(min_cx, std::get<0>(key));
+            min_cy = std::min(min_cy, std::get<1>(key));
+            min_cz = std::min(min_cz, std::get<2>(key));
+            max_cx = std::max(max_cx, std::get<0>(key));
+            max_cy = std::max(max_cy, std::get<1>(key));
+            max_cz = std::max(max_cz, std::get<2>(key));
+        }
+
+        return std::make_pair(
+            VoxelKey{min_cx * CHUNK_SIZE, min_cy * CHUNK_SIZE, min_cz * CHUNK_SIZE},
+            VoxelKey{(max_cx + 1) * CHUNK_SIZE - 1, (max_cy + 1) * CHUNK_SIZE - 1, (max_cz + 1) * CHUNK_SIZE - 1}
+        );
+    }
+
+    std::optional<std::pair<Vec3, Vec3>> world_bounds() const {
+        auto voxel_bounds = bounds();
+        if (!voxel_bounds) return std::nullopt;
+
+        auto [min_v, max_v] = *voxel_bounds;
+        Vec3 min_world = origin_ + Vec3(std::get<0>(min_v), std::get<1>(min_v), std::get<2>(min_v)) * cell_size_;
+        Vec3 max_world = origin_ + Vec3(std::get<0>(max_v) + 1, std::get<1>(max_v) + 1, std::get<2>(max_v) + 1) * cell_size_;
+        return std::make_pair(min_world, max_world);
+    }
+
+    // ========================================================================
+    // Extract surface (creates new grid)
+    // ========================================================================
+
+    VoxelGrid extract_surface(uint8_t surface_value = VOXEL_SOLID) const {
+        VoxelGrid result(cell_size_, origin_,
+                         name_.empty() ? "surface" : name_ + "_surface");
+
+        const std::array<std::tuple<int, int, int>, 6> neighbors = {{
+            {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}
+        }};
+
+        for (auto [vx, vy, vz, vtype] : iter_non_empty()) {
+            bool has_empty_neighbor = false;
+            for (const auto& [dx, dy, dz] : neighbors) {
+                if (get(vx + dx, vy + dy, vz + dz) == VOXEL_EMPTY) {
+                    has_empty_neighbor = true;
+                    break;
+                }
+            }
+            if (has_empty_neighbor) {
+                result.set(vx, vy, vz, surface_value);
+            }
+        }
+
+        return result;
+    }
+
 private:
     double cell_size_;
     Vec3 origin_;
+    std::string name_;
+    std::string source_path_;
     std::unordered_map<ChunkKey, VoxelChunk, ChunkKeyHash> chunks_;
     std::unordered_map<VoxelKey, std::vector<Vec3>, ChunkKeyHash> surface_normals_;
 };

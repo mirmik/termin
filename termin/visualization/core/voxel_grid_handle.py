@@ -1,4 +1,4 @@
-"""Re-export for backwards compatibility."""
-from termin.assets.voxel_grid_handle import VoxelGridHandle
+"""Re-export from C++ native module."""
+from termin.voxels._voxels_native import VoxelGridHandle
 
 __all__ = ["VoxelGridHandle"]

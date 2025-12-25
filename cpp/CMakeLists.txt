@@ -83,11 +83,12 @@ target_compile_options(_physics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Voxels native module (VoxelGrid, voxelization)
+# Voxels native module (VoxelGrid, voxelization, VoxelGridHandle)
 pybind11_add_module(_voxels_native termin/voxels_bindings.cpp)
 target_compile_options(_voxels_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_link_libraries(_voxels_native PRIVATE entity_lib trent)
 
 # Collision native module (BVH, CollisionWorld, ContactManifold)
 pybind11_add_module(_collision_native termin/collision_bindings.cpp)

@@ -4,8 +4,12 @@ Voxel system for navmesh generation.
 Provides chunked voxel grid with visualization and serialization support.
 """
 
-from termin.voxels.chunk import VoxelChunk, CHUNK_SIZE
-from termin.voxels.grid import VoxelGrid
+from termin.voxels._voxels_native import (
+    VoxelChunk,
+    VoxelGrid,
+    VoxelGridHandle,
+    CHUNK_SIZE,
+)
 from termin.voxels.component import VoxelGridComponent
 from termin.voxels.visualization import VoxelVisualizer
 from termin.voxels.voxelizer import (
@@ -28,6 +32,7 @@ from termin.voxels.voxel_mesh import VoxelMesh
 __all__ = [
     "VoxelChunk",
     "VoxelGrid",
+    "VoxelGridHandle",
     "VoxelGridComponent",
     "VoxelVisualizer",
     "MeshVoxelizer",

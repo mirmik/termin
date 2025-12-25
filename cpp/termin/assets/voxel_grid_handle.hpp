@@ -7,11 +7,6 @@ namespace py = pybind11;
 
 namespace termin {
 
-// Forward declaration
-namespace voxels {
-class VoxelGrid;
-}
-
 /**
  * VoxelGridHandle - smart reference to voxel grid asset.
  *
@@ -61,15 +56,15 @@ public:
     }
 
     /**
-     * Get VoxelGrid pointer.
-     * Returns nullptr if asset is empty or resource is None.
+     * Get VoxelGrid object (returns py::object).
+     * Returns None if asset is empty or resource is None.
      */
-    voxels::VoxelGrid* get() const;
+    py::object get() const;
 
     /**
      * Convenience alias.
      */
-    voxels::VoxelGrid* grid() const { return get(); }
+    py::object grid() const { return get(); }
 
     /**
      * Serialize for scene saving.

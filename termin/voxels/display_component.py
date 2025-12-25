@@ -105,7 +105,7 @@ class VoxelDisplayComponent(Component):
         "voxel_grid": InspectField(
             path="voxel_grid",
             label="Voxel Grid",
-            kind="voxel_grid",
+            kind="voxel_grid_handle",
             setter=lambda obj, val: obj.set_voxel_grid(val),
         ),
         "color_below": InspectField(

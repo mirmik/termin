@@ -32,11 +32,10 @@ inline VoxelGridHandle VoxelGridHandle::from_uuid(const std::string& uuid) {
     }
 }
 
-inline voxels::VoxelGrid* VoxelGridHandle::get() const {
-    if (asset.is_none()) return nullptr;
+inline py::object VoxelGridHandle::get() const {
+    if (asset.is_none()) return py::none();
     py::object res = asset.attr("resource");
-    if (res.is_none()) return nullptr;
-    return res.cast<voxels::VoxelGrid*>();
+    return res;  // Returns the VoxelGrid object (or None)
 }
 
 inline VoxelGridHandle VoxelGridHandle::deserialize(const py::dict& data) {
