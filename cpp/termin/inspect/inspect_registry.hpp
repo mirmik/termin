@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <functional>
+#include <iostream>
 #include <pybind11/pybind11.h>
 #include "../../trent/trent.h"
 
@@ -153,10 +154,12 @@ public:
      * Serialize all inspect fields to trent dict.
      */
     nos::trent serialize_all(void* obj, const std::string& type_name) const {
+        std::cout << "[serialize_all] type=" << type_name << std::endl;
         nos::trent result;
         result.init(nos::trent_type::dict);
 
         for (const auto& f : fields(type_name)) {
+            std::cout << "[serialize_all] field=" << f.path << " kind=" << f.kind << std::endl;
             py::object val = f.getter(obj);
             result[f.path] = py_to_trent_with_kind(val, f.kind);
         }
@@ -167,11 +170,15 @@ public:
      * Deserialize all inspect fields from trent dict.
      */
     void deserialize_all(void* obj, const std::string& type_name, const nos::trent& data) {
+        std::cout << "[deserialize_all] type=" << type_name << " is_dict=" << data.is_dict() << std::endl;
         if (!data.is_dict()) return;
 
         for (const auto& f : fields(type_name)) {
+            std::cout << "[deserialize_all] field=" << f.path << " kind=" << f.kind
+                      << " contains=" << data.contains(f.path) << std::endl;
             if (data.contains(f.path)) {
                 py::object val = trent_to_py_with_kind(data[f.path], f.kind);
+                std::cout << "[deserialize_all] calling setter for " << f.path << std::endl;
                 f.setter(obj, val);
             }
         }

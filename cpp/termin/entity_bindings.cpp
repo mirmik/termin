@@ -6,6 +6,7 @@
 #include "termin/entity/component_registry.hpp"
 #include "termin/entity/vtable_utils.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/entity/entity_handle.hpp"
 #include "termin/entity/entity_registry.hpp"
 #include "termin/entity/components/rotator_component.hpp"
 #include "termin/geom/general_transform3.hpp"
@@ -198,6 +199,22 @@ void bind_entity(py::module_& m) {
         .def("list_native", &ComponentRegistry::list_native)
         .def("list_python", &ComponentRegistry::list_python)
         .def("clear", &ComponentRegistry::clear);
+
+    // --- EntityHandle ---
+    py::class_<EntityHandle>(m, "EntityHandle")
+        .def(py::init<>())
+        .def(py::init<const std::string&>(), py::arg("uuid"))
+        .def_readwrite("uuid", &EntityHandle::uuid)
+        .def_property_readonly("entity", &EntityHandle::get, py::return_value_policy::reference)
+        .def_property_readonly("is_valid", &EntityHandle::is_valid)
+        .def_property_readonly("name", &EntityHandle::name)
+        .def_static("from_entity", &EntityHandle::from_entity, py::arg("entity"))
+        .def("get", &EntityHandle::get, py::return_value_policy::reference)
+        .def("__repr__", [](const EntityHandle& h) {
+            std::string status = h.get() ? "resolved" : "unresolved";
+            std::string uuid_short = h.uuid.size() > 8 ? h.uuid.substr(0, 8) + "..." : h.uuid;
+            return "<EntityHandle " + uuid_short + " (" + status + ")>";
+        });
 
     // --- Entity ---
     py::class_<Entity>(m, "Entity")
@@ -479,7 +496,22 @@ void bind_entity(py::module_& m) {
             py::object py_ent = py::cast(ent, py::return_value_policy::take_ownership);
             py::dict data_dict = data.cast<py::dict>();
 
-            // Deserialize components
+            // Deserialize children FIRST (so all entities are registered before components)
+            if (data_dict.contains("children")) {
+                py::list children_list = data_dict["children"].cast<py::list>();
+                // Get the Entity class to call deserialize recursively
+                py::type entity_class = py::type::of(py_ent);
+
+                for (auto child_item : children_list) {
+                    py::object child_obj = entity_class.attr("deserialize")(child_item, context);
+                    if (!child_obj.is_none()) {
+                        // Call set_parent through Python binding to trigger keep_alive
+                        child_obj.attr("set_parent")(py_ent);
+                    }
+                }
+            }
+
+            // Deserialize components AFTER children (so entity references can be resolved)
             if (data_dict.contains("components")) {
                 py::list comp_list = data_dict["components"].cast<py::list>();
                 for (auto item : comp_list) {
@@ -519,21 +551,6 @@ void bind_entity(py::module_& m) {
 
                     // Call add_component through Python to trigger keep_alive
                     py_ent.attr("add_component")(py_comp);
-                }
-            }
-
-            // Deserialize children recursively
-            if (data_dict.contains("children")) {
-                py::list children_list = data_dict["children"].cast<py::list>();
-                // Get the Entity class to call deserialize recursively
-                py::type entity_class = py::type::of(py_ent);
-
-                for (auto child_item : children_list) {
-                    py::object child_obj = entity_class.attr("deserialize")(child_item, context);
-                    if (!child_obj.is_none()) {
-                        // Call set_parent through Python binding to trigger keep_alive
-                        child_obj.attr("set_parent")(py_ent);
-                    }
                 }
             }
 

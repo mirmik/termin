@@ -4,6 +4,7 @@
 #include "termin/render/skeleton_controller.hpp"
 #include "termin/render/render.hpp"
 #include "termin/entity/entity.hpp"
+#include <iostream>
 
 namespace termin {
 
@@ -36,13 +37,13 @@ void bind_renderers(py::module_& m) {
                 }
             }
 
-            std::vector<Entity*> bone_entities;
+            std::vector<Entity*> entities;
             for (auto item : bone_entities_list) {
                 if (!item.is_none()) {
-                    bone_entities.push_back(item.cast<Entity*>());
+                    entities.push_back(item.cast<Entity*>());
                 }
             }
-            controller->set_bone_entities(std::move(bone_entities));
+            controller->set_bone_entities_from_ptrs(std::move(entities));
 
             return controller;
         }),
@@ -76,8 +77,13 @@ void bind_renderers(py::module_& m) {
             py::return_value_policy::reference)
         .def_property("bone_entities",
             [](const SkeletonController& self) {
+                std::cout << "[SkeletonController.bone_entities getter] this=" << &self
+                          << " count=" << self.bone_entities.size() << std::endl;
+                // Return resolved Entity* list
                 py::list result;
-                for (Entity* e : self.bone_entities()) {
+                for (const auto& handle : self.bone_entities) {
+                    Entity* e = handle.get();
+                    std::cout << "  uuid=" << handle.uuid << " -> " << (e ? e->name : "null") << std::endl;
                     if (e) {
                         result.append(py::cast(e, py::return_value_policy::reference));
                     } else {
@@ -95,7 +101,7 @@ void bind_renderers(py::module_& m) {
                         vec.push_back(item.cast<Entity*>());
                     }
                 }
-                self.set_bone_entities(std::move(vec));
+                self.set_bone_entities_from_ptrs(std::move(vec));
             })
         .def_property_readonly("skeleton_instance",
             &SkeletonController::skeleton_instance,
@@ -108,7 +114,7 @@ void bind_renderers(py::module_& m) {
                     vec.push_back(item.cast<Entity*>());
                 }
             }
-            self.set_bone_entities(std::move(vec));
+            self.set_bone_entities_from_ptrs(std::move(vec));
         })
         .def("invalidate_instance", &SkeletonController::invalidate_instance);
 

@@ -80,6 +80,12 @@ public:
     void draw_geometry(const RenderContext& context, const std::string& geometry_id = "") override;
 
     /**
+     * Get geometry draw calls using skinned material.
+     * Overrides MeshRenderer to use get_skinned_material().
+     */
+    std::vector<GeometryDrawCall> get_geometry_draws(const std::string& phase_mark = "") override;
+
+    /**
      * Component lifecycle: find skeleton controller on start.
      */
     void start() override;

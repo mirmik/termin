@@ -7,6 +7,7 @@
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/entity/entity_handle.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/skeleton/skeleton_data.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
@@ -26,8 +27,8 @@ public:
     // Skeleton handle (wraps SkeletonAsset)
     SkeletonHandle skeleton;
 
-    // Bone entities (same order as skeleton_data.bones)
-    std::vector<Entity*> _bone_entities;
+    // Bone entity handles (same order as skeleton_data.bones)
+    std::vector<EntityHandle> bone_entities;
 
 private:
     // Cached skeleton instance (created lazily)
@@ -48,21 +49,26 @@ public:
     void set_skeleton(const SkeletonHandle& handle);
 
     /**
-     * Get bone entities.
+     * Set bone entities from handles. Invalidates cached instance.
      */
-    const std::vector<Entity*>& bone_entities() const { return _bone_entities; }
+    void set_bone_entities(std::vector<EntityHandle> handles);
 
     /**
-     * Set bone entities. Invalidates cached instance.
+     * Set bone entities from Entity pointers. Invalidates cached instance.
      */
-    void set_bone_entities(std::vector<Entity*> entities);
+    void set_bone_entities_from_ptrs(std::vector<Entity*> entities);
+
+    /**
+     * Get resolved bone entities (for SkeletonInstance).
+     */
+    std::vector<Entity*> get_resolved_bone_entities() const;
 
     /**
      * Get or create SkeletonInstance.
      *
      * Creates instance lazily on first access using:
      * - skeleton handle
-     * - _bone_entities
+     * - bone_entities
      * - this->entity as skeleton root
      */
     SkeletonInstance* skeleton_instance();
@@ -74,7 +80,7 @@ public:
     void invalidate_instance();
 
     INSPECT_FIELD(SkeletonController, skeleton, "Skeleton", "skeleton")
-    INSPECT_FIELD(SkeletonController, _bone_entities, "Bone Entities", "entity_list")
+    INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "entity_list")
 };
 
 REGISTER_COMPONENT(SkeletonController);

@@ -2,6 +2,7 @@
 #include "termin/assets/handles.hpp"
 #include "termin/skeleton/skeleton_data.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/entity/entity_handle.hpp"
 #include "termin/entity/entity_registry.hpp"
 
 namespace termin {
@@ -77,7 +78,7 @@ nos::trent InspectRegistry::py_to_trent_with_kind(py::object obj, const std::str
         return nos::trent::nil();
     }
 
-    // Entity list - serialize as list of UUIDs
+    // Entity list - serialize EntityHandle list as list of UUIDs
     if (kind == "entity_list") {
         nos::trent result;
         result.init(nos::trent_type::list);
@@ -88,9 +89,10 @@ nos::trent InspectRegistry::py_to_trent_with_kind(py::object obj, const std::str
                     result.push_back(nos::trent::nil());
                 } else {
                     try {
-                        Entity* ent = item.cast<Entity*>();
-                        if (ent) {
-                            result.push_back(nos::trent(ent->uuid));
+                        // Try EntityHandle first
+                        EntityHandle handle = item.cast<EntityHandle>();
+                        if (!handle.uuid.empty()) {
+                            result.push_back(nos::trent(handle.uuid));
                         } else {
                             result.push_back(nos::trent::nil());
                         }
@@ -129,22 +131,24 @@ py::object InspectRegistry::trent_to_py_with_kind(const nos::trent& t, const std
         return py::cast(SkeletonHandle::deserialize(d));
     }
 
-    // Entity list - deserialize from list of UUIDs
+    // Entity list - deserialize from list of UUIDs into EntityHandle list
     if (kind == "entity_list") {
-        std::vector<Entity*> entities;
+        std::cout << "[trent_to_py_with_kind] entity_list, is_list=" << t.is_list() << std::endl;
+        std::vector<EntityHandle> result;
         if (t.is_list()) {
-            auto& registry = EntityRegistry::instance();
+            std::cout << "[trent_to_py_with_kind] list size=" << t.as_list().size() << std::endl;
             for (const auto& item : t.as_list()) {
                 if (item.is_string()) {
                     std::string uuid = item.as_string();
-                    Entity* ent = registry.get(uuid);
-                    entities.push_back(ent);  // may be nullptr if not found
+                    std::cout << "[trent_to_py_with_kind] uuid=" << uuid << std::endl;
+                    result.push_back(EntityHandle(uuid));
                 } else {
-                    entities.push_back(nullptr);
+                    result.push_back(EntityHandle());
                 }
             }
         }
-        return py::cast(entities);
+        std::cout << "[trent_to_py_with_kind] result size=" << result.size() << std::endl;
+        return py::cast(result);
     }
 
     return trent_to_py(t);

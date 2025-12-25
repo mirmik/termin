@@ -186,6 +186,7 @@ pybind11_add_module(_native
     termin/render/mesh_renderer.cpp
     termin/entity/entity.cpp
     termin/entity/entity_registry.cpp
+    termin/entity/entity_handle.cpp
     termin/entity/component_registry.cpp
     termin/entity/vtable_utils.cpp
     termin/entity/components/rotator_component.cpp

@@ -39,7 +39,7 @@ class CMakeBuildExt(build_ext):
         ]
 
         subprocess.check_call(["cmake", *cmake_args], cwd=build_temp)
-        subprocess.check_call(["cmake", "--build", ".", "--config", cfg], cwd=build_temp)
+        subprocess.check_call(["cmake", "--build", ".", "--config", cfg, "--parallel"], cwd=build_temp)
         subprocess.check_call(["cmake", "--install", ".", "--config", cfg], cwd=build_temp)
 
         # Nothing else to do; CMake produced the .so/.pyd into build_lib already.

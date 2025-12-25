@@ -114,17 +114,51 @@ class EntityListWidget(QWidget):
             self._move_down_btn = None
             self._remove_btn = None
 
-    def get_value(self) -> List[EntityHandle]:
-        """Return current list of EntityHandles."""
-        return list(self._handles)
+    def get_value(self) -> list:
+        """
+        Return current list of Entity objects.
 
-    def set_value(self, handles: Optional[List[EntityHandle]]) -> None:
-        """Set list of EntityHandles."""
+        Unwraps EntityHandles to Entity* for C++ field compatibility.
+        """
+        result = []
+        for handle in self._handles:
+            entity = handle.entity
+            if entity is not None:
+                result.append(entity)
+        return result
+
+    def set_value(self, items: Optional[list]) -> None:
+        """
+        Set list of entities.
+
+        Accepts:
+        - List[EntityHandle]
+        - List[Entity] (C++ Entity pointers)
+        - Mixed list
+        """
+        # DEBUG
+        print(f"[EntityListWidget.set_value] items={items}, type={type(items)}")
+        if items:
+            for i, item in enumerate(items):
+                print(f"  [{i}] type={type(item)}, value={item}")
+
         self._updating = True
         try:
-            self._handles = list(handles) if handles else []
+            self._handles = []
+            if items:
+                for item in items:
+                    if item is None:
+                        continue
+                    if isinstance(item, EntityHandle):
+                        self._handles.append(item)
+                    elif hasattr(item, 'uuid') and hasattr(item, 'name'):
+                        # It's an Entity object - wrap in EntityHandle
+                        self._handles.append(EntityHandle.from_entity(item))
+                    else:
+                        print(f"  [EntityListWidget] Skipping invalid item: {item}")
             self._rebuild_list()
             self._update_buttons()
+            print(f"[EntityListWidget.set_value] result: {len(self._handles)} handles")
         finally:
             self._updating = False
 

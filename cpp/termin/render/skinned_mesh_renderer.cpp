@@ -1,15 +1,25 @@
 #include "skinned_mesh_renderer.hpp"
 #include "skeleton_controller.hpp"
 #include "termin/entity/entity.hpp"
+#include <iostream>
+#include <algorithm>
 
 namespace termin {
 
 SkinnedMeshRenderer::SkinnedMeshRenderer()
     : MeshRenderer()
 {
+    _type_name = "SkinnedMeshRenderer";
+    std::cout << "[SkinnedMeshRenderer] Created, this=" << this << std::endl;
 }
 
 void SkinnedMeshRenderer::set_skeleton_controller(SkeletonController* controller) {
+    std::cout << "[SkinnedMeshRenderer::set_skeleton_controller] this=" << this
+              << " controller=" << controller;
+    if (controller) {
+        std::cout << " bone_entities.size=" << controller->bone_entities.size();
+    }
+    std::cout << std::endl;
     _skeleton_controller = controller;
 }
 
@@ -117,6 +127,26 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std:
 
     // Draw the mesh via GPU
     gpu->draw(context, *mesh_data, mesh.version());
+}
+
+std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string& phase_mark) {
+    Material* mat = get_skinned_material();
+    if (mat == nullptr) {
+        return {};
+    }
+
+    std::vector<GeometryDrawCall> result;
+    for (auto& phase : mat->phases) {
+        if (phase_mark.empty() || phase.phase_mark == phase_mark) {
+            result.emplace_back(&phase, "");
+        }
+    }
+
+    std::sort(result.begin(), result.end(), [](const GeometryDrawCall& a, const GeometryDrawCall& b) {
+        return a.phase->priority < b.phase->priority;
+    });
+
+    return result;
 }
 
 void SkinnedMeshRenderer::start() {
