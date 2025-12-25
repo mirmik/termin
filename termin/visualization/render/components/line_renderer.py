@@ -12,7 +12,7 @@ LineRenderer — компонент для рендеринга линий.
 
 from __future__ import annotations
 
-from typing import Iterable, List, Set, TYPE_CHECKING
+from typing import Iterable, List, Optional, Set, TYPE_CHECKING
 
 import numpy as np
 
@@ -200,11 +200,13 @@ class LineRenderer(Component):
             kind="bool",
             setter=lambda obj, value: obj.set_raw_lines(value),
         ),
+
+        # не работает
         "material": InspectField(
             path="material",
             label="Material",
-            kind="material",
-            setter=lambda obj, value: obj.set_material(value),
+            kind="material_handle",
+            setter=lambda obj, value: obj.set_material(value.get()),
         ),
     }
 
@@ -241,6 +243,8 @@ class LineRenderer(Component):
         """
         marks: Set[str] = set()
         mat = self._get_material_or_default()
+        if mat is None:
+            return marks
         for phase in mat.phases:
             marks.add(phase.phase_mark)
         return marks
@@ -374,33 +378,30 @@ class LineRenderer(Component):
         self._ensure_geometry()
         return self._ribbon_handle
 
-    def _get_material_or_default(self) -> Material:
-        """Возвращает материал или создаёт дефолтный."""
+    # Class-level cache for default line material
+    _default_material: Optional[Material] = None
+
+    def _get_material_or_default(self) -> Optional[Material]:
+        """Возвращает материал или создаёт дефолтный (кэшированный)."""
         mat = self._material_handle.get_material_or_none()
         if mat is None:
-            # Создаём дефолтный материал для линий
-            from termin.visualization.core.material import Material
-            from termin.visualization.render.shader import ShaderProgram
-            from termin.visualization.render.renderpass import RenderState
+            if LineRenderer._default_material is None:
+                from termin.visualization.core.material import Material
+                from termin.visualization.render.shader import ShaderProgram
+                from termin.visualization.render.renderpass import RenderState
 
-            # Простой шейдер для линий
-            shader = ShaderProgram(
-                vertex_source=_DEFAULT_LINE_VERT,
-                fragment_source=_DEFAULT_LINE_FRAG,
-            )
-
-            # RenderState с отключённым culling для двустороннего рендеринга
-            render_state = RenderState(cull=False)
-
-            # Создаём материал с phase_mark="opaque"
-            mat = Material(
-                shader=shader,
-                color=(1.0, 1.0, 1.0, 1.0),
-                phase_mark="opaque",
-                render_state=render_state,
-            )
-
-            self._material_handle = MaterialHandle.from_material(mat)
+                shader = ShaderProgram(
+                    vertex_source=_DEFAULT_LINE_VERT,
+                    fragment_source=_DEFAULT_LINE_FRAG,
+                )
+                render_state = RenderState(cull=False)
+                LineRenderer._default_material = Material(
+                    shader=shader,
+                    color=(1.0, 1.0, 1.0, 1.0),
+                    phase_mark="opaque",
+                    render_state=render_state,
+                )
+            mat = LineRenderer._default_material
         return mat
 
     # --- Drawable protocol ---

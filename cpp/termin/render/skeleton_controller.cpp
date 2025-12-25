@@ -9,26 +9,16 @@ SkeletonController::SkeletonController()
 {
     _type_name = "SkeletonController";
     is_native = true;
-    std::cout << "[SkeletonController] Created, this=" << this << std::endl;
 }
 
 void SkeletonController::set_skeleton(const SkeletonHandle& handle) {
-    std::cout << "[SkeletonController::set_skeleton] this=" << this
-              << " handle.is_valid=" << handle.is_valid() << std::endl;
     skeleton = handle;
     _skeleton_instance.reset();
 }
 
 void SkeletonController::set_bone_entities(std::vector<EntityHandle> handles) {
-    std::cout << "[SkeletonController::set_bone_entities] this=" << this
-              << " count=" << handles.size() << std::endl;
-    for (size_t i = 0; i < handles.size(); ++i) {
-        std::cout << "  [" << i << "] uuid=" << handles[i].uuid << std::endl;
-    }
     bone_entities = std::move(handles);
     _skeleton_instance.reset();
-    std::cout << "[SkeletonController::set_bone_entities] after move, bone_entities.size="
-              << bone_entities.size() << std::endl;
 }
 
 void SkeletonController::set_bone_entities_from_ptrs(std::vector<Entity*> entities) {

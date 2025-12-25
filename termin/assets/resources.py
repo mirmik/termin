@@ -1861,31 +1861,31 @@ class ResourceManager:
                 get_by_name=self.get_mesh,
                 find_name=self.find_mesh_name,
             )
-        if kind == "audio_clip":
+        if kind == "audio_clip_handle":
             return HandleAccessors(
                 list_names=self.list_audio_clip_names,
                 get_by_name=self.get_audio_clip,
                 find_name=self.find_audio_clip_name,
             )
-        if kind == "voxel_grid":
+        if kind == "voxel_grid_handle":
             return HandleAccessors(
                 list_names=self.list_voxel_grid_names,
                 get_by_name=self._get_voxel_grid_handle,
                 find_name=self._find_voxel_grid_handle_name,
             )
-        if kind == "navmesh":
+        if kind == "navmesh_handle":
             return HandleAccessors(
                 list_names=self.list_navmesh_names,
                 get_by_name=self._get_navmesh_handle,
                 find_name=self._find_navmesh_handle_name,
             )
-        if kind == "skeleton":
+        if kind == "skeleton_handle":
             return HandleAccessors(
                 list_names=self.list_skeleton_names,
                 get_by_name=self._get_skeleton_handle,
                 find_name=self._find_skeleton_handle_name,
             )
-        if kind == "texture":
+        if kind == "texture_handle":
             return HandleAccessors(
                 list_names=self.list_texture_names,
                 get_by_name=self.get_texture_handle,

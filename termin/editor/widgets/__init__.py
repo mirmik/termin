@@ -13,7 +13,7 @@ from termin.editor.widgets.field_widgets import (
     ColorFieldWidget,
     ButtonFieldWidget,
     ComboFieldWidget,
-    ResourceComboWidget,
+    HandleSelectorWidget,
     FieldWidgetFactory,
     to_qcolor,
 )
@@ -32,7 +32,7 @@ __all__ = [
     "ColorFieldWidget",
     "ButtonFieldWidget",
     "ComboFieldWidget",
-    "ResourceComboWidget",
+    "HandleSelectorWidget",
     "AudioClipFieldWidget",
     "FieldWidgetFactory",
     "to_qcolor",

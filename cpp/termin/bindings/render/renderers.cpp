@@ -80,13 +80,10 @@ void bind_renderers(py::module_& m) {
             py::return_value_policy::reference)
         .def_property("bone_entities",
             [](const SkeletonController& self) {
-                std::cout << "[SkeletonController.bone_entities getter] this=" << &self
-                          << " count=" << self.bone_entities.size() << std::endl;
                 // Return resolved Entity* list
                 py::list result;
                 for (const auto& handle : self.bone_entities) {
                     Entity* e = handle.get();
-                    std::cout << "  uuid=" << handle.uuid << " -> " << (e ? e->name : "null") << std::endl;
                     if (e) {
                         result.append(py::cast(e, py::return_value_policy::reference));
                     } else {

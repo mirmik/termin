@@ -10,16 +10,9 @@ SkinnedMeshRenderer::SkinnedMeshRenderer()
     : MeshRenderer()
 {
     _type_name = "SkinnedMeshRenderer";
-    std::cout << "[SkinnedMeshRenderer] Created, this=" << this << std::endl;
 }
 
 void SkinnedMeshRenderer::set_skeleton_controller(SkeletonController* controller) {
-    std::cout << "[SkinnedMeshRenderer::set_skeleton_controller] this=" << this
-              << " controller=" << controller;
-    if (controller) {
-        std::cout << " bone_entities.size=" << controller->bone_entities.size();
-    }
-    std::cout << std::endl;
     _skeleton_controller = controller;
 }
 

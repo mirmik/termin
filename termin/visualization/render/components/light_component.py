@@ -5,9 +5,8 @@ from typing import Optional
 import numpy as np
 
 from termin.visualization.core.component import Component
-from termin.visualization.core.serialization import COMPONENT_REGISTRY
 from termin.editor.inspect_field import InspectField
-from termin.lighting import LightType, Light, LightShadowParams, light_type_from_value
+from termin.lighting import LightType, Light, LightShadowParams
 
 
 class LightComponent(Component):
@@ -15,9 +14,6 @@ class LightComponent(Component):
     Простейший компонент источника света.
     Хранит тип, цвет, интенсивность и параметры теней.
     """
-
-    # Используем кастомную сериализацию вместо serializable_fields
-    serializable_fields = []
 
     inspect_fields = {
         "light_type": InspectField(
@@ -29,6 +25,7 @@ class LightComponent(Component):
                 (LightType.POINT, "Point"),
                 (LightType.SPOT, "Spot"),
             ],
+            setter=lambda self, v: setattr(self, 'light_type', v if isinstance(v, LightType) else LightType(v)),
         ),
         "color": InspectField(
             path="color",
@@ -41,12 +38,12 @@ class LightComponent(Component):
             kind="float",
         ),
         "shadows_enabled": InspectField(
-            path="shadows.enabled",
+            path="shadows_enabled",
             label="Cast Shadows",
             kind="bool",
         ),
         "shadows_map_resolution": InspectField(
-            path="shadows.map_resolution",
+            path="shadows_map_resolution",
             label="Shadow Resolution",
             kind="int",
             min=256,
@@ -63,11 +60,32 @@ class LightComponent(Component):
         shadows: Optional[LightShadowParams] = None,
         enabled: bool = True,
     ):
-        super().__init__(enabled=enabled)
+        super().__init__()
+        self.enabled = enabled
         self.light_type = light_type
         self.color = np.asarray(color, dtype=np.float32)
         self.intensity = float(intensity)
-        self.shadows = shadows if shadows is not None else LightShadowParams()
+        self._shadows = shadows if shadows is not None else LightShadowParams()
+
+    @property
+    def shadows_enabled(self) -> bool:
+        return self._shadows.enabled
+
+    @shadows_enabled.setter
+    def shadows_enabled(self, value: bool):
+        self._shadows.enabled = value
+
+    @property
+    def shadows_map_resolution(self) -> int:
+        return self._shadows.map_resolution
+
+    @shadows_map_resolution.setter
+    def shadows_map_resolution(self, value: int):
+        self._shadows.map_resolution = value
+
+    @property
+    def shadows(self) -> LightShadowParams:
+        return self._shadows
 
     def to_light(self) -> Light:
         """Преобразовать в объект Light для рендеринга."""
@@ -75,36 +93,5 @@ class LightComponent(Component):
             type=self.light_type,
             color=self.color,
             intensity=self.intensity,
-            shadows=self.shadows,
+            shadows=self._shadows,
         )
-
-    def serialize_data(self):
-        """Сериализует компонент в словарь."""
-        return {
-            "light_type": self.light_type.value,
-            "color": list(self.color),
-            "intensity": self.intensity,
-            "shadows_enabled": self.shadows.enabled,
-            "shadows_map_resolution": self.shadows.map_resolution,
-        }
-
-    @classmethod
-    def deserialize(cls, data, context=None):
-        """Десериализует компонент из словаря."""
-        light_type = light_type_from_value(data.get("light_type", 0))
-        color = data.get("color", (1.0, 1.0, 1.0))
-        intensity = data.get("intensity", 1.0)
-        shadows = LightShadowParams(
-            enabled=data.get("shadows_enabled", False),
-            map_resolution=data.get("shadows_map_resolution", 1024),
-        )
-        return cls(
-            light_type=light_type,
-            color=color,
-            intensity=intensity,
-            shadows=shadows,
-        )
-
-
-# Регистрируем для десериализации
-COMPONENT_REGISTRY["LightComponent"] = LightComponent

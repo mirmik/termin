@@ -539,54 +539,40 @@ PYBIND11_MODULE(_entity_native, m) {
                 for (auto item : comp_list) {
                     py::dict comp_data = item.cast<py::dict>();
                     if (!comp_data.contains("type")) {
-                        std::cout << "[Entity.deserialize] component missing 'type' key" << std::endl;
                         continue;
                     }
                     std::string comp_type = comp_data["type"].cast<std::string>();
-                    std::cout << "[Entity.deserialize] deserializing component: " << comp_type << std::endl;
 
                     // Get component class from registry
                     ComponentRegistry& reg = ComponentRegistry::instance();
                     if (!reg.has(comp_type)) {
-                        std::cout << "[Entity.deserialize] component NOT in registry: " << comp_type << std::endl;
                         continue;
                     }
 
                     // Get the component class
                     py::object comp_class = reg.get_class(comp_type);
                     if (comp_class.is_none()) {
-                        std::cout << "[Entity.deserialize] comp_class is None for: " << comp_type << std::endl;
                         continue;
                     }
-                    std::cout << "[Entity.deserialize] found class for: " << comp_type << std::endl;
 
                     // Get component data
                     py::object comp_inner = comp_data.contains("data")
                         ? comp_data["data"]
                         : py::dict();
-                    std::cout << "[Entity.deserialize] comp_inner: " << py::str(comp_inner).cast<std::string>() << std::endl;
 
                     // Use deserialize classmethod if available, otherwise create and deserialize_data
                     py::object py_comp;
                     if (py::hasattr(comp_class, "deserialize")) {
-                        std::cout << "[Entity.deserialize] calling deserialize classmethod" << std::endl;
                         py_comp = comp_class.attr("deserialize")(comp_inner, context);
                     } else {
-                        std::cout << "[Entity.deserialize] no deserialize, creating instance" << std::endl;
                         py_comp = comp_class();
-                        std::cout << "[Entity.deserialize] instance created, has deserialize_data: "
-                                  << py::hasattr(py_comp, "deserialize_data") << std::endl;
                         if (py::hasattr(py_comp, "deserialize_data")) {
-                            std::cout << "[Entity.deserialize] calling deserialize_data" << std::endl;
                             py_comp.attr("deserialize_data")(comp_inner, context);
-                            std::cout << "[Entity.deserialize] deserialize_data done" << std::endl;
                         }
                     }
 
-                    std::cout << "[Entity.deserialize] adding component to entity" << std::endl;
                     // Call add_component through Python to trigger keep_alive
                     py_ent.attr("add_component")(py_comp);
-                    std::cout << "[Entity.deserialize] component added successfully" << std::endl;
                 }
             }
 

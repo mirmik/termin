@@ -306,7 +306,7 @@ void bind_skeleton_handle(py::module_& m) {
 void register_skeleton_kind() {
     auto& registry = termin::InspectRegistry::instance();
 
-    registry.register_kind("skeleton", termin::KindHandler{
+    registry.register_kind("skeleton_handle", termin::KindHandler{
         // serialize
         [](py::object obj) -> nos::trent {
             if (py::hasattr(obj, "serialize")) {

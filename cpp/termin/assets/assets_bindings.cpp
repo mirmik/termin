@@ -121,8 +121,8 @@ void register_kind_handlers() {
 
     // Note: skeleton kind is registered in _skeleton_native module
 
-    // ===== entity_list kind =====
-    registry.register_kind("entity_list", KindHandler{
+    // ===== entity_handle_list kind =====
+    registry.register_kind("entity_handle_list", KindHandler{
         // serialize
         [](py::object obj) -> nos::trent {
             nos::trent result;

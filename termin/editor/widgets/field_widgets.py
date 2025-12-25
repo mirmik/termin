@@ -579,140 +579,6 @@ class HandleSelectorWidget(FieldWidget):
         self._combo.blockSignals(False)
 
 
-class ResourceComboWidget(FieldWidget):
-    """
-    Widget for resource fields (material, mesh, voxel_grid, navmesh).
-
-    DEPRECATED: Use HandleSelectorWidget for new code.
-    This widget returns raw resource objects for backward compatibility.
-    """
-
-    def __init__(
-        self,
-        resource_kind: str,
-        resources: Optional["ResourceManager"] = None,
-        parent: Optional[QWidget] = None,
-    ):
-        super().__init__(parent)
-        self._resource_kind = resource_kind
-        self._resources = resources
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        self._combo = QComboBox()
-        self._combo.currentIndexChanged.connect(lambda _: self.value_changed.emit())
-        layout.addWidget(self._combo)
-
-        self._refresh_items()
-
-    def set_resources(self, resources: "ResourceManager") -> None:
-        self._resources = resources
-        self._refresh_items()
-
-    def _refresh_items(self) -> None:
-        if self._resources is None:
-            return
-
-        self._combo.blockSignals(True)
-        current_text = self._combo.currentText()
-        self._combo.clear()
-
-        names = self._get_resource_names()
-        for name in names:
-            self._combo.addItem(name)
-
-        # Restore selection
-        idx = self._combo.findText(current_text)
-        if idx >= 0:
-            self._combo.setCurrentIndex(idx)
-
-        self._combo.blockSignals(False)
-
-    def _get_resource_names(self) -> list[str]:
-        if self._resources is None:
-            return []
-        if self._resource_kind == "material":
-            return self._resources.list_material_names()
-        if self._resource_kind == "mesh":
-            return self._resources.list_mesh_names()
-        if self._resource_kind == "voxel_grid":
-            return self._resources.list_voxel_grid_names()
-        if self._resource_kind == "navmesh":
-            return self._resources.list_navmesh_names()
-        if self._resource_kind == "skeleton":
-            return self._resources.list_skeleton_names()
-        return []
-
-    def _find_resource_name(self, resource: Any) -> Optional[str]:
-        if self._resources is None or resource is None:
-            return None
-        if self._resource_kind == "material":
-            # Handle both Material and MaterialHandle
-            mat = resource
-            # Check if it's a MaterialHandle (C++ or Python)
-            if hasattr(resource, 'material'):
-                mat = resource.material
-            elif hasattr(resource, 'get_material'):
-                mat = resource.get_material()
-            if mat is None:
-                return None
-            return self._resources.find_material_name(mat)
-        if self._resource_kind == "mesh":
-            # find_mesh_name expects MeshHandle, not Mesh3
-            # Just pass the handle as-is
-            return self._resources.find_mesh_name(resource)
-        if self._resource_kind == "voxel_grid":
-            return self._resources.find_voxel_grid_name(resource)
-        if self._resource_kind == "navmesh":
-            # navmesh is stored by name directly
-            return resource if isinstance(resource, str) else None
-        if self._resource_kind == "skeleton":
-            return self._resources.find_skeleton_name(resource)
-        return None
-
-    def _get_resource(self, name: str) -> Any:
-        if self._resources is None or not name:
-            return None
-        if self._resource_kind == "material":
-            return self._resources.get_material(name)
-        if self._resource_kind == "mesh":
-            return self._resources.get_mesh(name)
-        if self._resource_kind == "voxel_grid":
-            return self._resources.get_voxel_grid(name)
-        if self._resource_kind == "navmesh":
-            return self._resources.get_navmesh(name)
-        if self._resource_kind == "skeleton":
-            return self._resources.get_skeleton(name)
-        return None
-
-    def get_value(self) -> Any:
-        name = self._combo.currentText()
-        if not name:
-            return None
-        return self._get_resource(name)
-
-    def set_value(self, value: Any) -> None:
-        self._combo.blockSignals(True)
-
-        # Refresh items in case the list changed
-        self._refresh_items()
-
-        if value is None:
-            self._combo.setCurrentIndex(-1)
-            self._combo.blockSignals(False)
-            return
-
-        name = self._find_resource_name(value)
-        if name is None:
-            self._combo.setCurrentIndex(-1)
-        else:
-            idx = self._combo.findText(name)
-            self._combo.setCurrentIndex(idx if idx >= 0 else -1)
-
-        self._combo.blockSignals(False)
-
-
 class FieldWidgetFactory:
     """Factory for creating field widgets based on InspectField."""
 
@@ -774,21 +640,21 @@ class FieldWidgetFactory:
             return ClipSelectorWidget()
 
         # Handle-based resource selectors
-        if kind in ("material_handle", "mesh_handle"):
+        if kind in (
+            "material_handle",
+            "mesh_handle",
+            "skeleton_handle",
+            "voxel_grid_handle",
+            "navmesh_handle",
+            "texture_handle",
+        ):
             return HandleSelectorWidget(
                 resource_kind=kind,
                 resources=self._resources,
                 allow_none=True,
             )
 
-        # Legacy resource selectors (raw resource objects)
-        if kind in ("voxel_grid", "navmesh", "skeleton"):
-            return ResourceComboWidget(
-                resource_kind=kind,
-                resources=self._resources,
-            )
-
-        if kind == "audio_clip":
+        if kind == "audio_clip_handle":
             from termin.editor.widgets.audio_clip_widget import AudioClipFieldWidget
 
             return AudioClipFieldWidget(resources=self._resources)
@@ -798,7 +664,7 @@ class FieldWidgetFactory:
 
             return Vec3ListWidget()
 
-        if kind == "entity_list":
+        if kind == "entity_handle_list":
             from termin.editor.widgets.entity_list_widget import EntityListWidget
 
             return EntityListWidget(read_only=field.read_only)

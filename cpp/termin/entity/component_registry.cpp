@@ -8,21 +8,16 @@ namespace termin {
 
 ComponentRegistry& ComponentRegistry::instance() {
     static ComponentRegistry inst;
-    std::cout << "[ComponentRegistry::instance] this=" << &inst
-              << " size=" << inst.registry_.size() << std::endl;
     return inst;
 }
 
 void ComponentRegistry::register_native(const std::string& name, NativeFactory factory) {
-    std::cout << "[ComponentRegistry::register_native] name=" << name
-              << " this=" << this << std::endl;
     ComponentInfo info;
     info.name = name;
     info.is_native = true;
     info.native_factory = std::move(factory);
 
     registry_[name] = std::move(info);
-    std::cout << "[ComponentRegistry::register_native] done, size=" << registry_.size() << std::endl;
 }
 
 void ComponentRegistry::register_python(const std::string& name, py::object cls) {
@@ -62,11 +57,7 @@ py::object ComponentRegistry::create(const std::string& name) const {
 }
 
 bool ComponentRegistry::has(const std::string& name) const {
-    bool result = registry_.count(name) > 0;
-    std::cout << "[ComponentRegistry::has] name=" << name
-              << " this=" << this << " result=" << result
-              << " size=" << registry_.size() << std::endl;
-    return result;
+    return registry_.count(name) > 0;
 }
 
 const ComponentRegistry::ComponentInfo* ComponentRegistry::get_info(const std::string& name) const {

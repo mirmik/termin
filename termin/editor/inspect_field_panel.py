@@ -42,17 +42,25 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
         type_name = cls.__name__
         cpp_fields = registry.fields(type_name)
         for info in cpp_fields:
-            # Create InspectField wrapper that delegates to registry
-            result[info.path] = InspectField(
-                path=info.path,
-                label=info.label,
-                kind=info.kind,
-                min=info.min,
-                max=info.max,
-                step=info.step,
-                getter=lambda o, p=info.path: registry.get(o, p),
-                setter=lambda o, v, p=info.path: registry.set(o, p, v),
-            )
+            if info.path in result:
+                # Merge: keep Python field but add C++ getter/setter if Python doesn't have custom ones
+                py_field = result[info.path]
+                if py_field.getter is None:
+                    py_field.getter = lambda o, p=info.path: registry.get(o, p)
+                if py_field.setter is None:
+                    py_field.setter = lambda o, v, p=info.path: registry.set(o, p, v)
+            else:
+                # Create InspectField wrapper that delegates to registry
+                result[info.path] = InspectField(
+                    path=info.path,
+                    label=info.label,
+                    kind=info.kind,
+                    min=info.min,
+                    max=info.max,
+                    step=info.step,
+                    getter=lambda o, p=info.path: registry.get(o, p),
+                    setter=lambda o, v, p=info.path: registry.set(o, p, v),
+                )
     except (ImportError, RuntimeError):
         pass  # C++ module not available or no fields registered
 
@@ -132,20 +140,6 @@ class InspectFieldPanel(QWidget):
                     label = field.label or key
                     self._layout.addRow(QLabel(label), widget)
                     value = field.get_value(target)
-                    # DEBUG
-                    if field.kind == "entity_list":
-                        print(f"=== DEBUG entity_list ===")
-                        print(f"target type: {type(target)}")
-                        print(f"target: {target}")
-                        print(f"field.path: {field.path}")
-                        print(f"field.getter: {field.getter}")
-                        print(f"value from get_value: {value} (len={len(value) if value else 0})")
-                        # Direct property access
-                        be = target.bone_entities
-                        print(f"target.bone_entities: {be} (len={len(be) if be else 0})")
-                        for i, e in enumerate(be):
-                            print(f"  [{i}] {e.name if e else None}")
-                        print(f"=========================")
                     widget.set_value(value)
 
                 self._connect_widget(widget, key, field)

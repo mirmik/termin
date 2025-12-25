@@ -48,8 +48,8 @@ public:
      * DO NOT OVERRIDE in derived components!
      * All serializable fields should be registered via INSPECT_FIELD macro.
      * Use appropriate "kind" for special types:
-     * - "mesh", "material", "skeleton" for asset handles
-     * - "entity_list" for std::vector<Entity*>
+     * - "mesh_handle", "material_handle", "skeleton_handle" for asset handles
+     * - "entity_handle_list" for std::vector<EntityHandle>
      */
     virtual nos::trent serialize_data() const {
         return InspectRegistry::instance().serialize_all(

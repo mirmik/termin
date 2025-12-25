@@ -97,19 +97,23 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
         };
 
         auto setter_fn = [path_copy, setter_copy](void* obj, py::object value) {
-            py::object py_obj = py::cast(static_cast<Component*>(obj),
-                                         py::return_value_policy::reference);
-            if (!setter_copy.is_none()) {
-                setter_copy(py_obj, value);
-                return;
+            try {
+                py::object py_obj = py::cast(static_cast<Component*>(obj),
+                                             py::return_value_policy::reference);
+                if (!setter_copy.is_none()) {
+                    setter_copy(py_obj, value);
+                    return;
+                }
+                // Use setattr for path resolution
+                auto parts = split_path(path_copy);
+                py::object target = py_obj;
+                for (size_t i = 0; i < parts.size() - 1; ++i) {
+                    target = py::getattr(target, parts[i].c_str());
+                }
+                py::setattr(target, parts.back().c_str(), value);
+            } catch (const std::exception& e) {
+                std::cerr << "[Python setter error] path=" << path_copy << " error=" << e.what() << std::endl;
             }
-            // Use setattr for path resolution
-            auto parts = split_path(path_copy);
-            py::object target = py_obj;
-            for (size_t i = 0; i < parts.size() - 1; ++i) {
-                target = py::getattr(target, parts[i].c_str());
-            }
-            py::setattr(target, parts.back().c_str(), value);
         };
 
         _fields[type_name].push_back({
@@ -152,7 +156,6 @@ nos::trent InspectRegistry::py_to_trent_with_kind(py::object obj, const std::str
 py::object InspectRegistry::trent_to_py_with_kind(const nos::trent& t, const std::string& kind) {
     // Check for registered kind handler first
     auto* handler = instance().get_kind_handler(kind);
-    std::cout << "[trent_to_py_with_kind] kind=" << kind << " handler=" << (handler ? "yes" : "no") << std::endl;
     if (handler && handler->deserialize) {
         return handler->deserialize(t);
     }

@@ -79,8 +79,8 @@ public:
      */
     void invalidate_instance();
 
-    INSPECT_FIELD(SkeletonController, skeleton, "Skeleton", "skeleton")
-    INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "entity_list")
+    INSPECT_FIELD(SkeletonController, skeleton, "Skeleton", "skeleton_handle")
+    INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "entity_handle_list")
 };
 
 REGISTER_COMPONENT(SkeletonController);

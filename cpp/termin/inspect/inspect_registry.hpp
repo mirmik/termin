@@ -82,19 +82,15 @@ public:
             .min = min,
             .max = max,
             .step = step,
-            .getter = [member, path](void* obj) -> py::object {
+            .getter = [member](void* obj) -> py::object {
                 auto& val = static_cast<C*>(obj)->*member;
-                py::object result = py::cast(val);
-                std::cout << "[INSPECT getter] path=" << path << " obj=" << obj << " result=" << std::string(py::str(py::repr(result))) << std::endl;
-                return result;
+                return py::cast(val);
             },
             .setter = [member, path](void* obj, py::object val) {
-                std::cout << "[INSPECT setter] path=" << path << " obj=" << obj << " val_type=" << std::string(py::str(val.get_type())) << std::endl;
                 try {
                     static_cast<C*>(obj)->*member = val.cast<T>();
-                    std::cout << "[INSPECT setter] success" << std::endl;
                 } catch (const std::exception& e) {
-                    std::cout << "[INSPECT setter] EXCEPTION: " << e.what() << std::endl;
+                    std::cerr << "[INSPECT setter error] path=" << path << " error=" << e.what() << std::endl;
                 }
             }
         });
@@ -233,20 +229,12 @@ public:
      * Deserialize all inspect fields from trent dict.
      */
     void deserialize_all(void* obj, const std::string& type_name, const nos::trent& data) {
-        std::cout << "[InspectRegistry.deserialize_all] type=" << type_name
-                  << " data.is_dict=" << data.is_dict() << std::endl;
         if (!data.is_dict()) return;
 
-        auto& field_list = fields(type_name);
-        std::cout << "[InspectRegistry.deserialize_all] field_count=" << field_list.size() << std::endl;
-
-        for (const auto& f : field_list) {
+        for (const auto& f : fields(type_name)) {
             if (f.non_serializable) continue;
-            std::cout << "[InspectRegistry.deserialize_all] field=" << f.path
-                      << " kind=" << f.kind << " in_data=" << data.contains(f.path) << std::endl;
             if (data.contains(f.path)) {
                 py::object val = trent_to_py_with_kind(data[f.path], f.kind);
-                std::cout << "[InspectRegistry.deserialize_all] setting " << f.path << std::endl;
                 f.setter(obj, val);
             }
         }
