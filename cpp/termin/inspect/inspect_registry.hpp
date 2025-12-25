@@ -14,6 +14,7 @@ namespace termin {
 // Forward declarations for handle types
 class MeshHandle;
 class MaterialHandle;
+class SkeletonHandle;
 
 /**
  * Metadata for an inspectable field.
@@ -135,11 +136,13 @@ public:
 
     /**
      * Set field value by path.
+     * Converts value to the expected type based on field kind.
      */
     void set(void* obj, const std::string& type_name, const std::string& field_path, py::object value) {
         for (const auto& f : fields(type_name)) {
             if (f.path == field_path) {
-                f.setter(obj, value);
+                py::object converted = convert_value_for_kind(value, f.kind);
+                f.setter(obj, converted);
                 return;
             }
         }
@@ -213,16 +216,21 @@ private:
         return result;
     }
 
-    static nos::trent py_to_trent_with_kind(py::object obj, const std::string& kind) {
-        // Handle types serialize to dict
-        if (kind == "mesh" || kind == "material") {
-            if (py::hasattr(obj, "serialize")) {
-                py::dict d = obj.attr("serialize")();
-                return py_dict_to_trent(d);
-            }
-            return nos::trent::nil();
+    /**
+     * Convert py value to correct type for field kind.
+     * Used when setting values from editor - ensures proper type conversion.
+     */
+    static py::object convert_value_for_kind(py::object value, const std::string& kind);
+
+    static nos::trent py_to_trent_with_kind(py::object obj, const std::string& kind);
+
+    static nos::trent py_list_to_trent(py::list lst) {
+        nos::trent result;
+        result.init(nos::trent_type::list);
+        for (auto item : lst) {
+            result.push_back(py_to_trent(py::reinterpret_borrow<py::object>(item)));
         }
-        return py_to_trent(obj);
+        return result;
     }
 
     static py::object trent_to_py_with_kind(const nos::trent& t, const std::string& kind);

@@ -384,4 +384,85 @@ public:
     static MaterialHandle deserialize(const py::dict& data);
 };
 
+
+// Forward declaration
+class SkeletonData;
+
+/**
+ * SkeletonHandle - smart reference to skeleton asset.
+ *
+ * Wraps SkeletonAsset py::object, provides:
+ * - Access to SkeletonData
+ * - Serialization/deserialization with UUID
+ */
+class SkeletonHandle {
+public:
+    // Python asset object (SkeletonAsset or None)
+    py::object asset;
+
+    SkeletonHandle() : asset(py::none()) {}
+
+    explicit SkeletonHandle(py::object asset_) : asset(std::move(asset_)) {}
+
+    /**
+     * Create handle by name lookup in ResourceManager.
+     */
+    static SkeletonHandle from_name(const std::string& name);
+
+    /**
+     * Create handle from Python SkeletonAsset.
+     */
+    static SkeletonHandle from_asset(py::object asset) {
+        return SkeletonHandle(std::move(asset));
+    }
+
+    /**
+     * Check if handle is valid (has asset).
+     */
+    bool is_valid() const {
+        return !asset.is_none();
+    }
+
+    /**
+     * Get asset name.
+     */
+    std::string name() const {
+        if (asset.is_none()) return "";
+        return asset.attr("name").cast<std::string>();
+    }
+
+    /**
+     * Get SkeletonData pointer.
+     * Returns nullptr if asset is empty or resource is None.
+     */
+    SkeletonData* get() const;
+
+    /**
+     * Serialize for scene saving.
+     */
+    py::dict serialize() const {
+        if (asset.is_none()) {
+            py::dict d;
+            d["type"] = "none";
+            return d;
+        }
+        py::dict d;
+        d["uuid"] = asset.attr("uuid");
+        py::object source_path = asset.attr("source_path");
+        if (!source_path.is_none()) {
+            d["type"] = "path";
+            d["path"] = py::str(source_path.attr("as_posix")());
+        } else {
+            d["type"] = "named";
+            d["name"] = asset.attr("name");
+        }
+        return d;
+    }
+
+    /**
+     * Deserialize from scene data.
+     */
+    static SkeletonHandle deserialize(const py::dict& data);
+};
+
 } // namespace termin

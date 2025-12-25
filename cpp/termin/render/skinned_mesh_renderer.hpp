@@ -4,42 +4,57 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
-#include "termin/geom/mat44.hpp"
+#include "termin/render/mesh_renderer.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
-#include "termin/render/shader_program.hpp"
-#include "termin/render/render_context.hpp"
-#include "termin/mesh/mesh3.hpp"
-#include "termin/render/mesh_gpu.hpp"
 
 namespace py = pybind11;
 
 namespace termin {
 
+// Forward declaration
+class SkeletonController;
+
 /**
  * SkinnedMeshRenderer - renders skinned mesh with bone matrices.
  *
- * Simplified C++ implementation focusing on the core rendering logic:
- * - Gets bone matrices from SkeletonInstance
- * - Uploads to shader
- * - Draws mesh
+ * Extends MeshRenderer with:
+ * - skeleton_controller: Reference to SkeletonController for bone matrices
+ * - Automatic upload of u_bone_matrices uniform before drawing
+ * - Skinned shader variant injection via get_skinned_material()
  */
-class SkinnedMeshRenderer {
+class SkinnedMeshRenderer : public MeshRenderer {
 public:
-    // Skeleton instance for bone matrices
-    SkeletonInstance* skeleton_instance = nullptr;
+    // C++ SkeletonController pointer (not owned)
+    SkeletonController* _skeleton_controller = nullptr;
 
     // Cached bone matrices (column-major, ready for shader)
-    std::vector<float> bone_matrices_flat;
-    int bone_count = 0;
+    std::vector<float> _bone_matrices_flat;
+    int _bone_count = 0;
 
-    SkinnedMeshRenderer() = default;
+    // Cached skinned material
+    Material* _skinned_material_cache = nullptr;
+    int _cached_base_material_id = 0;
+
+    // Note: mesh, material, cast_shadow are inherited from MeshRenderer
+    // and already have INSPECT_FIELD registrations there
+
+    SkinnedMeshRenderer();
+    ~SkinnedMeshRenderer() override = default;
 
     /**
-     * Set skeleton instance.
+     * Get skeleton controller.
      */
-    void set_skeleton_instance(SkeletonInstance* si) {
-        skeleton_instance = si;
-    }
+    SkeletonController* skeleton_controller() const { return _skeleton_controller; }
+
+    /**
+     * Set skeleton controller.
+     */
+    void set_skeleton_controller(SkeletonController* controller);
+
+    /**
+     * Get skeleton instance from controller.
+     */
+    SkeletonInstance* skeleton_instance();
 
     /**
      * Update bone matrices from skeleton instance.
@@ -53,21 +68,23 @@ public:
     void upload_bone_matrices(ShaderProgram& shader);
 
     /**
-     * Draw skinned mesh.
-     *
-     * @param context Render context with graphics backend
-     * @param mesh Mesh3 data
-     * @param mesh_gpu GPU mesh wrapper
-     * @param mesh_version Mesh version for re-upload check
-     * @param shader Shader program to use (should have skinning support)
+     * Get skinned variant of the current material.
+     * Caches the result for performance.
      */
-    void draw(
-        const RenderContext& context,
-        const Mesh3& mesh,
-        MeshGPU& mesh_gpu,
-        int mesh_version,
-        ShaderProgram& shader
-    );
+    Material* get_skinned_material();
+
+    /**
+     * Draw skinned geometry with bone matrices.
+     * Overrides MeshRenderer::draw_geometry.
+     */
+    void draw_geometry(const RenderContext& context, const std::string& geometry_id = "") override;
+
+    /**
+     * Component lifecycle: find skeleton controller on start.
+     */
+    void start() override;
 };
+
+REGISTER_COMPONENT(SkinnedMeshRenderer);
 
 } // namespace termin

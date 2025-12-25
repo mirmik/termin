@@ -6,6 +6,7 @@
 #include "handles.hpp"
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/material.hpp"
+#include "termin/skeleton/skeleton_data.hpp"
 
 namespace py = pybind11;
 
@@ -311,6 +312,20 @@ void bind_assets(py::module_& m) {
     py::implicitly_convertible<std::shared_ptr<Material>, MaterialHandle>();
     // Allow implicit conversion from Material* to MaterialHandle
     py::implicitly_convertible<Material*, MaterialHandle>();
+
+    // ========== SkeletonHandle ==========
+    py::class_<SkeletonHandle>(m, "SkeletonHandle")
+        .def(py::init<>())
+        .def(py::init<py::object>(), py::arg("asset"))
+        .def_static("from_name", &SkeletonHandle::from_name, py::arg("name"))
+        .def_static("from_asset", &SkeletonHandle::from_asset, py::arg("asset"))
+        .def_static("deserialize", &SkeletonHandle::deserialize, py::arg("data"))
+        .def_readwrite("asset", &SkeletonHandle::asset)
+        .def_property_readonly("is_valid", &SkeletonHandle::is_valid)
+        .def_property_readonly("name", &SkeletonHandle::name)
+        .def("get", &SkeletonHandle::get, py::return_value_policy::reference)
+        .def("get_asset", [](const SkeletonHandle& self) { return self.asset; })
+        .def("serialize", &SkeletonHandle::serialize);
 
     // ========== Free functions ==========
     m.def("get_white_texture_handle", &get_white_texture_handle,

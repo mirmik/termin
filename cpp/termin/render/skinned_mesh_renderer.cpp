@@ -1,78 +1,148 @@
 #include "skinned_mesh_renderer.hpp"
-
-#include <cstdio>
+#include "skeleton_controller.hpp"
+#include "termin/entity/entity.hpp"
 
 namespace termin {
 
+SkinnedMeshRenderer::SkinnedMeshRenderer()
+    : MeshRenderer()
+{
+}
+
+void SkinnedMeshRenderer::set_skeleton_controller(SkeletonController* controller) {
+    _skeleton_controller = controller;
+}
+
+SkeletonInstance* SkinnedMeshRenderer::skeleton_instance() {
+    if (_skeleton_controller == nullptr) {
+        return nullptr;
+    }
+    return _skeleton_controller->skeleton_instance();
+}
+
 void SkinnedMeshRenderer::update_bone_matrices() {
-    if (!skeleton_instance) {
-        bone_count = 0;
-        bone_matrices_flat.clear();
+    SkeletonInstance* si = skeleton_instance();
+    if (si == nullptr) {
+        _bone_count = 0;
+        _bone_matrices_flat.clear();
         return;
     }
 
     // Update skeleton (computes matrices from entity transforms)
-    skeleton_instance->update();
+    si->update();
 
     // Get bone count
-    bone_count = skeleton_instance->bone_count();
-    if (bone_count == 0) {
-        bone_matrices_flat.clear();
+    _bone_count = si->bone_count();
+    if (_bone_count == 0) {
+        _bone_matrices_flat.clear();
         return;
     }
 
     // Resize buffer
-    bone_matrices_flat.resize(bone_count * 16);
+    _bone_matrices_flat.resize(_bone_count * 16);
 
     // Copy matrices (column-major for OpenGL)
-    for (int i = 0; i < bone_count; ++i) {
-        const Mat44& m = skeleton_instance->get_bone_matrix(i);
+    for (int i = 0; i < _bone_count; ++i) {
+        const Mat44& m = si->get_bone_matrix(i);
         // Mat44 is column-major, copy directly
         for (int j = 0; j < 16; ++j) {
-            bone_matrices_flat[i * 16 + j] = static_cast<float>(m.data[j]);
+            _bone_matrices_flat[i * 16 + j] = static_cast<float>(m.data[j]);
         }
-    }
-
-    // Debug: check if matrices are identity
-    static int debug_count = 0;
-    if (debug_count < 3 && bone_count > 0) {
-        debug_count++;
-        float* m = bone_matrices_flat.data();
-        bool is_identity = (m[0] == 1.0f && m[5] == 1.0f && m[10] == 1.0f && m[15] == 1.0f &&
-                           m[12] == 0.0f && m[13] == 0.0f && m[14] == 0.0f);
-        printf("[SkinnedMeshRenderer] bone_count=%d, first matrix is_identity=%d\n",
-               bone_count, is_identity);
-        printf("  translation: %f %f %f\n", m[12], m[13], m[14]);
     }
 }
 
 void SkinnedMeshRenderer::upload_bone_matrices(ShaderProgram& shader) {
-    if (bone_count == 0 || bone_matrices_flat.empty()) {
+    if (_bone_count == 0 || _bone_matrices_flat.empty()) {
         return;
     }
 
-    shader.set_uniform_matrix4_array("u_bone_matrices", bone_matrices_flat.data(), bone_count, false);
-    shader.set_uniform_int("u_bone_count", bone_count);
+    shader.set_uniform_matrix4_array("u_bone_matrices", _bone_matrices_flat.data(), _bone_count, false);
+    shader.set_uniform_int("u_bone_count", _bone_count);
 }
 
-void SkinnedMeshRenderer::draw(
-    const RenderContext& context,
-    const Mesh3& mesh,
-    MeshGPU& mesh_gpu,
-    int mesh_version,
-    ShaderProgram& shader
-) {
-    // Update bone matrices
-    update_bone_matrices();
+Material* SkinnedMeshRenderer::get_skinned_material() {
+    Material* base_mat = get_material();
+    if (base_mat == nullptr) {
+        return nullptr;
+    }
 
-    // Ensure shader is ready and active
-    // (caller should handle this, but we upload uniforms)
+    // Check if cache is still valid
+    int base_mat_id = reinterpret_cast<intptr_t>(base_mat);
+    if (_skinned_material_cache != nullptr && _cached_base_material_id == base_mat_id) {
+        return _skinned_material_cache;
+    }
 
-    // Upload bone matrices
-    upload_bone_matrices(shader);
+    // Check if shader already has skinning
+    if (!base_mat->phases.empty() && base_mat->phases[0].shader) {
+        const std::string& vert_source = base_mat->phases[0].shader->vertex_source();
+        if (vert_source.find("u_bone_matrices") != std::string::npos) {
+            // Already has skinning, use as-is
+            _skinned_material_cache = base_mat;
+            _cached_base_material_id = base_mat_id;
+            return base_mat;
+        }
+    }
 
-    // Draw mesh
-    mesh_gpu.draw(context, mesh, mesh_version);
+    // Create skinned variant via Python
+    try {
+        py::object skinning_module = py::module_::import("termin.visualization.render.shader_skinning");
+        py::object skinned_mat_obj = skinning_module.attr("get_skinned_material")(base_mat);
+        if (!skinned_mat_obj.is_none()) {
+            _skinned_material_cache = skinned_mat_obj.cast<Material*>();
+            _cached_base_material_id = base_mat_id;
+            return _skinned_material_cache;
+        }
+    } catch (const py::error_already_set& e) {
+        // Failed to get skinned material, use base
+        PyErr_Clear();
+    }
+
+    return base_mat;
+}
+
+void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std::string& geometry_id) {
+    Mesh3* mesh_data = mesh.get();
+    MeshGPU* gpu = mesh.gpu();
+    if (mesh_data == nullptr || gpu == nullptr) {
+        return;
+    }
+
+    // Upload bone matrices to current shader (already skinned by ColorPass via get_skinned_material)
+    if (_skeleton_controller != nullptr && context.current_shader != nullptr) {
+        update_bone_matrices();
+        if (_bone_count > 0) {
+            upload_bone_matrices(*context.current_shader);
+        }
+    }
+
+    // Draw the mesh via GPU
+    gpu->draw(context, *mesh_data, mesh.version());
+}
+
+void SkinnedMeshRenderer::start() {
+    Component::start();
+
+    // After deserialization, skeleton_controller may be null - try to find it
+    if (_skeleton_controller == nullptr && entity != nullptr) {
+        // Look for SkeletonController by type name
+        // Check parent entity first (typical for GLB structure)
+        Entity* parent_entity = entity->parent();
+
+        if (parent_entity != nullptr) {
+            Component* controller = parent_entity->get_component_by_type("SkeletonController");
+            if (controller != nullptr) {
+                _skeleton_controller = dynamic_cast<SkeletonController*>(controller);
+            }
+        }
+
+        // Also check current entity
+        if (_skeleton_controller == nullptr) {
+            Component* controller = entity->get_component_by_type("SkeletonController");
+            if (controller != nullptr) {
+                _skeleton_controller = dynamic_cast<SkeletonController*>(controller);
+            }
+        }
+    }
 }
 
 } // namespace termin

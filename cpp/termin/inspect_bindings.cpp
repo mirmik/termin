@@ -5,6 +5,7 @@
 #include "render/material.hpp"
 #include "render/mesh_renderer.hpp"
 #include "render/skinned_mesh_renderer.hpp"
+#include "render/skeleton_controller.hpp"
 
 namespace py = pybind11;
 
@@ -27,6 +28,9 @@ static void* get_raw_pointer(py::object obj, const std::string& type_name) {
     }
     if (type_name == "SkinnedMeshRenderer") {
         return static_cast<void*>(obj.cast<SkinnedMeshRenderer*>());
+    }
+    if (type_name == "SkeletonController") {
+        return static_cast<void*>(obj.cast<SkeletonController*>());
     }
 
     // Fallback for regular pointer types

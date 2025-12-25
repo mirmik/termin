@@ -182,6 +182,7 @@ pybind11_add_module(_native
     termin/render/mesh_gpu.cpp
     termin/render/texture_gpu.cpp
     termin/render/skinned_mesh_renderer.cpp
+    termin/render/skeleton_controller.cpp
     termin/render/mesh_renderer.cpp
     termin/entity/entity.cpp
     termin/entity/entity_registry.cpp

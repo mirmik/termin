@@ -1,11 +1,118 @@
 #include "common.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/skinned_mesh_renderer.hpp"
+#include "termin/render/skeleton_controller.hpp"
 #include "termin/render/render.hpp"
+#include "termin/entity/entity.hpp"
 
 namespace termin {
 
 void bind_renderers(py::module_& m) {
+    // SkeletonController
+    py::class_<SkeletonController, Component>(m, "SkeletonController")
+        .def(py::init<>())
+        .def(py::init([](py::object skeleton_arg, py::list bone_entities_list) {
+            auto controller = new SkeletonController();
+
+            // Handle skeleton argument: SkeletonHandle, SkeletonAsset, or SkeletonData*
+            if (!skeleton_arg.is_none()) {
+                if (py::isinstance<SkeletonHandle>(skeleton_arg)) {
+                    controller->skeleton = skeleton_arg.cast<SkeletonHandle>();
+                } else if (py::hasattr(skeleton_arg, "resource")) {
+                    // SkeletonAsset - wrap in handle
+                    controller->skeleton = SkeletonHandle::from_asset(skeleton_arg);
+                } else {
+                    // Raw SkeletonData* - wrap in handle via asset
+                    auto skel_data = skeleton_arg.cast<SkeletonData*>();
+                    if (skel_data != nullptr) {
+                        // Create minimal asset and wrap
+                        py::object rm_module = py::module_::import("termin.assets.resources");
+                        py::object rm = rm_module.attr("ResourceManager").attr("instance")();
+                        py::object asset = rm.attr("get_or_create_skeleton_asset")(
+                            py::cast(skel_data), py::arg("name") = "skeleton"
+                        );
+                        controller->skeleton = SkeletonHandle::from_asset(asset);
+                    }
+                }
+            }
+
+            std::vector<Entity*> bone_entities;
+            for (auto item : bone_entities_list) {
+                if (!item.is_none()) {
+                    bone_entities.push_back(item.cast<Entity*>());
+                }
+            }
+            controller->set_bone_entities(std::move(bone_entities));
+
+            return controller;
+        }),
+            py::arg("skeleton") = py::none(),
+            py::arg("bone_entities") = py::list())
+        .def_readwrite("skeleton", &SkeletonController::skeleton)
+        .def_property("skeleton_data",
+            &SkeletonController::skeleton_data,
+            [](SkeletonController& self, py::object skel_arg) {
+                // Setter accepts SkeletonData*, SkeletonAsset, or SkeletonHandle
+                if (skel_arg.is_none()) {
+                    self.skeleton = SkeletonHandle();
+                    return;
+                }
+                if (py::isinstance<SkeletonHandle>(skel_arg)) {
+                    self.set_skeleton(skel_arg.cast<SkeletonHandle>());
+                } else if (py::hasattr(skel_arg, "resource")) {
+                    self.set_skeleton(SkeletonHandle::from_asset(skel_arg));
+                } else {
+                    auto skel_data = skel_arg.cast<SkeletonData*>();
+                    if (skel_data != nullptr) {
+                        py::object rm_module = py::module_::import("termin.assets.resources");
+                        py::object rm = rm_module.attr("ResourceManager").attr("instance")();
+                        py::object asset = rm.attr("get_or_create_skeleton_asset")(
+                            py::cast(skel_data), py::arg("name") = "skeleton"
+                        );
+                        self.set_skeleton(SkeletonHandle::from_asset(asset));
+                    }
+                }
+            },
+            py::return_value_policy::reference)
+        .def_property("bone_entities",
+            [](const SkeletonController& self) {
+                py::list result;
+                for (Entity* e : self.bone_entities()) {
+                    if (e) {
+                        result.append(py::cast(e, py::return_value_policy::reference));
+                    } else {
+                        result.append(py::none());
+                    }
+                }
+                return result;
+            },
+            [](SkeletonController& self, py::list entities) {
+                std::vector<Entity*> vec;
+                for (auto item : entities) {
+                    if (item.is_none()) {
+                        vec.push_back(nullptr);
+                    } else {
+                        vec.push_back(item.cast<Entity*>());
+                    }
+                }
+                self.set_bone_entities(std::move(vec));
+            })
+        .def_property_readonly("skeleton_instance",
+            &SkeletonController::skeleton_instance,
+            py::return_value_policy::reference)
+        .def("set_skeleton", &SkeletonController::set_skeleton)
+        .def("set_bone_entities", [](SkeletonController& self, py::list entities) {
+            std::vector<Entity*> vec;
+            for (auto item : entities) {
+                if (!item.is_none()) {
+                    vec.push_back(item.cast<Entity*>());
+                }
+            }
+            self.set_bone_entities(std::move(vec));
+        })
+        .def("invalidate_instance", &SkeletonController::invalidate_instance);
+
+    // MeshRenderer
     py::class_<MeshRenderer, Component>(m, "MeshRenderer")
         .def(py::init<>())
         // Constructor with mesh and material (for Python compatibility)
@@ -66,17 +173,59 @@ void bind_renderers(py::module_& m) {
         .def("get_geometry_draws", &MeshRenderer::get_geometry_draws,
             py::arg("phase_mark") = "");
 
-    py::class_<SkinnedMeshRenderer>(m, "SkinnedMeshRenderer")
+    py::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
         .def(py::init<>())
-        .def("set_skeleton_instance", &SkinnedMeshRenderer::set_skeleton_instance)
+        // Constructor with mesh, material, skeleton_controller
+        .def(py::init([](py::object mesh_arg, py::object material_arg, SkeletonController* skeleton_controller, bool cast_shadow) {
+            auto renderer = new SkinnedMeshRenderer();
+            renderer->cast_shadow = cast_shadow;
+
+            if (!mesh_arg.is_none()) {
+                if (py::isinstance<MeshHandle>(mesh_arg)) {
+                    renderer->mesh = mesh_arg.cast<MeshHandle>();
+                } else if (py::hasattr(mesh_arg, "_handle")) {
+                    py::object handle = mesh_arg.attr("_handle");
+                    if (py::isinstance<MeshHandle>(handle)) {
+                        renderer->mesh = handle.cast<MeshHandle>();
+                    }
+                }
+            }
+
+            if (!material_arg.is_none()) {
+                renderer->material = MaterialHandle::from_asset(material_arg);
+            }
+
+            if (skeleton_controller != nullptr) {
+                renderer->set_skeleton_controller(skeleton_controller);
+            }
+
+            return renderer;
+        }),
+            py::arg("mesh") = py::none(),
+            py::arg("material") = py::none(),
+            py::arg("skeleton_controller") = nullptr,
+            py::arg("cast_shadow") = true)
+        .def_readwrite("_skeleton_controller", &SkinnedMeshRenderer::_skeleton_controller)
+        .def_property("skeleton_controller",
+            &SkinnedMeshRenderer::skeleton_controller,
+            &SkinnedMeshRenderer::set_skeleton_controller,
+            py::return_value_policy::reference)
+        .def_property_readonly("skeleton_instance",
+            &SkinnedMeshRenderer::skeleton_instance,
+            py::return_value_policy::reference)
         .def("update_bone_matrices", &SkinnedMeshRenderer::update_bone_matrices)
         .def("upload_bone_matrices", &SkinnedMeshRenderer::upload_bone_matrices)
-        .def_readonly("bone_count", &SkinnedMeshRenderer::bone_count)
+        .def("get_skinned_material", &SkinnedMeshRenderer::get_skinned_material,
+            py::return_value_policy::reference)
+        .def_readonly("_bone_count", &SkinnedMeshRenderer::_bone_count)
         .def("get_bone_matrices_flat", [](SkinnedMeshRenderer& self) {
+            if (self._bone_count == 0) {
+                return py::array_t<float>();
+            }
             return py::array_t<float>(
-                {self.bone_count, 4, 4},
+                {self._bone_count, 4, 4},
                 {16 * sizeof(float), 4 * sizeof(float), sizeof(float)},
-                self.bone_matrices_flat.data()
+                self._bone_matrices_flat.data()
             );
         });
 }

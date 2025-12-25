@@ -35,7 +35,15 @@ public:
     virtual void on_added_to_entity() {}
     virtual void on_removed_from_entity() {}
 
-    // Serialization - uses InspectRegistry for INSPECT_FIELD properties
+    /**
+     * Serialization - uses InspectRegistry for INSPECT_FIELD properties.
+     *
+     * DO NOT OVERRIDE in derived components!
+     * All serializable fields should be registered via INSPECT_FIELD macro.
+     * Use appropriate "kind" for special types:
+     * - "mesh", "material", "skeleton" for asset handles
+     * - "entity_list" for std::vector<Entity*>
+     */
     virtual nos::trent serialize_data() const {
         return InspectRegistry::instance().serialize_all(
             const_cast<void*>(static_cast<const void*>(this)),
