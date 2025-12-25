@@ -91,14 +91,18 @@ MeshHandle MeshHandle::deserialize(const py::dict& data) {
         std::string name = data["name"].cast<std::string>();
         return from_name(name);
     } else if (type == "path") {
+        // Extract name from path and look up via ResourceManager
+        // This ensures we use an existing asset instead of creating a duplicate
         try {
             std::string path = data["path"].cast<std::string>();
-            py::object mesh_asset_module = py::module_::import("termin.visualization.core.mesh_asset");
-            py::object asset = mesh_asset_module.attr("MeshAsset")(
-                py::none(),  // mesh_data
-                py::arg("source_path") = path
-            );
-            return MeshHandle(asset);
+            // Extract filename without extension
+            size_t last_slash = path.find_last_of("/\\");
+            std::string filename = (last_slash != std::string::npos)
+                ? path.substr(last_slash + 1) : path;
+            size_t last_dot = filename.find_last_of('.');
+            std::string name = (last_dot != std::string::npos)
+                ? filename.substr(0, last_dot) : filename;
+            return from_name(name);
         } catch (const py::error_already_set&) {
             return MeshHandle();
         }
@@ -162,17 +166,37 @@ TextureHandle TextureHandle::from_texture_data(
 }
 
 TextureHandle TextureHandle::deserialize(const py::dict& data) {
+    // UUID-based lookup (primary format in scene files)
+    if (data.contains("uuid")) {
+        try {
+            std::string uuid = data["uuid"].cast<std::string>();
+            py::object rm_module = py::module_::import("termin.assets.resources");
+            py::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            py::object asset = rm.attr("get_texture_asset_by_uuid")(uuid);
+            if (!asset.is_none()) {
+                return TextureHandle(asset);
+            }
+        } catch (const py::error_already_set&) {
+            // Fall through to other methods
+        }
+    }
+
     std::string type = data.contains("type") ? data["type"].cast<std::string>() : "none";
 
     if (type == "named") {
         std::string name = data["name"].cast<std::string>();
         return from_name(name);
     } else if (type == "path") {
+        // Extract name from path and look up via ResourceManager
         try {
             std::string path = data["path"].cast<std::string>();
-            py::object texture_asset_module = py::module_::import("termin.visualization.render.texture_asset");
-            py::object asset = texture_asset_module.attr("TextureAsset").attr("from_file")(path);
-            return TextureHandle(asset);
+            size_t last_slash = path.find_last_of("/\\");
+            std::string filename = (last_slash != std::string::npos)
+                ? path.substr(last_slash + 1) : path;
+            size_t last_dot = filename.find_last_of('.');
+            std::string name = (last_dot != std::string::npos)
+                ? filename.substr(0, last_dot) : filename;
+            return from_name(name);
         } catch (const py::error_already_set&) {
             return TextureHandle();
         }
@@ -264,6 +288,7 @@ py::dict MaterialHandle::serialize() const {
             py::dict d;
             d["type"] = "path";
             d["path"] = _direct->source_path;
+            // Direct materials don't have UUID - return path only
             return d;
         }
         py::dict d;
@@ -275,16 +300,18 @@ py::dict MaterialHandle::serialize() const {
         d["type"] = "none";
         return d;
     }
+    py::dict d;
+    // Always include UUID for reliable lookup
+    d["uuid"] = asset.attr("uuid");
+    // Also include path/name for debugging and fallback
     py::object source_path = asset.attr("source_path");
     if (!source_path.is_none()) {
-        py::dict d;
         d["type"] = "path";
         d["path"] = py::str(source_path.attr("as_posix")());
-        return d;
+    } else {
+        d["type"] = "named";
+        d["name"] = asset.attr("name");
     }
-    py::dict d;
-    d["type"] = "named";
-    d["name"] = asset.attr("name");
     return d;
 }
 
@@ -310,11 +337,17 @@ MaterialHandle MaterialHandle::deserialize(const py::dict& data) {
         std::string name = data["name"].cast<std::string>();
         return from_name(name);
     } else if (type == "path") {
+        // Extract name from path and look up via ResourceManager
         try {
             std::string path = data["path"].cast<std::string>();
-            py::object material_asset_module = py::module_::import("termin.visualization.core.material_asset");
-            py::object asset = material_asset_module.attr("MaterialAsset").attr("from_file")(path);
-            return MaterialHandle(asset);
+            size_t last_slash = path.find_last_of("/\\");
+            std::string filename = (last_slash != std::string::npos)
+                ? path.substr(last_slash + 1) : path;
+            // Remove .material extension
+            size_t last_dot = filename.find_last_of('.');
+            std::string name = (last_dot != std::string::npos)
+                ? filename.substr(0, last_dot) : filename;
+            return from_name(name);
         } catch (const py::error_already_set&) {
             return MaterialHandle();
         }

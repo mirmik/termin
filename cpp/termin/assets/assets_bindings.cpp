@@ -275,7 +275,17 @@ void bind_assets(py::module_& m) {
     // ========== MaterialHandle ==========
     py::class_<MaterialHandle>(m, "MaterialHandle")
         .def(py::init<>())
-        .def(py::init<py::object>(), py::arg("asset"))
+        // Smart constructor that handles both Material and MaterialAsset
+        .def(py::init([](py::object obj) {
+            // Check if it's a Material (shared_ptr<Material>)
+            try {
+                auto mat = obj.cast<std::shared_ptr<Material>>();
+                return MaterialHandle(mat.get());
+            } catch (const py::cast_error&) {
+                // Not a Material, treat as MaterialAsset
+                return MaterialHandle(std::move(obj));
+            }
+        }), py::arg("material_or_asset"))
         .def_static("from_direct", &MaterialHandle::from_direct, py::arg("material"),
             py::return_value_policy::reference)
         .def_static("from_asset", &MaterialHandle::from_asset, py::arg("asset"))
@@ -293,7 +303,14 @@ void bind_assets(py::module_& m) {
         .def("get_material", &MaterialHandle::get_material, py::return_value_policy::reference)
         .def("get_material_or_none", &MaterialHandle::get_material_or_none,
             py::return_value_policy::reference)
-        .def("serialize", &MaterialHandle::serialize);
+        .def("serialize", &MaterialHandle::serialize)
+        // Constructor from Material* for implicit conversion
+        .def(py::init<Material*>(), py::arg("material"));
+
+    // Allow implicit conversion from Material (shared_ptr) to MaterialHandle
+    py::implicitly_convertible<std::shared_ptr<Material>, MaterialHandle>();
+    // Allow implicit conversion from Material* to MaterialHandle
+    py::implicitly_convertible<Material*, MaterialHandle>();
 
     // ========== Free functions ==========
     m.def("get_white_texture_handle", &get_white_texture_handle,

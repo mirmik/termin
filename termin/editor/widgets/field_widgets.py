@@ -648,8 +648,19 @@ class ResourceComboWidget(FieldWidget):
         if self._resources is None or resource is None:
             return None
         if self._resource_kind == "material":
-            return self._resources.find_material_name(resource)
+            # Handle both Material and MaterialHandle
+            mat = resource
+            # Check if it's a MaterialHandle (C++ or Python)
+            if hasattr(resource, 'material'):
+                mat = resource.material
+            elif hasattr(resource, 'get_material'):
+                mat = resource.get_material()
+            if mat is None:
+                return None
+            return self._resources.find_material_name(mat)
         if self._resource_kind == "mesh":
+            # find_mesh_name expects MeshHandle, not Mesh3
+            # Just pass the handle as-is
             return self._resources.find_mesh_name(resource)
         if self._resource_kind == "voxel_grid":
             return self._resources.find_voxel_grid_name(resource)

@@ -1179,6 +1179,15 @@ class ResourceManager:
             return asset
         return None
 
+    def get_texture_asset_by_uuid(self, uuid: str) -> Optional["TextureAsset"]:
+        """Get TextureAsset by UUID."""
+        from termin.visualization.render.texture_asset import TextureAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, TextureAsset):
+            return asset
+        return None
+
     # --------- Шейдеры (Asset-based) ---------
     def get_shader_asset(self, name: str) -> Optional["ShaderAsset"]:
         """Получить ShaderAsset по имени."""

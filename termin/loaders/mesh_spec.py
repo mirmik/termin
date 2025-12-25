@@ -62,24 +62,44 @@ class MeshSpec:
         spec_path = Path(str(mesh_path) + ".spec")
         return cls.load(spec_path)
 
-    def save(self, spec_path: str | Path) -> None:
-        """Save spec to file."""
+    def save(self, spec_path: str | Path, preserve_existing: bool = False) -> None:
+        """Save spec to file.
+
+        Args:
+            spec_path: Path to save the spec file.
+            preserve_existing: If True, preserve fields from existing file (like uuid).
+        """
         path = Path(spec_path)
-        data = {
+
+        # Read existing data to preserve fields like uuid
+        existing_data = {}
+        if preserve_existing and path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+            except Exception:
+                pass
+
+        # Update with our fields
+        data = existing_data.copy()
+        data.update({
             "scale": self.scale,
             "axis_x": self.axis_x,
             "axis_y": self.axis_y,
             "axis_z": self.axis_z,
             "flip_uv_v": self.flip_uv_v,
-        }
+        })
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     def save_for_mesh(self, mesh_path: str | Path) -> None:
-        """Save spec next to mesh file (.meta format)."""
+        """Save spec next to mesh file (.meta format).
+
+        Preserves existing fields like uuid from the .meta file.
+        """
         import os
         meta_path = Path(str(mesh_path) + ".meta")
-        self.save(meta_path)
+        self.save(meta_path, preserve_existing=True)
         # Remove old .spec if exists (migration)
         old_spec = Path(str(mesh_path) + ".spec")
         if old_spec.exists():

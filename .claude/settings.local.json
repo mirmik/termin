@@ -56,7 +56,8 @@
       "Bash(done)",
       "Bash(PYTHONPATH=. timeout 30 python:*)",
       "Bash(g++:*)",
-      "Bash(QT_QPA_PLATFORM=offscreen PYTHONPATH=. timeout 15 python:*)"
+      "Bash(QT_QPA_PLATFORM=offscreen PYTHONPATH=. timeout 15 python:*)",
+      "Bash(PYTHONPATH=. timeout 180 python -m pytest:*)"
     ]
   }
 }

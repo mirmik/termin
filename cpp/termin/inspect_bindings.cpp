@@ -2,10 +2,36 @@
 #include <pybind11/stl.h>
 
 #include "inspect/inspect_registry.hpp"
+#include "render/material.hpp"
+#include "render/mesh_renderer.hpp"
+#include "render/skinned_mesh_renderer.hpp"
 
 namespace py = pybind11;
 
 namespace termin {
+
+// Helper to extract raw pointer from Python object
+// Works with both raw pointer holders and shared_ptr holders
+static void* get_raw_pointer(py::object obj, const std::string& type_name) {
+    // For shared_ptr types, we need to cast to the specific type first
+    // pybind11 will automatically extract the raw pointer from shared_ptr
+
+    if (type_name == "Material") {
+        return static_cast<void*>(obj.cast<Material*>());
+    }
+    if (type_name == "MaterialPhase") {
+        return static_cast<void*>(obj.cast<MaterialPhase*>());
+    }
+    if (type_name == "MeshRenderer") {
+        return static_cast<void*>(obj.cast<MeshRenderer*>());
+    }
+    if (type_name == "SkinnedMeshRenderer") {
+        return static_cast<void*>(obj.cast<SkinnedMeshRenderer*>());
+    }
+
+    // Fallback for regular pointer types
+    return py::cast<void*>(obj);
+}
 
 void bind_inspect(py::module_& m) {
     // InspectFieldInfo - read-only metadata
@@ -31,14 +57,13 @@ void bind_inspect(py::module_& m) {
         .def("get", [](InspectRegistry& self, py::object obj, const std::string& field_path) {
             // Get type name from Python object
             std::string type_name = py::str(py::type::of(obj).attr("__name__")).cast<std::string>();
-            // Cast to void* - pybind11 knows the actual type
-            void* ptr = py::cast<void*>(obj);
+            void* ptr = get_raw_pointer(obj, type_name);
             return self.get(ptr, type_name, field_path);
         }, py::arg("obj"), py::arg("field"),
            "Get field value from object")
         .def("set", [](InspectRegistry& self, py::object obj, const std::string& field_path, py::object value) {
             std::string type_name = py::str(py::type::of(obj).attr("__name__")).cast<std::string>();
-            void* ptr = py::cast<void*>(obj);
+            void* ptr = get_raw_pointer(obj, type_name);
             self.set(ptr, type_name, field_path, value);
         }, py::arg("obj"), py::arg("field"), py::arg("value"),
            "Set field value on object");

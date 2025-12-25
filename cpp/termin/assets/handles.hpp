@@ -126,6 +126,7 @@ public:
 
     /**
      * Serialize for scene saving.
+     * Always includes UUID for reliable deserialization.
      */
     py::dict serialize() const {
         if (asset.is_none()) {
@@ -133,16 +134,18 @@ public:
             d["type"] = "none";
             return d;
         }
+        py::dict d;
+        // Always include UUID for reliable lookup
+        d["uuid"] = asset.attr("uuid");
+        // Also include path/name for debugging and fallback
         py::object source_path = asset.attr("source_path");
         if (!source_path.is_none()) {
-            py::dict d;
             d["type"] = "path";
             d["path"] = py::str(source_path.attr("as_posix")());
-            return d;
+        } else {
+            d["type"] = "named";
+            d["name"] = asset.attr("name");
         }
-        py::dict d;
-        d["type"] = "named";
-        d["name"] = asset.attr("name");
         return d;
     }
 
@@ -258,6 +261,7 @@ public:
 
     /**
      * Serialize for scene saving.
+     * Always includes UUID for reliable deserialization.
      */
     py::dict serialize() const {
         if (asset.is_none()) {
@@ -265,16 +269,18 @@ public:
             d["type"] = "none";
             return d;
         }
+        py::dict d;
+        // Always include UUID for reliable lookup
+        d["uuid"] = asset.attr("uuid");
+        // Also include path/name for debugging and fallback
         py::object source_path = asset.attr("source_path");
         if (!source_path.is_none()) {
-            py::dict d;
             d["type"] = "path";
             d["path"] = py::str(source_path.attr("as_posix")());
-            return d;
+        } else {
+            d["type"] = "named";
+            d["name"] = asset.attr("name");
         }
-        py::dict d;
-        d["type"] = "named";
-        d["name"] = asset.attr("name");
         return d;
     }
 

@@ -79,6 +79,8 @@ class MaterialAsset(DataAsset["Material"]):
         if file_uuid:
             self._uuid = file_uuid
             self._runtime_id = hash(self._uuid) & 0xFFFFFFFFFFFFFFFF
+            # Mark that UUID was in the file, so we don't re-save
+            self._has_uuid_in_spec = True
 
         return material
 
