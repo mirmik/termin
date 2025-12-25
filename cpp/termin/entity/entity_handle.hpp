@@ -2,18 +2,26 @@
 
 #include <string>
 
+// DLL export/import macros for Windows
+#ifdef _WIN32
+    #ifdef ENTITY_LIB_EXPORTS
+        #define ENTITY_API __declspec(dllexport)
+    #else
+        #define ENTITY_API __declspec(dllimport)
+    #endif
+#else
+    #define ENTITY_API
+#endif
+
 namespace termin {
 
 class Entity;
 class EntityRegistry;
 
-/**
- * EntityHandle - lazy reference to Entity by UUID.
- *
- * Used when Entity might not exist yet during deserialization.
- * Resolves to actual Entity on first access via global EntityRegistry.
- */
-class EntityHandle {
+// EntityHandle - lazy reference to Entity by UUID.
+// Used when Entity might not exist yet during deserialization.
+// Resolves to actual Entity on first access via global EntityRegistry.
+class ENTITY_API EntityHandle {
 public:
     std::string uuid;
 

@@ -39,7 +39,7 @@ void bind_mesh_handle(py::module_& m) {
 void register_mesh_kind() {
     auto& registry = termin::InspectRegistry::instance();
 
-    registry.register_kind("mesh", termin::KindHandler{
+    registry.register_kind("mesh_handle", termin::KindHandler{
         // serialize
         [](py::object obj) -> nos::trent {
             if (py::hasattr(obj, "serialize")) {

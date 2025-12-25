@@ -9,7 +9,10 @@
 namespace termin {
 
 void bind_renderers(py::module_& m) {
-    // SkeletonController
+    // Import _entity_native so pybind11 can find Component type for inheritance
+    py::module_::import("termin.entity._entity_native");
+
+    // SkeletonController - inherits from Component
     py::class_<SkeletonController, Component>(m, "SkeletonController")
         .def(py::init<>())
         .def(py::init([](py::object skeleton_arg, py::list bone_entities_list) {
@@ -118,7 +121,7 @@ void bind_renderers(py::module_& m) {
         })
         .def("invalidate_instance", &SkeletonController::invalidate_instance);
 
-    // MeshRenderer
+    // MeshRenderer - inherits from Component
     py::class_<MeshRenderer, Component>(m, "MeshRenderer")
         .def(py::init<>())
         // Constructor with mesh and material (for Python compatibility)

@@ -48,6 +48,7 @@ else()
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 endif()
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 
 # Include directories
@@ -138,9 +139,8 @@ set_target_properties(trent PROPERTIES
 pybind11_add_module(_mesh_native
     termin/bindings/mesh/mesh_module.cpp
     termin/mesh_bindings.cpp
-    termin/inspect/inspect_registry.cpp
 )
-target_link_libraries(_mesh_native PRIVATE trent)
+target_link_libraries(_mesh_native PRIVATE trent entity_lib)
 target_compile_options(_mesh_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -148,9 +148,8 @@ target_compile_options(_mesh_native PRIVATE
 # Skeleton native module (Bone, SkeletonData, SkeletonHandle) - separate module
 pybind11_add_module(_skeleton_native
     termin/bindings/skeleton/skeleton_module.cpp
-    termin/inspect/inspect_registry.cpp
 )
-target_link_libraries(_skeleton_native PRIVATE trent)
+target_link_libraries(_skeleton_native PRIVATE trent entity_lib)
 target_compile_options(_skeleton_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -176,6 +175,38 @@ target_include_directories(_graphics_native PRIVATE
 )
 target_link_libraries(_graphics_native PRIVATE OpenGL::GL)
 target_compile_options(_graphics_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
+# Entity shared library (shared by _entity_native and _native)
+# Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
+# are the same instance across all Python extension modules.
+add_library(entity_lib SHARED
+    termin/entity/entity.cpp
+    termin/entity/entity_registry.cpp
+    termin/entity/entity_handle.cpp
+    termin/entity/component_registry.cpp
+    termin/entity/vtable_utils.cpp
+    termin/entity/components/rotator_component.cpp
+    termin/inspect/inspect_registry.cpp
+)
+target_link_libraries(entity_lib PRIVATE trent pybind11::headers Python3::Python)
+target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS)
+target_compile_options(entity_lib PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(entity_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+# Entity native module (Component, Entity, EntityHandle, registries)
+pybind11_add_module(_entity_native
+    termin/bindings/entity/entity_module.cpp
+)
+target_link_libraries(_entity_native PRIVATE entity_lib trent)
+target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
@@ -219,9 +250,10 @@ else()
     endif()
 endif()
 
-# Unified native module (Render + SDL + Entity + Scene + Skeleton + Inspect + Assets)
+# Unified native module (Render + SDL + Scene + Skeleton + Inspect + Assets)
 # Note: Mesh3/SkinnedMesh3 are in separate _mesh_native module, imported at runtime
 # Note: Graphics types (Color4, Size2i, etc), GraphicsBackend, handles are in _graphics_native
+# Note: Component, Entity, EntityHandle are in _entity_native module, imported at runtime
 pybind11_add_module(_native
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
@@ -237,11 +269,9 @@ pybind11_add_module(_native
     termin/bindings/render/gpu.cpp
     termin/bindings/render/renderers.cpp
     termin/sdl_bindings.cpp
-    termin/entity_bindings.cpp
     termin/scene_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
-    termin/inspect/inspect_registry.cpp
     termin/assets/assets_bindings.cpp
     termin/assets/handles.cpp
     termin/render/shader_parser.cpp
@@ -253,12 +283,6 @@ pybind11_add_module(_native
     termin/render/skinned_mesh_renderer.cpp
     termin/render/skeleton_controller.cpp
     termin/render/mesh_renderer.cpp
-    termin/entity/entity.cpp
-    termin/entity/entity_registry.cpp
-    termin/entity/entity_handle.cpp
-    termin/entity/component_registry.cpp
-    termin/entity/vtable_utils.cpp
-    termin/entity/components/rotator_component.cpp
     termin/scene/scene.cpp
     termin/skeleton/skeleton_instance.cpp
     termin/render/glad/src/glad.c
@@ -267,7 +291,7 @@ target_include_directories(_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
     ${SDL2_INCLUDE_DIRS}
 )
-target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES} trent)
+target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES} trent entity_lib)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
@@ -340,6 +364,10 @@ set_target_properties(_skeleton_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/.."
     BUILD_WITH_INSTALL_RPATH TRUE
 )
+set_target_properties(_entity_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
 set_target_properties(_native PROPERTIES
     INSTALL_RPATH "$ORIGIN"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -356,4 +384,5 @@ install(TARGETS _mesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/mesh)
 install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)
 install(TARGETS _texture_native DESTINATION ${CMAKE_INSTALL_PREFIX}/texture)
 install(TARGETS _graphics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/graphics)
+install(TARGETS _entity_native DESTINATION ${CMAKE_INSTALL_PREFIX}/entity)
 install(TARGETS _native DESTINATION ${CMAKE_INSTALL_PREFIX})

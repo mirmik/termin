@@ -46,7 +46,8 @@ void bind_inspect(py::module_& m) {
         .def_readonly("kind", &InspectFieldInfo::kind)
         .def_readonly("min", &InspectFieldInfo::min)
         .def_readonly("max", &InspectFieldInfo::max)
-        .def_readonly("step", &InspectFieldInfo::step);
+        .def_readonly("step", &InspectFieldInfo::step)
+        .def_readonly("non_serializable", &InspectFieldInfo::non_serializable);
 
     // InspectRegistry singleton
     py::class_<InspectRegistry>(m, "InspectRegistry")
@@ -58,6 +59,9 @@ void bind_inspect(py::module_& m) {
              "Get all fields for a type")
         .def("types", &InspectRegistry::types,
              "Get all registered type names")
+        .def("register_python_fields", &InspectRegistry::register_python_fields,
+             py::arg("type_name"), py::arg("fields_dict"),
+             "Register fields from Python inspect_fields dict")
         .def("get", [](InspectRegistry& self, py::object obj, const std::string& field_path) {
             // Get type name from Python object
             std::string type_name = py::str(py::type::of(obj).attr("__name__")).cast<std::string>();

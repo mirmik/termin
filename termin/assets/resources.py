@@ -1844,18 +1844,18 @@ class ResourceManager:
         Get unified handle accessors for a resource kind.
 
         Args:
-            kind: Resource kind (material, mesh, audio_clip, voxel_grid, navmesh, skeleton, texture)
+            kind: Resource kind (material_handle, mesh_handle, audio_clip, voxel_grid, navmesh, skeleton, texture)
 
         Returns:
             HandleAccessors with list_names, get_by_name, find_name methods
         """
-        if kind == "material":
+        if kind == "material_handle":
             return HandleAccessors(
                 list_names=self.list_material_names,
                 get_by_name=self._get_material_handle,
                 find_name=self._find_material_handle_name,
             )
-        if kind == "mesh":
+        if kind == "mesh_handle":
             return HandleAccessors(
                 list_names=self.list_mesh_names,
                 get_by_name=self.get_mesh,

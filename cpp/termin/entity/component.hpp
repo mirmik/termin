@@ -2,21 +2,21 @@
 
 #include <string>
 #include <cstdint>
+#include <pybind11/pybind11.h>
 #include "../../trent/trent.h"
 #include "../inspect/inspect_registry.hpp"
+
+namespace py = pybind11;
 
 namespace termin {
 
 class Entity;  // Forward declaration
 
-/**
- * Base class for all components.
- *
- * Both C++ and Python components inherit from this.
- * C++ components use REGISTER_COMPONENT macro for auto-registration.
- * Python components register via Component.__init_subclass__.
- */
-class Component {
+// Base class for all components.
+// Both C++ and Python components inherit from this.
+// C++ components use REGISTER_COMPONENT macro for auto-registration.
+// Python components register via Component.__init_subclass__.
+class ENTITY_API Component {
 public:
     virtual ~Component() = default;
 
@@ -31,9 +31,16 @@ public:
     virtual void on_destroy() {}
     virtual void on_editor_start() {}
 
+    // Editor hooks
+    virtual void setup_editor_defaults() {}  // Called when created via editor UI
+
     // Called when added/removed from entity
     virtual void on_added_to_entity() {}
     virtual void on_removed_from_entity() {}
+
+    // Called when entity is added/removed from scene
+    virtual void on_added(py::object scene) {}
+    virtual void on_removed() {}
 
     /**
      * Serialization - uses InspectRegistry for INSPECT_FIELD properties.

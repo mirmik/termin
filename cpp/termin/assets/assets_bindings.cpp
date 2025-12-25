@@ -50,6 +50,8 @@ void bind_assets(py::module_& m) {
         .def(py::init<Material*>(), py::arg("material"))
         .def_static("from_direct", &MaterialHandle::from_direct, py::arg("material"),
             py::return_value_policy::reference)
+        .def_static("from_material", &MaterialHandle::from_direct, py::arg("material"),
+            py::return_value_policy::reference)  // alias for from_direct
         .def_static("from_asset", &MaterialHandle::from_asset, py::arg("asset"))
         .def_static("from_name", &MaterialHandle::from_name, py::arg("name"))
         .def_static("deserialize", &MaterialHandle::deserialize, py::arg("data"))
@@ -85,10 +87,10 @@ void bind_assets(py::module_& m) {
 void register_kind_handlers() {
     auto& registry = InspectRegistry::instance();
 
-    // Note: mesh kind is registered in _mesh_native module
+    // Note: mesh_handle kind is registered in _mesh_native module
 
-    // ===== material kind =====
-    registry.register_kind("material", KindHandler{
+    // ===== material_handle kind =====
+    registry.register_kind("material_handle", KindHandler{
         // serialize
         [](py::object obj) -> nos::trent {
             if (py::hasattr(obj, "serialize")) {

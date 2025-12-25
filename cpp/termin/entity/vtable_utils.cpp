@@ -8,6 +8,11 @@ namespace termin {
 void UpdateProbe::update(float dt) { _probe_marker = dt; }
 void FixedUpdateProbe::fixed_update(float dt) { _probe_marker = dt; }
 
+VTableSlots& VTableSlots::instance() {
+    static VTableSlots slots = compute();
+    return slots;
+}
+
 VTableSlots VTableSlots::compute() {
     VTableSlots slots;
 

@@ -5,18 +5,26 @@
 #include <cstdint>
 #include <utility>
 
+// DLL export/import macros for Windows
+#ifdef _WIN32
+    #ifdef ENTITY_LIB_EXPORTS
+        #define ENTITY_API __declspec(dllexport)
+    #else
+        #define ENTITY_API __declspec(dllimport)
+    #endif
+#else
+    #define ENTITY_API
+#endif
+
 namespace termin {
 
 class Entity;
 struct GeneralTransform3;
 
-/**
- * Global registry for entity lookup by UUID, pick_id, and transform.
- *
- * Singleton pattern. Entities register themselves on creation
- * and unregister on destruction.
- */
-class EntityRegistry {
+// Global registry for entity lookup by UUID, pick_id, and transform.
+// Singleton pattern. Entities register themselves on creation
+// and unregister on destruction.
+class ENTITY_API EntityRegistry {
 public:
     // Singleton access
     static EntityRegistry& instance();

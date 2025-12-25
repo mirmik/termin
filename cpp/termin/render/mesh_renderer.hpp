@@ -36,8 +36,8 @@ public:
     Material* _overridden_material = nullptr;
 
     // INSPECT_FIELD registrations
-    INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "mesh")
-    INSPECT_FIELD(MeshRenderer, material, "Material", "material")
+    INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "mesh_handle")
+    INSPECT_FIELD(MeshRenderer, material, "Material", "material_handle")
     INSPECT_FIELD(MeshRenderer, cast_shadow, "Cast Shadow", "bool")
 
     MeshRenderer();

@@ -1,0 +1,141 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "0f2fd73c-f3e8-4a30-aa3b-e4565bfef52b",
+    "background_color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.07999999821186066,
+      1.0
+    ],
+    "entities": [
+      {
+        "uuid": "4c972a2d-b302-4b2d-aa58-2047fc9febdc",
+        "name": "entity1",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "children": [],
+        "components": [
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000004",
+                "type": "named",
+                "name": "Cylinder"
+              },
+              "material": {
+                "type": "uuid",
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "cast_shadow": true
+            }
+          }
+        ]
+      }
+    ],
+    "layer_names": {},
+    "flag_names": {},
+    "light_direction": [
+      0.30000001192092896,
+      1.0,
+      -0.5
+    ],
+    "light_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_intensity": 0.1,
+    "shadow_settings": {
+      "method": 1,
+      "softness": 1.0,
+      "bias": 0.005
+    },
+    "skybox_type": "gradient",
+    "skybox_color": [
+      0.5,
+      0.699999988079071,
+      0.8999999761581421
+    ],
+    "skybox_top_color": [
+      0.4000000059604645,
+      0.6000000238418579,
+      0.8999999761581421
+    ],
+    "skybox_bottom_color": [
+      0.6000000238418579,
+      0.5,
+      0.4000000059604645
+    ]
+  },
+  "editor": {
+    "camera": {
+      "target": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "radius": 5.0,
+      "azimuth": 2.1991148575128543,
+      "elevation": 0.45029494701453676
+    },
+    "selected_entity": "entity1",
+    "displays": [
+      {
+        "name": "Editor",
+        "editor_only": true,
+        "input_mode": "editor",
+        "block_input_in_editor": false,
+        "viewports": [
+          {
+            "uuid": "a5b6d216-536e-40bf-a171-46bffc4e58f9",
+            "camera_entity": "camera",
+            "rect": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "depth": 0
+          }
+        ]
+      }
+    ],
+    "expanded_entities": [
+      "camera",
+      "EditorEntities"
+    ]
+  },
+  "resources": {
+    "textures": {}
+  }
+}

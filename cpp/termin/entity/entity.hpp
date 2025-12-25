@@ -10,21 +10,28 @@
 #include "../core/identifiable.hpp"
 #include "../../trent/trent.h"
 
+// DLL export/import macros for Windows
+#ifdef _WIN32
+    #ifdef ENTITY_LIB_EXPORTS
+        #define ENTITY_API __declspec(dllexport)
+    #else
+        #define ENTITY_API __declspec(dllimport)
+    #endif
+#else
+    #define ENTITY_API
+#endif
+
 namespace py = pybind11;
 
 namespace termin {
 
 class Component;
 
-/**
- * Entity - container of components with transform data.
- *
- * Unity-like architecture: Entity holds Components,
- * has a transform hierarchy, and belongs to a Scene.
- *
- * Inherits from Identifiable for uuid and runtime_id.
- */
-class Entity : public Identifiable {
+// Entity - container of components with transform data.
+// Unity-like architecture: Entity holds Components,
+// has a transform hierarchy, and belongs to a Scene.
+// Inherits from Identifiable for uuid and runtime_id.
+class ENTITY_API Entity : public Identifiable {
 public:
     // Name (uuid comes from Identifiable)
     std::string name;

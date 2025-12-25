@@ -36,6 +36,24 @@ value = obj.foo
 do_something(obj.bar)
 ```
 
+### C++ Comments
+
+Use single-line comments (`//`). Replace multi-line comments (`/* */`) with single-line comments when encountered.
+
+```cpp
+// Good
+// This function does something important.
+// It takes two parameters and returns a result.
+void do_something();
+
+// Bad
+/*
+ * This function does something important.
+ * It takes two parameters and returns a result.
+ */
+void do_something();
+```
+
 ### C++ Class Layout
 
 All fields (public, protected, private) must be declared at the top of the class, before any methods. Group fields first, then methods.

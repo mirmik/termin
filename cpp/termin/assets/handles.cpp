@@ -39,32 +39,13 @@ Material* MaterialHandle::get_material() const {
 }
 
 py::dict MaterialHandle::serialize() const {
-    if (_direct != nullptr) {
-        if (!_direct->source_path.empty()) {
-            py::dict d;
-            d["type"] = "path";
-            d["path"] = _direct->source_path;
-            return d;
-        }
-        py::dict d;
-        d["type"] = "direct_unsupported";
-        return d;
-    }
-    if (asset.is_none()) {
-        py::dict d;
+    py::dict d;
+    if (_direct != nullptr || asset.is_none()) {
         d["type"] = "none";
         return d;
     }
-    py::dict d;
+    d["type"] = "uuid";
     d["uuid"] = asset.attr("uuid");
-    py::object source_path = asset.attr("source_path");
-    if (!source_path.is_none()) {
-        d["type"] = "path";
-        d["path"] = py::str(source_path.attr("as_posix")());
-    } else {
-        d["type"] = "named";
-        d["name"] = asset.attr("name");
-    }
     return d;
 }
 

@@ -9,18 +9,26 @@
 #include "component.hpp"
 #include "vtable_utils.hpp"
 
+// DLL export/import macros for Windows
+#ifdef _WIN32
+    #ifdef ENTITY_LIB_EXPORTS
+        #define ENTITY_API __declspec(dllexport)
+    #else
+        #define ENTITY_API __declspec(dllimport)
+    #endif
+#else
+    #define ENTITY_API
+#endif
+
 namespace py = pybind11;
 
 namespace termin {
 
-/**
- * Global registry for component types.
- *
- * Manages both C++ native components and Python components.
- * - C++ components register via REGISTER_COMPONENT macro
- * - Python components register via Component.__init_subclass__
- */
-class ComponentRegistry {
+// Global registry for component types.
+// Manages both C++ native components and Python components.
+// - C++ components register via REGISTER_COMPONENT macro
+// - Python components register via Component.__init_subclass__
+class ENTITY_API ComponentRegistry {
 public:
     // Factory function for C++ components
     using NativeFactory = std::function<Component*()>;

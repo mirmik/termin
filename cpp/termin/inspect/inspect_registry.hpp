@@ -8,14 +8,25 @@
 #include <pybind11/pybind11.h>
 #include "../../trent/trent.h"
 
+// DLL export/import macros for Windows
+#ifdef _WIN32
+    #ifdef ENTITY_LIB_EXPORTS
+        #define ENTITY_API __declspec(dllexport)
+    #else
+        #define ENTITY_API __declspec(dllimport)
+    #endif
+#else
+    #define ENTITY_API
+#endif
+
 namespace py = pybind11;
 
 namespace termin {
 
-/**
- * Handler functions for a specific inspect field "kind".
- * Modules register these to enable serialization of their types.
- */
+class Component;  // Forward declaration
+
+// Handler functions for a specific inspect field "kind".
+// Modules register these to enable serialization of their types.
 struct KindHandler {
     // Serialize py::object → trent (for saving)
     std::function<nos::trent(py::object)> serialize;
@@ -38,27 +49,22 @@ struct InspectFieldInfo {
     double min = 0.0;
     double max = 1.0;
     double step = 0.01;
+    bool non_serializable = false;  // If true, field is not serialized
 
     // Type-erased getter/setter using void*
     std::function<py::object(void*)> getter;
     std::function<void(void*, py::object)> setter;
 };
 
-/**
- * Registry for inspectable fields.
- *
- * Stores field metadata and provides get/set access.
- * Used by editor inspector to display and edit C++ object properties.
- */
-class InspectRegistry {
+// Registry for inspectable fields.
+// Stores field metadata and provides get/set access.
+// Used by editor inspector to display and edit C++ object properties.
+class ENTITY_API InspectRegistry {
     std::unordered_map<std::string, std::vector<InspectFieldInfo>> _fields;
     std::unordered_map<std::string, KindHandler> _kind_handlers;
 
 public:
-    static InspectRegistry& instance() {
-        static InspectRegistry reg;
-        return reg;
-    }
+    static InspectRegistry& instance();
 
     /**
      * Register a field via member pointer.
@@ -76,11 +82,20 @@ public:
             .min = min,
             .max = max,
             .step = step,
-            .getter = [member](void* obj) -> py::object {
-                return py::cast(static_cast<C*>(obj)->*member);
+            .getter = [member, path](void* obj) -> py::object {
+                auto& val = static_cast<C*>(obj)->*member;
+                py::object result = py::cast(val);
+                std::cout << "[INSPECT getter] path=" << path << " obj=" << obj << " result=" << std::string(py::str(py::repr(result))) << std::endl;
+                return result;
             },
-            .setter = [member](void* obj, py::object val) {
-                static_cast<C*>(obj)->*member = val.cast<T>();
+            .setter = [member, path](void* obj, py::object val) {
+                std::cout << "[INSPECT setter] path=" << path << " obj=" << obj << " val_type=" << std::string(py::str(val.get_type())) << std::endl;
+                try {
+                    static_cast<C*>(obj)->*member = val.cast<T>();
+                    std::cout << "[INSPECT setter] success" << std::endl;
+                } catch (const std::exception& e) {
+                    std::cout << "[INSPECT setter] EXCEPTION: " << e.what() << std::endl;
+                }
             }
         });
     }
@@ -143,6 +158,21 @@ public:
     }
 
     /**
+     * Register fields from Python inspect_fields dict.
+     * Called from Python __init_subclass__ to register component fields.
+     *
+     * @param type_name Component class name
+     * @param fields_dict Python dict {field_name: InspectField}
+     */
+    void register_python_fields(const std::string& type_name, py::dict fields_dict);
+
+private:
+    // Helper to split path by '.'
+    static std::vector<std::string> split_path(const std::string& path);
+
+public:
+
+    /**
      * Check if a kind handler is registered.
      */
     bool has_kind_handler(const std::string& kind) const {
@@ -188,12 +218,11 @@ public:
      * Serialize all inspect fields to trent dict.
      */
     nos::trent serialize_all(void* obj, const std::string& type_name) const {
-        std::cout << "[serialize_all] type=" << type_name << std::endl;
         nos::trent result;
         result.init(nos::trent_type::dict);
 
         for (const auto& f : fields(type_name)) {
-            std::cout << "[serialize_all] field=" << f.path << " kind=" << f.kind << std::endl;
+            if (f.non_serializable) continue;
             py::object val = f.getter(obj);
             result[f.path] = py_to_trent_with_kind(val, f.kind);
         }
@@ -204,15 +233,20 @@ public:
      * Deserialize all inspect fields from trent dict.
      */
     void deserialize_all(void* obj, const std::string& type_name, const nos::trent& data) {
-        std::cout << "[deserialize_all] type=" << type_name << " is_dict=" << data.is_dict() << std::endl;
+        std::cout << "[InspectRegistry.deserialize_all] type=" << type_name
+                  << " data.is_dict=" << data.is_dict() << std::endl;
         if (!data.is_dict()) return;
 
-        for (const auto& f : fields(type_name)) {
-            std::cout << "[deserialize_all] field=" << f.path << " kind=" << f.kind
-                      << " contains=" << data.contains(f.path) << std::endl;
+        auto& field_list = fields(type_name);
+        std::cout << "[InspectRegistry.deserialize_all] field_count=" << field_list.size() << std::endl;
+
+        for (const auto& f : field_list) {
+            if (f.non_serializable) continue;
+            std::cout << "[InspectRegistry.deserialize_all] field=" << f.path
+                      << " kind=" << f.kind << " in_data=" << data.contains(f.path) << std::endl;
             if (data.contains(f.path)) {
                 py::object val = trent_to_py_with_kind(data[f.path], f.kind);
-                std::cout << "[deserialize_all] calling setter for " << f.path << std::endl;
+                std::cout << "[InspectRegistry.deserialize_all] setting " << f.path << std::endl;
                 f.setter(obj, val);
             }
         }

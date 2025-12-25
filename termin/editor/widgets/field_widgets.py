@@ -773,17 +773,16 @@ class FieldWidgetFactory:
         if kind == "clip_selector":
             return ClipSelectorWidget()
 
-        # Handle-based resource selectors (new pattern)
-        if kind.endswith("_handle"):
-            resource_kind = kind[:-7]  # Remove "_handle" suffix
+        # Handle-based resource selectors
+        if kind in ("material_handle", "mesh_handle"):
             return HandleSelectorWidget(
-                resource_kind=resource_kind,
+                resource_kind=kind,
                 resources=self._resources,
                 allow_none=True,
             )
 
         # Legacy resource selectors (raw resource objects)
-        if kind in ("material", "mesh", "voxel_grid", "navmesh", "skeleton"):
+        if kind in ("voxel_grid", "navmesh", "skeleton"):
             return ResourceComboWidget(
                 resource_kind=kind,
                 resources=self._resources,

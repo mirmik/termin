@@ -48,6 +48,7 @@ class CMakeBuildExt(build_ext):
             self._built_objects = getattr(self, "_built_objects", [])  # satisfy setuptools expectations
 
         # Copy all native modules into source tree for editable/pytest runs
+        bin_dir = build_temp / "bin"
         module_mappings = [
             ("tests", "_cpp_tests"),
             ("geombase", "_geom_native"),
@@ -70,6 +71,12 @@ class CMakeBuildExt(build_ext):
             src_dir = install_prefix / subdir
             for so in src_dir.glob(f"{module_name}.*"):
                 shutil.copy2(so, dst_dir / so.name)
+
+        # Copy shared libraries (entity_lib.dll, trent.dll) to termin/ directory
+        if sys.platform == "win32":
+            termin_dir = Path(directory) / "termin"
+            for dll in bin_dir.glob("*.dll"):
+                shutil.copy2(dll, termin_dir / dll.name)
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
