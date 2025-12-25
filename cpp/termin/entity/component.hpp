@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cstdint>
+#include <unordered_set>
 #include <pybind11/pybind11.h>
 #include "../../trent/trent.h"
 #include "../inspect/inspect_registry.hpp"
@@ -22,7 +23,13 @@ public:
 
     // Type identification (for serialization)
     const char* type_name() const { return _type_name; }
-    void set_type_name(const char* name) { _type_name = name; }
+
+    // Set type name with string interning to avoid dangling pointers
+    void set_type_name(const char* name) {
+        static std::unordered_set<std::string> interned_names;
+        auto [it, _] = interned_names.insert(name);
+        _type_name = it->c_str();
+    }
 
     // Lifecycle hooks
     virtual void start() {}

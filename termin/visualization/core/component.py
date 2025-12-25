@@ -52,6 +52,18 @@ def _component_init_subclass(cls, **kwargs):
 # Inject __init_subclass__ into the C++ Component class
 _NativeComponent.__init_subclass__ = classmethod(lambda cls, **kw: _component_init_subclass(cls, **kw))
 
+# Wrap __init__ to set _type_name for Python components
+_original_init = _NativeComponent.__init__
+
+def _wrapped_init(self, *args, **kwargs):
+    _original_init(self, *args, **kwargs)
+    # Set _type_name to match InspectRegistry registration
+    cls_name = type(self).__name__
+    if cls_name != "Component":
+        self.set_type_name(cls_name)
+
+_NativeComponent.__init__ = _wrapped_init
+
 
 # Re-export Component
 Component = _NativeComponent

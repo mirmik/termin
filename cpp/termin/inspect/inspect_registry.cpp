@@ -97,10 +97,13 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
         };
 
         auto setter_fn = [path_copy, setter_copy](void* obj, py::object value) {
+            std::cerr << "[Python setter_fn] path=" << path_copy
+                      << " has_custom=" << !setter_copy.is_none() << std::endl;
             try {
                 py::object py_obj = py::cast(static_cast<Component*>(obj),
                                              py::return_value_policy::reference);
                 if (!setter_copy.is_none()) {
+                    std::cerr << "[Python setter_fn] calling custom setter" << std::endl;
                     setter_copy(py_obj, value);
                     return;
                 }

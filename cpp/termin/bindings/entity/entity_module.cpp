@@ -9,6 +9,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
+#include <unordered_set>
 
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry.hpp"
@@ -170,6 +171,7 @@ PYBIND11_MODULE(_entity_native, m) {
             return c;
         }), py::arg("enabled") = true)
         .def("type_name", &Component::type_name)
+        .def("set_type_name", &Component::set_type_name, py::arg("name"))
         .def("start", &Component::start)
         .def("update", &Component::update, py::arg("dt"))
         .def("fixed_update", &Component::fixed_update, py::arg("dt"))
@@ -560,12 +562,23 @@ PYBIND11_MODULE(_entity_native, m) {
                         ? comp_data["data"]
                         : py::dict();
 
-                    // Use deserialize classmethod if available, otherwise create and deserialize_data
+                    // Create component
                     py::object py_comp;
                     if (py::hasattr(comp_class, "deserialize")) {
                         py_comp = comp_class.attr("deserialize")(comp_inner, context);
                     } else {
                         py_comp = comp_class();
+                    }
+
+                    // Set type_name for Python components (C++ components set it in constructor)
+                    // set_type_name handles string interning internally
+                    Component* raw_comp = py_comp.cast<Component*>();
+                    if (!raw_comp->is_native) {
+                        raw_comp->set_type_name(comp_type.c_str());
+                    }
+
+                    // Now deserialize_data can find fields by correct type_name
+                    if (!py::hasattr(comp_class, "deserialize")) {
                         if (py::hasattr(py_comp, "deserialize_data")) {
                             py_comp.attr("deserialize_data")(comp_inner, context);
                         }

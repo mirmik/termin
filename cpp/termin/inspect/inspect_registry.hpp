@@ -229,10 +229,15 @@ public:
      * Deserialize all inspect fields from trent dict.
      */
     void deserialize_all(void* obj, const std::string& type_name, const nos::trent& data) {
+        std::cerr << "[deserialize_all] type=" << type_name << " is_dict=" << data.is_dict() << std::endl;
         if (!data.is_dict()) return;
 
-        for (const auto& f : fields(type_name)) {
+        auto& flds = fields(type_name);
+        std::cerr << "[deserialize_all] field_count=" << flds.size() << std::endl;
+
+        for (const auto& f : flds) {
             if (f.non_serializable) continue;
+            std::cerr << "[deserialize_all] field=" << f.path << " in_data=" << data.contains(f.path) << std::endl;
             if (data.contains(f.path)) {
                 py::object val = trent_to_py_with_kind(data[f.path], f.kind);
                 f.setter(obj, val);
