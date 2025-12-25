@@ -105,6 +105,47 @@ target_compile_options(_lighting_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
+# Trent library (shared by all resource modules)
+add_library(trent SHARED
+    trent/trent.cpp
+    trent/trent_path.cpp
+    trent/string_ext.cpp
+)
+target_compile_options(trent PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(trent PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
+# Mesh native module (Mesh3, SkinnedMesh3, MeshHandle) - separate module
+pybind11_add_module(_mesh_native
+    termin/bindings/mesh/mesh_module.cpp
+    termin/mesh_bindings.cpp
+    termin/inspect/inspect_registry.cpp
+)
+target_link_libraries(_mesh_native PRIVATE trent)
+target_compile_options(_mesh_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
+# Skeleton native module (Bone, SkeletonData, SkeletonHandle) - separate module
+pybind11_add_module(_skeleton_native
+    termin/bindings/skeleton/skeleton_module.cpp
+    termin/inspect/inspect_registry.cpp
+)
+target_link_libraries(_skeleton_native PRIVATE trent)
+target_compile_options(_skeleton_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
+# Texture native module (TextureData) - separate module
+pybind11_add_module(_texture_native
+    termin/bindings/texture/texture_module.cpp
+)
+target_compile_options(_texture_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
 
 # Find OpenGL (needed by _native)
 find_package(OpenGL REQUIRED)
@@ -149,10 +190,10 @@ else()
     endif()
 endif()
 
-# Unified native module (Mesh3 + Render + SDL + Entity + Scene + Skeleton + Inspect + Assets)
+# Unified native module (Render + SDL + Entity + Scene + Skeleton + Inspect + Assets)
+# Note: Mesh3/SkinnedMesh3 are in separate _mesh_native module, imported at runtime
 pybind11_add_module(_native
     termin/bindings.cpp
-    termin/mesh_bindings.cpp
     termin/bindings/render/render_module.cpp
     termin/bindings/render/types.cpp
     termin/bindings/render/graphics_backend.cpp
@@ -193,15 +234,12 @@ pybind11_add_module(_native
     termin/scene/scene.cpp
     termin/skeleton/skeleton_instance.cpp
     termin/render/glad/src/glad.c
-    trent/trent.cpp
-    trent/trent_path.cpp
-    trent/string_ext.cpp
 )
 target_include_directories(_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
     ${SDL2_INCLUDE_DIRS}
 )
-target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES})
+target_link_libraries(_native PRIVATE OpenGL::GL ${SDL2_LIBRARIES} trent)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
@@ -262,6 +300,23 @@ add_custom_target(run_tests
     COMMENT "Running C++ tests")
 
 # Install to python packages
+# Install libtrent to root termin directory
+install(TARGETS trent DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+# Set RPATH for modules that depend on libtrent
+set_target_properties(_mesh_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_skeleton_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN"
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+
 install(TARGETS _geom_native DESTINATION ${CMAKE_INSTALL_PREFIX}/geombase)
 install(TARGETS _colliders_native DESTINATION ${CMAKE_INSTALL_PREFIX}/colliders)
 install(TARGETS _physics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/physics)
@@ -269,4 +324,7 @@ install(TARGETS _voxels_native DESTINATION ${CMAKE_INSTALL_PREFIX}/voxels)
 install(TARGETS _collision_native DESTINATION ${CMAKE_INSTALL_PREFIX}/collision)
 install(TARGETS _animation_native DESTINATION ${CMAKE_INSTALL_PREFIX}/visualization/animation)
 install(TARGETS _lighting_native DESTINATION ${CMAKE_INSTALL_PREFIX}/lighting)
+install(TARGETS _mesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/mesh)
+install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)
+install(TARGETS _texture_native DESTINATION ${CMAKE_INSTALL_PREFIX}/texture)
 install(TARGETS _native DESTINATION ${CMAKE_INSTALL_PREFIX})

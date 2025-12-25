@@ -57,7 +57,11 @@
       "Bash(PYTHONPATH=. timeout 30 python:*)",
       "Bash(g++:*)",
       "Bash(QT_QPA_PLATFORM=offscreen PYTHONPATH=. timeout 15 python:*)",
-      "Bash(PYTHONPATH=. timeout 180 python -m pytest:*)"
+      "Bash(PYTHONPATH=. timeout 180 python -m pytest:*)",
+      "Bash(LD_LIBRARY_PATH=./termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 10 python:*)",
+      "Bash(git checkout:*)",
+      "Bash(PYTHONPATH=. timeout 90 python -m pytest:*)",
+      "Bash(PYTHONPATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310:/media/sf_Shared/termin timeout 10 python:*)"
     ]
   }
 }

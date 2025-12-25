@@ -12,10 +12,20 @@ namespace py = pybind11;
 
 namespace termin {
 
-// Forward declarations for handle types
-class MeshHandle;
-class MaterialHandle;
-class SkeletonHandle;
+/**
+ * Handler functions for a specific inspect field "kind".
+ * Modules register these to enable serialization of their types.
+ */
+struct KindHandler {
+    // Serialize py::object → trent (for saving)
+    std::function<nos::trent(py::object)> serialize;
+
+    // Deserialize trent → py::object (for loading)
+    std::function<py::object(const nos::trent&)> deserialize;
+
+    // Convert value for setter (e.g., from None to empty handle)
+    std::function<py::object(py::object)> convert;
+};
 
 /**
  * Metadata for an inspectable field.
@@ -42,6 +52,7 @@ struct InspectFieldInfo {
  */
 class InspectRegistry {
     std::unordered_map<std::string, std::vector<InspectFieldInfo>> _fields;
+    std::unordered_map<std::string, KindHandler> _kind_handlers;
 
 public:
     static InspectRegistry& instance() {
@@ -124,6 +135,29 @@ public:
     }
 
     /**
+     * Register a kind handler for serialization/deserialization.
+     * Modules call this to register their handle types.
+     */
+    void register_kind(const std::string& kind, KindHandler handler) {
+        _kind_handlers[kind] = std::move(handler);
+    }
+
+    /**
+     * Check if a kind handler is registered.
+     */
+    bool has_kind_handler(const std::string& kind) const {
+        return _kind_handlers.find(kind) != _kind_handlers.end();
+    }
+
+    /**
+     * Get kind handler (returns nullptr if not found).
+     */
+    const KindHandler* get_kind_handler(const std::string& kind) const {
+        auto it = _kind_handlers.find(kind);
+        return it != _kind_handlers.end() ? &it->second : nullptr;
+    }
+
+    /**
      * Get field value by path.
      */
     py::object get(void* obj, const std::string& type_name, const std::string& field_path) const {
@@ -184,7 +218,8 @@ public:
         }
     }
 
-private:
+    // ===== Utility functions for kind handlers =====
+
     static nos::trent py_to_trent(py::object obj) {
         if (obj.is_none()) {
             return nos::trent::nil();

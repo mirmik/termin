@@ -7,248 +7,19 @@
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/material.hpp"
 #include "termin/skeleton/skeleton_data.hpp"
+#include "termin/inspect/inspect_registry.hpp"
+#include "termin/entity/entity_handle.hpp"
 
 namespace py = pybind11;
 
 namespace termin {
 
+// Forward declaration
+void register_kind_handlers();
+
 void bind_assets(py::module_& m) {
-    py::class_<TextureData>(m, "TextureData")
-        .def(py::init<>())
-        .def(py::init([](
-            py::array_t<uint8_t> data,
-            int width,
-            int height,
-            int channels,
-            bool flip_x,
-            bool flip_y,
-            bool transpose,
-            const std::string& source_path
-        ) {
-            // Convert numpy array to vector
-            py::buffer_info info = data.request();
-            uint8_t* ptr = static_cast<uint8_t*>(info.ptr);
-            size_t size = info.size;
-            std::vector<uint8_t> vec(ptr, ptr + size);
-
-            return TextureData(
-                std::move(vec),
-                width, height, channels,
-                flip_x, flip_y, transpose,
-                source_path
-            );
-        }),
-            py::arg("data"),
-            py::arg("width"),
-            py::arg("height"),
-            py::arg("channels") = 4,
-            py::arg("flip_x") = false,
-            py::arg("flip_y") = true,
-            py::arg("transpose") = false,
-            py::arg("source_path") = ""
-        )
-
-        // Properties
-        .def_readwrite("width", &TextureData::width)
-        .def_readwrite("height", &TextureData::height)
-        .def_readwrite("channels", &TextureData::channels)
-        .def_readwrite("flip_x", &TextureData::flip_x)
-        .def_readwrite("flip_y", &TextureData::flip_y)
-        .def_readwrite("transpose", &TextureData::transpose)
-        .def_readwrite("source_path", &TextureData::source_path)
-
-        // Data as numpy array property
-        .def_property("data",
-            [](const TextureData& self) {
-                // Return as numpy array with shape (height, width, channels)
-                return py::array_t<uint8_t>(
-                    {self.height, self.width, self.channels},
-                    {self.width * self.channels * sizeof(uint8_t),
-                     self.channels * sizeof(uint8_t),
-                     sizeof(uint8_t)},
-                    self.data.data()
-                );
-            },
-            [](TextureData& self, py::array_t<uint8_t> arr) {
-                py::buffer_info info = arr.request();
-                uint8_t* ptr = static_cast<uint8_t*>(info.ptr);
-                size_t size = info.size;
-                self.data.assign(ptr, ptr + size);
-            }
-        )
-
-        // Static factory methods
-        .def_static("white_1x1", &TextureData::white_1x1)
-
-        .def_static("from_file", [](const std::string& path) {
-            // Load image via PIL
-            py::object PIL = py::module_::import("PIL.Image");
-            py::object image = PIL.attr("open")(path).attr("convert")("RGBA");
-            py::object np = py::module_::import("numpy");
-            py::array_t<uint8_t> data = np.attr("array")(image, py::arg("dtype") = np.attr("uint8"));
-
-            py::buffer_info info = data.request();
-            int height = static_cast<int>(info.shape[0]);
-            int width = static_cast<int>(info.shape[1]);
-            int channels = static_cast<int>(info.shape[2]);
-
-            uint8_t* ptr = static_cast<uint8_t*>(info.ptr);
-            std::vector<uint8_t> vec(ptr, ptr + info.size);
-
-            // Load spec for flip settings
-            py::object spec_module = py::module_::import("termin.loaders.texture_spec");
-            py::object spec = spec_module.attr("TextureSpec").attr("for_texture_file")(path);
-            bool flip_x = spec.attr("flip_x").cast<bool>();
-            bool flip_y = spec.attr("flip_y").cast<bool>();
-            bool transpose = spec.attr("transpose").cast<bool>();
-
-            return TextureData(
-                std::move(vec),
-                width, height, channels,
-                flip_x, flip_y, transpose,
-                path
-            );
-        }, py::arg("path"))
-
-        .def_static("from_array", [](
-            py::array_t<uint8_t> data,
-            bool flip_x,
-            bool flip_y,
-            bool transpose
-        ) {
-            py::buffer_info info = data.request();
-            if (info.ndim != 3) {
-                throw std::runtime_error("Expected 3D array (height, width, channels)");
-            }
-
-            int height = static_cast<int>(info.shape[0]);
-            int width = static_cast<int>(info.shape[1]);
-            int channels = static_cast<int>(info.shape[2]);
-
-            uint8_t* ptr = static_cast<uint8_t*>(info.ptr);
-            size_t size = info.size;
-            std::vector<uint8_t> vec(ptr, ptr + size);
-
-            return TextureData(
-                std::move(vec),
-                width, height, channels,
-                flip_x, flip_y, transpose
-            );
-        },
-            py::arg("data"),
-            py::arg("flip_x") = false,
-            py::arg("flip_y") = true,
-            py::arg("transpose") = false
-        )
-
-        // Methods
-        .def("get_upload_data", [](const TextureData& self) {
-            auto [data, w, h] = self.get_upload_data();
-
-            // Return as (numpy array, (width, height))
-            py::array_t<uint8_t> arr(
-                {h, w, self.channels},
-                {w * self.channels * sizeof(uint8_t),
-                 self.channels * sizeof(uint8_t),
-                 sizeof(uint8_t)},
-                data.data()
-            );
-            // Copy data since 'data' will be destroyed
-            py::array_t<uint8_t> result({h, w, self.channels});
-            std::memcpy(result.mutable_data(), data.data(), data.size());
-
-            return py::make_tuple(result, py::make_tuple(w, h));
-        })
-
-        .def("is_valid", &TextureData::is_valid)
-
-        // Serialization
-        .def("direct_serialize", [](const TextureData& self) {
-            py::dict result;
-            if (!self.source_path.empty()) {
-                result["type"] = "path";
-                result["path"] = self.source_path;
-            } else {
-                // Inline serialization via base64
-                py::object base64 = py::module_::import("base64");
-                py::bytes data_bytes(reinterpret_cast<const char*>(self.data.data()), self.data.size());
-                py::object data_b64 = base64.attr("b64encode")(data_bytes).attr("decode")("ascii");
-
-                result["type"] = "inline";
-                result["width"] = self.width;
-                result["height"] = self.height;
-                result["channels"] = self.channels;
-                result["flip_x"] = self.flip_x;
-                result["flip_y"] = self.flip_y;
-                result["transpose"] = self.transpose;
-                result["data_b64"] = data_b64;
-            }
-            return result;
-        })
-
-        .def_static("direct_deserialize", [](const py::dict& data) {
-            std::string type = data.contains("type") ? data["type"].cast<std::string>() : "inline";
-
-            if (type == "path") {
-                std::string path = data["path"].cast<std::string>();
-                // Load via from_file
-                py::object PIL = py::module_::import("PIL.Image");
-                py::object image = PIL.attr("open")(path).attr("convert")("RGBA");
-                py::object np = py::module_::import("numpy");
-                py::array_t<uint8_t> arr = np.attr("array")(image, py::arg("dtype") = np.attr("uint8"));
-
-                py::buffer_info info = arr.request();
-                int height = static_cast<int>(info.shape[0]);
-                int width = static_cast<int>(info.shape[1]);
-                int channels = static_cast<int>(info.shape[2]);
-
-                uint8_t* ptr = static_cast<uint8_t*>(info.ptr);
-                std::vector<uint8_t> vec(ptr, ptr + info.size);
-
-                return TextureData(std::move(vec), width, height, channels, false, true, false, path);
-            }
-
-            // Inline deserialization
-            int width = data["width"].cast<int>();
-            int height = data["height"].cast<int>();
-            int channels = data.contains("channels") ? data["channels"].cast<int>() : 4;
-
-            py::object base64 = py::module_::import("base64");
-            py::bytes data_bytes = base64.attr("b64decode")(data["data_b64"]);
-            std::string bytes_str = data_bytes.cast<std::string>();
-            std::vector<uint8_t> vec(bytes_str.begin(), bytes_str.end());
-
-            bool flip_x = data.contains("flip_x") ? data["flip_x"].cast<bool>() : false;
-            bool flip_y = data.contains("flip_y") ? data["flip_y"].cast<bool>() : true;
-            bool transpose = data.contains("transpose") ? data["transpose"].cast<bool>() : false;
-
-            return TextureData(std::move(vec), width, height, channels, flip_x, flip_y, transpose);
-        }, py::arg("data"));
-
-    // ========== MeshHandle ==========
-    py::class_<MeshHandle>(m, "MeshHandle")
-        .def(py::init<>())
-        .def(py::init<py::object>(), py::arg("asset"))
-        .def_static("from_name", &MeshHandle::from_name, py::arg("name"))
-        .def_static("from_asset", &MeshHandle::from_asset, py::arg("asset"))
-        .def_static("from_mesh3", &MeshHandle::from_mesh3,
-            py::arg("mesh"), py::arg("name") = "mesh", py::arg("source_path") = "")
-        .def_static("from_mesh", &MeshHandle::from_mesh3,  // alias
-            py::arg("mesh"), py::arg("name") = "mesh", py::arg("source_path") = "")
-        .def_static("from_vertices_indices", &MeshHandle::from_vertices_indices,
-            py::arg("vertices"), py::arg("indices"), py::arg("name") = "mesh")
-        .def_static("deserialize", &MeshHandle::deserialize, py::arg("data"))
-        .def_readwrite("asset", &MeshHandle::asset)
-        .def_property_readonly("is_valid", &MeshHandle::is_valid)
-        .def_property_readonly("name", &MeshHandle::name)
-        .def_property_readonly("version", &MeshHandle::version)
-        .def_property_readonly("mesh", &MeshHandle::mesh)
-        .def_property_readonly("gpu", &MeshHandle::gpu, py::return_value_policy::reference)
-        .def("get", &MeshHandle::get, py::return_value_policy::reference)
-        .def("get_mesh", &MeshHandle::mesh)
-        .def("get_mesh_or_none", &MeshHandle::mesh)
-        .def("get_asset", [](const MeshHandle& self) { return self.asset; })
-        .def("serialize", &MeshHandle::serialize);
+    // Note: TextureData is now in _texture_native module
+    // Note: MeshHandle is now in _mesh_native module
 
     // ========== TextureHandle ==========
     py::class_<TextureHandle>(m, "TextureHandle")
@@ -313,23 +84,97 @@ void bind_assets(py::module_& m) {
     // Allow implicit conversion from Material* to MaterialHandle
     py::implicitly_convertible<Material*, MaterialHandle>();
 
-    // ========== SkeletonHandle ==========
-    py::class_<SkeletonHandle>(m, "SkeletonHandle")
-        .def(py::init<>())
-        .def(py::init<py::object>(), py::arg("asset"))
-        .def_static("from_name", &SkeletonHandle::from_name, py::arg("name"))
-        .def_static("from_asset", &SkeletonHandle::from_asset, py::arg("asset"))
-        .def_static("deserialize", &SkeletonHandle::deserialize, py::arg("data"))
-        .def_readwrite("asset", &SkeletonHandle::asset)
-        .def_property_readonly("is_valid", &SkeletonHandle::is_valid)
-        .def_property_readonly("name", &SkeletonHandle::name)
-        .def("get", &SkeletonHandle::get, py::return_value_policy::reference)
-        .def("get_asset", [](const SkeletonHandle& self) { return self.asset; })
-        .def("serialize", &SkeletonHandle::serialize);
+    // Note: SkeletonHandle is now in _skeleton_native module
 
     // ========== Free functions ==========
     m.def("get_white_texture_handle", &get_white_texture_handle,
         "Get a white 1x1 texture handle (singleton).");
+
+    // Register kind handlers for serialization
+    register_kind_handlers();
+}
+
+void register_kind_handlers() {
+    auto& registry = InspectRegistry::instance();
+
+    // Note: mesh kind is registered in _mesh_native module
+
+    // ===== material kind =====
+    registry.register_kind("material", KindHandler{
+        // serialize
+        [](py::object obj) -> nos::trent {
+            if (py::hasattr(obj, "serialize")) {
+                py::dict d = obj.attr("serialize")();
+                return InspectRegistry::py_dict_to_trent(d);
+            }
+            return nos::trent::nil();
+        },
+        // deserialize
+        [](const nos::trent& t) -> py::object {
+            if (!t.is_dict()) {
+                return py::cast(MaterialHandle());
+            }
+            py::dict d = InspectRegistry::trent_to_py_dict(t);
+            return py::cast(MaterialHandle::deserialize(d));
+        },
+        // convert
+        [](py::object value) -> py::object {
+            if (value.is_none()) {
+                return py::cast(MaterialHandle());
+            }
+            if (py::isinstance<MaterialHandle>(value)) {
+                return value;
+            }
+            return value;
+        }
+    });
+
+    // Note: skeleton kind is registered in _skeleton_native module
+
+    // ===== entity_list kind =====
+    registry.register_kind("entity_list", KindHandler{
+        // serialize
+        [](py::object obj) -> nos::trent {
+            nos::trent result;
+            result.init(nos::trent_type::list);
+
+            if (py::isinstance<py::list>(obj)) {
+                for (auto item : obj) {
+                    if (item.is_none()) {
+                        result.push_back(nos::trent::nil());
+                    } else {
+                        try {
+                            EntityHandle handle = item.cast<EntityHandle>();
+                            if (!handle.uuid.empty()) {
+                                result.push_back(nos::trent(handle.uuid));
+                            } else {
+                                result.push_back(nos::trent::nil());
+                            }
+                        } catch (const py::cast_error&) {
+                            result.push_back(nos::trent::nil());
+                        }
+                    }
+                }
+            }
+            return result;
+        },
+        // deserialize
+        [](const nos::trent& t) -> py::object {
+            std::vector<EntityHandle> result;
+            if (t.is_list()) {
+                for (const auto& item : t.as_list()) {
+                    if (item.is_string()) {
+                        result.push_back(EntityHandle(item.as_string()));
+                    } else {
+                        result.push_back(EntityHandle());
+                    }
+                }
+            }
+            return py::cast(result);
+        },
+        // convert
+        nullptr
+    });
 }
 
 } // namespace termin

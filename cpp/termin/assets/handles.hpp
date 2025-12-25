@@ -466,3 +466,6 @@ public:
 };
 
 } // namespace termin
+
+// Include inline implementations
+#include "handles_inline.hpp"

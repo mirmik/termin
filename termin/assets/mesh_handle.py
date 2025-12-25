@@ -1,4 +1,4 @@
 """MeshHandle - re-export from C++."""
-from termin._native.assets import MeshHandle
+from termin.mesh._mesh_native import MeshHandle
 
 __all__ = ["MeshHandle"]
