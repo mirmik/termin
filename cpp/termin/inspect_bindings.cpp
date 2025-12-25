@@ -2,38 +2,26 @@
 #include <pybind11/stl.h>
 
 #include "inspect/inspect_registry.hpp"
+#include "entity/component.hpp"
 #include "render/material.hpp"
-#include "render/mesh_renderer.hpp"
-#include "render/skinned_mesh_renderer.hpp"
-#include "render/skeleton_controller.hpp"
 
 namespace py = pybind11;
 
 namespace termin {
 
 // Helper to extract raw pointer from Python object
-// Works with both raw pointer holders and shared_ptr holders
-static void* get_raw_pointer(py::object obj, const std::string& type_name) {
-    // For shared_ptr types, we need to cast to the specific type first
-    // pybind11 will automatically extract the raw pointer from shared_ptr
+static void* get_raw_pointer(py::object obj) {
+    // Try Component first (covers all component types)
+    try {
+        return static_cast<void*>(obj.cast<Component*>());
+    } catch (const py::cast_error&) {}
 
-    if (type_name == "Material") {
+    // Material uses shared_ptr
+    try {
         return static_cast<void*>(obj.cast<Material*>());
-    }
-    if (type_name == "MaterialPhase") {
-        return static_cast<void*>(obj.cast<MaterialPhase*>());
-    }
-    if (type_name == "MeshRenderer") {
-        return static_cast<void*>(obj.cast<MeshRenderer*>());
-    }
-    if (type_name == "SkinnedMeshRenderer") {
-        return static_cast<void*>(obj.cast<SkinnedMeshRenderer*>());
-    }
-    if (type_name == "SkeletonController") {
-        return static_cast<void*>(obj.cast<SkeletonController*>());
-    }
+    } catch (const py::cast_error&) {}
 
-    // Fallback for regular pointer types
+    // Fallback
     return py::cast<void*>(obj);
 }
 
@@ -63,15 +51,14 @@ void bind_inspect(py::module_& m) {
              py::arg("type_name"), py::arg("fields_dict"),
              "Register fields from Python inspect_fields dict")
         .def("get", [](InspectRegistry& self, py::object obj, const std::string& field_path) {
-            // Get type name from Python object
             std::string type_name = py::str(py::type::of(obj).attr("__name__")).cast<std::string>();
-            void* ptr = get_raw_pointer(obj, type_name);
+            void* ptr = get_raw_pointer(obj);
             return self.get(ptr, type_name, field_path);
         }, py::arg("obj"), py::arg("field"),
            "Get field value from object")
         .def("set", [](InspectRegistry& self, py::object obj, const std::string& field_path, py::object value) {
             std::string type_name = py::str(py::type::of(obj).attr("__name__")).cast<std::string>();
-            void* ptr = get_raw_pointer(obj, type_name);
+            void* ptr = get_raw_pointer(obj);
             self.set(ptr, type_name, field_path, value);
         }, py::arg("obj"), py::arg("field"), py::arg("value"),
            "Set field value on object");

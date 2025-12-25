@@ -1,4 +1,5 @@
 #include "common.hpp"
+#include "termin/entity/entity.hpp"
 
 namespace termin {
 
@@ -88,38 +89,13 @@ void bind_transform(py::module_& m) {
                 return result;
             })
 
-        // entity back-pointer
-        // C++ code uses self.entity field directly
-        // Python getter uses _entity attribute (set by entity_bindings), with fallback to C++ field
-        .def_property("entity",
+        // entity back-pointer - directly use C++ pointer
+        .def_property_readonly("entity",
             [](GeneralTransform3& self) -> py::object {
-                py::object py_self = py::cast(&self, py::return_value_policy::reference);
-                // First check _entity Python attribute
-                if (py::hasattr(py_self, "_entity")) {
-                    return py_self.attr("_entity");
-                }
-                // Fallback: check C++ entity pointer and use EntityRegistry to find Python object
                 if (self.entity != nullptr) {
-                    try {
-                        // Import entity module to get EntityRegistry
-                        py::module_ entity_module = py::module_::import("termin._native.entity");
-                        py::object registry = entity_module.attr("EntityRegistry").attr("instance")();
-                        // Get entity by transform pointer
-                        py::object entity = registry.attr("get_by_transform")(py::cast(&self, py::return_value_policy::reference));
-                        if (!entity.is_none()) {
-                            // Cache it for next access
-                            py_self.attr("_entity") = entity;
-                            return entity;
-                        }
-                    } catch (...) {
-                        // Module not loaded yet, ignore
-                    }
+                    return py::cast(self.entity, py::return_value_policy::reference);
                 }
                 return py::none();
-            },
-            [](GeneralTransform3& self, py::object entity) {
-                py::object py_self = py::cast(&self, py::return_value_policy::reference);
-                py_self.attr("_entity") = entity;
             })
 
         // Pose access

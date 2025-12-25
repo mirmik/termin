@@ -24,13 +24,13 @@ class AnimationPlayer(Component):
     """
 
     _DEBUG_UPDATE = False
-    _DEBUG_LIFECYCLE = False
+    _DEBUG_LIFECYCLE = True
 
     inspect_fields = {
         **Component.inspect_fields,
         "clips": InspectField(
             label="Animation Clips",
-            kind="animation_clip_list",
+            kind="list[animation_clip_handle]",
             getter=lambda self: self._clip_handles,
             setter=lambda self, v: self._set_clip_handles(v),
         ),

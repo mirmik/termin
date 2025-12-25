@@ -125,7 +125,6 @@ class ColliderComponent(Component):
                 self._scene.collision_world.add(self._attached)
 
     def _set_collider_type(self, value: str):
-        print(f"[ColliderComponent] _set_collider_type called: {self.collider_type} -> {value}")
         if value != self.collider_type:
             self.collider_type = value
             self._rebuild_collider()

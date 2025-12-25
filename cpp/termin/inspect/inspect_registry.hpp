@@ -177,11 +177,122 @@ public:
 
     /**
      * Get kind handler (returns nullptr if not found).
+     * For parameterized types like list[T], auto-generates handler.
      */
     const KindHandler* get_kind_handler(const std::string& kind) const {
         auto it = _kind_handlers.find(kind);
-        return it != _kind_handlers.end() ? &it->second : nullptr;
+        if (it != _kind_handlers.end()) {
+            return &it->second;
+        }
+        // Try to generate handler for parameterized type
+        return const_cast<InspectRegistry*>(this)->try_generate_handler(kind);
     }
+
+    /**
+     * Parse parameterized kind like "list[T]" or "dict[K,V]".
+     * Returns (container, element_type) or ("", kind) if not parameterized.
+     */
+    static std::pair<std::string, std::string> parse_kind(const std::string& kind) {
+        size_t bracket_start = kind.find('[');
+        if (bracket_start == std::string::npos) {
+            return {"", kind};
+        }
+        size_t bracket_end = kind.rfind(']');
+        if (bracket_end == std::string::npos || bracket_end <= bracket_start) {
+            return {"", kind};
+        }
+        std::string container = kind.substr(0, bracket_start);
+        std::string element = kind.substr(bracket_start + 1, bracket_end - bracket_start - 1);
+        return {container, element};
+    }
+
+private:
+    /**
+     * Try to generate handler for parameterized type like list[T].
+     * Caches generated handler for future use.
+     */
+    KindHandler* try_generate_handler(const std::string& kind) {
+        auto [container, element] = parse_kind(kind);
+        if (container.empty()) {
+            return nullptr;
+        }
+
+        if (container == "list") {
+            // Get element handler
+            auto it = _kind_handlers.find(element);
+            if (it == _kind_handlers.end()) {
+                return nullptr;
+            }
+
+            // Generate list handler
+            KindHandler list_handler;
+
+            // Serialize: py::list → trent::list
+            list_handler.serialize = [element, this](py::object obj) -> nos::trent {
+                nos::trent result;
+                result.init(nos::trent_type::list);
+                if (obj.is_none()) return result;
+
+                auto elem_it = _kind_handlers.find(element);
+                if (elem_it == _kind_handlers.end()) return result;
+
+                for (auto item : obj) {
+                    py::object py_item = py::reinterpret_borrow<py::object>(item);
+                    if (elem_it->second.serialize) {
+                        result.push_back(elem_it->second.serialize(py_item));
+                    } else {
+                        result.push_back(py_to_trent(py_item));
+                    }
+                }
+                return result;
+            };
+
+            // Deserialize: trent::list → py::list
+            list_handler.deserialize = [element, this](const nos::trent& t) -> py::object {
+                py::list result;
+                if (!t.is_list()) return result;
+
+                auto elem_it = _kind_handlers.find(element);
+                if (elem_it == _kind_handlers.end()) return result;
+
+                for (const auto& item : t.as_list()) {
+                    if (elem_it->second.deserialize) {
+                        result.append(elem_it->second.deserialize(item));
+                    } else {
+                        result.append(trent_to_py(item));
+                    }
+                }
+                return result;
+            };
+
+            // Convert: ensure each element is properly converted
+            list_handler.convert = [element, this](py::object value) -> py::object {
+                if (value.is_none()) {
+                    return py::list();
+                }
+
+                auto elem_it = _kind_handlers.find(element);
+                if (elem_it == _kind_handlers.end() || !elem_it->second.convert) {
+                    // No element converter, return as-is
+                    return value;
+                }
+
+                py::list result;
+                for (auto item : value) {
+                    py::object py_item = py::reinterpret_borrow<py::object>(item);
+                    result.append(elem_it->second.convert(py_item));
+                }
+                return result;
+            };
+
+            _kind_handlers[kind] = std::move(list_handler);
+            return &_kind_handlers[kind];
+        }
+
+        return nullptr;
+    }
+
+public:
 
     /**
      * Get field value by path.
@@ -229,17 +340,16 @@ public:
      * Deserialize all inspect fields from trent dict.
      */
     void deserialize_all(void* obj, const std::string& type_name, const nos::trent& data) {
-        std::cerr << "[deserialize_all] type=" << type_name << " is_dict=" << data.is_dict() << std::endl;
         if (!data.is_dict()) return;
 
         auto& flds = fields(type_name);
-        std::cerr << "[deserialize_all] field_count=" << flds.size() << std::endl;
-
         for (const auto& f : flds) {
             if (f.non_serializable) continue;
-            std::cerr << "[deserialize_all] field=" << f.path << " in_data=" << data.contains(f.path) << std::endl;
             if (data.contains(f.path)) {
-                py::object val = trent_to_py_with_kind(data[f.path], f.kind);
+                const auto& field_data = data[f.path];
+                // Skip nil values - don't overwrite default with None
+                if (field_data.is_nil()) continue;
+                py::object val = trent_to_py_with_kind(field_data, f.kind);
                 f.setter(obj, val);
             }
         }
@@ -262,6 +372,28 @@ public:
         }
         if (py::isinstance<py::str>(obj)) {
             return nos::trent(obj.cast<std::string>());
+        }
+        if (py::isinstance<py::list>(obj)) {
+            nos::trent result;
+            result.init(nos::trent_type::list);
+            for (auto item : obj) {
+                result.push_back(py_to_trent(py::reinterpret_borrow<py::object>(item)));
+            }
+            return result;
+        }
+        if (py::isinstance<py::dict>(obj)) {
+            nos::trent result;
+            result.init(nos::trent_type::dict);
+            for (auto& item : obj.cast<py::dict>()) {
+                std::string key = py::str(item.first).cast<std::string>();
+                result[key] = py_to_trent(py::reinterpret_borrow<py::object>(item.second));
+            }
+            return result;
+        }
+        // Handle numpy arrays (common for vec3, etc.)
+        if (py::hasattr(obj, "tolist")) {
+            py::object as_list = obj.attr("tolist")();
+            return py_to_trent(as_list);
         }
         return nos::trent::nil();
     }
@@ -319,6 +451,20 @@ public:
             }
             case nos::trent_type::string:
                 return py::str(t.as_string());
+            case nos::trent_type::list: {
+                py::list result;
+                for (const auto& item : t.as_list()) {
+                    result.append(trent_to_py(item));
+                }
+                return result;
+            }
+            case nos::trent_type::dict: {
+                py::dict result;
+                for (const auto& [key, val] : t.as_dict()) {
+                    result[py::str(key)] = trent_to_py(val);
+                }
+                return result;
+            }
             default:
                 return py::none();
         }

@@ -316,6 +316,8 @@ class OrbitCameraController(CameraController):
         entity = self.entity
         if entity is None:
             return
+        if self.target is None:
+            self.target = np.array([0.0, 0.0, 0.0], dtype=np.float32)
         r = float(np.clip(self.radius, self._min_radius, self._max_radius))
         cos_elev = math.cos(self.elevation)
         eye = np.array(

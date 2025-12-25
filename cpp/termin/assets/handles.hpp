@@ -465,7 +465,102 @@ public:
     static SkeletonHandle deserialize(const py::dict& data);
 };
 
+// Forward declaration
+namespace animation {
+class AnimationClip;
+}
+
+/**
+ * AnimationClipHandle - smart reference to animation clip asset.
+ *
+ * Wraps AnimationClipAsset py::object, provides:
+ * - Access to AnimationClip
+ * - Serialization/deserialization with UUID
+ */
+class AnimationClipHandle {
+public:
+    // Python asset object (AnimationClipAsset or None)
+    py::object asset;
+
+    AnimationClipHandle() : asset(py::none()) {}
+
+    explicit AnimationClipHandle(py::object asset_) : asset(std::move(asset_)) {}
+
+    /**
+     * Create handle by name lookup in ResourceManager.
+     */
+    static AnimationClipHandle from_name(const std::string& name);
+
+    /**
+     * Create handle from Python AnimationClipAsset.
+     */
+    static AnimationClipHandle from_asset(py::object asset) {
+        return AnimationClipHandle(std::move(asset));
+    }
+
+    /**
+     * Create handle by UUID lookup in ResourceManager.
+     */
+    static AnimationClipHandle from_uuid(const std::string& uuid);
+
+    /**
+     * Check if handle is valid (has asset).
+     */
+    bool is_valid() const {
+        return !asset.is_none();
+    }
+
+    /**
+     * Get asset name.
+     */
+    std::string name() const {
+        if (asset.is_none()) return "";
+        return asset.attr("name").cast<std::string>();
+    }
+
+    /**
+     * Get AnimationClip pointer.
+     * Returns nullptr if asset is empty or resource is None.
+     */
+    animation::AnimationClip* get() const;
+
+    /**
+     * Convenience alias.
+     */
+    animation::AnimationClip* clip() const { return get(); }
+
+    /**
+     * Serialize for scene saving.
+     */
+    py::dict serialize() const {
+        if (asset.is_none()) {
+            py::dict d;
+            d["type"] = "none";
+            return d;
+        }
+        py::dict d;
+        d["uuid"] = asset.attr("uuid");
+        py::object source_path = asset.attr("source_path");
+        if (!source_path.is_none()) {
+            d["type"] = "path";
+            d["path"] = py::str(source_path.attr("as_posix")());
+        } else {
+            d["type"] = "named";
+            d["name"] = asset.attr("name");
+        }
+        return d;
+    }
+
+    /**
+     * Deserialize from scene data.
+     */
+    static AnimationClipHandle deserialize(const py::dict& data);
+};
+
 } // namespace termin
 
 // Include inline implementations
 #include "handles_inline.hpp"
+
+// Additional handle types in separate files
+#include "voxel_grid_handle.hpp"

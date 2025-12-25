@@ -659,17 +659,17 @@ class FieldWidgetFactory:
 
             return AudioClipFieldWidget(resources=self._resources)
 
-        if kind == "vec3_list":
+        if kind == "vec3_list" or kind == "list[vec3]":
             from termin.editor.widgets.vec3_list_widget import Vec3ListWidget
 
             return Vec3ListWidget()
 
-        if kind == "entity_handle_list":
+        if kind == "entity_handle_list" or kind == "list[entity_handle]":
             from termin.editor.widgets.entity_list_widget import EntityListWidget
 
             return EntityListWidget(read_only=field.read_only)
 
-        if kind == "animation_clip_list":
+        if kind == "animation_clip_handle_list" or kind == "list[animation_clip_handle]":
             from termin.editor.widgets.generic_list_widget import GenericListWidget
 
             def get_clip_name(handle):

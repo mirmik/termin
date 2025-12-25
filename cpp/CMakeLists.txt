@@ -69,6 +69,7 @@ pybind11_add_module(_geom_native
 target_compile_options(_geom_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_link_libraries(_geom_native PRIVATE entity_lib)
 
 # Colliders native module (BoxCollider, SphereCollider)
 pybind11_add_module(_colliders_native termin/colliders_bindings.cpp)
@@ -91,12 +92,6 @@ target_compile_options(_voxels_native PRIVATE
 # Collision native module (BVH, CollisionWorld, ContactManifold)
 pybind11_add_module(_collision_native termin/collision_bindings.cpp)
 target_compile_options(_collision_native PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-
-# Animation native module (Channel, Clip)
-pybind11_add_module(_animation_native termin/animation_bindings.cpp)
-target_compile_options(_animation_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
@@ -208,6 +203,18 @@ pybind11_add_module(_entity_native
 target_link_libraries(_entity_native PRIVATE entity_lib trent)
 target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+
+# Animation native module (Channel, Clip, AnimationClipHandle)
+# Must be after entity_lib since it links against it
+pybind11_add_module(_animation_native termin/bindings/animation/animation_module.cpp)
+target_link_libraries(_animation_native PRIVATE trent entity_lib)
+target_compile_options(_animation_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
+set_target_properties(_animation_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
 )
 
 # Find SDL2 (required)

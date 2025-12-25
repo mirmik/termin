@@ -50,8 +50,12 @@ public:
     // Unregistration (for hot-reload)
     void unregister(const std::string& name);
 
-    // Creation
+    // Creation - returns py::object (for Python compatibility)
     py::object create(const std::string& name) const;
+
+    // Creation - returns raw Component* (for Entity::deserialize)
+    // Works for both native and Python components
+    Component* create_component(const std::string& name) const;
 
     // Queries
     bool has(const std::string& name) const;

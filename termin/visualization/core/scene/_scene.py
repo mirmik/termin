@@ -300,10 +300,7 @@ class Scene(_NativeScene):
     def add(self, entity: Entity) -> Entity:
         """Add entity to the scene, including all its children."""
         self.add_non_recurse(entity)
-        for child_trans in entity.transform.children:
-            child = child_trans.entity
-            if child is None:
-                continue
+        for child in entity.children():
             self.add(child)
         return entity
 
@@ -353,12 +350,10 @@ class Scene(_NativeScene):
         """Recursive helper for find_entity_by_uuid."""
         if entity.uuid == uuid:
             return entity
-        for child_transform in entity.transform.children:
-            child = child_transform.entity
-            if child is not None:
-                result = self._find_entity_by_uuid_recursive(child, uuid)
-                if result is not None:
-                    return result
+        for child in entity.children():
+            result = self._find_entity_by_uuid_recursive(child, uuid)
+            if result is not None:
+                return result
         return None
 
     # --- Component search ---
@@ -587,11 +582,25 @@ class Scene(_NativeScene):
             self.layer_names = {int(k): v for k, v in data.get("layer_names", {}).items()}
             self.flag_names = {int(k): v for k, v in data.get("flag_names", {}).items()}
 
-        loaded_count = 0
         entities_data = data.get("entities", [])
         for ent_data in entities_data:
-            ent = Entity.deserialize(ent_data, context)
-            self.add(ent)
-            loaded_count += 1
+            ent = self._deserialize_entity_recursive(ent_data, context)
+            if ent:
+                self.add(ent)
 
-        return loaded_count
+        return len(entities_data)
+        
+    def _deserialize_entity_recursive(self, data: dict, context=None) -> Entity | None:
+        """Deserialize entity with children recursively."""
+        ent = Entity.deserialize(data, context)
+        if ent is None:
+            return None
+
+        # Deserialize children and set parent
+        children_data = data.get("children", [])
+        for child_data in children_data:
+            child = self._deserialize_entity_recursive(child_data, context)
+            if child:
+                child.set_parent(ent)
+
+        return ent

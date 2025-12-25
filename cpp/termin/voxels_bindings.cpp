@@ -3,6 +3,8 @@
 #include <pybind11/stl.h>
 
 #include "termin/voxels/voxel_grid.hpp"
+#include "termin/assets/handles.hpp"
+#include "termin/inspect/inspect_registry.hpp"
 
 namespace py = pybind11;
 using namespace termin::voxels;

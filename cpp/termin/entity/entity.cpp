@@ -1,6 +1,8 @@
 #include "entity.hpp"
 #include "component.hpp"
 #include "entity_registry.hpp"
+#include "component_registry.hpp"
+#include "../inspect/inspect_registry.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -348,8 +350,29 @@ Entity* Entity::deserialize(const nos::trent& data) {
         ent->transform->set_local_pose(pose);
     }
 
-    // Components and children are handled by Python binding
-    // to ensure proper component deserialization
+    // Deserialize components (children are handled by Scene)
+    const nos::trent* components_ptr = data.get(nos::trent_path("components"));
+    if (components_ptr && components_ptr->is_list()) {
+        ComponentRegistry& reg = ComponentRegistry::instance();
+
+        for (const auto& comp_data : components_ptr->as_list()) {
+            if (!comp_data.is_dict()) continue;
+
+            std::string comp_type = comp_data["type"].as_string_default("");
+            if (comp_type.empty() || !reg.has(comp_type)) continue;
+
+            Component* comp = reg.create_component(comp_type);
+            if (!comp) continue;
+
+            // Deserialize component data via InspectRegistry
+            const nos::trent* inner = comp_data.get(nos::trent_path("data"));
+            if (inner && inner->is_dict()) {
+                InspectRegistry::instance().deserialize_all(comp, comp_type, *inner);
+            }
+
+            ent->add_component(comp);
+        }
+    }
 
     return ent;
 }

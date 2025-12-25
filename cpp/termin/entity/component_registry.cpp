@@ -56,6 +56,30 @@ py::object ComponentRegistry::create(const std::string& name) const {
     }
 }
 
+Component* ComponentRegistry::create_component(const std::string& name) const {
+    auto it = registry_.find(name);
+    if (it == registry_.end()) {
+        return nullptr;
+    }
+
+    const auto& info = it->second;
+
+    if (info.is_native) {
+        Component* comp = info.native_factory();
+        comp->is_native = true;
+        return comp;
+    } else {
+        // Create Python component and extract Component*
+        py::object py_comp = info.python_class();
+        Component* comp = py_comp.cast<Component*>();
+        comp->is_native = false;
+        comp->set_type_name(name.c_str());
+        // prevent python side destroy
+        py_comp.inc_ref();
+        return comp;
+    }
+}
+
 bool ComponentRegistry::has(const std::string& name) const {
     return registry_.count(name) > 0;
 }
