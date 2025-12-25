@@ -106,16 +106,32 @@ target_compile_options(_lighting_native PRIVATE
 )
 
 # Trent library (shared by all resource modules)
-add_library(trent SHARED
-    trent/trent.cpp
-    trent/trent_path.cpp
-    trent/string_ext.cpp
-)
+# trent library - STATIC on Windows (avoids DLL import library issues), SHARED on Linux
+if(WIN32)
+    add_library(trent STATIC
+        trent/trent.cpp
+        trent/trent_path.cpp
+        trent/string_ext.cpp
+    )
+else()
+    add_library(trent SHARED
+        trent/trent.cpp
+        trent/trent_path.cpp
+        trent/string_ext.cpp
+    )
+endif()
 target_compile_options(trent PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 set_target_properties(trent PROPERTIES
     POSITION_INDEPENDENT_CODE ON
+    # Explicit output directories for multi-config builds
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin
+    ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
 )
 
 # Mesh native module (Mesh3, SkinnedMesh3, MeshHandle) - separate module
@@ -147,8 +163,21 @@ target_compile_options(_texture_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
-# Find OpenGL (needed by _native)
+# Find OpenGL (needed by _graphics_native and _native)
 find_package(OpenGL REQUIRED)
+
+# Graphics native module (GraphicsBackend, OpenGLGraphicsBackend, GPU handles)
+pybind11_add_module(_graphics_native
+    termin/bindings/graphics/graphics_module.cpp
+    termin/render/glad/src/glad.c
+)
+target_include_directories(_graphics_native PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
+)
+target_link_libraries(_graphics_native PRIVATE OpenGL::GL)
+target_compile_options(_graphics_native PRIVATE
+    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+)
 
 # Find SDL2 (required)
 if(WIN32)
@@ -192,11 +221,10 @@ endif()
 
 # Unified native module (Render + SDL + Entity + Scene + Skeleton + Inspect + Assets)
 # Note: Mesh3/SkinnedMesh3 are in separate _mesh_native module, imported at runtime
+# Note: Graphics types (Color4, Size2i, etc), GraphicsBackend, handles are in _graphics_native
 pybind11_add_module(_native
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
-    termin/bindings/render/types.cpp
-    termin/bindings/render/graphics_backend.cpp
     termin/bindings/render/shader.cpp
     termin/bindings/render/shader_parser.cpp
     termin/bindings/render/camera.cpp
@@ -327,4 +355,5 @@ install(TARGETS _lighting_native DESTINATION ${CMAKE_INSTALL_PREFIX}/lighting)
 install(TARGETS _mesh_native DESTINATION ${CMAKE_INSTALL_PREFIX}/mesh)
 install(TARGETS _skeleton_native DESTINATION ${CMAKE_INSTALL_PREFIX}/skeleton)
 install(TARGETS _texture_native DESTINATION ${CMAKE_INSTALL_PREFIX}/texture)
+install(TARGETS _graphics_native DESTINATION ${CMAKE_INSTALL_PREFIX}/graphics)
 install(TARGETS _native DESTINATION ${CMAKE_INSTALL_PREFIX})

@@ -13,11 +13,9 @@ namespace termin {
 void bind_render(py::module_& m) {
     // Order matters - dependencies must be bound first
 
-    // Basic types, enums, RenderState
-    bind_render_types(m);
-
-    // Graphics backend, handles, OpenGL
-    bind_graphics_backend(m);
+    // NOTE: Basic types (Color4, Size2i, etc), enums (PolygonMode, etc),
+    // RenderState, GraphicsBackend, handles - all defined in _graphics_native
+    // They are imported in bindings.cpp before bind_render is called
 
     // ShaderProgram
     bind_shader(m);

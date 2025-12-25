@@ -21,7 +21,7 @@ from .qt import QtGLWindowHandle, QtWindowBackend
 from termin.visualization.platform.backends.glfw import GLFWWindowBackend
 
 # Use C++ OpenGLGraphicsBackend
-from termin._native.render import OpenGLGraphicsBackend
+from termin.graphics import OpenGLGraphicsBackend
 
 # Context management functions (still in Python)
 from termin.visualization.platform.backends.opengl import (

@@ -138,7 +138,13 @@ void bind_renderers(py::module_& m) {
             }
 
             if (!material_arg.is_none()) {
-                renderer->material = MaterialHandle::from_asset(material_arg);
+                // Check if it's a Material directly or a MaterialAsset
+                try {
+                    auto mat = material_arg.cast<Material*>();
+                    renderer->material = MaterialHandle::from_direct(mat);
+                } catch (const py::cast_error&) {
+                    renderer->material = MaterialHandle::from_asset(material_arg);
+                }
             }
 
             return renderer;
@@ -198,7 +204,13 @@ void bind_renderers(py::module_& m) {
             }
 
             if (!material_arg.is_none()) {
-                renderer->material = MaterialHandle::from_asset(material_arg);
+                // Check if it's a Material directly or a MaterialAsset
+                try {
+                    auto mat = material_arg.cast<Material*>();
+                    renderer->material = MaterialHandle::from_direct(mat);
+                } catch (const py::cast_error&) {
+                    renderer->material = MaterialHandle::from_asset(material_arg);
+                }
             }
 
             if (skeleton_controller != nullptr) {

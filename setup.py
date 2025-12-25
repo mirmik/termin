@@ -59,7 +59,10 @@ class CMakeBuildExt(build_ext):
             ("entity", "_entity_native"),
             ("lighting", "_lighting_native"),
             ("skeleton", "_skeleton_native"),
-            ("", "_native"),  # unified mesh + render module
+            ("mesh", "_mesh_native"),
+            ("texture", "_texture_native"),
+            ("graphics", "_graphics_native"),
+            ("", "_native"),  # unified render module
         ]
         for subdir, module_name in module_mappings:
             dst_dir = Path(directory) / "termin" / subdir
@@ -133,7 +136,10 @@ if __name__ == "__main__":
             Extension("termin.entity._entity_native", sources=[]),
             Extension("termin.lighting._lighting_native", sources=[]),
             Extension("termin.skeleton._skeleton_native", sources=[]),
-            Extension("termin._native", sources=[]),  # unified mesh + render
+            Extension("termin.mesh._mesh_native", sources=[]),
+            Extension("termin.texture._texture_native", sources=[]),
+            Extension("termin.graphics._graphics_native", sources=[]),
+            Extension("termin._native", sources=[]),  # unified render module
             Extension("termin.tests._cpp_tests", sources=[]),
         ],
         cmdclass={"build_ext": CMakeBuildExt},

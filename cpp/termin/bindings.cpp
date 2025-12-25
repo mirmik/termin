@@ -18,6 +18,11 @@ PYBIND11_MODULE(_native, m) {
     py::module_ mesh_native = py::module_::import("termin.mesh._mesh_native");
     m.attr("mesh") = mesh_native;
 
+    // Import _graphics_native and re-export as submodule
+    // Types like GraphicsBackend, ShaderHandle, etc. are defined there
+    py::module_ graphics_native = py::module_::import("termin.graphics._graphics_native");
+    m.attr("graphics") = graphics_native;
+
     // Create submodules
     auto render_module = m.def_submodule("render", "Render module");
     auto platform_module = m.def_submodule("platform", "Platform module");

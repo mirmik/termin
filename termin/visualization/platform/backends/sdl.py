@@ -8,7 +8,7 @@ from termin._native.platform import (
     SDLWindow,
     SDLWindowBackend as _SDLWindowBackend,
 )
-from termin._native.render import OpenGLGraphicsBackend
+from termin.graphics import OpenGLGraphicsBackend
 
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 

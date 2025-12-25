@@ -8,7 +8,7 @@ import glfw
 
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 
-from termin._native.render import OpenGLGraphicsBackend
+from termin.graphics import OpenGLGraphicsBackend
 
 
 def _ensure_glfw():

@@ -9,7 +9,7 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 
-from termin._native.render import OpenGLGraphicsBackend
+from termin.graphics import OpenGLGraphicsBackend
 
 
 

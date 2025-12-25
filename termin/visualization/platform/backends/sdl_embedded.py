@@ -15,7 +15,7 @@ from sdl2 import video
 
 from .base import Action, BackendWindow, Key, MouseButton, WindowBackend
 
-from termin._native.render import OpenGLGraphicsBackend
+from termin.graphics import OpenGLGraphicsBackend
 
 
 _sdl_initialized = False

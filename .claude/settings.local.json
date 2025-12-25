@@ -61,7 +61,8 @@
       "Bash(LD_LIBRARY_PATH=./termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 10 python:*)",
       "Bash(git checkout:*)",
       "Bash(PYTHONPATH=. timeout 90 python -m pytest:*)",
-      "Bash(PYTHONPATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310:/media/sf_Shared/termin timeout 10 python:*)"
+      "Bash(PYTHONPATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310:/media/sf_Shared/termin timeout 10 python:*)",
+      "Bash(cp:*)"
     ]
   }
 }

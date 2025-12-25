@@ -91,28 +91,10 @@ void MeshRenderer::recreate_overridden_material() {
 std::set<std::string> MeshRenderer::phase_marks() const {
     std::set<std::string> marks;
 
-    // Try C++ Material first
     Material* mat = material.get();
     if (mat != nullptr) {
         for (const auto& phase : mat->phases) {
             marks.insert(phase.phase_mark);
-        }
-    } else {
-        // Try Python Material via asset
-        try {
-            py::object asset = material.asset;
-            if (!asset.is_none()) {
-                py::object res = asset.attr("resource");
-                if (!res.is_none() && py::hasattr(res, "phases")) {
-                    py::list phases = res.attr("phases");
-                    for (auto phase : phases) {
-                        std::string phase_mark = phase.attr("phase_mark").cast<std::string>();
-                        marks.insert(phase_mark);
-                    }
-                }
-            }
-        } catch (const py::error_already_set&) {
-            // Ignore errors when accessing Python material
         }
     }
 
