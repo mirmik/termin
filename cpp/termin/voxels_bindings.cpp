@@ -161,10 +161,10 @@ PYBIND11_MODULE(_voxels_native, m) {
              py::arg("name") = "",
              py::arg("source_path") = "")
 
-        // Properties
-        .def("cell_size", &VoxelGrid::cell_size)
-        .def("chunk_count", &VoxelGrid::chunk_count)
-        .def("voxel_count", &VoxelGrid::voxel_count)
+        // Properties (as Python properties, not methods, for compatibility)
+        .def_property_readonly("cell_size", &VoxelGrid::cell_size)
+        .def_property_readonly("chunk_count", &VoxelGrid::chunk_count)
+        .def_property_readonly("voxel_count", &VoxelGrid::voxel_count)
         .def_property("name",
             [](const VoxelGrid& g) { return g.name(); },
             [](VoxelGrid& g, const std::string& n) { g.set_name(n); })
@@ -177,6 +177,9 @@ PYBIND11_MODULE(_voxels_native, m) {
             auto buf = result.mutable_unchecked<1>();
             buf(0) = o.x; buf(1) = o.y; buf(2) = o.z;
             return result;
+        })
+        .def_property_readonly("surface_normals", [](const VoxelGrid& grid) {
+            return surface_normals_to_dict(grid.surface_normals());
         })
 
         // Voxel access
@@ -275,10 +278,6 @@ PYBIND11_MODULE(_voxels_native, m) {
             auto verts = numpy_to_vec3_vector(vertices);
             auto tris = numpy_to_triangles(triangles);
             return grid.compute_surface_normals(verts, tris);
-        })
-
-        .def("surface_normals", [](const VoxelGrid& grid) {
-            return surface_normals_to_dict(grid.surface_normals());
         })
 
         .def("get_surface_normal", [](const VoxelGrid& grid, int vx, int vy, int vz) -> py::object {

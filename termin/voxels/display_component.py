@@ -295,20 +295,23 @@ class VoxelDisplayComponent(Component):
 
         # Обновляем uniforms перед возвратом фаз
         # (ColorPass вызовет phase.apply() который загрузит их в GPU)
-        for phase in phases:
-            phase.uniforms["u_color_below"] = np.array(self.color_below, dtype=np.float32)
-            phase.uniforms["u_color_above"] = np.array(self.color_above, dtype=np.float32)
-            phase.uniforms["u_color_surface"] = np.array(self.color_surface, dtype=np.float32)
-            phase.uniforms["u_slice_axis"] = np.array(self.slice_axis, dtype=np.float32)
-            phase.uniforms["u_fill_percent"] = self.fill_percent / 100.0
-            phase.uniforms["u_bounds_min"] = self._bounds_min
-            phase.uniforms["u_bounds_max"] = self._bounds_max
-            phase.uniforms["u_ambient_color"] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-            phase.uniforms["u_ambient_intensity"] = 0.4
+        # ВАЖНО: используем set_param, т.к. phase.uniforms возвращает копию dict
+        color_below_arr = np.array(self.color_below, dtype=np.float32)
+        color_above_arr = np.array(self.color_above, dtype=np.float32)
+        color_surface_arr = np.array(self.color_surface, dtype=np.float32)
+        slice_axis_arr = np.array(self.slice_axis, dtype=np.float32)
+        ambient_color_arr = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
-            if self._DEBUG_GET_PHASES:
-                print(f"[VoxelDisplayComponent.get_geometry_draws] phase_mark={phase_mark}, fill_percent={self.fill_percent}, u_fill_percent={phase.uniforms['u_fill_percent']}")
-                print(f"  bounds_min={self._bounds_min}, bounds_max={self._bounds_max}")
+        for phase in phases:
+            phase.set_param("u_color_below", color_below_arr)
+            phase.set_param("u_color_above", color_above_arr)
+            phase.set_param("u_color_surface", color_surface_arr)
+            phase.set_param("u_slice_axis", slice_axis_arr)
+            phase.set_param("u_fill_percent", self.fill_percent / 100.0)
+            phase.set_param("u_bounds_min", self._bounds_min)
+            phase.set_param("u_bounds_max", self._bounds_max)
+            phase.set_param("u_ambient_color", ambient_color_arr)
+            phase.set_param("u_ambient_intensity", 0.4)
 
         phases.sort(key=lambda p: p.priority)
         return [GeometryDrawCall(phase=p) for p in phases]

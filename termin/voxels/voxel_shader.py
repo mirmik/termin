@@ -47,11 +47,6 @@ uniform float u_fill_percent;   // 0.0 - 1.0
 uniform vec3 u_bounds_min;      // bounds in mesh space (before model transform)
 uniform vec3 u_bounds_max;
 
-// Basic lighting
-uniform vec3 u_camera_position;
-uniform vec3 u_ambient_color;
-uniform float u_ambient_intensity;
-
 // Voxel types (from voxelizer.py)
 const float VOXEL_SOLID = 1.0;
 const float VOXEL_SURFACE = 2.0;
@@ -90,28 +85,15 @@ void main() {
         discard;
     }
 
-    // Select base color based on voxel type (v_uv.x)
-    float voxel_type = v_uv.x;
+    // Select base color based on position
     vec4 base_color;
 
-    if (abs(voxel_type - VOXEL_SURFACE) < 0.5) {
-        // Surface voxel - check if we have normal-encoded color
-        // v_color = (1,1,1) means no normal, use u_color_surface
-        // otherwise v_color contains encoded normal as RGB
-        float color_sum = v_color.r + v_color.g + v_color.b;
-        if (abs(color_sum - 3.0) < 0.01) {
-            // Default white = no normal data, use uniform color
-            base_color = u_color_surface;
-        } else {
-            // Normal encoded as color
-            base_color = vec4(v_color, u_color_surface.a);
-        }
-    } else if (normalized_pos > u_fill_percent) {
-        // In blend zone (SOLID voxels)
+    if (normalized_pos > u_fill_percent) {
+        // In blend zone
         float t = (normalized_pos - u_fill_percent) / blend_zone;
         base_color = mix(u_color_below, u_color_above, t);
     } else {
-        // Below fill percent (SOLID voxels)
+        // Below fill percent
         base_color = u_color_below;
     }
 
@@ -120,7 +102,7 @@ void main() {
     vec3 light_dir = normalize(vec3(0.5, 0.8, 1.0));
     float ndotl = max(dot(N, light_dir), 0.0);
 
-    vec3 ambient = u_ambient_color * u_ambient_intensity;
+    vec3 ambient = vec3(0.4);
     vec3 diffuse = base_color.rgb * (ambient + ndotl * 0.6);
 
     FragColor = vec4(diffuse, base_color.a);
