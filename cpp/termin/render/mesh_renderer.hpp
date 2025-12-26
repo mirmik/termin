@@ -20,7 +20,7 @@ namespace termin {
  * Stores mesh via MeshHandle and material via MaterialHandle.
  * Supports material override for per-instance customization.
  */
-class MeshRenderer : public Component {
+class MeshRenderer : public Component, public Drawable {
 public:
     // Mesh to render
     MeshHandle mesh;
@@ -111,31 +111,36 @@ public:
     // --- Phase marks ---
 
     /**
-     * Get all phase marks for this renderer.
+     * Get all phase marks for this renderer (Drawable interface).
      * Includes material phases + "shadow" if cast_shadow.
      */
-    std::set<std::string> phase_marks() const;
+    std::set<std::string> get_phase_marks() const override;
+
+    /**
+     * Alias for get_phase_marks (legacy).
+     */
+    std::set<std::string> phase_marks() const { return get_phase_marks(); }
 
     // --- Rendering ---
 
     /**
-     * Draw geometry with current shader.
+     * Draw geometry with current shader (Drawable interface).
      * Shader is already bound by the pass.
      */
-    virtual void draw_geometry(const RenderContext& context, const std::string& geometry_id = "");
+    void draw_geometry(const RenderContext& context, const std::string& geometry_id = "") override;
 
     /**
      * Get material phases for given phase mark.
      * Returns sorted by priority.
      */
-    virtual std::vector<MaterialPhase*> get_phases_for_mark(const std::string& phase_mark);
+    std::vector<MaterialPhase*> get_phases_for_mark(const std::string& phase_mark);
 
     /**
-     * Get geometry draw calls for given phase mark.
+     * Get geometry draw calls for given phase mark (Drawable interface).
      * Returns sorted by priority.
-     * If phase_mark is empty, returns all phases.
+     * If phase_mark is nullptr, returns all phases.
      */
-    virtual std::vector<GeometryDrawCall> get_geometry_draws(const std::string& phase_mark = "");
+    std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
 
     // --- Serialization (py::dict based) ---
 

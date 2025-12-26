@@ -271,6 +271,7 @@ pybind11_add_module(_native
     termin/bindings/render/shadow.cpp
     termin/bindings/render/resource_spec.cpp
     termin/bindings/render/immediate.cpp
+    termin/bindings/render/wireframe.cpp
     termin/bindings/render/frame_pass.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
@@ -285,6 +286,7 @@ pybind11_add_module(_native
     termin/render/shader_parser.cpp
     termin/render/shadow_camera.cpp
     termin/render/immediate_renderer.cpp
+    termin/render/wireframe_renderer.cpp
     termin/render/material.cpp
     termin/render/mesh_gpu.cpp
     termin/render/texture_gpu.cpp

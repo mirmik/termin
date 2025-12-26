@@ -122,7 +122,7 @@ void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, const std:
     gpu->draw(context, *mesh_data, mesh.version());
 }
 
-std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string& phase_mark) {
+std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string* phase_mark) {
     Material* mat = get_skinned_material();
     if (mat == nullptr) {
         return {};
@@ -130,7 +130,7 @@ std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std:
 
     std::vector<GeometryDrawCall> result;
     for (auto& phase : mat->phases) {
-        if (phase_mark.empty() || phase.phase_mark == phase_mark) {
+        if (phase_mark == nullptr || phase_mark->empty() || phase.phase_mark == *phase_mark) {
             result.emplace_back(&phase, "");
         }
     }

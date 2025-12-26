@@ -66,7 +66,8 @@
       "Bash(cmake:*)",
       "Bash(PYTHONPATH=/media/sf_Shared/termin python3:*)",
       "Bash(PYTHONPATH=/media/sf_Shared/termin LD_LIBRARY_PATH=/media/sf_Shared/termin/termin python3:*)",
-      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin python3:*)"
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin PYTHONPATH=. python3:*)"
     ]
   }
 }

@@ -4,6 +4,7 @@
 #include <string>
 #include <set>
 #include <algorithm>
+#include <pybind11/pybind11.h>
 
 #include "termin/render/render_frame_pass.hpp"
 #include "termin/render/resource_spec.hpp"
@@ -12,11 +13,14 @@
 #include "termin/render/graphics_backend.hpp"
 #include "termin/render/render_state.hpp"
 #include "termin/lighting/light.hpp"
+#include "termin/lighting/shadow.hpp"
 #include "termin/lighting/lighting_upload.hpp"
 #include "termin/camera/camera.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
+
+namespace py = pybind11;
 
 namespace termin {
 
@@ -34,6 +38,13 @@ public:
     std::string phase_mark = "opaque";
     bool sort_by_distance = false;
     bool clear_depth = false;
+
+    // Debugger support (Python objects)
+    py::object debugger_window;         // Window for debug blit
+    py::object depth_capture_callback;  // Callback for depth buffer capture
+
+    // Entity names cache (for get_internal_symbols)
+    std::vector<std::string> entity_names;
 
     ColorPass(
         const std::string& input_res = "empty",
@@ -74,7 +85,9 @@ public:
         int64_t context_key,
         const std::vector<Light>& lights,
         const Vec3& ambient_color,
-        float ambient_intensity
+        float ambient_intensity,
+        const std::vector<ShadowMapEntry>& shadow_maps,
+        const ShadowSettings& shadow_settings
     );
 
     // Legacy execute (required by base class) - does nothing
@@ -91,6 +104,29 @@ public:
 
     std::vector<ResourceSpec> get_resource_specs() const override;
 
+    /**
+     * Get internal symbols for debugging.
+     */
+    std::vector<std::string> get_internal_symbols() const override {
+        return entity_names;
+    }
+
+    /**
+     * Set debugger window for debug blitting.
+     * Matches Python API: set_debugger_window(window, depth_callback)
+     */
+    void set_debugger_window(py::object window, py::object callback = py::none()) {
+        debugger_window = window;
+        depth_capture_callback = callback;
+    }
+
+    /**
+     * Get debugger window.
+     */
+    py::object get_debugger_window() const {
+        return debugger_window;
+    }
+
 private:
     /**
      * Collect draw calls from entities.
@@ -98,6 +134,17 @@ private:
     std::vector<PhaseDrawCall> collect_draw_calls(
         const std::vector<Entity*>& entities,
         const std::string& phase_mark
+    );
+
+    /**
+     * Call debugger blit if debug point matches entity name.
+     */
+    void maybe_blit_to_debugger(
+        GraphicsBackend* graphics,
+        FramebufferHandle* fb,
+        const std::string& entity_name,
+        int width,
+        int height
     );
 };
 

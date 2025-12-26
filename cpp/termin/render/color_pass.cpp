@@ -127,7 +127,9 @@ void ColorPass::execute_with_data(
     int64_t context_key,
     const std::vector<Light>& lights,
     const Vec3& ambient_color,
-    float ambient_intensity
+    float ambient_intensity,
+    const std::vector<ShadowMapEntry>& shadow_maps,
+    const ShadowSettings& shadow_settings
 ) {
     // Get output framebuffer
     auto it = writes_fbos.find(output_res);
@@ -168,8 +170,17 @@ void ColorPass::execute_with_data(
             });
     }
 
+    // Clear entity names cache
+    entity_names.clear();
+
+    // Get debug symbol
+    const std::string& debug_symbol = get_debug_internal_point();
+
     // Render each draw call
     for (const auto& dc : draw_calls) {
+        // Cache entity name
+        entity_names.push_back(dc.entity->name);
+
         // Get model matrix
         Mat44f model = get_model_matrix(dc.entity);
         context.model = model;
@@ -193,11 +204,20 @@ void ColorPass::execute_with_data(
             // Upload ambient
             upload_ambient_to_shader(dc.phase->shader.get(), ambient_color, ambient_intensity);
 
+            // Upload shadow maps
+            upload_shadow_maps_to_shader(dc.phase->shader.get(), shadow_maps);
+            upload_shadow_settings_to_shader(dc.phase->shader.get(), shadow_settings);
+
             context.current_shader = dc.phase->shader.get();
         }
 
         // Draw geometry
         dc.drawable->draw_geometry(context, dc.geometry_id);
+
+        // Check for debug blit
+        if (!debug_symbol.empty() && dc.entity->name == debug_symbol) {
+            maybe_blit_to_debugger(graphics, fb, dc.entity->name, rect.width, rect.height);
+        }
     }
 
     // Reset render state
@@ -215,6 +235,33 @@ void ColorPass::execute(
     const std::vector<Light*>* lights
 ) {
     // Legacy execute - not used, call execute_with_data instead
+}
+
+void ColorPass::maybe_blit_to_debugger(
+    GraphicsBackend* graphics,
+    FramebufferHandle* fb,
+    const std::string& entity_name,
+    int width,
+    int height
+) {
+    // Check if debugger window is set
+    if (debugger_window.is_none()) {
+        return;
+    }
+
+    try {
+        // Call Python debugger_window.blit_from_pass(fb, width, height, depth_callback)
+        debugger_window.attr("blit_from_pass")(
+            py::cast(fb, py::return_value_policy::reference),
+            py::cast(graphics, py::return_value_policy::reference),
+            width,
+            height,
+            depth_capture_callback
+        );
+    } catch (const py::error_already_set& e) {
+        // Log error but don't crash rendering
+        // In production, you might want proper logging
+    }
 }
 
 } // namespace termin

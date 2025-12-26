@@ -35,6 +35,9 @@ void bind_render(py::module_& m) {
     // ImmediateRenderer
     bind_immediate(m);
 
+    // WireframeRenderer
+    bind_wireframe(m);
+
     // FramePass, FrameGraph, RenderContext
     bind_frame_pass(m);
 

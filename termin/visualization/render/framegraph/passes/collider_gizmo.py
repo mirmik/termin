@@ -100,8 +100,8 @@ class ColliderGizmoPass(RenderFramePass):
         graphics.bind_framebuffer(fb)
         graphics.set_viewport(0, 0, pw, ph)
 
-        view = camera.get_view_matrix()
-        proj = camera.get_projection_matrix()
+        view = camera.get_view_matrix().astype(np.float32)
+        proj = camera.get_projection_matrix().astype(np.float32)
 
         self._renderer.begin(graphics, view, proj, depth_test=False)
         self._draw_colliders(scene)

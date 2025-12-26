@@ -5,11 +5,14 @@
 #include <cmath>
 
 #include "termin/lighting/light.hpp"
+#include "termin/lighting/shadow.hpp"
 #include "termin/render/shader_program.hpp"
 
 namespace termin {
 
 constexpr int MAX_LIGHTS = 8;
+constexpr int MAX_SHADOW_MAPS = 4;
+constexpr int SHADOW_MAP_TEXTURE_UNIT_START = 8;
 
 /**
  * Convert LightType to shader integer.
@@ -78,6 +81,57 @@ inline void upload_lights_to_shader(ShaderProgram* shader, const std::vector<Lig
 inline void upload_ambient_to_shader(ShaderProgram* shader, const Vec3& ambient_color, float ambient_intensity) {
     shader->set_uniform_vec3("u_ambient_color", ambient_color);
     shader->set_uniform_float("u_ambient_intensity", ambient_intensity);
+}
+
+/**
+ * Upload shadow settings uniforms.
+ *
+ * Uniforms:
+ *   u_shadow_method: int (0=hard, 1=pcf, 2=poisson)
+ *   u_shadow_softness: float
+ *   u_shadow_bias: float
+ */
+inline void upload_shadow_settings_to_shader(ShaderProgram* shader, const ShadowSettings& settings) {
+    shader->set_uniform_int("u_shadow_method", settings.method);
+    shader->set_uniform_float("u_shadow_softness", static_cast<float>(settings.softness));
+    shader->set_uniform_float("u_shadow_bias", static_cast<float>(settings.bias));
+}
+
+/**
+ * Upload shadow maps uniforms.
+ *
+ * Uniforms:
+ *   u_shadow_map_count: int
+ *   u_shadow_map[i]: int (texture unit)
+ *   u_light_space_matrix[i]: mat4
+ *   u_shadow_light_index[i]: int
+ *
+ * Note: Shadow map textures must be bound by the caller before rendering.
+ * This function only sets the uniform values.
+ */
+inline void upload_shadow_maps_to_shader(ShaderProgram* shader, const std::vector<ShadowMapEntry>& shadow_maps) {
+    int count = static_cast<int>(std::min(shadow_maps.size(), static_cast<size_t>(MAX_SHADOW_MAPS)));
+    shader->set_uniform_int("u_shadow_map_count", count);
+
+    for (int i = 0; i < count; ++i) {
+        const ShadowMapEntry& entry = shadow_maps[i];
+        std::string idx = "[" + std::to_string(i) + "]";
+
+        // Texture unit for sampler2DShadow
+        shader->set_uniform_int(("u_shadow_map" + idx).c_str(), SHADOW_MAP_TEXTURE_UNIT_START + i);
+
+        // Light-space matrix: P_light * V_light
+        shader->set_uniform_matrix4(("u_light_space_matrix" + idx).c_str(), entry.light_space_matrix);
+
+        // Light index (for matching with u_light_* arrays)
+        shader->set_uniform_int(("u_shadow_light_index" + idx).c_str(), entry.light_index);
+    }
+
+    // Set remaining samplers to their units (for AMD drivers)
+    for (int i = count; i < MAX_SHADOW_MAPS; ++i) {
+        std::string idx = "[" + std::to_string(i) + "]";
+        shader->set_uniform_int(("u_shadow_map" + idx).c_str(), SHADOW_MAP_TEXTURE_UNIT_START + i);
+    }
 }
 
 } // namespace termin

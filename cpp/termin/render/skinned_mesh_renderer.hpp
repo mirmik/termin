@@ -83,7 +83,7 @@ public:
      * Get geometry draw calls using skinned material.
      * Overrides MeshRenderer to use get_skinned_material().
      */
-    std::vector<GeometryDrawCall> get_geometry_draws(const std::string& phase_mark = "") override;
+    std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
 
     /**
      * Component lifecycle: find skeleton controller on start.

@@ -17,6 +17,7 @@ void bind_camera(py::module_& m);
 void bind_shadow(py::module_& m);
 void bind_resource_spec(py::module_& m);
 void bind_immediate(py::module_& m);
+void bind_wireframe(py::module_& m);
 void bind_frame_pass(py::module_& m);
 void bind_material(py::module_& m);
 void bind_drawable(py::module_& m);

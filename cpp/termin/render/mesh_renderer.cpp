@@ -88,7 +88,7 @@ void MeshRenderer::recreate_overridden_material() {
     }
 }
 
-std::set<std::string> MeshRenderer::phase_marks() const {
+std::set<std::string> MeshRenderer::get_phase_marks() const {
     std::set<std::string> marks;
 
     Material* mat = material.get();
@@ -134,7 +134,7 @@ std::vector<MaterialPhase*> MeshRenderer::get_phases_for_mark(const std::string&
     return result;
 }
 
-std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string& phase_mark) {
+std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string* phase_mark) {
     Material* mat = get_material();
     if (mat == nullptr) {
         return {};
@@ -142,7 +142,7 @@ std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string
 
     std::vector<GeometryDrawCall> result;
     for (auto& phase : mat->phases) {
-        if (phase_mark.empty() || phase.phase_mark == phase_mark) {
+        if (phase_mark == nullptr || phase_mark->empty() || phase.phase_mark == *phase_mark) {
             result.emplace_back(&phase, "");
         }
     }

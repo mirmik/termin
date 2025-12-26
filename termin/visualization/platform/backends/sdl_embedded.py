@@ -265,6 +265,81 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             return 0
         return video.SDL_GetWindowID(self._window)
 
+    def blit_from_pass(
+        self,
+        fb,
+        graphics,
+        width: int,
+        height: int,
+        depth_callback=None,
+    ) -> None:
+        """
+        Blit framebuffer texture to this window.
+
+        Called from C++ ColorPass during debug mode to show intermediate
+        render state in the debugger window.
+
+        Args:
+            fb: Source FramebufferHandle
+            graphics: GraphicsBackend for GL operations
+            width: Source framebuffer width
+            height: Source framebuffer height
+            depth_callback: Optional callback to receive depth buffer
+        """
+        from termin.visualization.render.framegraph.passes.present import (
+            PresentToScreenPass,
+            _get_texture_from_resource,
+        )
+
+        # Capture depth buffer before switching context
+        if depth_callback is not None:
+            depth = graphics.read_depth_buffer(fb)
+            if depth is not None:
+                depth_callback(depth)
+
+        # Get texture from FBO
+        tex = _get_texture_from_resource(fb)
+        if tex is None:
+            return
+
+        # Save current context
+        saved_context = video.SDL_GL_GetCurrentContext()
+        saved_window = video.SDL_GL_GetCurrentWindow()
+
+        # Switch to debugger window context
+        self.make_current()
+
+        # Get debugger window size
+        dst_w, dst_h = self.framebuffer_size()
+
+        # Bind framebuffer 0 (window)
+        graphics.bind_framebuffer(None)
+        graphics.set_viewport(0, 0, dst_w, dst_h)
+
+        graphics.set_depth_test(False)
+        graphics.set_depth_mask(False)
+
+        # Render fullscreen quad with texture
+        shader = PresentToScreenPass._get_shader()
+        shader.ensure_ready(graphics)
+        shader.use()
+        shader.set_uniform_int("u_tex", 0)
+        tex.bind(0)
+        graphics.draw_ui_textured_quad(0)
+
+        graphics.set_depth_test(True)
+        graphics.set_depth_mask(True)
+
+        # Swap buffers
+        self.swap_buffers()
+
+        # Restore original context
+        if saved_window and saved_context:
+            video.SDL_GL_MakeCurrent(saved_window, saved_context)
+            # Restore FBO and viewport
+            graphics.bind_framebuffer(fb)
+            graphics.set_viewport(0, 0, width, height)
+
     def check_resize(self) -> None:
         """Check if window was resized and call callback if needed."""
         new_w, new_h = self.framebuffer_size()
