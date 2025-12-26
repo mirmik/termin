@@ -291,6 +291,7 @@ pybind11_add_module(_native
     termin/render/skinned_mesh_renderer.cpp
     termin/render/skeleton_controller.cpp
     termin/render/mesh_renderer.cpp
+    termin/render/color_pass.cpp
     termin/scene/scene.cpp
     termin/skeleton/skeleton_instance.cpp
     termin/render/glad/src/glad.c
