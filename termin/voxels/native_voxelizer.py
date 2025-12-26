@@ -104,7 +104,7 @@ def voxelize_mesh_native(
         py_grid.set(vx, vy, vz, vtype)
 
     # Copy surface normals (list of normals per voxel)
-    native_normals = native_grid.surface_normals()
+    native_normals = native_grid.surface_normals
     for key, normals_list in native_normals.items():
         vx, vy, vz = key
         py_grid.set_surface_normals(vx, vy, vz, list(normals_list))

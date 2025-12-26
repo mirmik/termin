@@ -39,17 +39,27 @@ struct KindHandler {
 };
 
 /**
+ * Choice for enum fields: (value, label).
+ */
+struct EnumChoice {
+    py::object value;
+    std::string label;
+};
+
+/**
  * Metadata for an inspectable field.
  */
 struct InspectFieldInfo {
     std::string type_name;
     std::string path;
     std::string label;
-    std::string kind;  // "float", "int", "bool", "vec3", "color", "string"
+    std::string kind;  // "float", "int", "bool", "vec3", "color", "string", "enum"
     double min = 0.0;
     double max = 1.0;
     double step = 0.01;
     bool non_serializable = false;  // If true, field is not serialized
+    std::vector<EnumChoice> choices;  // For enum fields
+    py::object action;  // For button fields: callable(obj) -> None (default: null)
 
     // Type-erased getter/setter using void*
     std::function<py::object(void*)> getter;
@@ -126,12 +136,36 @@ public:
     }
 
     /**
-     * Get all fields for a type.
+     * Get all fields for a type (type's own fields only).
      */
     const std::vector<InspectFieldInfo>& fields(const std::string& type_name) const {
         static std::vector<InspectFieldInfo> empty;
         auto it = _fields.find(type_name);
         return it != _fields.end() ? it->second : empty;
+    }
+
+    /**
+     * Get all fields for a type including inherited Component fields.
+     * Returns combined vector (Component fields first, then type's own fields).
+     */
+    std::vector<InspectFieldInfo> all_fields(const std::string& type_name) const {
+        std::vector<InspectFieldInfo> result;
+
+        // Add Component base class fields first (if not querying Component itself)
+        if (type_name != "Component") {
+            auto base_it = _fields.find("Component");
+            if (base_it != _fields.end()) {
+                result.insert(result.end(), base_it->second.begin(), base_it->second.end());
+            }
+        }
+
+        // Add type's own fields
+        auto it = _fields.find(type_name);
+        if (it != _fields.end()) {
+            result.insert(result.end(), it->second.begin(), it->second.end());
+        }
+
+        return result;
     }
 
     /**
@@ -298,7 +332,7 @@ public:
      * Get field value by path.
      */
     py::object get(void* obj, const std::string& type_name, const std::string& field_path) const {
-        for (const auto& f : fields(type_name)) {
+        for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
                 return f.getter(obj);
             }
@@ -311,7 +345,7 @@ public:
      * Converts value to the expected type based on field kind.
      */
     void set(void* obj, const std::string& type_name, const std::string& field_path, py::object value) {
-        for (const auto& f : fields(type_name)) {
+        for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
                 py::object converted = convert_value_for_kind(value, f.kind);
                 f.setter(obj, converted);
@@ -328,7 +362,7 @@ public:
         nos::trent result;
         result.init(nos::trent_type::dict);
 
-        for (const auto& f : fields(type_name)) {
+        for (const auto& f : all_fields(type_name)) {
             if (f.non_serializable) continue;
             py::object val = f.getter(obj);
             result[f.path] = py_to_trent_with_kind(val, f.kind);
@@ -342,7 +376,7 @@ public:
     void deserialize_all(void* obj, const std::string& type_name, const nos::trent& data) {
         if (!data.is_dict()) return;
 
-        auto& flds = fields(type_name);
+        auto flds = all_fields(type_name);
         for (const auto& f : flds) {
             if (f.non_serializable) continue;
             if (data.contains(f.path)) {

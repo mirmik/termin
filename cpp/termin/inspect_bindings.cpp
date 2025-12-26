@@ -26,6 +26,11 @@ static void* get_raw_pointer(py::object obj) {
 }
 
 void bind_inspect(py::module_& m) {
+    // EnumChoice - value/label pair for enum fields
+    py::class_<EnumChoice>(m, "EnumChoice")
+        .def_readonly("value", &EnumChoice::value)
+        .def_readonly("label", &EnumChoice::label);
+
     // InspectFieldInfo - read-only metadata
     py::class_<InspectFieldInfo>(m, "InspectFieldInfo")
         .def_readonly("type_name", &InspectFieldInfo::type_name)
@@ -35,7 +40,14 @@ void bind_inspect(py::module_& m) {
         .def_readonly("min", &InspectFieldInfo::min)
         .def_readonly("max", &InspectFieldInfo::max)
         .def_readonly("step", &InspectFieldInfo::step)
-        .def_readonly("non_serializable", &InspectFieldInfo::non_serializable);
+        .def_readonly("non_serializable", &InspectFieldInfo::non_serializable)
+        .def_readonly("choices", &InspectFieldInfo::choices)
+        .def_property_readonly("action", [](const InspectFieldInfo& self) -> py::object {
+            if (self.action.ptr() == nullptr || self.action.is_none()) {
+                return py::none();
+            }
+            return self.action;
+        });
 
     // InspectRegistry singleton
     py::class_<InspectRegistry>(m, "InspectRegistry")
@@ -44,7 +56,10 @@ void bind_inspect(py::module_& m) {
         .def("fields", &InspectRegistry::fields,
              py::arg("type_name"),
              py::return_value_policy::reference,
-             "Get all fields for a type")
+             "Get type's own fields only")
+        .def("all_fields", &InspectRegistry::all_fields,
+             py::arg("type_name"),
+             "Get all fields including inherited Component fields")
         .def("types", &InspectRegistry::types,
              "Get all registered type names")
         .def("register_python_fields", &InspectRegistry::register_python_fields,

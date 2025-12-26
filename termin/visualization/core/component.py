@@ -69,13 +69,8 @@ _NativeComponent.__init__ = _wrapped_init
 Component = _NativeComponent
 
 # Default inspect_fields for Component base class
-Component.inspect_fields = {
-    "enabled": InspectField(
-        path="enabled",
-        label="Enabled",
-        kind="bool",
-    ),
-}
+# Note: "enabled" is registered in C++ Component class via INSPECT_FIELD
+Component.inspect_fields = {}
 
 
 class InputComponent(Component):

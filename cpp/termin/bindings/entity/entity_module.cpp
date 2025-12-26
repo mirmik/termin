@@ -586,4 +586,9 @@ PYBIND11_MODULE(_entity_native, m) {
     // --- Native Components ---
     BIND_NATIVE_COMPONENT(m, CXXRotatorComponent)
         .def_readwrite("speed", &CXXRotatorComponent::speed);
+
+    // Register Component::enabled in InspectRegistry for all components to inherit
+    InspectRegistry::instance().add<Component, bool>(
+        "Component", &Component::enabled, "enabled", "Enabled", "bool"
+    );
 }

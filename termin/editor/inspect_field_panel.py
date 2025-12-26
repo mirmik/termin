@@ -33,8 +33,16 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
         from termin._native.inspect import InspectRegistry
         registry = InspectRegistry.instance()
         type_name = cls.__name__
-        cpp_fields = registry.fields(type_name)
+        cpp_fields = registry.all_fields(type_name)
         for info in cpp_fields:
+            # Convert C++ EnumChoice list to Python tuple list
+            choices = None
+            if info.choices:
+                choices = [(c.value, c.label) for c in info.choices]
+
+            # Get action for button fields (None or callable)
+            action = info.action if info.action is not None else None
+
             result[info.path] = InspectField(
                 path=info.path,
                 label=info.label,
@@ -42,6 +50,8 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
                 min=info.min,
                 max=info.max,
                 step=info.step,
+                choices=choices,
+                action=action,
                 getter=lambda o, p=info.path: registry.get(o, p),
                 setter=lambda o, v, p=info.path: registry.set(o, p, v),
             )

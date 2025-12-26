@@ -554,8 +554,8 @@ class VoxelizerComponent(Component):
 
         return Mesh3(
             vertices=combined_vertices,
-            triangles=combined_triangles,
-            normals=combined_normals,
+            triangles=combined_triangles.astype(np.uint32) if combined_triangles is not None else None,
+            vertex_normals=combined_normals,
         )
 
     def voxelize(self) -> bool:
@@ -571,6 +571,7 @@ class VoxelizerComponent(Component):
         from termin.voxels.persistence import VoxelPersistence
         from termin.voxels.native_voxelizer import voxelize_mesh_native
 
+        print("VoxelizerComponent: starting voxelization")
         if self.entity is None:
             print("VoxelizerComponent: no entity")
             return False

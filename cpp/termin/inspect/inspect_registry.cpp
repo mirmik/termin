@@ -67,6 +67,27 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
             non_serializable = field_obj.attr("non_serializable").cast<bool>();
         }
 
+        // Extract choices for enum fields
+        std::vector<EnumChoice> choices;
+        if (py::hasattr(field_obj, "choices") && !field_obj.attr("choices").is_none()) {
+            py::object choices_obj = field_obj.attr("choices");
+            for (auto item : choices_obj) {
+                py::tuple t = item.cast<py::tuple>();
+                if (t.size() >= 2) {
+                    EnumChoice choice;
+                    choice.value = py::reinterpret_borrow<py::object>(t[0]);
+                    choice.label = t[1].cast<std::string>();
+                    choices.push_back(choice);
+                }
+            }
+        }
+
+        // Extract action for button fields
+        py::object action = py::none();
+        if (py::hasattr(field_obj, "action") && !field_obj.attr("action").is_none()) {
+            action = field_obj.attr("action");
+        }
+
         // Check for custom getter/setter
         py::object py_getter = py::none();
         py::object py_setter = py::none();
@@ -125,6 +146,8 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
             .max = max_val,
             .step = step_val,
             .non_serializable = non_serializable,
+            .choices = std::move(choices),
+            .action = action,
             .getter = getter_fn,
             .setter = setter_fn
         });
