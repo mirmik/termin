@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Sequence, TYPE_CHECKING
+from typing import Callable, List, Sequence, TYPE_CHECKING
 
 import numpy as np
 
@@ -511,10 +511,19 @@ class Scene(_NativeScene):
 
     # --- Input dispatch ---
 
-    def dispatch_input(self, event_name: str, event):
-        """Dispatch input event to all InputComponents."""
+    def dispatch_input(self, event_name: str, event, filter_fn: Callable[[InputComponent], bool] | None = None):
+        """Dispatch input event to InputComponents.
+
+        Args:
+            event_name: Name of the handler method (e.g., "on_mouse_button").
+            event: Event object to dispatch.
+            filter_fn: Optional filter function. If provided, only components
+                       for which filter_fn(component) returns True receive the event.
+        """
         listeners = list(self._input_components)
         for component in listeners:
+            if filter_fn is not None and not filter_fn(component):
+                continue
             handler = getattr(component, event_name, None)
             if handler:
                 handler(event)

@@ -14,6 +14,7 @@ class Label(Widget):
         self.text: str = ""
         self.color: tuple[float, float, float, float] = (1, 1, 1, 1)
         self.font_size: float = 14
+        self.alignment: str = "left"  # left, center, right
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
         if self.preferred_width and self.preferred_height:
@@ -27,13 +28,31 @@ class Label(Widget):
         return (text_width, text_height)
 
     def render(self, renderer: 'UIRenderer'):
-        renderer.draw_text(
-            self.x,
-            self.y + self.font_size,  # baseline offset
-            self.text,
-            self.color,
-            self.font_size
-        )
+        if self.alignment == "center":
+            renderer.draw_text_centered(
+                self.x + self.width / 2,
+                self.y + self.height / 2,
+                self.text,
+                self.color,
+                self.font_size
+            )
+        elif self.alignment == "right":
+            text_width, _ = renderer.measure_text(self.text, self.font_size)
+            renderer.draw_text(
+                self.x + self.width - text_width,
+                self.y + self.font_size,
+                self.text,
+                self.color,
+                self.font_size
+            )
+        else:  # left
+            renderer.draw_text(
+                self.x,
+                self.y + self.font_size,
+                self.text,
+                self.color,
+                self.font_size
+            )
 
 
 class Button(Widget):

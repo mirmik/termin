@@ -24,6 +24,9 @@ Usage:
     hit = world.raycast_closest(ray)
 """
 
+# Setup DLL paths before importing native extensions
+from termin import _dll_setup  # noqa: F401
+
 from ._collision_native import (
     ContactID,
     ContactPoint,

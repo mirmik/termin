@@ -440,6 +440,7 @@ class EditorViewportFeatures:
         from termin.visualization.render.framegraph.passes.depth import DepthPass
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.shadow import ShadowPass
+        from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
 
         def get_gizmo_manager():
             return self._gizmo_manager
@@ -528,8 +529,12 @@ class EditorViewportFeatures:
                 dst="color+ui",
                 pass_name="Canvas",
             ),
-            PresentToScreenPass(
+            UIWidgetPass(
                 input_res="color+ui",
+                output_res="color+ui+ui_widgets",
+            ),
+            PresentToScreenPass(
+                input_res="color+ui+ui_widgets",
                 pass_name="Present",
             ),
         ]

@@ -7,6 +7,7 @@ from termin.visualization.ui.widgets.basic import Label, Button, Separator
 from termin.visualization.ui.widgets.renderer import UIRenderer
 from termin.visualization.ui.widgets.loader import UILoader
 from termin.visualization.ui.widgets.ui import UI
+from termin.visualization.ui.widgets.component import UIComponent
 
 __all__ = [
     # Units
@@ -31,4 +32,6 @@ __all__ = [
     "UILoader",
     # Main class
     "UI",
+    # Component
+    "UIComponent",
 ]

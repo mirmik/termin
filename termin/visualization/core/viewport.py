@@ -94,13 +94,14 @@ def make_default_pipeline() -> "RenderPipeline":
     """
     Собирает дефолтный конвейер рендера.
 
-    Включает: ShadowPass, SkyBoxPass, ColorPass (opaque + transparent), PostFX, Canvas, Present.
+    Включает: ShadowPass, SkyBoxPass, ColorPass (opaque + transparent), PostFX, Canvas, UIWidgets, Present.
     """
     from termin.visualization.render.framegraph import (
         CanvasPass,
         ColorPass,
         PresentToScreenPass,
-        RenderPipeline
+        RenderPipeline,
+        UIWidgetPass,
     )
     from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
     from termin.visualization.render.framegraph.passes.shadow import ShadowPass
@@ -151,8 +152,13 @@ def make_default_pipeline() -> "RenderPipeline":
             dst="color+ui",
             pass_name="Canvas",
         ),
-        PresentToScreenPass(
+        UIWidgetPass(
             input_res="color+ui",
+            output_res="color+widgets",
+            pass_name="UIWidgets",
+        ),
+        PresentToScreenPass(
+            input_res="color+widgets",
             pass_name="Present",
         )
     ]

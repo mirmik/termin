@@ -40,6 +40,7 @@ from termin.editor.file_processors import (
     GlslPreLoader,
     PrefabPreLoader,
     AudioPreLoader,
+    UIPreLoader,
 )
 from termin.editor.spacemouse_controller import SpaceMouseController
 from termin.editor.profiler import ProfilerPanel
@@ -204,6 +205,12 @@ class EditorWindow(QMainWindow):
         )
         self._project_file_watcher.register_processor(
             AudioPreLoader(
+                resource_manager=self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
+            )
+        )
+        self._project_file_watcher.register_processor(
+            UIPreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )

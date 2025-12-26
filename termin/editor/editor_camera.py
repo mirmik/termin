@@ -17,6 +17,7 @@ import numpy as np
 
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
+from termin.visualization.ui.widgets.component import UIComponent
 from termin.geombase import Pose3
 
 if TYPE_CHECKING:
@@ -68,6 +69,12 @@ class EditorCameraManager:
         camera = PerspectiveCameraComponent()
         camera_entity.add_component(camera)
         camera_entity.add_component(OrbitCameraController())
+
+        # Add UI component for editor camera controls
+        ui_comp = UIComponent()
+        ui_comp.active_in_editor = True
+        ui_comp.set_ui_layout_by_name("editor_camera_ui")
+        camera_entity.add_component(ui_comp)
 
         if self.editor_entities is not None:
             self.editor_entities.transform.link(camera_entity.transform)

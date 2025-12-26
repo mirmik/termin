@@ -8,6 +8,9 @@
 - ColliderHit, RayHit - результаты запросов
 """
 
+# Setup DLL paths before importing native extensions
+from termin import _dll_setup  # noqa: F401
+
 from ._colliders_native import (
     Collider,
     SphereCollider,

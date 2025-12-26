@@ -77,6 +77,7 @@ _BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
     ("termin.visualization.render.framegraph.passes.depth", "DepthPass"),
     ("termin.visualization.render.framegraph.passes.shadow", "ShadowPass"),
     ("termin.visualization.render.framegraph.passes.canvas", "CanvasPass"),
+    ("termin.visualization.render.framegraph.passes.ui_widget", "UIWidgetPass"),
     ("termin.visualization.render.framegraph.passes.present", "PresentToScreenPass"),
     ("termin.visualization.render.framegraph.passes.present", "BlitPass"),
     # ID/Picking
@@ -161,6 +162,7 @@ class ResourceManager:
         self._skeleton_registry = self._create_skeleton_registry()
         self._glsl_registry = self._create_glsl_registry()
         self._audio_clip_registry = self._create_audio_clip_registry()
+        self._ui_registry = self._create_ui_registry()
 
         # Legacy dicts (для обратной совместимости и типов без registry)
         self._material_assets: Dict[str, "MaterialAsset"] = {}
@@ -373,6 +375,31 @@ class ResourceManager:
             data_to_asset=data_to_asset,
         )
 
+    def _create_ui_registry(self):
+        """Create AssetRegistry for UI layouts."""
+        from termin.assets.asset_registry import AssetRegistry
+
+        def data_from_asset(asset):
+            from termin.assets.ui_handle import UIHandle
+            return UIHandle.from_asset(asset)
+
+        def data_to_asset(handle):
+            if handle is not None:
+                return handle.get_asset()
+            return None
+
+        # Import asset class lazily to avoid circular imports
+        def get_asset_class():
+            from termin.assets.ui_asset import UIAsset
+            return UIAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
     @property
     def _mesh_assets(self) -> Dict[str, "MeshAsset"]:
         """Legacy access to mesh assets dict."""
@@ -407,6 +434,11 @@ class ResourceManager:
     def _audio_clip_assets(self) -> Dict[str, "AudioClipAsset"]:
         """Legacy access to audio clip assets dict."""
         return self._audio_clip_registry.assets
+
+    @property
+    def _ui_assets(self) -> Dict[str, "UIAsset"]:
+        """Legacy access to UI assets dict."""
+        return self._ui_registry.assets
 
     @property
     def glsl(self):
@@ -464,6 +496,8 @@ class ResourceManager:
             self._register_prefab_file(name, result)
         elif result.resource_type == "audio_clip":
             self._register_audio_clip_file(name, result)
+        elif result.resource_type == "ui":
+            self._register_ui_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type: {result.resource_type}")
 
@@ -497,6 +531,8 @@ class ResourceManager:
             self._reload_prefab_file(name, result)
         elif result.resource_type == "audio_clip":
             self._reload_audio_clip_file(name, result)
+        elif result.resource_type == "ui":
+            self._reload_ui_file(name, result)
         else:
             print(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
 
@@ -989,6 +1025,49 @@ class ResourceManager:
             return
 
         # Reload audio data
+        asset.reload()
+
+    def _register_ui_file(self, name: str, result: "PreLoadResult") -> None:
+        """Register UI layout from PreLoadResult."""
+        from termin.assets.ui_asset import UIAsset
+
+        # Check if already registered by name
+        if name in self._ui_assets:
+            return
+
+        # Try to find existing Asset by UUID
+        asset = None
+        if result.uuid:
+            asset = self._assets_by_uuid.get(result.uuid)
+            if asset is not None and not isinstance(asset, UIAsset):
+                asset = None
+
+        # Create new Asset if not found
+        if asset is None:
+            asset = UIAsset(
+                widget=None,
+                name=name,
+                source_path=result.path,
+            )
+
+        # Parse spec to set UUID
+        asset.parse_spec(result.spec_data)
+        self._assets_by_uuid[asset.uuid] = asset
+
+        # Register by name (lazy loading - don't load content yet)
+        self._ui_assets[name] = asset
+
+    def _reload_ui_file(self, name: str, result: "PreLoadResult") -> None:
+        """Reload UI layout from PreLoadResult."""
+        asset = self._ui_assets.get(name)
+        if asset is None:
+            return
+
+        # Skip if this was our own save
+        if not asset.should_reload_from_file():
+            return
+
+        # Reload UI
         asset.reload()
 
     # --------- Prefabs ---------
@@ -1626,6 +1705,31 @@ class ResourceManager:
         """Remove audio clip by name."""
         self._audio_clip_registry.unregister(name)
 
+    # --------- UI Layouts (Asset-based via registry) ---------
+    def get_ui_asset(self, name: str) -> Optional["UIAsset"]:
+        """Get UIAsset by name."""
+        return self._ui_registry.get_asset(name)
+
+    def get_ui_handle(self, name: str) -> Optional["UIHandle"]:
+        """Get UIHandle by name."""
+        from termin.assets.ui_handle import UIHandle
+        asset = self._ui_registry.get_asset(name)
+        if asset is not None:
+            return UIHandle.from_asset(asset)
+        return None
+
+    def list_ui_names(self) -> list[str]:
+        """List names of all UI layouts."""
+        return self._ui_registry.list_names()
+
+    def get_ui_asset_by_uuid(self, uuid: str) -> Optional["UIAsset"]:
+        """Get UIAsset by UUID."""
+        return self._ui_registry.get_asset_by_uuid(uuid)
+
+    def unregister_ui(self, name: str) -> None:
+        """Remove UI layout by name."""
+        self._ui_registry.unregister(name)
+
     # --------- Текстуры (Asset-based via registry) ---------
     def get_texture_asset(self, name: str) -> Optional["TextureAsset"]:
         """Получить TextureAsset по имени."""
@@ -1891,6 +1995,12 @@ class ResourceManager:
                 get_by_name=self.get_texture_handle,
                 find_name=self._find_texture_handle_name,
             )
+        if kind == "ui_handle":
+            return HandleAccessors(
+                list_names=self.list_ui_names,
+                get_by_name=self._get_ui_handle,
+                find_name=self._find_ui_handle_name,
+            )
         return None
 
     # Handle accessors for MaterialHandle
@@ -1980,6 +2090,21 @@ class ResourceManager:
         from termin.assets.texture_handle import TextureHandle
         if isinstance(handle, TextureHandle):
             return self.find_texture_name(handle)
+        return None
+
+    # Handle accessors for UIHandle
+    def _get_ui_handle(self, name: str) -> Optional["UIHandle"]:
+        """Get UIHandle by name."""
+        from termin.assets.ui_handle import UIHandle
+        return UIHandle.from_name(name)
+
+    def _find_ui_handle_name(self, handle: Any) -> Optional[str]:
+        """Find name for a UIHandle."""
+        from termin.assets.ui_handle import UIHandle
+        if isinstance(handle, UIHandle):
+            asset = handle.get_asset()
+            if asset is not None:
+                return asset.name
         return None
 
     def get_handle_by_uuid(self, kind: str, uuid: str) -> Any:

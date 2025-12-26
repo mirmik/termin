@@ -18,6 +18,22 @@ class Widget:
         self.preferred_width: Value | None = None
         self.preferred_height: Value | None = None
 
+        # Position anchor: where to position the widget
+        # Options: "top-left", "top-center", "top-right",
+        #          "center-left", "center", "center-right",
+        #          "bottom-left", "bottom-center", "bottom-right"
+        #          "absolute" - use position_x/position_y directly
+        self.anchor: str = "top-left"
+
+        # Offset from anchor position (in pixels)
+        self.offset_x: float = 0
+        self.offset_y: float = 0
+
+        # Absolute position (used when anchor="absolute")
+        # Can be px, ndc, or %
+        self.position_x: Value | None = None
+        self.position_y: Value | None = None
+
         # Computed layout (always in pixels after layout pass)
         self.x: float = 0
         self.y: float = 0

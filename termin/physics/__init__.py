@@ -1,5 +1,8 @@
 """Модуль физической симуляции для динамики твёрдых тел."""
 
+# Setup DLL paths before importing native extensions
+from termin import _dll_setup  # noqa: F401
+
 from termin.physics._physics_native import (
     RigidBody,
     PhysicsWorld,

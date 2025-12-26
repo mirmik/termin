@@ -3,7 +3,56 @@ from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
 import os
+import sys
 from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
+
+
+def find_system_font() -> str | None:
+    """Find a system font file."""
+    candidates = []
+
+    if sys.platform == "win32":
+        fonts_dir = os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts")
+        candidates = [
+            os.path.join(fonts_dir, "segoeui.ttf"),
+            os.path.join(fonts_dir, "arial.ttf"),
+            os.path.join(fonts_dir, "tahoma.ttf"),
+        ]
+    elif sys.platform == "darwin":
+        candidates = [
+            "/System/Library/Fonts/SFNSText.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/Library/Fonts/Arial.ttf",
+        ]
+    else:  # Linux
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        ]
+
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+_default_font_atlas: "FontTextureAtlas | None" = None
+
+
+def get_default_font(size: int = 14) -> "FontTextureAtlas | None":
+    """Get or create default system font atlas."""
+    global _default_font_atlas
+    if _default_font_atlas is None:
+        font_path = find_system_font()
+        if font_path:
+            try:
+                _default_font_atlas = FontTextureAtlas(font_path, size)
+            except Exception as e:
+                print(f"[Font] Failed to load system font: {e}")
+    return _default_font_atlas
+
 
 class FontTextureAtlas:
     def __init__(self, path: str, size: int = 32):

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 from distutils.util import get_platform
 from pathlib import Path
@@ -72,11 +72,27 @@ class CMakeBuildExt(build_ext):
             for so in src_dir.glob(f"{module_name}.*"):
                 shutil.copy2(so, dst_dir / so.name)
 
-        # Copy shared libraries (entity_lib.dll, trent.dll) to termin/ directory
+        # Copy shared libraries to termin/ directory
+        # Copy to BOTH source tree (for editable installs) and build_lib (for wheel)
+        source_termin_dir = Path(directory) / "termin"
+        build_termin_dir = install_prefix  # build_lib/termin
+
         if sys.platform == "win32":
-            termin_dir = Path(directory) / "termin"
-            for dll in bin_dir.glob("*.dll"):
-                shutil.copy2(dll, termin_dir / dll.name)
+            # Windows: copy .dll files from bin/
+            if bin_dir.exists():
+                for dll in bin_dir.glob("*.dll"):
+                    shutil.copy2(dll, source_termin_dir / dll.name)
+                    shutil.copy2(dll, build_termin_dir / dll.name)
+        else:
+            # Linux/macOS: copy .so/.dylib from lib/ or install_prefix
+            lib_dir = build_temp / "lib"
+            for pattern in ["*.so", "*.so.*", "*.dylib"]:
+                for lib in install_prefix.glob(pattern):
+                    shutil.copy2(lib, source_termin_dir / lib.name)
+                if lib_dir.exists():
+                    for lib in lib_dir.glob(pattern):
+                        shutil.copy2(lib, source_termin_dir / lib.name)
+                        shutil.copy2(lib, build_termin_dir / lib.name)
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
@@ -84,7 +100,7 @@ directory = os.path.dirname(os.path.realpath(__file__))
 if __name__ == "__main__":
     setup(
         name="termin",
-        packages=["termin"],
+        packages=find_packages(exclude=["tests", "tests.*", "examples", "examples.*"]),
         python_requires='>3.10.0',
         version="0.0.0",
         license="MIT",
@@ -99,6 +115,11 @@ if __name__ == "__main__":
         classifiers=[],
         package_data={
             "termin": [
+                # Shared libraries (Windows DLLs, Linux .so)
+                "*.dll",
+                "*.so",
+                "*.dylib",
+                # Subpackages
                 "ga201/*",
                 "physics/*",
                 "colliders/*",

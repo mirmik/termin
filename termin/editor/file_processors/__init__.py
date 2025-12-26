@@ -12,6 +12,7 @@ from termin.editor.file_processors.glb_processor import GLBPreLoader
 from termin.editor.file_processors.glsl_processor import GlslPreLoader
 from termin.editor.file_processors.prefab_processor import PrefabPreLoader
 from termin.editor.file_processors.audio_processor import AudioPreLoader
+from termin.editor.file_processors.ui_processor import UIPreLoader
 
 # Backward compatibility aliases
 MaterialFileProcessor = MaterialPreLoader
@@ -32,4 +33,5 @@ __all__ = [
     "PrefabPreLoader",
     "AudioPreLoader",
     "AudioFileProcessor",  # backward compat
+    "UIPreLoader",
 ]

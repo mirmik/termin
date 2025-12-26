@@ -647,6 +647,7 @@ class FieldWidgetFactory:
             "voxel_grid_handle",
             "navmesh_handle",
             "texture_handle",
+            "ui_handle",
         ):
             return HandleSelectorWidget(
                 resource_kind=kind,

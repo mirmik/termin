@@ -123,6 +123,13 @@ class EditorDisplayInputManager:
                 if handler:
                     handler(event)
 
+    def _dispatch_to_editor_components(self, viewport: "Viewport", event_name: str, event) -> None:
+        """Диспатчит событие в InputComponent'ы сцены с active_in_editor=True."""
+        scene = viewport.scene
+        if scene is None:
+            return
+        scene.dispatch_input(event_name, event, lambda c: c.active_in_editor)
+
     def _request_update(self) -> None:
         """Запрашивает перерисовку."""
         if self._on_request_update is not None:
@@ -382,12 +389,13 @@ class EditorDisplayInputManager:
                 viewport = self._active_viewport
             self._active_viewport = None
 
-        # Dispatch to camera (в editor mode события идут только в камеру)
+        # Dispatch to camera and editor components
         if viewport is not None:
             event = MouseButtonEvent(
                 viewport=viewport, x=x, y=y,
                 button=button, action=action, mods=mods
             )
+            self._dispatch_to_editor_components(viewport, "on_mouse_button", event)
             self._dispatch_to_camera(viewport, "on_mouse_button", event)
 
         # Double-click: center camera on clicked entity
@@ -434,9 +442,10 @@ class EditorDisplayInputManager:
             rect = self._viewport_rect_to_pixels(viewport)
             viewport.canvas.mouse_move(x, y, rect)
 
-        # Dispatch to camera
+        # Dispatch to editor components and camera
         if viewport is not None:
             event = MouseMoveEvent(viewport=viewport, x=x, y=y, dx=dx, dy=dy)
+            self._dispatch_to_editor_components(viewport, "on_mouse_move", event)
             self._dispatch_to_camera(viewport, "on_mouse_move", event)
 
         # Внешний колбэк
@@ -452,6 +461,7 @@ class EditorDisplayInputManager:
 
         if viewport is not None:
             event = ScrollEvent(viewport=viewport, x=x, y=y, xoffset=xoffset, yoffset=yoffset)
+            self._dispatch_to_editor_components(viewport, "on_scroll", event)
             self._dispatch_to_camera(viewport, "on_scroll", event)
 
         self._request_update()
@@ -471,6 +481,7 @@ class EditorDisplayInputManager:
                 viewport=viewport,
                 key=key, scancode=scancode, action=action, mods=mods
             )
+            self._dispatch_to_editor_components(viewport, "on_key", event)
             self._dispatch_to_camera(viewport, "on_key", event)
 
         self._request_update()

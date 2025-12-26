@@ -20,6 +20,7 @@ from termin.visualization.render.framegraph.passes.gizmo import GizmoPass
 from termin.visualization.render.framegraph.passes.id_pass import IdPass
 from termin.visualization.render.framegraph.passes.present import BlitPass, PresentToScreenPass, ResolvePass, blit_fbo_to_fbo
 from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
+from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
 
 __all__ = [
     "FrameGraph",
@@ -42,5 +43,6 @@ __all__ = [
     "IdPass",
     "PresentToScreenPass",
     "ResolvePass",
+    "UIWidgetPass",
     "blit_fbo_to_fbo",
 ]

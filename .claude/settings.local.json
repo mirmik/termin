@@ -67,7 +67,10 @@
       "Bash(PYTHONPATH=/media/sf_Shared/termin python3:*)",
       "Bash(PYTHONPATH=/media/sf_Shared/termin LD_LIBRARY_PATH=/media/sf_Shared/termin/termin python3:*)",
       "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin python3:*)",
-      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin PYTHONPATH=. python3:*)"
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin PYTHONPATH=. python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin PYTHONPATH=. timeout 10 python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin PYTHONPATH=. timeout 5 python3 -c \"\nfrom termin.editor.file_processors.ui_processor import UIPreLoader\nfrom termin.editor.project_file_watcher import PreLoadResult\n\nclass FakeRM:\n    pass\n\npreloader = UIPreLoader\\(FakeRM\\(\\)\\)\nprint\\(''Extensions:'', preloader.extensions\\)\nprint\\(''Resource type:'', preloader.resource_type\\)\n\n# Try preload\nresult = preloader.preload\\(''/media/sf_Shared/termin/examples/project/Assets/my_menu.uiscript''\\)\nprint\\(''PreLoadResult:'', result\\)\nprint\\(''UUID:'', result.uuid if result else None\\)\nprint\\(''spec_data:'', result.spec_data if result else None\\)\n\")",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin PYTHONPATH=. timeout 5 python3:*)"
     ]
   }
 }

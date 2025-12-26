@@ -6,7 +6,7 @@ import numpy as np
 
 from termin.visualization.platform.backends.base import GraphicsBackend
 from termin.visualization.render.shader import ShaderProgram
-from termin.visualization.ui.font import FontTextureAtlas
+from termin.visualization.ui.font import FontTextureAtlas, get_default_font
 
 
 # Built-in UI shaders
@@ -57,6 +57,8 @@ class UIRenderer:
 
     @property
     def font(self) -> FontTextureAtlas | None:
+        if self._font is None:
+            self._font = get_default_font()
         return self._font
 
     @font.setter
@@ -121,7 +123,8 @@ class UIRenderer:
         ], dtype=np.float32)
 
         # Bind shader and set uniforms
-        self._shader.bind()
+        self._shader.ensure_ready(self._graphics)
+        self._shader.use()
         self._shader.set_uniform_vec4("u_color", np.array(color, dtype=np.float32))
         self._shader.set_uniform_int("u_use_texture", 0)
 
@@ -132,27 +135,29 @@ class UIRenderer:
                   color: tuple[float, float, float, float],
                   font_size: float = 14):
         """Draw text at pixel coordinates (baseline position)."""
-        if not self._font or not text:
+        font = self.font  # Use property for lazy loading
+        if not font or not text:
             return
 
-        self._shader.bind()
+        self._shader.ensure_ready(self._graphics)
+        self._shader.use()
         self._shader.set_uniform_vec4("u_color", np.array(color, dtype=np.float32))
         self._shader.set_uniform_int("u_use_texture", 1)
 
         # Bind font texture
-        texture_handle = self._font.ensure_texture(self._graphics, context_key=self._context_key)
+        texture_handle = font.ensure_texture(self._graphics, context_key=self._context_key)
         texture_handle.bind(0)
         self._shader.set_uniform_int("u_texture", 0)
 
         # Scale factor from font atlas size to desired size
-        scale = font_size / self._font.size
+        scale = font_size / font.size
 
         cursor_x = x
         for ch in text:
-            if ch not in self._font.glyphs:
+            if ch not in font.glyphs:
                 continue
 
-            glyph = self._font.glyphs[ch]
+            glyph = font.glyphs[ch]
             gw, gh = glyph["size"]
             u0, v0, u1, v1 = glyph["uv"]
 
@@ -187,15 +192,16 @@ class UIRenderer:
                            color: tuple[float, float, float, float],
                            font_size: float = 14):
         """Draw text centered at the given pixel position."""
-        if not self._font or not text:
+        font = self.font  # Use property for lazy loading
+        if not font or not text:
             return
 
         # Measure text width
-        scale = font_size / self._font.size
+        scale = font_size / font.size
         text_width = 0.0
         for ch in text:
-            if ch in self._font.glyphs:
-                gw, _ = self._font.glyphs[ch]["size"]
+            if ch in font.glyphs:
+                gw, _ = font.glyphs[ch]["size"]
                 text_width += gw * scale
 
         # Center position
@@ -206,16 +212,17 @@ class UIRenderer:
 
     def measure_text(self, text: str, font_size: float = 14) -> tuple[float, float]:
         """Measure text dimensions in pixels."""
-        if not self._font or not text:
+        font = self.font  # Use property for lazy loading
+        if not font or not text:
             return (0, 0)
 
-        scale = font_size / self._font.size
+        scale = font_size / font.size
         width = 0.0
         height = font_size
 
         for ch in text:
-            if ch in self._font.glyphs:
-                gw, _ = self._font.glyphs[ch]["size"]
+            if ch in font.glyphs:
+                gw, _ = font.glyphs[ch]["size"]
                 width += gw * scale
 
         return (width, height)

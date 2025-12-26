@@ -79,8 +79,39 @@ class UI:
 
         if self._root:
             w, h = self._root.compute_size(viewport_w, viewport_h)
-            # Position at top-left by default
-            self._root.layout(0, 0, w, h, viewport_w, viewport_h)
+
+            anchor = self._root.anchor
+            x, y = 0.0, 0.0
+
+            if anchor == "absolute":
+                # Absolute positioning using position_x/position_y
+                if self._root.position_x is not None:
+                    x = self._root.position_x.to_pixels(viewport_w)
+                if self._root.position_y is not None:
+                    y = self._root.position_y.to_pixels(viewport_h)
+            else:
+                # Calculate position based on anchor
+                # Horizontal position
+                if "left" in anchor:
+                    x = 0
+                elif "right" in anchor:
+                    x = viewport_w - w
+                else:  # center
+                    x = (viewport_w - w) / 2
+
+                # Vertical position
+                if "top" in anchor:
+                    y = 0
+                elif "bottom" in anchor:
+                    y = viewport_h - h
+                else:  # center
+                    y = (viewport_h - h) / 2
+
+                # Apply offset
+                x += self._root.offset_x
+                y += self._root.offset_y
+
+            self._root.layout(x, y, w, h, viewport_w, viewport_h)
 
     def render(self, viewport_w: int, viewport_h: int, context_key: int | None = None):
         """Render the UI."""

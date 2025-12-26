@@ -12,7 +12,8 @@ class HStack(Widget):
     def __init__(self):
         super().__init__()
         self.spacing: float = 0  # pixels
-        self.alignment: str = "center"  # top, center, bottom
+        self.alignment: str = "center"  # top, center, bottom (vertical)
+        self.justify: str = "start"  # start, center, end (horizontal)
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
         if self.preferred_width and self.preferred_height:
@@ -44,7 +45,22 @@ class HStack(Widget):
                viewport_w: float, viewport_h: float):
         super().layout(x, y, width, height, viewport_w, viewport_h)
 
-        cx = x
+        # Calculate total content width
+        total_content_width = 0.0
+        for child in self.children:
+            cw, _ = child.compute_size(viewport_w, viewport_h)
+            total_content_width += cw
+        if self.children:
+            total_content_width += self.spacing * (len(self.children) - 1)
+
+        # Horizontal justify
+        if self.justify == "center":
+            cx = x + (width - total_content_width) / 2
+        elif self.justify == "end":
+            cx = x + width - total_content_width
+        else:  # start
+            cx = x
+
         for child in self.children:
             cw, ch = child.compute_size(viewport_w, viewport_h)
 
@@ -66,7 +82,8 @@ class VStack(Widget):
     def __init__(self):
         super().__init__()
         self.spacing: float = 0  # pixels
-        self.alignment: str = "center"  # left, center, right
+        self.alignment: str = "center"  # left, center, right (horizontal)
+        self.justify: str = "start"  # start, center, end (vertical)
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
         if self.preferred_width and self.preferred_height:
@@ -97,7 +114,22 @@ class VStack(Widget):
                viewport_w: float, viewport_h: float):
         super().layout(x, y, width, height, viewport_w, viewport_h)
 
-        cy = y
+        # Calculate total content height
+        total_content_height = 0.0
+        for child in self.children:
+            _, ch = child.compute_size(viewport_w, viewport_h)
+            total_content_height += ch
+        if self.children:
+            total_content_height += self.spacing * (len(self.children) - 1)
+
+        # Vertical justify
+        if self.justify == "center":
+            cy = y + (height - total_content_height) / 2
+        elif self.justify == "end":
+            cy = y + height - total_content_height
+        else:  # start
+            cy = y
+
         for child in self.children:
             cw, ch = child.compute_size(viewport_w, viewport_h)
 

@@ -1,5 +1,8 @@
 """Graphics module - graphics backend and GPU resource handles."""
 
+# Setup DLL paths before importing native extensions
+from termin import _dll_setup  # noqa: F401
+
 from termin.graphics._graphics_native import (
     # Types
     Color4,

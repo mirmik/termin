@@ -88,6 +88,37 @@ class UILoader:
         if "height" in data:
             widget.preferred_height = Value.parse(data["height"])
 
+        # Anchor positioning (for root widget)
+        if "anchor" in data:
+            widget.anchor = data["anchor"]
+
+        if "offset_x" in data:
+            widget.offset_x = float(data["offset_x"])
+
+        if "offset_y" in data:
+            widget.offset_y = float(data["offset_y"])
+
+        # Shorthand: offset: [x, y]
+        if "offset" in data:
+            offset = data["offset"]
+            if isinstance(offset, (list, tuple)) and len(offset) == 2:
+                widget.offset_x = float(offset[0])
+                widget.offset_y = float(offset[1])
+
+        # Absolute positioning (for anchor="absolute")
+        if "position_x" in data:
+            widget.position_x = Value.parse(data["position_x"])
+
+        if "position_y" in data:
+            widget.position_y = Value.parse(data["position_y"])
+
+        # Shorthand: position: [x, y]
+        if "position" in data:
+            pos = data["position"]
+            if isinstance(pos, (list, tuple)) and len(pos) == 2:
+                widget.position_x = Value.parse(pos[0])
+                widget.position_y = Value.parse(pos[1])
+
         # Type-specific attributes
         self._apply_attributes(widget, data)
 
@@ -108,6 +139,8 @@ class UILoader:
                 widget.spacing = float(data["spacing"])
             if "alignment" in data:
                 widget.alignment = data["alignment"]
+            if "justify" in data:
+                widget.justify = data["justify"]
 
         # Panel attributes
         if isinstance(widget, Panel):
@@ -126,6 +159,8 @@ class UILoader:
                 widget.color = self._parse_color(data["color"])
             if "font_size" in data:
                 widget.font_size = float(data["font_size"])
+            if "alignment" in data:
+                widget.alignment = data["alignment"]
 
         # Button attributes
         if isinstance(widget, Button):
