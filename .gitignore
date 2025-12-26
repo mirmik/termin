@@ -110,8 +110,6 @@ ENV/
 .evalfile
 test/screens/*.png
 
-*.stl
-*.brep
 mangen/images/generic/*.png
 
 
