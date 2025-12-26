@@ -41,15 +41,10 @@ in vec3 v_color;
 uniform mat4 u_model;
 uniform vec4 u_color_below;
 uniform vec4 u_color_above;
-uniform vec4 u_color_surface;   // color for VOXEL_SURFACE type (2) when no normals
 uniform vec3 u_slice_axis;      // slice axis in entity local space
 uniform float u_fill_percent;   // 0.0 - 1.0
 uniform vec3 u_bounds_min;      // bounds in mesh space (before model transform)
 uniform vec3 u_bounds_max;
-
-// Voxel types (from voxelizer.py)
-const float VOXEL_SOLID = 1.0;
-const float VOXEL_SURFACE = 2.0;
 
 out vec4 FragColor;
 
