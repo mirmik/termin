@@ -9,6 +9,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
+from PyQt6.QtCore import QThread
+from PyQt6.QtWidgets import QApplication
 
 from termin.editor.settings import EditorSettings
 
@@ -97,6 +99,7 @@ class SceneFileController:
             "Save Scene As",
             "scene.scene",
             "Scene Files (*.scene);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not file_path:
             return False
@@ -145,6 +148,7 @@ class SceneFileController:
             "Load Scene",
             "",
             "Scene Files (*.scene);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not file_path:
             return False

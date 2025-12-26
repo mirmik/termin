@@ -110,6 +110,7 @@ class ResourceLoader:
             "Load Material",
             "",
             "Shader Files (*.shader);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not file_path:
             return
@@ -162,6 +163,7 @@ class ResourceLoader:
             "Load Components",
             "",
             "Python Files (*.py);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return
