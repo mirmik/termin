@@ -97,6 +97,13 @@ TC_API void tc_entity_set_scene(tc_entity* e, void* scene);
 TC_API void* tc_entity_scene(const tc_entity* e);
 
 // ============================================================================
+// User Data (for language bindings)
+// ============================================================================
+
+TC_API void tc_entity_set_data(tc_entity* e, void* data);
+TC_API void* tc_entity_data(const tc_entity* e);
+
+// ============================================================================
 // Lifecycle
 // ============================================================================
 

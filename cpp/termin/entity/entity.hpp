@@ -37,8 +37,8 @@ public:
     // Name (uuid comes from Identifiable)
     std::string name;
 
-    // Transform (owned)
-    std::unique_ptr<GeneralTransform3> transform;
+    // Transform - returns view wrapper over tc_entity's tc_transform
+    GeneralTransform3 transform;
 
     // Flags
     bool visible = true;
@@ -112,26 +112,26 @@ public:
     // --- Transform shortcuts ---
 
     const GeneralPose3& global_pose() const {
-        return transform->global_pose();
+        return transform.global_pose();
     }
 
     void relocate(const GeneralPose3& pose) {
-        transform->relocate(pose);
+        transform.relocate(pose);
     }
 
     void relocate(const Pose3& pose) {
-        transform->relocate(pose);
+        transform.relocate(pose);
     }
 
     void relocate_global(const GeneralPose3& pose) {
-        transform->relocate_global(pose);
+        transform.relocate_global(pose);
     }
 
     /**
      * Get 4x4 model matrix (column-major, OpenGL convention).
      */
     void model_matrix(double* m) const {
-        transform->world_matrix(m);
+        transform.world_matrix(m);
     }
 
     // --- Hierarchy shortcuts ---

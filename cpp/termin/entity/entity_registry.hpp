@@ -19,11 +19,11 @@
 namespace termin {
 
 class Entity;
-struct GeneralTransform3;
 
-// Global registry for entity lookup by UUID, pick_id, and transform.
+// Global registry for entity lookup by UUID and pick_id.
 // Singleton pattern. Entities register themselves on creation
 // and unregister on destruction.
+// Note: Transform lookup is now done via tc_transform -> tc_entity -> Entity*.
 class ENTITY_API EntityRegistry {
 public:
     // Singleton access
@@ -38,9 +38,6 @@ public:
     void register_pick_id(uint32_t pick_id, Entity* entity);
     void unregister_pick_id(uint32_t pick_id);
     Entity* get_by_pick_id(uint32_t pick_id) const;
-
-    // Lookup by transform (for parent/children resolution)
-    Entity* get_by_transform(GeneralTransform3* transform) const;
 
     // Clear all (for testing)
     void clear();
@@ -62,7 +59,6 @@ private:
 
     std::unordered_map<std::string, Entity*> by_uuid_;
     std::unordered_map<uint32_t, Entity*> by_pick_id_;
-    std::unordered_map<GeneralTransform3*, Entity*> by_transform_;
 };
 
 } // namespace termin

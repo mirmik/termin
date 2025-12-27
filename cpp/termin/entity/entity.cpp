@@ -11,21 +11,27 @@ namespace termin {
 
 Entity::Entity(const std::string& name_, const std::string& uuid_)
     : Identifiable(uuid_)
-    , name(name_)
-    , transform(std::make_unique<GeneralTransform3>()) {
+    , name(name_) {
 
-    // Set back-pointer from transform to entity
-    transform->entity = this;
+    // Create tc_entity which owns the transform
+    _ensure_c_entity();
+    // Get transform view from tc_entity
+    transform = GeneralTransform3(tc_entity_transform(_e));
+    transform.set_entity(this);
     // Register in global registry
     EntityRegistry::instance().register_entity(this);
 }
 
 Entity::Entity(const GeneralPose3& pose, const std::string& name_, const std::string& uuid_)
     : Identifiable(uuid_)
-    , name(name_)
-    , transform(std::make_unique<GeneralTransform3>(pose)) {
+    , name(name_) {
 
-    transform->entity = this;
+    // Create tc_entity which owns the transform
+    _ensure_c_entity();
+    // Get transform view from tc_entity
+    transform = GeneralTransform3(tc_entity_transform(_e));
+    transform.set_local_pose(pose);
+    transform.set_entity(this);
     EntityRegistry::instance().register_entity(this);
 }
 
@@ -57,7 +63,6 @@ Entity::~Entity() {
 Entity::Entity(Entity&& other) noexcept
     : Identifiable(std::move(other))
     , name(std::move(other.name))
-    , transform(std::move(other.transform))
     , visible(other.visible)
     , active(other.active)
     , pickable(other.pickable)
@@ -71,14 +76,14 @@ Entity::Entity(Entity&& other) noexcept
 
     // Take ownership of _e
     other._e = nullptr;
+    other.transform = GeneralTransform3(nullptr);
 
-    // Update transform->entity pointer
-    if (transform) {
-        transform->entity = this;
-    }
-
-    // Update component->entity pointers
+    // Update transform view to point to our _e's transform
     if (_e) {
+        transform = GeneralTransform3(tc_entity_transform(_e));
+        transform.set_entity(this);
+
+        // Update component->entity pointers
         size_t count = tc_entity_component_count(_e);
         for (size_t i = 0; i < count; i++) {
             tc_component* tc = tc_entity_component_at(_e, i);
@@ -114,7 +119,6 @@ Entity& Entity::operator=(Entity&& other) noexcept {
 
         Identifiable::operator=(std::move(other));
         name = std::move(other.name);
-        transform = std::move(other.transform);
         visible = other.visible;
         active = other.active;
         pickable = other.pickable;
@@ -126,14 +130,14 @@ Entity& Entity::operator=(Entity&& other) noexcept {
         _pick_id_computed = other._pick_id_computed;
         _e = other._e;
         other._e = nullptr;
+        other.transform = GeneralTransform3(nullptr);
 
-        // Update transform->entity pointer
-        if (transform) {
-            transform->entity = this;
-        }
-
-        // Update component->entity pointers
+        // Update transform view
         if (_e) {
+            transform = GeneralTransform3(tc_entity_transform(_e));
+            transform.set_entity(this);
+
+            // Update component->entity pointers
             size_t count = tc_entity_component_count(_e);
             for (size_t i = 0; i < count; i++) {
                 tc_component* tc = tc_entity_component_at(_e, i);
@@ -246,27 +250,28 @@ Component* Entity::get_component_by_type(const std::string& type_name) {
 
 void Entity::set_parent(Entity* parent_entity) {
     if (parent_entity) {
-        transform->set_parent(parent_entity->transform.get());
+        transform.set_parent(parent_entity->transform);
     } else {
-        transform->unparent();
+        transform.unparent();
     }
 }
 
 Entity* Entity::parent() const {
-    GeneralTransform3* parent_transform = transform->parent;
-    if (!parent_transform) return nullptr;
+    GeneralTransform3 parent_transform = transform.parent();
+    if (!parent_transform.valid()) return nullptr;
 
-    // Use back-pointer directly instead of registry lookup
-    return parent_transform->entity;
+    // Use back-pointer from transform
+    return parent_transform.entity();
 }
 
 std::vector<Entity*> Entity::children() const {
     std::vector<Entity*> result;
-    result.reserve(transform->children.size());
+    size_t count = transform.children_count();
+    result.reserve(count);
 
-    for (GeneralTransform3* child_transform : transform->children) {
-        // Use back-pointer directly instead of registry lookup
-        Entity* child_entity = child_transform->entity;
+    for (size_t i = 0; i < count; i++) {
+        GeneralTransform3 child_transform = transform.child_at(i);
+        Entity* child_entity = child_transform.entity();
         if (child_entity) {
             result.push_back(child_entity);
         }
@@ -323,7 +328,7 @@ nos::trent Entity::serialize() const {
     data["flags"] = static_cast<int64_t>(flags);
 
     // Pose
-    const auto& pose = transform->local_pose();
+    const auto& pose = transform.local_pose();
     nos::trent pose_data;
     pose_data.init(nos::trent_type::dict);
 
@@ -414,7 +419,7 @@ Entity* Entity::deserialize(const nos::trent& data) {
             pose.scale.z = scl->at(2).as_numer();
         }
 
-        ent->transform->set_local_pose(pose);
+        ent->transform.set_local_pose(pose);
     }
 
     // Deserialize components (children are handled by Scene)

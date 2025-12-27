@@ -8,6 +8,5 @@
 #include "general_pose3.hpp"
 #include "screw3.hpp"
 #include "general_transform3.hpp"
-#include "general_transform3_pool.hpp"
 #include "ray3.hpp"
 #include "aabb.hpp"

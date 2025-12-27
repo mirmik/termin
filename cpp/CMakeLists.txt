@@ -73,12 +73,14 @@ target_link_libraries(_geom_native PRIVATE entity_lib)
 
 # Colliders native module (BoxCollider, SphereCollider)
 pybind11_add_module(_colliders_native termin/colliders_bindings.cpp)
+target_link_libraries(_colliders_native PRIVATE entity_lib)
 target_compile_options(_colliders_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 
 # Physics native module (RigidBody, PhysicsWorld, Contact)
 pybind11_add_module(_physics_native termin/physics_bindings.cpp)
+target_link_libraries(_physics_native PRIVATE entity_lib)
 target_compile_options(_physics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -92,6 +94,7 @@ target_link_libraries(_voxels_native PRIVATE entity_lib trent)
 
 # Collision native module (BVH, CollisionWorld, ContactManifold)
 pybind11_add_module(_collision_native termin/collision_bindings.cpp)
+target_link_libraries(_collision_native PRIVATE entity_lib)
 target_compile_options(_collision_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -185,6 +188,7 @@ add_library(entity_lib SHARED
     termin/entity/component_registry.cpp
     termin/entity/vtable_utils.cpp
     termin/entity/components/rotator_component.cpp
+    termin/geom/general_transform3.cpp
     # C core
     ../core_c/src/tc_core.c
     ../core_c/src/tc_transform.c
@@ -337,7 +341,6 @@ configure_file(
 add_executable(termin_tests
     tests/main.cpp
     tests/tests_general_pose3.cpp
-    tests/tests_general_transform3.cpp
     tests/tests_colliders.cpp
     tests/tests_collision.cpp
 )
@@ -345,6 +348,7 @@ target_include_directories(termin_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
+target_link_libraries(termin_tests PRIVATE entity_lib)
 target_compile_options(termin_tests PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -354,7 +358,6 @@ add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_test
 pybind11_add_module(_cpp_tests
     tests/tests_binding.cpp
     tests/tests_general_pose3.cpp
-    tests/tests_general_transform3.cpp
     tests/tests_colliders.cpp
     tests/tests_collision.cpp
 )
@@ -362,6 +365,7 @@ target_include_directories(_cpp_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
+target_link_libraries(_cpp_tests PRIVATE entity_lib)
 target_compile_options(_cpp_tests PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )

@@ -781,59 +781,9 @@ PYBIND11_MODULE(_geom_native, m) {
                    std::to_string(s.lin.y) + ", " + std::to_string(s.lin.z) + "))";
         });
 
-    // Helper to convert Python GeneralPose3 (with numpy arrays) to C++ GeneralPose3
-    auto py_pose_to_cpp = [](py::object py_pose) -> GeneralPose3 {
-        if (py_pose.is_none()) {
-            return GeneralPose3::identity();
-        }
-        // Check if it's already a C++ GeneralPose3
-        if (py::isinstance<GeneralPose3>(py_pose)) {
-            return py_pose.cast<GeneralPose3>();
-        }
-        // Otherwise, extract ang, lin, scale from Python object
-        Quat ang = Quat::identity();
-        Vec3 lin = Vec3::zero();
-        Vec3 scale{1.0, 1.0, 1.0};
+    // GeneralTransform3 bindings are now in termin/bindings/geom/transform.cpp
 
-        if (py::hasattr(py_pose, "ang")) {
-            py::object ang_obj = py_pose.attr("ang");
-            if (py::isinstance<Quat>(ang_obj)) {
-                ang = ang_obj.cast<Quat>();
-            } else {
-                auto arr = ang_obj.cast<py::array_t<double>>();
-                auto buf = arr.unchecked<1>();
-                ang = Quat{buf(0), buf(1), buf(2), buf(3)};
-            }
-        }
-        if (py::hasattr(py_pose, "lin")) {
-            py::object lin_obj = py_pose.attr("lin");
-            if (py::isinstance<Vec3>(lin_obj)) {
-                lin = lin_obj.cast<Vec3>();
-            } else {
-                auto arr = lin_obj.cast<py::array_t<double>>();
-                auto buf = arr.unchecked<1>();
-                lin = Vec3{buf(0), buf(1), buf(2)};
-            }
-        }
-        if (py::hasattr(py_pose, "scale")) {
-            py::object scale_obj = py_pose.attr("scale");
-            if (py::isinstance<Vec3>(scale_obj)) {
-                scale = scale_obj.cast<Vec3>();
-            } else {
-                auto arr = scale_obj.cast<py::array_t<double>>();
-                auto buf = arr.unchecked<1>();
-                scale = Vec3{buf(0), buf(1), buf(2)};
-            }
-        }
-        return GeneralPose3{ang, lin, scale};
-    };
-
-    // GeneralTransform3
-    py::class_<GeneralTransform3>(m, "GeneralTransform3", py::dynamic_attr())
-        .def(py::init<>())
-        .def(py::init<const GeneralPose3&, const std::string&>(),
-             py::arg("local_pose") = GeneralPose3::identity(),
-             py::arg("name") = "")
+    // NOTE: GeneralTransform3 bindings are in termin/bindings/geom/transform.cpp
         // Constructor accepting any Python object with ang/lin/scale (including Python GeneralPose3)
         .def(py::init([py_pose_to_cpp](py::object local_pose, GeneralTransform3* parent, const std::string& name) {
             GeneralPose3 pose = py_pose_to_cpp(local_pose);
@@ -867,37 +817,14 @@ PYBIND11_MODULE(_geom_native, m) {
             })
 
         // entity back-pointer
-        // C++ code uses self.entity field directly
-        // Python getter uses _entity attribute (set by entity_bindings), with fallback to C++ field
-        .def_property("entity",
+        // Entity access via tc_entity data pointer
+        .def_property_readonly("entity",
             [](GeneralTransform3& self) -> py::object {
-                py::object py_self = py::cast(&self, py::return_value_policy::reference);
-                // First check _entity Python attribute
-                if (py::hasattr(py_self, "_entity")) {
-                    return py_self.attr("_entity");
+                Entity* ent = self.entity();
+                if (ent == nullptr) {
+                    return py::none();
                 }
-                // Fallback: check C++ entity pointer and use EntityRegistry to find Python object
-                if (self.entity != nullptr) {
-                    try {
-                        // Import entity module to get EntityRegistry
-                        py::module_ entity_module = py::module_::import("termin._native.entity");
-                        py::object registry = entity_module.attr("EntityRegistry").attr("instance")();
-                        // Get entity by transform pointer
-                        py::object entity = registry.attr("get_by_transform")(py::cast(&self, py::return_value_policy::reference));
-                        if (!entity.is_none()) {
-                            // Cache it for next access
-                            py_self.attr("_entity") = entity;
-                            return entity;
-                        }
-                    } catch (...) {
-                        // Module not loaded yet, ignore
-                    }
-                }
-                return py::none();
-            },
-            [](GeneralTransform3& self, py::object entity) {
-                py::object py_self = py::cast(&self, py::return_value_policy::reference);
-                py_self.attr("_entity") = entity;
+                return py::cast(ent, py::return_value_policy::reference);
             })
 
         // Pose access

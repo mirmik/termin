@@ -326,14 +326,9 @@ PYBIND11_MODULE(_entity_native, m) {
         // Pick ID
         .def_property_readonly("pick_id", &Entity::pick_id)
 
-        // Transform access
-        .def_property_readonly("transform", [](Entity& e) -> py::object {
-            GeneralTransform3* t = e.transform.get();
-            py::object py_transform = py::cast(t, py::return_value_policy::reference);
-            py::object py_entity = py::cast(&e, py::return_value_policy::reference);
-            // Set _entity attribute for Python code compatibility
-            py_transform.attr("_entity") = py_entity;
-            return py_transform;
+        // Transform access - returns the GeneralTransform3 wrapper
+        .def_property_readonly("transform", [](Entity& e) -> GeneralTransform3 {
+            return e.transform;
         })
 
         // Pose shortcuts
@@ -581,15 +576,6 @@ PYBIND11_MODULE(_entity_native, m) {
              py::return_value_policy::reference)
         .def("get_by_pick_id", &EntityRegistry::get_by_pick_id, py::arg("pick_id"),
              py::return_value_policy::reference)
-        .def("get_by_transform", [](EntityRegistry& reg, py::object transform) -> py::object {
-            // Get Entity by transform pointer
-            GeneralTransform3* t = transform.cast<GeneralTransform3*>();
-            Entity* ent = reg.get_by_transform(t);
-            if (ent == nullptr) {
-                return py::none();
-            }
-            return py::cast(ent, py::return_value_policy::reference);
-        }, py::arg("transform"))
         .def("clear", &EntityRegistry::clear)
         .def_property_readonly("entity_count", &EntityRegistry::entity_count)
         .def("swap_registries", [](EntityRegistry& reg, py::object new_by_uuid, py::object new_by_pick_id) {

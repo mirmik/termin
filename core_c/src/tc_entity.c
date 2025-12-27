@@ -42,6 +42,9 @@ struct tc_entity {
 
     // Scene (opaque pointer)
     void* scene;
+
+    // User data (for language bindings - e.g. C++ Entity*)
+    void* data;
 };
 
 // ============================================================================
@@ -384,6 +387,14 @@ void tc_entity_set_scene(tc_entity* e, void* scene) {
 
 void* tc_entity_scene(const tc_entity* e) {
     return e ? e->scene : NULL;
+}
+
+void tc_entity_set_data(tc_entity* e, void* data) {
+    if (e) e->data = data;
+}
+
+void* tc_entity_data(const tc_entity* e) {
+    return e ? e->data : NULL;
 }
 
 // ============================================================================

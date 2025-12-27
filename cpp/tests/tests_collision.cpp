@@ -353,7 +353,10 @@ TEST_CASE("CollisionWorld mixed colliders")
 TEST_CASE("AttachedCollider basic")
 {
     SphereCollider sphere(1.0);  // at origin
-    GeneralTransform3 transform(GeneralPose3::translation(5, 0, 0));
+    GeneralPose3 pose = GeneralPose3::translation(5, 0, 0);
+    tc_transform* tc_t = tc_transform_new_with_pose(
+        *reinterpret_cast<const tc_general_pose3*>(&pose));
+    GeneralTransform3 transform(tc_t);
     AttachedCollider attached(&sphere, &transform);
 
     // Center should be translated
@@ -361,14 +364,20 @@ TEST_CASE("AttachedCollider basic")
     CHECK_EQ(center.x, Approx(5.0).epsilon(1e-12));
     CHECK_EQ(center.y, Approx(0.0).epsilon(1e-12));
     CHECK_EQ(center.z, Approx(0.0).epsilon(1e-12));
+
+    tc_transform_free(tc_t);
 }
 
 TEST_CASE("AttachedCollider in CollisionWorld")
 {
     SphereCollider s1(1.0);
     SphereCollider s2(1.0);
-    GeneralTransform3 t1;
-    GeneralTransform3 t2(GeneralPose3::translation(5, 0, 0));
+    tc_transform* tc_t1 = tc_transform_new();
+    GeneralPose3 pose2 = GeneralPose3::translation(5, 0, 0);
+    tc_transform* tc_t2 = tc_transform_new_with_pose(
+        *reinterpret_cast<const tc_general_pose3*>(&pose2));
+    GeneralTransform3 t1(tc_t1);
+    GeneralTransform3 t2(tc_t2);
     AttachedCollider a1(&s1, &t1);
     AttachedCollider a2(&s2, &t2);
 
@@ -386,6 +395,9 @@ TEST_CASE("AttachedCollider in CollisionWorld")
 
     manifolds = world.detect_contacts();
     CHECK_EQ(manifolds.size(), 1u);
+
+    tc_transform_free(tc_t1);
+    tc_transform_free(tc_t2);
 }
 
 // ==================== ContactManifold tests ====================

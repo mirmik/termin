@@ -51,51 +51,43 @@ static GeneralPose3 py_pose_to_cpp(py::object py_pose) {
 }
 
 void bind_transform(py::module_& m) {
-    // GeneralTransform3
+    // GeneralTransform3 - thin wrapper around tc_transform*
     py::class_<GeneralTransform3>(m, "GeneralTransform3", py::dynamic_attr())
+        // Default constructor - null transform
         .def(py::init<>())
-        .def(py::init<const GeneralPose3&, const std::string&>(),
-             py::arg("local_pose") = GeneralPose3::identity(),
-             py::arg("name") = "")
-        // Constructor accepting any Python object with ang/lin/scale (including Python GeneralPose3)
-        .def(py::init([](py::object local_pose, GeneralTransform3* parent, const std::string& name) {
-            GeneralPose3 pose = py_pose_to_cpp(local_pose);
-            auto* t = new GeneralTransform3(pose, name);
-            if (parent) {
-                parent->add_child(t);
-            }
-            return t;
-        }), py::arg("local_pose") = py::none(), py::arg("parent") = nullptr, py::arg("name") = "",
-            py::return_value_policy::take_ownership)
+
+        // Check validity
+        .def("valid", &GeneralTransform3::valid)
+        .def("__bool__", &GeneralTransform3::valid)
 
         // Attributes
-        .def_readwrite("name", &GeneralTransform3::name)
+        .def_property_readonly("name",
+            [](const GeneralTransform3& self) -> py::object {
+                const char* n = self.name();
+                if (n) return py::str(n);
+                return py::none();
+            })
         .def_property_readonly("parent",
-            [](GeneralTransform3& self) { return self.parent; },
-            py::return_value_policy::reference)
+            [](const GeneralTransform3& self) -> py::object {
+                GeneralTransform3 p = self.parent();
+                if (!p.valid()) return py::none();
+                return py::cast(p);
+            })
         .def_property_readonly("children",
-            [](GeneralTransform3& self) -> py::list {
+            [](const GeneralTransform3& self) -> py::list {
                 py::list result;
-                for (GeneralTransform3* child : self.children) {
-                    py::object py_child = py::cast(child, py::return_value_policy::reference);
-                    // If child has C++ entity pointer but no _entity attr, try to set it
-                    if (child->entity != nullptr && !py::hasattr(py_child, "_entity")) {
-                        // Try to find the entity in Python - use capsule workaround
-                        // Store the pointer as a capsule for later resolution
-                        py_child.attr("_entity_ptr") = py::capsule(child->entity, "Entity*");
-                    }
-                    result.append(py_child);
+                for (GeneralTransform3 child : self.children()) {
+                    result.append(py::cast(child));
                 }
                 return result;
             })
 
-        // entity back-pointer - directly use C++ pointer
+        // Entity back-pointer
         .def_property_readonly("entity",
-            [](GeneralTransform3& self) -> py::object {
-                if (self.entity != nullptr) {
-                    return py::cast(self.entity, py::return_value_policy::reference);
-                }
-                return py::none();
+            [](const GeneralTransform3& self) -> py::object {
+                Entity* e = self.entity();
+                if (!e) return py::none();
+                return py::cast(e, py::return_value_policy::reference);
             })
 
         // Pose access
@@ -171,23 +163,25 @@ void bind_transform(py::module_& m) {
         })
 
         // Hierarchy
-        .def("add_child", &GeneralTransform3::add_child, py::keep_alive<1, 2>())
-        .def("set_parent", &GeneralTransform3::set_parent, py::keep_alive<2, 1>())
+        .def("add_child", [](GeneralTransform3& self, GeneralTransform3 child) {
+            self.add_child(child);
+        })
+        .def("set_parent", [](GeneralTransform3& self, py::object parent) {
+            if (parent.is_none()) {
+                self.unparent();
+            } else {
+                self.set_parent(parent.cast<GeneralTransform3>());
+            }
+        })
         .def("_unparent", &GeneralTransform3::unparent)
         .def("unparent", &GeneralTransform3::unparent)
-        .def("link", &GeneralTransform3::add_child, py::keep_alive<1, 2>())  // alias
+        .def("link", [](GeneralTransform3& self, GeneralTransform3 child) {
+            self.add_child(child);
+        })
 
         // Dirty tracking
         .def("is_dirty", &GeneralTransform3::is_dirty)
-        .def("_mark_dirty", &GeneralTransform3::_mark_dirty)
-        .def("increment_version", [](GeneralTransform3&, uint32_t v) {
-            return GeneralTransform3::increment_version(v);
-        })
-
-        // Version attributes
-        .def_readwrite("_version_for_walking_to_proximal", &GeneralTransform3::_version_for_walking_to_proximal)
-        .def_readwrite("_version_for_walking_to_distal", &GeneralTransform3::_version_for_walking_to_distal)
-        .def_readwrite("_version_only_my", &GeneralTransform3::_version_only_my)
+        .def_property_readonly("version", &GeneralTransform3::version)
 
         // Transformations - return numpy arrays
         .def("transform_point", [](const GeneralTransform3& self, py::array_t<double> point) {
@@ -244,47 +238,9 @@ void bind_transform(py::module_& m) {
         })
 
         .def("__repr__", [](const GeneralTransform3& self) {
-            return "GeneralTransform3(" + self.name + ", local_pose=GeneralPose3(...))";
-        });
-
-    // TransformHandle
-    py::class_<TransformHandle>(m, "TransformHandle")
-        .def(py::init<>())
-        .def_readonly("index", &TransformHandle::index)
-        .def_readonly("generation", &TransformHandle::generation)
-        .def("is_null", &TransformHandle::is_null)
-        .def("__bool__", &TransformHandle::operator bool)
-        .def("__eq__", &TransformHandle::operator==)
-        .def("__ne__", &TransformHandle::operator!=)
-        .def("__repr__", [](const TransformHandle& h) {
-            if (h.is_null()) return std::string("TransformHandle(null)");
-            return "TransformHandle(index=" + std::to_string(h.index) +
-                   ", generation=" + std::to_string(h.generation) + ")";
-        });
-
-    // GeneralTransform3Pool
-    py::class_<GeneralTransform3Pool>(m, "GeneralTransform3Pool")
-        .def(py::init<size_t>(), py::arg("initial_capacity") = 256)
-
-        .def("create", &GeneralTransform3Pool::create,
-             py::arg("local_pose") = GeneralPose3::identity(),
-             py::arg("name") = "")
-        .def("destroy", &GeneralTransform3Pool::destroy)
-        .def("destroy_by_ptr", &GeneralTransform3Pool::destroy_by_ptr)
-
-        .def("get", py::overload_cast<TransformHandle>(&GeneralTransform3Pool::get),
-             py::return_value_policy::reference)
-        .def("is_valid", &GeneralTransform3Pool::is_valid)
-        .def("is_valid_ptr", &GeneralTransform3Pool::is_valid_ptr)
-        .def("handle_from_ptr", &GeneralTransform3Pool::handle_from_ptr)
-
-        .def("__len__", &GeneralTransform3Pool::size)
-        .def_property_readonly("size", &GeneralTransform3Pool::size)
-        .def_property_readonly("capacity", &GeneralTransform3Pool::capacity)
-
-        .def("__repr__", [](const GeneralTransform3Pool& pool) {
-            return "GeneralTransform3Pool(size=" + std::to_string(pool.size()) +
-                   ", capacity=" + std::to_string(pool.capacity()) + ")";
+            const char* n = self.name();
+            std::string name_str = n ? n : "<unnamed>";
+            return "GeneralTransform3(" + name_str + ")";
         });
 }
 

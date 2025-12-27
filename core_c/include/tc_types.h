@@ -41,14 +41,15 @@ typedef struct tc_quatf {
     float x, y, z, w;
 } tc_quatf;
 
+// Layout matches C++ Pose3/GeneralPose3 for zero-cost interop
 typedef struct tc_pose3 {
-    tc_vec3 position;
     tc_quat rotation;
+    tc_vec3 position;
 } tc_pose3;
 
 typedef struct tc_general_pose3 {
-    tc_vec3 position;
     tc_quat rotation;
+    tc_vec3 position;
     tc_vec3 scale;
 } tc_general_pose3;
 

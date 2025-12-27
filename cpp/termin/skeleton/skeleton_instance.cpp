@@ -64,14 +64,14 @@ void SkeletonInstance::set_bone_transform_by_name(
     Entity* entity = get_bone_entity_by_name(bone_name);
     if (!entity) return;
 
-    const GeneralPose3& pose = entity->transform->local_pose();
+    const GeneralPose3& pose = entity->transform.local_pose();
 
     Vec3 new_lin = translation ? Vec3{translation[0], translation[1], translation[2]} : pose.lin;
     Quat new_ang = rotation ? Quat{rotation[0], rotation[1], rotation[2], rotation[3]} : pose.ang;
     Vec3 new_scale = scale ? Vec3{scale[0], scale[1], scale[2]} : pose.scale;
 
     GeneralPose3 new_pose(new_ang, new_lin, new_scale);
-    entity->transform->relocate(new_pose);
+    entity->transform.relocate(new_pose);
 }
 
 Entity* SkeletonInstance::find_skeleton_root() {
@@ -84,8 +84,9 @@ Entity* SkeletonInstance::find_skeleton_root() {
         int root_bone_idx = _data->root_bone_indices()[0];
         if (root_bone_idx >= 0 && root_bone_idx < static_cast<int>(_bone_entities.size())) {
             Entity* root_bone_entity = _bone_entities[root_bone_idx];
-            if (root_bone_entity && root_bone_entity->transform->parent != nullptr) {
-                _skeleton_root = root_bone_entity->transform->parent->entity;
+            GeneralTransform3 parent_transform = root_bone_entity->transform.parent();
+            if (root_bone_entity && parent_transform.valid()) {
+                _skeleton_root = parent_transform.entity();
                 return _skeleton_root;
             }
         }
@@ -121,7 +122,7 @@ void SkeletonInstance::update() {
     Entity* root = find_skeleton_root();
     if (root) {
         double m[16];
-        root->transform->world_matrix(m);  // row-major
+        root->transform.world_matrix(m);  // row-major
         Mat44 skeleton_world = row_major_to_mat44(m);
         skeleton_world_inv = skeleton_world.inverse();
     }
@@ -135,7 +136,7 @@ void SkeletonInstance::update() {
 
         // Get bone world matrix (row-major from world_matrix)
         double bone_world_d[16];
-        entity->transform->world_matrix(bone_world_d);
+        entity->transform.world_matrix(bone_world_d);
         Mat44 bone_world = row_major_to_mat44(bone_world_d);
 
         // Get inverse bind matrix (stored as row-major from numpy)
@@ -176,7 +177,7 @@ Mat44 SkeletonInstance::get_bone_world_matrix(int bone_index) const {
         Entity* entity = _bone_entities[bone_index];
         if (entity) {
             double m[16];
-            entity->transform->world_matrix(m);
+            entity->transform.world_matrix(m);
             Mat44 result;
             for (int i = 0; i < 16; ++i) {
                 result.data[i] = m[i];

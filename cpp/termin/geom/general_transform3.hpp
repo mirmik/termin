@@ -1,250 +1,149 @@
 #pragma once
 
-#include <vector>
-#include <string>
-#include <algorithm>
 #include <cstdint>
 #include "general_pose3.hpp"
+#include "../../../core_c/include/tc_transform.h"
+
+// DLL export/import macros for Windows
+#ifdef _WIN32
+    #ifdef ENTITY_LIB_EXPORTS
+        #define ENTITY_API __declspec(dllexport)
+    #else
+        #define ENTITY_API __declspec(dllimport)
+    #endif
+#else
+    #define ENTITY_API
+#endif
 
 namespace termin {
 
-// Forward declaration
 class Entity;
 
-
-
+// Thin non-owning wrapper around tc_transform*.
+// Provides C++ interface with zero-cost access to C core data.
+// Layout of tc_general_pose3 matches GeneralPose3 for reinterpret_cast.
 struct GeneralTransform3 {
-    // Core data
-    GeneralPose3 _local_pose;
-    std::string name;
+    tc_transform* _t;
 
-    // Hierarchy (raw pointers, non-owning)
-    GeneralTransform3* parent = nullptr;
-    std::vector<GeneralTransform3*> children;
+    // Construct from tc_transform pointer (non-owning)
+    explicit GeneralTransform3(tc_transform* t) : _t(t) {}
 
-    // Back-pointer to owning entity (non-owning, set by Entity)
-    Entity* entity = nullptr;
+    // Default constructor - null transform
+    GeneralTransform3() : _t(nullptr) {}
 
-    // Cached global pose
-    mutable GeneralPose3 _cached_global_pose;
-    mutable bool _dirty = true;
+    // Check if valid
+    bool valid() const { return _t != nullptr; }
+    explicit operator bool() const { return valid(); }
 
-    // Version tracking for change propagation
-    uint32_t _version_for_walking_to_proximal = 0;
-    uint32_t _version_for_walking_to_distal = 0;
-    uint32_t _version_only_my = 0;
+    // --- Pose accessors (zero-copy via reinterpret_cast) ---
 
-    // Constructors
-    GeneralTransform3()
-        : _local_pose(GeneralPose3::identity())
-        , name("")
-        , parent(nullptr)
-        , _dirty(true) {}
-
-    explicit GeneralTransform3(const GeneralPose3& local_pose, const std::string& name_ = "")
-        : _local_pose(local_pose)
-        , name(name_)
-        , parent(nullptr)
-        , _dirty(true) {}
-
-    // Destructor - automatically unparent
-    ~GeneralTransform3() {
-        unparent();
-        // Detach all children
-        for (auto* child : children) {
-            child->parent = nullptr;
-        }
-        children.clear();
+    const GeneralPose3& local_pose() const {
+        tc_general_pose3 p = tc_transform_local_pose(_t);
+        // Store in thread-local for reference return
+        static thread_local GeneralPose3 cached;
+        cached = *reinterpret_cast<const GeneralPose3*>(&p);
+        return cached;
     }
-
-    // Disable copy (would mess up hierarchy pointers)
-    GeneralTransform3(const GeneralTransform3&) = delete;
-    GeneralTransform3& operator=(const GeneralTransform3&) = delete;
-
-    // Move is allowed
-    GeneralTransform3(GeneralTransform3&& other) noexcept
-        : _local_pose(std::move(other._local_pose))
-        , name(std::move(other.name))
-        , parent(other.parent)
-        , children(std::move(other.children))
-        , _cached_global_pose(std::move(other._cached_global_pose))
-        , _dirty(other._dirty)
-        , _version_for_walking_to_proximal(other._version_for_walking_to_proximal)
-        , _version_for_walking_to_distal(other._version_for_walking_to_distal)
-        , _version_only_my(other._version_only_my) {
-        // Update parent's children list
-        if (parent) {
-            auto it = std::find(parent->children.begin(), parent->children.end(), &other);
-            if (it != parent->children.end()) {
-                *it = this;
-            }
-        }
-        // Update children's parent pointer
-        for (auto* child : children) {
-            child->parent = this;
-        }
-        other.parent = nullptr;
-        other.children.clear();
-    }
-
-    GeneralTransform3& operator=(GeneralTransform3&& other) noexcept {
-        if (this != &other) {
-            unparent();
-            for (auto* child : children) {
-                child->parent = nullptr;
-            }
-
-            _local_pose = std::move(other._local_pose);
-            name = std::move(other.name);
-            parent = other.parent;
-            children = std::move(other.children);
-            _cached_global_pose = std::move(other._cached_global_pose);
-            _dirty = other._dirty;
-            _version_for_walking_to_proximal = other._version_for_walking_to_proximal;
-            _version_for_walking_to_distal = other._version_for_walking_to_distal;
-            _version_only_my = other._version_only_my;
-
-            if (parent) {
-                auto it = std::find(parent->children.begin(), parent->children.end(), &other);
-                if (it != parent->children.end()) {
-                    *it = this;
-                }
-            }
-            for (auto* child : children) {
-                child->parent = this;
-            }
-            other.parent = nullptr;
-            other.children.clear();
-        }
-        return *this;
-    }
-
-    // --- Hierarchy operations ---
-
-    void unparent() {
-        if (parent) {
-            auto& siblings = parent->children;
-            siblings.erase(std::remove(siblings.begin(), siblings.end(), this), siblings.end());
-            parent = nullptr;
-            _mark_dirty();
-        }
-    }
-
-    void add_child(GeneralTransform3* child) {
-        if (!child || child == this) return;
-        child->unparent();
-        children.push_back(child);
-        child->parent = this;
-        child->_mark_dirty();
-    }
-
-    void set_parent(GeneralTransform3* new_parent) {
-        if (new_parent == parent) return;
-        if (new_parent && new_parent->_has_ancestor(this)) {
-            // Would create cycle
-            return;
-        }
-        unparent();
-        if (new_parent) {
-            new_parent->children.push_back(this);
-            parent = new_parent;
-            _mark_dirty();
-        }
-    }
-
-    bool _has_ancestor(const GeneralTransform3* possible_ancestor) const {
-        const GeneralTransform3* current = parent;
-        while (current) {
-            if (current == possible_ancestor) return true;
-            current = current->parent;
-        }
-        return false;
-    }
-
-    // --- Pose accessors ---
-
-    const GeneralPose3& local_pose() const { return _local_pose; }
 
     void set_local_pose(const GeneralPose3& pose) {
-        _local_pose = pose;
-        _mark_dirty();
+        tc_transform_set_local_pose(_t, *reinterpret_cast<const tc_general_pose3*>(&pose));
     }
 
-    // relocate with GeneralPose3
     void relocate(const GeneralPose3& pose) {
-        _local_pose = pose;
-        _mark_dirty();
+        set_local_pose(pose);
     }
 
-    // relocate with Pose3 (preserves current scale)
     void relocate(const Pose3& pose) {
-        _local_pose.ang = pose.ang;
-        _local_pose.lin = pose.lin;
-        // scale preserved
-        _mark_dirty();
+        GeneralPose3 gp = local_pose();
+        gp.ang = pose.ang;
+        gp.lin = pose.lin;
+        set_local_pose(gp);
     }
 
     const GeneralPose3& global_pose() const {
-        if (_dirty) {
-            if (parent) {
-                _cached_global_pose = parent->global_pose() * _local_pose;
-            } else {
-                _cached_global_pose = _local_pose;
-            }
-            _dirty = false;
-        }
-        return _cached_global_pose;
+        tc_general_pose3 p = tc_transform_global_pose(_t);
+        static thread_local GeneralPose3 cached;
+        cached = *reinterpret_cast<const GeneralPose3*>(&p);
+        return cached;
     }
 
-    void set_global_pose(const GeneralPose3& global_pose) {
-        relocate_global(global_pose);
+    void set_global_pose(const GeneralPose3& pose) {
+        tc_transform_set_global_pose(_t, *reinterpret_cast<const tc_general_pose3*>(&pose));
     }
 
     void relocate_global(const GeneralPose3& gpose) {
-        if (parent) {
-            const GeneralPose3& parent_global = parent->global_pose();
-            GeneralPose3 inv_parent = parent_global.inverse();
-            _local_pose = inv_parent * gpose;
-        } else {
-            _local_pose = gpose;
-        }
-        _mark_dirty();
+        set_global_pose(gpose);
     }
 
     void relocate_global(const Pose3& pose) {
-        // Preserve current global scale
-        Vec3 current_global_scale = global_pose().scale;
-        GeneralPose3 gpose(pose.ang, pose.lin, current_global_scale);
-        relocate_global(gpose);
+        Vec3 current_scale = global_pose().scale;
+        GeneralPose3 gp(pose.ang, pose.lin, current_scale);
+        set_global_pose(gp);
     }
+
+    // --- Hierarchy ---
+
+    GeneralTransform3 parent() const {
+        return GeneralTransform3(tc_transform_parent(_t));
+    }
+
+    void set_parent(GeneralTransform3 new_parent) {
+        tc_transform_set_parent(_t, new_parent._t);
+    }
+
+    void unparent() {
+        tc_transform_unparent(_t);
+    }
+
+    void add_child(GeneralTransform3 child) {
+        tc_transform_add_child(_t, child._t);
+    }
+
+    size_t children_count() const {
+        return tc_transform_children_count(_t);
+    }
+
+    GeneralTransform3 child_at(size_t index) const {
+        return GeneralTransform3(tc_transform_child_at(_t, index));
+    }
+
+    // Iterator support for children
+    struct ChildIterator {
+        tc_transform* _parent;
+        size_t _index;
+
+        GeneralTransform3 operator*() const {
+            return GeneralTransform3(tc_transform_child_at(_parent, _index));
+        }
+        ChildIterator& operator++() { ++_index; return *this; }
+        bool operator!=(const ChildIterator& other) const { return _index != other._index; }
+    };
+
+    struct ChildRange {
+        tc_transform* _t;
+        ChildIterator begin() const { return {_t, 0}; }
+        ChildIterator end() const { return {_t, tc_transform_children_count(_t)}; }
+    };
+
+    ChildRange children() const { return {_t}; }
+
+    // --- Entity back-pointer ---
+
+    ENTITY_API Entity* entity() const;
+    ENTITY_API void set_entity(Entity* e);
+
+    // --- Name (from entity) ---
+
+    ENTITY_API const char* name() const;
 
     // --- Dirty tracking ---
 
-    bool is_dirty() const { return _dirty; }
-
-    static uint32_t increment_version(uint32_t version) {
-        return (version + 1) % ((1u << 31) - 1);
+    bool is_dirty() const {
+        return tc_transform_is_dirty(_t);
     }
 
-    void _spread_changes_to_distal() {
-        _version_for_walking_to_proximal = increment_version(_version_for_walking_to_proximal);
-        _dirty = true;
-        for (auto* child : children) {
-            child->_spread_changes_to_distal();
-        }
-    }
-
-    void _spread_changes_to_proximal() {
-        _version_for_walking_to_distal = increment_version(_version_for_walking_to_distal);
-        if (parent) {
-            parent->_spread_changes_to_proximal();
-        }
-    }
-
-    void _mark_dirty() {
-        _version_only_my = increment_version(_version_only_my);
-        _spread_changes_to_proximal();
-        _spread_changes_to_distal();
+    uint32_t version() const {
+        return tc_transform_version(_t);
     }
 
     // --- Transformations ---
@@ -265,7 +164,7 @@ struct GeneralTransform3 {
         return global_pose().inverse_transform_vector(v);
     }
 
-    // --- Direction helpers (Y-forward convention: X=right, Y=forward, Z=up) ---
+    // --- Direction helpers (Y-forward convention) ---
 
     Vec3 forward(double distance = 1.0) const {
         return transform_vector(Vec3{0.0, distance, 0.0});
@@ -296,7 +195,10 @@ struct GeneralTransform3 {
     void world_matrix(double* m) const {
         global_pose().matrix4(m);
     }
-};
 
+    // --- Raw access ---
+
+    tc_transform* raw() const { return _t; }
+};
 
 } // namespace termin
