@@ -1,5 +1,6 @@
 // tc_scene.c - Scene implementation
 #include "../include/tc_scene.h"
+#include "../include/tc_profiler.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -305,11 +306,13 @@ void tc_scene_unregister_component(tc_scene* s, tc_component* c) {
 void tc_scene_update(tc_scene* s, double dt) {
     if (!s) return;
 
+    bool profiling = tc_profiler_enabled();
+
     // 1. Process pending start
-    // Copy list since start() might add more components
+    if (profiling) tc_profiler_begin_section("Start");
     size_t pending_count = s->pending_start.count;
     if (pending_count > 0) {
-        // Take snapshot
+        // Take snapshot - start() might add more components
         void** pending_copy = (void**)malloc(pending_count * sizeof(void*));
         memcpy(pending_copy, s->pending_start.items, pending_count * sizeof(void*));
         s->pending_start.count = 0;
@@ -326,8 +329,10 @@ void tc_scene_update(tc_scene* s, double dt) {
 
         free(pending_copy);
     }
+    if (profiling) tc_profiler_end_section();
 
     // 2. Fixed update (accumulator-based)
+    if (profiling) tc_profiler_begin_section("FixedUpdate");
     s->accumulated_time += dt;
     while (s->accumulated_time >= s->fixed_timestep) {
         for (size_t i = 0; i < s->fixed_update_list.count; i++) {
@@ -338,14 +343,17 @@ void tc_scene_update(tc_scene* s, double dt) {
         }
         s->accumulated_time -= s->fixed_timestep;
     }
+    if (profiling) tc_profiler_end_section();
 
     // 3. Regular update
+    if (profiling) tc_profiler_begin_section("Update");
     for (size_t i = 0; i < s->update_list.count; i++) {
         tc_component* c = (tc_component*)s->update_list.items[i];
         if (c->enabled) {
             tc_component_update(c, (float)dt);
         }
     }
+    if (profiling) tc_profiler_end_section();
 }
 
 void tc_scene_editor_update(tc_scene* s, double dt) {

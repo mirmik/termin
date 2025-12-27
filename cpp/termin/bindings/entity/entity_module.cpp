@@ -208,8 +208,12 @@ PYBIND11_MODULE(_entity_native, m) {
         .def_readwrite("active_in_editor", &Component::active_in_editor)
         .def_readonly("is_native", &Component::is_native)
         .def_readwrite("_started", &Component::_started)
-        .def_readonly("has_update", &Component::has_update)
-        .def_readonly("has_fixed_update", &Component::has_fixed_update)
+        .def_readwrite("has_update", &Component::has_update)
+        .def_readwrite("has_fixed_update", &Component::has_fixed_update)
+        .def("sync_to_c", &Component::sync_to_c)
+        .def("sync_from_c", &Component::sync_from_c)
+        .def("c_component", static_cast<tc_component* (Component::*)()>(&Component::c_component),
+             py::return_value_policy::reference)
         .def_property("entity",
             [](Component& c) -> py::object {
                 if (c.entity) {

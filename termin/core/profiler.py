@@ -28,14 +28,17 @@
 
 Когда профайлер выключен (enabled=False), overhead минимален —
 одна проверка bool в начале каждого метода.
+
+Использует C ядро (TcProfiler) для минимального overhead.
 """
 
 from __future__ import annotations
 
-import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Dict, List, Iterator, NamedTuple
+
+from termin._native.profiler import TcProfiler
 
 
 class SectionStats(NamedTuple):
@@ -68,6 +71,7 @@ class Profiler:
     Иерархический профайлер с минимальным overhead.
 
     Singleton — используйте Profiler.instance() для получения экземпляра.
+    Делегирует к C ядру TcProfiler для быстрого замера времени.
     """
 
     _instance: "Profiler | None" = None
@@ -86,47 +90,42 @@ class Profiler:
         Args:
             history_size: Количество кадров в истории (по умолчанию 120 = 2 секунды при 60 FPS).
         """
-        self._enabled = False
-        self._profile_components = False  # Детальное профилирование компонентов
-        self._history: List[FrameProfile] = []
+        self._tc = TcProfiler.instance()
         self._history_size = history_size
-        self._frame_count = 0
-        self._section_stack: List[SectionTiming] = []
-        self._current_frame: FrameProfile | None = None
-        self._frame_start: float = 0.0
+
+    @property
+    def _current_frame(self):
+        """Текущий кадр (None если не в процессе профилирования)."""
+        return self._tc.current_frame
 
     @property
     def enabled(self) -> bool:
         """Включён ли профайлер."""
-        return self._enabled
+        return self._tc.enabled
 
     @enabled.setter
     def enabled(self, value: bool) -> None:
         """Включает/выключает профайлер."""
-        self._enabled = value
-        if not value:
-            # Сбрасываем состояние при выключении
-            self._current_frame = None
-            self._section_stack.clear()
+        self._tc.enabled = value
 
     @property
     def profile_components(self) -> bool:
         """Детальное профилирование компонентов (Update, FixedUpdate)."""
-        return self._profile_components
+        return self._tc.profile_components
 
     @profile_components.setter
     def profile_components(self, value: bool) -> None:
         """Включает/выключает детальное профилирование компонентов."""
-        self._profile_components = value
+        self._tc.profile_components = value
 
     @property
     def history(self) -> List[FrameProfile]:
-        """История профилей кадров."""
-        return self._history
+        """История профилей кадров (конвертируется из C данных)."""
+        return self._convert_history()
 
     def clear_history(self) -> None:
         """Очищает историю профилей."""
-        self._history.clear()
+        self._tc.clear_history()
 
     def begin_frame(self) -> None:
         """
@@ -135,17 +134,7 @@ class Profiler:
         Вызывайте в начале игрового цикла.
         Идемпотентен — если frame уже начат, ничего не делает.
         """
-        if not self._enabled:
-            return
-
-        # Идемпотентность: если frame уже начат, не начинаем новый
-        if self._current_frame is not None:
-            return
-
-        self._current_frame = FrameProfile(frame_number=self._frame_count)
-        self._frame_count += 1
-        self._section_stack.clear()
-        self._frame_start = time.perf_counter()
+        self._tc.begin_frame()
 
     def end_frame(self) -> None:
         """
@@ -153,16 +142,7 @@ class Profiler:
 
         Вызывайте в конце игрового цикла.
         """
-        if not self._enabled or self._current_frame is None:
-            return
-
-        self._current_frame.total_ms = (time.perf_counter() - self._frame_start) * 1000.0
-
-        self._history.append(self._current_frame)
-        if len(self._history) > self._history_size:
-            self._history.pop(0)
-
-        self._current_frame = None
+        self._tc.end_frame()
 
     @contextmanager
     def section(self, name: str) -> Iterator[None]:
@@ -180,35 +160,46 @@ class Profiler:
         Args:
             name: Имя секции для отображения в профайлере.
         """
-        if not self._enabled or self._current_frame is None:
+        if not self._tc.enabled:
             yield
             return
 
-        # Находим словарь для текущего уровня вложенности
-        if self._section_stack:
-            sections = self._section_stack[-1].children
-        else:
-            sections = self._current_frame.sections
-
-        # Получаем или создаём тайминг для секции
-        if name not in sections:
-            sections[name] = SectionTiming(name=name)
-        timing = sections[name]
-
-        self._section_stack.append(timing)
-        start = time.perf_counter()
-
+        self._tc.begin_section(name)
         try:
             yield
         finally:
-            elapsed = (time.perf_counter() - start) * 1000.0
-            timing.cpu_ms += elapsed
-            timing.call_count += 1
-            self._section_stack.pop()
+            self._tc.end_section()
+
+    def _convert_history(self) -> List[FrameProfile]:
+        """Конвертирует C историю в Python FrameProfile объекты."""
+        result = []
+        for c_frame in self._tc.history:
+            frame = FrameProfile(
+                frame_number=c_frame.frame_number,
+                total_ms=c_frame.total_ms,
+            )
+            # Build hierarchical sections from flat C array
+            self._build_sections(c_frame.sections, frame.sections)
+            result.append(frame)
+        return result
+
+    def _build_sections(self, c_sections: list, out: Dict[str, SectionTiming], parent_idx: int = -1) -> None:
+        """Рекурсивно строит иерархию секций из плоского C массива."""
+        for i, s in enumerate(c_sections):
+            if s.parent_index == parent_idx:
+                timing = SectionTiming(
+                    name=s.name,
+                    cpu_ms=s.cpu_ms,
+                    call_count=s.call_count,
+                )
+                out[s.name] = timing
+                # Recursively add children
+                self._build_sections(c_sections, timing.children, i)
 
     def last_frame(self) -> FrameProfile | None:
         """Возвращает последний завершённый профиль кадра."""
-        return self._history[-1] if self._history else None
+        history = self._convert_history()
+        return history[-1] if history else None
 
     def average(self, frames: int = 60) -> Dict[str, float]:
         """
@@ -235,10 +226,11 @@ class Profiler:
             Словарь "путь/секции" -> SectionStats(cpu_ms, call_count).
             call_count — среднее количество вызовов за кадр.
         """
-        if not self._history:
+        history = self._convert_history()
+        if not history:
             return {}
 
-        recent = self._history[-frames:]
+        recent = history[-frames:]
         totals: Dict[str, List[tuple]] = {}  # path -> [(cpu_ms, call_count), ...]
 
         def collect(sections: Dict[str, SectionTiming], prefix: str = "") -> None:
@@ -269,13 +261,15 @@ class Profiler:
             print("No profiling data")
             return
 
+        history = self._convert_history()
+
         # Сортируем: сначала по глубине, потом по времени внутри уровня
         sorted_sections = sorted(detailed.items(), key=lambda x: (x[0].count("/"), -x[1].cpu_ms))
 
         # Считаем общее время (только root секции)
         total = sum(stats.cpu_ms for name, stats in sorted_sections if "/" not in name)
 
-        print(f"\n=== Profiler Report (avg {min(frames, len(self._history))} frames) ===")
+        print(f"\n=== Profiler Report (avg {min(frames, len(history))} frames) ===")
         if total > 0:
             print(f"Total: {total:.2f}ms ({1000/total:.0f} FPS)")
         print()

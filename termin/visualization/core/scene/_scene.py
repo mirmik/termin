@@ -55,13 +55,6 @@ class Scene:
         self._input_components: List[InputComponent] = []
         self.colliders = []
         self._collision_world = CollisionWorld()
-        self.update_list: List[Component] = []
-        self.fixed_update_list: List[Component] = []
-        self._pending_start: List[Component] = []
-
-        # Fixed timestep for physics (Unity-style)
-        self._fixed_timestep: float = 1.0 / 60.0
-        self._accumulated_time: float = 0.0
 
         # Skybox manager
         self._skybox = SkyboxManager()
@@ -431,20 +424,16 @@ class Scene:
             self._input_components.append(component)
 
         # For native C++ components, use flags set by REGISTER_COMPONENT
-        # For Python components, check if method is overridden
-        if component.is_native:
-            if component.has_update:
-                self.update_list.append(component)
-            if component.has_fixed_update:
-                self.fixed_update_list.append(component)
-        else:
+        # For Python components, check if method is overridden and set flags
+        if not component.is_native:
             if is_overrides_method(component, "update", Component):
-                self.update_list.append(component)
+                component.has_update = True
             if is_overrides_method(component, "fixed_update", Component):
-                self.fixed_update_list.append(component)
+                component.has_fixed_update = True
 
-        if not component._started:
-            self._pending_start.append(component)
+        # Sync flags to C component and register with TcScene
+        component.sync_to_c()
+        self._tc_scene.register_component(component)
 
     def unregister_component(self, component: Component):
         from termin.colliders.collider_component import ColliderComponent
@@ -458,59 +447,14 @@ class Scene:
         if isinstance(component, InputComponent) and component in self._input_components:
             self._input_components.remove(component)
 
-        if component in self.update_list:
-            self.update_list.remove(component)
-
-        if component in self.fixed_update_list:
-            self.fixed_update_list.remove(component)
-
-        if component in self._pending_start:
-            self._pending_start.remove(component)
+        # Unregister from TcScene
+        self._tc_scene.unregister_component(component)
 
     # --- Update loop ---
 
     def update(self, dt: float):
-        from termin.core.profiler import Profiler
-        profiler = Profiler.instance()
-
-        with profiler.section("Start"):
-            if self._pending_start:
-                pending = self._pending_start
-                self._pending_start = []
-                for component in pending:
-                    if component._started:
-                        continue
-                    if component.enabled:
-                        component.start()
-                    else:
-                        # Keep disabled components in pending until enabled
-                        self._pending_start.append(component)
-
-        # Fixed update loop (Unity-style)
-        with profiler.section("FixedUpdate"):
-            self._accumulated_time += dt
-            while self._accumulated_time >= self._fixed_timestep:
-                if profiler.profile_components:
-                    for component in self.fixed_update_list:
-                        if component.enabled:
-                            with profiler.section(type(component).__name__):
-                                component.fixed_update(self._fixed_timestep)
-                else:
-                    for component in self.fixed_update_list:
-                        if component.enabled:
-                            component.fixed_update(self._fixed_timestep)
-                self._accumulated_time -= self._fixed_timestep
-
-        with profiler.section("Update"):
-            if profiler.enabled and profiler.profile_components:
-                for component in self.update_list:
-                    if component.enabled:
-                        with profiler.section(type(component).__name__):
-                            component.update(dt)
-            else:
-                for component in self.update_list:
-                    if component.enabled:
-                        component.update(dt)
+        # Delegate to C core (includes profiling via tc_profiler)
+        self._tc_scene.update(dt)
 
     def editor_update(self, dt: float):
         """
@@ -519,19 +463,8 @@ class Scene:
         Called in editor mode to run editor-specific components.
         Uses the same _started flag as regular update().
         """
-        for entity in self.entities:
-            for component in entity.components:
-                if not component.active_in_editor:
-                    continue
-                if not component.enabled:
-                    continue
-                # Call start() once if not yet started
-                if not component._started:
-                    component.start()
-                    component._started = True
-                # Call update()
-                if component.has_update:
-                    component.update(dt)
+        # Delegate to C core
+        self._tc_scene.editor_update(dt)
 
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""

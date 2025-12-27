@@ -1,8 +1,15 @@
-from termin.visualization.core.scene import Scene
-from termin.entity import Entity
+from termin.core.profiler import Profiler
+import time
 
-scene = Scene()
-entity = Entity('TestEntity')
-scene.add(entity)
-print('Python entities:', len(scene.entities))
-print('TcScene entity_count:', scene._tc_scene.entity_count())
+p = Profiler.instance()
+p.enabled = True
+
+for i in range(5):
+    p.begin_frame()
+    with p.section("Test"):
+        time.sleep(0.01)
+        with p.section("Inner"):
+            time.sleep(0.005)
+    p.end_frame()
+
+p.print_report()
