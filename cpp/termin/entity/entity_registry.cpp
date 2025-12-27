@@ -11,16 +11,18 @@ EntityRegistry& EntityRegistry::instance() {
 void EntityRegistry::register_entity(Entity* entity) {
     if (!entity) return;
 
-    if (!entity->uuid.empty()) {
-        by_uuid_[entity->uuid] = entity;
+    const char* u = entity->uuid();
+    if (u && u[0]) {
+        by_uuid_[u] = entity;
     }
 }
 
 void EntityRegistry::unregister_entity(Entity* entity) {
     if (!entity) return;
 
-    if (!entity->uuid.empty()) {
-        by_uuid_.erase(entity->uuid);
+    const char* u = entity->uuid();
+    if (u && u[0]) {
+        by_uuid_.erase(u);
     }
 
     // Also remove from pick_id registry if registered

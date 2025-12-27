@@ -74,7 +74,7 @@ std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
     std::vector<PhaseDrawCall> draw_calls;
 
     for (Entity* entity : entities) {
-        if (!entity->active || !entity->visible) {
+        if (!entity->active() || !entity->visible()) {
             continue;
         }
 
@@ -191,7 +191,8 @@ void ColorPass::execute_with_data(
     // Render each draw call
     for (const auto& dc : draw_calls) {
         // Cache entity name
-        entity_names.push_back(dc.entity->name);
+        const char* ename = dc.entity->name();
+        entity_names.push_back(ename ? ename : "");
 
         // Get model matrix
         Mat44f model = get_model_matrix(dc.entity);
@@ -231,8 +232,8 @@ void ColorPass::execute_with_data(
         dc.drawable->draw_geometry(context, dc.geometry_id);
 
         // Check for debug blit
-        if (!debug_symbol.empty() && dc.entity->name == debug_symbol) {
-            maybe_blit_to_debugger(graphics, fb, dc.entity->name, rect.width, rect.height);
+        if (!debug_symbol.empty() && ename && ename == debug_symbol) {
+            maybe_blit_to_debugger(graphics, fb, ename, rect.width, rect.height);
         }
     }
 

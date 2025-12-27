@@ -14,7 +14,8 @@ Entity* EntityHandle::get() const {
 std::string EntityHandle::name() const {
     Entity* ent = get();
     if (ent != nullptr) {
-        return ent->name;
+        const char* n = ent->name();
+        return n ? n : "";
     }
     if (uuid.size() > 8) {
         return "<" + uuid.substr(0, 8) + "...>";
@@ -26,7 +27,8 @@ EntityHandle EntityHandle::from_entity(Entity* entity) {
     if (entity == nullptr) {
         return EntityHandle();
     }
-    return EntityHandle(entity->uuid);
+    const char* u = entity->uuid();
+    return EntityHandle(u ? u : "");
 }
 
 } // namespace termin

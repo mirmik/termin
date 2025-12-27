@@ -293,12 +293,12 @@ PYBIND11_MODULE(_entity_native, m) {
                 ent = new Entity(gpose, name, uuid);
             }
             // Set additional attributes
-            ent->priority = priority;
-            ent->pickable = pickable;
-            ent->selectable = selectable;
-            ent->serializable = serializable;
-            ent->layer = static_cast<uint64_t>(layer);
-            ent->flags = flags;
+            ent->set_priority(priority);
+            ent->set_pickable(pickable);
+            ent->set_selectable(selectable);
+            ent->set_serializable(serializable);
+            ent->set_layer(static_cast<uint64_t>(layer));
+            ent->set_flags(flags);
             return ent;
         }), py::arg("pose") = py::none(), py::arg("name") = "entity",
             py::arg("priority") = 0, py::arg("pickable") = true,
@@ -306,29 +306,55 @@ PYBIND11_MODULE(_entity_native, m) {
             py::arg("layer") = 0, py::arg("flags") = 0, py::arg("uuid") = "")
 
         // Identity
-        .def_readwrite("uuid", &Entity::uuid)
-        .def_readwrite("name", &Entity::name)
+        .def_property_readonly("uuid", [](const Entity& e) -> py::object {
+            const char* u = e.uuid();
+            if (u) return py::str(u);
+            return py::none();
+        })
+        .def_property("name",
+            [](const Entity& e) -> py::object {
+                const char* n = e.name();
+                if (n) return py::str(n);
+                return py::none();
+            },
+            [](Entity& e, const std::string& n) {
+                e.set_name(n);
+            })
         .def_property_readonly("runtime_id", [](const Entity& e) -> uint64_t {
-            return e.runtime_id;  // Cached in Identifiable base class
+            return e.runtime_id();
         })
 
         // Flags
-        .def_readwrite("visible", &Entity::visible)
-        .def_readwrite("active", &Entity::active)
-        .def_readwrite("pickable", &Entity::pickable)
-        .def_readwrite("selectable", &Entity::selectable)
+        .def_property("visible",
+            [](const Entity& e) { return e.visible(); },
+            [](Entity& e, bool v) { e.set_visible(v); })
+        .def_property("active",
+            [](const Entity& e) { return e.active(); },
+            [](Entity& e, bool v) { e.set_active(v); })
+        .def_property("pickable",
+            [](const Entity& e) { return e.pickable(); },
+            [](Entity& e, bool v) { e.set_pickable(v); })
+        .def_property("selectable",
+            [](const Entity& e) { return e.selectable(); },
+            [](Entity& e, bool v) { e.set_selectable(v); })
 
         // Rendering
-        .def_readwrite("priority", &Entity::priority)
-        .def_readwrite("layer", &Entity::layer)
-        .def_readwrite("flags", &Entity::flags)
+        .def_property("priority",
+            [](const Entity& e) { return e.priority(); },
+            [](Entity& e, int p) { e.set_priority(p); })
+        .def_property("layer",
+            [](const Entity& e) { return e.layer(); },
+            [](Entity& e, uint64_t l) { e.set_layer(l); })
+        .def_property("flags",
+            [](const Entity& e) { return e.flags(); },
+            [](Entity& e, uint64_t f) { e.set_flags(f); })
 
         // Pick ID
         .def_property_readonly("pick_id", &Entity::pick_id)
 
         // Transform access - returns the GeneralTransform3 wrapper
         .def_property_readonly("transform", [](Entity& e) -> GeneralTransform3 {
-            return e.transform;
+            return e.transform();
         })
 
         // Pose shortcuts
@@ -373,14 +399,14 @@ PYBIND11_MODULE(_entity_native, m) {
         })
 
         .def("set_visible", [](Entity& e, bool flag) {
-            e.visible = flag;
+            e.set_visible(flag);
             for (Entity* child : e.children()) {
                 py::cast(child, py::return_value_policy::reference).attr("set_visible")(flag);
             }
         }, py::arg("flag"))
 
         .def("is_pickable", [](Entity& e) {
-            return e.pickable && e.visible && e.active;
+            return e.pickable() && e.visible() && e.active();
         })
 
         .def_static("lookup_by_pick_id", [](uint32_t pid) -> Entity* {
@@ -511,7 +537,9 @@ PYBIND11_MODULE(_entity_native, m) {
         })
 
         // Serialization
-        .def_readwrite("serializable", &Entity::serializable)
+        .def_property("serializable",
+            [](const Entity& e) { return e.serializable(); },
+            [](Entity& e, bool v) { e.set_serializable(v); })
         .def("serialize", [](Entity& e) -> py::object {
             nos::trent data = e.serialize();
             if (data.is_nil()) {
@@ -545,7 +573,7 @@ PYBIND11_MODULE(_entity_native, m) {
             // Serialize children recursively
             py::list children_list;
             for (Entity* child : e.children()) {
-                if (child->serializable) {
+                if (child->serializable()) {
                     py::object child_obj = py::cast(child, py::return_value_policy::reference);
                     py::object child_data = child_obj.attr("serialize")();
                     if (!child_data.is_none()) {

@@ -3,11 +3,8 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <memory>
-#include <functional>
 #include <pybind11/pybind11.h>
 #include "../geom/general_transform3.hpp"
-#include "../core/identifiable.hpp"
 #include "../../trent/trent.h"
 #include "../../../core_c/include/tc_entity.h"
 
@@ -28,36 +25,21 @@ namespace termin {
 
 class Component;
 
-// Entity - container of components with transform data.
-// Unity-like architecture: Entity holds Components,
-// has a transform hierarchy, and belongs to a Scene.
-// Inherits from Identifiable for uuid and runtime_id.
-class ENTITY_API Entity : public Identifiable {
+// Entity - thin wrapper around tc_entity*.
+// All data is stored in tc_entity (C core).
+// Entity is created via new/delete for Python binding compatibility.
+// tc_entity->data points back to this Entity* for reverse lookup.
+class ENTITY_API Entity {
 public:
-    // Name (uuid comes from Identifiable)
-    std::string name;
-
-    // Transform - returns view wrapper over tc_entity's tc_transform
-    GeneralTransform3 transform;
-
-    // Flags
-    bool visible = true;
-    bool active = true;
-    bool pickable = true;
-    bool selectable = true;
-    bool serializable = true;
-
-    // Rendering
-    int priority = 0;      // lower values drawn first
-    uint64_t layer = 1;    // 64-bit layer mask
-    uint64_t flags = 0;    // custom flags
-
-    // Note: Components are stored in tc_entity (_e), not here.
-    // Use component_count() and component_at() to access them.
+    // The underlying C entity (owned by this wrapper)
+    tc_entity* _e = nullptr;
 
     // Constructors
     Entity(const std::string& name = "entity", const std::string& uuid = "");
     Entity(const GeneralPose3& pose, const std::string& name = "entity", const std::string& uuid = "");
+
+    // Wrap existing tc_entity (takes ownership)
+    explicit Entity(tc_entity* e);
 
     ~Entity();
 
@@ -69,30 +51,59 @@ public:
     Entity(Entity&& other) noexcept;
     Entity& operator=(Entity&& other) noexcept;
 
-    // --- Pick ID ---
+    // --- Identity (delegated to tc_entity) ---
 
-    /**
-     * Unique identifier for pick passes (hash from uuid).
-     * Computed lazily and cached.
-     */
-    uint32_t pick_id();
+    const char* uuid() const { return tc_entity_uuid(_e); }
+    uint64_t runtime_id() const { return tc_entity_runtime_id(_e); }
+    uint32_t pick_id() { return tc_entity_pick_id(_e); }
+
+    // --- Name ---
+
+    const char* name() const { return tc_entity_name(_e); }
+    void set_name(const std::string& n) { tc_entity_set_name(_e, n.c_str()); }
+
+    // --- Transform ---
+
+    GeneralTransform3 transform() const {
+        return GeneralTransform3(tc_entity_transform(_e));
+    }
+
+    // --- Flags ---
+
+    bool visible() const { return tc_entity_visible(_e); }
+    void set_visible(bool v) { tc_entity_set_visible(_e, v); }
+
+    bool active() const { return tc_entity_active(_e); }
+    void set_active(bool v) { tc_entity_set_active(_e, v); }
+
+    bool pickable() const { return tc_entity_pickable(_e); }
+    void set_pickable(bool v) { tc_entity_set_pickable(_e, v); }
+
+    bool selectable() const { return tc_entity_selectable(_e); }
+    void set_selectable(bool v) { tc_entity_set_selectable(_e, v); }
+
+    bool serializable() const { return tc_entity_serializable(_e); }
+    void set_serializable(bool v) { tc_entity_set_serializable(_e, v); }
+
+    int priority() const { return tc_entity_priority(_e); }
+    void set_priority(int p) { tc_entity_set_priority(_e, p); }
+
+    uint64_t layer() const { return tc_entity_layer(_e); }
+    void set_layer(uint64_t l) { tc_entity_set_layer(_e, l); }
+
+    uint64_t flags() const { return tc_entity_flags(_e); }
+    void set_flags(uint64_t f) { tc_entity_set_flags(_e, f); }
 
     // --- Component management ---
 
-    // Add C++ component (stores in tc_entity)
     void add_component(Component* component);
-
-    // Add component by tc_component pointer (for PythonComponent)
     void add_component_ptr(tc_component* c);
-
     void remove_component(Component* component);
     void remove_component_ptr(tc_component* c);
 
-    // Component access (delegates to tc_entity)
-    size_t component_count() const;
-    tc_component* component_at(size_t index) const;
+    size_t component_count() const { return tc_entity_component_count(_e); }
+    tc_component* component_at(size_t index) const { return tc_entity_component_at(_e, index); }
 
-    // Get C++ Component by type name
     Component* get_component_by_type(const std::string& type_name);
 
     template<typename T>
@@ -112,26 +123,23 @@ public:
     // --- Transform shortcuts ---
 
     const GeneralPose3& global_pose() const {
-        return transform.global_pose();
+        return transform().global_pose();
     }
 
     void relocate(const GeneralPose3& pose) {
-        transform.relocate(pose);
+        transform().relocate(pose);
     }
 
     void relocate(const Pose3& pose) {
-        transform.relocate(pose);
+        transform().relocate(pose);
     }
 
     void relocate_global(const GeneralPose3& pose) {
-        transform.relocate_global(pose);
+        transform().relocate_global(pose);
     }
 
-    /**
-     * Get 4x4 model matrix (column-major, OpenGL convention).
-     */
     void model_matrix(double* m) const {
-        transform.world_matrix(m);
+        transform().world_matrix(m);
     }
 
     // --- Hierarchy shortcuts ---
@@ -151,26 +159,15 @@ public:
     nos::trent serialize() const;
     static Entity* deserialize(const nos::trent& data);
 
-    // --- C Core Integration ---
+    // --- Raw access ---
 
-    // Get tc_entity pointer (creates lazily if needed)
-    tc_entity* c_entity();
-
-    // Sync C++ fields to C structure (call before C code uses _e)
-    void sync_to_c();
-
-    // Sync C structure back to C++ fields (call after C code modifies _e)
-    void sync_from_c();
-
-private:
-    uint32_t _pick_id = 0;
-    bool _pick_id_computed = false;
-
-    // C entity pointer (created lazily for tc_scene integration)
-    tc_entity* _e = nullptr;
-
-    void _compute_pick_id();
-    void _ensure_c_entity();
+    tc_entity* c_entity() { return _e; }
+    const tc_entity* c_entity() const { return _e; }
 };
+
+// Get Entity* from tc_entity* (via data pointer)
+inline Entity* entity_from_tc(tc_entity* e) {
+    return e ? static_cast<Entity*>(tc_entity_data(e)) : nullptr;
+}
 
 } // namespace termin

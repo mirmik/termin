@@ -20,15 +20,15 @@ public:
     INSPECT_FIELD(CXXRotatorComponent, speed, "Speed", "float", 0.0, 10.0, 0.1)
 
     void update(float dt) override {
-        if (!entity || !entity->transform.valid()) return;
+        if (!entity || !entity->transform().valid()) return;
 
-        GeneralPose3 pose = entity->transform.local_pose();
+        GeneralPose3 pose = entity->transform().local_pose();
         auto screw = Screw3{
             Vec3{0.0, 0.0, speed},
             Vec3{0.0, 0.0, 0.0}
         }.scaled(dt);
         pose = (pose * screw.to_pose()).normalized();
-        entity->transform.relocate(pose);
+        entity->transform().relocate(pose);
     }
 };
 
