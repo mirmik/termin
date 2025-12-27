@@ -208,15 +208,20 @@ void bind_graphics_backend(py::module_& m) {
         .def("create_external_framebuffer", [](OpenGLGraphicsBackend& self, uint32_t fbo_id, py::tuple size) {
             return self.create_external_framebuffer(fbo_id, size[0].cast<int>(), size[1].cast<int>());
         }, py::arg("fbo_id"), py::arg("size"))
-        // blit_framebuffer with 8 ints and with tuple rects
-        .def("blit_framebuffer", static_cast<void (OpenGLGraphicsBackend::*)(FramebufferHandle*, FramebufferHandle*, int, int, int, int, int, int, int, int)>(&OpenGLGraphicsBackend::blit_framebuffer))
-        .def("blit_framebuffer", [](OpenGLGraphicsBackend& self, FramebufferHandle* src, FramebufferHandle* dst, py::tuple src_rect, py::tuple dst_rect) {
+        // blit_framebuffer with tuple rects and optional blit_color/blit_depth
+        .def("blit_framebuffer", [](OpenGLGraphicsBackend& self, FramebufferHandle* src, FramebufferHandle* dst,
+                                    py::tuple src_rect, py::tuple dst_rect,
+                                    bool blit_color, bool blit_depth) {
             self.blit_framebuffer(src, dst,
                 src_rect[0].cast<int>(), src_rect[1].cast<int>(), src_rect[2].cast<int>(), src_rect[3].cast<int>(),
-                dst_rect[0].cast<int>(), dst_rect[1].cast<int>(), dst_rect[2].cast<int>(), dst_rect[3].cast<int>());
-        })
+                dst_rect[0].cast<int>(), dst_rect[1].cast<int>(), dst_rect[2].cast<int>(), dst_rect[3].cast<int>(),
+                blit_color, blit_depth);
+        }, py::arg("src"), py::arg("dst"), py::arg("src_rect"), py::arg("dst_rect"),
+           py::arg("blit_color") = true, py::arg("blit_depth") = false)
         // blit_framebuffer with Python FBO objects (for window FBOs)
-        .def("blit_framebuffer", [](OpenGLGraphicsBackend& self, py::object src, py::object dst, py::tuple src_rect, py::tuple dst_rect) {
+        .def("blit_framebuffer", [](OpenGLGraphicsBackend& self, py::object src, py::object dst,
+                                    py::tuple src_rect, py::tuple dst_rect,
+                                    bool blit_color, bool blit_depth) {
             // Extract FBO IDs from either C++ FramebufferHandle or Python OpenGLFramebufferHandle
             GLuint src_fbo = 0;
             GLuint dst_fbo = 0;
@@ -243,12 +248,18 @@ void bind_graphics_backend(py::module_& m) {
             int dx0 = dst_rect[0].cast<int>(), dy0 = dst_rect[1].cast<int>();
             int dx1 = dst_rect[2].cast<int>(), dy1 = dst_rect[3].cast<int>();
 
+            GLbitfield mask = 0;
+            if (blit_color) mask |= GL_COLOR_BUFFER_BIT;
+            if (blit_depth) mask |= GL_DEPTH_BUFFER_BIT;
+
             glBindFramebuffer(GL_READ_FRAMEBUFFER, src_fbo);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst_fbo);
-            glBlitFramebuffer(sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1,
-                              GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            if (mask != 0) {
+                glBlitFramebuffer(sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1, mask, GL_NEAREST);
+            }
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        })
+        }, py::arg("src"), py::arg("dst"), py::arg("src_rect"), py::arg("dst_rect"),
+           py::arg("blit_color") = true, py::arg("blit_depth") = false)
         .def("draw_ui_vertices", [](OpenGLGraphicsBackend& self, int64_t context_key, py::array_t<float> vertices) {
             auto buf = vertices.request();
             int count = static_cast<int>(buf.size / 2);

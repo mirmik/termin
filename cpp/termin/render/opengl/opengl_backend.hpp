@@ -241,7 +241,9 @@ public:
         FramebufferHandle* src,
         FramebufferHandle* dst,
         int src_x0, int src_y0, int src_x1, int src_y1,
-        int dst_x0, int dst_y0, int dst_x1, int dst_y1
+        int dst_x0, int dst_y0, int dst_x1, int dst_y1,
+        bool blit_color = true,
+        bool blit_depth = false
     ) override {
         GLuint src_fbo = src ? src->get_fbo_id() : 0;
         GLuint dst_fbo = dst ? dst->get_fbo_id() : 0;
@@ -249,12 +251,18 @@ public:
         glBindFramebuffer(GL_READ_FRAMEBUFFER, src_fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst_fbo);
 
-        glBlitFramebuffer(
-            src_x0, src_y0, src_x1, src_y1,
-            dst_x0, dst_y0, dst_x1, dst_y1,
-            GL_COLOR_BUFFER_BIT,
-            GL_NEAREST
-        );
+        GLbitfield mask = 0;
+        if (blit_color) mask |= GL_COLOR_BUFFER_BIT;
+        if (blit_depth) mask |= GL_DEPTH_BUFFER_BIT;
+
+        if (mask != 0) {
+            glBlitFramebuffer(
+                src_x0, src_y0, src_x1, src_y1,
+                dst_x0, dst_y0, dst_x1, dst_y1,
+                mask,
+                GL_NEAREST
+            );
+        }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }

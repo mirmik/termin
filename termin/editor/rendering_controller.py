@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from termin.visualization.platform.backends.base import BackendWindow, GraphicsBackend, WindowBackend
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
     from termin.visualization.render import RenderEngine, ViewportRenderState
+    from termin.visualization.render.framegraph import RenderPipeline
     from termin.editor.viewport_list_widget import ViewportListWidget
     from termin.editor.inspector_controller import InspectorController
 
@@ -139,6 +140,12 @@ class RenderingController:
         if self._center_tabs is not None:
             self._center_tabs.currentChanged.connect(self._on_center_tab_changed)
         self._inspector.viewport_inspector.depth_changed.connect(self._on_viewport_depth_changed)
+
+    def set_editor_pipeline_getter(self, getter: Callable[[], "RenderPipeline"]) -> None:
+        """Set callback for getting editor pipeline."""
+        self._get_editor_pipeline = getter
+        # Also update ViewportInspector
+        self._inspector.viewport_inspector.set_editor_pipeline_getter(getter)
 
     @property
     def displays(self) -> List["Display"]:
@@ -666,38 +673,21 @@ class RenderingController:
 
         Args:
             viewport: Viewport to set pipeline for.
-            pipeline: Pipeline to use, or None to use default.
+            pipeline: Pipeline to use, or None to disable rendering.
         """
-        display = viewport.display
-        if display is None:
-            return
+        old_pipeline = viewport.pipeline
+        viewport.pipeline = pipeline
 
-        display_id = id(display)
-        viewport_id = id(viewport)
-
-        # Get or create viewport state
-        if display_id not in self._display_render_states:
-            self._display_render_states[display_id] = {}
-
-        viewport_states = self._display_render_states[display_id]
-
-        if viewport_id not in viewport_states:
-            from termin.visualization.render import ViewportRenderState
-            from termin.visualization.core.viewport import make_default_pipeline
-
-            default_pipeline = pipeline if pipeline is not None else make_default_pipeline()
-            viewport_states[viewport_id] = ViewportRenderState(pipeline=default_pipeline)
-        else:
-            state = viewport_states[viewport_id]
-            if pipeline is not None:
-                state.pipeline = pipeline
-                # Clear FBO pool when pipeline changes
-                state.fbos.clear()
-            else:
-                # Reset to default
-                from termin.visualization.core.viewport import make_default_pipeline
-                state.pipeline = make_default_pipeline()
-                state.fbos.clear()
+        # Clear FBO pool when pipeline changes
+        if old_pipeline is not pipeline:
+            display = viewport.display
+            if display is not None:
+                display_id = id(display)
+                viewport_id = id(viewport)
+                viewport_states = self._display_render_states.get(display_id, {})
+                state = viewport_states.get(viewport_id)
+                if state is not None:
+                    state.fbos.clear()
 
         self._request_update()
 
@@ -711,7 +701,6 @@ class RenderingController:
     def _get_or_create_viewport_state(self, display_id: int, viewport: "Viewport"):
         """Get or create ViewportRenderState for a viewport."""
         from termin.visualization.render import ViewportRenderState
-        from termin.visualization.core.viewport import make_default_pipeline
 
         viewport_states = self._display_render_states.get(display_id)
         if viewport_states is None:
@@ -719,9 +708,7 @@ class RenderingController:
 
         viewport_id = id(viewport)
         if viewport_id not in viewport_states:
-            viewport_states[viewport_id] = ViewportRenderState(
-                pipeline=make_default_pipeline()
-            )
+            viewport_states[viewport_id] = ViewportRenderState()
 
         return viewport_states[viewport_id]
 
@@ -1003,6 +990,10 @@ class RenderingController:
             sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
 
             for viewport in sorted_viewports:
+                # Skip viewports without pipeline
+                if viewport.pipeline is None:
+                    continue
+
                 state = self._get_or_create_viewport_state(display_id, viewport)
                 if state is None:
                     continue
@@ -1011,6 +1002,7 @@ class RenderingController:
                     camera=viewport.camera,
                     rect=viewport.rect,
                     canvas=viewport.canvas,
+                    pipeline=viewport.pipeline,
                 )
                 views_and_states.append((view, state))
 

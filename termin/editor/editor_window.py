@@ -252,6 +252,11 @@ class EditorWindow(QMainWindow):
         self.inspector = self.entity_inspector
         self._inspector_controller.set_scene(self.scene)
 
+        # Handle ViewportHintComponent changes
+        self.entity_inspector.component_field_changed.connect(
+            self._on_component_field_changed
+        )
+
         # --- DialogManager ---
         self._dialog_manager = DialogManager(
             parent=self,
@@ -346,8 +351,8 @@ class EditorWindow(QMainWindow):
         editor_pipeline = self.editor_viewport.make_editor_pipeline()
         self._rendering_controller.set_viewport_pipeline(self.viewport, editor_pipeline)
 
-        # Set editor pipeline getter for ViewportInspector
-        self._inspector_controller.viewport_inspector.set_editor_pipeline_getter(
+        # Set editor pipeline getter for RenderingController (and ViewportInspector)
+        self._rendering_controller.set_editor_pipeline_getter(
             self.editor_viewport.make_editor_pipeline
         )
 
@@ -678,6 +683,49 @@ class EditorWindow(QMainWindow):
     def _on_material_inspector_changed(self):
         """Обработчик изменения материала в инспекторе."""
         self._request_viewport_update()
+
+    def _on_component_field_changed(self, component, field_key: str, new_value):
+        """Handle component field changes, particularly ViewportHintComponent."""
+        from termin.visualization.core.viewport_hint import ViewportHintComponent
+
+        if not isinstance(component, ViewportHintComponent):
+            return
+
+        if field_key != "pipeline_name":
+            return
+
+        # Get camera from component's entity
+        entity = component.entity
+        if entity is None:
+            return
+
+        from termin.visualization.core.camera import CameraComponent
+        camera = entity.get_component(CameraComponent)
+        if camera is None:
+            return
+
+        # Create pipeline based on name
+        pipeline = self._create_pipeline_by_name(new_value)
+
+        # Update all viewports using this camera
+        for viewport in camera.viewports:
+            viewport.pipeline = pipeline
+
+        self._request_viewport_update()
+
+    def _create_pipeline_by_name(self, pipeline_name: str):
+        """Create pipeline by name."""
+        from termin.visualization.core.viewport import make_default_pipeline
+
+        if pipeline_name == "(Default)" or not pipeline_name:
+            return make_default_pipeline()
+        elif pipeline_name == "(Editor)":
+            if self.editor_viewport is not None:
+                return self.editor_viewport.make_editor_pipeline()
+            return make_default_pipeline()
+        else:
+            # TODO: Lookup named pipeline from ResourceManager
+            return make_default_pipeline()
 
     def show_entity_inspector(self, entity: Entity | None = None):
         """Show EntityInspector and set target."""

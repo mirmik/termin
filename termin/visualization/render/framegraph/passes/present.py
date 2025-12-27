@@ -12,9 +12,10 @@ def _get_texture_from_resource(resource, shadow_map_index: int = 0):
     Поддерживает:
     - SingleFBO: возвращает color_texture()
     - ShadowMapArrayResource: возвращает текстуру из первого entry (или по индексу)
+    - FramebufferHandle (C++): возвращает color_texture()
 
     Args:
-        resource: объект ресурса (SingleFBO, ShadowMapArrayResource и т.д.)
+        resource: объект ресурса (SingleFBO, ShadowMapArrayResource, FramebufferHandle)
         shadow_map_index: индекс shadow map для ShadowMapArrayResource
 
     Returns:
@@ -23,24 +24,23 @@ def _get_texture_from_resource(resource, shadow_map_index: int = 0):
     if resource is None:
         return None
 
-    # Проверяем тип ресурса через атрибут resource_type
-    if hasattr(resource, 'resource_type'):
-        resource_type = resource.resource_type
+    from termin.visualization.render.framegraph.resource import (
+        SingleFBO,
+        ShadowMapArrayResource,
+    )
+    from termin.graphics import FramebufferHandle
 
-        if resource_type == "shadow_map_array":
-            # ShadowMapArrayResource - берем первую текстуру по умолчанию
-            if len(resource) == 0:
-                return None
-            index = min(shadow_map_index, len(resource) - 1)
-            entry = resource[index]
-            return entry.texture()
+    if isinstance(resource, ShadowMapArrayResource):
+        if len(resource) == 0:
+            return None
+        index = min(shadow_map_index, len(resource) - 1)
+        entry = resource[index]
+        return entry.texture()
 
-        elif resource_type == "fbo":
-            # SingleFBO
-            return resource.color_texture()
+    if isinstance(resource, SingleFBO):
+        return resource.color_texture()
 
-    # Для обратной совместимости: если нет resource_type, пробуем color_texture
-    if hasattr(resource, 'color_texture'):
+    if isinstance(resource, FramebufferHandle):
         return resource.color_texture()
 
     return None

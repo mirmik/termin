@@ -37,11 +37,24 @@ class FrameDebuggerPass(RenderFramePass):
         # SDL окно дебаггера и callback для depth
         self._debugger_window: Any = None
         self._depth_callback: Callable[[Any], None] | None = None
+        self._depth_error_callback: Callable[[str], None] | None = None
+
+        # Флаг запроса обновления depth buffer (только по кнопке)
+        self._depth_update_requested: bool = False
+
+        # Временный FBO для resolve MSAA (создаётся при необходимости)
+        self._resolve_fbo: "FramebufferHandle | None" = None
+        self._resolve_fbo_size: tuple[int, int] = (0, 0)
+
+    def request_depth_update(self) -> None:
+        """Запросить обновление depth buffer на следующем кадре."""
+        self._depth_update_requested = True
 
     def set_debugger_window(
         self,
         window,
         depth_callback: Callable[[Any], None] | None = None,
+        depth_error_callback: Callable[[str], None] | None = None,
     ) -> None:
         """
         Устанавливает SDL окно дебаггера для блита.
@@ -49,9 +62,11 @@ class FrameDebuggerPass(RenderFramePass):
         Args:
             window: SDL окно дебаггера. None — отключить.
             depth_callback: Callback для передачи depth buffer (numpy array).
+            depth_error_callback: Callback для сообщения об ошибке чтения depth.
         """
         self._debugger_window = window
         self._depth_callback = depth_callback
+        self._depth_error_callback = depth_error_callback
 
     def required_resources(self) -> set[str]:
         """Динамически определяет читаемые ресурсы."""
@@ -79,6 +94,107 @@ class FrameDebuggerPass(RenderFramePass):
             get_source_res=None,
             pass_name=data.get("pass_name", "FrameDebugger"),
         )
+
+    def _report_depth_error(self, message: str) -> None:
+        """Сообщает об ошибке чтения depth buffer."""
+        if self._depth_error_callback is not None:
+            self._depth_error_callback(message)
+
+    def _read_depth_buffer(self, graphics: "GraphicsBackend", fbo: "FramebufferHandle") -> None:
+        """Читает depth buffer и вызывает соответствующий callback.
+
+        Args:
+            graphics: Бэкенд графики.
+            fbo: FramebufferHandle для чтения (должен быть non-MSAA, после резолва).
+        """
+        if fbo is None:
+            self._report_depth_error("FBO не найден")
+            return
+
+        # Пытаемся прочитать depth
+        depth = graphics.read_depth_buffer(fbo)
+        if depth is None:
+            self._report_depth_error("read_depth_buffer вернул None")
+            return
+
+        if self._depth_callback is not None:
+            self._depth_callback(depth)
+
+    def _get_or_create_resolve_fbo(
+        self, graphics: "GraphicsBackend", width: int, height: int
+    ) -> "FramebufferHandle":
+        """Возвращает FBO для resolve MSAA, создаёт при необходимости."""
+        if (
+            self._resolve_fbo is not None
+            and self._resolve_fbo_size == (width, height)
+        ):
+            return self._resolve_fbo
+
+        # Создаём новый FBO нужного размера
+        self._resolve_fbo = graphics.create_framebuffer(width, height, samples=1)
+        self._resolve_fbo_size = (width, height)
+        return self._resolve_fbo
+
+    def _get_fbo_from_resource(self, resource) -> "FramebufferHandle | None":
+        """Извлекает FramebufferHandle из ресурса."""
+        from termin.visualization.render.framegraph.resource import (
+            SingleFBO,
+            ShadowMapArrayResource,
+        )
+        from termin.graphics import FramebufferHandle
+
+        if isinstance(resource, ShadowMapArrayResource):
+            if len(resource) == 0:
+                return None
+            return resource[0].fbo
+
+        if isinstance(resource, SingleFBO):
+            return resource._fbo
+
+        if isinstance(resource, FramebufferHandle):
+            return resource
+
+        return None
+
+    def _get_texture_from_resource(self, resource, shadow_map_index: int = 0):
+        """
+        Извлекает текстуру из ресурса framegraph для отображения.
+
+        Поддерживает:
+        - SingleFBO: возвращает color_texture()
+        - ShadowMapArrayResource: возвращает текстуру из первого entry (или по индексу)
+        - FramebufferHandle (C++): возвращает color_texture()
+
+        Args:
+            resource: объект ресурса (SingleFBO, ShadowMapArrayResource, FramebufferHandle)
+            shadow_map_index: индекс shadow map для ShadowMapArrayResource
+
+        Returns:
+            GPUTextureHandle или None
+        """
+        if resource is None:
+            return None
+
+        from termin.visualization.render.framegraph.resource import (
+            SingleFBO,
+            ShadowMapArrayResource,
+        )
+        from termin.graphics import FramebufferHandle
+
+        if isinstance(resource, ShadowMapArrayResource):
+            if len(resource) == 0:
+                return None
+            index = min(shadow_map_index, len(resource) - 1)
+            entry = resource[index]
+            return entry.texture()
+
+        if isinstance(resource, SingleFBO):
+            return resource.color_texture()
+
+        if isinstance(resource, FramebufferHandle):
+            return resource.color_texture()
+
+        return None
 
     def execute(
         self,
@@ -109,52 +225,76 @@ class FrameDebuggerPass(RenderFramePass):
 
         from termin.visualization.render.framegraph.passes.present import (
             PresentToScreenPass,
-            _get_texture_from_resource,
         )
         from sdl2 import video as sdl_video
 
-        # Читаем depth buffer до переключения контекста
-        if self._depth_callback is not None:
-            depth = graphics.read_depth_buffer(src_fb)
-            if depth is not None:
-                self._depth_callback(depth)
+        # Получаем FBO из ресурса
+        fbo = self._get_fbo_from_resource(src_fb)
+        if fbo is None:
+            return
 
-        # Извлекаем текстуру
-        tex = _get_texture_from_resource(src_fb)
+        # Проверяем, нужен ли resolve для MSAA
+        texture_fbo = fbo
+        if fbo.is_msaa():
+            # Создаём или переиспользуем resolve FBO
+            w, h = fbo.get_size()
+            resolve_fbo = self._get_or_create_resolve_fbo(graphics, w, h)
+            # Blit MSAA -> non-MSAA (color + depth)
+            graphics.blit_framebuffer(
+                fbo, resolve_fbo,
+                (0, 0, w, h),
+                (0, 0, w, h),
+                blit_color=True,
+                blit_depth=True,
+            )
+            texture_fbo = resolve_fbo
+
+        # Читаем depth buffer только по запросу (после резолва, если был MSAA)
+        if self._depth_update_requested:
+            self._depth_update_requested = False
+            self._read_depth_buffer(graphics, texture_fbo)
+
+        # Извлекаем текстуру из (возможно resolved) FBO
+        tex = texture_fbo.color_texture()
         if tex is None:
             return
 
-        # Запоминаем текущий контекст и окно
-        saved_context = sdl_video.SDL_GL_GetCurrentContext()
-        saved_window = sdl_video.SDL_GL_GetCurrentWindow()
+        try:
+            # Запоминаем текущий контекст и окно
+            saved_context = sdl_video.SDL_GL_GetCurrentContext()
+            saved_window = sdl_video.SDL_GL_GetCurrentWindow()
 
-        # Переключаемся на контекст окна дебаггера
-        self._debugger_window.make_current()
+            # Переключаемся на контекст окна дебаггера
+            self._debugger_window.make_current()
 
-        # Получаем размер окна
-        dst_w, dst_h = self._debugger_window.framebuffer_size()
+            # Получаем размер окна
+            dst_w, dst_h = self._debugger_window.framebuffer_size()
 
-        # Биндим framebuffer 0 (окно)
-        graphics.bind_framebuffer(None)
-        graphics.set_viewport(0, 0, dst_w, dst_h)
+            # Биндим framebuffer 0 (окно)
+            graphics.bind_framebuffer(None)
+            graphics.set_viewport(0, 0, dst_w, dst_h)
 
-        graphics.set_depth_test(False)
-        graphics.set_depth_mask(False)
+            graphics.set_depth_test(False)
+            graphics.set_depth_mask(False)
 
-        # Рендерим fullscreen quad
-        shader = PresentToScreenPass._get_shader()
-        shader.ensure_ready(graphics)
-        shader.use()
-        shader.set_uniform_int("u_tex", 0)
-        tex.bind(0)
-        graphics.draw_ui_textured_quad(0)
+            # Рендерим fullscreen quad
+            shader = PresentToScreenPass._get_shader()
+            shader.ensure_ready(graphics)
+            shader.use()
+            shader.set_uniform_int("u_tex", 0)
+            tex.bind(0)
+            graphics.draw_ui_textured_quad(0)
 
-        graphics.set_depth_test(True)
-        graphics.set_depth_mask(True)
+            graphics.set_depth_test(True)
+            graphics.set_depth_mask(True)
 
-        # Показываем результат
-        self._debugger_window.swap_buffers()
+            # Показываем результат
+            self._debugger_window.swap_buffers()
 
-        # Восстанавливаем исходный контекст
-        if saved_window and saved_context:
-            sdl_video.SDL_GL_MakeCurrent(saved_window, saved_context)
+        except Exception:
+            pass
+
+        finally:
+            # Восстанавливаем исходный контекст
+            if saved_window and saved_context:
+                sdl_video.SDL_GL_MakeCurrent(saved_window, saved_context)

@@ -193,6 +193,8 @@ class ComponentInspectorPanel(QWidget):
     """
 
     component_changed = pyqtSignal()
+    # Emitted when a field changes: (component, field_key, new_value)
+    field_changed = pyqtSignal(object, str, object)
 
     def __init__(self, resources: ResourceManager, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -224,6 +226,10 @@ class ComponentInspectorPanel(QWidget):
         self, handler: Optional[Callable[[UndoCommand, bool], None]]
     ) -> None:
         self._push_undo_command = handler
+
+    def set_scene_getter(self, getter) -> None:
+        """Set callback for getting current scene (for layer_mask widget)."""
+        self._panel.set_scene_getter(getter)
 
     def set_component(self, comp: Optional[Component]) -> None:
         self._component = comp
@@ -280,6 +286,7 @@ class ComponentInspectorPanel(QWidget):
         if key == "override_material":
             self._update_material_props_editor()
 
+        self.field_changed.emit(self._component, key, new_value)
         self.component_changed.emit()
 
     def _on_material_property_changed(self, name: str, value: Any) -> None:
@@ -300,6 +307,8 @@ class EntityInspector(QWidget):
 
     transform_changed = pyqtSignal()
     component_changed = pyqtSignal()
+    # Emitted when a component field changes: (component, field_key, new_value)
+    component_field_changed = pyqtSignal(object, str, object)
 
     def __init__(self, resources: ResourceManager, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -338,6 +347,9 @@ class EntityInspector(QWidget):
         self._component_inspector.component_changed.connect(
             self._on_component_changed
         )
+        self._component_inspector.field_changed.connect(
+            self.component_field_changed
+        )
         self._components_panel.components_changed.connect(
             self._on_components_changed
         )
@@ -356,6 +368,7 @@ class EntityInspector(QWidget):
         """Set the scene for layer/flag names."""
         self._scene = scene
         self._entity_properties_inspector.set_scene(scene)
+        self._component_inspector.set_scene_getter(lambda: self._scene)
 
     def _on_components_changed(self) -> None:
         ent = self._entity

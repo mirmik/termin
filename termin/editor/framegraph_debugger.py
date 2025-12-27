@@ -80,10 +80,16 @@ class SingleFBOHandler(ResourceHandler):
     """
 
     def get_texture(self, resource, context: dict) -> "GPUTextureHandle | None":
-        """Возвращает color_texture из SingleFBO."""
+        """Возвращает color_texture из SingleFBO или FramebufferHandle."""
         if resource is None:
             return None
-        if hasattr(resource, 'color_texture'):
+
+        from termin.visualization.render.framegraph.resource import SingleFBO
+        from termin.graphics import FramebufferHandle
+
+        if isinstance(resource, SingleFBO):
+            return resource.color_texture()
+        if isinstance(resource, FramebufferHandle):
             return resource.color_texture()
         return None
 
@@ -121,23 +127,19 @@ class ShadowMapArrayHandler(ResourceHandler):
         if resource is None:
             return None
 
-        shadow_map_index = context.get('shadow_map_index', 0)
+        from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 
-        # Проверяем, что это ShadowMapArrayResource
-        if not hasattr(resource, '__len__') or not hasattr(resource, '__getitem__'):
+        if not isinstance(resource, ShadowMapArrayResource):
             return None
 
         if len(resource) == 0:
             return None
 
-        # Ограничиваем индекс размером массива
+        shadow_map_index = context.get('shadow_map_index', 0)
         index = min(shadow_map_index, len(resource) - 1)
         entry = resource[index]
 
-        if hasattr(entry, 'texture'):
-            return entry.texture()
-
-        return None
+        return entry.texture()
 
     def create_ui_panel(self, parent: QtWidgets.QWidget) -> QtWidgets.QWidget | None:
         """Создаёт панель с ComboBox для выбора shadow map."""
@@ -159,22 +161,20 @@ class ShadowMapArrayHandler(ResourceHandler):
         if self._combo is None or resource is None:
             return
 
-        # Получаем количество shadow maps
-        count = len(resource) if hasattr(resource, '__len__') else 0
+        from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
+
+        if not isinstance(resource, ShadowMapArrayResource):
+            return
+
+        count = len(resource)
 
         # Блокируем сигналы при обновлении
         self._combo.blockSignals(True)
         self._combo.clear()
 
-        if count > 0:
-            for i in range(count):
-                # Пытаемся получить информацию об источнике света
-                try:
-                    entry = resource[i]
-                    light_index = entry.light_index if hasattr(entry, 'light_index') else i
-                    self._combo.addItem(f"Light {light_index}", i)
-                except (IndexError, AttributeError, TypeError):
-                    self._combo.addItem(f"Shadow Map {i}", i)
+        for i in range(count):
+            entry = resource[i]
+            self._combo.addItem(f"Light {entry.light_index}", i)
 
         # Устанавливаем первый элемент по умолчанию
         if count > 0:
@@ -196,6 +196,7 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
     созданным в основном рендер-контексте.
     """
     depthImageUpdated = QtCore.pyqtSignal(QtGui.QImage)
+    depthErrorUpdated = QtCore.pyqtSignal(str)
 
     def __init__(
         self,
@@ -220,6 +221,9 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
 
         # Captured depth для режима "внутри пасса" (передаётся через callback)
         self._captured_depth: Optional[np.ndarray] = None
+
+        # Флаг запроса обновления depth buffer (только по кнопке)
+        self._depth_update_requested: bool = False
 
         # Реестр обработчиков ресурсов
         self._handlers: dict[str, ResourceHandler] = {
@@ -353,6 +357,14 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._captured_depth = depth_array
         self._emit_depth_image(depth_array)
 
+    def on_depth_error(self, message: str) -> None:
+        """
+        Callback для сообщения об ошибке чтения depth buffer.
+
+        Вызывается из FrameDebuggerPass при невозможности прочитать depth.
+        """
+        self.depthErrorUpdated.emit(message)
+
     def _emit_depth_image(self, depth: np.ndarray) -> None:
         """Конвертирует depth array в QImage и эмитит сигнал."""
         if depth is None:
@@ -438,6 +450,10 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         self._channel_mode = mode
         self.render()
 
+    def request_depth_update(self) -> None:
+        """Запросить обновление depth buffer на следующем рендере."""
+        self._depth_update_requested = True
+
     def get_resource_type(self) -> str | None:
         """
         Возвращает тип текущего ресурса.
@@ -448,8 +464,17 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         resource = self._current_resource()
         if resource is None:
             return None
-        if hasattr(resource, 'resource_type'):
-            return resource.resource_type
+
+        from termin.visualization.render.framegraph.resource import (
+            SingleFBO,
+            ShadowMapArrayResource,
+        )
+        from termin.graphics import FramebufferHandle
+
+        if isinstance(resource, ShadowMapArrayResource):
+            return "shadow_map_array"
+        if isinstance(resource, (SingleFBO, FramebufferHandle)):
+            return "fbo"
         return None
 
     def _update_depth_image(self) -> None:
@@ -537,7 +562,11 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         gl.glEnable(gl.GL_DEPTH_TEST)
 
         self._sdl_window.swap_buffers()
-        self._update_depth_image()
+
+        # Читаем depth только по запросу (кнопка Refresh)
+        if self._depth_update_requested:
+            self._depth_update_requested = False
+            self._update_depth_image()
 
         # Восстанавливаем контекст
         if saved_window and saved_context:
@@ -604,12 +633,16 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._selected_symbol: str | None = None
 
         # Debug source resource name (for "between passes" mode)
-        self._debug_source_res: str = "color_pp"
+        # Будет установлен при инициализации из первого доступного ресурса
+        self._debug_source_res: str = ""
         # Paused state
         self._debug_paused: bool = False
 
         # FrameDebuggerPass для режима "между пассами" (создаётся динамически)
         self._frame_debugger_pass = None
+
+        # UI элементы (инициализируются в _build_ui)
+        self._depth_label: QtWidgets.QLabel | None = None
 
         self._build_ui()
 
@@ -617,49 +650,66 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self.setWindowTitle("Framegraph Debugger")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
         self.setModal(False)
-        self.setMinimumSize(450, 400)
+        self.setMinimumSize(800, 600)
+        self.resize(900, 700)
 
         layout = QtWidgets.QVBoxLayout(self)
 
-        # ============ Выбор viewport ============
+        # ============ Верхняя панель: настройки слева, pipeline справа ============
+        top_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+
+        # --- Левая часть: настройки ---
+        settings_widget = QtWidgets.QWidget()
+        settings_layout = QtWidgets.QVBoxLayout(settings_widget)
+        settings_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Выбор viewport
         viewport_row = QtWidgets.QHBoxLayout()
         viewport_label = QtWidgets.QLabel("Viewport:")
         self._viewport_combo = QtWidgets.QComboBox()
         self._viewport_combo.currentIndexChanged.connect(self._on_viewport_selected)
         viewport_row.addWidget(viewport_label)
         viewport_row.addWidget(self._viewport_combo, 1)
-        layout.addLayout(viewport_row)
+        settings_layout.addLayout(viewport_row)
 
-        # ============ Группа выбора режима ============
-        mode_group = QtWidgets.QGroupBox("Режим подключения")
-        mode_layout = QtWidgets.QVBoxLayout(mode_group)
-        self._radio_between = QtWidgets.QRadioButton("Между пассами (ресурс FBO)")
-        self._radio_inside = QtWidgets.QRadioButton("Внутри пасса (символ)")
+        # Группа выбора режима
+        mode_group = QtWidgets.QGroupBox("Режим")
+        mode_layout = QtWidgets.QHBoxLayout(mode_group)
+        self._radio_between = QtWidgets.QRadioButton("Между пассами")
+        self._radio_inside = QtWidgets.QRadioButton("Внутри пасса")
         self._radio_between.setChecked(True)
-
         self._radio_between.toggled.connect(self._on_mode_changed)
-
         mode_layout.addWidget(self._radio_between)
         mode_layout.addWidget(self._radio_inside)
-        layout.addWidget(mode_group)
+        settings_layout.addWidget(mode_group)
 
-        # ============ Панель «Между пассами» ============
+        # Панель «Между пассами»
         self._between_panel = QtWidgets.QWidget()
-        between_layout = QtWidgets.QHBoxLayout(self._between_panel)
+        between_layout = QtWidgets.QVBoxLayout(self._between_panel)
         between_layout.setContentsMargins(0, 0, 0, 0)
 
+        resource_row = QtWidgets.QHBoxLayout()
         self._resource_label = QtWidgets.QLabel("Ресурс:")
         self._resource_combo = QtWidgets.QComboBox()
         self._resource_combo.currentTextChanged.connect(self._on_resource_selected)
-        between_layout.addWidget(self._resource_label)
-        between_layout.addWidget(self._resource_combo, 1)
-        layout.addWidget(self._between_panel)
+        resource_row.addWidget(self._resource_label)
+        resource_row.addWidget(self._resource_combo, 1)
+        between_layout.addLayout(resource_row)
 
-        # ============ Панель «Внутри пасса» ============
+        # Пасс, который пишет выбранный ресурс
+        self._writer_pass_label = QtWidgets.QLabel()
+        self._writer_pass_label.setStyleSheet(
+            "QLabel { color: #8be9fd; font-weight: bold; }"
+        )
+        between_layout.addWidget(self._writer_pass_label)
+
+        settings_layout.addWidget(self._between_panel)
+
+        # Панель «Внутри пасса»
         self._inside_panel = QtWidgets.QWidget()
         inside_layout = QtWidgets.QVBoxLayout(self._inside_panel)
         inside_layout.setContentsMargins(0, 0, 0, 0)
-        # Выбор пасса
+
         pass_row = QtWidgets.QHBoxLayout()
         self._pass_label = QtWidgets.QLabel("Пасс:")
         self._pass_combo = QtWidgets.QComboBox()
@@ -667,7 +717,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         pass_row.addWidget(self._pass_label)
         pass_row.addWidget(self._pass_combo, 1)
         inside_layout.addLayout(pass_row)
-        # Выбор символа
+
         symbol_row = QtWidgets.QHBoxLayout()
         self._symbol_label = QtWidgets.QLabel("Символ:")
         self._symbol_combo = QtWidgets.QComboBox()
@@ -675,37 +725,67 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         symbol_row.addWidget(self._symbol_label)
         symbol_row.addWidget(self._symbol_combo, 1)
         inside_layout.addLayout(symbol_row)
-        layout.addWidget(self._inside_panel)
-        self._inside_panel.hide()  # По умолчанию скрыта
 
-        # ============ Контейнер для динамических UI панелей обработчиков ресурсов ============
+        settings_layout.addWidget(self._inside_panel)
+        self._inside_panel.hide()
+
+        # Контейнер для UI обработчиков ресурсов
         self._resource_ui_container = QtWidgets.QWidget()
         self._resource_ui_layout = QtWidgets.QVBoxLayout(self._resource_ui_container)
         self._resource_ui_layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self._resource_ui_container)
-        self._resource_ui_container.hide()  # По умолчанию скрыт
+        settings_layout.addWidget(self._resource_ui_container)
+        self._resource_ui_container.hide()
 
-        # Текущая UI панель обработчика
         self._current_handler_ui: QtWidgets.QWidget | None = None
         self._current_handler: ResourceHandler | None = None
 
-        # ============ Пауза и выбор канала ============
-        controls_row = QtWidgets.QHBoxLayout()
+        # Информация о FBO
+        self._fbo_info_label = QtWidgets.QLabel()
+        self._fbo_info_label.setStyleSheet(
+            "QLabel { background-color: #2a2a2a; padding: 4px; border-radius: 3px; }"
+        )
+        self._fbo_info_label.setWordWrap(True)
+        settings_layout.addWidget(self._fbo_info_label)
 
+        # Пауза и выбор канала
+        controls_row = QtWidgets.QHBoxLayout()
         self._pause_check = QtWidgets.QCheckBox("Пауза")
         self._pause_check.toggled.connect(self._on_pause_toggled)
         controls_row.addWidget(self._pause_check)
-
         controls_row.addStretch()
-
         channel_label = QtWidgets.QLabel("Канал:")
         self._channel_combo = QtWidgets.QComboBox()
         self._channel_combo.addItems(["RGB", "R", "G", "B", "A"])
         self._channel_combo.currentIndexChanged.connect(self._on_channel_changed)
         controls_row.addWidget(channel_label)
         controls_row.addWidget(self._channel_combo)
+        settings_layout.addLayout(controls_row)
 
-        layout.addLayout(controls_row)
+        settings_layout.addStretch()
+
+        # --- Правая часть: pipeline schedule ---
+        pipeline_widget = QtWidgets.QWidget()
+        pipeline_layout = QtWidgets.QVBoxLayout(pipeline_widget)
+        pipeline_layout.setContentsMargins(0, 0, 0, 0)
+
+        pipeline_title = QtWidgets.QLabel("Pipeline Schedule")
+        pipeline_title.setStyleSheet("font-weight: bold;")
+        pipeline_layout.addWidget(pipeline_title)
+
+        self._pipeline_info = QtWidgets.QTextEdit()
+        self._pipeline_info.setReadOnly(True)
+        self._pipeline_info.setStyleSheet(
+            "QTextEdit { font-family: monospace; font-size: 11px; "
+            "background-color: #1e1e1e; color: #d4d4d4; }"
+        )
+        pipeline_layout.addWidget(self._pipeline_info)
+
+        top_splitter.addWidget(settings_widget)
+        top_splitter.addWidget(pipeline_widget)
+        top_splitter.setStretchFactor(0, 1)
+        top_splitter.setStretchFactor(1, 1)
+
+        layout.addWidget(top_splitter)
 
         # ============ Просмотр ============
         self._gl_widget = FramegraphTextureWidget(
@@ -721,9 +801,16 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         depth_layout = QtWidgets.QVBoxLayout(depth_container)
         depth_layout.setContentsMargins(0, 0, 0, 0)
 
+        # Header with title and refresh button
+        depth_header = QtWidgets.QHBoxLayout()
         depth_title = QtWidgets.QLabel("Depth Buffer")
-        depth_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        depth_layout.addWidget(depth_title)
+        depth_header.addWidget(depth_title)
+        depth_header.addStretch()
+        self._refresh_depth_btn = QtWidgets.QPushButton("Refresh")
+        self._refresh_depth_btn.setFixedWidth(60)
+        self._refresh_depth_btn.clicked.connect(self._on_refresh_depth_clicked)
+        depth_header.addWidget(self._refresh_depth_btn)
+        depth_layout.addLayout(depth_header)
 
         self._depth_label = QtWidgets.QLabel()
         self._depth_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -743,12 +830,16 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         layout.addWidget(viewer_splitter, 1)
 
         self._gl_widget.depthImageUpdated.connect(self._on_depth_image_updated)
+        self._gl_widget.depthErrorUpdated.connect(self._on_depth_error_updated)
 
         # Инициализация
         self._update_viewport_list()
         self._update_resource_list()
         self._update_passes_list()
         self._sync_pause_state()
+
+        # Синхронизируем выбранный ресурс с первым в списке
+        self._sync_initial_resource()
 
     # ============ Viewport selection ============
 
@@ -766,16 +857,15 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._update_resource_list()
         self._update_passes_list()
 
-        # Update GL widget resource based on pipeline capabilities
-        self._update_gl_widget_resource()
+        # Синхронизируем ресурс с первым в списке для нового viewport
+        self._sync_initial_resource()
 
         # Подключаем к новому viewport если режим "между пассами"
         if self._mode == "between":
             self._attach_frame_debugger_pass()
 
-        # Request render update for new viewport
-        if self._on_request_update is not None:
-            self._on_request_update()
+        # Запрашиваем обновление depth для новой текстуры
+        self._request_depth_refresh()
 
         # Update GL widget
         self._gl_widget.update()
@@ -792,6 +882,25 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 first_key = next(iter(fbos.keys()), None)
                 if first_key:
                     self._gl_widget.set_resource_name(first_key)
+
+    def _sync_initial_resource(self) -> None:
+        """Синхронизирует начальное состояние: выбирает первый ресурс и обновляет все UI."""
+        if self._resource_combo.count() == 0:
+            return
+
+        # Выбираем первый ресурс в комбобоксе
+        self._resource_combo.setCurrentIndex(0)
+        first_resource = self._resource_combo.currentText()
+
+        if first_resource:
+            # Синхронизируем все части
+            self._debug_source_res = first_resource
+            self._gl_widget.set_resource_name(first_resource)
+
+            # Обновляем UI
+            self._update_fbo_info()
+            self._update_writer_pass_label()
+            self._update_pipeline_info()
 
     def _update_viewport_list(self) -> None:
         """Update viewport ComboBox from RenderingController."""
@@ -827,17 +936,94 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         return state.fbos
 
     def _get_current_pipeline(self):
-        """Get pipeline from current viewport's render state."""
-        state = self._get_current_render_state()
-        if state is None:
+        """Get pipeline from current viewport."""
+        if self._current_viewport is None:
             return None
-        return state.pipeline
+        return self._current_viewport.pipeline
+
+    def _update_fbo_info(self) -> None:
+        """Обновляет информацию о текущем FBO."""
+        fbos = self._get_fbos()
+        resource_name = self._gl_widget._resource_name
+        resource = fbos.get(resource_name) if fbos else None
+
+        if resource is None:
+            self._fbo_info_label.setText(f"Ресурс '{resource_name}': не найден")
+            return
+
+        info_parts = [f"<b>{resource_name}</b>"]
+
+        # Определяем тип ресурса
+        from termin.visualization.render.framegraph.resource import (
+            SingleFBO,
+            ShadowMapArrayResource,
+        )
+        from termin.graphics import FramebufferHandle
+
+        if isinstance(resource, ShadowMapArrayResource):
+            info_parts.append(f"Тип: ShadowMapArray ({len(resource)} entries)")
+            if len(resource) > 0:
+                entry = resource[0]
+                fbo = entry.fbo
+                if fbo is not None:
+                    w, h = fbo.get_size()
+                    info_parts.append(f"Размер: {w}×{h}")
+        elif isinstance(resource, SingleFBO):
+            info_parts.append("Тип: SingleFBO")
+            fbo = resource._fbo
+            if fbo is not None:
+                w, h = fbo.get_size()
+                samples = fbo.get_samples()
+                is_msaa = fbo.is_msaa()
+                info_parts.append(f"Размер: {w}×{h}")
+                if is_msaa:
+                    info_parts.append(f"<span style='color: #ffaa00;'>MSAA: {samples}x</span>")
+                else:
+                    info_parts.append("MSAA: нет")
+                info_parts.append(f"FBO ID: {fbo.get_fbo_id()}")
+        elif isinstance(resource, FramebufferHandle):
+            info_parts.append("Тип: FramebufferHandle")
+            w, h = resource.get_size()
+            samples = resource.get_samples()
+            is_msaa = resource.is_msaa()
+            info_parts.append(f"Размер: {w}×{h}")
+            if is_msaa:
+                info_parts.append(f"<span style='color: #ffaa00;'>MSAA: {samples}x</span>")
+            else:
+                info_parts.append("MSAA: нет")
+            info_parts.append(f"FBO ID: {resource.get_fbo_id()}")
+        else:
+            info_parts.append(f"Тип: {type(resource).__name__}")
+
+        self._fbo_info_label.setText(" | ".join(info_parts))
+
+    def _update_writer_pass_label(self) -> None:
+        """Обновляет лейбл с именем пасса, который пишет выбранный ресурс."""
+        resource_name = self._gl_widget._resource_name
+        if not resource_name:
+            self._writer_pass_label.setText("")
+            return
+
+        schedule = self._build_schedule(exclude_debugger=True)
+        writer_pass = None
+        for p in schedule:
+            if resource_name in p.writes:
+                writer_pass = p.pass_name
+                break
+
+        if writer_pass:
+            self._writer_pass_label.setText(f"← {writer_pass}")
+        else:
+            self._writer_pass_label.setText("(read-only)")
 
     def _on_depth_image_updated(self, image: QtGui.QImage) -> None:
         if image is None or image.isNull():
             return
-        if not hasattr(self, "_depth_label"):
+        if self._depth_label is None:
             return
+        # Сбрасываем стиль ошибки
+        self._depth_label.setStyleSheet("")
+        self._depth_label.setText("")
         pixmap = QtGui.QPixmap.fromImage(image)
         target_size = self._depth_label.size()
         if target_size.width() > 0 and target_size.height() > 0:
@@ -847,6 +1033,13 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 QtCore.Qt.TransformationMode.SmoothTransformation,
             )
         self._depth_label.setPixmap(pixmap)
+
+    def _on_depth_error_updated(self, message: str) -> None:
+        if self._depth_label is None:
+            return
+        self._depth_label.clear()
+        self._depth_label.setText(message)
+        self._depth_label.setStyleSheet("color: #ff6666;")
 
     def _on_mode_changed(self, checked: bool) -> None:
         """Обработчик переключения режима."""
@@ -870,6 +1063,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._resource_ui_container.hide()
             self._update_passes_list()
 
+        # Запрашиваем обновление depth для новой текстуры
+        self._request_depth_refresh()
+
     def _attach_frame_debugger_pass(self) -> None:
         """Создаёт и добавляет FrameDebuggerPass в пайплайн текущего viewport."""
         pipeline = self._get_current_pipeline()
@@ -891,10 +1087,13 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             pass_name="FrameDebugger",
         )
 
-        # Передаём SDL окно и depth callback
+        # Передаём SDL окно и depth callbacks
         sdl_window = self._gl_widget.get_sdl_window()
         depth_callback = self._gl_widget.on_depth_captured
-        self._frame_debugger_pass.set_debugger_window(sdl_window, depth_callback)
+        depth_error_callback = self._gl_widget.on_depth_error
+        self._frame_debugger_pass.set_debugger_window(
+            sdl_window, depth_callback, depth_error_callback
+        )
 
         # Добавляем в конец пайплайна (после всех пассов)
         pipeline.passes.append(self._frame_debugger_pass)
@@ -925,12 +1124,16 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._debug_source_res = name
         self._gl_widget.set_resource_name(name)
 
-        # Запрашиваем обновление
-        if self._on_request_update is not None:
-            self._on_request_update()
-
         # Обновляем UI для типа ресурса
         self._update_ui_for_resource_type()
+
+        # Обновляем информацию о FBO, пасс-писатель и подсветку в pipeline
+        self._update_fbo_info()
+        self._update_writer_pass_label()
+        self._update_pipeline_info()
+
+        # Запрашиваем обновление depth для новой текстуры
+        self._request_depth_refresh()
 
     def _on_pass_selected(self, name: str) -> None:
         """Обработчик выбора пасса (режим «Внутри пасса»)."""
@@ -955,6 +1158,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._selected_symbol = name
         self._set_pass_internal_symbol(self._selected_pass, name)
 
+        # Запрашиваем обновление depth для новой текстуры
+        self._request_depth_refresh()
+
     def _on_pause_toggled(self, checked: bool) -> None:
         """Обработчик переключения паузы."""
         self._debug_paused = bool(checked)
@@ -964,6 +1170,26 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     def _on_channel_changed(self, index: int) -> None:
         """Обработчик выбора канала для отображения."""
         self._gl_widget.set_channel_mode(index)
+
+    def _request_depth_refresh(self) -> None:
+        """Запрашивает обновление depth buffer и перерисовку."""
+        if self._mode == "between":
+            if self._frame_debugger_pass is not None:
+                self._frame_debugger_pass.request_depth_update()
+        else:
+            self._gl_widget.request_depth_update()
+
+        if self._on_request_update is not None:
+            self._on_request_update()
+
+    def _on_refresh_depth_clicked(self) -> None:
+        """Обработчик кнопки обновления depth buffer."""
+        self._request_depth_refresh()
+
+    def _on_shadow_map_index_changed(self, index: int) -> None:
+        """Обработчик смены индекса shadow map."""
+        self._gl_widget.set_shadow_map_index(index)
+        self._request_depth_refresh()
 
     def _clear_internal_symbol(self) -> None:
         """Сбрасывает внутренний символ при переключении режима."""
@@ -981,31 +1207,112 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 if symbol is None or symbol == "":
                     # Отключаем внутреннюю точку дебага
                     p.set_debug_internal_point(None)
-                    p.set_debugger_window(None, None)
+                    p.set_debugger_window(None)
                 else:
                     # Устанавливаем символ и передаём SDL окно для блита
                     p.set_debug_internal_point(symbol)
                     sdl_window = self._gl_widget.get_sdl_window()
                     depth_callback = self._gl_widget.on_depth_captured
-                    p.set_debugger_window(sdl_window, depth_callback)
+                    depth_error_callback = self._gl_widget.on_depth_error
+                    p.set_debugger_window(sdl_window, depth_callback, depth_error_callback)
 
                 if self._on_request_update is not None:
                     self._on_request_update()
                 return
 
+    def _build_schedule(self, exclude_debugger: bool = False) -> list:
+        """Строит schedule из текущего pipeline через FrameGraph.
+
+        Args:
+            exclude_debugger: Исключить FrameDebuggerPass из schedule.
+                              Полезно для построения списка ресурсов, чтобы
+                              порядок не менялся при смене выбранного ресурса.
+        """
+        pipeline = self._get_current_pipeline()
+        if pipeline is None:
+            return []
+
+        from termin.visualization.render.framegraph.core import FrameGraph
+        from termin.visualization.render.framegraph.passes.base import RenderFramePass
+        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
+
+        # Фильтруем пассы если нужно исключить debugger
+        passes = pipeline.passes
+        if exclude_debugger:
+            passes = [p for p in passes if not isinstance(p, FrameDebuggerPass)]
+
+        # Вызываем required_resources() для динамических пассов (как в RenderEngine)
+        for render_pass in passes:
+            if isinstance(render_pass, RenderFramePass):
+                render_pass.required_resources()
+
+        graph = FrameGraph(passes)
+        return graph.build_schedule()
+
+    def _update_pipeline_info(self) -> None:
+        """Обновляет информацию о pipeline schedule."""
+        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
+
+        schedule = self._build_schedule()
+        if not schedule:
+            self._pipeline_info.setHtml("<i>Pipeline пуст</i>")
+            return
+
+        # Текущий выбранный ресурс
+        current_resource = self._gl_widget._resource_name if self._gl_widget else None
+
+        lines = []
+        for p in schedule:
+            reads_str = ", ".join(sorted(p.reads)) if p.reads else "∅"
+            writes_str = ", ".join(sorted(p.writes)) if p.writes else "∅"
+            line = f"{p.pass_name}: {{{reads_str}}} → {{{writes_str}}}"
+
+            if isinstance(p, FrameDebuggerPass):
+                # Оранжевый для FrameDebuggerPass
+                line = f"<span style='color: #ffb86c;'>► {line}</span>"
+            elif current_resource and current_resource in p.writes:
+                # Зелёный для пасса, который пишет текущий ресурс
+                line = f"<span style='color: #50fa7b; font-weight: bold;'>● {line}</span>"
+
+            lines.append(line)
+
+        self._pipeline_info.setHtml("<pre>" + "<br>".join(lines) + "</pre>")
+
     def _update_resource_list(self) -> None:
         """Обновляет список ресурсов для режима «Между пассами»."""
-        # Get resources from pipeline
-        pipeline = self._get_current_pipeline()
-        if pipeline is not None:
-            resources: set[str] = set()
-            for p in pipeline.passes:
-                resources.update(p.reads)
-                resources.update(p.writes)
-            resources.discard("DISPLAY")
-            names = sorted(resources)
+        # Обновляем pipeline info
+        self._update_pipeline_info()
+
+        # Получаем schedule для определения порядка записи ресурсов
+        # Исключаем FrameDebuggerPass, чтобы порядок не менялся при смене ресурса
+        schedule = self._build_schedule(exclude_debugger=True)
+
+        if schedule:
+            # Сначала собираем все записываемые ресурсы
+            written: set[str] = set()
+            for p in schedule:
+                written.update(p.writes)
+            written.discard("DISPLAY")
+
+            # Ресурсы, которые только читаются (никогда не пишутся) — в начало
+            read_only: list[str] = []
+            for p in schedule:
+                for r in sorted(p.reads):
+                    if r not in written and r != "DISPLAY" and r not in read_only:
+                        read_only.append(r)
+
+            # Затем ресурсы в порядке первой записи
+            seen: set[str] = set()
+            write_order: list[str] = []
+            for p in schedule:
+                for w in sorted(p.writes):
+                    if w not in seen and w != "DISPLAY":
+                        seen.add(w)
+                        write_order.append(w)
+
+            names = read_only + write_order
         else:
-            names = list(self._get_fbos().keys())
+            names = sorted(self._get_fbos().keys())
 
         # Check if list changed - avoid clearing ComboBox while user interacts with it
         current_items = [self._resource_combo.itemText(i) for i in range(self._resource_combo.count())]
@@ -1159,7 +1466,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
                     # Для ShadowMapArrayHandler устанавливаем callback
                     if isinstance(handler, ShadowMapArrayHandler):
-                        handler.set_index_changed_callback(self._gl_widget.set_shadow_map_index)
+                        handler.set_index_changed_callback(self._on_shadow_map_index_changed)
                 else:
                     self._resource_ui_container.hide()
             else:
@@ -1191,6 +1498,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._update_passes_list()
         self._sync_pause_state()
         self._update_ui_for_resource_type()
+        self._update_fbo_info()
         # В режиме "между пассами" не вызываем _gl_widget.update(),
         # т.к. FrameDebuggerPass уже отрендерил в окно
         if self._mode == "inside":

@@ -6,9 +6,9 @@ RenderView содержит:
 - camera: камера (CameraComponent)
 - rect: нормализованный прямоугольник [0..1] внутри целевой поверхности
 - canvas: опциональная 2D канва для UI
+- pipeline: конвейер рендеринга
 
 RenderView НЕ содержит:
-- pipeline (это ViewportRenderState)
 - fbos (это ViewportRenderState)
 - ссылки на Window
 
@@ -33,24 +33,27 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.ui.canvas import Canvas
+    from termin.visualization.render.framegraph import RenderPipeline
 
 
 @dataclass
 class RenderView:
     """
     Описание "что рендерим" для RenderEngine.
-    
+
     Атрибуты:
         scene: Сцена с объектами для рендеринга.
         camera: Камера, определяющая точку зрения.
         rect: Нормализованный прямоугольник (x, y, w, h) в [0..1].
               (0,0) — левый нижний угол, (1,1) — правый верхний.
         canvas: Опциональная 2D канва для overlay UI.
+        pipeline: Конвейер рендеринга.
     """
     scene: "Scene"
     camera: "CameraComponent"
     rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
     canvas: Optional["Canvas"] = None
+    pipeline: Optional["RenderPipeline"] = None
 
     def compute_pixel_rect(
         self, 

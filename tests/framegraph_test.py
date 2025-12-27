@@ -331,5 +331,57 @@ class FrameGraphTests(unittest.TestCase):
             g.build_schedule()
 
 
+    def test_frame_debugger_before_inplace_color_pass(self):
+        """
+        Реальный сценарий из framegraph debugger:
+
+        SkyboxPass пишет skybox
+        ColorPass читает skybox, пишет color_scene (inplace — один FBO)
+        FrameDebugger читает skybox
+
+        Проблема: ColorPass портит skybox при выполнении.
+        Решение: FrameDebugger должен читать skybox ДО ColorPass.
+
+        Ожидаемый порядок: Skybox -> FrameDebugger -> Color
+        """
+        skybox = DummyPass("Skybox", writes={"skybox"})
+        color = DummyPass("Color", reads={"skybox"}, writes={"color_scene"}, inplace=True)
+        debugger = DummyPass("FrameDebugger", reads={"skybox"})
+
+        g = FrameGraph([skybox, color, debugger])
+        schedule = g.build_schedule()
+        names = [p.pass_name for p in schedule]
+
+        # Skybox должен быть первым (пишет ресурс)
+        self.assertEqual(names[0], "Skybox")
+
+        # FrameDebugger должен быть ДО Color (читает skybox до того, как Color его испортит)
+        self.assertLess(names.index("FrameDebugger"), names.index("Color"))
+
+    def test_frame_debugger_order_independent_of_pass_list_order(self):
+        """
+        Порядок пассов в списке не должен влиять на результат.
+        FrameDebugger должен быть до ColorPass независимо от порядка добавления.
+        """
+        skybox = DummyPass("Skybox", writes={"skybox"})
+        color = DummyPass("Color", reads={"skybox"}, writes={"color_scene"}, inplace=True)
+        debugger = DummyPass("FrameDebugger", reads={"skybox"})
+
+        # Порядок 1: debugger в конце
+        g1 = FrameGraph([skybox, color, debugger])
+        names1 = [p.pass_name for p in g1.build_schedule()]
+        self.assertLess(names1.index("FrameDebugger"), names1.index("Color"))
+
+        # Порядок 2: debugger перед color
+        g2 = FrameGraph([skybox, debugger, color])
+        names2 = [p.pass_name for p in g2.build_schedule()]
+        self.assertLess(names2.index("FrameDebugger"), names2.index("Color"))
+
+        # Порядок 3: debugger первый после skybox
+        g3 = FrameGraph([debugger, skybox, color])
+        names3 = [p.pass_name for p in g3.build_schedule()]
+        self.assertLess(names3.index("FrameDebugger"), names3.index("Color"))
+
+
 if __name__ == "__main__":
     unittest.main()

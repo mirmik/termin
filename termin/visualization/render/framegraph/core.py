@@ -38,6 +38,8 @@ class FramePass:
     _debugger_window: Any = field(default=None, repr=False)
     # Callback для передачи depth buffer дебаггеру: (numpy_array) -> None
     _depth_capture_callback: "Callable[[Any], None] | None" = field(default=None, repr=False)
+    # Callback для сообщения об ошибке чтения depth: (str) -> None
+    _depth_error_callback: "Callable[[str], None] | None" = field(default=None, repr=False)
 
     def __repr__(self) -> str:
         return f"FramePass({self.pass_name!r})"
@@ -102,6 +104,7 @@ class FramePass:
         self,
         window,
         depth_callback: Callable[[Any], None] | None = None,
+        depth_error_callback: Callable[[str], None] | None = None,
     ) -> None:
         """
         Устанавливает SDL окно дебаггера для блита промежуточного состояния.
@@ -109,9 +112,11 @@ class FramePass:
         Args:
             window: SDL окно дебаггера. None — отключить.
             depth_callback: Callback для передачи depth buffer (numpy array).
+            depth_error_callback: Callback для сообщения об ошибке чтения depth.
         """
         self._debugger_window = window
         self._depth_capture_callback = depth_callback
+        self._depth_error_callback = depth_error_callback
 
     def get_debugger_window(self):
         """Возвращает SDL окно дебаггера или None."""
@@ -316,12 +321,26 @@ class FrameGraph:
 
         # Для каждого ресурса: writer -> все его reader-ы
         for res, w_idx in writer_for.items():
-            for r_idx in readers_for.get(res, ()): 
+            for r_idx in readers_for.get(res, ()):
                 if r_idx == w_idx:
                     continue  # на всякий случай, не создаём петли writer->writer
                 if r_idx not in adjacency[w_idx]:
                     adjacency[w_idx].append(r_idx)
                     in_degree[r_idx] += 1
+
+        # 4) Inplace пассы должны ждать всех других читателей своего input'а.
+        #    Иначе inplace пасс "испортит" ресурс до того, как другие его прочитают.
+        for idx, p in enumerate(self._passes):
+            inplace_aliases = p.get_inplace_aliases()
+            for src, _dst in inplace_aliases:
+                # Все читатели src (кроме самого inplace пасса) должны выполниться до него
+                for other_idx in readers_for.get(src, ()):
+                    if other_idx == idx:
+                        continue
+                    # other_idx -> idx (other должен выполниться до inplace)
+                    if idx not in adjacency[other_idx]:
+                        adjacency[other_idx].append(idx)
+                        in_degree[idx] += 1
 
         return adjacency, in_degree
 

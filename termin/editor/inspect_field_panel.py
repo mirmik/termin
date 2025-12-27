@@ -96,6 +96,10 @@ class InspectFieldPanel(QWidget):
         """Set resource manager for material/mesh lookups."""
         self._factory.set_resources(resources)
 
+    def set_scene_getter(self, getter) -> None:
+        """Set callback for getting current scene (for layer_mask widget)."""
+        self._factory.set_scene_getter(getter)
+
     def set_target(self, target: Any) -> None:
         """Set the object to inspect."""
         # Clear existing widgets

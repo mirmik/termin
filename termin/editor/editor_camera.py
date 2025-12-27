@@ -17,6 +17,7 @@ import numpy as np
 
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
+from termin.visualization.core.viewport_hint import ViewportHintComponent
 from termin.visualization.ui.widgets.component import UIComponent
 from termin.geombase import Pose3
 
@@ -70,15 +71,28 @@ class EditorCameraManager:
         camera_entity.add_component(camera)
         camera_entity.add_component(OrbitCameraController())
 
-        # Add UI component for editor camera controls
+        # Add ViewportHintComponent for layer mask control
+        hint = ViewportHintComponent()
+        hint.pipeline_name = "(Editor)"
+        # Layer mask: only layer 1 (editor UI layer)
+        hint.layer_mask = 1 << 1  # Layer 1
+        camera_entity.add_component(hint)
+
+        # Create child entity for editor UI with layer=1
+        ui_entity = Entity(name="editor_ui", pose=Pose3.identity(), serializable=False)
+        ui_entity.layer = 1  # Editor UI layer
         ui_comp = UIComponent()
         ui_comp.active_in_editor = True
         ui_comp.set_ui_layout_by_name("editor_camera_ui")
-        camera_entity.add_component(ui_comp)
+        ui_entity.add_component(ui_comp)
+
+        # Link UI entity as child of camera
+        camera_entity.transform.link(ui_entity.transform)
 
         if self.editor_entities is not None:
             self.editor_entities.transform.link(camera_entity.transform)
         self._scene.add(camera_entity)
+        self._scene.add(ui_entity)
         self.camera = camera
 
     @property

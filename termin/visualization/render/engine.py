@@ -122,7 +122,6 @@ class RenderEngine:
                         logger = logging.getLogger(__name__)
                         tb = traceback.format_exc()
                         logger.error(f"Pipeline error: {e}\n{tb}")
-                        print(f"Pipeline error: {e}\n{tb}")
 
             if present:
                 surface.present()
@@ -157,19 +156,19 @@ class RenderEngine:
     ) -> None:
         """
         Внутренний метод рендеринга одного view.
-        
-        Выполняет framegraph schedule для pipeline из state.
-        
+
+        Выполняет framegraph schedule для pipeline из view.
+
         Параметры:
-            view: RenderView (сцена, камера, rect).
-            state: ViewportRenderState (pipeline, fbos).
+            view: RenderView (сцена, камера, rect, pipeline).
+            state: ViewportRenderState (fbos).
             framebuffer_size: Размер целевого буфера (width, height).
             display_fbo: FBO экрана/окна.
             context_key: Ключ контекста для кэширования.
         """
         from termin.visualization.render.framegraph import FrameGraph, RenderFramePass
 
-        pipeline = state.pipeline
+        pipeline = view.pipeline
         if pipeline is None:
             return
 
@@ -283,16 +282,6 @@ class RenderEngine:
         # Выполняем пассы
         scene = view.scene
         lights = scene.build_lights()
-
-        # Debug: log first frames (controlled by pass-level flag)
-        from termin.visualization.render.framegraph.passes.color import ColorPass
-        if ColorPass._DEBUG_FIRST_FRAMES and ColorPass._debug_frame_count < 5:
-            print(f"\n=== RenderEngine.build_lights ===")
-            print(f"  light_components count: {len(scene.light_components)}")
-            print(f"  built lights count: {len(lights)}")
-            for i, lt in enumerate(lights):
-                print(f"  Light[{i}]: type={lt.type}, dir={lt.direction}, pos={lt.position}")
-            print(f"=== end ===\n")
 
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()

@@ -87,12 +87,17 @@ private:
  */
 class OpenGLTextureRef : public GPUTextureHandle {
 public:
-    explicit OpenGLTextureRef(GLuint tex_id, int width = 0, int height = 0)
-        : tex_id_(tex_id), width_(width), height_(height) {}
+    GLuint tex_id_;
+    GLenum target_;
+    int width_;
+    int height_;
+
+    explicit OpenGLTextureRef(GLuint tex_id, int width = 0, int height = 0, GLenum target = GL_TEXTURE_2D)
+        : tex_id_(tex_id), target_(target), width_(width), height_(height) {}
 
     void bind(int unit) override {
         glActiveTexture(GL_TEXTURE0 + unit);
-        glBindTexture(GL_TEXTURE_2D, tex_id_);
+        glBindTexture(target_, tex_id_);
     }
 
     void release() override {
@@ -104,11 +109,7 @@ public:
     int get_height() const override { return height_; }
 
     void set_tex_id(GLuint id) { tex_id_ = id; }
-
-private:
-    GLuint tex_id_;
-    int width_;
-    int height_;
+    void set_target(GLenum target) { target_ = target; }
 };
 
 } // namespace termin

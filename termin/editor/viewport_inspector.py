@@ -147,6 +147,12 @@ class ViewportInspector(QWidget):
         self._pipeline_combo.currentIndexChanged.connect(self._on_pipeline_changed)
         form.addRow("Pipeline:", self._pipeline_combo)
 
+        # Hint warning label (shown when ViewportHint controls the viewport)
+        self._hint_label = QLabel("Controlled by ViewportHint on camera")
+        self._hint_label.setStyleSheet("color: #888; font-style: italic;")
+        self._hint_label.hide()
+        form.addRow(self._hint_label)
+
         layout.addLayout(form)
         layout.addStretch()
 
@@ -229,8 +235,27 @@ class ViewportInspector(QWidget):
 
             # Update pipeline list
             self.update_pipeline_list()
+
+            # Check if camera has ViewportHintComponent
+            self._update_hint_state(viewport)
         finally:
             self._updating = False
+
+    def _update_hint_state(self, viewport: "Viewport") -> None:
+        """Update hint label visibility based on ViewportHintComponent."""
+        from termin.visualization.core.viewport_hint import ViewportHintComponent
+
+        has_hint = False
+        if viewport.camera is not None and viewport.camera.entity is not None:
+            hint = viewport.camera.entity.get_component(ViewportHintComponent)
+            has_hint = hint is not None
+
+        if has_hint:
+            self._hint_label.show()
+            self._pipeline_combo.setEnabled(False)
+        else:
+            self._hint_label.hide()
+            self._pipeline_combo.setEnabled(True)
 
     def _clear(self) -> None:
         """Clear all fields."""
@@ -244,6 +269,8 @@ class ViewportInspector(QWidget):
             self._h_spin.setValue(1.0)
             self._depth_spin.setValue(0)
             self._pipeline_combo.setCurrentIndex(0)
+            self._pipeline_combo.setEnabled(True)
+            self._hint_label.hide()
             self._current_pipeline_name = None
         finally:
             self._updating = False

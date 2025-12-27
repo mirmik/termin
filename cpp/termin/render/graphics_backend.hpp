@@ -109,15 +109,19 @@ public:
         FramebufferHandle* src,
         FramebufferHandle* dst,
         int src_x0, int src_y0, int src_x1, int src_y1,
-        int dst_x0, int dst_y0, int dst_x1, int dst_y1
+        int dst_x0, int dst_y0, int dst_x1, int dst_y1,
+        bool blit_color = true,
+        bool blit_depth = false
     ) = 0;
 
     // Convenience overload with Rect2i
     void blit_framebuffer(FramebufferHandle* src, FramebufferHandle* dst,
-                          const Rect2i& src_rect, const Rect2i& dst_rect) {
+                          const Rect2i& src_rect, const Rect2i& dst_rect,
+                          bool blit_color = true, bool blit_depth = false) {
         blit_framebuffer(src, dst,
             src_rect.x0, src_rect.y0, src_rect.x1, src_rect.y1,
-            dst_rect.x0, dst_rect.y0, dst_rect.x1, dst_rect.y1);
+            dst_rect.x0, dst_rect.y0, dst_rect.x1, dst_rect.y1,
+            blit_color, blit_depth);
     }
 
     // --- Read operations ---

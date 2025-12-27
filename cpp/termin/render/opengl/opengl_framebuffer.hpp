@@ -103,6 +103,7 @@ public:
 
     GPUTextureHandle* color_texture() override {
         color_ref_.set_tex_id(color_tex_);
+        color_ref_.set_target(samples_ > 1 ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D);
         return &color_ref_;
     }
 

@@ -83,6 +83,14 @@ class UIWidgetPass(RenderFramePass):
         if scene is None:
             return
 
+        # Get layer_mask from ViewportHintComponent on camera
+        layer_mask = 0xFFFFFFFFFFFFFFFF  # All layers by default
+        if camera is not None and camera.entity is not None:
+            from termin.visualization.core.viewport_hint import ViewportHintComponent
+            hint = camera.entity.get_component(ViewportHintComponent)
+            if hint is not None:
+                layer_mask = hint.layer_mask
+
         # Find all UIComponent instances in the scene
         from termin.visualization.ui.widgets.component import UIComponent
 
@@ -93,7 +101,14 @@ class UIWidgetPass(RenderFramePass):
         # Sort by priority (lower priority renders first)
         ui_components.sort(key=lambda c: c.priority)
 
-        # Render each UIComponent
+        # Render each UIComponent that passes layer mask filter
         for ui_comp in ui_components:
-            if ui_comp.enabled:
-                ui_comp.render(graphics, pw, ph, context_key)
+            if not ui_comp.enabled:
+                continue
+            # Check if UI entity's layer is in the mask
+            entity = ui_comp.entity
+            if entity is not None:
+                entity_layer = entity.layer
+                if not (layer_mask & (1 << entity_layer)):
+                    continue
+            ui_comp.render(graphics, pw, ph, context_key)

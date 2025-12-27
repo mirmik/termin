@@ -8,6 +8,7 @@ from termin.visualization.core.camera import CameraComponent
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.ui.canvas import Canvas
+    from termin.visualization.render.framegraph import RenderPipeline
 
 
 @dataclass(eq=False)
@@ -15,17 +16,16 @@ class Viewport(Identifiable):
     """
     Viewport — "что рендерим и куда" в рамках дисплея.
 
-    Содержит только данные:
+    Содержит данные:
     - scene: сцена с объектами
     - camera: камера для рендеринга
     - display: родительский дисплей
     - rect: нормализованный прямоугольник (x, y, w, h) в [0..1]
     - canvas: опциональная 2D канва для UI
     - depth: приоритет рендеринга (меньше = раньше, как Camera.depth в Unity)
+    - pipeline: конвейер рендеринга (None = default)
 
-    НЕ содержит:
-    - pipeline (управляется снаружи)
-    - fbos (управляются снаружи через ViewportRenderState)
+    fbos управляются снаружи через ViewportRenderState.
 
     Для рендеринга используйте RenderEngine с RenderView и ViewportRenderState.
     """
@@ -35,6 +35,7 @@ class Viewport(Identifiable):
     display: Optional["Display"] = None
     canvas: Optional["Canvas"] = None
     depth: int = 0  # Render priority: lower values render first
+    pipeline: Optional["RenderPipeline"] = None  # None = don't render
     _init_uuid: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
@@ -82,11 +83,17 @@ class Viewport(Identifiable):
         if self.camera is not None and self.camera.entity is not None:
             camera_entity_name = self.camera.entity.name
 
+        # Get pipeline name for serialization
+        pipeline_name = None
+        if self.pipeline is not None:
+            pipeline_name = self.pipeline.name
+
         return {
             "uuid": self._uuid,
             "camera_entity": camera_entity_name,
             "rect": list(self.rect),
             "depth": self.depth,
+            "pipeline": pipeline_name,
         }
 
 

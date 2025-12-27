@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.render.surface import RenderSurface
+    from termin.visualization.render.framegraph import RenderPipeline
     from termin.visualization.ui.canvas import Canvas
 
 
@@ -114,6 +115,7 @@ class Display(Identifiable):
         camera: "CameraComponent",
         rect: Tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
         canvas: Optional["Canvas"] = None,
+        pipeline: Optional["RenderPipeline"] = None,
     ) -> "Viewport":
         """
         Создаёт и добавляет новый viewport.
@@ -123,11 +125,15 @@ class Display(Identifiable):
             camera: Камера для рендеринга.
             rect: Нормализованный прямоугольник (x, y, w, h) в [0..1].
             canvas: Опциональная 2D канва для UI.
+            pipeline: Конвейер рендеринга (None = default pipeline).
 
         Возвращает:
             Созданный Viewport.
         """
-        from termin.visualization.core.viewport import Viewport
+        from termin.visualization.core.viewport import Viewport, make_default_pipeline
+
+        if pipeline is None:
+            pipeline = make_default_pipeline()
 
         viewport = Viewport(
             scene=scene,
@@ -135,6 +141,7 @@ class Display(Identifiable):
             display=self,
             rect=rect,
             canvas=canvas,
+            pipeline=pipeline,
         )
         camera.add_viewport(viewport)
         self._viewports.append(viewport)

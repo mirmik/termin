@@ -7,7 +7,7 @@ replacing the previous approach with hasattr/getattr dynamic attribute access.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional, List
 
 import numpy as np
 from PyQt6.QtWidgets import (
@@ -584,9 +584,14 @@ class FieldWidgetFactory:
 
     def __init__(self, resources: Optional["ResourceManager"] = None):
         self._resources = resources
+        self._scene_getter: Optional[Callable[[], Any]] = None
 
     def set_resources(self, resources: "ResourceManager") -> None:
         self._resources = resources
+
+    def set_scene_getter(self, getter: Callable[[], Any]) -> None:
+        """Set callback for getting current scene (for layer_mask widget)."""
+        self._scene_getter = getter
 
     def create(self, field: "InspectField") -> FieldWidget:
         """Create a widget for the given field."""
@@ -684,6 +689,16 @@ class FieldWidgetFactory:
                 item_type_label="clip",
                 read_only=field.read_only,
             )
+
+        if kind == "layer_mask":
+            from termin.editor.widgets.layer_mask_widget import LayerMaskFieldWidget
+
+            return LayerMaskFieldWidget(scene_getter=self._scene_getter)
+
+        if kind == "pipeline_selector":
+            from termin.editor.widgets.pipeline_selector_widget import PipelineSelectorWidget
+
+            return PipelineSelectorWidget(resources=self._resources)
 
         # Fallback: read-only string
         return StringFieldWidget(read_only=True)

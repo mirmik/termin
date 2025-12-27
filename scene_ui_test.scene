@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "c40a4f08-9657-4ced-80d3-301e92f24eff",
+    "uuid": "a70b7fb9-343e-4fef-ae31-9569722a98f4",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -321,15 +321,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            -0.34264975786209106,
-            -0.055889375507831573,
-            -1.133297085762024
+            4.852386474609375,
+            -0.7021505832672119,
+            3.1524498462677
           ],
           "rotation": [
-            -0.23911762560508354,
-            -0.09904576365747,
-            0.36964381022118065,
-            0.8923990987174202
+            -0.314901261802275,
+            -0.2313179752979486,
+            0.5449510086096463,
+            0.7418608952052412
           ]
         },
         "scale": [
@@ -352,11 +352,11 @@
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
-              "radius": 1.5,
+              "radius": 8,
               "target": [
-                -1.2612084141246367,
-                0.8626692790576646,
-                -1.8832971154573008
+                -0.4505818916442295,
+                0.9596989237508654,
+                -2.6022685250680277
               ]
             }
           }
@@ -7141,7 +7141,8 @@
       }
     ],
     "layer_names": {
-      "0": "Default"
+      "0": "Default",
+      "1": "EditorUI"
     },
     "flag_names": {},
     "light_direction": [
@@ -7190,8 +7191,8 @@
         -0.4230639636516571
       ],
       "radius": 10.0,
-      "azimuth": 58.39522611323089,
-      "elevation": 0.49567350756638795
+      "azimuth": 59.065432545996735,
+      "elevation": 0.5654866776461609
     },
     "displays": [
       {
@@ -7201,7 +7202,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "d2968fb2-642b-4e10-9cc0-a85b8707035d",
+            "uuid": "4d44b7b5-c6b7-43b1-9037-bda862194d8a",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7220,8 +7221,8 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "c78c9ee5-97da-4378-9977-cf7a891d1f50",
-            "camera_entity": "camera",
+            "uuid": "2d4b3efc-9758-48d4-b89a-a24367ddf46a",
+            "camera_entity": "GameCamera",
             "rect": [
               0.0,
               0.0,
@@ -7234,15 +7235,16 @@
       }
     ],
     "expanded_entities": [
-      "Walls",
-      "camera",
       "Arti",
-      "cube2",
+      "editor_ui",
       "[Root]",
+      "Walls",
+      "cube2",
       "entity13",
+      "entity12_copy",
+      "camera",
       "cube1",
       "Glitch",
-      "entity12_copy",
       "EditorEntities"
     ]
   },
