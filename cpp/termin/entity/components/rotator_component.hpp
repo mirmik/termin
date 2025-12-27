@@ -6,6 +6,7 @@
 #include "../../geom/geom.hpp"
 #include "../../inspect/inspect_registry.hpp"
 #include <iostream>
+#include <pybind11/pybind11.h>
 
 namespace termin {
 
@@ -16,8 +17,18 @@ namespace termin {
 class CXXRotatorComponent : public Component {
 public:
     float speed = 1.0f;  // radians per second
+    termin::Component* collider_component = nullptr;
+    pybind11::object py_collider_component;
 
     INSPECT_FIELD(CXXRotatorComponent, speed, "Speed", "float", 0.0, 10.0, 0.1)
+
+    void start() override {
+        // collider_component = entity->get_component_by_type("ColliderComponent");
+        // if (collider_component) {
+        //     py_collider_component = collider_component->to_python();
+        // }
+    }
+
 
     void update(float dt) override {
         if (!entity || !entity->transform().valid()) return;

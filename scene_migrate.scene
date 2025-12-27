@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "5be7eea2-e47e-41b6-985b-defed944b805",
+    "uuid": "",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -5187,7 +5187,7 @@
         "pose": {
           "position": [
             0,
-            4,
+            8.158212661743164,
             2
           ],
           "rotation": [
@@ -7320,14 +7320,15 @@
   "editor": {
     "camera": {
       "target": [
-        2.5523533821105957,
-        6.309185981750488,
-        -0.3063035309314728
+        1.4674190747744027,
+        4.52691759414711,
+        -0.03200999449245418
       ],
-      "radius": 14.0,
-      "azimuth": 58.25210911456732,
-      "elevation": 0.5829399701661049
+      "radius": 9.0,
+      "azimuth": 57.91351523968042,
+      "elevation": 0.4817108735504333
     },
+    "selected_entity": "Pendulum2",
     "displays": [
       {
         "name": "Editor",
@@ -7336,7 +7337,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "7bb27387-cff0-4cee-acf7-e738a88af519",
+            "uuid": "dde47bb7-9c11-461c-8bfa-1b3ff389571f",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7356,7 +7357,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "11f03f14-edd5-45a4-b77d-b90be6adb85a",
+            "uuid": "d44237b3-b09c-4760-9e76-1bc01897905e",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -7371,13 +7372,13 @@
       }
     ],
     "expanded_entities": [
-      "[Root]",
       "editor_ui",
+      "[Root]",
+      "cube2",
       "camera",
-      "cube1",
       "EditorEntities",
       "entity12_copy",
-      "cube2"
+      "cube1"
     ]
   },
   "resources": {

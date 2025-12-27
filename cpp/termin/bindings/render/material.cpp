@@ -600,6 +600,65 @@ void bind_material(py::module_& m) {
             [](Material& self, std::shared_ptr<ShaderProgram> shader) {
                 self.default_phase().shader = shader;
             })
+        .def("set_shader", [](Material& self, std::shared_ptr<ShaderProgram> shader, const std::string& shader_name) {
+            // Update shader in all phases
+            for (auto& phase : self.phases) {
+                phase.shader = shader;
+            }
+            self.shader_name = shader_name;
+        }, py::arg("shader"), py::arg("shader_name") = "")
+        // Overload for multi-phase shader program
+        .def("set_shader", [](Material& self, const ShaderMultyPhaseProgramm& program, const std::string& shader_name) {
+            if (program.phases.empty()) {
+                throw std::runtime_error("Program has no phases");
+            }
+
+            // Preserve existing color, textures, uniforms from first phase
+            std::optional<Vec4> old_color;
+            std::unordered_map<std::string, TextureHandle> old_textures;
+            std::unordered_map<std::string, MaterialUniformValue> old_uniforms;
+
+            if (!self.phases.empty()) {
+                old_color = self.phases[0].color;
+                old_textures = self.phases[0].textures;
+                old_uniforms = self.phases[0].uniforms;
+            }
+
+            // Clear and rebuild phases
+            self.phases.clear();
+            self.shader_name = shader_name.empty() ? program.program : shader_name;
+
+            // Get MaterialPhase class for from_shader_phase
+            py::object MaterialPhase_cls = py::module_::import("termin._native.render").attr("MaterialPhase");
+
+            // Convert old values to py::object for from_shader_phase
+            py::object py_color = py::none();
+            if (old_color.has_value()) {
+                auto arr = py::array_t<float>(4);
+                auto buf = arr.mutable_unchecked<1>();
+                buf(0) = static_cast<float>(old_color->x);
+                buf(1) = static_cast<float>(old_color->y);
+                buf(2) = static_cast<float>(old_color->z);
+                buf(3) = static_cast<float>(old_color->w);
+                py_color = arr;
+            }
+
+            for (const auto& shader_phase : program.phases) {
+                MaterialPhase phase = MaterialPhase_cls.attr("from_shader_phase")(
+                    shader_phase, py_color, py::none(), py::none()
+                ).cast<MaterialPhase>();
+
+                // Restore old textures and uniforms
+                for (const auto& [key, val] : old_textures) {
+                    phase.textures[key] = val;
+                }
+                for (const auto& [key, val] : old_uniforms) {
+                    phase.uniforms[key] = val;
+                }
+
+                self.phases.push_back(std::move(phase));
+            }
+        }, py::arg("program"), py::arg("shader_name") = "")
         .def_property("color",
             [](Material& self) -> py::object {
                 if (!self.default_phase().color.has_value()) return py::none();

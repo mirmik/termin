@@ -410,7 +410,9 @@ PYBIND11_MODULE(_entity_native, m) {
         })
 
         .def_static("lookup_by_pick_id", [](uint32_t pid) -> Entity* {
-            return EntityRegistry::instance().get_by_pick_id(pid);
+            // Use C registry for lookup (C++ HashMap is not populated)
+            tc_entity* e = tc_entity_registry_find_by_pick_id(pid);
+            return entity_from_tc(e);
         }, py::arg("pick_id"), py::return_value_policy::reference)
 
         // Component management

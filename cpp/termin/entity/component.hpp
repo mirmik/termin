@@ -22,6 +22,36 @@ class Entity;  // Forward declaration
 // Internally wraps tc_component (C core) for future Scene integration.
 class ENTITY_API Component {
 public:
+    // --- Fields (public) ---
+
+    // Flags (synced to internal tc_component structure)
+    bool enabled = true;
+    bool active_in_editor = false;
+    // is_native=true means _c.data is Component* (including Python classes inheriting C++ Component)
+    // is_native=false means _c.data is PyObject* (pure Python components using TcComponent)
+    bool is_native = true;
+    bool _started = false;
+    bool has_update = false;
+    bool has_fixed_update = false;
+
+    // Owner entity (set by Entity::add_component)
+    Entity* entity = nullptr;
+
+protected:
+    // --- Fields (protected) ---
+
+    const char* _type_name = "Component";
+    tc_component _c;  // Internal C component structure
+
+private:
+    // --- Fields (private) ---
+
+    // Static vtable for C++ components - dispatches to virtual methods
+    static const tc_component_vtable _cpp_vtable;
+
+public:
+    // --- Methods ---
+
     virtual ~Component();
 
     // Type identification (for serialization)
@@ -32,7 +62,6 @@ public:
         static std::unordered_set<std::string> interned_names;
         auto [it, _] = interned_names.insert(name);
         _type_name = it->c_str();
-        // Sync to C component
         _c.type_name = _type_name;
     }
 
@@ -77,24 +106,25 @@ public:
         return result;
     }
 
-    // Flags (public fields for backward compatibility)
-    // These are synced to the internal tc_component structure
-    bool enabled = true;
-    bool active_in_editor = false;
-    // is_native=true means _c.data is Component* (including Python classes inheriting C++ Component)
-    // is_native=false means _c.data is PyObject* (pure Python components using TcComponent)
-    bool is_native = true;
-    bool _started = false;
-    bool has_update = false;
-    bool has_fixed_update = false;
-
-    // Owner entity (set by Entity::add_component)
-    Entity* entity = nullptr;
-
     // Access to underlying C component (for Scene integration)
-    // Note: Call sync_to_c() before using the C component
     tc_component* c_component() { return &_c; }
     const tc_component* c_component() const { return &_c; }
+
+    // Convert tc_component to Python object.
+    // For C++ components (is_native=true): casts Component* to py::object
+    // For Python components (is_native=false): returns stored PyObject*
+    static py::object to_python(tc_component* c) {
+        if (!c || !c->data) return py::none();
+        if (c->is_native) {
+            // C++ component - c->data is Component*
+            return py::cast(static_cast<Component*>(c->data));
+        } else {
+            // Python component - c->data is PyObject*
+            return py::reinterpret_borrow<py::object>(
+                reinterpret_cast<PyObject*>(c->data)
+            );
+        }
+    }
 
     // Sync C++ fields to C structure (call before C code uses _c)
     void sync_to_c() {
@@ -119,15 +149,8 @@ public:
 
 protected:
     Component();
-    const char* _type_name = "Component";
-
-    // Internal C component structure
-    tc_component _c;
 
 private:
-    // Static vtable for C++ components - dispatches to virtual methods
-    static const tc_component_vtable _cpp_vtable;
-
     // Static callbacks that dispatch to C++ virtual methods
     static void _cb_start(tc_component* c);
     static void _cb_update(tc_component* c, float dt);
