@@ -81,6 +81,7 @@ public:
 
     // Flags
     bool enabled = true;
+    bool active_in_editor = false;  // True if component runs in editor mode
     bool is_native = false;  // True for C++ components, false for Python
     bool _started = false;   // True after start() has been called
     bool has_update = false;        // True if update() is overridden

@@ -183,6 +183,7 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("on_added", &Component::on_added, py::arg("scene"))
         .def("on_removed", &Component::on_removed)
         .def_readwrite("enabled", &Component::enabled)
+        .def_readwrite("active_in_editor", &Component::active_in_editor)
         .def_readonly("is_native", &Component::is_native)
         .def_readwrite("_started", &Component::_started)
         .def_readonly("has_update", &Component::has_update)

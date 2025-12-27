@@ -222,14 +222,13 @@ class FrameGraph:
     Простейший frame graph: на вход – набор FramePass,
     на выход – топологически отсортированный список пассов.
 
-    Пассы с enabled=False игнорируются при построении графа и
-    не попадают в итоговое расписание.
+    Флаг enabled обрабатывается каждым пассом самостоятельно в execute().
+    Inplace-пассы могут просто вернуться без действий (ресурс пройдёт насквозь).
+    Non-inplace пассы могут блитить вход в выход или использовать другую логику.
     """
 
     def __init__(self, passes: Iterable[FramePass]):
-        self._all_passes: List[FramePass] = list(passes)
-        # Фильтруем только включённые пассы для построения графа
-        self._passes: List[FramePass] = [p for p in self._all_passes if p.enabled]
+        self._passes: List[FramePass] = list(passes)
         # карта "ресурс -> каноническое имя" (на будущее — для дебага / инспекции)
         self._canonical_resources: Dict[str, str] = {}
 

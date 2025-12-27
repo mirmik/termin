@@ -503,6 +503,27 @@ class Scene(_NativeScene):
                     if component.enabled:
                         component.update(dt)
 
+    def editor_update(self, dt: float):
+        """
+        Update only components with active_in_editor=True.
+
+        Called in editor mode to run editor-specific components.
+        Uses the same _started flag as regular update().
+        """
+        for entity in self.entities:
+            for component in entity.components:
+                if not component.active_in_editor:
+                    continue
+                if not component.enabled:
+                    continue
+                # Call start() once if not yet started
+                if not component._started:
+                    component.start()
+                    component._started = True
+                # Call update()
+                if component.has_update:
+                    component.update(dt)
+
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""
         for entity in self.entities:

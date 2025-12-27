@@ -159,6 +159,7 @@ void bind_entity(py::module_& m) {
         .def("on_added_to_entity", &Component::on_added_to_entity)
         .def("on_removed_from_entity", &Component::on_removed_from_entity)
         .def_readwrite("enabled", &Component::enabled)
+        .def_readwrite("active_in_editor", &Component::active_in_editor)
         .def_readonly("is_native", &Component::is_native)
         .def_readwrite("_started", &Component::_started)
         .def_readonly("has_update", &Component::has_update)

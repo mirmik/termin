@@ -2034,6 +2034,10 @@ class EditorWindow(QMainWindow):
             orbit_controller = self._camera_manager.orbit_controller
             self._spacemouse.update(orbit_controller, self._request_viewport_update)
 
+        # Update active_in_editor components in editor mode
+        if not is_playing:
+            self.scene.editor_update(dt)
+
         # Check if any display needs render (unified check)
         needs_render = is_playing
         if not needs_render and self._rendering_controller is not None:

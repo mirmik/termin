@@ -7,7 +7,7 @@ import yaml
 
 from termin.visualization.ui.widgets.widget import Widget
 from termin.visualization.ui.widgets.containers import HStack, VStack, Panel
-from termin.visualization.ui.widgets.basic import Label, Button, Separator
+from termin.visualization.ui.widgets.basic import Label, Button, Checkbox, IconButton, Separator
 from termin.visualization.ui.widgets.units import Value
 
 
@@ -21,6 +21,8 @@ class UILoader:
         "Panel": Panel,
         "Label": Label,
         "Button": Button,
+        "Checkbox": Checkbox,
+        "IconButton": IconButton,
         "Separator": Separator,
     }
 
@@ -182,6 +184,54 @@ class UILoader:
                 widget.font_size = float(data["font_size"])
             if "padding" in data:
                 widget.padding = float(data["padding"])
+
+        # Checkbox attributes
+        if isinstance(widget, Checkbox):
+            if "text" in data:
+                widget.text = data["text"]
+            if "checked" in data:
+                widget.checked = bool(data["checked"])
+            if "box_color" in data:
+                widget.box_color = self._parse_color(data["box_color"])
+            if "check_color" in data:
+                widget.check_color = self._parse_color(data["check_color"])
+            if "hover_color" in data:
+                widget.hover_color = self._parse_color(data["hover_color"])
+            if "text_color" in data:
+                widget.text_color = self._parse_color(data["text_color"])
+            if "border_radius" in data:
+                widget.border_radius = float(data["border_radius"])
+            if "font_size" in data:
+                widget.font_size = float(data["font_size"])
+            if "box_size" in data:
+                widget.box_size = float(data["box_size"])
+            if "spacing" in data:
+                widget.spacing = float(data["spacing"])
+
+        # IconButton attributes
+        if isinstance(widget, IconButton):
+            if "icon" in data:
+                widget.icon = data["icon"]
+            if "tooltip" in data:
+                widget.tooltip = data["tooltip"]
+            if "background_color" in data:
+                widget.background_color = self._parse_color(data["background_color"])
+            if "hover_color" in data:
+                widget.hover_color = self._parse_color(data["hover_color"])
+            if "pressed_color" in data:
+                widget.pressed_color = self._parse_color(data["pressed_color"])
+            if "active_color" in data:
+                widget.active_color = self._parse_color(data["active_color"])
+            if "icon_color" in data:
+                widget.icon_color = self._parse_color(data["icon_color"])
+            if "border_radius" in data:
+                widget.border_radius = float(data["border_radius"])
+            if "size" in data:
+                widget.size = float(data["size"])
+            if "font_size" in data:
+                widget.font_size = float(data["font_size"])
+            if "active" in data:
+                widget.active = bool(data["active"])
 
         # Separator attributes
         if isinstance(widget, Separator):

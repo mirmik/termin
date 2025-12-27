@@ -172,23 +172,54 @@ class Panel(Widget):
                viewport_w: float, viewport_h: float):
         super().layout(x, y, width, height, viewport_w, viewport_h)
 
-        if self.children:
-            # Layout first child inside padding
-            self.children[0].layout(
-                x + self.padding,
-                y + self.padding,
-                width - self.padding * 2,
-                height - self.padding * 2,
-                viewport_w,
-                viewport_h
-            )
+        # Inner area after padding
+        inner_x = x + self.padding
+        inner_y = y + self.padding
+        inner_w = width - self.padding * 2
+        inner_h = height - self.padding * 2
+
+        for child in self.children:
+            cw, ch = child.compute_size(viewport_w, viewport_h)
+
+            # Respect child's anchor within panel's inner area
+            anchor = child.anchor
+            cx, cy = inner_x, inner_y
+
+            if anchor == "absolute":
+                # Absolute positioning relative to panel
+                if child.position_x is not None:
+                    cx = inner_x + child.position_x.to_pixels(inner_w)
+                if child.position_y is not None:
+                    cy = inner_y + child.position_y.to_pixels(inner_h)
+            else:
+                # Anchor-based positioning
+                if "left" in anchor:
+                    cx = inner_x
+                elif "right" in anchor:
+                    cx = inner_x + inner_w - cw
+                elif "center" in anchor or anchor in ("top", "bottom"):
+                    cx = inner_x + (inner_w - cw) / 2
+
+                if "top" in anchor:
+                    cy = inner_y
+                elif "bottom" in anchor:
+                    cy = inner_y + inner_h - ch
+                elif "center" in anchor or anchor in ("left", "right"):
+                    cy = inner_y + (inner_h - ch) / 2
+
+                # Apply offset
+                cx += child.offset_x
+                cy += child.offset_y
+
+            child.layout(cx, cy, cw, ch, viewport_w, viewport_h)
 
     def render(self, renderer: 'UIRenderer'):
-        # Draw background
-        renderer.draw_rect(
-            self.x, self.y, self.width, self.height,
-            self.background_color,
-            self.border_radius
-        )
+        # Draw background only if not fully transparent
+        if self.background_color[3] > 0:
+            renderer.draw_rect(
+                self.x, self.y, self.width, self.height,
+                self.background_color,
+                self.border_radius
+            )
         # Render children
         super().render(renderer)
