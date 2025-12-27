@@ -323,9 +323,6 @@ PYBIND11_MODULE(_entity_native, m) {
         .def_readwrite("layer", &Entity::layer)
         .def_readwrite("flags", &Entity::flags)
 
-        // Scene
-        .def_readwrite("scene", &Entity::scene)
-
         // Pick ID
         .def_property_readonly("pick_id", &Entity::pick_id)
 
@@ -396,48 +393,65 @@ PYBIND11_MODULE(_entity_native, m) {
         }, py::arg("pick_id"), py::return_value_policy::reference)
 
         // Component management
-        .def("add_component", [](Entity& e, Component* component) {
-            std::cerr << "[add_component] Start, type=" << component->type_name() << std::endl;
-            if (!check_heap_entity()) {
-                std::cerr << "[add_component] HEAP CORRUPTED before add_component!" << std::endl;
+        // Accepts both C++ Component and PythonComponent (via py::object)
+        // Note: Scene registration is handled by Python Scene.add(), not here
+        .def("add_component", [](Entity& e, py::object component) -> py::object {
+            // Check if it's a C++ Component
+            if (py::isinstance<Component>(component)) {
+                e.add_component(component.cast<Component*>());
+                return component;
             }
-            e.add_component(component);
-            if (!check_heap_entity()) {
-                std::cerr << "[add_component] HEAP CORRUPTED after add_component!" << std::endl;
+
+            // Check if it's a PythonComponent (has c_component_ptr method)
+            if (py::hasattr(component, "c_component_ptr")) {
+                uintptr_t ptr = component.attr("c_component_ptr")().cast<uintptr_t>();
+                tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+
+                // Set entity reference on PythonComponent
+                if (py::hasattr(component, "entity")) {
+                    component.attr("entity") = py::cast(&e, py::return_value_policy::reference);
+                }
+
+                e.add_component_ptr(tc);
+                return component;
             }
-            // If entity is in a scene, do lifecycle: register, on_added
-            // Note: start() is NOT called here - Scene.update() handles it via _pending_start
-            if (!e.scene.is_none()) {
-                py::object py_comp = py::cast(component, py::return_value_policy::reference);
-                if (py::hasattr(e.scene, "register_component")) {
-                    e.scene.attr("register_component")(py_comp);
-                }
-                if (py::hasattr(py_comp, "on_added")) {
-                    py_comp.attr("on_added")(e.scene);
-                }
+
+            throw std::runtime_error("add_component requires Component or PythonComponent");
+        }, py::arg("component"), py::keep_alive<1, 2>())
+        .def("remove_component", [](Entity& e, py::object component) {
+            // Check if it's a C++ Component
+            if (py::isinstance<Component>(component)) {
+                e.remove_component(component.cast<Component*>());
+                return;
             }
-            std::cerr << "[add_component] Done" << std::endl;
-            return component;
-        }, py::arg("component"), py::keep_alive<1, 2>(), py::return_value_policy::reference)
-        .def("remove_component", [](Entity& e, Component* component) {
-            // Unregister from scene before removing
-            if (!e.scene.is_none()) {
-                py::object py_comp = py::cast(component, py::return_value_policy::reference);
-                if (py::hasattr(e.scene, "unregister_component")) {
-                    e.scene.attr("unregister_component")(py_comp);
-                }
-                if (py::hasattr(py_comp, "on_removed")) {
-                    py_comp.attr("on_removed")();
-                }
+
+            // Check if it's a PythonComponent
+            if (py::hasattr(component, "c_component_ptr")) {
+                uintptr_t ptr = component.attr("c_component_ptr")().cast<uintptr_t>();
+                e.remove_component_ptr(reinterpret_cast<tc_component*>(ptr));
+                return;
             }
-            e.remove_component(component);
+
+            throw std::runtime_error("remove_component requires Component or PythonComponent");
         }, py::arg("component"))
         .def("get_component_by_type", &Entity::get_component_by_type,
              py::arg("type_name"), py::return_value_policy::reference)
         .def("get_component", [](Entity& e, py::object type_class) -> py::object {
             // Get component by Python type class (like Unity's GetComponent<T>())
-            for (Component* comp : e.components) {
-                py::object py_comp = py::cast(comp, py::return_value_policy::reference);
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (!tc) continue;
+
+                py::object py_comp;
+                if (tc->is_native) {
+                    Component* comp = static_cast<Component*>(tc->data);
+                    py_comp = py::cast(comp, py::return_value_policy::reference);
+                } else {
+                    // PythonComponent - data is PyObject*
+                    py_comp = py::reinterpret_borrow<py::object>((PyObject*)tc->data);
+                }
+
                 if (py::isinstance(py_comp, type_class)) {
                     return py_comp;
                 }
@@ -446,8 +460,19 @@ PYBIND11_MODULE(_entity_native, m) {
         }, py::arg("component_type"))
         .def("find_component", [](Entity& e, py::object type_class) -> py::object {
             // Get component by Python type class, raise if not found
-            for (Component* comp : e.components) {
-                py::object py_comp = py::cast(comp, py::return_value_policy::reference);
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (!tc) continue;
+
+                py::object py_comp;
+                if (tc->is_native) {
+                    Component* comp = static_cast<Component*>(tc->data);
+                    py_comp = py::cast(comp, py::return_value_policy::reference);
+                } else {
+                    py_comp = py::reinterpret_borrow<py::object>((PyObject*)tc->data);
+                }
+
                 if (py::isinstance(py_comp, type_class)) {
                     return py_comp;
                 }
@@ -456,8 +481,18 @@ PYBIND11_MODULE(_entity_native, m) {
         }, py::arg("component_type"))
         .def_property_readonly("components", [](Entity& e) {
             py::list result;
-            for (Component* c : e.components) {
-                result.append(py::cast(c, py::return_value_policy::reference));
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (!tc) continue;
+
+                if (tc->is_native) {
+                    Component* comp = static_cast<Component*>(tc->data);
+                    result.append(py::cast(comp, py::return_value_policy::reference));
+                } else {
+                    // PythonComponent - data is PyObject*
+                    result.append(py::reinterpret_borrow<py::object>((PyObject*)tc->data));
+                }
             }
             return result;
         })
@@ -472,35 +507,11 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("update", &Entity::update, py::arg("dt"))
         .def("on_added_to_scene", &Entity::on_added_to_scene, py::arg("scene"))
         .def("on_removed_from_scene", &Entity::on_removed_from_scene)
-        // Visualization-compatible lifecycle (registers components with scene)
-        // Note: start() is NOT called here - Scene.update() handles that via _pending_start
+        // Lifecycle - Scene handles component registration in Python
         .def("on_added", [](Entity& e, py::object scene) {
-            e.scene = scene;
-
-            // Register components with scene and call on_added
-            for (Component* comp : e.components) {
-                py::object py_comp = py::cast(comp, py::return_value_policy::reference);
-                if (py::hasattr(scene, "register_component")) {
-                    scene.attr("register_component")(py_comp);
-                }
-                if (py::hasattr(py_comp, "on_added")) {
-                    py_comp.attr("on_added")(scene);
-                }
-            }
+            e.on_added_to_scene(scene);
         }, py::arg("scene"))
         .def("on_removed", [](Entity& e) {
-            py::object scene = e.scene;
-            // Unregister components from scene if scene has unregister_component
-            if (!scene.is_none() && py::hasattr(scene, "unregister_component")) {
-                for (Component* comp : e.components) {
-                    py::object py_comp = py::cast(comp, py::return_value_policy::reference);
-                    scene.attr("unregister_component")(py_comp);
-                    // Call component.on_removed() if it exists
-                    if (py::hasattr(py_comp, "on_removed")) {
-                        py_comp.attr("on_removed")();
-                    }
-                }
-            }
             e.on_removed_from_scene();
         })
 
@@ -515,8 +526,18 @@ PYBIND11_MODULE(_entity_native, m) {
 
             // Serialize components by calling their Python serialize() methods
             py::list comp_list;
-            for (Component* comp : e.components) {
-                py::object py_comp = py::cast(comp, py::return_value_policy::reference);
+            size_t count = e.component_count();
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = e.component_at(i);
+                if (!tc) continue;
+
+                py::object py_comp;
+                if (tc->is_native) {
+                    py_comp = py::cast(static_cast<Component*>(tc->data), py::return_value_policy::reference);
+                } else {
+                    py_comp = py::reinterpret_borrow<py::object>((PyObject*)tc->data);
+                }
+
                 if (py::hasattr(py_comp, "serialize")) {
                     py::object comp_data = py_comp.attr("serialize")();
                     if (!comp_data.is_none()) {

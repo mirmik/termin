@@ -189,6 +189,7 @@ add_library(entity_lib SHARED
     ../core_c/src/tc_core.c
     ../core_c/src/tc_transform.c
     ../core_c/src/tc_component.c
+    ../core_c/src/tc_component_python.c
     ../core_c/src/tc_entity.c
     ../core_c/src/tc_scene.c
     ../core_c/src/tc_inspect.c
@@ -289,6 +290,7 @@ pybind11_add_module(_native
     termin/bindings/render/renderers.cpp
     termin/sdl_bindings.cpp
     termin/tc_scene_bindings.cpp
+    termin/tc_component_python_bindings.cpp
     termin/profiler_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp

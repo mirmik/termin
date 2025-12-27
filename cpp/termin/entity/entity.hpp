@@ -52,11 +52,8 @@ public:
     uint64_t layer = 1;    // 64-bit layer mask
     uint64_t flags = 0;    // custom flags
 
-    // Scene (Python object for now, will migrate later)
-    py::object scene;
-
-    // Components (owned)
-    std::vector<Component*> components;
+    // Note: Components are stored in tc_entity (_e), not here.
+    // Use component_count() and component_at() to access them.
 
     // Constructors
     Entity(const std::string& name = "entity", const std::string& uuid = "");
@@ -82,16 +79,32 @@ public:
 
     // --- Component management ---
 
+    // Add C++ component (stores in tc_entity)
     void add_component(Component* component);
-    void remove_component(Component* component);
 
+    // Add component by tc_component pointer (for PythonComponent)
+    void add_component_ptr(tc_component* c);
+
+    void remove_component(Component* component);
+    void remove_component_ptr(tc_component* c);
+
+    // Component access (delegates to tc_entity)
+    size_t component_count() const;
+    tc_component* component_at(size_t index) const;
+
+    // Get C++ Component by type name
     Component* get_component_by_type(const std::string& type_name);
 
     template<typename T>
     T* get_component() {
-        for (Component* comp : components) {
-            T* typed = dynamic_cast<T*>(comp);
-            if (typed) return typed;
+        size_t count = component_count();
+        for (size_t i = 0; i < count; i++) {
+            tc_component* tc = component_at(i);
+            if (tc && tc->is_native) {
+                Component* comp = static_cast<Component*>(tc->data);
+                T* typed = dynamic_cast<T*>(comp);
+                if (typed) return typed;
+            }
         }
         return nullptr;
     }

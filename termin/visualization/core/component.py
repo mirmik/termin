@@ -55,12 +55,24 @@ _NativeComponent.__init_subclass__ = classmethod(lambda cls, **kw: _component_in
 # Wrap __init__ to set _type_name for Python components
 _original_init = _NativeComponent.__init__
 
+
+def _check_overrides_method(cls, method_name: str, base_class) -> bool:
+    """Check if cls overrides method_name from base_class."""
+    return getattr(cls, method_name) is not getattr(base_class, method_name)
+
+
 def _wrapped_init(self, *args, **kwargs):
     _original_init(self, *args, **kwargs)
-    # Set _type_name to match InspectRegistry registration
-    cls_name = type(self).__name__
+    cls = type(self)
+    cls_name = cls.__name__
     if cls_name != "Component":
+        # Set _type_name to match InspectRegistry registration
         self.set_type_name(cls_name)
+        # Set has_update/has_fixed_update based on method overrides
+        if _check_overrides_method(cls, "update", _NativeComponent):
+            self.has_update = True
+        if _check_overrides_method(cls, "fixed_update", _NativeComponent):
+            self.has_fixed_update = True
 
 _NativeComponent.__init__ = _wrapped_init
 
@@ -102,4 +114,6 @@ from termin.visualization.core.input_events import (
     KeyEvent,
 )
 
-__all__ = ["Component", "InputComponent", "InspectField"]
+from termin.visualization.core.python_component import PythonComponent
+
+__all__ = ["Component", "PythonComponent", "InputComponent", "InspectField"]

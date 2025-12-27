@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, List
 import numpy as np
 
 from termin.visualization.core.component import Component
+from termin.visualization.core.scene import get_current_scene
 from termin.fem.dynamic_assembler import DynamicMatrixAssembler
 from termin.editor.inspect_field import InspectField
 
@@ -95,7 +96,7 @@ class FEMPhysicsWorldComponent(Component):
 
     def start(self):
         super().start()
-        self._scene = self.entity.scene
+        self._scene = get_current_scene()
         self._rebuild_simulation()
         self._initialized = True
 

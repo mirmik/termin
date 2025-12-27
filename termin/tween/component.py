@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.core.component import Component
+from termin.visualization.core.scene import get_current_scene
 from termin.tween.manager import TweenManager
 from termin.tween.ease import Ease
 from termin.tween.tween import Tween, MoveTween, RotateTween, ScaleTween
@@ -49,8 +50,9 @@ class TweenManagerComponent(Component):
 
     def start(self) -> None:
         super().start()
-        self._scene = self.entity.scene
-        self._scene.on_entity_removed += self._on_entity_removed
+        self._scene = get_current_scene()
+        if self._scene:
+            self._scene.on_entity_removed += self._on_entity_removed
 
     def on_removed(self) -> None:
         super().on_removed()

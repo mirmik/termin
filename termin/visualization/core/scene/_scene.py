@@ -33,6 +33,16 @@ def is_overrides_method(obj, method_name, base_class):
     return getattr(obj.__class__, method_name) is not getattr(base_class, method_name)
 
 
+# Global current scene - set before update/start loops
+# Temporary solution until proper scene wrapper architecture is implemented
+_current_scene: "Scene | None" = None
+
+
+def get_current_scene() -> "Scene | None":
+    """Get the current scene being updated."""
+    return _current_scene
+
+
 class Scene:
     """Container for renderable entities and lighting data."""
 
@@ -278,6 +288,8 @@ class Scene:
 
     def add_non_recurse(self, entity: Entity) -> Entity:
         """Add entity to the scene, keeping the entities list sorted by priority."""
+        global _current_scene
+
         # Insert sorted by priority (Python-side list)
         idx = 0
         for i, e in enumerate(self._entities):
@@ -287,12 +299,20 @@ class Scene:
             idx = i + 1
         self._entities.insert(idx, entity)
 
-        # Add to C core scene
-        self._tc_scene.add_entity(entity)
+        # Add to C core scene (registers components in tc_scene, calls on_added via vtable)
+        prev_scene = _current_scene
+        _current_scene = self
+        try:
+            self._tc_scene.add_entity(entity)
 
-        # Python-specific: set scene reference and emit Event
-        entity.on_added(self)
-        self._on_entity_added.emit(entity)
+            # Python-specific component registration (Light, Collider, Input, etc.)
+            for component in entity.components:
+                self._register_component_python_specific(component)
+
+            entity.on_added(self)
+            self._on_entity_added.emit(entity)
+        finally:
+            _current_scene = prev_scene
         return entity
 
     def add(self, entity: Entity) -> Entity:
@@ -411,7 +431,12 @@ class Scene:
 
     # --- Component registration ---
 
-    def register_component(self, component: Component):
+    def _register_component_python_specific(self, component: Component):
+        """Register Python-specific component types (Light, Collider, Input).
+
+        Called after tc_scene has already registered the component.
+        Does NOT call tc_scene.register_component.
+        """
         from termin.colliders.collider_component import ColliderComponent
 
         if isinstance(component, ColliderComponent):
@@ -423,20 +448,35 @@ class Scene:
         if isinstance(component, InputComponent):
             self._input_components.append(component)
 
+    def register_component(self, component: Component):
+        from termin.colliders.collider_component import ColliderComponent
+        from termin.visualization.core.python_component import PythonComponent
+
+        # Python-specific registration
+        self._register_component_python_specific(component)
+
         # For native C++ components, use flags set by REGISTER_COMPONENT
         # For Python components, check if method is overridden and set flags
         if not component.is_native:
-            if is_overrides_method(component, "update", Component):
+            # Determine base class for override check
+            base_class = PythonComponent if isinstance(component, PythonComponent) else Component
+            if is_overrides_method(component, "update", base_class):
                 component.has_update = True
-            if is_overrides_method(component, "fixed_update", Component):
+            if is_overrides_method(component, "fixed_update", base_class):
                 component.has_fixed_update = True
 
-        # Sync flags to C component and register with TcScene
-        component.sync_to_c()
-        self._tc_scene.register_component(component)
+        # Register with TcScene
+        if isinstance(component, PythonComponent):
+            # Pure Python component - use pointer-based registration
+            self._tc_scene.register_component_ptr(component.c_component_ptr())
+        else:
+            # C++ Component - sync flags and use object-based registration
+            component.sync_to_c()
+            self._tc_scene.register_component(component)
 
     def unregister_component(self, component: Component):
         from termin.colliders.collider_component import ColliderComponent
+        from termin.visualization.core.python_component import PythonComponent
 
         if isinstance(component, ColliderComponent) and component in self.colliders:
             self.colliders.remove(component)
@@ -448,13 +488,21 @@ class Scene:
             self._input_components.remove(component)
 
         # Unregister from TcScene
-        self._tc_scene.unregister_component(component)
+        if isinstance(component, PythonComponent):
+            self._tc_scene.unregister_component_ptr(component.c_component_ptr())
+        else:
+            self._tc_scene.unregister_component(component)
 
     # --- Update loop ---
 
     def update(self, dt: float):
-        # Delegate to C core (includes profiling via tc_profiler)
-        self._tc_scene.update(dt)
+        global _current_scene
+        _current_scene = self
+        try:
+            # Delegate to C core (includes profiling via tc_profiler)
+            self._tc_scene.update(dt)
+        finally:
+            _current_scene = None
 
     def editor_update(self, dt: float):
         """
@@ -463,8 +511,13 @@ class Scene:
         Called in editor mode to run editor-specific components.
         Uses the same _started flag as regular update().
         """
-        # Delegate to C core
-        self._tc_scene.editor_update(dt)
+        global _current_scene
+        _current_scene = self
+        try:
+            # Delegate to C core
+            self._tc_scene.editor_update(dt)
+        finally:
+            _current_scene = None
 
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""

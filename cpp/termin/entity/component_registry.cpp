@@ -69,10 +69,11 @@ Component* ComponentRegistry::create_component(const std::string& name) const {
         comp->is_native = true;
         return comp;
     } else {
-        // Create Python component and extract Component*
+        // Create Python component that inherits from C++ Component
+        // is_native=true because storage mechanism is the same (embedded _c with data=this)
         py::object py_comp = info.python_class();
         Component* comp = py_comp.cast<Component*>();
-        comp->is_native = false;
+        comp->is_native = true;
         comp->set_type_name(name.c_str());
         // prevent python side destroy
         py_comp.inc_ref();

@@ -65,7 +65,7 @@ public:
         return tc_scene_entity_count(_s);
     }
 
-    // Component registration
+    // Component registration (C++ Component)
     void register_component(Component* c) {
         if (!c) return;
         c->sync_to_c();
@@ -75,6 +75,21 @@ public:
     void unregister_component(Component* c) {
         if (!c) return;
         tc_scene_unregister_component(_s, c->c_component());
+    }
+
+    // Component registration by pointer (for TcComponent/pure Python components)
+    void register_component_ptr(uintptr_t ptr) {
+        tc_component* c = reinterpret_cast<tc_component*>(ptr);
+        if (c) {
+            tc_scene_register_component(_s, c);
+        }
+    }
+
+    void unregister_component_ptr(uintptr_t ptr) {
+        tc_component* c = reinterpret_cast<tc_component*>(ptr);
+        if (c) {
+            tc_scene_unregister_component(_s, c);
+        }
     }
 
     // Update loop
@@ -127,9 +142,13 @@ void bind_tc_scene(py::module_& m) {
         .def("remove_entity", &TcScene::remove_entity, py::arg("entity"))
         .def("entity_count", &TcScene::entity_count)
 
-        // Component registration
+        // Component registration (C++ Component)
         .def("register_component", &TcScene::register_component, py::arg("component"))
         .def("unregister_component", &TcScene::unregister_component, py::arg("component"))
+
+        // Component registration by pointer (for pure Python components)
+        .def("register_component_ptr", &TcScene::register_component_ptr, py::arg("ptr"))
+        .def("unregister_component_ptr", &TcScene::unregister_component_ptr, py::arg("ptr"))
 
         // Update loop
         .def("update", &TcScene::update, py::arg("dt"))

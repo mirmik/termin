@@ -79,8 +79,14 @@ std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
         }
 
         // Get drawable components from entity
-        for (Component* component : entity->components) {
-            if (!component->enabled) {
+        size_t comp_count = entity->component_count();
+        for (size_t ci = 0; ci < comp_count; ci++) {
+            tc_component* tc = entity->component_at(ci);
+            if (!tc || !tc->is_native || !tc->enabled) {
+                continue;
+            }
+            Component* component = static_cast<Component*>(tc->data);
+            if (!component) {
                 continue;
             }
 

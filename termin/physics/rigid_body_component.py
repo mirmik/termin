@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 
 from termin.visualization.core.component import Component
+from termin.visualization.core.scene import get_current_scene
 from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase import Pose3
@@ -89,7 +90,9 @@ class RigidBodyComponent(Component):
         self._half_extents = self._compute_half_extents()
 
         # Ищем PhysicsWorldComponent в сцене и регистрируемся
-        self._find_and_register_with_physics_world(self.entity.scene)
+        scene = get_current_scene()
+        if scene:
+            self._find_and_register_with_physics_world(scene)
 
     def _validate_ancestor_scales(self):
         """Проверить, что у предков нет non-identity scale."""

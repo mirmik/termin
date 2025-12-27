@@ -270,7 +270,7 @@ void tc_scene_register_component(tc_scene* s, tc_component* c) {
         ptr_array_push(&s->pending_start, c);
     }
 
-    // Call on_added with scene
+    // Call on_added - C++ callback uses get_current_scene() for Python Scene
     if (c->vtable && c->vtable->on_added) {
         c->vtable->on_added(c, s);
     }

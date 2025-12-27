@@ -1,0 +1,122 @@
+// tc_component_python.c - Python-specific component implementation
+#include "../include/tc_component_python.h"
+#include <stdlib.h>
+#include <string.h>
+
+// Global Python callbacks (set once at initialization)
+static tc_python_callbacks g_py_callbacks = {0};
+
+// ============================================================================
+// Python vtable callbacks - these dispatch to global Python callbacks
+// ============================================================================
+
+static void py_vtable_start(tc_component* c) {
+    if (g_py_callbacks.start && c->data) {
+        g_py_callbacks.start(c->data);
+    }
+}
+
+static void py_vtable_update(tc_component* c, float dt) {
+    if (g_py_callbacks.update && c->data) {
+        g_py_callbacks.update(c->data, dt);
+    }
+}
+
+static void py_vtable_fixed_update(tc_component* c, float dt) {
+    if (g_py_callbacks.fixed_update && c->data) {
+        g_py_callbacks.fixed_update(c->data, dt);
+    }
+}
+
+static void py_vtable_on_destroy(tc_component* c) {
+    if (g_py_callbacks.on_destroy && c->data) {
+        g_py_callbacks.on_destroy(c->data);
+    }
+}
+
+static void py_vtable_on_added_to_entity(tc_component* c) {
+    if (g_py_callbacks.on_added_to_entity && c->data) {
+        g_py_callbacks.on_added_to_entity(c->data);
+    }
+}
+
+static void py_vtable_on_removed_from_entity(tc_component* c) {
+    if (g_py_callbacks.on_removed_from_entity && c->data) {
+        g_py_callbacks.on_removed_from_entity(c->data);
+    }
+}
+
+static void py_vtable_on_added(tc_component* c, void* scene) {
+    if (g_py_callbacks.on_added && c->data) {
+        g_py_callbacks.on_added(c->data, scene);
+    }
+}
+
+static void py_vtable_on_removed(tc_component* c) {
+    if (g_py_callbacks.on_removed && c->data) {
+        g_py_callbacks.on_removed(c->data);
+    }
+}
+
+static void py_vtable_on_editor_start(tc_component* c) {
+    if (g_py_callbacks.on_editor_start && c->data) {
+        g_py_callbacks.on_editor_start(c->data);
+    }
+}
+
+// ============================================================================
+// Python vtable (static, shared by all Python components)
+// ============================================================================
+
+static const tc_component_vtable g_python_vtable = {
+    .type_name = "PythonComponent",  // Instance type_name will override this
+    .start = py_vtable_start,
+    .update = py_vtable_update,
+    .fixed_update = py_vtable_fixed_update,
+    .on_destroy = py_vtable_on_destroy,
+    .on_added_to_entity = py_vtable_on_added_to_entity,
+    .on_removed_from_entity = py_vtable_on_removed_from_entity,
+    .on_added = py_vtable_on_added,
+    .on_removed = py_vtable_on_removed,
+    .on_editor_start = py_vtable_on_editor_start,
+    .setup_editor_defaults = NULL,  // Python handles this differently
+    .drop = NULL,  // Python manages its own memory
+    .serialize = NULL,
+    .deserialize = NULL,
+};
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+void tc_component_set_python_callbacks(const tc_python_callbacks* callbacks) {
+    if (callbacks) {
+        g_py_callbacks = *callbacks;
+    }
+}
+
+tc_component* tc_component_new_python(void* py_self, const char* type_name) {
+    tc_component* c = (tc_component*)calloc(1, sizeof(tc_component));
+    if (!c) return NULL;
+
+    // Initialize with Python vtable
+    tc_component_init(c, &g_python_vtable);
+
+    // Store Python object pointer
+    c->data = py_self;
+
+    // Set instance type name (overrides vtable->type_name)
+    c->type_name = type_name;
+
+    // Python components are not native
+    c->is_native = false;
+
+    return c;
+}
+
+void tc_component_free_python(tc_component* c) {
+    if (c) {
+        // Don't free c->data - Python manages its own objects
+        free(c);
+    }
+}

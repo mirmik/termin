@@ -92,13 +92,17 @@ void Component::_cb_on_removed_from_entity(tc_component* c) {
 }
 
 void Component::_cb_on_added(tc_component* c, void* scene) {
+    (void)scene;  // Ignore - might be tc_scene* or PyObject*
     auto* self = static_cast<Component*>(c->data);
     if (self) {
-        // Convert void* back to py::object
-        // Note: scene is actually passed as nullptr here since we don't have the py::object
-        // The actual on_added is called from Python/C++ with proper py::object
-        (void)scene;
-        // self->on_added(py::reinterpret_borrow<py::object>(scene));
+        // Get Python scene from global current_scene
+        try {
+            py::module_ scene_mod = py::module_::import("termin.visualization.core.scene");
+            py::object py_scene = scene_mod.attr("get_current_scene")();
+            self->on_added(py_scene);
+        } catch (const py::error_already_set&) {
+            // Module not available or scene not set - ignore
+        }
     }
 }
 

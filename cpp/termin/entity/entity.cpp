@@ -5,14 +5,14 @@
 #include "../inspect/inspect_registry.hpp"
 #include <algorithm>
 #include <iostream>
+#include <cstdio>
 
 namespace termin {
 
 Entity::Entity(const std::string& name_, const std::string& uuid_)
     : Identifiable(uuid_)
     , name(name_)
-    , transform(std::make_unique<GeneralTransform3>())
-    , scene(py::none()) {
+    , transform(std::make_unique<GeneralTransform3>()) {
 
     // Set back-pointer from transform to entity
     transform->entity = this;
@@ -23,8 +23,7 @@ Entity::Entity(const std::string& name_, const std::string& uuid_)
 Entity::Entity(const GeneralPose3& pose, const std::string& name_, const std::string& uuid_)
     : Identifiable(uuid_)
     , name(name_)
-    , transform(std::make_unique<GeneralTransform3>(pose))
-    , scene(py::none()) {
+    , transform(std::make_unique<GeneralTransform3>(pose)) {
 
     transform->entity = this;
     EntityRegistry::instance().register_entity(this);
@@ -36,24 +35,23 @@ Entity::~Entity() {
 
     // Clean up C entity if created
     if (_e) {
-        // Remove all components from _e first to prevent double-cleanup
-        while (tc_entity_component_count(_e) > 0) {
-            tc_component* c = tc_entity_component_at(_e, 0);
-            tc_entity_remove_component(_e, c);
+        // Call on_removed_from_entity and clean up components
+        size_t count = tc_entity_component_count(_e);
+        for (size_t i = 0; i < count; i++) {
+            tc_component* tc = tc_entity_component_at(_e, i);
+            if (tc && tc->is_native) {
+                Component* comp = static_cast<Component*>(tc->data);
+                if (comp) {
+                    comp->on_removed_from_entity();
+                    comp->entity = nullptr;
+                    delete comp;
+                }
+            }
+            // PythonComponents are managed by Python GC
         }
         tc_entity_free(_e);
         _e = nullptr;
     }
-
-    // Clean up components
-    for (Component* comp : components) {
-        comp->on_removed_from_entity();
-        comp->entity = nullptr;
-        if (comp->is_native) {
-            delete comp;
-        }
-    }
-    components.clear();
 }
 
 Entity::Entity(Entity&& other) noexcept
@@ -67,8 +65,6 @@ Entity::Entity(Entity&& other) noexcept
     , priority(other.priority)
     , layer(other.layer)
     , flags(other.flags)
-    , scene(std::move(other.scene))
-    , components(std::move(other.components))
     , _pick_id(other._pick_id)
     , _pick_id_computed(other._pick_id_computed)
     , _e(other._e) {
@@ -82,8 +78,15 @@ Entity::Entity(Entity&& other) noexcept
     }
 
     // Update component->entity pointers
-    for (Component* comp : components) {
-        comp->entity = this;
+    if (_e) {
+        size_t count = tc_entity_component_count(_e);
+        for (size_t i = 0; i < count; i++) {
+            tc_component* tc = tc_entity_component_at(_e, i);
+            if (tc && tc->is_native) {
+                Component* comp = static_cast<Component*>(tc->data);
+                if (comp) comp->entity = this;
+            }
+        }
     }
 
     // Re-register with new address
@@ -93,16 +96,19 @@ Entity::Entity(Entity&& other) noexcept
 Entity& Entity::operator=(Entity&& other) noexcept {
     if (this != &other) {
         // Clean up old components
-        for (Component* comp : components) {
-            comp->on_removed_from_entity();
-            comp->entity = nullptr;
-            if (comp->is_native) {
-                delete comp;
-            }
-        }
-
-        // Clean up old _e
         if (_e) {
+            size_t count = tc_entity_component_count(_e);
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = tc_entity_component_at(_e, i);
+                if (tc && tc->is_native) {
+                    Component* comp = static_cast<Component*>(tc->data);
+                    if (comp) {
+                        comp->on_removed_from_entity();
+                        comp->entity = nullptr;
+                        delete comp;
+                    }
+                }
+            }
             tc_entity_free(_e);
         }
 
@@ -116,8 +122,6 @@ Entity& Entity::operator=(Entity&& other) noexcept {
         priority = other.priority;
         layer = other.layer;
         flags = other.flags;
-        scene = std::move(other.scene);
-        components = std::move(other.components);
         _pick_id = other._pick_id;
         _pick_id_computed = other._pick_id_computed;
         _e = other._e;
@@ -128,8 +132,16 @@ Entity& Entity::operator=(Entity&& other) noexcept {
             transform->entity = this;
         }
 
-        for (Component* comp : components) {
-            comp->entity = this;
+        // Update component->entity pointers
+        if (_e) {
+            size_t count = tc_entity_component_count(_e);
+            for (size_t i = 0; i < count; i++) {
+                tc_component* tc = tc_entity_component_at(_e, i);
+                if (tc && tc->is_native) {
+                    Component* comp = static_cast<Component*>(tc->data);
+                    if (comp) comp->entity = this;
+                }
+            }
         }
 
         EntityRegistry::instance().register_entity(this);
@@ -175,8 +187,11 @@ uint32_t Entity::pick_id() {
 void Entity::add_component(Component* component) {
     if (!component) return;
 
+    _ensure_c_entity();
+
     component->entity = this;
-    components.push_back(component);
+    component->sync_to_c();
+    tc_entity_add_component(_e, component->c_component());
     component->on_added_to_entity();
 
     // Note: start() is NOT called here anymore.
@@ -184,21 +199,46 @@ void Entity::add_component(Component* component) {
     // 1) register_component, 2) on_added(scene), 3) start()
 }
 
+void Entity::add_component_ptr(tc_component* c) {
+    if (!c) return;
+
+    _ensure_c_entity();
+    tc_entity_add_component(_e, c);
+    tc_component_on_added_to_entity(c);
+}
+
 void Entity::remove_component(Component* component) {
-    if (!component) return;
+    if (!component || !_e) return;
 
-    auto it = std::find(components.begin(), components.end(), component);
-    if (it == components.end()) return;
-
+    tc_entity_remove_component(_e, component->c_component());
     component->on_removed_from_entity();
     component->entity = nullptr;
-    components.erase(it);
+}
+
+void Entity::remove_component_ptr(tc_component* c) {
+    if (!c || !_e) return;
+
+    tc_entity_remove_component(_e, c);
+    tc_component_on_removed_from_entity(c);
+}
+
+size_t Entity::component_count() const {
+    return _e ? tc_entity_component_count(_e) : 0;
+}
+
+tc_component* Entity::component_at(size_t index) const {
+    return _e ? tc_entity_component_at(const_cast<tc_entity*>(_e), index) : nullptr;
 }
 
 Component* Entity::get_component_by_type(const std::string& type_name) {
-    for (Component* comp : components) {
-        if (comp->type_name() == type_name) {
-            return comp;
+    size_t count = component_count();
+    for (size_t i = 0; i < count; i++) {
+        tc_component* tc = component_at(i);
+        if (tc && tc->is_native) {
+            Component* comp = static_cast<Component*>(tc->data);
+            if (comp && comp->type_name() == type_name) {
+                return comp;
+            }
         }
     }
     return nullptr;
@@ -237,26 +277,31 @@ std::vector<Entity*> Entity::children() const {
 void Entity::update(float dt) {
     if (!active) return;
 
-    for (Component* comp : components) {
-        if (comp->enabled) {
-            comp->update(dt);
+    // Update is now handled by tc_scene
+    // This method is kept for backwards compatibility with direct Entity.update() calls
+    size_t count = component_count();
+    for (size_t i = 0; i < count; i++) {
+        tc_component* tc = component_at(i);
+        if (tc && tc->enabled) {
+            tc_component_update(tc, dt);
         }
     }
 }
 
-void Entity::on_added_to_scene(py::object scene_) {
-    scene = scene_;
-
-    for (Component* comp : components) {
-        comp->start();
-    }
+void Entity::on_added_to_scene(py::object) {
+    // on_added is called from tc_scene_register_component
+    // start is called from tc_scene update loop via pending_start
+    // Nothing to do here - kept for API compatibility
 }
 
 void Entity::on_removed_from_scene() {
-    for (Component* comp : components) {
-        comp->on_destroy();
+    size_t count = component_count();
+    for (size_t i = 0; i < count; i++) {
+        tc_component* tc = component_at(i);
+        if (tc) {
+            tc_component_on_destroy(tc);
+        }
     }
-    scene = py::none();
 }
 
 nos::trent Entity::serialize() const {
@@ -436,17 +481,14 @@ void Entity::sync_to_c() {
         tc_entity_set_name(_e, name.c_str());
     }
 
-    // Sync components - add their tc_component to _e
-    // First clear existing components in _e (they're just pointers, not owned)
-    while (tc_entity_component_count(_e) > 0) {
-        tc_component* c = tc_entity_component_at(_e, 0);
-        tc_entity_remove_component(_e, c);
-    }
-
-    // Add current components
-    for (Component* comp : components) {
-        comp->sync_to_c();
-        tc_entity_add_component(_e, comp->c_component());
+    // Sync C++ components (components are already in tc_entity)
+    size_t count = tc_entity_component_count(_e);
+    for (size_t i = 0; i < count; i++) {
+        tc_component* tc = tc_entity_component_at(_e, i);
+        if (tc && tc->is_native) {
+            Component* comp = static_cast<Component*>(tc->data);
+            if (comp) comp->sync_to_c();
+        }
     }
 }
 
@@ -463,9 +505,14 @@ void Entity::sync_from_c() {
     layer = tc_entity_layer(_e);
     flags = tc_entity_flags(_e);
 
-    // Sync components back
-    for (Component* comp : components) {
-        comp->sync_from_c();
+    // Sync C++ components back
+    size_t count = tc_entity_component_count(_e);
+    for (size_t i = 0; i < count; i++) {
+        tc_component* tc = tc_entity_component_at(_e, i);
+        if (tc && tc->is_native) {
+            Component* comp = static_cast<Component*>(tc->data);
+            if (comp) comp->sync_from_c();
+        }
     }
 }
 

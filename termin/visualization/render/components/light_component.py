@@ -81,7 +81,7 @@ class LightComponent(Component):
 
     @shadows_map_resolution.setter
     def shadows_map_resolution(self, value: int):
-        self._shadows.map_resolution = value
+        self._shadows.map_resolution = int(value)
 
     @property
     def shadows(self) -> LightShadowParams:

@@ -6,6 +6,7 @@ import numpy as np
 from typing import TYPE_CHECKING
 
 from termin.visualization.core.component import Component
+from termin.visualization.core.scene import get_current_scene
 from termin.editor.inspect_field import InspectField
 from termin.assets.audio_clip_handle import AudioClipHandle
 
@@ -233,12 +234,13 @@ class AudioSource(Component):
 
     def _find_audio_listener(self) -> "AudioListener | None":
         """Find the AudioListener in the scene."""
-        if self.entity is None or self.entity.scene is None:
+        scene = get_current_scene()
+        if self.entity is None or scene is None:
             return None
 
         from termin.audio.components.audio_listener import AudioListener
 
-        for entity in self.entity.scene.entities:
+        for entity in scene.entities:
             listener = entity.get_component(AudioListener)
             if listener is not None and listener.enabled:
                 return listener

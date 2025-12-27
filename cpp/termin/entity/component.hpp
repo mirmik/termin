@@ -81,7 +81,9 @@ public:
     // These are synced to the internal tc_component structure
     bool enabled = true;
     bool active_in_editor = false;
-    bool is_native = false;
+    // is_native=true means _c.data is Component* (including Python classes inheriting C++ Component)
+    // is_native=false means _c.data is PyObject* (pure Python components using TcComponent)
+    bool is_native = true;
     bool _started = false;
     bool has_update = false;
     bool has_fixed_update = false;

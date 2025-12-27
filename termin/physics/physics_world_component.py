@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, List
 import numpy as np
 
 from termin.visualization.core.component import Component
+from termin.visualization.core.scene import get_current_scene
 from termin.geombase._geom_native import Vec3
 from termin.physics._physics_native import PhysicsWorld
 from termin.editor.inspect_field import InspectField
@@ -158,7 +159,9 @@ class PhysicsWorldComponent(Component):
 
     def start(self):
         super().start()
-        scene = self.entity.scene
+        scene = get_current_scene()
+        if not scene:
+            return
         # Передаём CollisionWorld из сцены в PhysicsWorld
         self._physics_world.set_collision_world(scene.collision_world)
         self._collect_rigid_bodies(scene)
