@@ -110,16 +110,19 @@ public:
     tc_component* c_component() { return &_c; }
     const tc_component* c_component() const { return &_c; }
 
-    // Convert tc_component to Python object.
+    // Get Python object for this component
+    py::object to_python() {
+        return py::cast(this);
+    }
+
+    // Convert any tc_component to Python object (static version)
     // For C++ components (is_native=true): casts Component* to py::object
     // For Python components (is_native=false): returns stored PyObject*
     static py::object to_python(tc_component* c) {
         if (!c || !c->data) return py::none();
         if (c->is_native) {
-            // C++ component - c->data is Component*
             return py::cast(static_cast<Component*>(c->data));
         } else {
-            // Python component - c->data is PyObject*
             return py::reinterpret_borrow<py::object>(
                 reinterpret_cast<PyObject*>(c->data)
             );

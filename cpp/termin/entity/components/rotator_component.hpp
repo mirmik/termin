@@ -7,6 +7,7 @@
 #include "../../inspect/inspect_registry.hpp"
 #include <iostream>
 #include <pybind11/pybind11.h>
+#include <termin/colliders/attached_collider.hpp>
 
 namespace termin {
 
@@ -23,10 +24,10 @@ public:
     INSPECT_FIELD(CXXRotatorComponent, speed, "Speed", "float", 0.0, 10.0, 0.1)
 
     void start() override {
-        // collider_component = entity->get_component_by_type("ColliderComponent");
-        // if (collider_component) {
-        //     py_collider_component = collider_component->to_python();
-        // }
+        collider_component = entity->get_component_by_type("ColliderComponent");
+        if (collider_component) {
+            py_collider_component = collider_component->to_python();
+        }
     }
 
 
@@ -40,6 +41,10 @@ public:
         }.scaled(dt);
         pose = (pose * screw.to_pose()).normalized();
         entity->transform().relocate(pose);
+
+        py::object attached = py_collider_component.attr("attached");
+        auto* ac = attached.cast<termin::colliders::AttachedCollider*>();
+        ac->angular_velocity = Vec3(0, 0, speed);
     }
 };
 
