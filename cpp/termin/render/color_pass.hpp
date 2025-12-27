@@ -39,6 +39,7 @@ public:
     std::string phase_mark = "opaque";
     bool sort_by_distance = false;
     bool clear_depth = false;
+    bool wireframe = false;  // Render as wireframe (override polygon mode)
 
     // Debugger support (Python objects)
     py::object debugger_window;         // Window for debug blit

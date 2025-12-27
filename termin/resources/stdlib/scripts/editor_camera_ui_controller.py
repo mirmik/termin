@@ -99,6 +99,10 @@ class EditorCameraUIController(Component):
         if collider_pass is not None and self._colliders_btn is not None:
             self._colliders_btn.active = collider_pass.enabled
 
+        color_pass = self._find_pass_by_name("Color")
+        if color_pass is not None and self._wireframe_btn is not None:
+            self._wireframe_btn.active = color_pass.wireframe
+
     def _find_pass_by_name(self, pass_name: str):
         """Ищет пасс по имени в pipeline."""
         vp = self.viewport
@@ -119,9 +123,17 @@ class EditorCameraUIController(Component):
 
     def _on_wireframe_click(self) -> None:
         """Переключает wireframe режим."""
-        # TODO: Реализовать wireframe режим
-        if self._wireframe_btn is not None:
-            self._wireframe_btn.active = not self._wireframe_btn.active
+        color_pass = self._find_pass_by_name("Color")
+        transparent_pass = self._find_pass_by_name("Transparent")
+
+        self._wireframe_btn.active = not self._wireframe_btn.active
+        current_state = self._wireframe_btn.active
+
+        if color_pass is not None:
+            color_pass.wireframe = current_state
+
+        if transparent_pass is not None:
+            transparent_pass.wireframe = current_state
 
     def _on_ortho_click(self) -> None:
         """Переключает ортографическую камеру."""

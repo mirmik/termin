@@ -52,13 +52,9 @@ class EditorCameraUIController(Component):
 
     def start(self) -> None:
         """Инициализация при старте."""
-        print(f"EditorCameraUIController.start() called, entity={self.entity}")
         self._find_camera_component()
-        print(f"  camera_component={self._camera_component}")
         self._find_ui_component()
-        print(f"  ui_component={self._ui_component}")
         self._bind_buttons()
-        print(f"  colliders_btn={self._colliders_btn}, wireframe_btn={self._wireframe_btn}, ortho_btn={self._ortho_btn}")
         self._sync_button_states()
 
     def _find_camera_component(self) -> None:
@@ -103,6 +99,10 @@ class EditorCameraUIController(Component):
         if collider_pass is not None and self._colliders_btn is not None:
             self._colliders_btn.active = collider_pass.enabled
 
+        color_pass = self._find_pass_by_name("Color")
+        if color_pass is not None and self._wireframe_btn is not None:
+            self._wireframe_btn.active = color_pass.wireframe
+
     def _find_pass_by_name(self, pass_name: str):
         """Ищет пасс по имени в pipeline."""
         vp = self.viewport
@@ -115,7 +115,6 @@ class EditorCameraUIController(Component):
 
     def _on_colliders_click(self) -> None:
         """Переключает отображение коллайдеров."""
-        print("EditorCameraUIController: Toggling colliders display")   
         collider_pass = self._find_pass_by_name("ColliderGizmo")
         if collider_pass is not None:
             collider_pass.enabled = not collider_pass.enabled
@@ -124,14 +123,20 @@ class EditorCameraUIController(Component):
 
     def _on_wireframe_click(self) -> None:
         """Переключает wireframe режим."""
-        # TODO: Реализовать wireframe режим
-        print("EditorCameraUIController: Toggling wireframe mode")
-        if self._wireframe_btn is not None:
-            self._wireframe_btn.active = not self._wireframe_btn.active
+        color_pass = self._find_pass_by_name("Color")
+        transparent_pass = self._find_pass_by_name("Transparent")
+
+        self._wireframe_btn.active = not self._wireframe_btn.active
+        current_state = self._wireframe_btn.active
+
+        if color_pass is not None:
+            color_pass.wireframe = current_state
+
+        if transparent_pass is not None:
+            transparent_pass.wireframe = current_state
 
     def _on_ortho_click(self) -> None:
         """Переключает ортографическую камеру."""
         # TODO: Реализовать переключение проекции камеры
-        print("EditorCameraUIController: Toggling orthographic camera")
         if self._ortho_btn is not None:
             self._ortho_btn.active = not self._ortho_btn.active

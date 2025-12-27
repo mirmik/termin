@@ -191,8 +191,12 @@ void ColorPass::execute_with_data(
         Mat44f model = get_model_matrix(dc.entity);
         context.model = model;
 
-        // Apply render state
-        graphics->apply_render_state(dc.phase->render_state);
+        // Apply render state (override polygon mode if wireframe enabled)
+        RenderState state = dc.phase->render_state;
+        if (wireframe) {
+            state.polygon_mode = PolygonMode::Line;
+        }
+        graphics->apply_render_state(state);
 
         // Apply material (binds shader, uploads MVP, textures, uniforms)
         dc.phase->apply(model, view, projection, graphics, context_key);

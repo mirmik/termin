@@ -244,6 +244,7 @@ void bind_frame_pass(py::module_& m) {
         .def_readwrite("phase_mark", &ColorPass::phase_mark)
         .def_readwrite("sort_by_distance", &ColorPass::sort_by_distance)
         .def_readwrite("clear_depth", &ColorPass::clear_depth)
+        .def_readwrite("wireframe", &ColorPass::wireframe)
         .def("get_resource_specs", &ColorPass::get_resource_specs)
         .def("get_internal_symbols", &ColorPass::get_internal_symbols)
         .def("set_debugger_window", &ColorPass::set_debugger_window,
