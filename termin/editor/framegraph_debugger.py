@@ -577,6 +577,29 @@ class FramegraphTextureWidget(QtWidgets.QWidget):
         super().update()
         self.render()
 
+    def clear_to_background(self) -> None:
+        """Очищает окно дебаггера до фонового цвета (без текстуры)."""
+        from sdl2 import video as sdl_video
+
+        self._ensure_initialized()
+
+        saved_context = sdl_video.SDL_GL_GetCurrentContext()
+        saved_window = sdl_video.SDL_GL_GetCurrentWindow()
+
+        self._sdl_window.make_current()
+
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+        w, h = self._sdl_window.framebuffer_size()
+        gl.glViewport(0, 0, w, h)
+        gl.glDisable(gl.GL_SCISSOR_TEST)
+        gl.glClearColor(0.1, 0.1, 0.1, 1.0)
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+
+        self._sdl_window.swap_buffers()
+
+        if saved_window and saved_context:
+            sdl_video.SDL_GL_MakeCurrent(saved_window, saved_context)
+
     def closeEvent(self, event) -> None:
         """Закрываем SDL окно при закрытии виджета."""
         if self._sdl_window is not None:
@@ -1057,11 +1080,15 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._mode = "inside"
             self._between_panel.hide()
             self._inside_panel.show()
+            # Сбрасываем внутренний символ предыдущего пасса
+            self._clear_internal_symbol()
             # Отключаем FrameDebuggerPass от пайплайна
             self._detach_frame_debugger_pass()
             # В режиме "Внутри пасса" скрываем UI обработчиков ресурсов
             self._resource_ui_container.hide()
             self._update_passes_list()
+            # Очищаем окно дебаггера до выбора символа
+            self._gl_widget.clear_to_background()
 
         # Запрашиваем обновление depth для новой текстуры
         self._request_depth_refresh()
@@ -1139,6 +1166,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         """Обработчик выбора пасса (режим «Внутри пасса»)."""
         if not name:
             return
+        # Сначала очищаем debugger window у предыдущего пасса
+        self._clear_internal_symbol()
         # Извлекаем реальное имя пасса (без суффикса)
         idx = self._pass_combo.currentIndex()
         if idx >= 0:
@@ -1147,6 +1176,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         # чтобы не тянуть его между разными пассами.
         self._selected_symbol = None
         self._update_symbols_list()
+        # Очищаем окно дебаггера до выбора нового символа
+        self._gl_widget.clear_to_background()
 
     def _on_symbol_selected(self, name: str) -> None:
         """Обработчик выбора символа (режим «Внутри пасса»)."""
@@ -1499,9 +1530,10 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._sync_pause_state()
         self._update_ui_for_resource_type()
         self._update_fbo_info()
-        # В режиме "между пассами" не вызываем _gl_widget.update(),
-        # т.к. FrameDebuggerPass уже отрендерил в окно
-        if self._mode == "inside":
+        # В режиме "между пассами" FrameDebuggerPass уже отрендерил в окно.
+        # В режиме "внутри пасса" пасс с debug_internal_symbol рендерит в окно,
+        # поэтому _gl_widget.update() не вызываем если выбран символ.
+        if self._mode == "inside" and not self._selected_symbol:
             self._gl_widget.update()
 
     def showEvent(self, event) -> None:

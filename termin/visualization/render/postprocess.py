@@ -317,6 +317,10 @@ class PostProcessPass(RenderFramePass):
         graphics.set_depth_test(False)
         graphics.set_depth_mask(False)
 
+        # Debugger: блит входной текстуры если выбран символ "input"
+        if debug_symbol == "input":
+            self._blit_to_debugger(graphics, fb_in)
+
         try:
             for i, effect in enumerate(self.effects):
                 is_last = (i == len(self.effects) - 1)
@@ -331,7 +335,9 @@ class PostProcessPass(RenderFramePass):
 
                 effect.draw(graphics, key, current_tex, extra_textures, size)
 
-                # TODO: реализовать дебаг внутри постпроцесса через debugger_window
+                # Debugger: блит после применения эффекта если выбран его символ
+                if debug_symbol == self._effect_symbol(i, effect):
+                    self._blit_to_debugger(graphics, fb_target)
 
                 # Извлекаем текстуру с учетом типа ресурса
                 current_tex = _get_texture_from_resource(fb_target)

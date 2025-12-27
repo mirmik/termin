@@ -222,5 +222,9 @@ class IdPass(RenderFramePass):
             # Рисуем геометрию
             dc.drawable.draw_geometry(render_ctx)
 
+            # Debugger: блит после отрисовки выбранного символа
+            if self.debug_internal_symbol and dc.entity.name == self.debug_internal_symbol:
+                self._blit_to_debugger(graphics, fb)
+
         if self._DEBUG_DRAW_COUNT:
             print(f"[IdPass] draw_calls: {len(draw_calls)}")
