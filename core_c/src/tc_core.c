@@ -207,6 +207,8 @@ static bool g_initialized = false;
 // Forward declarations for cleanup functions
 extern void tc_component_registry_cleanup(void);
 extern void tc_entity_registry_cleanup(void);
+extern void tc_inspect_cleanup(void);
+extern void tc_kind_cleanup(void);
 
 void tc_init(void) {
     if (g_initialized) return;
@@ -221,6 +223,8 @@ void tc_shutdown(void) {
     // Cleanup in reverse order of dependency
     tc_entity_registry_cleanup();
     tc_component_registry_cleanup();
+    tc_inspect_cleanup();
+    tc_kind_cleanup();
     tc_intern_cleanup();
 
     g_initialized = false;

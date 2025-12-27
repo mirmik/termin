@@ -58,6 +58,10 @@ struct tc_component {
     // Owner entity (set by entity_add_component)
     tc_entity* entity;
 
+    // Instance-specific type name (takes precedence over vtable->type_name)
+    // Used by C++ wrapper where subclasses share a vtable
+    const char* type_name;
+
     // Flags
     bool enabled;
     bool active_in_editor;
@@ -75,6 +79,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->data = NULL;
     c->vtable = vtable;
     c->entity = NULL;
+    c->type_name = NULL;
     c->enabled = true;
     c->active_in_editor = false;
     c->is_native = true;
@@ -143,8 +148,10 @@ static inline void tc_component_drop(tc_component* c) {
 }
 
 static inline const char* tc_component_type_name(const tc_component* c) {
-    if (c && c->vtable && c->vtable->type_name) {
-        return c->vtable->type_name;
+    if (c) {
+        // Instance-specific type_name takes precedence (for C++ wrapper)
+        if (c->type_name) return c->type_name;
+        if (c->vtable && c->vtable->type_name) return c->vtable->type_name;
     }
     return "Component";
 }

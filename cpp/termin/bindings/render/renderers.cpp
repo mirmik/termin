@@ -6,6 +6,27 @@
 #include "termin/entity/entity.hpp"
 #include <iostream>
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#undef near
+#undef far
+
+inline bool check_heap() {
+    HANDLE heaps[100];
+    DWORD numHeaps = GetProcessHeaps(100, heaps);
+    for (DWORD i = 0; i < numHeaps; i++) {
+        if (!HeapValidate(heaps[i], 0, nullptr)) {
+            std::cerr << "[HEAP CORRUPT] Heap " << i << " is corrupted!" << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+#else
+inline bool check_heap() { return true; }
+#endif
+
 namespace termin {
 
 void bind_renderers(py::module_& m) {
@@ -13,13 +34,20 @@ void bind_renderers(py::module_& m) {
     py::module_::import("termin.entity._entity_native");
 
     // SkeletonController - inherits from Component
-    py::class_<SkeletonController, Component>(m, "SkeletonController")
+    // Use py::nodelete because Entity owns and deletes components
+    py::class_<SkeletonController, Component, std::unique_ptr<SkeletonController, py::nodelete>>(m, "SkeletonController")
         .def(py::init<>())
         .def(py::init([](py::object skeleton_arg, py::list bone_entities_list) {
+            std::cerr << "[SkeletonController] Constructor start" << std::endl;
+            if (!check_heap()) {
+                std::cerr << "[SkeletonController] HEAP CORRUPTED at start!" << std::endl;
+            }
+
             auto controller = new SkeletonController();
 
             // Handle skeleton argument: SkeletonHandle, SkeletonAsset, or SkeletonData*
             if (!skeleton_arg.is_none()) {
+                std::cerr << "[SkeletonController] Processing skeleton arg" << std::endl;
                 if (py::isinstance<SkeletonHandle>(skeleton_arg)) {
                     controller->skeleton = skeleton_arg.cast<SkeletonHandle>();
                 } else if (py::hasattr(skeleton_arg, "resource")) {
@@ -29,17 +57,21 @@ void bind_renderers(py::module_& m) {
                     // Raw SkeletonData* - wrap in handle via asset
                     auto skel_data = skeleton_arg.cast<SkeletonData*>();
                     if (skel_data != nullptr) {
-                        // Create minimal asset and wrap
+                        // Create minimal asset and set skeleton_data
                         py::object rm_module = py::module_::import("termin.assets.resources");
                         py::object rm = rm_module.attr("ResourceManager").attr("instance")();
-                        py::object asset = rm.attr("get_or_create_skeleton_asset")(
-                            py::cast(skel_data), py::arg("name") = "skeleton"
-                        );
+                        py::object asset = rm.attr("get_or_create_skeleton_asset")(py::arg("name") = "skeleton");
+                        asset.attr("skeleton_data") = skeleton_arg;
                         controller->skeleton = SkeletonHandle::from_asset(asset);
                     }
                 }
+                std::cerr << "[SkeletonController] Skeleton set" << std::endl;
+                if (!check_heap()) {
+                    std::cerr << "[SkeletonController] HEAP CORRUPTED after skeleton!" << std::endl;
+                }
             }
 
+            std::cerr << "[SkeletonController] Processing " << bone_entities_list.size() << " bone entities" << std::endl;
             std::vector<Entity*> entities;
             for (auto item : bone_entities_list) {
                 if (!item.is_none()) {
@@ -47,7 +79,12 @@ void bind_renderers(py::module_& m) {
                 }
             }
             controller->set_bone_entities_from_ptrs(std::move(entities));
+            std::cerr << "[SkeletonController] Bone entities set" << std::endl;
+            if (!check_heap()) {
+                std::cerr << "[SkeletonController] HEAP CORRUPTED after bone entities!" << std::endl;
+            }
 
+            std::cerr << "[SkeletonController] Constructor done" << std::endl;
             return controller;
         }),
             py::arg("skeleton") = py::none(),
@@ -70,9 +107,8 @@ void bind_renderers(py::module_& m) {
                     if (skel_data != nullptr) {
                         py::object rm_module = py::module_::import("termin.assets.resources");
                         py::object rm = rm_module.attr("ResourceManager").attr("instance")();
-                        py::object asset = rm.attr("get_or_create_skeleton_asset")(
-                            py::cast(skel_data), py::arg("name") = "skeleton"
-                        );
+                        py::object asset = rm.attr("get_or_create_skeleton_asset")(py::arg("name") = "skeleton");
+                        asset.attr("skeleton_data") = skel_arg;
                         self.set_skeleton(SkeletonHandle::from_asset(asset));
                     }
                 }
@@ -119,7 +155,8 @@ void bind_renderers(py::module_& m) {
         .def("invalidate_instance", &SkeletonController::invalidate_instance);
 
     // MeshRenderer - inherits from Component
-    py::class_<MeshRenderer, Component>(m, "MeshRenderer")
+    // Use py::nodelete because Entity owns and deletes components
+    py::class_<MeshRenderer, Component, std::unique_ptr<MeshRenderer, py::nodelete>>(m, "MeshRenderer")
         .def(py::init<>())
         // Constructor with mesh and material (for Python compatibility)
         .def(py::init([](py::object mesh_arg, py::object material_arg, bool cast_shadow) {
@@ -185,7 +222,8 @@ void bind_renderers(py::module_& m) {
         .def("get_geometry_draws", &MeshRenderer::get_geometry_draws,
             py::arg("phase_mark") = "");
 
-    py::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
+    // Use py::nodelete because Entity owns and deletes components
+    py::class_<SkinnedMeshRenderer, MeshRenderer, std::unique_ptr<SkinnedMeshRenderer, py::nodelete>>(m, "SkinnedMeshRenderer")
         .def(py::init<>())
         // Constructor with mesh, material, skeleton_controller
         .def(py::init([](py::object mesh_arg, py::object material_arg, SkeletonController* skeleton_controller, bool cast_shadow) {

@@ -14,6 +14,8 @@
 //   - tc_transform.h - Hierarchical transform
 //   - tc_component.h - Component base and vtable
 //   - tc_entity.h    - Entity (game object container)
+//   - tc_scene.h     - Scene (entity world + component scheduler)
+//   - tc_inspect.h   - Field inspection/serialization
 //
 
 #ifndef TERMIN_CORE_H
@@ -26,6 +28,8 @@
 #include "tc_transform.h"
 #include "tc_component.h"
 #include "tc_entity.h"
+#include "tc_scene.h"
+#include "tc_inspect.h"
 
 #ifdef __cplusplus
 extern "C" {

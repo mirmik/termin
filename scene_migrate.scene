@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "4a2d90c9-1b2d-4203-bb4b-a06174e57d68",
+    "uuid": "5be7eea2-e47e-41b6-985b-defed944b805",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -82,7 +82,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -177,7 +181,11 @@
                 0.8
               ],
               "fill_percent": 100,
-              "slice_axis": null,
+              "slice_axis": [
+                0,
+                0,
+                1
+              ],
               "color_surface": [
                 0.2,
                 1,
@@ -218,7 +226,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -301,7 +313,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -515,7 +531,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -610,7 +630,11 @@
                 0.8
               ],
               "fill_percent": 100,
-              "slice_axis": null,
+              "slice_axis": [
+                0,
+                0,
+                1
+              ],
               "color_surface": [
                 0.2,
                 1,
@@ -686,7 +710,11 @@
                 0.46399635076522827
               ],
               "fill_percent": 100,
-              "slice_axis": null,
+              "slice_axis": [
+                0,
+                0,
+                1
+              ],
               "color_surface": [
                 0.2,
                 1,
@@ -859,7 +887,11 @@
                 0.8
               ],
               "fill_percent": 100,
-              "slice_axis": null,
+              "slice_axis": [
+                0,
+                0,
+                1
+              ],
               "color_surface": [
                 0.2,
                 1,
@@ -989,7 +1021,7 @@
               ],
               "intensity": 1,
               "shadows_enabled": true,
-              "shadows_map_resolution": 4096
+              "shadows_map_resolution": 1024
             }
           }
         ]
@@ -5355,7 +5387,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -5414,7 +5450,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -5483,7 +5523,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -5552,7 +5596,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -5621,7 +5669,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -5700,7 +5752,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -5769,7 +5825,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -5828,7 +5888,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -5907,7 +5971,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6005,7 +6073,11 @@
                 "data": {
                   "enabled": true,
                   "collider_type": "Box",
-                  "box_size": null,
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
                   "sphere_radius": 0.5,
                   "capsule_height": 1,
                   "capsule_radius": 0.25
@@ -6074,7 +6146,11 @@
                 "data": {
                   "enabled": true,
                   "collider_type": "Box",
-                  "box_size": null,
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
                   "sphere_radius": 0.5,
                   "capsule_height": 1,
                   "capsule_radius": 0.25
@@ -6143,7 +6219,11 @@
                 "data": {
                   "enabled": true,
                   "collider_type": "Box",
-                  "box_size": null,
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
                   "sphere_radius": 0.5,
                   "capsule_height": 1,
                   "capsule_radius": 0.25
@@ -6212,7 +6292,11 @@
                 "data": {
                   "enabled": true,
                   "collider_type": "Box",
-                  "box_size": null,
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
                   "sphere_radius": 0.5,
                   "capsule_height": 1,
                   "capsule_radius": 0.25
@@ -6284,7 +6368,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6382,7 +6470,11 @@
                 "data": {
                   "enabled": true,
                   "collider_type": "Box",
-                  "box_size": null,
+                  "box_size": [
+                    1,
+                    1,
+                    1
+                  ],
                   "sphere_radius": 0.5,
                   "capsule_height": 1,
                   "capsule_radius": 0.25
@@ -6413,7 +6505,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6492,7 +6588,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6561,7 +6661,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6630,7 +6734,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6699,7 +6807,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6768,7 +6880,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6837,7 +6953,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6906,7 +7026,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -6975,7 +7099,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -7133,7 +7261,11 @@
             "data": {
               "enabled": true,
               "collider_type": "Box",
-              "box_size": null,
+              "box_size": [
+                1,
+                1,
+                1
+              ],
               "sphere_radius": 0.5,
               "capsule_height": 1,
               "capsule_radius": 0.25
@@ -7193,8 +7325,8 @@
         -0.3063035309314728
       ],
       "radius": 14.0,
-      "azimuth": 58.31494096763911,
-      "elevation": 0.5480333851262182
+      "azimuth": 58.25210911456732,
+      "elevation": 0.5829399701661049
     },
     "displays": [
       {
@@ -7204,7 +7336,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "5fa365ed-8ccd-4aa3-aa0b-64239b0b18b3",
+            "uuid": "7bb27387-cff0-4cee-acf7-e738a88af519",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7224,7 +7356,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "6f510150-542c-4bbd-8fa5-0b8c8419bc9a",
+            "uuid": "11f03f14-edd5-45a4-b77d-b90be6adb85a",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -7239,12 +7371,12 @@
       }
     ],
     "expanded_entities": [
-      "entity12_copy",
+      "[Root]",
       "editor_ui",
+      "camera",
       "cube1",
       "EditorEntities",
-      "camera",
-      "[Root]",
+      "entity12_copy",
       "cube2"
     ]
   },

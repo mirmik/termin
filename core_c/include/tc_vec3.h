@@ -5,6 +5,13 @@
 #include "tc_types.h"
 #include <math.h>
 
+// C/C++ compatible struct initialization
+#ifdef __cplusplus
+    #define TC_VEC3(x, y, z) tc_vec3{x, y, z}
+#else
+    #define TC_VEC3(x, y, z) (tc_vec3){x, y, z}
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,47 +21,47 @@ extern "C" {
 // ============================================================================
 
 static inline tc_vec3 tc_vec3_new(double x, double y, double z) {
-    return (tc_vec3){x, y, z};
+    return TC_VEC3(x, y, z);
 }
 
 static inline tc_vec3 tc_vec3_zero(void) {
-    return (tc_vec3){0, 0, 0};
+    return TC_VEC3(0, 0, 0);
 }
 
 static inline tc_vec3 tc_vec3_one(void) {
-    return (tc_vec3){1, 1, 1};
+    return TC_VEC3(1, 1, 1);
 }
 
-static inline tc_vec3 tc_vec3_unit_x(void) { return (tc_vec3){1, 0, 0}; }
-static inline tc_vec3 tc_vec3_unit_y(void) { return (tc_vec3){0, 1, 0}; }
-static inline tc_vec3 tc_vec3_unit_z(void) { return (tc_vec3){0, 0, 1}; }
+static inline tc_vec3 tc_vec3_unit_x(void) { return TC_VEC3(1, 0, 0); }
+static inline tc_vec3 tc_vec3_unit_y(void) { return TC_VEC3(0, 1, 0); }
+static inline tc_vec3 tc_vec3_unit_z(void) { return TC_VEC3(0, 0, 1); }
 
 // ============================================================================
 // Arithmetic
 // ============================================================================
 
 static inline tc_vec3 tc_vec3_add(tc_vec3 a, tc_vec3 b) {
-    return (tc_vec3){a.x + b.x, a.y + b.y, a.z + b.z};
+    return TC_VEC3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
 
 static inline tc_vec3 tc_vec3_sub(tc_vec3 a, tc_vec3 b) {
-    return (tc_vec3){a.x - b.x, a.y - b.y, a.z - b.z};
+    return TC_VEC3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
 static inline tc_vec3 tc_vec3_mul(tc_vec3 a, tc_vec3 b) {
-    return (tc_vec3){a.x * b.x, a.y * b.y, a.z * b.z};
+    return TC_VEC3(a.x * b.x, a.y * b.y, a.z * b.z);
 }
 
 static inline tc_vec3 tc_vec3_div(tc_vec3 a, tc_vec3 b) {
-    return (tc_vec3){a.x / b.x, a.y / b.y, a.z / b.z};
+    return TC_VEC3(a.x / b.x, a.y / b.y, a.z / b.z);
 }
 
 static inline tc_vec3 tc_vec3_scale(tc_vec3 v, double s) {
-    return (tc_vec3){v.x * s, v.y * s, v.z * s};
+    return TC_VEC3(v.x * s, v.y * s, v.z * s);
 }
 
 static inline tc_vec3 tc_vec3_neg(tc_vec3 v) {
-    return (tc_vec3){-v.x, -v.y, -v.z};
+    return TC_VEC3(-v.x, -v.y, -v.z);
 }
 
 // ============================================================================
@@ -66,11 +73,11 @@ static inline double tc_vec3_dot(tc_vec3 a, tc_vec3 b) {
 }
 
 static inline tc_vec3 tc_vec3_cross(tc_vec3 a, tc_vec3 b) {
-    return (tc_vec3){
+    return TC_VEC3(
         a.y * b.z - a.z * b.y,
         a.z * b.x - a.x * b.z,
         a.x * b.y - a.y * b.x
-    };
+    );
 }
 
 // ============================================================================
@@ -100,11 +107,11 @@ static inline double tc_vec3_distance(tc_vec3 a, tc_vec3 b) {
 // ============================================================================
 
 static inline tc_vec3 tc_vec3_lerp(tc_vec3 a, tc_vec3 b, double t) {
-    return (tc_vec3){
+    return TC_VEC3(
         a.x + (b.x - a.x) * t,
         a.y + (b.y - a.y) * t,
         a.z + (b.z - a.z) * t
-    };
+    );
 }
 
 // ============================================================================

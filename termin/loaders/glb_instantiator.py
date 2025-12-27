@@ -121,10 +121,15 @@ class GLBInstantiateResult:
         entity: Entity,
         skeleton_controller: Optional[SkeletonController] = None,
         animation_player: Optional[AnimationPlayer] = None,
+        # Debug: keep references to prevent premature destruction
+        _bone_entities: Optional[List] = None,
+        _clips: Optional[List] = None,
     ):
         self.entity = entity
         self.skeleton_controller = skeleton_controller
         self.animation_player = animation_player
+        self._bone_entities = _bone_entities
+        self._clips = _clips
 
     @property
     def skeleton_instance(self) -> Optional[SkeletonInstance]:
@@ -216,6 +221,7 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
 
     # Step 2: Create skeleton controller
     skeleton_controller: Optional[SkeletonController] = None
+    bone_entities: List[Entity] = []  # keep reference for debug
     if scene_data.skins:
         skin = scene_data.skins[0]
 
@@ -227,10 +233,7 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
         if skeleton_asset is None or skeleton_asset.skeleton_data is None:
             raise RuntimeError(f"[glb_instantiator] Skeleton not found in GLBAsset '{glb_asset.name}'")
 
-        skeleton_data = skeleton_asset.skeleton_data
-
         # Collect bone entities
-        bone_entities: List[Entity] = []
         for node_idx in skin.joint_node_indices:
             entity = node_to_entity.get(node_idx)
             if entity is None:
@@ -238,7 +241,7 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
             bone_entities.append(entity)
 
         skeleton_controller = SkeletonController(
-            skeleton_data=skeleton_data,
+            skeleton=skeleton_asset,
             bone_entities=bone_entities,
         )
         root_entity.add_component(skeleton_controller)
@@ -255,11 +258,11 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
 
     # Step 4: Setup animations from GLBAsset's child assets
     animation_player: Optional[AnimationPlayer] = None
+    clips: List[AnimationClip] = []  # keep reference for debug
     animation_assets = glb_asset.get_animation_assets()
 
     if animation_assets:
         animation_player = AnimationPlayer()
-        clips: List[AnimationClip] = []
 
         for anim_name, anim_asset in animation_assets.items():
             clip = anim_asset.clip
@@ -269,9 +272,15 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
 
         if clips:
             root_entity.add_component(animation_player)
+            print("[glb_instantiator] AnimationPlayer added")
 
-    return GLBInstantiateResult(
+    print("[glb_instantiator] Creating GLBInstantiateResult...")
+    result = GLBInstantiateResult(
         entity=root_entity,
         skeleton_controller=skeleton_controller,
         animation_player=animation_player,
+        _bone_entities=bone_entities,
+        _clips=clips,
     )
+    print("[glb_instantiator] Returning result")
+    return result

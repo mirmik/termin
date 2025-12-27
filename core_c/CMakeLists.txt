@@ -14,6 +14,8 @@ set(TC_SOURCES
     src/tc_transform.c
     src/tc_entity.c
     src/tc_component.c
+    src/tc_inspect.c
+    src/tc_scene.c
 )
 
 # Header files (for IDE integration)
@@ -26,6 +28,8 @@ set(TC_HEADERS
     include/tc_transform.h
     include/tc_component.h
     include/tc_entity.h
+    include/tc_inspect.h
+    include/tc_scene.h
 )
 
 # Library target

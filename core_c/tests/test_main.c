@@ -225,6 +225,157 @@ static int test_uuid(void) {
     return 0;
 }
 
+static int test_tc_value(void) {
+    printf("Testing tc_value...\n");
+
+    // Test primitives
+    tc_value v_nil = tc_value_nil();
+    TEST_ASSERT(v_nil.type == TC_VALUE_NIL, "nil type");
+
+    tc_value v_bool = tc_value_bool(true);
+    TEST_ASSERT(v_bool.type == TC_VALUE_BOOL, "bool type");
+    TEST_ASSERT(v_bool.data.b == true, "bool value");
+
+    tc_value v_int = tc_value_int(42);
+    TEST_ASSERT(v_int.type == TC_VALUE_INT, "int type");
+    TEST_ASSERT(v_int.data.i == 42, "int value");
+
+    tc_value v_str = tc_value_string("hello");
+    TEST_ASSERT(v_str.type == TC_VALUE_STRING, "string type");
+    TEST_ASSERT(strcmp(v_str.data.s, "hello") == 0, "string value");
+    tc_value_free(&v_str);
+
+    // Test list
+    tc_value list = tc_value_list_new();
+    tc_value_list_push(&list, tc_value_int(1));
+    tc_value_list_push(&list, tc_value_int(2));
+    tc_value_list_push(&list, tc_value_int(3));
+    TEST_ASSERT(tc_value_list_count(&list) == 3, "list count");
+    TEST_ASSERT(tc_value_list_get(&list, 1)->data.i == 2, "list get");
+    tc_value_free(&list);
+
+    // Test dict
+    tc_value dict = tc_value_dict_new();
+    tc_value_dict_set(&dict, "name", tc_value_string("test"));
+    tc_value_dict_set(&dict, "value", tc_value_int(123));
+    TEST_ASSERT(tc_value_dict_has(&dict, "name"), "dict has");
+    TEST_ASSERT(tc_value_dict_get(&dict, "value")->data.i == 123, "dict get");
+    tc_value_free(&dict);
+
+    printf("  tc_value: PASS\n");
+    return 0;
+}
+
+// Test component type for inspect
+typedef struct {
+    float speed;
+    int health;
+    bool active;
+} TestComponentData;
+
+static tc_value test_getter(void* obj, const tc_field_desc* field, void* user_data) {
+    (void)user_data;
+    TestComponentData* data = (TestComponentData*)obj;
+
+    if (strcmp(field->path, "speed") == 0) return tc_value_float(data->speed);
+    if (strcmp(field->path, "health") == 0) return tc_value_int(data->health);
+    if (strcmp(field->path, "active") == 0) return tc_value_bool(data->active);
+
+    return tc_value_nil();
+}
+
+static void test_setter(void* obj, const tc_field_desc* field, tc_value value, void* user_data) {
+    (void)user_data;
+    TestComponentData* data = (TestComponentData*)obj;
+
+    if (strcmp(field->path, "speed") == 0 && value.type == TC_VALUE_FLOAT) {
+        data->speed = value.data.f;
+    } else if (strcmp(field->path, "health") == 0 && value.type == TC_VALUE_INT) {
+        data->health = (int)value.data.i;
+    } else if (strcmp(field->path, "active") == 0 && value.type == TC_VALUE_BOOL) {
+        data->active = value.data.b;
+    }
+}
+
+static int test_inspect(void) {
+    printf("Testing tc_inspect...\n");
+
+    // Define fields
+    static const tc_field_desc test_fields[] = {
+        { .path = "speed",  .label = "Speed",  .kind = "float", .min = 0, .max = 100, .step = 0.1 },
+        { .path = "health", .label = "Health", .kind = "int",   .min = 0, .max = 100, .step = 1 },
+        { .path = "active", .label = "Active", .kind = "bool" },
+    };
+
+    static const tc_type_vtable test_vtable = {
+        .get = test_getter,
+        .set = test_setter,
+        .action = NULL,
+        .user_data = NULL,
+    };
+
+    static const tc_type_desc test_desc = {
+        .type_name = "TestComponent",
+        .base_type = NULL,
+        .fields = test_fields,
+        .field_count = 3,
+        .vtable = &test_vtable,
+    };
+
+    // Register type
+    tc_inspect_register(&test_desc);
+
+    // Verify registration
+    TEST_ASSERT(tc_inspect_get_type("TestComponent") != NULL, "type registered");
+    TEST_ASSERT(tc_inspect_field_count("TestComponent") == 3, "field count");
+
+    // Find field
+    const tc_field_desc* speed_field = tc_inspect_find_field("TestComponent", "speed");
+    TEST_ASSERT(speed_field != NULL, "find field");
+    TEST_ASSERT(strcmp(speed_field->label, "Speed") == 0, "field label");
+
+    // Get/Set through registry
+    TestComponentData data = { .speed = 5.0f, .health = 100, .active = true };
+
+    tc_value v = tc_inspect_get(&data, "TestComponent", "speed");
+    TEST_ASSERT(v.type == TC_VALUE_FLOAT, "get returns float");
+    TEST_ASSERT(fabs(v.data.f - 5.0f) < 0.001f, "get value");
+
+    tc_inspect_set(&data, "TestComponent", "health", tc_value_int(50));
+    TEST_ASSERT(data.health == 50, "set value");
+
+    // Serialize
+    tc_value serialized = tc_inspect_serialize(&data, "TestComponent");
+    TEST_ASSERT(serialized.type == TC_VALUE_DICT, "serialize returns dict");
+    TEST_ASSERT(tc_value_dict_has(&serialized, "speed"), "serialized has speed");
+    TEST_ASSERT(tc_value_dict_has(&serialized, "health"), "serialized has health");
+    tc_value_free(&serialized);
+
+    // Cleanup
+    tc_inspect_unregister("TestComponent");
+    TEST_ASSERT(tc_inspect_get_type("TestComponent") == NULL, "type unregistered");
+
+    printf("  tc_inspect: PASS\n");
+    return 0;
+}
+
+static int test_kind_handler(void) {
+    printf("Testing kind handlers...\n");
+
+    // Parse parameterized kind
+    char container[32], element[32];
+    bool ok = tc_kind_parse("list[entity_handle]", container, sizeof(container), element, sizeof(element));
+    TEST_ASSERT(ok, "parse list[entity_handle]");
+    TEST_ASSERT(strcmp(container, "list") == 0, "container is list");
+    TEST_ASSERT(strcmp(element, "entity_handle") == 0, "element is entity_handle");
+
+    ok = tc_kind_parse("float", container, sizeof(container), element, sizeof(element));
+    TEST_ASSERT(!ok, "float is not parameterized");
+
+    printf("  Kind handlers: PASS\n");
+    return 0;
+}
+
 int main(void) {
     printf("=== Termin Core Tests ===\n");
     printf("Version: %s\n\n", tc_version());
@@ -241,6 +392,9 @@ int main(void) {
     result |= test_entity_hierarchy();
     result |= test_entity_registry();
     result |= test_uuid();
+    result |= test_tc_value();
+    result |= test_inspect();
+    result |= test_kind_handler();
 
     tc_shutdown();
 

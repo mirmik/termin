@@ -110,7 +110,11 @@ TC_API void tc_entity_on_removed_from_scene(tc_entity* e);
 // ============================================================================
 
 static inline tc_entity_handle tc_entity_handle_empty(void) {
+#ifdef __cplusplus
+    tc_entity_handle h = {};
+#else
     tc_entity_handle h = {{0}};
+#endif
     return h;
 }
 

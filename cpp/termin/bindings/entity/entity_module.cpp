@@ -10,6 +10,28 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include <unordered_set>
+#include <iostream>
+
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#undef near
+#undef far
+
+inline bool check_heap_entity() {
+    HANDLE heaps[100];
+    DWORD numHeaps = GetProcessHeaps(100, heaps);
+    for (DWORD i = 0; i < numHeaps; i++) {
+        if (!HeapValidate(heaps[i], 0, nullptr)) {
+            std::cerr << "[HEAP CORRUPT] Heap " << i << " is corrupted!" << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+#else
+inline bool check_heap_entity() { return true; }
+#endif
 
 #include "termin/entity/component.hpp"
 #include "termin/entity/component_registry.hpp"
@@ -371,7 +393,14 @@ PYBIND11_MODULE(_entity_native, m) {
 
         // Component management
         .def("add_component", [](Entity& e, Component* component) {
+            std::cerr << "[add_component] Start, type=" << component->type_name() << std::endl;
+            if (!check_heap_entity()) {
+                std::cerr << "[add_component] HEAP CORRUPTED before add_component!" << std::endl;
+            }
             e.add_component(component);
+            if (!check_heap_entity()) {
+                std::cerr << "[add_component] HEAP CORRUPTED after add_component!" << std::endl;
+            }
             // If entity is in a scene, do lifecycle: register, on_added
             // Note: start() is NOT called here - Scene.update() handles it via _pending_start
             if (!e.scene.is_none()) {
@@ -383,6 +412,7 @@ PYBIND11_MODULE(_entity_native, m) {
                     py_comp.attr("on_added")(e.scene);
                 }
             }
+            std::cerr << "[add_component] Done" << std::endl;
             return component;
         }, py::arg("component"), py::keep_alive<1, 2>(), py::return_value_policy::reference)
         .def("remove_component", [](Entity& e, Component* component) {

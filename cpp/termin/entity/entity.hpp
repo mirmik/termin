@@ -9,6 +9,7 @@
 #include "../geom/general_transform3.hpp"
 #include "../core/identifiable.hpp"
 #include "../../trent/trent.h"
+#include "../../../core_c/include/tc_entity.h"
 
 // DLL export/import macros for Windows
 #ifdef _WIN32
@@ -137,11 +138,26 @@ public:
     nos::trent serialize() const;
     static Entity* deserialize(const nos::trent& data);
 
+    // --- C Core Integration ---
+
+    // Get tc_entity pointer (creates lazily if needed)
+    tc_entity* c_entity();
+
+    // Sync C++ fields to C structure (call before C code uses _e)
+    void sync_to_c();
+
+    // Sync C structure back to C++ fields (call after C code modifies _e)
+    void sync_from_c();
+
 private:
     uint32_t _pick_id = 0;
     bool _pick_id_computed = false;
 
+    // C entity pointer (created lazily for tc_scene integration)
+    tc_entity* _e = nullptr;
+
     void _compute_pick_id();
+    void _ensure_c_entity();
 };
 
 } // namespace termin

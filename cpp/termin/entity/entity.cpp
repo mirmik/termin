@@ -34,6 +34,17 @@ Entity::~Entity() {
     // Unregister from registry
     EntityRegistry::instance().unregister_entity(this);
 
+    // Clean up C entity if created
+    if (_e) {
+        // Remove all components from _e first to prevent double-cleanup
+        while (tc_entity_component_count(_e) > 0) {
+            tc_component* c = tc_entity_component_at(_e, 0);
+            tc_entity_remove_component(_e, c);
+        }
+        tc_entity_free(_e);
+        _e = nullptr;
+    }
+
     // Clean up components
     for (Component* comp : components) {
         comp->on_removed_from_entity();
@@ -59,7 +70,11 @@ Entity::Entity(Entity&& other) noexcept
     , scene(std::move(other.scene))
     , components(std::move(other.components))
     , _pick_id(other._pick_id)
-    , _pick_id_computed(other._pick_id_computed) {
+    , _pick_id_computed(other._pick_id_computed)
+    , _e(other._e) {
+
+    // Take ownership of _e
+    other._e = nullptr;
 
     // Update transform->entity pointer
     if (transform) {
@@ -86,6 +101,11 @@ Entity& Entity::operator=(Entity&& other) noexcept {
             }
         }
 
+        // Clean up old _e
+        if (_e) {
+            tc_entity_free(_e);
+        }
+
         Identifiable::operator=(std::move(other));
         name = std::move(other.name);
         transform = std::move(other.transform);
@@ -100,6 +120,8 @@ Entity& Entity::operator=(Entity&& other) noexcept {
         components = std::move(other.components);
         _pick_id = other._pick_id;
         _pick_id_computed = other._pick_id_computed;
+        _e = other._e;
+        other._e = nullptr;
 
         // Update transform->entity pointer
         if (transform) {
@@ -375,6 +397,76 @@ Entity* Entity::deserialize(const nos::trent& data) {
     }
 
     return ent;
+}
+
+// ============================================================================
+// C Core Integration
+// ============================================================================
+
+void Entity::_ensure_c_entity() {
+    if (_e) return;
+
+    // Create tc_entity with our uuid
+    _e = tc_entity_new_with_uuid(name.c_str(), uuid.c_str());
+
+    // Initial sync
+    sync_to_c();
+}
+
+tc_entity* Entity::c_entity() {
+    _ensure_c_entity();
+    return _e;
+}
+
+void Entity::sync_to_c() {
+    if (!_e) return;
+
+    // Sync flags
+    tc_entity_set_visible(_e, visible);
+    tc_entity_set_active(_e, active);
+    tc_entity_set_pickable(_e, pickable);
+    tc_entity_set_selectable(_e, selectable);
+    tc_entity_set_serializable(_e, serializable);
+    tc_entity_set_priority(_e, priority);
+    tc_entity_set_layer(_e, layer);
+    tc_entity_set_flags(_e, flags);
+
+    // Sync name if changed
+    if (name != tc_entity_name(_e)) {
+        tc_entity_set_name(_e, name.c_str());
+    }
+
+    // Sync components - add their tc_component to _e
+    // First clear existing components in _e (they're just pointers, not owned)
+    while (tc_entity_component_count(_e) > 0) {
+        tc_component* c = tc_entity_component_at(_e, 0);
+        tc_entity_remove_component(_e, c);
+    }
+
+    // Add current components
+    for (Component* comp : components) {
+        comp->sync_to_c();
+        tc_entity_add_component(_e, comp->c_component());
+    }
+}
+
+void Entity::sync_from_c() {
+    if (!_e) return;
+
+    // Sync flags back
+    visible = tc_entity_visible(_e);
+    active = tc_entity_active(_e);
+    pickable = tc_entity_pickable(_e);
+    selectable = tc_entity_selectable(_e);
+    serializable = tc_entity_serializable(_e);
+    priority = tc_entity_priority(_e);
+    layer = tc_entity_layer(_e);
+    flags = tc_entity_flags(_e);
+
+    // Sync components back
+    for (Component* comp : components) {
+        comp->sync_from_c();
+    }
 }
 
 } // namespace termin

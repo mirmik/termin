@@ -181,11 +181,20 @@ add_library(entity_lib SHARED
     termin/entity/entity.cpp
     termin/entity/entity_registry.cpp
     termin/entity/entity_handle.cpp
+    termin/entity/component.cpp
     termin/entity/component_registry.cpp
     termin/entity/vtable_utils.cpp
     termin/entity/components/rotator_component.cpp
-    termin/inspect/inspect_registry.cpp
+    # C core
+    ../core_c/src/tc_core.c
+    ../core_c/src/tc_transform.c
+    ../core_c/src/tc_component.c
+    ../core_c/src/tc_entity.c
+    ../core_c/src/tc_scene.c
+    ../core_c/src/tc_inspect.c
+    ../core_c/src/tc_inspect_instance.cpp
 )
+target_include_directories(entity_lib PRIVATE ../core_c/include)
 target_link_libraries(entity_lib PRIVATE trent pybind11::headers Python3::Python)
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS)
 target_compile_options(entity_lib PRIVATE
