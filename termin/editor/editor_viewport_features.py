@@ -567,6 +567,7 @@ class EditorViewportFeatures:
         ]
 
         return RenderPipeline(
+            name="editor",
             passes=passes,
             pipeline_specs=msaa_specs,
         )

@@ -58,21 +58,16 @@ class ColorPass(_ColorPassNative):
         if phase_mark is None:
             phase_mark = "opaque"
 
-        # Call C++ constructor
+        # Call C++ constructor (shadow_res is now handled in C++)
         super().__init__(
             input_res=input_res,
             output_res=output_res,
+            shadow_res=shadow_res if shadow_res is not None else "",
             phase_mark=phase_mark,
             pass_name=pass_name,
             sort_by_distance=sort_by_distance,
             clear_depth=clear_depth,
         )
-
-        self.shadow_res = shadow_res
-
-        # Update reads to include shadow_res
-        if shadow_res is not None:
-            self.reads.add(shadow_res)
 
         # Cache of entity names with MeshRenderer
         self._entity_names: List[str] = []
@@ -91,10 +86,14 @@ class ColorPass(_ColorPassNative):
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":
         """Create ColorPass from serialized data."""
+        shadow_res = data.get("shadow_res", "shadow_maps")
+        # Handle legacy None value
+        if shadow_res is None:
+            shadow_res = ""
         return cls(
             input_res=data.get("input_res", "empty"),
             output_res=data.get("output_res", "color"),
-            shadow_res=data.get("shadow_res", "shadow_maps"),
+            shadow_res=shadow_res,
             pass_name=data.get("pass_name", "Color"),
             phase_mark=data.get("phase_mark"),
             sort_by_distance=data.get("sort_by_distance", False),
@@ -159,9 +158,9 @@ class ColorPass(_ColorPassNative):
         if lights is not None:
             scene.lights = lights
 
-        # Get ShadowMapArrayResource
+        # Get ShadowMapArrayResource (shadow_res is "" if disabled)
         shadow_array = None
-        if self.shadow_res is not None:
+        if self.shadow_res:
             shadow_array = reads_fbos.get(self.shadow_res)
             from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
             if not isinstance(shadow_array, ShadowMapArrayResource):

@@ -120,8 +120,8 @@ inline void upload_shadow_maps_to_shader(ShaderProgram* shader, const std::vecto
         // Texture unit for sampler2DShadow
         shader->set_uniform_int(("u_shadow_map" + idx).c_str(), SHADOW_MAP_TEXTURE_UNIT_START + i);
 
-        // Light-space matrix: P_light * V_light
-        shader->set_uniform_matrix4(("u_light_space_matrix" + idx).c_str(), entry.light_space_matrix);
+        // Light-space matrix: P_light * V_light (no transpose - Mat44f is already column-major)
+        shader->set_uniform_matrix4(("u_light_space_matrix" + idx).c_str(), entry.light_space_matrix, false);
 
         // Light index (for matching with u_light_* arrays)
         shader->set_uniform_int(("u_shadow_light_index" + idx).c_str(), entry.light_index);

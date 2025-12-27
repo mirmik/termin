@@ -230,15 +230,17 @@ void bind_frame_pass(py::module_& m) {
     // ColorPass - main color rendering pass
     py::class_<ColorPass, FramePass>(m, "ColorPass")
         .def(py::init<const std::string&, const std::string&, const std::string&,
-                      const std::string&, bool, bool>(),
+                      const std::string&, const std::string&, bool, bool>(),
              py::arg("input_res") = "empty",
              py::arg("output_res") = "color",
+             py::arg("shadow_res") = "shadow_maps",
              py::arg("phase_mark") = "opaque",
              py::arg("pass_name") = "Color",
              py::arg("sort_by_distance") = false,
              py::arg("clear_depth") = false)
         .def_readwrite("input_res", &ColorPass::input_res)
         .def_readwrite("output_res", &ColorPass::output_res)
+        .def_readwrite("shadow_res", &ColorPass::shadow_res)
         .def_readwrite("phase_mark", &ColorPass::phase_mark)
         .def_readwrite("sort_by_distance", &ColorPass::sort_by_distance)
         .def_readwrite("clear_depth", &ColorPass::clear_depth)
@@ -273,20 +275,28 @@ void bind_frame_pass(py::module_& m) {
             py::object shadow_array_py,
             py::object shadow_settings_py
         ) {
-            // Convert FBO maps
+            // Convert FBO maps (skip non-FBO resources like ShadowMapArrayResource)
             FBOMap reads_fbos, writes_fbos;
             for (auto item : reads_fbos_py) {
                 std::string key = py::str(item.first);
                 py::object val = py::reinterpret_borrow<py::object>(item.second);
                 if (!val.is_none()) {
-                    reads_fbos[key] = val.cast<FramebufferHandle*>();
+                    try {
+                        reads_fbos[key] = val.cast<FramebufferHandle*>();
+                    } catch (const py::cast_error&) {
+                        // Skip non-FBO resources (e.g., ShadowMapArrayResource)
+                    }
                 }
             }
             for (auto item : writes_fbos_py) {
                 std::string key = py::str(item.first);
                 py::object val = py::reinterpret_borrow<py::object>(item.second);
                 if (!val.is_none()) {
-                    writes_fbos[key] = val.cast<FramebufferHandle*>();
+                    try {
+                        writes_fbos[key] = val.cast<FramebufferHandle*>();
+                    } catch (const py::cast_error&) {
+                        // Skip non-FBO resources
+                    }
                 }
             }
 
@@ -342,13 +352,13 @@ void bind_frame_pass(py::module_& m) {
                 for (py::ssize_t i = 0; i < count; ++i) {
                     py::object entry = shadow_array_py[py::int_(i)];
 
-                    // Get light_space_matrix as numpy array
-                    py::array_t<float> matrix_py = entry.attr("light_space_matrix").cast<py::array_t<float>>();
+                    // Get light_space_matrix as numpy array (compute_light_space_matrix returns float64)
+                    py::array_t<double> matrix_py = entry.attr("light_space_matrix").cast<py::array_t<double>>();
                     auto matrix_buf = matrix_py.unchecked<2>();
                     Mat44f matrix;
                     for (int row = 0; row < 4; ++row) {
                         for (int col = 0; col < 4; ++col) {
-                            matrix(col, row) = matrix_buf(row, col);
+                            matrix(col, row) = static_cast<float>(matrix_buf(row, col));
                         }
                     }
 

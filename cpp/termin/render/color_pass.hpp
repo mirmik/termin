@@ -35,6 +35,7 @@ public:
     // Pass configuration
     std::string input_res = "empty";
     std::string output_res = "color";
+    std::string shadow_res = "shadow_maps";  // Shadow map resource name (empty = no shadows)
     std::string phase_mark = "opaque";
     bool sort_by_distance = false;
     bool clear_depth = false;
@@ -49,6 +50,7 @@ public:
     ColorPass(
         const std::string& input_res = "empty",
         const std::string& output_res = "color",
+        const std::string& shadow_res = "shadow_maps",
         const std::string& phase_mark = "opaque",
         const std::string& pass_name = "Color",
         bool sort_by_distance = false,

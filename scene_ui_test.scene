@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "a70b7fb9-343e-4fef-ae31-9569722a98f4",
+    "uuid": "827b2bea-49c7-4ab1-9d7e-a6ab40629566",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -321,15 +321,15 @@
         "flags": 0,
         "pose": {
           "position": [
-            4.852386474609375,
-            -0.7021505832672119,
-            3.1524498462677
+            4.448397636413574,
+            -3.9392805099487305,
+            1.3977314233779907
           ],
           "rotation": [
-            -0.314901261802275,
-            -0.2313179752979486,
-            0.5449510086096463,
-            0.7418608952052412
+            -0.2391176156120983,
+            -0.09904576073779482,
+            0.36964381516732603,
+            0.8923990996703214
           ]
         },
         "scale": [
@@ -7191,8 +7191,8 @@
         -0.4230639636516571
       ],
       "radius": 10.0,
-      "azimuth": 59.065432545996735,
-      "elevation": 0.5654866776461609
+      "azimuth": 58.18229594448764,
+      "elevation": 0.813323431429356
     },
     "displays": [
       {
@@ -7202,7 +7202,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "4d44b7b5-c6b7-43b1-9037-bda862194d8a",
+            "uuid": "9886cc9c-3d9b-4068-91b6-a0ad53162e92",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7210,7 +7210,8 @@
               1.0,
               1.0
             ],
-            "depth": 0
+            "depth": 0,
+            "pipeline": "default"
           }
         ]
       },
@@ -7221,7 +7222,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "2d4b3efc-9758-48d4-b89a-a24367ddf46a",
+            "uuid": "fa3517ef-7d40-4a48-9e1a-1ac896b00f34",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -7229,23 +7230,24 @@
               1.0,
               1.0
             ],
-            "depth": 0
+            "depth": 0,
+            "pipeline": "default"
           }
         ]
       }
     ],
     "expanded_entities": [
-      "Arti",
-      "editor_ui",
-      "[Root]",
-      "Walls",
       "cube2",
       "entity13",
-      "entity12_copy",
-      "camera",
+      "[Root]",
       "cube1",
-      "Glitch",
-      "EditorEntities"
+      "editor_ui",
+      "camera",
+      "Walls",
+      "Arti",
+      "entity12_copy",
+      "EditorEntities",
+      "Glitch"
     ]
   },
   "resources": {

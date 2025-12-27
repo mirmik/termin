@@ -22,12 +22,14 @@ class RenderPipeline:
     """
     Контейнер конвейера рендеринга.
 
+    name: имя пайплайна для сериализации
     passes: список FramePass
     pipeline_specs: спецификации ресурсов пайплайна
 
     Спецификации ресурсов (размер, очистка, формат) теперь объявляются
     самими pass'ами через метод get_resource_specs().
     """
+    name: str = "default"
     passes: List["FramePass"] = field(default_factory=list)
     pipeline_specs: List[ResourceSpec] = field(default_factory=list)
 
@@ -36,6 +38,7 @@ class RenderPipeline:
         from termin.visualization.render.framegraph.core import FramePass
 
         return {
+            "name": self.name,
             "passes": [p.serialize() for p in self.passes],
             "pipeline_specs": [spec.serialize() for spec in self.pipeline_specs],
         }
@@ -71,6 +74,7 @@ class RenderPipeline:
             specs.append(spec)
 
         return cls(
+            name=data.get("name", "default"),
             passes=passes,
             pipeline_specs=specs,
         )

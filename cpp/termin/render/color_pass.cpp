@@ -36,6 +36,7 @@ Vec3 get_global_position(Entity* entity) {
 ColorPass::ColorPass(
     const std::string& input_res,
     const std::string& output_res,
+    const std::string& shadow_res,
     const std::string& phase_mark,
     const std::string& pass_name,
     bool sort_by_distance,
@@ -43,10 +44,15 @@ ColorPass::ColorPass(
 ) : RenderFramePass(pass_name, {input_res}, {output_res}),
     input_res(input_res),
     output_res(output_res),
+    shadow_res(shadow_res),
     phase_mark(phase_mark),
     sort_by_distance(sort_by_distance),
     clear_depth(clear_depth)
 {
+    // Add shadow_res to reads if not empty
+    if (!shadow_res.empty()) {
+        reads.insert(shadow_res);
+    }
 }
 
 std::vector<ResourceSpec> ColorPass::get_resource_specs() const {

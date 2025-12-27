@@ -170,4 +170,4 @@ def make_default_pipeline() -> "RenderPipeline":
         )
     ]
 
-    return RenderPipeline(passes=passes)
+    return RenderPipeline(name="default", passes=passes)
