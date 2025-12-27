@@ -103,6 +103,9 @@ class EditorCameraUIController(Component):
         if color_pass is not None and self._wireframe_btn is not None:
             self._wireframe_btn.active = color_pass.wireframe
 
+        if self._camera_component is not None and self._ortho_btn is not None:
+            self._ortho_btn.active = (self._camera_component.projection_type == "orthographic")
+
     def _find_pass_by_name(self, pass_name: str):
         """Ищет пасс по имени в pipeline."""
         vp = self.viewport
@@ -137,6 +140,14 @@ class EditorCameraUIController(Component):
 
     def _on_ortho_click(self) -> None:
         """Переключает ортографическую камеру."""
-        # TODO: Реализовать переключение проекции камеры
+        if self._camera_component is None:
+            return
+
+        # Toggle projection type
+        if self._camera_component.projection_type == "perspective":
+            self._camera_component.projection_type = "orthographic"
+        else:
+            self._camera_component.projection_type = "perspective"
+
         if self._ortho_btn is not None:
-            self._ortho_btn.active = not self._ortho_btn.active
+            self._ortho_btn.active = (self._camera_component.projection_type == "orthographic")

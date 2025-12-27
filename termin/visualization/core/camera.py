@@ -30,9 +30,66 @@ from termin.visualization.platform.backends.base import Action, MouseButton
 
 
 class CameraComponent(Component):
-    """Component that exposes view/projection matrices based on entity pose."""
+    """
+    Unified camera component supporting both perspective and orthographic projection.
 
-    aspect: float | None = None
+    Attributes:
+        projection_type: "perspective" or "orthographic"
+        fov_y: Vertical field of view in radians (perspective mode)
+        aspect: Aspect ratio width/height
+        ortho_size: Half-height of the orthographic view (orthographic mode)
+        near, far: Clipping planes
+    """
+
+    # Projection type: "perspective" or "orthographic"
+    projection_type: str = "perspective"
+
+    # Perspective parameters
+    fov_y: float = math.radians(60.0)
+    aspect: float = 1.0
+
+    # Orthographic parameters (ortho_size = half-height)
+    ortho_size: float = 5.0
+
+    inspect_fields = {
+        "projection_type": InspectField(
+            path="projection_type",
+            label="Projection",
+            kind="enum",
+            choices=[("perspective", "Perspective"), ("orthographic", "Orthographic")],
+        ),
+        "fov_deg": InspectField(
+            label="FOV (deg)",
+            kind="float",
+            min=5.0,
+            max=170.0,
+            step=1.0,
+            getter=lambda obj: math.degrees(obj.fov_y),
+            setter=lambda obj, value: setattr(obj, "fov_y", math.radians(float(value))),
+        ),
+        "ortho_size": InspectField(
+            path="ortho_size",
+            label="Ortho Size",
+            kind="float",
+            min=0.1,
+            max=1000.0,
+            step=0.5,
+        ),
+        "near": InspectField(
+            path="near",
+            label="Near clip",
+            kind="float",
+            min=0.001,
+            step=0.01,
+        ),
+        "far": InspectField(
+            path="far",
+            label="Far clip",
+            kind="float",
+            min=0.01,
+            step=0.1,
+        ),
+    }
 
     def screen_point_to_ray(self, x: float, y: float, viewport_rect):
         import numpy as np
@@ -74,10 +131,22 @@ class CameraComponent(Component):
         return Ray3(Vec3(float(origin[0]), float(origin[1]), float(origin[2])),
                     Vec3(float(direction[0]), float(direction[1]), float(direction[2])))
 
-    def __init__(self, near: float = 0.1, far: float = 100.0):
+    def __init__(
+        self,
+        near: float = 0.1,
+        far: float = 100.0,
+        fov_y_degrees: float = 60.0,
+        aspect: float = 1.0,
+        ortho_size: float = 5.0,
+        projection_type: str = "perspective",
+    ):
         super().__init__(enabled=True)
         self.near = near
         self.far = far
+        self.fov_y = math.radians(fov_y_degrees)
+        self.aspect = aspect
+        self.ortho_size = ortho_size
+        self.projection_type = projection_type
         self._viewports: List["Viewport"] = []
 
     @property
@@ -126,56 +195,6 @@ class CameraComponent(Component):
         #return self.entity.pose.inverse().as_matrix()
 
     def get_projection_matrix(self) -> np.ndarray:
-        raise NotImplementedError
-
-    def projection_matrix(self) -> np.ndarray:
-        return self.get_projection_matrix()
-
-    def view_matrix(self) -> np.ndarray:
-        return self.get_view_matrix()
-
-    def set_aspect(self, aspect: float):
-        """Optional method for perspective cameras."""
-        return
-
-
-class PerspectiveCameraComponent(CameraComponent):
-    # поля для инспектора (fov в градусах, near/far как есть)
-    inspect_fields = {
-        "fov_deg": InspectField(
-            label="FOV (deg)",
-            kind="float",
-            min=5.0,
-            max=170.0,
-            step=1.0,
-            getter=lambda obj: math.degrees(obj.fov_y),
-            setter=lambda obj, value: setattr(obj, "fov_y", math.radians(float(value))),
-        ),
-        "near": InspectField(
-            path="near",
-            label="Near clip",
-            kind="float",
-            min=0.001,
-            step=0.01,
-        ),
-        "far": InspectField(
-            path="far",
-            label="Far clip",
-            kind="float",
-            min=0.01,
-            step=0.1,
-        ),
-    }
-
-    def __init__(self, fov_y_degrees: float = 60.0, aspect: float = 1.0, near: float = 0.1, far: float = 100.0):
-        super().__init__(near=near, far=far)
-        self.fov_y = math.radians(fov_y_degrees)
-        self.aspect = aspect
-
-    def set_aspect(self, aspect: float):
-        self.aspect = aspect
-
-    def get_projection_matrix(self) -> np.ndarray:
         """
         Projection matrix for Y-forward convention.
 
@@ -184,6 +203,13 @@ class PerspectiveCameraComponent(CameraComponent):
         - View Z → Screen Y (up)
         - View Y → Depth (forward)
         """
+        if self.projection_type == "orthographic":
+            return self._ortho_projection_matrix()
+        else:
+            return self._perspective_projection_matrix()
+
+    def _perspective_projection_matrix(self) -> np.ndarray:
+        """Perspective projection matrix."""
         f = 1.0 / math.tan(self.fov_y * 0.5)
         near, far = self.near, self.far
         proj = np.zeros((4, 4), dtype=np.float32)
@@ -194,37 +220,72 @@ class PerspectiveCameraComponent(CameraComponent):
         proj[3, 1] = 1.0                          # w = y
         return proj
 
+    def _ortho_projection_matrix(self) -> np.ndarray:
+        """Orthographic projection matrix."""
+        # Compute bounds from ortho_size and aspect
+        top = self.ortho_size
+        bottom = -self.ortho_size
+        right = self.ortho_size * self.aspect
+        left = -right
+        near, far = self.near, self.far
+
+        lr = right - left
+        tb = top - bottom
+        fn = far - near
+
+        proj = np.zeros((4, 4), dtype=np.float32)
+        proj[0, 0] = 2.0 / lr                     # X → screen X
+        proj[1, 2] = 2.0 / tb                     # Z → screen Y (up)
+        proj[2, 1] = 2.0 / fn                     # Y → depth
+        proj[0, 3] = -(right + left) / lr
+        proj[1, 3] = -(top + bottom) / tb
+        proj[2, 3] = -(far + near) / fn
+        proj[3, 3] = 1.0
+        return proj
+
+    def projection_matrix(self) -> np.ndarray:
+        return self.get_projection_matrix()
+
+    def view_matrix(self) -> np.ndarray:
+        return self.get_view_matrix()
+
+    def set_aspect(self, aspect: float):
+        """Set aspect ratio (width/height)."""
+        self.aspect = aspect
+
+
+class PerspectiveCameraComponent(CameraComponent):
+    """
+    Perspective camera - convenience subclass with perspective defaults.
+
+    Deprecated: Use CameraComponent directly with projection_type="perspective".
+    """
+
+    def __init__(self, fov_y_degrees: float = 60.0, aspect: float = 1.0, near: float = 0.1, far: float = 100.0):
+        super().__init__(
+            near=near,
+            far=far,
+            fov_y_degrees=fov_y_degrees,
+            aspect=aspect,
+            projection_type="perspective",
+        )
+
 
 class OrthographicCameraComponent(CameraComponent):
     """
-    Orthographic camera for Y-forward convention.
+    Orthographic camera - convenience subclass with orthographic defaults.
 
-    Camera looks along +Y axis:
-    - View X → Screen X (controlled by left/right)
-    - View Z → Screen Y (controlled by bottom/top, representing up)
-    - View Y → Depth (controlled by near/far)
+    Deprecated: Use CameraComponent directly with projection_type="orthographic".
     """
 
-    def __init__(self, left: float = -1.0, right: float = 1.0, bottom: float = -1.0, top: float = 1.0, near: float = 0.1, far: float = 100.0):
-        super().__init__(near=near, far=far)
-        self.left = left
-        self.right = right
-        self.bottom = bottom
-        self.top = top
-
-    def get_projection_matrix(self) -> np.ndarray:
-        lr = self.right - self.left
-        tb = self.top - self.bottom
-        fn = self.far - self.near
-        proj = np.zeros((4, 4), dtype=np.float32)
-        proj[0, 0] = 2.0 / lr                       # X → screen X
-        proj[1, 2] = 2.0 / tb                       # Z → screen Y (up)
-        proj[2, 1] = 2.0 / fn                       # Y → depth
-        proj[0, 3] = -(self.right + self.left) / lr
-        proj[1, 3] = -(self.top + self.bottom) / tb
-        proj[2, 3] = -(self.far + self.near) / fn
-        proj[3, 3] = 1.0
-        return proj
+    def __init__(self, ortho_size: float = 5.0, aspect: float = 1.0, near: float = 0.1, far: float = 100.0):
+        super().__init__(
+            near=near,
+            far=far,
+            aspect=aspect,
+            ortho_size=ortho_size,
+            projection_type="orthographic",
+        )
 
 
 class CameraController(InputComponent):
@@ -336,8 +397,15 @@ class OrbitCameraController(CameraController):
         self._update_pose()
 
     def zoom(self, delta: float):
-        self.radius += delta
-        self._update_pose()
+        # For orthographic camera, change ortho_size instead of radius
+        if self.camera_component is not None and self.camera_component.projection_type == "orthographic":
+            # Scale ortho_size proportionally
+            scale_factor = 1.0 + delta * 0.1
+            self.camera_component.ortho_size = max(0.1, self.camera_component.ortho_size * scale_factor)
+        else:
+            # Perspective: change radius (distance to target)
+            self.radius += delta
+            self._update_pose()
 
     def pan(self, dx: float, dy: float):
         entity = self.entity

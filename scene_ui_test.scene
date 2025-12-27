@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "827b2bea-49c7-4ab1-9d7e-a6ab40629566",
+    "uuid": "605edc2f-dd89-4588-b4b1-ba2dc5a19663",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -343,7 +343,9 @@
             "type": "PerspectiveCameraComponent",
             "data": {
               "enabled": true,
+              "projection_type": "perspective",
               "fov_deg": 59.99999999999999,
+              "ortho_size": 5,
               "near": 0.1,
               "far": 100
             }
@@ -7186,13 +7188,13 @@
   "editor": {
     "camera": {
       "target": [
-        5.354339122772217,
-        4.786274433135986,
-        -0.4230639636516571
+        2.5523533821105957,
+        6.309185981750488,
+        -0.3063035309314728
       ],
-      "radius": 10.0,
-      "azimuth": 58.18229594448764,
-      "elevation": 0.813323431429356
+      "radius": 14.0,
+      "azimuth": 58.31494096763911,
+      "elevation": 0.5480333851262182
     },
     "displays": [
       {
@@ -7202,7 +7204,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "9886cc9c-3d9b-4068-91b6-a0ad53162e92",
+            "uuid": "ff544a62-165b-4934-a8b2-d0be67b125de",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7211,7 +7213,7 @@
               1.0
             ],
             "depth": 0,
-            "pipeline": "default"
+            "pipeline": "editor"
           }
         ]
       },
@@ -7222,7 +7224,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "fa3517ef-7d40-4a48-9e1a-1ac896b00f34",
+            "uuid": "b2254711-3b71-419d-8dbd-efa3a496f2ea",
             "camera_entity": "GameCamera",
             "rect": [
               0.0,
@@ -7237,14 +7239,14 @@
       }
     ],
     "expanded_entities": [
-      "cube2",
-      "entity13",
-      "[Root]",
-      "cube1",
       "editor_ui",
-      "camera",
+      "[Root]",
+      "cube2",
       "Walls",
       "Arti",
+      "cube1",
+      "camera",
+      "entity13",
       "entity12_copy",
       "EditorEntities",
       "Glitch"

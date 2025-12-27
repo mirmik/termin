@@ -44,7 +44,7 @@ def _limit_projection_far(
     """
     Create a copy of projection matrix with limited far plane.
 
-    For Y-forward perspective projection, recalculates elements [2,1] and [2,3].
+    Handles both perspective and orthographic projections (Y-forward convention).
     """
     proj = proj.copy()
 
@@ -54,11 +54,21 @@ def _limit_projection_far(
     if far <= near:
         far = near + 1.0
 
-    # For Y-forward perspective projection:
-    # proj[2,1] = (far + near) / (far - near)
-    # proj[2,3] = -2 * far * near / (far - near)
-    proj[2, 1] = (far + near) / (far - near)
-    proj[2, 3] = -2.0 * far * near / (far - near)
+    # Check projection type
+    projection_type = getattr(camera, 'projection_type', 'perspective')
+
+    if projection_type == "orthographic":
+        # For Y-forward orthographic projection:
+        # proj[2,1] = 2.0 / (far - near)
+        # proj[2,3] = -(far + near) / (far - near)
+        proj[2, 1] = 2.0 / (far - near)
+        proj[2, 3] = -(far + near) / (far - near)
+    else:
+        # For Y-forward perspective projection:
+        # proj[2,1] = (far + near) / (far - near)
+        # proj[2,3] = -2 * far * near / (far - near)
+        proj[2, 1] = (far + near) / (far - near)
+        proj[2, 3] = -2.0 * far * near / (far - near)
 
     return proj
 
