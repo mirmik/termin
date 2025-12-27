@@ -8,7 +8,7 @@ import numpy as np
 
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
-from termin._native.scene import Scene as _NativeScene
+from termin._native.scene import TcScene
 from termin.lighting import Light
 from termin.visualization.render.components.light_component import LightComponent
 from termin.geombase import Ray3
@@ -33,7 +33,7 @@ def is_overrides_method(obj, method_name, base_class):
     return getattr(obj.__class__, method_name) is not getattr(base_class, method_name)
 
 
-class Scene(_NativeScene):
+class Scene:
     """Container for renderable entities and lighting data."""
 
     def __init__(
@@ -41,10 +41,16 @@ class Scene(_NativeScene):
         background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0),
         uuid: str | None = None,
     ):
-        super().__init__(uuid or "")
-        # Python-side entity list (C++ entities property has RTTI issues on Windows)
+        # C core scene for optimized entity/component management
+        self._tc_scene = TcScene()
+
+        # Identifiable fields
+        self.uuid = uuid or ""
+        self.runtime_id = 0
+
+        # Python-side entity list (for Python iteration)
         self._entities: List[Entity] = []
-        # Background color with alpha (C++ only has RGB)
+        # Background color with alpha
         self._background_color = np.array(background_color, dtype=np.float32)
         self._input_components: List[InputComponent] = []
         self.colliders = []
@@ -53,7 +59,7 @@ class Scene(_NativeScene):
         self.fixed_update_list: List[Component] = []
         self._pending_start: List[Component] = []
 
-        # Fixed timestep для физики (Unity-style)
+        # Fixed timestep for physics (Unity-style)
         self._fixed_timestep: float = 1.0 / 60.0
         self._accumulated_time: float = 0.0
 
@@ -67,12 +73,7 @@ class Scene(_NativeScene):
         self.layer_names: dict[int, str] = {}  # 0-63
         self.flag_names: dict[int, str] = {}   # 0-63 (bit index)
 
-        # Entity lifecycle events (Python Event objects)
-        # Note: C++ Scene also has on_entity_added/removed as py::object callbacks
-        # We override them with None to disable C++ event emission
-        # Python handles events via Event.emit() in add/remove methods
-        _NativeScene.on_entity_added.__set__(self, None)
-        _NativeScene.on_entity_removed.__set__(self, None)
+        # Entity lifecycle events
         self._on_entity_added: Event[Entity] = Event()
         self._on_entity_removed: Event[Entity] = Event()
 
@@ -292,6 +293,10 @@ class Scene(_NativeScene):
                 break
             idx = i + 1
         self._entities.insert(idx, entity)
+
+        # Add to C core scene
+        self._tc_scene.add_entity(entity)
+
         # Python-specific: set scene reference and emit Event
         entity.on_added(self)
         self._on_entity_added.emit(entity)
@@ -308,6 +313,10 @@ class Scene(_NativeScene):
         # Remove from Python list
         if entity in self._entities:
             self._entities.remove(entity)
+
+        # Remove from C core scene
+        self._tc_scene.remove_entity(entity)
+
         # Python-specific: emit Event and cleanup
         self._on_entity_removed.emit(entity)
         entity.on_removed()

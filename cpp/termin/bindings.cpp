@@ -3,6 +3,7 @@
 #include "render_bindings.hpp"
 #include "sdl_bindings.hpp"
 #include "scene_bindings.hpp"
+#include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
 #include "assets/assets_bindings.hpp"
@@ -32,13 +33,15 @@ PYBIND11_MODULE(_native, m) {
     auto render_module = m.def_submodule("render", "Render module");
     auto platform_module = m.def_submodule("platform", "Platform module");
     auto scene_module = m.def_submodule("scene", "Scene module");
+    auto profiler_module = m.def_submodule("profiler", "Profiler module");
     auto skeleton_module = m.def_submodule("skeleton", "Skeleton module");
     auto inspect_module = m.def_submodule("inspect", "Inspect module");
     auto assets_module = m.def_submodule("assets", "Assets module");
 
     termin::bind_render(render_module);
     termin::bind_sdl(platform_module);
-    termin::bind_scene(scene_module);
+    termin::bind_tc_scene(scene_module);
+    termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);
     termin::bind_inspect(inspect_module);
     termin::bind_assets(assets_module);

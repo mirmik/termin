@@ -3,5 +3,5 @@
 #include <pybind11/pybind11.h>
 
 namespace termin {
-void bind_tc_scene(pybind11::module_& m);
+void bind_profiler(pybind11::module_& m);
 }

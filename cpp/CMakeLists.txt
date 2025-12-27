@@ -193,6 +193,7 @@ add_library(entity_lib SHARED
     ../core_c/src/tc_scene.c
     ../core_c/src/tc_inspect.c
     ../core_c/src/tc_inspect_instance.cpp
+    ../core_c/src/tc_profiler.c
 )
 target_include_directories(entity_lib PRIVATE ../core_c/include)
 target_link_libraries(entity_lib PRIVATE trent pybind11::headers Python3::Python)
@@ -287,7 +288,8 @@ pybind11_add_module(_native
     termin/bindings/render/gpu.cpp
     termin/bindings/render/renderers.cpp
     termin/sdl_bindings.cpp
-    termin/scene_bindings.cpp
+    termin/tc_scene_bindings.cpp
+    termin/profiler_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
     termin/assets/assets_bindings.cpp
@@ -303,7 +305,6 @@ pybind11_add_module(_native
     termin/render/skeleton_controller.cpp
     termin/render/mesh_renderer.cpp
     termin/render/color_pass.cpp
-    termin/scene/scene.cpp
     termin/skeleton/skeleton_instance.cpp
     termin/render/glad/src/glad.c
 )
