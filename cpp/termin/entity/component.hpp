@@ -26,13 +26,6 @@ public:
     // Embedded C component (MUST be first member for from_tc to work)
     tc_component _c;
 
-    // Flags (synced to internal tc_component structure)
-    bool enabled = true;
-    bool active_in_editor = false;
-    bool _started = false;
-    bool has_update = false;
-    bool has_fixed_update = false;
-
     // Owner entity (set by Entity::add_component)
     Entity entity;
 
@@ -70,6 +63,22 @@ public:
         _type_name = it->c_str();
         _c.type_name = _type_name;
     }
+
+    // Accessors for tc_component flags
+    bool enabled() const { return _c.enabled; }
+    void set_enabled(bool v) { _c.enabled = v; }
+
+    bool active_in_editor() const { return _c.active_in_editor; }
+    void set_active_in_editor(bool v) { _c.active_in_editor = v; }
+
+    bool started() const { return _c._started; }
+    void set_started(bool v) { _c._started = v; }
+
+    bool has_update() const { return _c.has_update; }
+    void set_has_update(bool v) { _c.has_update = v; }
+
+    bool has_fixed_update() const { return _c.has_fixed_update; }
+    void set_has_fixed_update(bool v) { _c.has_fixed_update = v; }
 
     // Lifecycle hooks (virtual - subclasses override these)
     virtual void start() {}
@@ -151,25 +160,6 @@ public:
                 reinterpret_cast<PyObject*>(c->py_wrap)
             );
         }
-    }
-
-    // Sync C++ fields to C structure (call before C code uses _c)
-    void sync_to_c() {
-        _c.enabled = enabled;
-        _c.active_in_editor = active_in_editor;
-        _c._started = _started;
-        _c.has_update = has_update;
-        _c.has_fixed_update = has_fixed_update;
-        _c.type_name = _type_name;
-    }
-
-    // Sync C structure back to C++ fields (call after C code modifies _c)
-    void sync_from_c() {
-        enabled = _c.enabled;
-        active_in_editor = _c.active_in_editor;
-        _started = _c._started;
-        has_update = _c.has_update;
-        has_fixed_update = _c.has_fixed_update;
     }
 
 protected:

@@ -34,11 +34,16 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
         from termin._native.inspect import InspectRegistry, TypeBackend
         registry = InspectRegistry.instance()
 
-        # For Python types, use inspect_fields directly (faster, no C++ overhead)
+        # For Python types, collect from full class hierarchy
         if registry.has_type(type_name):
             backend = registry.get_type_backend(type_name)
             if backend == TypeBackend.Python:
-                return dict(cls.inspect_fields)
+                # Collect from MRO (base classes first, then subclasses override)
+                for klass in reversed(cls.__mro__):
+                    fields = getattr(klass, 'inspect_fields', None)
+                    if fields:
+                        result.update(fields)
+                return result
 
         # For C++ types (and fallback), use InspectRegistry
         cpp_fields = registry.all_fields(type_name)

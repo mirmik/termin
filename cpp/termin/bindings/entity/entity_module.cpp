@@ -195,7 +195,7 @@ PYBIND11_MODULE(_entity_native, m) {
         .def(py::init<>())
         .def(py::init([](bool enabled) {
             auto c = new PyCxxComponent();
-            c->enabled = enabled;
+            c->set_enabled(enabled);
             return c;
         }), py::arg("enabled") = true)
         .def("type_name", &CxxComponent::type_name)
@@ -210,13 +210,11 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
         .def("on_added", &CxxComponent::on_added, py::arg("scene"))
         .def("on_removed", &CxxComponent::on_removed)
-        .def_readwrite("enabled", &CxxComponent::enabled)
-        .def_readwrite("active_in_editor", &CxxComponent::active_in_editor)
-        .def_readwrite("_started", &CxxComponent::_started)
-        .def_readwrite("has_update", &CxxComponent::has_update)
-        .def_readwrite("has_fixed_update", &CxxComponent::has_fixed_update)
-        .def("sync_to_c", &CxxComponent::sync_to_c)
-        .def("sync_from_c", &CxxComponent::sync_from_c)
+        .def_property("enabled", &CxxComponent::enabled, &CxxComponent::set_enabled)
+        .def_property("active_in_editor", &CxxComponent::active_in_editor, &CxxComponent::set_active_in_editor)
+        .def_property("_started", &CxxComponent::started, &CxxComponent::set_started)
+        .def_property("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
+        .def_property("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
         .def("c_component", static_cast<tc_component* (CxxComponent::*)()>(&CxxComponent::c_component),
              py::return_value_policy::reference)
         .def_property("entity",
@@ -808,7 +806,9 @@ PYBIND11_MODULE(_entity_native, m) {
         .def_readwrite("speed", &CXXRotatorComponent::speed);
 
     // Register CxxComponent::enabled in InspectRegistry for all components to inherit
-    InspectRegistry::instance().add<CxxComponent, bool>(
-        "Component", &CxxComponent::enabled, "enabled", "Enabled", "bool"
+    InspectRegistry::instance().add_with_accessors<CxxComponent, bool>(
+        "Component", "enabled", "Enabled", "bool",
+        [](CxxComponent* c) { return c->enabled(); },
+        [](CxxComponent* c, bool v) { c->set_enabled(v); }
     );
 }

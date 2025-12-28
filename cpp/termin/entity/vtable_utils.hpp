@@ -85,8 +85,8 @@ bool component_overrides_fixed_update() {
         .def(py::init([]() { \
             auto comp = new ClassName(); \
             comp->set_type_name(#ClassName); \
-            comp->has_update = component_overrides_update<ClassName>(); \
-            comp->has_fixed_update = component_overrides_fixed_update<ClassName>(); \
+            comp->set_has_update(component_overrides_update<ClassName>()); \
+            comp->set_has_fixed_update(component_overrides_fixed_update<ClassName>()); \
             return comp; \
         }))
 

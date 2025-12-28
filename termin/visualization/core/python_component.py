@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
 
 from termin._native.component import TcComponent
+from termin.editor.inspect_field import InspectField
 
 
 class PythonComponent:
@@ -24,8 +25,10 @@ class PythonComponent:
     Provides the same API as the C++ Component for compatibility.
     """
 
-    # Class-level inspect fields (populated by subclasses)
-    inspect_fields: Dict[str, Any] = {}
+    # Class-level inspect fields - enabled is inherited by all subclasses
+    inspect_fields: Dict[str, Any] = {
+        "enabled": InspectField(path="enabled", label="Enabled", kind="bool"),
+    }
 
     def __init__(self, enabled: bool = True):
         # Create TcComponent wrapper

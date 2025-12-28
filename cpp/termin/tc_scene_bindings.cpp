@@ -61,7 +61,6 @@ public:
     // Component registration (C++ Component)
     void register_component(Component* c) {
         if (!c) return;
-        c->sync_to_c();
         tc_scene_register_component(_s, c->c_component());
     }
 

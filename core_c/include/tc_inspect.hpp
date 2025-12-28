@@ -375,6 +375,34 @@ public:
         _type_backends[type_name] = TypeBackend::Cpp;
     }
 
+    // Version with value getters (for accessor methods)
+    template<typename C, typename T>
+    void add_with_accessors(
+        const char* type_name,
+        const char* path,
+        const char* label,
+        const char* kind,
+        std::function<T(C*)> getter,
+        std::function<void(C*, T)> setter
+    ) {
+        InspectFieldInfo info;
+        info.type_name = type_name;
+        info.path = path;
+        info.label = label;
+        info.kind = kind;
+
+        info.getter = [getter](void* obj) -> py::object {
+            return py::cast(getter(static_cast<C*>(obj)));
+        };
+
+        info.setter = [setter](void* obj, py::object val) {
+            setter(static_cast<C*>(obj), val.cast<T>());
+        };
+
+        _py_fields[type_name].push_back(std::move(info));
+        _type_backends[type_name] = TypeBackend::Cpp;
+    }
+
     // ========================================================================
     // Field registration (Python types)
     // ========================================================================

@@ -94,8 +94,8 @@ struct ComponentRegistrar {
             [name, has_update, has_fixed_update]() -> CxxComponent* {
                 T* comp = new T();
                 comp->set_type_name(name);
-                comp->has_update = has_update;
-                comp->has_fixed_update = has_fixed_update;
+                comp->set_has_update(has_update);
+                comp->set_has_fixed_update(has_fixed_update);
                 return comp;
             });
     }

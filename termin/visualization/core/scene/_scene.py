@@ -474,8 +474,7 @@ class Scene:
             ptr = component.c_component_ptr()
             self._tc_scene.register_component_ptr(ptr)
         else:
-            # C++ Component - sync flags and use object-based registration
-            component.sync_to_c()
+            # C++ Component - use object-based registration
             self._tc_scene.register_component(component)
 
     def unregister_component(self, component: Component):

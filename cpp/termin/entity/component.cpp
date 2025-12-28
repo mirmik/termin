@@ -33,12 +33,12 @@ CxxComponent::CxxComponent() {
     tc_component_init(&_c, &_cxx_vtable);
     _c.kind = TC_CXX_COMPONENT;
     _c.type_name = _type_name;
-    // Sync initial flags
-    _c.enabled = enabled;
-    _c.active_in_editor = active_in_editor;
-    _c._started = _started;
-    _c.has_update = has_update;
-    _c.has_fixed_update = has_fixed_update;
+    // Set default flags
+    _c.enabled = true;
+    _c.active_in_editor = false;
+    _c._started = false;
+    _c.has_update = false;
+    _c.has_fixed_update = false;
 }
 
 CxxComponent::~CxxComponent() {
@@ -55,7 +55,6 @@ void CxxComponent::_cb_start(tc_component* c) {
     auto* self = from_tc(c);
     if (self) {
         self->start();
-        self->_started = true;
         c->_started = true;
     }
 }

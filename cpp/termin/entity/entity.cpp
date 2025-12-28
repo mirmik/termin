@@ -18,7 +18,6 @@ void Entity::add_component(Component* component) {
     if (!component || !valid()) return;
 
     component->entity = *this;
-    component->sync_to_c();
     tc_entity_pool_add_component(_pool, _id, component->c_component());
     component->on_added_to_entity();
 }
