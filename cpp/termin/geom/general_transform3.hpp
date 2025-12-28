@@ -59,6 +59,40 @@ struct GeneralTransform3 {
         tc_entity_pool_set_local_scale(_pool, _id, scale);
     }
 
+    // Individual component accessors
+    Vec3 local_position() const {
+        double pos[3];
+        tc_entity_pool_get_local_position(_pool, _id, pos);
+        return Vec3{pos[0], pos[1], pos[2]};
+    }
+
+    void set_local_position(const Vec3& p) {
+        double pos[3] = {p.x, p.y, p.z};
+        tc_entity_pool_set_local_position(_pool, _id, pos);
+    }
+
+    Quat local_rotation() const {
+        double rot[4];
+        tc_entity_pool_get_local_rotation(_pool, _id, rot);
+        return Quat{rot[0], rot[1], rot[2], rot[3]};
+    }
+
+    void set_local_rotation(const Quat& q) {
+        double rot[4] = {q.x, q.y, q.z, q.w};
+        tc_entity_pool_set_local_rotation(_pool, _id, rot);
+    }
+
+    Vec3 local_scale() const {
+        double scale[3];
+        tc_entity_pool_get_local_scale(_pool, _id, scale);
+        return Vec3{scale[0], scale[1], scale[2]};
+    }
+
+    void set_local_scale(const Vec3& s) {
+        double scale[3] = {s.x, s.y, s.z};
+        tc_entity_pool_set_local_scale(_pool, _id, scale);
+    }
+
     void relocate(const GeneralPose3& pose) {
         set_local_pose(pose);
     }

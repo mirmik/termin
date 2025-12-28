@@ -108,6 +108,20 @@ void bind_transform(py::module_& m) {
             self.set_global_pose(py_pose_to_cpp(pose));
         })
 
+        // Position/rotation access
+        .def("local_position", &GeneralTransform3::local_position)
+        .def("local_rotation", &GeneralTransform3::local_rotation)
+        .def("local_scale", &GeneralTransform3::local_scale)
+        .def("set_local_position", [](GeneralTransform3& self, const Vec3& pos) {
+            self.set_local_position(pos);
+        }, py::arg("position"))
+        .def("set_local_rotation", [](GeneralTransform3& self, const Quat& rot) {
+            self.set_local_rotation(rot);
+        }, py::arg("rotation"))
+        .def("set_local_scale", [](GeneralTransform3& self, const Vec3& scale) {
+            self.set_local_scale(scale);
+        }, py::arg("scale"))
+
         // Relocate (accepts Python GeneralPose3, C++ GeneralPose3, Python Pose3, or C++ Pose3)
         .def("relocate", [](GeneralTransform3& self, py::object pose) {
             // Check if it's a C++ Pose3

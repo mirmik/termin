@@ -331,6 +331,10 @@ PYBIND11_MODULE(_entity_native, m) {
             py::arg("selectable") = true, py::arg("serializable") = true,
             py::arg("layer") = 0, py::arg("flags") = 0, py::arg("uuid") = "")
 
+        // Validity
+        .def("valid", &Entity::valid)
+        .def("__bool__", &Entity::valid)
+
         // Identity
         .def_property_readonly("uuid", [](const Entity& e) -> py::object {
             const char* u = e.uuid();
