@@ -252,11 +252,11 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
         free(pool->uuids[i]);
         entity_id_array_free(&pool->children[i]);
 
-        // Release Python references for all components
+        // Release Python references for all components with py_wrap
         ComponentArray* comps = &pool->components[i];
         for (size_t j = 0; j < comps->count; j++) {
             tc_component* c = comps->items[j];
-            if (c && c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
+            if (c && c->py_wrap) {
                 Py_DECREF((PyObject*)c->py_wrap);
             }
         }
@@ -413,11 +413,11 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
 
     uint32_t idx = id.index;
 
-    // Release Python references for all components
+    // Release Python references for all components with py_wrap
     ComponentArray* comps = &pool->components[idx];
     for (size_t i = 0; i < comps->count; i++) {
         tc_component* c = comps->items[i];
-        if (c && c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
+        if (c && c->py_wrap) {
             Py_DECREF((PyObject*)c->py_wrap);
         }
     }
@@ -804,8 +804,10 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
 
     component_array_remove(&pool->components[id.index], c);
 
-    // Release Python reference (matches incref in add_component)
-    if (c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
+    // Release Python reference (matches incref in add_component/set_py_wrap)
+    // For Python components: INCREF was done in add_component
+    // For C++ components: INCREF was done via set_py_wrap in bindings
+    if (c->py_wrap) {
         Py_DECREF((PyObject*)c->py_wrap);
     }
 }

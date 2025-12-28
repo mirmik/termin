@@ -4,13 +4,13 @@ TweenTest.py component.
 
 from __future__ import annotations
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.component import PythonComponent
 from termin.visualization.core.scene import get_current_scene
 from termin.geombase import Vec3
 from termin.tween.ease import Ease
 
 
-class TweenTest(Component):
+class TweenTest(PythonComponent):
     """
     Custom component.
 

@@ -290,8 +290,6 @@ class Scene:
         """Add entity to the scene, keeping the entities list sorted by priority."""
         global _current_scene
 
-        print(f"[Scene.add_non_recurse] entity={entity.name}, components={[type(c).__name__ for c in entity.components]}")
-
         # Insert sorted by priority (Python-side list)
         idx = 0
         for i, e in enumerate(self._entities):
@@ -308,7 +306,6 @@ class Scene:
         try:
             # Register each component (triggers on_added via C vtable)
             for component in entity.components:
-                print(f"[Scene.add_non_recurse] Registering component: {type(component).__name__}")
                 self.register_component(component)
 
             entity.on_added(self)
@@ -455,7 +452,6 @@ class Scene:
         from termin.visualization.core.python_component import PythonComponent
 
         is_python = isinstance(component, PythonComponent)
-        print(f"[Scene.register_component] {type(component).__name__}, is_python={is_python}")
 
         # Python-specific registration
         self._register_component_python_specific(component)
@@ -472,12 +468,10 @@ class Scene:
         if is_python:
             # Pure Python component - use pointer-based registration
             ptr = component.c_component_ptr()
-            print(f"[Scene.register_component] Calling register_component_ptr({ptr})")
             self._tc_scene.register_component_ptr(ptr)
         else:
             # C++ Component - sync flags and use object-based registration
             component.sync_to_c()
-            print(f"[Scene.register_component] Calling register_component (C++)")
             self._tc_scene.register_component(component)
 
     def unregister_component(self, component: Component):
@@ -528,11 +522,7 @@ class Scene:
     def notify_editor_start(self):
         """Notify all components that scene started in editor mode."""
         for entity in self.entities:
-            print(f"[notify_editor_start] entity={entity.name}, components={len(entity.components)}")
             for component in entity.components:
-                print(f"[notify_editor_start] calling on_editor_start on {type(component).__name__}")
-                import sys
-                sys.stdout.flush()
                 component.on_editor_start()
 
     # --- Input dispatch ---
@@ -618,33 +608,21 @@ class Scene:
             self.flag_names = {int(k): v for k, v in data.get("flag_names", {}).items()}
 
         entities_data = data.get("entities", [])
-        print(f"[Scene.load_from_data] Loading {len(entities_data)} root entities")
-        for i, ent_data in enumerate(entities_data):
-            print(f"[Scene.load_from_data] Deserializing root entity {i}: name={ent_data.get('name', '?')}, uuid={ent_data.get('uuid', '?')}")
+        for ent_data in entities_data:
             ent = self._deserialize_entity_recursive(ent_data, context)
             if ent:
-                print(f"[Scene.load_from_data] Adding entity to scene: {ent.name}")
                 self.add(ent)
-            else:
-                print(f"[Scene.load_from_data] Entity deserialization returned None!")
 
         return len(entities_data)
 
     def _deserialize_entity_recursive(self, data: dict, context=None) -> Entity | None:
         """Deserialize entity with children recursively."""
-        print(f"[Scene._deserialize_entity_recursive] name={data.get('name', '?')}, uuid={data.get('uuid', '?')}")
-        print(f"  components: {[c.get('type', '?') for c in data.get('components', [])]}")
         ent = Entity.deserialize(data, context)
         if ent is None:
-            print(f"  -> Entity.deserialize returned None!")
             return None
-        print(f"  -> Created entity: {ent.name}, components: {[type(c).__name__ for c in ent.components]}")
 
         # Deserialize children and set parent
-        children_data = data.get("children", [])
-        if children_data:
-            print(f"  -> Has {len(children_data)} children")
-        for child_data in children_data:
+        for child_data in data.get("children", []):
             child = self._deserialize_entity_recursive(child_data, context)
             if child:
                 child.set_parent(ent)

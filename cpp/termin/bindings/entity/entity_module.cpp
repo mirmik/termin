@@ -437,7 +437,11 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("add_component", [](Entity& e, py::object component) -> py::object {
             // Check if it's a C++ Component
             if (py::isinstance<Component>(component)) {
-                e.add_component(component.cast<Component*>());
+                Component* c = component.cast<Component*>();
+                // Store Python wrapper in py_wrap to keep it alive while attached to entity
+                // set_py_wrap does INCREF
+                c->set_py_wrap(component);
+                e.add_component(c);
                 return component;
             }
 
@@ -518,10 +522,6 @@ PYBIND11_MODULE(_entity_native, m) {
                 py::object py_comp = CxxComponent::tc_to_python(tc);
                 if (!py_comp.is_none()) {
                     result.append(py_comp);
-                } else {
-                    printf("[Entity.components] WARNING: tc_to_python returned None for component %zu (kind=%d, py_wrap=%p)\n",
-                           i, tc->kind, tc->py_wrap);
-                    fflush(stdout);
                 }
             }
             return result;
@@ -602,8 +602,6 @@ PYBIND11_MODULE(_entity_native, m) {
         })
         .def_static("deserialize", [](py::object data, py::object context) -> py::object {
             if (data.is_none() || !py::isinstance<py::dict>(data)) {
-                printf("[Entity.deserialize] Invalid data (not a dict)\n");
-                fflush(stdout);
                 return py::none();
             }
 
@@ -614,14 +612,10 @@ PYBIND11_MODULE(_entity_native, m) {
             if (dict_data.contains("name")) {
                 name = dict_data["name"].cast<std::string>();
             }
-            printf("[Entity.deserialize] Creating entity: %s\n", name.c_str());
-            fflush(stdout);
 
             // Create entity using standalone pool
             Entity ent = Entity::create(get_standalone_pool(), name);
             if (!ent.valid()) {
-                printf("[Entity.deserialize] Failed to create entity!\n");
-                fflush(stdout);
                 return py::none();
             }
 
@@ -683,8 +677,6 @@ PYBIND11_MODULE(_entity_native, m) {
             // Deserialize components via ComponentRegistry
             if (dict_data.contains("components") && py::isinstance<py::list>(dict_data["components"])) {
                 py::list components = dict_data["components"].cast<py::list>();
-                printf("[Entity.deserialize] Deserializing %zu components\n", components.size());
-                fflush(stdout);
 
                 // Use C++ ComponentRegistry
                 auto& registry = ComponentRegistry::instance();
@@ -693,24 +685,20 @@ PYBIND11_MODULE(_entity_native, m) {
                     if (!py::isinstance<py::dict>(comp_data_item)) continue;
                     py::dict comp_data = comp_data_item.cast<py::dict>();
 
-                    if (!comp_data.contains("type")) {
-                        printf("[Entity.deserialize] Component missing 'type' field\n");
-                        fflush(stdout);
-                        continue;
-                    }
+                    if (!comp_data.contains("type")) continue;
 
                     std::string type_name = comp_data["type"].cast<std::string>();
-                    printf("[Entity.deserialize] Deserializing component: %s\n", type_name.c_str());
-                    fflush(stdout);
+
+                    // Check if component type is registered
+                    if (!registry.has(type_name)) {
+                        fprintf(stderr, "[Warning] Unknown component type: %s (skipping)\n", type_name.c_str());
+                        continue;
+                    }
 
                     try {
                         // Create component via ComponentRegistry
                         py::object comp = registry.create(type_name);
-                        if (comp.is_none()) {
-                            printf("[Entity.deserialize] Unknown component type: %s\n", type_name.c_str());
-                            fflush(stdout);
-                            continue;
-                        }
+                        if (comp.is_none()) continue;
 
                         // Deserialize data if component has deserialize_data method
                         if (py::hasattr(comp, "deserialize_data")) {
@@ -721,17 +709,12 @@ PYBIND11_MODULE(_entity_native, m) {
                         // Add to entity via Python add_component
                         py::object py_ent = py::cast(ent);
                         py_ent.attr("add_component")(comp);
-                        printf("[Entity.deserialize] Component added: %s\n", type_name.c_str());
-                        fflush(stdout);
                     } catch (const std::exception& e) {
-                        printf("[Entity.deserialize] Exception deserializing %s: %s\n", type_name.c_str(), e.what());
-                        fflush(stdout);
+                        fprintf(stderr, "[Warning] Failed to deserialize component %s: %s\n", type_name.c_str(), e.what());
                     }
                 }
             }
 
-            printf("[Entity.deserialize] Entity created with %zu components\n", ent.component_count());
-            fflush(stdout);
             return py::cast(ent);
         }, py::arg("data"), py::arg("context") = py::none());
 

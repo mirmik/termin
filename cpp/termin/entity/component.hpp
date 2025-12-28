@@ -138,31 +138,15 @@ public:
 
     // Convert any tc_component to Python object
     static py::object tc_to_python(tc_component* c) {
-        if (!c) {
-            printf("[tc_to_python] c is NULL\n");
-            fflush(stdout);
-            return py::none();
-        }
-        printf("[tc_to_python] c=%p, kind=%d, type=%s, py_wrap=%p\n",
-               (void*)c, c->kind, c->type_name ? c->type_name : "(null)", c->py_wrap);
-        fflush(stdout);
+        if (!c) return py::none();
 
         if (c->kind == TC_CXX_COMPONENT) {
             CxxComponent* cxx = from_tc(c);
-            printf("[tc_to_python] CXX: from_tc returned %p\n", (void*)cxx);
-            fflush(stdout);
             if (!cxx) return py::none();
-            py::object result = cxx->to_python();
-            printf("[tc_to_python] CXX: to_python returned %p\n", result.ptr());
-            fflush(stdout);
-            return result;
+            return cxx->to_python();
         } else {
             // TC_PYTHON_COMPONENT: py_wrap holds the Python object
-            if (!c->py_wrap) {
-                printf("[tc_to_python] PYTHON: py_wrap is NULL!\n");
-                fflush(stdout);
-                return py::none();
-            }
+            if (!c->py_wrap) return py::none();
             return py::reinterpret_borrow<py::object>(
                 reinterpret_cast<PyObject*>(c->py_wrap)
             );
