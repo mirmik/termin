@@ -667,6 +667,23 @@ class EditorWindow(QMainWindow):
         if self.consoleOutput is not None:
             self.consoleOutput.appendPlainText(message)
 
+    def _setup_native_log_callback(self) -> None:
+        """Setup callback for native (C/C++) log messages."""
+        from termin._native import log as native_log
+
+        level_names = {
+            native_log.DEBUG: "DEBUG",
+            native_log.INFO: "INFO",
+            native_log.WARN: "WARN",
+            native_log.ERROR: "ERROR",
+        }
+
+        def on_native_log(level: int, message: str) -> None:
+            level_name = level_names.get(level, "?")
+            self._log_to_console(f"[{level_name}] {message}")
+
+        native_log.set_callback(on_native_log)
+
     # ----------- реакции инспектора -----------
 
     def _on_inspector_transform_changed(self):
@@ -800,6 +817,9 @@ class EditorWindow(QMainWindow):
         self.projectFileList: QListView = self.findChild(QListView, "projectFileList")
         self.bottomTabWidget: QTabWidget = self.findChild(QTabWidget, "bottomTabWidget")
         self.consoleOutput: QPlainTextEdit = self.findChild(QPlainTextEdit, "consoleOutput")
+
+        # Connect native logging to console
+        self._setup_native_log_callback()
 
         if self.projectDirTree is None or self.projectFileList is None:
             return

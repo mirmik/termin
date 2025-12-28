@@ -2,13 +2,13 @@
 #pragma once
 
 #include "tc_inspect.h"
+#include "tc_log.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <functional>
-#include <iostream>
 #include <any>
 
 #include "trent/trent.h"
@@ -524,8 +524,8 @@ public:
                         return result;
                     }
                     // Fallback: serialize to trent and convert (returns dict, not object!)
-                    std::cerr << "[WARN] get " << type_name << "." << field_path
-                              << " (kind=" << f.kind << "): no to_python handler, returning dict" << std::endl;
+                    tc_log_warn("get %s.%s (kind=%s): no to_python handler, returning dict",
+                        type_name.c_str(), field_path.c_str(), f.kind.c_str());
                     nos::trent t = KindRegistry::instance().serialize_cpp(f.kind, val);
                     return trent_to_py_compat(t);
                 }
@@ -642,8 +642,8 @@ public:
             if (f.backend == TypeBackend::Cpp) {
                 // C++ field: py::object → std::any → cpp_setter
                 if (!f.cpp_setter) {
-                    std::cerr << "[WARN] deserialize " << type_name << "." << f.path
-                              << " (kind=" << f.kind << ", backend=Cpp): no cpp_setter" << std::endl;
+                    tc_log_warn("deserialize %s.%s (kind=%s, backend=Cpp): no cpp_setter",
+                        type_name.c_str(), f.path.c_str(), f.kind.c_str());
                     continue;
                 }
 
@@ -660,14 +660,14 @@ public:
                 if (val.has_value()) {
                     f.cpp_setter(ptr, val);
                 } else {
-                    std::cerr << "[WARN] deserialize " << type_name << "." << f.path
-                              << " (kind=" << f.kind << "): no cpp handler, value not set" << std::endl;
+                    tc_log_warn("deserialize %s.%s (kind=%s): no cpp handler, value not set",
+                        type_name.c_str(), f.path.c_str(), f.kind.c_str());
                 }
             } else {
                 // Python field
                 if (!f.py_setter) {
-                    std::cerr << "[WARN] deserialize " << type_name << "." << f.path
-                              << " (kind=" << f.kind << ", backend=Python): no py_setter" << std::endl;
+                    tc_log_warn("deserialize %s.%s (kind=%s, backend=Python): no py_setter",
+                        type_name.c_str(), f.path.c_str(), f.kind.c_str());
                     continue;
                 }
 
@@ -686,9 +686,9 @@ public:
     void deserialize_fields_of_python_component_over_python(py::object obj, const std::string& type_name, const py::dict& data) {
         for (const auto& f : all_fields(type_name)) {
             if (f.backend == TypeBackend::Cpp) {
-                std::cerr << "[WARN] deserialize " << type_name << "." << f.path
-                          << " (kind=" << f.kind << "): C++ backend field in Python component" << std::endl;
-                continue;   
+                tc_log_warn("deserialize %s.%s (kind=%s): C++ backend field in Python component",
+                    type_name.c_str(), f.path.c_str(), f.kind.c_str());
+                continue;
             }
 
             if (f.non_serializable) continue;
@@ -700,8 +700,8 @@ public:
             if (field_data.is_none()) continue;
 
             if (!f.py_setter) {
-                std::cerr << "[WARN] deserialize " << type_name << "." << f.path
-                          << " (kind=" << f.kind << "): no py_setter" << std::endl;
+                tc_log_warn("deserialize %s.%s (kind=%s): no py_setter",
+                    type_name.c_str(), f.path.c_str(), f.kind.c_str());
                 continue;
             }
 

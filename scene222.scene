@@ -6619,9 +6619,9 @@
   "editor": {
     "camera": {
       "target": [
-        5.819811890746627,
-        -4.682937436245181,
-        0.3668187703904439
+        5.819811820983887,
+        -4.6829376220703125,
+        0.36681875586509705
       ],
       "radius": 8.5,
       "azimuth": 58.38475413771894,
@@ -6636,7 +6636,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "875e5a30-3136-40d2-bc9f-8eb898ebdb4c",
+            "uuid": "d007c637-286d-4cc7-8b9f-dbdd569d465a",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -6656,7 +6656,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "cd1c686b-8907-4950-b4b1-dca42579789b",
+            "uuid": "4d5ab6ec-d248-491e-b9e3-7024907dd1bf",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -6671,17 +6671,17 @@
       }
     ],
     "expanded_entities": [
-      "entity13",
-      "[Root]",
-      "Glitch",
-      "Arti",
-      "cube1",
-      "entity12_copy",
-      "editor_ui",
+      "EditorEntities",
       "Walls",
       "camera",
+      "Glitch",
+      "entity13",
+      "entity12_copy",
+      "cube1",
+      "editor_ui",
+      "[Root]",
       "cube2",
-      "EditorEntities"
+      "Arti"
     ]
   },
   "resources": {

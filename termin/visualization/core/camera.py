@@ -297,8 +297,6 @@ class CameraController(InputComponent):
 
     def on_added(self, scene):
         super().on_added(scene)
-        for c in (self.entity.components if self.entity else []):
-            print(f"  - {type(c).__name__}: {c}")
         self.camera_component = self.entity.get_component(CameraComponent)
         if self.camera_component is None:
             raise RuntimeError("CameraController requires a CameraComponent on the same entity.")
