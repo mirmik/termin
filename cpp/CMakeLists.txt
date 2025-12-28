@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.16)
 project(termin_native LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -70,6 +70,7 @@ target_compile_options(_geom_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 target_link_libraries(_geom_native PRIVATE entity_lib)
+target_precompile_headers(_geom_native PRIVATE termin/pch.hpp)
 
 # Colliders native module (BoxCollider, SphereCollider)
 pybind11_add_module(_colliders_native termin/colliders_bindings.cpp)
@@ -77,6 +78,7 @@ target_link_libraries(_colliders_native PRIVATE entity_lib)
 target_compile_options(_colliders_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_colliders_native PRIVATE termin/pch.hpp)
 
 # Physics native module (RigidBody, PhysicsWorld, Contact)
 pybind11_add_module(_physics_native termin/physics_bindings.cpp)
@@ -84,6 +86,7 @@ target_link_libraries(_physics_native PRIVATE entity_lib)
 target_compile_options(_physics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_physics_native PRIVATE termin/pch.hpp)
 
 # Voxels native module (VoxelGrid, voxelization, VoxelGridHandle)
 pybind11_add_module(_voxels_native termin/voxels_bindings.cpp)
@@ -91,6 +94,7 @@ target_compile_options(_voxels_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 target_link_libraries(_voxels_native PRIVATE entity_lib trent)
+target_precompile_headers(_voxels_native PRIVATE termin/pch.hpp)
 
 # Collision native module (BVH, CollisionWorld, ContactManifold)
 pybind11_add_module(_collision_native termin/collision_bindings.cpp)
@@ -98,12 +102,14 @@ target_link_libraries(_collision_native PRIVATE entity_lib)
 target_compile_options(_collision_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_collision_native PRIVATE termin/pch.hpp)
 
 # Lighting native module (Light, AttenuationCoefficients)
 pybind11_add_module(_lighting_native termin/lighting_bindings.cpp)
 target_compile_options(_lighting_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_lighting_native PRIVATE termin/pch.hpp)
 
 # Trent library (shared by all resource modules)
 # trent library - STATIC on Windows (avoids DLL import library issues), SHARED on Linux
@@ -143,6 +149,7 @@ target_link_libraries(_mesh_native PRIVATE trent entity_lib)
 target_compile_options(_mesh_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_mesh_native PRIVATE termin/pch.hpp)
 
 # Skeleton native module (Bone, SkeletonData, SkeletonHandle) - separate module
 pybind11_add_module(_skeleton_native
@@ -152,6 +159,7 @@ target_link_libraries(_skeleton_native PRIVATE trent entity_lib)
 target_compile_options(_skeleton_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_skeleton_native PRIVATE termin/pch.hpp)
 
 # Texture native module (TextureData) - separate module
 pybind11_add_module(_texture_native
@@ -160,6 +168,7 @@ pybind11_add_module(_texture_native
 target_compile_options(_texture_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_texture_native PRIVATE termin/pch.hpp)
 
 # Find OpenGL (needed by _graphics_native and _native)
 find_package(OpenGL REQUIRED)
@@ -176,6 +185,7 @@ target_link_libraries(_graphics_native PRIVATE OpenGL::GL)
 target_compile_options(_graphics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_graphics_native PRIVATE termin/pch.hpp)
 
 # Entity shared library (shared by _entity_native and _native)
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
@@ -207,6 +217,7 @@ target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS)
 target_compile_options(entity_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(entity_lib PRIVATE termin/pch.hpp)
 set_target_properties(entity_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -221,6 +232,7 @@ target_link_libraries(_entity_native PRIVATE entity_lib trent)
 target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_entity_native REUSE_FROM entity_lib)
 
 # Animation native module (Channel, Clip, AnimationClipHandle)
 # Must be after entity_lib since it links against it
@@ -229,6 +241,7 @@ target_link_libraries(_animation_native PRIVATE trent entity_lib)
 target_compile_options(_animation_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_animation_native REUSE_FROM entity_lib)
 set_target_properties(_animation_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/.."
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -329,6 +342,7 @@ endif()
 target_compile_options(_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
+target_precompile_headers(_native REUSE_FROM entity_lib)
 
 # ---------------- Tests ----------------
 option(BUILD_TESTS "Build C++ tests" OFF)
