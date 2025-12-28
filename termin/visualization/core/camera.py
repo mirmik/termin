@@ -24,12 +24,12 @@ import numpy as np
 from termin.geombase import Pose3
 
 from termin.editor.inspect_field import InspectField, inspect
-from termin.visualization.core.component import Component, InputComponent
+from termin.visualization.core.python_component import PythonComponent, InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEvent, ScrollEvent
 from termin.visualization.platform.backends.base import Action, MouseButton
 
 
-class CameraComponent(Component):
+class CameraComponent(PythonComponent):
     """
     Unified camera component supporting both perspective and orthographic projection.
 

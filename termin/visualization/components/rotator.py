@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import numpy as np
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.editor.inspect_field import inspect
 from termin.geombase import Pose3
 from termin.util import qmul
 
 
-class RotatorComponent(Component):
+class RotatorComponent(PythonComponent):
     """Компонент, который вращает entity вокруг заданной оси."""
 
     speed = inspect(

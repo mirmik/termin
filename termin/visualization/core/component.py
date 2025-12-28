@@ -85,27 +85,6 @@ Component = _NativeComponent
 Component.inspect_fields = {}
 
 
-class InputComponent(Component):
-    """Component capable of handling input events."""
-
-    def __init__(self, enabled: bool = True, active_in_editor: bool = False):
-        super().__init__()
-        self.enabled = enabled
-        self.active_in_editor = active_in_editor
-
-    def on_mouse_button(self, event: "MouseButtonEvent"):
-        pass
-
-    def on_mouse_move(self, event: "MouseMoveEvent"):
-        pass
-
-    def on_scroll(self, event: "ScrollEvent"):
-        pass
-
-    def on_key(self, event: "KeyEvent"):
-        pass
-
-
 # Import event types for type hints
 from termin.visualization.core.input_events import (
     MouseButtonEvent,
@@ -114,6 +93,6 @@ from termin.visualization.core.input_events import (
     KeyEvent,
 )
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.visualization.core.python_component import PythonComponent, InputComponent
 
 __all__ = ["Component", "PythonComponent", "InputComponent", "InspectField"]

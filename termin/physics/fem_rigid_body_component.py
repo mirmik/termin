@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import warnings
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.fem.multibody3d_3 import RigidBody3D
 from termin.fem.inertia3d import SpatialInertia3D
 from termin.geombase import Pose3
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from termin.physics.fem_physics_world_component import FEMPhysicsWorldComponent
 
 
-class FEMRigidBodyComponent(Component):
+class FEMRigidBodyComponent(PythonComponent):
     """
     Компонент твёрдого тела для FEM симуляции.
 

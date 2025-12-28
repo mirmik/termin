@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.fem.multibody3d_3 import RevoluteJoint3D
 from termin.editor.inspect_field import InspectField
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from termin.visualization.render.immediate import ImmediateRenderer
 
 
-class FEMRevoluteJointComponent(Component):
+class FEMRevoluteJointComponent(PythonComponent):
     """
     Компонент вращательного шарнира для FEM симуляции.
 

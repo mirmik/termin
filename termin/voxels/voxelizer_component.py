@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional, List, Set
 
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh_handle import MeshHandle
 from termin.mesh.mesh import Mesh3
@@ -61,7 +61,7 @@ def _build_navmesh_action(component: "VoxelizerComponent") -> None:
     component.build_navmesh()
 
 
-class VoxelizerComponent(Component):
+class VoxelizerComponent(PythonComponent):
     """
     Компонент для вокселизации меша entity.
 

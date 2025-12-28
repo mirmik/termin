@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.animation_clip_handle import AnimationClipHandle
 from termin.editor.inspect_field import InspectField
 from termin.geombase import Pose3
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from termin.skeleton import SkeletonInstance
 
 
-class AnimationPlayer(Component):
+class AnimationPlayer(PythonComponent):
     """
     Компонент-плеер: хранит набор клипов и проигрывает один из них,
     обновляя локальный Pose3 сущности (и её scale).
@@ -27,7 +27,6 @@ class AnimationPlayer(Component):
     _DEBUG_LIFECYCLE = True
 
     inspect_fields = {
-        **Component.inspect_fields,
         "clips": InspectField(
             label="Animation Clips",
             kind="list[animation_clip_handle]",

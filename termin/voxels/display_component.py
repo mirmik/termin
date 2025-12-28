@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, List, Optional, Set, Tuple
 
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
@@ -91,7 +91,7 @@ CUBE_SCALE = 0.85  # Размер кубика относительно ячей
 MAX_VOXELS = 100_000
 
 
-class VoxelDisplayComponent(Component):
+class VoxelDisplayComponent(PythonComponent):
     """
     Компонент для отображения воксельной сетки из ResourceManager.
 

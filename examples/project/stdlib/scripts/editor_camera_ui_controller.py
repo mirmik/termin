@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.camera import CameraComponent
 from termin.visualization.ui.widgets.component import UIComponent
 from termin.visualization.ui.widgets.basic import IconButton
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.viewport import Viewport
 
 
-class EditorCameraUIController(Component):
+class EditorCameraUIController(PythonComponent):
     """
     Контроллер UI редакторской камеры.
 

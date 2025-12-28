@@ -1300,10 +1300,10 @@ MyComponent component.
 
 from __future__ import annotations
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 
 
-class MyComponent(Component):
+class MyComponent(PythonComponent):
     """
     Custom component.
 

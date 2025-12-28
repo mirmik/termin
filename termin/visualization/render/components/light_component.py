@@ -4,12 +4,12 @@ from typing import Optional
 
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.editor.inspect_field import InspectField
 from termin.lighting import LightType, Light, LightShadowParams
 
 
-class LightComponent(Component):
+class LightComponent(PythonComponent):
     """
     Простейший компонент источника света.
     Хранит тип, цвет, интенсивность и параметры теней.

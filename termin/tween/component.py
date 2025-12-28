@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.scene import get_current_scene
 from termin.tween.manager import TweenManager
 from termin.tween.ease import Ease
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from termin.kinematic.general_transform import GeneralTransform3
 
 
-class TweenManagerComponent(Component):
+class TweenManagerComponent(PythonComponent):
     """
     Component that provides tweening functionality to a scene.
 

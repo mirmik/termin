@@ -7,11 +7,11 @@ configuration including pipeline selection and layer mask.
 
 from __future__ import annotations
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.editor.inspect_field import InspectField
 
 
-class ViewportHintComponent(Component):
+class ViewportHintComponent(PythonComponent):
     """
     Component that provides viewport configuration hints.
 

@@ -91,8 +91,12 @@ class PythonComponent:
         self._tc.active_in_editor = value
 
     @property
-    def is_native(self) -> bool:
-        return self._tc.is_native
+    def is_python_component(self) -> bool:
+        return True
+
+    @property
+    def is_cxx_component(self) -> bool:
+        return False
 
     @property
     def _started(self) -> bool:
@@ -227,4 +231,24 @@ class PythonComponent:
         }
 
 
-__all__ = ["PythonComponent"]
+class InputComponent(PythonComponent):
+    """Component capable of handling input events."""
+
+    def __init__(self, enabled: bool = True, active_in_editor: bool = False):
+        super().__init__(enabled=enabled)
+        self.active_in_editor = active_in_editor
+
+    def on_mouse_button(self, event):
+        pass
+
+    def on_mouse_move(self, event):
+        pass
+
+    def on_scroll(self, event):
+        pass
+
+    def on_key(self, event):
+        pass
+
+
+__all__ = ["PythonComponent", "InputComponent"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.scene import get_current_scene
 from termin.geombase._geom_native import Vec3
 from termin.physics._physics_native import PhysicsWorld
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from termin.physics.rigid_body_component import RigidBodyComponent
 
 
-class PhysicsWorldComponent(Component):
+class PhysicsWorldComponent(PythonComponent):
     """
     Компонент, управляющий физической симуляцией для сцены.
 

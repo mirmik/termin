@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, List, Optional, Set, Tuple
 
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.navmesh_handle import NavMeshHandle
@@ -35,7 +35,7 @@ def _get_navmesh_choices() -> list[tuple[str, str]]:
     return [(name, name) for name in names]
 
 
-class NavMeshDisplayComponent(Component):
+class NavMeshDisplayComponent(PythonComponent):
     """
     Компонент для отображения NavMesh из ResourceManager.
 
