@@ -5,6 +5,7 @@
 #include "termin/voxels/voxel_grid.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
+#include "../../core_c/include/tc_kind.hpp"
 
 namespace py = pybind11;
 using namespace termin::voxels;
@@ -511,36 +512,32 @@ PYBIND11_MODULE(_voxels_native, m) {
         .def("serialize", &VoxelGridHandle::serialize);
 
     // Register kind handler for voxel_grid_handle
-    auto& registry = InspectRegistry::instance();
-    registry.register_kind("voxel_grid_handle", KindHandler{
+    // C++ handler for C++ fields
+    tc::register_cpp_handle_kind<VoxelGridHandle>("voxel_grid_handle");
+
+    // Python handler for Python fields
+    tc::KindRegistry::instance().register_python(
+        "voxel_grid_handle",
         // serialize
-        [](py::object obj) -> nos::trent {
-            if (py::isinstance<VoxelGridHandle>(obj)) {
-                VoxelGridHandle handle = obj.cast<VoxelGridHandle>();
-                py::dict d = handle.serialize();
-                return InspectRegistry::py_dict_to_trent(d);
-            }
-            if (py::hasattr(obj, "serialize")) {
-                py::dict d = obj.attr("serialize")();
-                return InspectRegistry::py_dict_to_trent(d);
-            }
-            return nos::trent::nil();
-        },
+        py::cpp_function([](py::object obj) -> py::object {
+            VoxelGridHandle handle = obj.cast<VoxelGridHandle>();
+            return handle.serialize();
+        }),
         // deserialize
-        [](const nos::trent& t) -> py::object {
+        py::cpp_function([](py::object data) -> py::object {
             // Handle UUID string
-            if (t.is_string()) {
-                return py::cast(VoxelGridHandle::from_uuid(t.as_string()));
+            if (py::isinstance<py::str>(data)) {
+                return py::cast(VoxelGridHandle::from_uuid(data.cast<std::string>()));
             }
             // Handle dict format
-            if (t.is_dict()) {
-                py::dict d = InspectRegistry::trent_to_py_dict(t);
+            if (py::isinstance<py::dict>(data)) {
+                py::dict d = data.cast<py::dict>();
                 return py::cast(VoxelGridHandle::deserialize(d));
             }
             return py::cast(VoxelGridHandle());
-        },
+        }),
         // convert
-        [](py::object value) -> py::object {
+        py::cpp_function([](py::object value) -> py::object {
             if (value.is_none()) {
                 return py::cast(VoxelGridHandle());
             }
@@ -548,8 +545,8 @@ PYBIND11_MODULE(_voxels_native, m) {
                 return value;
             }
             return value;
-        }
-    });
+        })
+    );
 
     // Standalone function for testing
     m.def("triangle_aabb_intersect", [](

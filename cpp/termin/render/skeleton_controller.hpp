@@ -81,6 +81,6 @@ public:
     INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "list[entity_handle]")
 };
 
-REGISTER_COMPONENT(SkeletonController);
+REGISTER_COMPONENT(SkeletonController, Component);
 
 } // namespace termin

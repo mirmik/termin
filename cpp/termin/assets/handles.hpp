@@ -4,6 +4,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
+#include "../../trent/trent.h"
 #include "termin/render/handles.hpp"
 #include "termin/render/mesh_gpu.hpp"
 #include "termin/render/texture_gpu.hpp"
@@ -153,6 +154,11 @@ public:
      * Deserialize from scene data.
      */
     static MeshHandle deserialize(const py::dict& data);
+
+    /**
+     * Deserialize inplace from scene data.
+     */
+    void deserialize_from(const nos::trent& data);
 };
 
 
@@ -288,6 +294,11 @@ public:
      * Deserialize from scene data.
      */
     static TextureHandle deserialize(const py::dict& data);
+
+    /**
+     * Deserialize inplace from scene data.
+     */
+    void deserialize_from(const nos::trent& data);
 };
 
 /**
@@ -382,6 +393,11 @@ public:
      * Deserialize from scene data.
      */
     static MaterialHandle deserialize(const py::dict& data);
+
+    /**
+     * Deserialize inplace from scene data.
+     */
+    void deserialize_from(const nos::trent& data);
 };
 
 
@@ -463,6 +479,11 @@ public:
      * Deserialize from scene data.
      */
     static SkeletonHandle deserialize(const py::dict& data);
+
+    /**
+     * Deserialize inplace from scene data.
+     */
+    void deserialize_from(const nos::trent& data);
 };
 
 // Forward declaration
@@ -555,6 +576,11 @@ public:
      * Deserialize from scene data.
      */
     static AnimationClipHandle deserialize(const py::dict& data);
+
+    /**
+     * Deserialize inplace from scene data.
+     */
+    void deserialize_from(const nos::trent& data);
 };
 
 } // namespace termin

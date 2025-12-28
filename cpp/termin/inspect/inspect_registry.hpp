@@ -5,11 +5,7 @@
 //
 #pragma once
 
-// Enable trent compatibility
-#define TC_HAS_TRENT
 #include "../../trent/trent.h"
-
-// Include the new implementation
 #include "../../../core_c/include/tc_inspect.hpp"
 #include "../../../core_c/include/inspect_registry_compat.hpp"
 

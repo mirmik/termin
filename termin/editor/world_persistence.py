@@ -30,6 +30,27 @@ def numpy_encoder(obj):
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
+def _validate_serializable(obj, path: str = ""):
+    """Проверяет, что объект содержит только JSON-сериализуемые типы.
+
+    Допустимые типы: dict, list, str, int, float, bool, None, numpy types.
+    Raises TypeError с путём к невалидному объекту.
+    """
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return
+    if isinstance(obj, (np.floating, np.integer)):
+        return
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            _validate_serializable(v, f"{path}.{k}" if path else k)
+        return
+    if isinstance(obj, (list, tuple, np.ndarray)):
+        for i, v in enumerate(obj):
+            _validate_serializable(v, f"{path}[{i}]")
+        return
+    raise TypeError(f"Non-serializable type {type(obj).__name__} at path: {path or 'root'}")
+
+
 class WorldPersistence:
     """
     Единственный владелец жизненного цикла Scene.
@@ -216,11 +237,17 @@ class WorldPersistence:
         if expanded_entities:
             editor_data["expanded_entities"] = expanded_entities
 
+        scene_data = self._editor_scene.serialize()
+        _validate_serializable(scene_data, "scene")
+
+        resources_data = self._resource_manager.serialize()
+        _validate_serializable(resources_data, "resources")
+
         data = {
             "version": "1.0",
-            "scene": self._editor_scene.serialize(),
+            "scene": scene_data,
             "editor": editor_data,
-            "resources": self._resource_manager.serialize(),
+            "resources": resources_data,
         }
 
         json_str = json.dumps(data, indent=2, ensure_ascii=False, default=numpy_encoder)

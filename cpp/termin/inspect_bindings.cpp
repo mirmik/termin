@@ -4,6 +4,7 @@
 #include "inspect/inspect_registry.hpp"
 #include "entity/component.hpp"
 #include "render/material.hpp"
+#include "../../core_c/include/tc_kind.hpp"
 
 namespace py = pybind11;
 
@@ -26,7 +27,30 @@ static void* get_raw_pointer(py::object obj) {
     return static_cast<void*>(obj.ptr());
 }
 
+void register_builtin_kind_handlers() {
+    // enum kind handler - serializes enum.value (int), deserializes as-is
+    tc::KindRegistry::instance().register_python(
+        "enum",
+        // serialize
+        py::cpp_function([](py::object obj) -> py::object {
+            if (py::hasattr(obj, "value")) {
+                return obj.attr("value");
+            }
+            return obj;
+        }),
+        // deserialize - return as-is, setter handles conversion
+        py::cpp_function([](py::object data) -> py::object {
+            return data;
+        }),
+        // convert
+        py::none()
+    );
+}
+
 void bind_inspect(py::module_& m) {
+    // Register builtin kind handlers
+    register_builtin_kind_handlers();
+
     // TypeBackend enum
     py::enum_<TypeBackend>(m, "TypeBackend")
         .value("Cpp", TypeBackend::Cpp)
@@ -78,6 +102,12 @@ void bind_inspect(py::module_& m) {
         .def("has_type", &InspectRegistry::has_type,
              py::arg("type_name"),
              "Check if type is registered")
+        .def("set_type_parent", &InspectRegistry::set_type_parent,
+             py::arg("type_name"), py::arg("parent_name"),
+             "Set parent type for field inheritance")
+        .def("get_type_parent", &InspectRegistry::get_type_parent,
+             py::arg("type_name"),
+             "Get parent type name")
         .def("get", [](InspectRegistry& self, py::object obj, const std::string& field_path) {
             std::string type_name = py::str(py::type::of(obj).attr("__name__")).cast<std::string>();
             void* ptr = get_raw_pointer(obj);
@@ -89,7 +119,21 @@ void bind_inspect(py::module_& m) {
             void* ptr = get_raw_pointer(obj);
             self.set(ptr, type_name, field_path, value);
         }, py::arg("obj"), py::arg("field"), py::arg("value"),
-           "Set field value on object");
+           "Set field value on object")
+        .def("serialize_all", [](InspectRegistry& self, py::object obj) {
+            std::string type_name = py::str(py::type::of(obj).attr("__name__")).cast<std::string>();
+            void* ptr = get_raw_pointer(obj);
+            nos::trent t = self.serialize_all(ptr, type_name);
+            return InspectRegistry::trent_to_py(t);
+        }, py::arg("obj"),
+           "Serialize all fields of object to dict")
+        .def("deserialize_all", [](InspectRegistry& self, py::object obj, py::object data) {
+            std::string type_name = py::str(py::type::of(obj).attr("__name__")).cast<std::string>();
+            void* ptr = get_raw_pointer(obj);
+            py::dict py_data = data.cast<py::dict>();
+            self.deserialize_component_fields_over_python(ptr, obj, type_name, py_data);
+        }, py::arg("obj"), py::arg("data"),
+           "Deserialize all fields from dict to object");
 }
 
 } // namespace termin

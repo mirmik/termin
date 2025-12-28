@@ -151,5 +151,5 @@ private:
     void recreate_overridden_material();
 };
 
-REGISTER_COMPONENT(MeshRenderer);
+REGISTER_COMPONENT(MeshRenderer, Component);
 } // namespace termin

@@ -9,14 +9,10 @@
 #include <unordered_map>
 #include <functional>
 #include <iostream>
+#include <any>
 
-// Optional trent support for serialization compatibility
-#ifdef TC_HAS_TRENT
 #include "trent/trent.h"
-#endif
-
-// Forward declare CxxComponent for Python object casting
-namespace termin { class CxxComponent; }
+#include "tc_kind.hpp"
 
 namespace py = pybind11;
 
@@ -198,40 +194,32 @@ struct InspectFieldInfo {
     std::vector<EnumChoice> choices;
     py::object action;
 
-    // Getter/setter using tc_inspect
-    std::function<py::object(void*)> getter;
-    std::function<void(void*, py::object)> setter;
+    // Which language backend owns this field
+    TypeBackend backend = TypeBackend::Python;
+
+    // Python getter/setter - for Python fields only
+    std::function<py::object(void*)> py_getter;
+    std::function<void(void*, py::object)> py_setter;
+
+    // C++ getter/setter - for C++ fields only
+    std::function<std::any(void*)> cpp_getter;
+    std::function<void(void*, const std::any&)> cpp_setter;
 };
 
 // ============================================================================
-// Forward declarations for trent compatibility
+// Forward declarations for trent
 // ============================================================================
 
-#ifdef TC_HAS_TRENT
 tc_value trent_to_tc_value(const nos::trent& t);
 nos::trent tc_value_to_trent(const tc_value* v);
 nos::trent py_to_trent_compat(py::object obj);
 py::object trent_to_py_compat(const nos::trent& t);
-#endif
 
 // ============================================================================
-// KindHandler - wrapper for tc_kind_handler with Python callbacks
-// Uses trent for serialize/deserialize to maintain backward compatibility
+// KindHandler - alias to TcKind from tc_kind.hpp
 // ============================================================================
 
-#ifdef TC_HAS_TRENT
-struct KindHandler {
-    std::function<nos::trent(py::object)> serialize;
-    std::function<py::object(const nos::trent&)> deserialize;
-    std::function<py::object(py::object)> convert;
-};
-#else
-struct KindHandler {
-    std::function<py::object(py::object)> serialize;
-    std::function<py::object(py::object)> deserialize;
-    std::function<py::object(py::object)> convert;
-};
-#endif
+using KindHandler = TcKind;
 
 // ============================================================================
 // InspectRegistry - main wrapper class
@@ -252,7 +240,6 @@ struct KindHandler {
 class TC_INSPECT_API InspectRegistry {
     // Python-specific storage (for fields registered from Python)
     std::unordered_map<std::string, std::vector<InspectFieldInfo>> _py_fields;
-    std::unordered_map<std::string, KindHandler> _py_kind_handlers;
 
     // Type vtables for Python types
     std::unordered_map<std::string, tc_type_vtable> _py_vtables;
@@ -261,34 +248,24 @@ class TC_INSPECT_API InspectRegistry {
     // Type backend registry
     std::unordered_map<std::string, TypeBackend> _type_backends;
 
+    // Type inheritance (child -> parent)
+    std::unordered_map<std::string, std::string> _type_parents;
+
 public:
     // Singleton - defined in entity_lib to ensure single instance
     static InspectRegistry& instance();
 
     // ========================================================================
-    // Kind handler registration
+    // Kind handler access (delegates to KindRegistry)
     // ========================================================================
 
-    void register_kind(const std::string& kind, KindHandler handler) {
-        _py_kind_handlers[kind] = std::move(handler);
-
-        // Also register in C layer
-        // Note: C layer handlers are simpler, Python layer does the heavy lifting
-    }
-
     bool has_kind_handler(const std::string& kind) const {
-        return _py_kind_handlers.find(kind) != _py_kind_handlers.end()
+        return KindRegistry::instance().get(kind) != nullptr
             || tc_kind_exists(kind.c_str());
     }
 
-    const KindHandler* get_kind_handler(const std::string& kind) {
-        auto it = _py_kind_handlers.find(kind);
-        if (it != _py_kind_handlers.end()) {
-            return &it->second;
-        }
-
-        // Try to generate for parameterized types like list[T]
-        return try_generate_handler(kind);
+    KindHandler* get_kind_handler(const std::string& kind) {
+        return KindRegistry::instance().get(kind);
     }
 
     // ========================================================================
@@ -312,6 +289,15 @@ public:
         return _type_backends.find(type_name) != _type_backends.end();
     }
 
+    void set_type_parent(const std::string& type_name, const std::string& parent_name) {
+        _type_parents[type_name] = parent_name;
+    }
+
+    std::string get_type_parent(const std::string& type_name) const {
+        auto it = _type_parents.find(type_name);
+        return it != _type_parents.end() ? it->second : "";
+    }
+
     // ========================================================================
     // Field registration (C++ types via template)
     // ========================================================================
@@ -329,19 +315,14 @@ public:
         info.min = min;
         info.max = max;
         info.step = step;
+        info.backend = TypeBackend::Cpp;
 
-        info.getter = [member](void* obj) -> py::object {
-            auto& val = static_cast<C*>(obj)->*member;
-            return py::cast(val);
+        info.cpp_getter = [member](void* obj) -> std::any {
+            return static_cast<C*>(obj)->*member;
         };
 
-        info.setter = [member, path](void* obj, py::object val) {
-            try {
-                static_cast<C*>(obj)->*member = val.cast<T>();
-            } catch (const std::exception& e) {
-                std::cerr << "[INSPECT setter error] path=" << path
-                          << " error=" << e.what() << std::endl;
-            }
+        info.cpp_setter = [member](void* obj, const std::any& val) {
+            static_cast<C*>(obj)->*member = std::any_cast<T>(val);
         };
 
         _py_fields[type_name].push_back(std::move(info));
@@ -354,21 +335,22 @@ public:
         const char* path,
         const char* label,
         const char* kind,
-        std::function<T&(C*)> getter,
-        std::function<void(C*, const T&)> setter
+        std::function<T&(C*)> getter_fn,
+        std::function<void(C*, const T&)> setter_fn
     ) {
         InspectFieldInfo info;
         info.type_name = type_name;
         info.path = path;
         info.label = label;
         info.kind = kind;
+        info.backend = TypeBackend::Cpp;
 
-        info.getter = [getter](void* obj) -> py::object {
-            return py::cast(getter(static_cast<C*>(obj)));
+        info.cpp_getter = [getter_fn](void* obj) -> std::any {
+            return getter_fn(static_cast<C*>(obj));
         };
 
-        info.setter = [setter](void* obj, py::object val) {
-            setter(static_cast<C*>(obj), val.cast<T>());
+        info.cpp_setter = [setter_fn](void* obj, const std::any& val) {
+            setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
         };
 
         _py_fields[type_name].push_back(std::move(info));
@@ -382,21 +364,47 @@ public:
         const char* path,
         const char* label,
         const char* kind,
-        std::function<T(C*)> getter,
-        std::function<void(C*, T)> setter
+        std::function<T(C*)> getter_fn,
+        std::function<void(C*, T)> setter_fn
     ) {
         InspectFieldInfo info;
         info.type_name = type_name;
         info.path = path;
         info.label = label;
         info.kind = kind;
+        info.backend = TypeBackend::Cpp;
 
-        info.getter = [getter](void* obj) -> py::object {
-            return py::cast(getter(static_cast<C*>(obj)));
+        info.cpp_getter = [getter_fn](void* obj) -> std::any {
+            return getter_fn(static_cast<C*>(obj));
         };
 
-        info.setter = [setter](void* obj, py::object val) {
-            setter(static_cast<C*>(obj), val.cast<T>());
+        info.cpp_setter = [setter_fn](void* obj, const std::any& val) {
+            setter_fn(static_cast<C*>(obj), std::any_cast<T>(val));
+        };
+
+        _py_fields[type_name].push_back(std::move(info));
+        _type_backends[type_name] = TypeBackend::Cpp;
+    }
+
+    // Version for handle types with deserialize_from (C++ inplace deserialization)
+    template<typename C, typename H>
+    void add_handle(
+        const char* type_name, H C::*member,
+        const char* path, const char* label, const char* kind
+    ) {
+        InspectFieldInfo info;
+        info.type_name = type_name;
+        info.path = path;
+        info.label = label;
+        info.kind = kind;
+        info.backend = TypeBackend::Cpp;
+
+        info.cpp_getter = [member](void* obj) -> std::any {
+            return static_cast<C*>(obj)->*member;
+        };
+
+        info.cpp_setter = [member](void* obj, const std::any& val) {
+            static_cast<C*>(obj)->*member = std::any_cast<H>(val);
         };
 
         _py_fields[type_name].push_back(std::move(info));
@@ -423,12 +431,11 @@ public:
     std::vector<InspectFieldInfo> all_fields(const std::string& type_name) const {
         std::vector<InspectFieldInfo> result;
 
-        // Add Component base fields first
-        if (type_name != "Component") {
-            auto base_it = _py_fields.find("Component");
-            if (base_it != _py_fields.end()) {
-                result.insert(result.end(), base_it->second.begin(), base_it->second.end());
-            }
+        // Add parent fields first (recursively)
+        std::string parent = get_type_parent(type_name);
+        if (!parent.empty()) {
+            auto parent_fields = all_fields(parent);
+            result.insert(result.end(), parent_fields.begin(), parent_fields.end());
         }
 
         // Add own fields
@@ -436,7 +443,6 @@ public:
         if (it != _py_fields.end()) {
             result.insert(result.end(), it->second.begin(), it->second.end());
         }
-
         return result;
     }
 
@@ -449,13 +455,81 @@ public:
     }
 
     // ========================================================================
-    // Field access
+    // Builtin type conversion helpers
+    // ========================================================================
+
+    // Convert std::any to py::object for builtin types
+    // Returns py::none() if not a builtin type (caller should use KindRegistry)
+    static py::object any_to_py_builtin(const std::any& val) {
+        if (auto* v = std::any_cast<bool>(&val)) return py::cast(*v);
+        if (auto* v = std::any_cast<int>(&val)) return py::cast(*v);
+        if (auto* v = std::any_cast<int64_t>(&val)) return py::cast(*v);
+        if (auto* v = std::any_cast<float>(&val)) return py::cast(*v);
+        if (auto* v = std::any_cast<double>(&val)) return py::cast(*v);
+        if (auto* v = std::any_cast<std::string>(&val)) return py::cast(*v);
+        return py::none();
+    }
+
+    // Convert py::object to std::any for builtin types based on kind
+    // Returns empty std::any if not a builtin kind (caller should use KindRegistry)
+    static std::any py_to_any_builtin(py::object value, const std::string& kind) {
+        if (kind == "bool" || kind == "checkbox") {
+            return value.cast<bool>();
+        }
+        if (kind == "int" || kind == "slider_int") {
+            return value.cast<int>();
+        }
+        if (kind == "float" || kind == "slider" || kind == "drag_float") {
+            return value.cast<float>();
+        }
+        if (kind == "double") {
+            return value.cast<double>();
+        }
+        if (kind == "string" || kind == "text" || kind == "multiline_text") {
+            return value.cast<std::string>();
+        }
+        return std::any{};
+    }
+
+    // Check if kind is a builtin type
+    static bool is_builtin_kind(const std::string& kind) {
+        return kind == "bool" || kind == "checkbox" ||
+               kind == "int" || kind == "slider_int" ||
+               kind == "float" || kind == "slider" || kind == "drag_float" ||
+               kind == "double" ||
+               kind == "string" || kind == "text" || kind == "multiline_text";
+    }
+
+    // ========================================================================
+    // Field access (Python interop - converts C++ fields via py::cast)
     // ========================================================================
 
     py::object get(void* obj, const std::string& type_name, const std::string& field_path) const {
         for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
-                return f.getter(obj);
+                if (f.py_getter) {
+                    return f.py_getter(obj);
+                }
+                // C++ field - get via cpp_getter
+                if (f.cpp_getter) {
+                    std::any val = f.cpp_getter(obj);
+                    // Try builtin types first
+                    py::object result = any_to_py_builtin(val);
+                    if (!result.is_none()) {
+                        return result;
+                    }
+                    // Custom kinds - use to_python handler
+                    result = KindRegistry::instance().to_python_cpp(f.kind, val);
+                    if (!result.is_none()) {
+                        return result;
+                    }
+                    // Fallback: serialize to trent and convert (returns dict, not object!)
+                    std::cerr << "[WARN] get " << type_name << "." << field_path
+                              << " (kind=" << f.kind << "): no to_python handler, returning dict" << std::endl;
+                    nos::trent t = KindRegistry::instance().serialize_cpp(f.kind, val);
+                    return trent_to_py_compat(t);
+                }
+                throw py::type_error("No getter for field: " + field_path);
             }
         }
         throw py::attribute_error("Field not found: " + field_path);
@@ -464,9 +538,28 @@ public:
     void set(void* obj, const std::string& type_name, const std::string& field_path, py::object value) {
         for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
-                py::object converted = convert_value_for_kind(value, f.kind);
-                f.setter(obj, converted);
-                return;
+                if (f.py_setter) {
+                    py::object converted = convert_value_for_kind(value, f.kind);
+                    f.py_setter(obj, converted);
+                    return;
+                }
+                // C++ field - set via cpp_setter
+                if (f.cpp_setter) {
+                    // Try builtin types first
+                    std::any val = py_to_any_builtin(value, f.kind);
+                    if (val.has_value()) {
+                        f.cpp_setter(obj, val);
+                        return;
+                    }
+                    // Custom kinds - use KindRegistry
+                    nos::trent t = py_to_trent_compat(value);
+                    val = KindRegistry::instance().deserialize_cpp(f.kind, t);
+                    if (val.has_value()) {
+                        f.cpp_setter(obj, val);
+                    }
+                    return;
+                }
+                throw py::type_error("No setter for field: " + field_path);
             }
         }
         throw py::attribute_error("Field not found: " + field_path);
@@ -478,16 +571,27 @@ public:
 
     py::object convert_value_for_kind(py::object value, const std::string& kind) {
         auto* handler = get_kind_handler(kind);
-        if (handler && handler->convert) {
-            return handler->convert(value);
+        if (handler && !handler->python.convert.is_none()) {
+            return handler->python.convert(value);
         }
         return value;
     }
 
-#ifdef TC_HAS_TRENT
     // ========================================================================
-    // Serialization (trent-based for backward compatibility)
+    // Serialization
     // ========================================================================
+
+    // Convert std::any to trent for builtin types
+    // Returns nil trent if not a builtin type
+    static nos::trent any_to_trent_builtin(const std::any& val) {
+        if (auto* v = std::any_cast<bool>(&val)) return nos::trent(*v);
+        if (auto* v = std::any_cast<int>(&val)) return nos::trent(static_cast<int64_t>(*v));
+        if (auto* v = std::any_cast<int64_t>(&val)) return nos::trent(*v);
+        if (auto* v = std::any_cast<float>(&val)) return nos::trent(static_cast<double>(*v));
+        if (auto* v = std::any_cast<double>(&val)) return nos::trent(*v);
+        if (auto* v = std::any_cast<std::string>(&val)) return nos::trent(*v);
+        return nos::trent::nil();
+    }
 
     nos::trent serialize_all(void* obj, const std::string& type_name) const {
         nos::trent result;
@@ -495,46 +599,136 @@ public:
 
         for (const auto& f : all_fields(type_name)) {
             if (f.non_serializable) continue;
-            py::object val = f.getter(obj);
 
-            // Apply kind handler if exists (serialize returns trent)
-            auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
-            if (handler && handler->serialize) {
-                result[f.path] = handler->serialize(val);
-            } else {
-                tc_value tv = py_to_tc_value(val);
-                result[f.path] = tc_value_to_trent(&tv);
-                tc_value_free(&tv);
+            if (f.py_getter) {
+                // Python field
+                py::object val = f.py_getter(obj);
+                auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
+                if (handler && !handler->python.serialize.is_none()) {
+                    py::object serialized = handler->python.serialize(val);
+                    result[f.path] = py_to_trent_compat(serialized);
+                } else {
+                    result[f.path] = py_to_trent_compat(val);
+                }
+            } else if (f.cpp_getter) {
+                // C++ field
+                std::any val = f.cpp_getter(obj);
+                // Try builtin types first
+                nos::trent t = any_to_trent_builtin(val);
+                if (!t.is_nil()) {
+                    result[f.path] = t;
+                    continue;
+                }
+                // Custom kinds - use KindRegistry
+                t = KindRegistry::instance().serialize_cpp(f.kind, val);
+                result[f.path] = t;
             }
         }
         return result;
     }
 
-    void deserialize_all(void* obj, const std::string& type_name, const nos::trent& data) {
-        if (!data.is_dict()) return;
+    // Takes both raw C++ pointer (for cpp_setter) and py::object (for py_setter)
+    void deserialize_fields_of_cxx_component_over_python(void* ptr, py::object obj, const std::string& type_name, const py::dict& data) {
 
         for (const auto& f : all_fields(type_name)) {
             if (f.non_serializable) continue;
-            if (!data.contains(f.path)) continue;
 
-            const auto& field_data = data[f.path];
-            if (field_data.is_nil()) continue;
+            py::str key(f.path);
+            if (!data.contains(key)) continue;
+
+            py::object field_data = data[key];
+            if (field_data.is_none()) continue;
+
+            if (f.backend == TypeBackend::Cpp) {
+                // C++ field: py::object → std::any → cpp_setter
+                if (!f.cpp_setter) {
+                    std::cerr << "[WARN] deserialize " << type_name << "." << f.path
+                              << " (kind=" << f.kind << ", backend=Cpp): no cpp_setter" << std::endl;
+                    continue;
+                }
+
+                // Try builtin types first
+                std::any val = py_to_any_builtin(field_data, f.kind);
+                if (val.has_value()) {
+                    f.cpp_setter(ptr, val);
+                    continue;
+                }
+
+                // Custom kinds - use KindRegistry
+                nos::trent t = py_to_trent_compat(field_data);
+                val = KindRegistry::instance().deserialize_cpp(f.kind, t);
+                if (val.has_value()) {
+                    f.cpp_setter(ptr, val);
+                } else {
+                    std::cerr << "[WARN] deserialize " << type_name << "." << f.path
+                              << " (kind=" << f.kind << "): no cpp handler, value not set" << std::endl;
+                }
+            } else {
+                // Python field
+                if (!f.py_setter) {
+                    std::cerr << "[WARN] deserialize " << type_name << "." << f.path
+                              << " (kind=" << f.kind << ", backend=Python): no py_setter" << std::endl;
+                    continue;
+                }
+
+                py::object val;
+                auto* handler = get_kind_handler(f.kind);
+                if (handler && !handler->python.deserialize.is_none()) {
+                    val = handler->python.deserialize(field_data);
+                } else {
+                    val = field_data;
+                }
+                f.py_setter(obj.ptr(), val);
+            }
+        }
+    }
+
+    void deserialize_fields_of_python_component_over_python(py::object obj, const std::string& type_name, const py::dict& data) {
+        for (const auto& f : all_fields(type_name)) {
+            if (f.backend == TypeBackend::Cpp) {
+                std::cerr << "[WARN] deserialize " << type_name << "." << f.path
+                          << " (kind=" << f.kind << "): C++ backend field in Python component" << std::endl;
+                continue;   
+            }
+
+            if (f.non_serializable) continue;
+
+            py::str key(f.path);
+            if (!data.contains(key)) continue;
+
+            py::object field_data = data[key];
+            if (field_data.is_none()) continue;
+
+            if (!f.py_setter) {
+                std::cerr << "[WARN] deserialize " << type_name << "." << f.path
+                          << " (kind=" << f.kind << "): no py_setter" << std::endl;
+                continue;
+            }
 
             py::object val;
 
-            // Apply kind handler if exists (deserialize takes trent)
             auto* handler = get_kind_handler(f.kind);
-            if (handler && handler->deserialize) {
-                val = handler->deserialize(field_data);
+            if (handler && !handler->python.deserialize.is_none()) {
+                val = handler->python.deserialize(field_data);
             } else {
-                tc_value tv = trent_to_tc_value(field_data);
-                val = tc_value_to_py(&tv);
-                tc_value_free(&tv);
+                val = field_data;
             }
 
-            f.setter(obj, val);
+            f.py_setter(obj.ptr(), val);
         }
     }
+
+    // Dispatches based on type backend
+    // For C++ components: ptr is the actual C++ object pointer (e.g. this)
+    // For Python components: ptr is unused, obj.ptr() is used for setters
+    void deserialize_component_fields_over_python(void* ptr, py::object obj, const std::string& type_name, const py::dict& data) {
+        if (get_type_backend(type_name) == TypeBackend::Cpp) {
+            deserialize_fields_of_cxx_component_over_python(ptr, obj, type_name, data);
+        } else {
+            deserialize_fields_of_python_component_over_python(obj, type_name, data);
+        }
+    }
+
 
     // Compatibility static methods
     static py::object trent_to_py(const nos::trent& t) {
@@ -561,10 +755,7 @@ public:
         return py_to_trent_compat(lst);
     }
 
-#endif // TC_HAS_TRENT
-
 private:
-#ifdef TC_HAS_TRENT
     KindHandler* try_generate_handler(const std::string& kind) {
         char container[64], element[64];
         if (!tc_kind_parse(kind.c_str(), container, sizeof(container),
@@ -573,76 +764,69 @@ private:
         }
 
         if (std::string(container) == "list") {
-            auto elem_it = _py_kind_handlers.find(element);
-            if (elem_it == _py_kind_handlers.end()) {
+            auto* elem_handler = KindRegistry::instance().get(element);
+            if (!elem_handler) {
                 return nullptr;
             }
 
-            KindHandler list_handler;
             std::string elem_kind = element;
+            auto& list_handler = KindRegistry::instance().get_or_create(kind);
 
-            // serialize: py::object (list) -> nos::trent (list)
-            list_handler.serialize = [this, elem_kind](py::object obj) -> nos::trent {
-                nos::trent result;
-                result.init(nos::trent_type::list);
+            // serialize: py::object (list) -> py::object (list of serialized elements)
+            list_handler.python.serialize = py::cpp_function([this, elem_kind](py::object obj) -> py::object {
+                py::list result;
                 if (obj.is_none()) return result;
 
                 auto* elem_handler = get_kind_handler(elem_kind);
                 for (auto item : obj) {
                     py::object py_item = py::reinterpret_borrow<py::object>(item);
-                    if (elem_handler && elem_handler->serialize) {
-                        result.push_back(elem_handler->serialize(py_item));
+                    if (elem_handler && !elem_handler->python.serialize.is_none()) {
+                        result.append(elem_handler->python.serialize(py_item));
                     } else {
-                        result.push_back(py_to_trent_compat(py_item));
+                        result.append(py_item);
                     }
                 }
                 return result;
-            };
+            });
 
-            // deserialize: nos::trent (list) -> py::object (list)
-            list_handler.deserialize = [this, elem_kind](const nos::trent& t) -> py::object {
+            // deserialize: py::object (list) -> py::object (list of deserialized elements)
+            list_handler.python.deserialize = py::cpp_function([this, elem_kind](py::object data) -> py::object {
                 py::list result;
-                if (!t.is_list()) return result;
+                if (!py::isinstance<py::list>(data)) return result;
 
                 auto* elem_handler = get_kind_handler(elem_kind);
-                for (const auto& item : t.as_list()) {
-                    if (elem_handler && elem_handler->deserialize) {
-                        result.append(elem_handler->deserialize(item));
+                for (auto item : data) {
+                    py::object py_item = py::reinterpret_borrow<py::object>(item);
+                    if (elem_handler && !elem_handler->python.deserialize.is_none()) {
+                        result.append(elem_handler->python.deserialize(py_item));
                     } else {
-                        result.append(trent_to_py_compat(item));
+                        result.append(py_item);
                     }
                 }
                 return result;
-            };
+            });
 
-            list_handler.convert = [this, elem_kind](py::object value) -> py::object {
+            list_handler.python.convert = py::cpp_function([this, elem_kind](py::object value) -> py::object {
                 if (value.is_none()) return py::list();
 
                 auto* elem_handler = get_kind_handler(elem_kind);
-                if (!elem_handler || !elem_handler->convert) {
+                if (!elem_handler || elem_handler->python.convert.is_none()) {
                     return value;
                 }
 
                 py::list result;
                 for (auto item : value) {
                     py::object py_item = py::reinterpret_borrow<py::object>(item);
-                    result.append(elem_handler->convert(py_item));
+                    result.append(elem_handler->python.convert(py_item));
                 }
                 return result;
-            };
+            });
 
-            _py_kind_handlers[kind] = std::move(list_handler);
-            return &_py_kind_handlers[kind];
+            return &list_handler;
         }
 
         return nullptr;
     }
-#else
-    KindHandler* try_generate_handler(const std::string& kind) {
-        (void)kind;
-        return nullptr;
-    }
-#endif
 };
 
 // ============================================================================
@@ -675,10 +859,8 @@ struct InspectFieldCallbackRegistrar {
 };
 
 // ============================================================================
-// Trent compatibility (when TC_HAS_TRENT is defined)
+// Trent compatibility functions
 // ============================================================================
-
-#ifdef TC_HAS_TRENT
 
 inline tc_value trent_to_tc_value(const nos::trent& t) {
     switch (t.get_type()) {
@@ -778,8 +960,6 @@ inline py::object trent_to_py_compat(const nos::trent& t) {
     tc_value_free(&v);
     return result;
 }
-
-#endif // TC_HAS_TRENT
 
 } // namespace tc
 

@@ -172,6 +172,56 @@ nos::trent Entity::serialize() const {
     return data;
 }
 
+bool Entity::validate_components() const {
+    if (!valid()) {
+        fprintf(stderr, "[validate_components] Entity not valid\n");
+        return false;
+    }
+
+    size_t count = component_count();
+    if (count > 1000) {
+        fprintf(stderr, "[validate_components] Suspicious component count: %zu\n", count);
+        return false;
+    }
+
+    for (size_t i = 0; i < count; i++) {
+        tc_component* tc = component_at(i);
+
+        if (!tc) {
+            fprintf(stderr, "[validate_components] Entity '%s' component %zu is NULL\n", name(), i);
+            return false;
+        }
+
+        // Check kind is valid
+        if (tc->kind != TC_CXX_COMPONENT && tc->kind != TC_PYTHON_COMPONENT) {
+            fprintf(stderr, "[validate_components] Entity '%s' component %zu has invalid kind: %d\n", name(), i, (int)tc->kind);
+            return false;
+        }
+
+        // Check vtable
+        if (!tc->vtable) {
+            fprintf(stderr, "[validate_components] Entity '%s' component %zu has NULL vtable\n", name(), i);
+            return false;
+        }
+
+        // Try to get type name
+        const char* tname = tc_component_type_name(tc);
+        if (!tname) {
+            fprintf(stderr, "[validate_components] Entity '%s' component %zu has NULL type_name\n", name(), i);
+            return false;
+        }
+
+        // Check type_name looks valid (first char is printable)
+        if (tname[0] < 32 || tname[0] > 126) {
+            fprintf(stderr, "[validate_components] Entity '%s' component %zu type_name starts with non-printable: 0x%02x\n",
+                    name(), i, (unsigned char)tname[0]);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 Entity Entity::deserialize(tc_entity_pool* pool, const nos::trent& data) {
     if (!pool || data.is_nil() || !data.is_dict()) {
         return Entity();

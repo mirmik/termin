@@ -25,7 +25,7 @@ class LightComponent(PythonComponent):
                 (LightType.POINT, "Point"),
                 (LightType.SPOT, "Spot"),
             ],
-            setter=lambda self, v: setattr(self, 'light_type', v if isinstance(v, LightType) else LightType(v)),
+            setter=lambda self, v: setattr(self, 'light_type', v if isinstance(v, LightType) else LightType(int(v))),
         ),
         "color": InspectField(
             path="color",

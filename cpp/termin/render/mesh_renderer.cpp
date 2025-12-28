@@ -153,35 +153,4 @@ std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string
     return result;
 }
 
-// py::dict MeshRenderer::serialize_data_py() const {
-//     py::dict data;
-
-//     data["mesh_handle"] = _mesh_handle.serialize();
-//     data["material_handle"] = _material_handle.serialize();
-//     data["cast_shadow"] = cast_shadow;
-//     data["override_material"] = _override_material;
-
-//     return data;
-// }
-
-// void MeshRenderer::deserialize_data_py(const py::dict& data) {
-//     if (data.contains("mesh_handle")) {
-//         py::dict mesh_data = data["mesh_handle"].cast<py::dict>();
-//         _mesh_handle = MeshHandle::deserialize(mesh_data);
-//     }
-
-//     if (data.contains("material_handle")) {
-//         py::dict mat_data = data["material_handle"].cast<py::dict>();
-//         _material_handle = MaterialHandle::deserialize(mat_data);
-//     }
-
-//     if (data.contains("cast_shadow")) {
-//         cast_shadow = data["cast_shadow"].cast<bool>();
-//     }
-
-//     if (data.contains("override_material")) {
-//         set_override_material(data["override_material"].cast<bool>());
-//     }
-// }
-
 } // namespace termin

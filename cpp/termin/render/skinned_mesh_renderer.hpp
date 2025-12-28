@@ -91,6 +91,6 @@ public:
     void start() override;
 };
 
-REGISTER_COMPONENT(SkinnedMeshRenderer);
+REGISTER_COMPONENT(SkinnedMeshRenderer, MeshRenderer);
 
 } // namespace termin

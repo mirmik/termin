@@ -23,8 +23,6 @@ class VoxelGridComponent(PythonComponent):
     - Сериализации/десериализации воксельных данных
     """
 
-    serializable_fields = {"grid": None}  # Кастомная сериализация
-
     def __init__(
         self,
         origin: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -68,26 +66,3 @@ class VoxelGridComponent(PythonComponent):
         if self._visualization_dirty and self._visualizer is not None:
             self._visualizer.rebuild()
             self._visualization_dirty = False
-
-    # ----------------------------------------------------------------
-    # Сериализация
-    # ----------------------------------------------------------------
-
-    def serialize_data(self) -> dict:
-        """Сериализовать данные компонента."""
-        return {
-            "grid": self._grid.serialize(),
-        }
-
-    @classmethod
-    def deserialize(cls, data: dict, context) -> "VoxelGridComponent":
-        """Десериализовать компонент."""
-        grid_data = data.get("grid", {})
-        grid = VoxelGrid.deserialize(grid_data)
-
-        component = cls(
-            origin=tuple(grid.origin),
-            cell_size=grid.cell_size,
-        )
-        component._grid = grid
-        return component

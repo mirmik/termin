@@ -107,10 +107,14 @@ public:
         );
     }
     virtual void deserialize_data(const nos::trent& data) {
-        InspectRegistry::instance().deserialize_all(
+        // Convert trent to py::dict and call over-python method
+        py::dict py_data = InspectRegistry::trent_to_py_dict(data);
+        py::object py_self = py::cast(this);
+        InspectRegistry::instance().deserialize_component_fields_over_python(
             static_cast<void*>(this),
+            py_self,
             _type_name,
-            data
+            py_data
         );
     }
 

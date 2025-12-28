@@ -111,6 +111,45 @@ inline MeshHandle MeshHandle::deserialize(const py::dict& data) {
     return MeshHandle();
 }
 
+inline void MeshHandle::deserialize_from(const nos::trent& data) {
+    if (!data.is_dict()) {
+        asset = py::none();
+        return;
+    }
+
+    // Try UUID first
+    if (data.contains("uuid")) {
+        try {
+            std::string uuid = data["uuid"].as_string();
+            py::object rm_module = py::module_::import("termin.assets.resources");
+            py::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            py::object handle = rm.attr("get_mesh_by_uuid")(uuid);
+            if (!handle.is_none()) {
+                asset = handle.cast<MeshHandle>().asset;
+                return;
+            }
+        } catch (...) {}
+    }
+
+    std::string type = data.contains("type") ? data["type"].as_string() : "none";
+
+    if (type == "named") {
+        std::string name = data["name"].as_string();
+        asset = from_name(name).asset;
+    } else if (type == "path") {
+        std::string path = data["path"].as_string();
+        size_t last_slash = path.find_last_of("/\\");
+        std::string filename = (last_slash != std::string::npos)
+            ? path.substr(last_slash + 1) : path;
+        size_t last_dot = filename.find_last_of('.');
+        std::string name = (last_dot != std::string::npos)
+            ? filename.substr(0, last_dot) : filename;
+        asset = from_name(name).asset;
+    } else {
+        asset = py::none();
+    }
+}
+
 // ========== TextureHandle inline implementations ==========
 
 inline TextureHandle TextureHandle::from_name(const std::string& name) {
@@ -201,6 +240,44 @@ inline TextureHandle TextureHandle::deserialize(const py::dict& data) {
     return TextureHandle();
 }
 
+inline void TextureHandle::deserialize_from(const nos::trent& data) {
+    if (!data.is_dict()) {
+        asset = py::none();
+        return;
+    }
+
+    if (data.contains("uuid")) {
+        try {
+            std::string uuid = data["uuid"].as_string();
+            py::object rm_module = py::module_::import("termin.assets.resources");
+            py::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            py::object found = rm.attr("get_texture_asset_by_uuid")(uuid);
+            if (!found.is_none()) {
+                asset = found;
+                return;
+            }
+        } catch (...) {}
+    }
+
+    std::string type = data.contains("type") ? data["type"].as_string() : "none";
+
+    if (type == "named") {
+        std::string name = data["name"].as_string();
+        asset = from_name(name).asset;
+    } else if (type == "path") {
+        std::string path = data["path"].as_string();
+        size_t last_slash = path.find_last_of("/\\");
+        std::string filename = (last_slash != std::string::npos)
+            ? path.substr(last_slash + 1) : path;
+        size_t last_dot = filename.find_last_of('.');
+        std::string name = (last_dot != std::string::npos)
+            ? filename.substr(0, last_dot) : filename;
+        asset = from_name(name).asset;
+    } else {
+        asset = py::none();
+    }
+}
+
 inline void TextureHandle::bind(GraphicsBackend* graphics, int unit, int64_t context_key) const {
     TextureGPU* gpu_ptr = gpu();
     TextureData* data = get();
@@ -264,6 +341,46 @@ inline MaterialHandle MaterialHandle::deserialize(const py::dict& data) {
     return MaterialHandle();
 }
 
+inline void MaterialHandle::deserialize_from(const nos::trent& data) {
+    _direct = nullptr;
+
+    if (!data.is_dict()) {
+        asset = py::none();
+        return;
+    }
+
+    if (data.contains("uuid")) {
+        try {
+            std::string uuid = data["uuid"].as_string();
+            py::object rm_module = py::module_::import("termin.assets.resources");
+            py::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            py::object found = rm.attr("get_material_asset_by_uuid")(uuid);
+            if (!found.is_none()) {
+                asset = found;
+                return;
+            }
+        } catch (...) {}
+    }
+
+    std::string type = data.contains("type") ? data["type"].as_string() : "none";
+
+    if (type == "named") {
+        std::string name = data["name"].as_string();
+        asset = from_name(name).asset;
+    } else if (type == "path") {
+        std::string path = data["path"].as_string();
+        size_t last_slash = path.find_last_of("/\\");
+        std::string filename = (last_slash != std::string::npos)
+            ? path.substr(last_slash + 1) : path;
+        size_t last_dot = filename.find_last_of('.');
+        std::string name = (last_dot != std::string::npos)
+            ? filename.substr(0, last_dot) : filename;
+        asset = from_name(name).asset;
+    } else {
+        asset = py::none();
+    }
+}
+
 // ========== SkeletonHandle inline implementations ==========
 
 inline SkeletonHandle SkeletonHandle::from_name(const std::string& name) {
@@ -321,6 +438,44 @@ inline SkeletonHandle SkeletonHandle::deserialize(const py::dict& data) {
     }
 
     return SkeletonHandle();
+}
+
+inline void SkeletonHandle::deserialize_from(const nos::trent& data) {
+    if (!data.is_dict()) {
+        asset = py::none();
+        return;
+    }
+
+    if (data.contains("uuid")) {
+        try {
+            std::string uuid = data["uuid"].as_string();
+            py::object rm_module = py::module_::import("termin.assets.resources");
+            py::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            py::object found = rm.attr("get_skeleton_asset_by_uuid")(uuid);
+            if (!found.is_none()) {
+                asset = found;
+                return;
+            }
+        } catch (...) {}
+    }
+
+    std::string type = data.contains("type") ? data["type"].as_string() : "none";
+
+    if (type == "named") {
+        std::string name = data["name"].as_string();
+        asset = from_name(name).asset;
+    } else if (type == "path") {
+        std::string path = data["path"].as_string();
+        size_t last_slash = path.find_last_of("/\\");
+        std::string filename = (last_slash != std::string::npos)
+            ? path.substr(last_slash + 1) : path;
+        size_t last_dot = filename.find_last_of('.');
+        std::string name = (last_dot != std::string::npos)
+            ? filename.substr(0, last_dot) : filename;
+        asset = from_name(name).asset;
+    } else {
+        asset = py::none();
+    }
 }
 
 // ========== get_white_texture_handle ==========
@@ -407,6 +562,44 @@ inline AnimationClipHandle AnimationClipHandle::deserialize(const py::dict& data
     }
 
     return AnimationClipHandle();
+}
+
+inline void AnimationClipHandle::deserialize_from(const nos::trent& data) {
+    if (!data.is_dict()) {
+        asset = py::none();
+        return;
+    }
+
+    if (data.contains("uuid")) {
+        try {
+            std::string uuid = data["uuid"].as_string();
+            py::object rm_module = py::module_::import("termin.assets.resources");
+            py::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            py::object found = rm.attr("get_animation_clip_asset_by_uuid")(uuid);
+            if (!found.is_none()) {
+                asset = found;
+                return;
+            }
+        } catch (...) {}
+    }
+
+    std::string type = data.contains("type") ? data["type"].as_string() : "none";
+
+    if (type == "named") {
+        std::string name = data["name"].as_string();
+        asset = from_name(name).asset;
+    } else if (type == "path") {
+        std::string path = data["path"].as_string();
+        size_t last_slash = path.find_last_of("/\\");
+        std::string filename = (last_slash != std::string::npos)
+            ? path.substr(last_slash + 1) : path;
+        size_t last_dot = filename.find_last_of('.');
+        std::string name = (last_dot != std::string::npos)
+            ? filename.substr(0, last_dot) : filename;
+        asset = from_name(name).asset;
+    } else {
+        asset = py::none();
+    }
 }
 
 } // namespace termin

@@ -2,6 +2,7 @@
 
 #include <string>
 #include "entity.hpp"
+#include "../../trent/trent.h"
 
 // DLL export/import macros for Windows
 #ifdef _WIN32
@@ -40,6 +41,15 @@ public:
 
     // Create handle from existing Entity.
     static EntityHandle from_entity(const Entity& entity);
+
+    // Deserialize inplace from scene data.
+    void deserialize_from(const nos::trent& data) {
+        if (data.is_string()) {
+            uuid = data.as_string();
+        } else {
+            uuid.clear();
+        }
+    }
 
     bool operator==(const EntityHandle& other) const { return uuid == other.uuid; }
     bool operator!=(const EntityHandle& other) const { return uuid != other.uuid; }

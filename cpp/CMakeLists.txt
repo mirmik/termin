@@ -197,6 +197,7 @@ add_library(entity_lib SHARED
     ../core_c/src/tc_scene.c
     ../core_c/src/tc_inspect.c
     ../core_c/src/tc_inspect_instance.cpp
+    ../core_c/src/tc_kind_instance.cpp
     ../core_c/src/tc_profiler.c
 )
 target_include_directories(entity_lib PRIVATE ../core_c/include)
@@ -297,6 +298,7 @@ pybind11_add_module(_native
     termin/profiler_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
+    termin/kind_bindings.cpp
     termin/assets/assets_bindings.cpp
     termin/assets/handles.cpp
     termin/render/shader_parser.cpp

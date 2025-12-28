@@ -122,6 +122,9 @@ public:
     size_t component_count() const { return tc_entity_pool_component_count(_pool, _id); }
     tc_component* component_at(size_t index) const { return tc_entity_pool_component_at(_pool, _id, index); }
 
+    // Validate all components - returns true if all ok, prints errors if not
+    bool validate_components() const;
+
     CxxComponent* get_component_by_type(const std::string& type_name);
 
     // Note: get_component<T>() is defined in component.hpp after CxxComponent is fully defined

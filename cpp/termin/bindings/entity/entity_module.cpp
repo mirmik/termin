@@ -568,6 +568,9 @@ PYBIND11_MODULE(_entity_native, m) {
             e.on_removed_from_scene();
         })
 
+        // Validation - for debugging memory corruption
+        .def("validate_components", &Entity::validate_components)
+
         // Serialization
         .def_property("serializable",
             [](const Entity& e) { return e.serializable(); },
@@ -720,6 +723,11 @@ PYBIND11_MODULE(_entity_native, m) {
                         // Add to entity via Python add_component
                         py::object py_ent = py::cast(ent);
                         py_ent.attr("add_component")(comp);
+
+                        // Validate after each component add
+                        if (!ent.validate_components()) {
+                            fprintf(stderr, "[ERROR] Component validation failed after adding %s\n", type_name.c_str());
+                        }
                     } catch (const std::exception& e) {
                         fprintf(stderr, "[Warning] Failed to deserialize component %s: %s\n", type_name.c_str(), e.what());
                     }
@@ -805,7 +813,7 @@ PYBIND11_MODULE(_entity_native, m) {
     BIND_NATIVE_COMPONENT(m, CXXRotatorComponent)
         .def_readwrite("speed", &CXXRotatorComponent::speed);
 
-    // Register CxxComponent::enabled in InspectRegistry for all components to inherit
+    // Register CxxComponent::enabled in InspectRegistry
     InspectRegistry::instance().add_with_accessors<CxxComponent, bool>(
         "Component", "enabled", "Enabled", "bool",
         [](CxxComponent* c) { return c->enabled(); },

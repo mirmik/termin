@@ -6,6 +6,7 @@
 #include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
+#include "kind_bindings.hpp"
 #include "tc_component_python_bindings.hpp"
 #include "assets/assets_bindings.hpp"
 
@@ -37,6 +38,7 @@ PYBIND11_MODULE(_native, m) {
     auto profiler_module = m.def_submodule("profiler", "Profiler module");
     auto skeleton_module = m.def_submodule("skeleton", "Skeleton module");
     auto inspect_module = m.def_submodule("inspect", "Inspect module");
+    auto kind_module = m.def_submodule("kind", "Kind serialization module");
     auto component_module = m.def_submodule("component", "Component module");
     auto assets_module = m.def_submodule("assets", "Assets module");
 
@@ -46,6 +48,7 @@ PYBIND11_MODULE(_native, m) {
     termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);
     termin::bind_inspect(inspect_module);
+    termin::bind_kind(kind_module);
     termin::bind_tc_component_python(component_module);
     termin::bind_assets(assets_module);
 }

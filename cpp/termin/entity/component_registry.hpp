@@ -8,6 +8,7 @@
 
 #include "component.hpp"
 #include "vtable_utils.hpp"
+#include "../../../core_c/include/tc_inspect.hpp"
 
 // DLL export/import macros for Windows
 #ifdef _WIN32
@@ -86,7 +87,7 @@ private:
  */
 template<typename T>
 struct ComponentRegistrar {
-    explicit ComponentRegistrar(const char* name) {
+    ComponentRegistrar(const char* name, const char* parent = nullptr) {
         bool has_update = component_overrides_update<T>();
         bool has_fixed_update = component_overrides_fixed_update<T>();
 
@@ -98,18 +99,24 @@ struct ComponentRegistrar {
                 comp->set_has_fixed_update(has_fixed_update);
                 return comp;
             });
+
+        // Register type parent for field inheritance
+        if (parent) {
+            tc::InspectRegistry::instance().set_type_parent(name, parent);
+        }
     }
 };
 
 /**
  * Macro for registering C++ components.
- * Place in .cpp file after class definition.
+ * Place in header file after class definition.
  *
  * Usage:
- *   REGISTER_COMPONENT(MyComponent);
+ *   REGISTER_COMPONENT(MyComponent, Component);
+ *   REGISTER_COMPONENT(ChildComponent, ParentComponent);
  */
-#define REGISTER_COMPONENT(ClassName) \
+#define REGISTER_COMPONENT(ClassName, Parent) \
     static ::termin::ComponentRegistrar<ClassName> \
-        _component_registrar_##ClassName(#ClassName)
+        _component_registrar_##ClassName(#ClassName, #Parent)
 
 } // namespace termin

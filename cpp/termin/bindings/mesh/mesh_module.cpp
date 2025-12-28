@@ -5,6 +5,7 @@
 #include "termin/mesh_bindings.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
+#include "../../../../core_c/include/tc_kind.hpp"
 
 namespace py = pybind11;
 
@@ -37,27 +38,27 @@ void bind_mesh_handle(py::module_& m) {
 }
 
 void register_mesh_kind() {
-    auto& registry = termin::InspectRegistry::instance();
+    // C++ handler for C++ fields
+    tc::register_cpp_handle_kind<termin::MeshHandle>("mesh_handle");
 
-    registry.register_kind("mesh_handle", termin::KindHandler{
+    // Python handler for Python fields
+    tc::KindRegistry::instance().register_python(
+        "mesh_handle",
         // serialize
-        [](py::object obj) -> nos::trent {
-            if (py::hasattr(obj, "serialize")) {
-                py::dict d = obj.attr("serialize")();
-                return termin::InspectRegistry::py_dict_to_trent(d);
-            }
-            return nos::trent::nil();
-        },
+        py::cpp_function([](py::object obj) -> py::object {
+            termin::MeshHandle handle = obj.cast<termin::MeshHandle>();
+            return handle.serialize();
+        }),
         // deserialize
-        [](const nos::trent& t) -> py::object {
-            if (!t.is_dict()) {
+        py::cpp_function([](py::object data) -> py::object {
+            if (!py::isinstance<py::dict>(data)) {
                 return py::cast(termin::MeshHandle());
             }
-            py::dict d = termin::InspectRegistry::trent_to_py_dict(t);
+            py::dict d = data.cast<py::dict>();
             return py::cast(termin::MeshHandle::deserialize(d));
-        },
+        }),
         // convert
-        [](py::object value) -> py::object {
+        py::cpp_function([](py::object value) -> py::object {
             if (value.is_none()) {
                 return py::cast(termin::MeshHandle());
             }
@@ -65,8 +66,8 @@ void register_mesh_kind() {
                 return value;
             }
             return value;
-        }
-    });
+        })
+    );
 }
 
 } // anonymous namespace

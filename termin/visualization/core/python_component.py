@@ -50,16 +50,22 @@ class PythonComponent:
         if cls.__name__ == "PythonComponent":
             return
 
-        # Collect all inspect_fields from class hierarchy
-        all_fields = {}
-        for klass in reversed(cls.__mro__):
-            if hasattr(klass, 'inspect_fields') and klass.inspect_fields:
-                all_fields.update(klass.inspect_fields)
+        from termin._native.inspect import InspectRegistry
+        registry = InspectRegistry.instance()
 
-        # Register fields in C++ InspectRegistry
-        if all_fields:
-            from termin._native.inspect import InspectRegistry
-            InspectRegistry.instance().register_python_fields(cls.__name__, all_fields)
+        # Register only own fields (not inherited)
+        own_fields = cls.__dict__.get('inspect_fields', {})
+        if own_fields:
+            registry.register_python_fields(cls.__name__, own_fields)
+
+        # Find parent component type and register inheritance
+        for klass in cls.__mro__[1:]:
+            if klass is PythonComponent:
+                registry.set_type_parent(cls.__name__, "PythonComponent")
+                break
+            if hasattr(klass, 'inspect_fields'):
+                registry.set_type_parent(cls.__name__, klass.__name__)
+                break
 
         # Register in Python ResourceManager
         try:
@@ -217,42 +223,24 @@ class PythonComponent:
     # =========================================================================
 
     def serialize_data(self) -> Dict[str, Any]:
-        """Serialize component data using inspect_fields."""
-        result: Dict[str, Any] = {}
-        inspect_fields = getattr(self.__class__, 'inspect_fields', {})
-        for field_name, field in inspect_fields.items():
-            try:
-                if hasattr(field, 'getter') and field.getter:
-                    value = field.getter(self)
-                elif hasattr(field, 'path') and field.path:
-                    value = getattr(self, field.path, None)
-                else:
-                    value = getattr(self, field_name, None)
-                if value is not None:
-                    # Convert numpy arrays to lists for JSON
-                    if hasattr(value, 'tolist'):
-                        value = value.tolist()
-                    result[field_name] = value
-            except Exception:
-                pass
-        return result
+        """Serialize component data using InspectRegistry.
+
+        Uses the same mechanism as CxxComponent - kind handlers are applied
+        for enum, handles, etc.
+        """
+        from termin._native.inspect import InspectRegistry
+        return InspectRegistry.instance().serialize_all(self)
 
     def deserialize_data(self, data: Dict[str, Any], context: Any = None) -> None:
-        """Deserialize component data using inspect_fields."""
+        """Deserialize component data using InspectRegistry.
+
+        Uses the same mechanism as CxxComponent - kind handlers are applied
+        for enum, handles, etc.
+        """
         if not data:
             return
-        inspect_fields = getattr(self.__class__, 'inspect_fields', {})
-        for field_name, value in data.items():
-            try:
-                field = inspect_fields.get(field_name)
-                if field and hasattr(field, 'setter') and field.setter:
-                    field.setter(self, value)
-                elif field and hasattr(field, 'path') and field.path:
-                    setattr(self, field.path, value)
-                elif hasattr(self, field_name):
-                    setattr(self, field_name, value)
-            except Exception as e:
-                print(f"[PythonComponent.deserialize_data] Failed to set {field_name}: {e}")
+        from termin._native.inspect import InspectRegistry
+        InspectRegistry.instance().deserialize_all(self, data)
 
     def serialize(self) -> Dict[str, Any]:
         """Serialize component with type info."""
@@ -283,3 +271,13 @@ class InputComponent(PythonComponent):
 
 
 __all__ = ["PythonComponent", "InputComponent"]
+
+
+def _register_base_type():
+    """Register PythonComponent as base type with enabled field."""
+    from termin._native.inspect import InspectRegistry
+    registry = InspectRegistry.instance()
+    registry.register_python_fields("PythonComponent", PythonComponent.inspect_fields)
+
+
+_register_base_type()

@@ -75,4 +75,42 @@ inline VoxelGridHandle VoxelGridHandle::deserialize(const py::dict& data) {
     return VoxelGridHandle();
 }
 
+inline void VoxelGridHandle::deserialize_from(const nos::trent& data) {
+    if (!data.is_dict()) {
+        asset = py::none();
+        return;
+    }
+
+    if (data.contains("uuid")) {
+        try {
+            std::string uuid = data["uuid"].as_string();
+            py::object rm_module = py::module_::import("termin.assets.resources");
+            py::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            py::object found = rm.attr("get_voxel_grid_asset_by_uuid")(uuid);
+            if (!found.is_none()) {
+                asset = found;
+                return;
+            }
+        } catch (...) {}
+    }
+
+    std::string type = data.contains("type") ? data["type"].as_string() : "none";
+
+    if (type == "named") {
+        std::string name = data["name"].as_string();
+        asset = from_name(name).asset;
+    } else if (type == "path") {
+        std::string path = data["path"].as_string();
+        size_t last_slash = path.find_last_of("/\\");
+        std::string filename = (last_slash != std::string::npos)
+            ? path.substr(last_slash + 1) : path;
+        size_t last_dot = filename.find_last_of('.');
+        std::string name = (last_dot != std::string::npos)
+            ? filename.substr(0, last_dot) : filename;
+        asset = from_name(name).asset;
+    } else {
+        asset = py::none();
+    }
+}
+
 } // namespace termin

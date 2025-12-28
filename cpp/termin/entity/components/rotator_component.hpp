@@ -29,6 +29,6 @@ public:
     }
 };
 
-REGISTER_COMPONENT(CXXRotatorComponent);
+REGISTER_COMPONENT(CXXRotatorComponent, Component);
 
 } // namespace termin

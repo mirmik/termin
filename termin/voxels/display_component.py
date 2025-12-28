@@ -106,7 +106,6 @@ class VoxelDisplayComponent(PythonComponent):
             path="voxel_grid",
             label="Voxel Grid",
             kind="voxel_grid_handle",
-            setter=lambda obj, val: obj.set_voxel_grid(val),
         ),
         "color_below": InspectField(
             path="color_below",
@@ -147,7 +146,7 @@ class VoxelDisplayComponent(PythonComponent):
         super().__init__()
         # grid_name is the canonical name, voxel_grid_name is deprecated alias
         self._voxel_grid_name = grid_name or voxel_grid_name
-        self._grid_handle: VoxelGridHandle = VoxelGridHandle()
+        self.voxel_grid: VoxelGridHandle = VoxelGridHandle()
         self._last_grid: Optional["VoxelGrid"] = None  # Для отслеживания изменений
         self._mesh_handle: Optional[MeshHandle] = None
         self._material: Optional[Material] = None
@@ -219,38 +218,13 @@ class VoxelDisplayComponent(PythonComponent):
             )
         return self._material
 
-    @property
-    def voxel_grid(self) -> Optional["VoxelGrid"]:
-        """Текущая воксельная сетка (через handle)."""
-        return self._grid_handle.get_grid()
-
-    @voxel_grid.setter
-    def voxel_grid(self, value: Optional["VoxelGrid"]) -> None:
-        self.set_voxel_grid(value)
-
-    def set_voxel_grid(self, grid: Optional["VoxelGrid"]) -> None:
-        """Установить воксельную сетку."""
-        if grid is None:
-            self._grid_handle = VoxelGridHandle()
-            self._voxel_grid_name = ""
-        else:
-            # Создаём handle по имени для поддержки hot-reload
-            name = grid.name
-            if name:
-                self._grid_handle = VoxelGridHandle.from_name(name)
-                self._voxel_grid_name = name
-            else:
-                self._grid_handle = VoxelGridHandle.from_grid(grid)
-                self._voxel_grid_name = ""
-        self._needs_rebuild = True
-
     def set_voxel_grid_by_name(self, name: str) -> None:
         """Установить воксельную сетку по имени из ResourceManager."""
         if name:
-            self._grid_handle = VoxelGridHandle.from_name(name)
+            self.voxel_grid = VoxelGridHandle.from_name(name)
             self._voxel_grid_name = name
         else:
-            self._grid_handle = VoxelGridHandle()
+            self.voxel_grid = VoxelGridHandle()
             self._voxel_grid_name = ""
         self._needs_rebuild = True
 
@@ -278,7 +252,7 @@ class VoxelDisplayComponent(PythonComponent):
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
-        current_grid = self._grid_handle.get_grid()
+        current_grid = self.voxel_grid.get_grid()
         if current_grid is not self._last_grid:
             self._rebuild_mesh()
 
@@ -320,7 +294,7 @@ class VoxelDisplayComponent(PythonComponent):
             self._mesh_handle.delete()
             self._mesh_handle = None
 
-        grid = self._grid_handle.get_grid()
+        grid = self.voxel_grid.get_grid()
         self._last_grid = grid
 
         if grid is None:
@@ -409,7 +383,7 @@ class VoxelDisplayComponent(PythonComponent):
     def on_added(self, scene: "Scene") -> None:
         """При добавлении в сцену загрузить сетку и построить меш."""
         # Если есть сохранённое имя сетки, загружаем
-        if self._voxel_grid_name and self._grid_handle.get_grid() is None:
+        if self._voxel_grid_name and self.voxel_grid.get_grid() is None:
             self.set_voxel_grid_by_name(self._voxel_grid_name)
 
         if self._needs_rebuild:

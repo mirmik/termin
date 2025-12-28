@@ -2,6 +2,7 @@
 
 #include <string>
 #include <pybind11/pybind11.h>
+#include "../../trent/trent.h"
 
 namespace py = pybind11;
 
@@ -92,6 +93,11 @@ public:
      * Deserialize from scene data.
      */
     static VoxelGridHandle deserialize(const py::dict& data);
+
+    /**
+     * Deserialize inplace from scene data.
+     */
+    void deserialize_from(const nos::trent& data);
 };
 
 } // namespace termin

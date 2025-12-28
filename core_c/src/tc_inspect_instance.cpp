@@ -1,7 +1,6 @@
 // tc_inspect_instance.cpp - InspectRegistry singleton and methods needing Component
 // This file must be compiled into entity_lib to ensure single instance across all modules
 
-#define TC_HAS_TRENT
 #include "../../cpp/trent/trent.h"
 
 // Include Component BEFORE tc_inspect.hpp so it's fully defined
@@ -86,7 +85,7 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
 
         std::string path_copy = info.path;
 
-        info.getter = [path_copy, py_getter](void* obj) -> py::object {
+        info.py_getter = [path_copy, py_getter](void* obj) -> py::object {
             // obj is PyObject* from get_raw_pointer for Python types
             py::object py_obj = py::reinterpret_borrow<py::object>(
                 py::handle(static_cast<PyObject*>(obj)));
@@ -103,7 +102,7 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
             return py::getattr(result, path_copy.substr(start).c_str());
         };
 
-        info.setter = [path_copy, py_setter](void* obj, py::object value) {
+        info.py_setter = [path_copy, py_setter](void* obj, py::object value) {
             try {
                 // obj is PyObject* from get_raw_pointer for Python types
                 py::object py_obj = py::reinterpret_borrow<py::object>(
