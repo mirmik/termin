@@ -748,6 +748,12 @@ PYBIND11_MODULE(_entity_native, m) {
             }
             return py::none();
         }, py::arg("pick_id"))
+        .def("register_entity", [](EntityRegistry& reg, const Entity& entity) {
+            reg.register_entity(entity);
+        }, py::arg("entity"))
+        .def("unregister_entity", [](EntityRegistry& reg, const Entity& entity) {
+            reg.unregister_entity(entity);
+        }, py::arg("entity"))
         .def("clear", &EntityRegistry::clear)
         .def_property_readonly("entity_count", &EntityRegistry::entity_count)
         .def("swap_registries", [](EntityRegistry& reg, py::object new_by_uuid, py::object new_by_pick_id) {

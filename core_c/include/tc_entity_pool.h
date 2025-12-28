@@ -104,7 +104,8 @@ TC_POOL_API void tc_entity_pool_set_layer(tc_entity_pool* pool, tc_entity_id id,
 TC_POOL_API uint64_t tc_entity_pool_flags(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API void tc_entity_pool_set_flags(tc_entity_pool* pool, tc_entity_id id, uint64_t v);
 
-TC_POOL_API uint32_t tc_entity_pool_pick_id(tc_entity_pool* pool, tc_entity_id id);
+TC_POOL_API uint32_t tc_entity_pool_pick_id(const tc_entity_pool* pool, tc_entity_id id);
+TC_POOL_API tc_entity_id tc_entity_pool_find_by_pick_id(tc_entity_pool* pool, uint32_t pick_id);
 
 // ============================================================================
 // Transform data

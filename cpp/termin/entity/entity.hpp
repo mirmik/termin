@@ -56,7 +56,7 @@ public:
 
     const char* uuid() const { return tc_entity_pool_uuid(_pool, _id); }
     uint64_t runtime_id() const { return tc_entity_pool_runtime_id(_pool, _id); }
-    uint32_t pick_id() { return tc_entity_pool_pick_id(_pool, _id); }
+    uint32_t pick_id() const { return tc_entity_pool_pick_id(_pool, _id); }
 
     // --- Name ---
 

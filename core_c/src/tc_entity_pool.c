@@ -580,9 +580,19 @@ void tc_entity_pool_set_flags(tc_entity_pool* pool, tc_entity_id id, uint64_t v)
     pool->entity_flags[id.index] = v;
 }
 
-uint32_t tc_entity_pool_pick_id(tc_entity_pool* pool, tc_entity_id id) {
+uint32_t tc_entity_pool_pick_id(const tc_entity_pool* pool, tc_entity_id id) {
     if (!tc_entity_pool_alive(pool, id)) return 0;
     return pool->pick_ids[id.index];
+}
+
+tc_entity_id tc_entity_pool_find_by_pick_id(tc_entity_pool* pool, uint32_t pick_id) {
+    if (!pool || pick_id == 0) return TC_ENTITY_ID_INVALID;
+    for (size_t i = 0; i < pool->capacity; i++) {
+        if (pool->alive[i] && pool->pick_ids[i] == pick_id) {
+            return (tc_entity_id){(uint32_t)i, pool->generations[i]};
+        }
+    }
+    return TC_ENTITY_ID_INVALID;
 }
 
 // ============================================================================

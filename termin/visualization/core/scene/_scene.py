@@ -8,6 +8,7 @@ import numpy as np
 
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
+from termin.visualization.core.entity_registry import EntityRegistry
 from termin._native.scene import TcScene
 from termin.lighting import Light
 from termin.visualization.render.components.light_component import LightComponent
@@ -298,6 +299,9 @@ class Scene:
                 break
             idx = i + 1
         self._entities.insert(idx, entity)
+
+        # Register entity in global registry (for lookup by uuid/pick_id)
+        EntityRegistry.instance().register_entity(entity)
 
         # Register all components with C core scene
         # This calls on_added via vtable for each component

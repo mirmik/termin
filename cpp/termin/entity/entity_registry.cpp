@@ -14,6 +14,12 @@ void EntityRegistry::register_entity(const Entity& entity) {
     if (u && u[0]) {
         by_uuid_[u] = entity;
     }
+
+    // Also register by pick_id
+    uint32_t pid = entity.pick_id();
+    if (pid != 0) {
+        by_pick_id_[pid] = entity;
+    }
 }
 
 void EntityRegistry::unregister_entity(const Entity& entity) {
