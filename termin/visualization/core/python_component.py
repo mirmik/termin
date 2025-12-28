@@ -214,14 +214,42 @@ class PythonComponent:
     # =========================================================================
 
     def serialize_data(self) -> Dict[str, Any]:
-        """Serialize component data (override in subclasses)."""
-        from termin._native.inspect import InspectRegistry
-        return InspectRegistry.instance().serialize_python(self, self.type_name())
+        """Serialize component data using inspect_fields."""
+        result: Dict[str, Any] = {}
+        inspect_fields = getattr(self.__class__, 'inspect_fields', {})
+        for field_name, field in inspect_fields.items():
+            try:
+                if hasattr(field, 'getter') and field.getter:
+                    value = field.getter(self)
+                elif hasattr(field, 'path') and field.path:
+                    value = getattr(self, field.path, None)
+                else:
+                    value = getattr(self, field_name, None)
+                if value is not None:
+                    # Convert numpy arrays to lists for JSON
+                    if hasattr(value, 'tolist'):
+                        value = value.tolist()
+                    result[field_name] = value
+            except Exception:
+                pass
+        return result
 
     def deserialize_data(self, data: Dict[str, Any], context: Any = None) -> None:
-        """Deserialize component data (override in subclasses)."""
-        from termin._native.inspect import InspectRegistry
-        InspectRegistry.instance().deserialize_python(self, self.type_name(), data)
+        """Deserialize component data using inspect_fields."""
+        if not data:
+            return
+        inspect_fields = getattr(self.__class__, 'inspect_fields', {})
+        for field_name, value in data.items():
+            try:
+                field = inspect_fields.get(field_name)
+                if field and hasattr(field, 'setter') and field.setter:
+                    field.setter(self, value)
+                elif field and hasattr(field, 'path') and field.path:
+                    setattr(self, field.path, value)
+                elif hasattr(self, field_name):
+                    setattr(self, field_name, value)
+            except Exception as e:
+                print(f"[PythonComponent.deserialize_data] Failed to set {field_name}: {e}")
 
     def serialize(self) -> Dict[str, Any]:
         """Serialize component with type info."""

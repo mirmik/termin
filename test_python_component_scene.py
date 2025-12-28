@@ -44,7 +44,7 @@ print("2. Entity created")
 # Create component
 component = TestComponent()
 print(f"3. TestComponent created: type_name={component.type_name()}")
-print(f"   enabled={component.enabled}, is_native={component.is_native}")
+print(f"   enabled={component.enabled}, is_python_component={component.is_python_component}")
 print(f"   has_update={component.has_update}, has_fixed_update={component.has_fixed_update}")
 
 # Add component to entity

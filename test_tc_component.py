@@ -28,7 +28,7 @@ print("1. Python object created")
 # Create TcComponent wrapper
 tc = TcComponent(py_comp, "MyPythonComponent")
 print(f"2. TcComponent created: type_name={tc.type_name()}")
-print(f"   enabled={tc.enabled}, is_native={tc.is_native}")
+print(f"   enabled={tc.enabled}, is_python_component={tc.is_python_component}")
 
 # Set flags
 tc.has_update = True

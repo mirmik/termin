@@ -11,10 +11,9 @@
 //   - tc_vec3.h     - Vec3 operations (inline)
 //   - tc_quat.h     - Quaternion operations (inline)
 //   - tc_pose.h     - Pose operations (inline)
-//   - tc_transform.h - Hierarchical transform
 //   - tc_component.h - Component base and vtable
-//   - tc_entity.h    - Entity (game object container)
-//   - tc_scene.h     - Scene (entity world + component scheduler)
+//   - tc_entity_pool.h - Entity pool with generational indices
+//   - tc_scene.h     - Scene (owns pool + component scheduler)
 //   - tc_inspect.h   - Field inspection/serialization
 //
 
@@ -25,9 +24,8 @@
 #include "tc_vec3.h"
 #include "tc_quat.h"
 #include "tc_pose.h"
-#include "tc_transform.h"
 #include "tc_component.h"
-#include "tc_entity.h"
+#include "tc_entity_pool.h"
 #include "tc_scene.h"
 #include "tc_inspect.h"
 

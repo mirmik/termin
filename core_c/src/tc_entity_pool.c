@@ -5,6 +5,10 @@
 #include <string.h>
 #include <stdio.h>
 
+// For Py_INCREF/Py_DECREF on Python components
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+
 // ============================================================================
 // Internal structures
 // ============================================================================
@@ -242,11 +246,20 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
 void tc_entity_pool_destroy(tc_entity_pool* pool) {
     if (!pool) return;
 
-    // Free strings and dynamic arrays
+    // Free strings, release Python refs, and free dynamic arrays
     for (size_t i = 0; i < pool->capacity; i++) {
         free(pool->names[i]);
         free(pool->uuids[i]);
         entity_id_array_free(&pool->children[i]);
+
+        // Release Python references for all components
+        ComponentArray* comps = &pool->components[i];
+        for (size_t j = 0; j < comps->count; j++) {
+            tc_component* c = comps->items[j];
+            if (c && c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
+                Py_DECREF((PyObject*)c->py_wrap);
+            }
+        }
         component_array_free(&pool->components[i]);
     }
 
@@ -399,6 +412,15 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
     if (!pool || !tc_entity_pool_alive(pool, id)) return;
 
     uint32_t idx = id.index;
+
+    // Release Python references for all components
+    ComponentArray* comps = &pool->components[idx];
+    for (size_t i = 0; i < comps->count; i++) {
+        tc_component* c = comps->items[i];
+        if (c && c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
+            Py_DECREF((PyObject*)c->py_wrap);
+        }
+    }
 
     // Remove from parent's children
     if (pool->parent_indices[idx] != UINT32_MAX) {
@@ -768,12 +790,24 @@ tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id
 
 void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
     if (!tc_entity_pool_alive(pool, id) || !c) return;
+
+    // Keep Python object alive while attached to entity
+    if (c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
+        Py_INCREF((PyObject*)c->py_wrap);
+    }
+
     component_array_push(&pool->components[id.index], c);
 }
 
 void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
     if (!tc_entity_pool_alive(pool, id) || !c) return;
+
     component_array_remove(&pool->components[id.index], c);
+
+    // Release Python reference (matches incref in add_component)
+    if (c->kind == TC_PYTHON_COMPONENT && c->py_wrap) {
+        Py_DECREF((PyObject*)c->py_wrap);
+    }
 }
 
 size_t tc_entity_pool_component_count(const tc_entity_pool* pool, tc_entity_id id) {

@@ -3,7 +3,6 @@
 #include <pybind11/pybind11.h>
 
 #include "../../core_c/include/tc_component_python.h"
-#include "../../core_c/include/tc_entity.h"
 
 namespace py = pybind11;
 
@@ -95,15 +94,30 @@ static void py_cb_on_removed_from_entity(void* py_self) {
 }
 
 static void py_cb_on_added(void* py_self, void* scene) {
+    (void)scene;  // tc_scene* - not used, we use get_current_scene() instead
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         py::handle self((PyObject*)py_self);
+        py::object type_name = py::str(py::type::of(self).attr("__name__"));
+        printf("[py_cb_on_added] Component type: %s\n", type_name.cast<std::string>().c_str());
+        fflush(stdout);
+
         if (py::hasattr(self, "on_added")) {
-            // scene is a PyObject* (Python Scene object)
-            py::handle py_scene((PyObject*)scene);
+            // Get Python Scene from get_current_scene()
+            py::object scene_module = py::module_::import("termin.visualization.core.scene._scene");
+            py::object py_scene = scene_module.attr("get_current_scene")();
+            printf("[py_cb_on_added] Calling on_added, scene=%p\n", py_scene.ptr());
+            fflush(stdout);
             self.attr("on_added")(py_scene);
+            printf("[py_cb_on_added] on_added returned\n");
+            fflush(stdout);
+        } else {
+            printf("[py_cb_on_added] No on_added method\n");
+            fflush(stdout);
         }
     } catch (const py::error_already_set& e) {
+        printf("[py_cb_on_added] Exception!\n");
+        fflush(stdout);
         PyErr_Print();
     }
     PyGILState_Release(gstate);

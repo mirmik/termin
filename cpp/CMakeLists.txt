@@ -191,10 +191,8 @@ add_library(entity_lib SHARED
     termin/geom/general_transform3.cpp
     # C core
     ../core_c/src/tc_core.c
-    ../core_c/src/tc_transform.c
     ../core_c/src/tc_component.c
     ../core_c/src/tc_component_python.c
-    ../core_c/src/tc_entity.c
     ../core_c/src/tc_entity_pool.c
     ../core_c/src/tc_scene.c
     ../core_c/src/tc_inspect.c

@@ -11,6 +11,7 @@
 #include <pybind11/numpy.h>
 #include <unordered_set>
 #include <iostream>
+#include <cstdio>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -455,7 +456,7 @@ PYBIND11_MODULE(_entity_native, m) {
             }
 
             throw std::runtime_error("add_component requires Component or PythonComponent");
-        }, py::arg("component"), py::keep_alive<1, 2>())
+        }, py::arg("component"))
         .def("remove_component", [](Entity& e, py::object component) {
             // Check if it's a C++ Component
             if (py::isinstance<Component>(component)) {
@@ -514,7 +515,14 @@ PYBIND11_MODULE(_entity_native, m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                result.append(CxxComponent::tc_to_python(tc));
+                py::object py_comp = CxxComponent::tc_to_python(tc);
+                if (!py_comp.is_none()) {
+                    result.append(py_comp);
+                } else {
+                    printf("[Entity.components] WARNING: tc_to_python returned None for component %zu (kind=%d, py_wrap=%p)\n",
+                           i, tc->kind, tc->py_wrap);
+                    fflush(stdout);
+                }
             }
             return result;
         })
@@ -593,9 +601,138 @@ PYBIND11_MODULE(_entity_native, m) {
             return result;
         })
         .def_static("deserialize", [](py::object data, py::object context) -> py::object {
-            // TODO: deserialize needs a pool - requires Scene context
-            // For now, return None - deserialization should happen via Scene
-            return py::none();
+            if (data.is_none() || !py::isinstance<py::dict>(data)) {
+                printf("[Entity.deserialize] Invalid data (not a dict)\n");
+                fflush(stdout);
+                return py::none();
+            }
+
+            py::dict dict_data = data.cast<py::dict>();
+
+            // Get entity name
+            std::string name = "entity";
+            if (dict_data.contains("name")) {
+                name = dict_data["name"].cast<std::string>();
+            }
+            printf("[Entity.deserialize] Creating entity: %s\n", name.c_str());
+            fflush(stdout);
+
+            // Create entity using standalone pool
+            Entity ent = Entity::create(get_standalone_pool(), name);
+            if (!ent.valid()) {
+                printf("[Entity.deserialize] Failed to create entity!\n");
+                fflush(stdout);
+                return py::none();
+            }
+
+            // TODO: UUID is set at creation time, need Entity::create_with_uuid
+            // For now, skip UUID restoration - entity gets a new UUID
+            (void)dict_data;  // suppress unused warning if uuid handling removed
+
+            // Restore flags
+            if (dict_data.contains("priority")) {
+                ent.set_priority(dict_data["priority"].cast<int>());
+            }
+            if (dict_data.contains("visible")) {
+                ent.set_visible(dict_data["visible"].cast<bool>());
+            }
+            if (dict_data.contains("active")) {
+                ent.set_active(dict_data["active"].cast<bool>());
+            }
+            if (dict_data.contains("pickable")) {
+                ent.set_pickable(dict_data["pickable"].cast<bool>());
+            }
+            if (dict_data.contains("selectable")) {
+                ent.set_selectable(dict_data["selectable"].cast<bool>());
+            }
+            if (dict_data.contains("layer")) {
+                ent.set_layer(dict_data["layer"].cast<uint64_t>());
+            }
+            if (dict_data.contains("flags")) {
+                ent.set_flags(dict_data["flags"].cast<uint64_t>());
+            }
+
+            // Restore pose
+            if (dict_data.contains("pose") && py::isinstance<py::dict>(dict_data["pose"])) {
+                py::dict pose = dict_data["pose"].cast<py::dict>();
+                if (pose.contains("position") && py::isinstance<py::list>(pose["position"])) {
+                    py::list pos = pose["position"].cast<py::list>();
+                    if (pos.size() >= 3) {
+                        double xyz[3] = {pos[0].cast<double>(), pos[1].cast<double>(), pos[2].cast<double>()};
+                        ent.set_local_position(xyz);
+                    }
+                }
+                if (pose.contains("rotation") && py::isinstance<py::list>(pose["rotation"])) {
+                    py::list rot = pose["rotation"].cast<py::list>();
+                    if (rot.size() >= 4) {
+                        double xyzw[4] = {rot[0].cast<double>(), rot[1].cast<double>(), rot[2].cast<double>(), rot[3].cast<double>()};
+                        ent.set_local_rotation(xyzw);
+                    }
+                }
+            }
+
+            // Restore scale
+            if (dict_data.contains("scale") && py::isinstance<py::list>(dict_data["scale"])) {
+                py::list scl = dict_data["scale"].cast<py::list>();
+                if (scl.size() >= 3) {
+                    double xyz[3] = {scl[0].cast<double>(), scl[1].cast<double>(), scl[2].cast<double>()};
+                    ent.set_local_scale(xyz);
+                }
+            }
+
+            // Deserialize components via ComponentRegistry
+            if (dict_data.contains("components") && py::isinstance<py::list>(dict_data["components"])) {
+                py::list components = dict_data["components"].cast<py::list>();
+                printf("[Entity.deserialize] Deserializing %zu components\n", components.size());
+                fflush(stdout);
+
+                // Use C++ ComponentRegistry
+                auto& registry = ComponentRegistry::instance();
+
+                for (auto comp_data_item : components) {
+                    if (!py::isinstance<py::dict>(comp_data_item)) continue;
+                    py::dict comp_data = comp_data_item.cast<py::dict>();
+
+                    if (!comp_data.contains("type")) {
+                        printf("[Entity.deserialize] Component missing 'type' field\n");
+                        fflush(stdout);
+                        continue;
+                    }
+
+                    std::string type_name = comp_data["type"].cast<std::string>();
+                    printf("[Entity.deserialize] Deserializing component: %s\n", type_name.c_str());
+                    fflush(stdout);
+
+                    try {
+                        // Create component via ComponentRegistry
+                        py::object comp = registry.create(type_name);
+                        if (comp.is_none()) {
+                            printf("[Entity.deserialize] Unknown component type: %s\n", type_name.c_str());
+                            fflush(stdout);
+                            continue;
+                        }
+
+                        // Deserialize data if component has deserialize_data method
+                        if (py::hasattr(comp, "deserialize_data")) {
+                            py::object data_field = comp_data.contains("data") ? comp_data["data"] : py::dict();
+                            comp.attr("deserialize_data")(data_field, context);
+                        }
+
+                        // Add to entity via Python add_component
+                        py::object py_ent = py::cast(ent);
+                        py_ent.attr("add_component")(comp);
+                        printf("[Entity.deserialize] Component added: %s\n", type_name.c_str());
+                        fflush(stdout);
+                    } catch (const std::exception& e) {
+                        printf("[Entity.deserialize] Exception deserializing %s: %s\n", type_name.c_str(), e.what());
+                        fflush(stdout);
+                    }
+                }
+            }
+
+            printf("[Entity.deserialize] Entity created with %zu components\n", ent.component_count());
+            fflush(stdout);
+            return py::cast(ent);
         }, py::arg("data"), py::arg("context") = py::none());
 
     // --- EntityRegistry ---

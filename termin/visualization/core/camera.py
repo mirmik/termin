@@ -297,7 +297,12 @@ class CameraController(InputComponent):
 
     def on_added(self, scene):
         super().on_added(scene)
+        print(f"[CameraController.on_added] entity={self.entity}, entity.name={self.entity.name if self.entity else 'None'}")
+        print(f"[CameraController.on_added] components={self.entity.components if self.entity else []}")
+        for c in (self.entity.components if self.entity else []):
+            print(f"  - {type(c).__name__}: {c}")
         self.camera_component = self.entity.get_component(CameraComponent)
+        print(f"[CameraController.on_added] camera_component={self.camera_component}")
         if self.camera_component is None:
             raise RuntimeError("CameraController requires a CameraComponent on the same entity.")
 
@@ -437,6 +442,10 @@ class OrbitCameraController(CameraController):
 
     def on_mouse_move(self, event: MouseMoveEvent):
         if self._prevent_moving:
+            return
+        if self.camera_component is None:
+            print(f"[OrbitCameraController.on_mouse_move] ERROR: camera_component is None!")
+            print(f"  self={self}, entity={self.entity}, _started={self._started}")
             return
         if not self.camera_component.has_viewport(event.viewport):
             return

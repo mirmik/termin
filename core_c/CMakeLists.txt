@@ -11,12 +11,11 @@ option(TC_BUILD_TESTS "Build tests" ON)
 # Source files
 set(TC_SOURCES
     src/tc_core.c
-    src/tc_transform.c
-    src/tc_entity.c
     src/tc_component.c
     src/tc_component_python.c
-    src/tc_inspect.c
+    src/tc_entity_pool.c
     src/tc_scene.c
+    src/tc_inspect.c
 )
 
 # Header files (for IDE integration)
@@ -26,12 +25,11 @@ set(TC_HEADERS
     include/tc_vec3.h
     include/tc_quat.h
     include/tc_pose.h
-    include/tc_transform.h
     include/tc_component.h
     include/tc_component_python.h
-    include/tc_entity.h
-    include/tc_inspect.h
+    include/tc_entity_pool.h
     include/tc_scene.h
+    include/tc_inspect.h
 )
 
 # Library target
