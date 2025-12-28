@@ -148,3 +148,6 @@ cpp/**/*.obj
 cpp/**/*.exe
 cpp/**/*.dll
 cpp/**/*.out
+
+entity_lib.dll
+entity_lib.lib
