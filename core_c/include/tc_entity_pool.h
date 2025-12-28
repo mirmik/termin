@@ -157,6 +157,20 @@ TC_POOL_API tc_component* tc_entity_pool_component_at(const tc_entity_pool* pool
 TC_POOL_API void* tc_entity_pool_data(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API void tc_entity_pool_set_data(tc_entity_pool* pool, tc_entity_id id, void* data);
 
+// ============================================================================
+// Migration between pools
+// ============================================================================
+
+// Migrate entity from src_pool to dst_pool.
+// Copies all data (transform, flags, components, children).
+// Old entity in src_pool is freed (invalidated by generation bump).
+// Returns new entity_id in dst_pool, or TC_ENTITY_ID_INVALID on failure.
+// Note: parent links are NOT migrated (entity becomes root in dst_pool).
+// Note: children are recursively migrated to dst_pool.
+TC_POOL_API tc_entity_id tc_entity_pool_migrate(
+    tc_entity_pool* src_pool, tc_entity_id src_id,
+    tc_entity_pool* dst_pool);
+
 #ifdef __cplusplus
 }
 #endif

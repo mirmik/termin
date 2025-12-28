@@ -5,6 +5,16 @@
 
 namespace termin {
 
+// Global standalone pool for entities created outside of Scene
+static tc_entity_pool* g_standalone_pool = nullptr;
+
+tc_entity_pool* Entity::standalone_pool() {
+    if (!g_standalone_pool) {
+        g_standalone_pool = tc_entity_pool_create(1024);
+    }
+    return g_standalone_pool;
+}
+
 Entity Entity::create(tc_entity_pool* pool, const std::string& name) {
     if (!pool) return Entity();
     tc_entity_id id = tc_entity_pool_alloc(pool, name.c_str());

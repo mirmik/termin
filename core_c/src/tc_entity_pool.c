@@ -959,3 +959,81 @@ void tc_entity_pool_set_data(tc_entity_pool* pool, tc_entity_id id, void* data) 
     if (!tc_entity_pool_alive(pool, id)) return;
     pool->user_data[id.index] = data;
 }
+
+// ============================================================================
+// Migration between pools
+// ============================================================================
+
+tc_entity_id tc_entity_pool_migrate(
+    tc_entity_pool* src_pool, tc_entity_id src_id,
+    tc_entity_pool* dst_pool)
+{
+    if (!src_pool || !dst_pool || src_pool == dst_pool) {
+        return TC_ENTITY_ID_INVALID;
+    }
+    if (!tc_entity_pool_alive(src_pool, src_id)) {
+        return TC_ENTITY_ID_INVALID;
+    }
+
+    uint32_t src_idx = src_id.index;
+
+    // Allocate new entity in destination pool
+    tc_entity_id dst_id = tc_entity_pool_alloc(dst_pool, src_pool->names[src_idx]);
+    if (!tc_entity_id_valid(dst_id)) {
+        return TC_ENTITY_ID_INVALID;
+    }
+
+    uint32_t dst_idx = dst_id.index;
+
+    // Copy flags
+    dst_pool->visible[dst_idx] = src_pool->visible[src_idx];
+    dst_pool->active[dst_idx] = src_pool->active[src_idx];
+    dst_pool->pickable[dst_idx] = src_pool->pickable[src_idx];
+    dst_pool->selectable[dst_idx] = src_pool->selectable[src_idx];
+    dst_pool->serializable[dst_idx] = src_pool->serializable[src_idx];
+    dst_pool->priorities[dst_idx] = src_pool->priorities[src_idx];
+    dst_pool->layers[dst_idx] = src_pool->layers[src_idx];
+    dst_pool->entity_flags[dst_idx] = src_pool->entity_flags[src_idx];
+
+    // Copy transform
+    dst_pool->local_positions[dst_idx] = src_pool->local_positions[src_idx];
+    dst_pool->local_rotations[dst_idx] = src_pool->local_rotations[src_idx];
+    dst_pool->local_scales[dst_idx] = src_pool->local_scales[src_idx];
+    dst_pool->transform_dirty[dst_idx] = true;
+
+    // Copy user data pointer
+    dst_pool->user_data[dst_idx] = src_pool->user_data[src_idx];
+
+    // Move components (transfer ownership, don't copy)
+    // Components keep their py_wrap references
+    ComponentArray* src_comps = &src_pool->components[src_idx];
+    for (size_t i = 0; i < src_comps->count; i++) {
+        tc_component* c = src_comps->items[i];
+        // Add to dst without incrementing refcount (we're transferring ownership)
+        component_array_push(&dst_pool->components[dst_idx], c);
+    }
+    // Clear source without decrementing refcounts (ownership transferred)
+    src_comps->count = 0;
+
+    // Recursively migrate children
+    EntityIdArray* src_children = &src_pool->children[src_idx];
+    for (size_t i = 0; i < src_children->count; i++) {
+        tc_entity_id child_src_id = src_children->items[i];
+        if (tc_entity_pool_alive(src_pool, child_src_id)) {
+            tc_entity_id child_dst_id = tc_entity_pool_migrate(src_pool, child_src_id, dst_pool);
+            if (tc_entity_id_valid(child_dst_id)) {
+                // Set parent in destination pool
+                tc_entity_pool_set_parent(dst_pool, child_dst_id, dst_id);
+            }
+        }
+    }
+
+    // Free source entity (bumps generation, invalidates old handles)
+    // Note: components were already moved, so no Py_DECREF will happen
+    src_pool->alive[src_idx] = false;
+    src_pool->generations[src_idx]++;
+    src_pool->free_stack[src_pool->free_count++] = src_idx;
+    src_pool->count--;
+
+    return dst_id;
+}

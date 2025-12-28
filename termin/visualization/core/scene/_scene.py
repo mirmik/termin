@@ -288,8 +288,19 @@ class Scene:
         return self._entities
 
     def add_non_recurse(self, entity: Entity) -> Entity:
-        """Add entity to the scene, keeping the entities list sorted by priority."""
+        """Add entity to the scene, keeping the entities list sorted by priority.
+
+        Migrates entity to scene's pool if it's in a different pool.
+        Old entity reference becomes invalid after migration.
+        """
         global _current_scene
+
+        # Migrate entity to scene's pool (if not already there)
+        # This copies all data (transform, flags, components) to scene's pool
+        # and invalidates the old entity handle
+        entity = self._tc_scene.migrate_entity(entity)
+        if not entity:
+            raise RuntimeError("Failed to migrate entity to scene's pool")
 
         # Insert sorted by priority (Python-side list)
         idx = 0
@@ -319,11 +330,50 @@ class Scene:
         return entity
 
     def add(self, entity: Entity) -> Entity:
-        """Add entity to the scene, including all its children."""
-        self.add_non_recurse(entity)
+        """Add entity to the scene, including all its children.
+
+        Note: Entity migration happens during add, which recursively migrates
+        children. After add(), original entity reference is invalid - use the
+        returned entity instead.
+        """
+        # add_non_recurse migrates entity to scene's pool (with all children)
+        # So we don't need to iterate children - they're already migrated
+        entity = self.add_non_recurse(entity)
+        # Children were migrated together with parent, register them
         for child in entity.children():
-            self.add(child)
+            self._register_migrated_child(child)
         return entity
+
+    def _register_migrated_child(self, entity: Entity):
+        """Register a child entity that was already migrated with its parent."""
+        global _current_scene
+
+        # Insert sorted by priority
+        idx = 0
+        for i, e in enumerate(self._entities):
+            if e.priority > entity.priority:
+                idx = i
+                break
+            idx = i + 1
+        self._entities.insert(idx, entity)
+
+        # Register in global registry
+        EntityRegistry.instance().register_entity(entity)
+
+        # Register components
+        prev_scene = _current_scene
+        _current_scene = self
+        try:
+            for component in entity.components:
+                self.register_component(component)
+            entity.on_added(self)
+            self._on_entity_added.emit(entity)
+        finally:
+            _current_scene = prev_scene
+
+        # Recursively register children
+        for child in entity.children():
+            self._register_migrated_child(child)
 
     def remove(self, entity: Entity):
         # Remove from Python list

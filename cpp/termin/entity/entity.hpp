@@ -44,6 +44,9 @@ public:
     // Create new entity in pool
     static Entity create(tc_entity_pool* pool, const std::string& name = "entity");
 
+    // Get global standalone pool (for entities/transforms created outside of Scene)
+    static tc_entity_pool* standalone_pool();
+
     // Check if entity is valid (pool exists and id is alive)
     bool valid() const {
         return _pool && tc_entity_pool_alive(_pool, _id);

@@ -51,10 +51,14 @@ static GeneralPose3 py_pose_to_cpp(py::object py_pose) {
 }
 
 void bind_transform(py::module_& m) {
-    // GeneralTransform3 - thin wrapper around tc_transform*
+    // GeneralTransform3 - view into entity pool data (same as Entity, but transform-focused API)
     py::class_<GeneralTransform3>(m, "GeneralTransform3", py::dynamic_attr())
-        // Default constructor - null transform
-        .def(py::init<>())
+        // Default constructor - allocate entity in standalone pool (like Entity())
+        .def(py::init([]() {
+            tc_entity_pool* pool = Entity::standalone_pool();
+            tc_entity_id id = tc_entity_pool_alloc(pool, "transform");
+            return GeneralTransform3(pool, id);
+        }))
 
         // Check validity
         .def("valid", &GeneralTransform3::valid)

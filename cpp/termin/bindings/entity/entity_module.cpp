@@ -47,11 +47,30 @@ inline bool check_heap_entity() { return true; }
 namespace py = pybind11;
 using namespace termin;
 
-// Global standalone pool for entities created outside of Scene
-// TODO: Remove this when all entities are created through Scene
+// Shortcut for standalone pool
 static tc_entity_pool* get_standalone_pool() {
-    static tc_entity_pool* pool = tc_entity_pool_create(1024);
-    return pool;
+    return Entity::standalone_pool();
+}
+
+// Migrate entity from one pool to another (e.g., when adding to Scene)
+// Returns new Entity in dst_pool, old entity becomes invalid
+static Entity migrate_entity_to_pool(Entity& entity, tc_entity_pool* dst_pool) {
+    if (!entity.valid() || !dst_pool) {
+        return Entity();
+    }
+
+    tc_entity_pool* src_pool = entity.pool();
+    if (src_pool == dst_pool) {
+        // Already in target pool
+        return entity;
+    }
+
+    tc_entity_id new_id = tc_entity_pool_migrate(src_pool, entity.id(), dst_pool);
+    if (!tc_entity_id_valid(new_id)) {
+        return Entity();
+    }
+
+    return Entity(dst_pool, new_id);
 }
 
 // --- trent <-> Python conversion ---
@@ -819,4 +838,18 @@ PYBIND11_MODULE(_entity_native, m) {
         [](CxxComponent* c) { return c->enabled(); },
         [](CxxComponent* c, bool v) { c->set_enabled(v); }
     );
+
+    // --- Pool utilities ---
+
+    // Get standalone pool (for entities created outside of Scene)
+    m.def("get_standalone_pool", []() {
+        return reinterpret_cast<uintptr_t>(Entity::standalone_pool());
+    }, "Get the global standalone entity pool as uintptr_t");
+
+    // Migrate entity to a different pool (returns new Entity, old becomes invalid)
+    m.def("migrate_entity", [](Entity& entity, uintptr_t dst_pool_ptr) -> Entity {
+        tc_entity_pool* dst_pool = reinterpret_cast<tc_entity_pool*>(dst_pool_ptr);
+        return migrate_entity_to_pool(entity, dst_pool);
+    }, py::arg("entity"), py::arg("dst_pool"),
+       "Migrate entity to destination pool. Returns new Entity, old becomes invalid.");
 }

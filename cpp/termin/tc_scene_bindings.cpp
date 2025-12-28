@@ -123,6 +123,69 @@ public:
     size_t fixed_update_list_count() const {
         return tc_scene_fixed_update_list_count(_s);
     }
+
+    // Get entity pool owned by this scene
+    tc_entity_pool* entity_pool() const {
+        return tc_scene_entity_pool(_s);
+    }
+
+private:
+    // Update entity references in all components of an entity (and its children)
+    void update_component_entity_refs(Entity& ent) {
+        size_t count = ent.component_count();
+        for (size_t i = 0; i < count; i++) {
+            tc_component* tc = ent.component_at(i);
+            if (!tc) continue;
+
+            if (tc->kind == TC_CXX_COMPONENT) {
+                // C++ component - update entity field directly
+                CxxComponent* cxx = CxxComponent::from_tc(tc);
+                if (cxx) {
+                    cxx->entity = ent;
+                }
+            } else if (tc->kind == TC_PYTHON_COMPONENT && tc->py_wrap) {
+                // Python component - update via Python attribute
+                py::gil_scoped_acquire gil;
+                py::object py_comp = py::reinterpret_borrow<py::object>((PyObject*)tc->py_wrap);
+                if (py::hasattr(py_comp, "entity")) {
+                    py_comp.attr("entity") = py::cast(ent);
+                }
+            }
+        }
+
+        // Recursively update children
+        for (Entity child : ent.children()) {
+            update_component_entity_refs(child);
+        }
+    }
+
+public:
+    // Migrate entity to this scene's pool
+    // Returns new Entity in scene's pool, old entity becomes invalid
+    Entity migrate_entity(Entity& entity) {
+        tc_entity_pool* dst_pool = entity_pool();
+        if (!entity.valid() || !dst_pool) {
+            return Entity();
+        }
+
+        tc_entity_pool* src_pool = entity.pool();
+        if (src_pool == dst_pool) {
+            // Already in scene's pool
+            return entity;
+        }
+
+        tc_entity_id new_id = tc_entity_pool_migrate(src_pool, entity.id(), dst_pool);
+        if (!tc_entity_id_valid(new_id)) {
+            return Entity();
+        }
+
+        Entity new_entity(dst_pool, new_id);
+
+        // Update entity reference in all components (including children)
+        update_component_entity_refs(new_entity);
+
+        return new_entity;
+    }
 };
 
 void bind_tc_scene(py::module_& m) {
@@ -155,6 +218,15 @@ void bind_tc_scene(py::module_& m) {
         .def_property_readonly("pending_start_count", &TcScene::pending_start_count)
         .def_property_readonly("update_list_count", &TcScene::update_list_count)
         .def_property_readonly("fixed_update_list_count", &TcScene::fixed_update_list_count)
+
+        // Pool access
+        .def("entity_pool_ptr", [](TcScene& self) {
+            return reinterpret_cast<uintptr_t>(self.entity_pool());
+        }, "Get scene's entity pool as uintptr_t")
+
+        // Entity migration
+        .def("migrate_entity", &TcScene::migrate_entity, py::arg("entity"),
+             "Migrate entity to scene's pool. Returns new Entity, old becomes invalid.")
         ;
 }
 
