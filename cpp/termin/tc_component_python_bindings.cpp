@@ -202,7 +202,8 @@ public:
     bool get_active_in_editor() const { return _c ? _c->active_in_editor : false; }
     void set_active_in_editor(bool v) { if (_c) _c->active_in_editor = v; }
 
-    bool get_is_native() const { return _c ? _c->is_native : false; }
+    bool is_cxx_component() const { return _c ? _c->kind == TC_CXX_COMPONENT : false; }
+    bool is_python_component() const { return _c ? _c->kind == TC_PYTHON_COMPONENT : true; }
 
     bool get_started() const { return _c ? _c->_started : false; }
     void set_started(bool v) { if (_c) _c->_started = v; }
@@ -234,7 +235,8 @@ void bind_tc_component_python(py::module_& m) {
         .def("type_name", &TcComponent::type_name)
         .def_property("enabled", &TcComponent::get_enabled, &TcComponent::set_enabled)
         .def_property("active_in_editor", &TcComponent::get_active_in_editor, &TcComponent::set_active_in_editor)
-        .def_property_readonly("is_native", &TcComponent::get_is_native)
+        .def_property_readonly("is_cxx_component", &TcComponent::is_cxx_component)
+        .def_property_readonly("is_python_component", &TcComponent::is_python_component)
         .def_property("_started", &TcComponent::get_started, &TcComponent::set_started)
         .def_property("has_update", &TcComponent::get_has_update, &TcComponent::set_has_update)
         .def_property("has_fixed_update", &TcComponent::get_has_fixed_update, &TcComponent::set_has_fixed_update)

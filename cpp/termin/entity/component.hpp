@@ -2,57 +2,63 @@
 
 #include <string>
 #include <cstdint>
+#include <cstddef>
 #include <unordered_set>
 #include <pybind11/pybind11.h>
 #include "../../trent/trent.h"
 #include "../inspect/inspect_registry.hpp"
 #include "../../../core_c/include/tc_component.h"
+#include "../../../core_c/include/tc_entity_pool.h"
+#include "entity.hpp"
 
 namespace py = pybind11;
 
 namespace termin {
 
-class Entity;  // Forward declaration
-
-// Base class for all components.
-// Both C++ and Python components inherit from this.
+// Base class for all C++ components.
 // C++ components use REGISTER_COMPONENT macro for auto-registration.
-// Python components register via Component.__init_subclass__.
 //
-// Internally wraps tc_component (C core) for future Scene integration.
-class ENTITY_API Component {
+// tc_component is embedded as first member, allowing container_of to work.
+class ENTITY_API CxxComponent {
 public:
     // --- Fields (public) ---
+
+    // Embedded C component (MUST be first member for from_tc to work)
+    tc_component _c;
 
     // Flags (synced to internal tc_component structure)
     bool enabled = true;
     bool active_in_editor = false;
-    // is_native=true means _c.data is Component* (including Python classes inheriting C++ Component)
-    // is_native=false means _c.data is PyObject* (pure Python components using TcComponent)
-    bool is_native = true;
     bool _started = false;
     bool has_update = false;
     bool has_fixed_update = false;
 
     // Owner entity (set by Entity::add_component)
-    Entity* entity = nullptr;
+    Entity entity;
 
 protected:
     // --- Fields (protected) ---
 
-    const char* _type_name = "Component";
-    tc_component _c;  // Internal C component structure
+    const char* _type_name = "CxxComponent";
 
 private:
     // --- Fields (private) ---
 
     // Static vtable for C++ components - dispatches to virtual methods
-    static const tc_component_vtable _cpp_vtable;
+    static const tc_component_vtable _cxx_vtable;
 
 public:
     // --- Methods ---
 
-    virtual ~Component();
+    virtual ~CxxComponent();
+
+    // Get CxxComponent* from tc_component* (uses offsetof since _c is first member)
+    static CxxComponent* from_tc(tc_component* c) {
+        if (!c) return nullptr;
+        return reinterpret_cast<CxxComponent*>(
+            reinterpret_cast<char*>(c) - offsetof(CxxComponent, _c)
+        );
+    }
 
     // Type identification (for serialization)
     const char* type_name() const { return _type_name; }
@@ -110,21 +116,37 @@ public:
     tc_component* c_component() { return &_c; }
     const tc_component* c_component() const { return &_c; }
 
-    // Get Python object for this component
+    // Get Python wrapper for this component (cached in _c.py_wrap)
     py::object to_python() {
-        return py::cast(this);
+        if (!_c.py_wrap) {
+            py::object wrapper = py::cast(this, py::return_value_policy::reference);
+            _c.py_wrap = wrapper.inc_ref().ptr();
+        }
+        return py::reinterpret_borrow<py::object>(
+            reinterpret_cast<PyObject*>(_c.py_wrap)
+        );
     }
 
-    // Convert any tc_component to Python object (static version)
-    // For C++ components (is_native=true): casts Component* to py::object
-    // For Python components (is_native=false): returns stored PyObject*
-    static py::object to_python(tc_component* c) {
-        if (!c || !c->data) return py::none();
-        if (c->is_native) {
-            return py::cast(static_cast<Component*>(c->data));
+    // Set cached Python wrapper (called from bindings when component is created)
+    void set_py_wrap(py::object self) {
+        if (_c.py_wrap) {
+            py::handle old(reinterpret_cast<PyObject*>(_c.py_wrap));
+            old.dec_ref();
+        }
+        _c.py_wrap = self.inc_ref().ptr();
+    }
+
+    // Convert any tc_component to Python object
+    static py::object tc_to_python(tc_component* c) {
+        if (!c) return py::none();
+        if (c->kind == TC_CXX_COMPONENT) {
+            CxxComponent* cxx = from_tc(c);
+            return cxx ? cxx->to_python() : py::none();
         } else {
+            // TC_PYTHON_COMPONENT: py_wrap holds the Python object
+            if (!c->py_wrap) return py::none();
             return py::reinterpret_borrow<py::object>(
-                reinterpret_cast<PyObject*>(c->data)
+                reinterpret_cast<PyObject*>(c->py_wrap)
             );
         }
     }
@@ -133,7 +155,6 @@ public:
     void sync_to_c() {
         _c.enabled = enabled;
         _c.active_in_editor = active_in_editor;
-        _c.is_native = is_native;
         _c._started = _started;
         _c.has_update = has_update;
         _c.has_fixed_update = has_fixed_update;
@@ -144,14 +165,13 @@ public:
     void sync_from_c() {
         enabled = _c.enabled;
         active_in_editor = _c.active_in_editor;
-        is_native = _c.is_native;
         _started = _c._started;
         has_update = _c.has_update;
         has_fixed_update = _c.has_fixed_update;
     }
 
 protected:
-    Component();
+    CxxComponent();
 
 private:
     // Static callbacks that dispatch to C++ virtual methods
@@ -166,5 +186,24 @@ private:
     static void _cb_on_editor_start(tc_component* c);
     static void _cb_setup_editor_defaults(tc_component* c);
 };
+
+// Alias for backward compatibility during migration
+using Component = CxxComponent;
+
+// Template definition for Entity::get_component<T>()
+// Defined here after CxxComponent is fully declared
+template<typename T>
+T* Entity::get_component() {
+    size_t count = component_count();
+    for (size_t i = 0; i < count; i++) {
+        tc_component* tc = component_at(i);
+        if (tc && tc->kind == TC_CXX_COMPONENT) {
+            CxxComponent* comp = CxxComponent::from_tc(tc);
+            T* typed = dynamic_cast<T*>(comp);
+            if (typed) return typed;
+        }
+    }
+    return nullptr;
+}
 
 } // namespace termin

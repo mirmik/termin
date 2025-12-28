@@ -20,9 +20,9 @@ VTableSlots VTableSlots::compute() {
     UpdateProbe update_probe;
     FixedUpdateProbe fixed_update_probe;
 
-    void** base_vt = *reinterpret_cast<void***>(static_cast<Component*>(&base));
-    void** update_vt = *reinterpret_cast<void***>(static_cast<Component*>(&update_probe));
-    void** fixed_vt = *reinterpret_cast<void***>(static_cast<Component*>(&fixed_update_probe));
+    void** base_vt = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&base));
+    void** update_vt = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&update_probe));
+    void** fixed_vt = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&fixed_update_probe));
 
     constexpr int max_slots = 16;
     for (int i = 0; i < max_slots; ++i) {

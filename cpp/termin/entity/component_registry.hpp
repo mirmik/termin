@@ -31,11 +31,11 @@ namespace termin {
 class ENTITY_API ComponentRegistry {
 public:
     // Factory function for C++ components
-    using NativeFactory = std::function<Component*()>;
+    using NativeFactory = std::function<CxxComponent*()>;
 
     struct ComponentInfo {
         std::string name;
-        bool is_native;
+        tc_component_kind kind;
         NativeFactory native_factory;  // For C++ components
         py::object python_class;       // For Python components
     };
@@ -53,9 +53,9 @@ public:
     // Creation - returns py::object (for Python compatibility)
     py::object create(const std::string& name) const;
 
-    // Creation - returns raw Component* (for Entity::deserialize)
-    // Works for both native and Python components
-    Component* create_component(const std::string& name) const;
+    // Creation - returns raw CxxComponent* (for Entity::deserialize)
+    // Only works for native C++ components
+    CxxComponent* create_component(const std::string& name) const;
 
     // Queries
     bool has(const std::string& name) const;
@@ -91,7 +91,7 @@ struct ComponentRegistrar {
         bool has_fixed_update = component_overrides_fixed_update<T>();
 
         ComponentRegistry::instance().register_native(name,
-            [name, has_update, has_fixed_update]() -> Component* {
+            [name, has_update, has_fixed_update]() -> CxxComponent* {
                 T* comp = new T();
                 comp->set_type_name(name);
                 comp->has_update = has_update;

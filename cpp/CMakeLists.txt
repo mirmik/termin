@@ -195,6 +195,7 @@ add_library(entity_lib SHARED
     ../core_c/src/tc_component.c
     ../core_c/src/tc_component_python.c
     ../core_c/src/tc_entity.c
+    ../core_c/src/tc_entity_pool.c
     ../core_c/src/tc_scene.c
     ../core_c/src/tc_inspect.c
     ../core_c/src/tc_inspect_instance.cpp
@@ -328,55 +329,59 @@ target_compile_options(_native PRIVATE
 )
 
 # ---------------- Tests ----------------
-enable_testing()
+option(BUILD_TESTS "Build C++ tests" OFF)
 
-# Default config for multi-config generators so that plain `ctest` works
-set(DEFAULT_CTEST_CONFIG "Debug")
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/CTestCustom.cmake
-    @ONLY
-)
+if(BUILD_TESTS)
+    enable_testing()
 
-add_executable(termin_tests
-    tests/main.cpp
-    tests/tests_general_pose3.cpp
-    tests/tests_colliders.cpp
-    tests/tests_collision.cpp
-)
-target_include_directories(termin_tests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
-target_link_libraries(termin_tests PRIVATE entity_lib)
-target_compile_options(termin_tests PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
+    # Default config for multi-config generators so that plain `ctest` works
+    set(DEFAULT_CTEST_CONFIG "Debug")
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/CTestCustom.cmake
+        @ONLY
+    )
 
-# Pybind module to run C++ tests from Python
-pybind11_add_module(_cpp_tests
-    tests/tests_binding.cpp
-    tests/tests_general_pose3.cpp
-    tests/tests_colliders.cpp
-    tests/tests_collision.cpp
-)
-target_include_directories(_cpp_tests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
-target_link_libraries(_cpp_tests PRIVATE entity_lib)
-target_compile_options(_cpp_tests PRIVATE
-    $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
-)
-install(TARGETS _cpp_tests DESTINATION ${CMAKE_INSTALL_PREFIX}/tests)
+    add_executable(termin_tests
+        tests/main.cpp
+        tests/tests_general_pose3.cpp
+        tests/tests_colliders.cpp
+        tests/tests_collision.cpp
+    )
+    target_include_directories(termin_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    )
+    target_link_libraries(termin_tests PRIVATE entity_lib)
+    target_compile_options(termin_tests PRIVATE
+        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+    )
+    add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
 
-# Convenience target to run tests with correct config on multi-config generators (MSVC)
-add_custom_target(run_tests
-    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
-    DEPENDS termin_tests
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Running C++ tests")
+    # Pybind module to run C++ tests from Python
+    pybind11_add_module(_cpp_tests
+        tests/tests_binding.cpp
+        tests/tests_general_pose3.cpp
+        tests/tests_colliders.cpp
+        tests/tests_collision.cpp
+    )
+    target_include_directories(_cpp_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    )
+    target_link_libraries(_cpp_tests PRIVATE entity_lib)
+    target_compile_options(_cpp_tests PRIVATE
+        $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
+    )
+    install(TARGETS _cpp_tests DESTINATION ${CMAKE_INSTALL_PREFIX}/tests)
+
+    # Convenience target to run tests with correct config on multi-config generators (MSVC)
+    add_custom_target(run_tests
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
+        DEPENDS termin_tests
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Running C++ tests")
+endif()
 
 # Install to python packages
 # Install libtrent to root termin directory

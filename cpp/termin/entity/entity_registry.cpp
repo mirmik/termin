@@ -1,5 +1,4 @@
 #include "entity_registry.hpp"
-#include "entity.hpp"
 
 namespace termin {
 
@@ -8,19 +7,19 @@ EntityRegistry& EntityRegistry::instance() {
     return inst;
 }
 
-void EntityRegistry::register_entity(Entity* entity) {
-    if (!entity) return;
+void EntityRegistry::register_entity(const Entity& entity) {
+    if (!entity.valid()) return;
 
-    const char* u = entity->uuid();
+    const char* u = entity.uuid();
     if (u && u[0]) {
         by_uuid_[u] = entity;
     }
 }
 
-void EntityRegistry::unregister_entity(Entity* entity) {
-    if (!entity) return;
+void EntityRegistry::unregister_entity(const Entity& entity) {
+    if (!entity.valid()) return;
 
-    const char* u = entity->uuid();
+    const char* u = entity.uuid();
     if (u && u[0]) {
         by_uuid_.erase(u);
     }
@@ -35,13 +34,13 @@ void EntityRegistry::unregister_entity(Entity* entity) {
     }
 }
 
-Entity* EntityRegistry::get(const std::string& uuid) const {
+Entity EntityRegistry::get(const std::string& uuid) const {
     auto it = by_uuid_.find(uuid);
-    return (it != by_uuid_.end()) ? it->second : nullptr;
+    return (it != by_uuid_.end()) ? it->second : Entity();
 }
 
-void EntityRegistry::register_pick_id(uint32_t pick_id, Entity* entity) {
-    if (entity) {
+void EntityRegistry::register_pick_id(uint32_t pick_id, const Entity& entity) {
+    if (entity.valid()) {
         by_pick_id_[pick_id] = entity;
     }
 }
@@ -50,9 +49,9 @@ void EntityRegistry::unregister_pick_id(uint32_t pick_id) {
     by_pick_id_.erase(pick_id);
 }
 
-Entity* EntityRegistry::get_by_pick_id(uint32_t pick_id) const {
+Entity EntityRegistry::get_by_pick_id(uint32_t pick_id) const {
     auto it = by_pick_id_.find(pick_id);
-    return (it != by_pick_id_.end()) ? it->second : nullptr;
+    return (it != by_pick_id_.end()) ? it->second : Entity();
 }
 
 void EntityRegistry::clear() {
@@ -60,10 +59,10 @@ void EntityRegistry::clear() {
     by_pick_id_.clear();
 }
 
-std::pair<std::unordered_map<std::string, Entity*>,
-          std::unordered_map<uint32_t, Entity*>>
-EntityRegistry::swap_registries(std::unordered_map<std::string, Entity*> new_by_uuid,
-                                std::unordered_map<uint32_t, Entity*> new_by_pick_id) {
+std::pair<std::unordered_map<std::string, Entity>,
+          std::unordered_map<uint32_t, Entity>>
+EntityRegistry::swap_registries(std::unordered_map<std::string, Entity> new_by_uuid,
+                                std::unordered_map<uint32_t, Entity> new_by_pick_id) {
     auto old_by_uuid = std::move(by_uuid_);
     auto old_by_pick_id = std::move(by_pick_id_);
 

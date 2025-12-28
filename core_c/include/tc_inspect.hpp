@@ -15,8 +15,8 @@
 #include "trent/trent.h"
 #endif
 
-// Forward declare Component for Python object casting
-namespace termin { class Component; }
+// Forward declare CxxComponent for Python object casting
+namespace termin { class CxxComponent; }
 
 namespace py = pybind11;
 

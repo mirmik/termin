@@ -62,7 +62,10 @@ static bool ptr_array_contains(const ptr_array* arr, void* item) {
 // ============================================================================
 
 struct tc_scene {
-    // Entity list (sorted by priority)
+    // Entity pool (new system)
+    tc_entity_pool* entity_pool;
+
+    // Entity list (sorted by priority) - legacy, uses tc_entity*
     ptr_array entities;
 
     // Component lifecycle lists
@@ -96,6 +99,8 @@ tc_scene* tc_scene_new(void) {
     tc_scene* s = (tc_scene*)calloc(1, sizeof(tc_scene));
     if (!s) return NULL;
 
+    s->entity_pool = tc_entity_pool_create(64);
+
     ptr_array_init(&s->entities);
     ptr_array_init(&s->pending_start);
     ptr_array_init(&s->update_list);
@@ -110,12 +115,18 @@ tc_scene* tc_scene_new(void) {
 void tc_scene_free(tc_scene* s) {
     if (!s) return;
 
+    tc_entity_pool_destroy(s->entity_pool);
+
     ptr_array_free(&s->entities);
     ptr_array_free(&s->pending_start);
     ptr_array_free(&s->update_list);
     ptr_array_free(&s->fixed_update_list);
 
     free(s);
+}
+
+tc_entity_pool* tc_scene_entity_pool(tc_scene* s) {
+    return s ? s->entity_pool : NULL;
 }
 
 // ============================================================================

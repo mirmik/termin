@@ -45,20 +45,13 @@ public:
     }
 
     // Entity management
-    void add_entity(Entity* e) {
-        if (!e) return;
-        tc_entity* te = e->c_entity();
-        if (te) {
-            tc_scene_add_entity(_s, te);
-        }
+    // Entities live in pool, scene just references them
+    void add_entity(const Entity& e) {
+        (void)e;
     }
 
-    void remove_entity(Entity* e) {
-        if (!e) return;
-        tc_entity* te = e->c_entity();
-        if (te) {
-            tc_scene_remove_entity(_s, te);
-        }
+    void remove_entity(const Entity& e) {
+        (void)e;
     }
 
     size_t entity_count() const {

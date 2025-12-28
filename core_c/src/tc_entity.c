@@ -1,5 +1,6 @@
 // tc_entity.c - Entity implementation
 #include "../include/tc_entity.h"
+#include <Python.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -25,7 +26,7 @@ struct tc_entity {
     // Transform (owned)
     tc_transform* transform;
 
-    // Components (owned array, component ownership depends on is_native)
+    // Components (owned array, component ownership depends on python_allocated)
     tc_component** components;
     size_t component_count;
     size_t component_capacity;
@@ -166,7 +167,11 @@ void tc_entity_free(tc_entity* e) {
         tc_component* c = e->components[i];
         if (c) {
             tc_component_on_removed_from_entity(c);
-            if (c->is_native) {
+            if (c->python_allocated && c->py_wrap) {
+                // Release Python reference
+                Py_DECREF((PyObject*)c->py_wrap);
+            } else {
+                // C++ component - drop and free
                 tc_component_drop(c);
                 free(c);
             }
@@ -310,6 +315,11 @@ void tc_entity_add_component(tc_entity* e, tc_component* c) {
     entity_ensure_component_capacity(e);
     e->components[e->component_count++] = c;
 
+    // Keep Python object alive while attached to entity
+    if (c->python_allocated && c->py_wrap) {
+        Py_INCREF((PyObject*)c->py_wrap);
+    }
+
     tc_component_on_added_to_entity(c);
 }
 
@@ -320,6 +330,11 @@ void tc_entity_remove_component(tc_entity* e, tc_component* c) {
         if (e->components[i] == c) {
             tc_component_on_removed_from_entity(c);
             c->entity = NULL;
+
+            // Release Python reference (matches incref in add_component)
+            if (c->python_allocated && c->py_wrap) {
+                Py_DECREF((PyObject*)c->py_wrap);
+            }
 
             for (size_t j = i; j < e->component_count - 1; j++) {
                 e->components[j] = e->components[j + 1];
@@ -526,7 +541,9 @@ void tc_entity_registry_cleanup(void) {
                 tc_component* c = e->components[j];
                 if (c) {
                     tc_component_on_removed_from_entity(c);
-                    if (c->is_native) {
+                    if (c->python_allocated && c->py_wrap) {
+                        Py_DECREF((PyObject*)c->py_wrap);
+                    } else {
                         tc_component_drop(c);
                         free(c);
                     }

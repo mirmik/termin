@@ -7,11 +7,10 @@
 
 #include "termin/render/material.hpp"
 #include "termin/render/render_context.hpp"
+#include "termin/entity/entity.hpp"
 
 namespace termin {
 
-// Forward declarations
-class Entity;
 class GraphicsBackend;
 
 /**
@@ -88,11 +87,9 @@ public:
     }
 };
 
-/**
- * Draw call for passes - combines entity, drawable, phase, and geometry.
- */
+// Draw call for passes - combines entity, drawable, phase, and geometry.
 struct PhaseDrawCall {
-    Entity* entity = nullptr;
+    Entity entity;
     Drawable* drawable = nullptr;
     MaterialPhase* phase = nullptr;
     int priority = 0;

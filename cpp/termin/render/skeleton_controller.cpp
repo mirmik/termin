@@ -5,10 +5,9 @@
 namespace termin {
 
 SkeletonController::SkeletonController()
-    : Component()
+    : CxxComponent()
 {
     _type_name = "SkeletonController";
-    is_native = true;
 }
 
 void SkeletonController::set_skeleton(const SkeletonHandle& handle) {
@@ -21,17 +20,17 @@ void SkeletonController::set_bone_entities(std::vector<EntityHandle> handles) {
     _skeleton_instance.reset();
 }
 
-void SkeletonController::set_bone_entities_from_ptrs(std::vector<Entity*> entities) {
+void SkeletonController::set_bone_entities_from_entities(std::vector<Entity> entities) {
     std::vector<EntityHandle> handles;
     handles.reserve(entities.size());
-    for (Entity* e : entities) {
+    for (const Entity& e : entities) {
         handles.push_back(EntityHandle::from_entity(e));
     }
     set_bone_entities(std::move(handles));
 }
 
-std::vector<Entity*> SkeletonController::get_resolved_bone_entities() const {
-    std::vector<Entity*> result;
+std::vector<Entity> SkeletonController::get_resolved_bone_entities() const {
+    std::vector<Entity> result;
     result.reserve(bone_entities.size());
     for (const auto& handle : bone_entities) {
         result.push_back(handle.get());

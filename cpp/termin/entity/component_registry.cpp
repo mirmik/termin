@@ -14,7 +14,7 @@ ComponentRegistry& ComponentRegistry::instance() {
 void ComponentRegistry::register_native(const std::string& name, NativeFactory factory) {
     ComponentInfo info;
     info.name = name;
-    info.is_native = true;
+    info.kind = TC_CXX_COMPONENT;
     info.native_factory = std::move(factory);
 
     registry_[name] = std::move(info);
@@ -22,14 +22,14 @@ void ComponentRegistry::register_native(const std::string& name, NativeFactory f
 
 void ComponentRegistry::register_python(const std::string& name, py::object cls) {
     auto it = registry_.find(name);
-    if (it != registry_.end() && it->second.is_native) {
+    if (it != registry_.end() && it->second.kind == TC_CXX_COMPONENT) {
         // Don't overwrite native components with Python
         return;
     }
 
     ComponentInfo info;
     info.name = name;
-    info.is_native = false;
+    info.kind = TC_PYTHON_COMPONENT;
     info.python_class = std::move(cls);
 
     registry_[name] = std::move(info);
@@ -47,16 +47,15 @@ py::object ComponentRegistry::create(const std::string& name) const {
 
     const auto& info = it->second;
 
-    if (info.is_native) {
-        Component* comp = info.native_factory();
-        comp->is_native = true;
+    if (info.kind == TC_CXX_COMPONENT) {
+        CxxComponent* comp = info.native_factory();
         return py::cast(comp, py::return_value_policy::take_ownership);
     } else {
         return info.python_class();
     }
 }
 
-Component* ComponentRegistry::create_component(const std::string& name) const {
+CxxComponent* ComponentRegistry::create_component(const std::string& name) const {
     auto it = registry_.find(name);
     if (it == registry_.end()) {
         return nullptr;
@@ -64,20 +63,12 @@ Component* ComponentRegistry::create_component(const std::string& name) const {
 
     const auto& info = it->second;
 
-    if (info.is_native) {
-        Component* comp = info.native_factory();
-        comp->is_native = true;
-        return comp;
+    if (info.kind == TC_CXX_COMPONENT) {
+        return info.native_factory();
     } else {
-        // Create Python component that inherits from C++ Component
-        // is_native=true because storage mechanism is the same (embedded _c with data=this)
-        py::object py_comp = info.python_class();
-        Component* comp = py_comp.cast<Component*>();
-        comp->is_native = true;
-        comp->set_type_name(name.c_str());
-        // prevent python side destroy
-        py_comp.inc_ref();
-        return comp;
+        // For Python components, this method shouldn't be used
+        // Use create() instead and handle Python objects properly
+        return nullptr;
     }
 }
 
@@ -100,10 +91,9 @@ py::object ComponentRegistry::get_class(const std::string& name) const {
     }
 
     const auto& info = it->second;
-    if (info.is_native) {
+    if (info.kind == TC_CXX_COMPONENT) {
         // For native components, create an instance and return its type
-        Component* comp = info.native_factory();
-        comp->is_native = true;
+        CxxComponent* comp = info.native_factory();
         py::object py_comp = py::cast(comp, py::return_value_policy::take_ownership);
         return py::type::of(py_comp);
     } else {
@@ -124,7 +114,7 @@ std::vector<std::string> ComponentRegistry::list_all() const {
 std::vector<std::string> ComponentRegistry::list_native() const {
     std::vector<std::string> result;
     for (const auto& [name, info] : registry_) {
-        if (info.is_native) {
+        if (info.kind == TC_CXX_COMPONENT) {
             result.push_back(name);
         }
     }
@@ -135,7 +125,7 @@ std::vector<std::string> ComponentRegistry::list_native() const {
 std::vector<std::string> ComponentRegistry::list_python() const {
     std::vector<std::string> result;
     for (const auto& [name, info] : registry_) {
-        if (!info.is_native) {
+        if (info.kind == TC_PYTHON_COMPONENT) {
             result.push_back(name);
         }
     }

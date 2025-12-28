@@ -6,13 +6,11 @@ namespace termin {
 
 namespace {
 
-/**
- * Get model matrix from Entity as Mat44f.
- * Entity::model_matrix outputs row-major double[16], Mat44f is column-major float.
- */
-Mat44f get_model_matrix(Entity* entity) {
+// Get model matrix from Entity as Mat44f.
+// GeneralTransform3::world_matrix outputs row-major double[16], Mat44f is column-major float.
+Mat44f get_model_matrix(const Entity& entity) {
     double m_row[16];
-    entity->model_matrix(m_row);
+    entity.transform().world_matrix(m_row);
 
     // Transpose from row-major to column-major
     Mat44f result;
@@ -24,11 +22,9 @@ Mat44f get_model_matrix(Entity* entity) {
     return result;
 }
 
-/**
- * Get global position from Entity.
- */
-Vec3 get_global_position(Entity* entity) {
-    return entity->global_pose().lin;
+// Get global position from Entity.
+Vec3 get_global_position(const Entity& entity) {
+    return entity.transform().global_pose().lin;
 }
 
 } // anonymous namespace
@@ -68,24 +64,24 @@ std::vector<ResourceSpec> ColorPass::get_resource_specs() const {
 }
 
 std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
-    const std::vector<Entity*>& entities,
+    const std::vector<Entity>& entities,
     const std::string& phase_mark
 ) {
     std::vector<PhaseDrawCall> draw_calls;
 
-    for (Entity* entity : entities) {
-        if (!entity->active() || !entity->visible()) {
+    for (const Entity& ent : entities) {
+        if (!ent.active() || !ent.visible()) {
             continue;
         }
 
         // Get drawable components from entity
-        size_t comp_count = entity->component_count();
+        size_t comp_count = ent.component_count();
         for (size_t ci = 0; ci < comp_count; ci++) {
-            tc_component* tc = entity->component_at(ci);
-            if (!tc || !tc->is_native || !tc->enabled) {
+            tc_component* tc = ent.component_at(ci);
+            if (!tc || tc->kind != TC_CXX_COMPONENT || !tc->enabled) {
                 continue;
             }
-            Component* component = static_cast<Component*>(tc->data);
+            CxxComponent* component = CxxComponent::from_tc(tc);
             if (!component) {
                 continue;
             }
@@ -107,7 +103,7 @@ std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
             for (const auto& gd : geometry_draws) {
                 if (gd.phase) {
                     draw_calls.push_back(PhaseDrawCall{
-                        entity,
+                        ent,
                         drawable,
                         gd.phase,
                         gd.phase->priority,
@@ -132,7 +128,7 @@ void ColorPass::execute_with_data(
     const FBOMap& reads_fbos,
     const FBOMap& writes_fbos,
     const Rect4i& rect,
-    const std::vector<Entity*>& entities,
+    const std::vector<Entity>& entities,
     const Mat44f& view,
     const Mat44f& projection,
     const Vec3& camera_position,
@@ -191,7 +187,7 @@ void ColorPass::execute_with_data(
     // Render each draw call
     for (const auto& dc : draw_calls) {
         // Cache entity name
-        const char* ename = dc.entity->name();
+        const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
 
         // Get model matrix

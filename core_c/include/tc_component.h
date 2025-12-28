@@ -9,6 +9,15 @@ extern "C" {
 #endif
 
 // ============================================================================
+// Component Kind - distinguishes C++ vs Python components
+// ============================================================================
+
+typedef enum tc_component_kind {
+    TC_CXX_COMPONENT = 0,     // C++ component (data points to CxxComponent*)
+    TC_PYTHON_COMPONENT = 1   // Python component (data points to PythonComponent PyObject*)
+} tc_component_kind;
+
+// ============================================================================
 // Component VTable - virtual method table for components
 // ============================================================================
 
@@ -49,9 +58,6 @@ struct tc_component_vtable {
 // ============================================================================
 
 struct tc_component {
-    // User data - each language stores its own data here
-    void* data;
-
     // Virtual method table
     const tc_component_vtable* vtable;
 
@@ -59,13 +65,22 @@ struct tc_component {
     tc_entity* entity;
 
     // Instance-specific type name (takes precedence over vtable->type_name)
-    // Used by C++ wrapper where subclasses share a vtable
     const char* type_name;
+
+    // Component kind (C++ or Python)
+    tc_component_kind kind;
+
+    // If true, this tc_component was allocated from Python
+    bool python_allocated;
+
+    // Python wrapper object (PyObject*)
+    // - For python_allocated components: holds the owning reference
+    // - For C++ components accessed from Python: cached wrapper (may be NULL)
+    void* py_wrap;
 
     // Flags
     bool enabled;
     bool active_in_editor;
-    bool is_native;
     bool _started;
     bool has_update;
     bool has_fixed_update;
@@ -76,13 +91,14 @@ struct tc_component {
 // ============================================================================
 
 static inline void tc_component_init(tc_component* c, const tc_component_vtable* vtable) {
-    c->data = NULL;
     c->vtable = vtable;
     c->entity = NULL;
     c->type_name = NULL;
+    c->kind = TC_CXX_COMPONENT;
+    c->python_allocated = false;
+    c->py_wrap = NULL;
     c->enabled = true;
     c->active_in_editor = false;
-    c->is_native = true;
     c->_started = false;
     c->has_update = (vtable && vtable->update != NULL);
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
@@ -165,7 +181,7 @@ typedef tc_component* (*tc_component_factory)(void);
 TC_API void tc_component_registry_register(
     const char* type_name,
     tc_component_factory factory,
-    bool is_native
+    tc_component_kind kind
 );
 
 TC_API void tc_component_registry_unregister(const char* type_name);

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include "general_pose3.hpp"
-#include "../../../core_c/include/tc_transform.h"
+#include "../../../core_c/include/tc_entity_pool.h"
 
 // DLL export/import macros for Windows
 #ifdef _WIN32
@@ -19,34 +19,44 @@ namespace termin {
 
 class Entity;
 
-// Thin non-owning wrapper around tc_transform*.
-// Provides C++ interface with zero-cost access to C core data.
-// Layout of tc_general_pose3 matches GeneralPose3 for reinterpret_cast.
+// Transform view into entity pool data.
+// Same pool + id as Entity, but provides transform-specific methods.
+// Entity.transform() and GeneralTransform3.entity() create each other on the fly.
 struct GeneralTransform3 {
-    tc_transform* _t;
+    tc_entity_pool* _pool = nullptr;
+    tc_entity_id _id = TC_ENTITY_ID_INVALID;
 
-    // Construct from tc_transform pointer (non-owning)
-    explicit GeneralTransform3(tc_transform* t) : _t(t) {}
+    // Default constructor - invalid transform
+    GeneralTransform3() = default;
 
-    // Default constructor - null transform
-    GeneralTransform3() : _t(nullptr) {}
+    // Construct from pool + id
+    GeneralTransform3(tc_entity_pool* pool, tc_entity_id id) : _pool(pool), _id(id) {}
 
     // Check if valid
-    bool valid() const { return _t != nullptr; }
+    bool valid() const { return _pool && tc_entity_pool_alive(_pool, _id); }
     explicit operator bool() const { return valid(); }
 
-    // --- Pose accessors (zero-copy via reinterpret_cast) ---
+    // --- Pose accessors ---
 
-    const GeneralPose3& local_pose() const {
-        tc_general_pose3 p = tc_transform_local_pose(_t);
-        // Store in thread-local for reference return
-        static thread_local GeneralPose3 cached;
-        cached = *reinterpret_cast<const GeneralPose3*>(&p);
-        return cached;
+    GeneralPose3 local_pose() const {
+        GeneralPose3 pose;
+        double pos[3], rot[4], scale[3];
+        tc_entity_pool_get_local_position(_pool, _id, pos);
+        tc_entity_pool_get_local_rotation(_pool, _id, rot);
+        tc_entity_pool_get_local_scale(_pool, _id, scale);
+        pose.lin = Vec3{pos[0], pos[1], pos[2]};
+        pose.ang = Quat{rot[0], rot[1], rot[2], rot[3]};
+        pose.scale = Vec3{scale[0], scale[1], scale[2]};
+        return pose;
     }
 
     void set_local_pose(const GeneralPose3& pose) {
-        tc_transform_set_local_pose(_t, *reinterpret_cast<const tc_general_pose3*>(&pose));
+        double pos[3] = {pose.lin.x, pose.lin.y, pose.lin.z};
+        double rot[4] = {pose.ang.x, pose.ang.y, pose.ang.z, pose.ang.w};
+        double scale[3] = {pose.scale.x, pose.scale.y, pose.scale.z};
+        tc_entity_pool_set_local_position(_pool, _id, pos);
+        tc_entity_pool_set_local_rotation(_pool, _id, rot);
+        tc_entity_pool_set_local_scale(_pool, _id, scale);
     }
 
     void relocate(const GeneralPose3& pose) {
@@ -60,15 +70,26 @@ struct GeneralTransform3 {
         set_local_pose(gp);
     }
 
-    const GeneralPose3& global_pose() const {
-        tc_general_pose3 p = tc_transform_global_pose(_t);
-        static thread_local GeneralPose3 cached;
-        cached = *reinterpret_cast<const GeneralPose3*>(&p);
-        return cached;
+    GeneralPose3 global_pose() const {
+        // TODO: need to ensure transforms are updated first
+        // For now, trigger update and get world data
+        GeneralPose3 pose;
+        double pos[3];
+        tc_entity_pool_get_world_position(_pool, _id, pos);
+        pose.lin = Vec3{pos[0], pos[1], pos[2]};
+        // TODO: world rotation and scale not yet exposed in pool API
+        // For now, return local as approximation
+        double rot[4], scale[3];
+        tc_entity_pool_get_local_rotation(_pool, _id, rot);
+        tc_entity_pool_get_local_scale(_pool, _id, scale);
+        pose.ang = Quat{rot[0], rot[1], rot[2], rot[3]};
+        pose.scale = Vec3{scale[0], scale[1], scale[2]};
+        return pose;
     }
 
     void set_global_pose(const GeneralPose3& pose) {
-        tc_transform_set_global_pose(_t, *reinterpret_cast<const tc_general_pose3*>(&pose));
+        // TODO: proper global-to-local conversion with parent
+        set_local_pose(pose);
     }
 
     void relocate_global(const GeneralPose3& gpose) {
@@ -84,66 +105,43 @@ struct GeneralTransform3 {
     // --- Hierarchy ---
 
     GeneralTransform3 parent() const {
-        return GeneralTransform3(tc_transform_parent(_t));
+        tc_entity_id parent_id = tc_entity_pool_parent(_pool, _id);
+        if (!tc_entity_id_valid(parent_id)) return GeneralTransform3();
+        return GeneralTransform3(_pool, parent_id);
     }
 
     void set_parent(GeneralTransform3 new_parent) {
-        tc_transform_set_parent(_t, new_parent._t);
+        tc_entity_pool_set_parent(_pool, _id, new_parent._id);
     }
 
     void unparent() {
-        tc_transform_unparent(_t);
-    }
-
-    void add_child(GeneralTransform3 child) {
-        tc_transform_add_child(_t, child._t);
+        tc_entity_pool_set_parent(_pool, _id, TC_ENTITY_ID_INVALID);
     }
 
     size_t children_count() const {
-        return tc_transform_children_count(_t);
+        return tc_entity_pool_children_count(_pool, _id);
     }
 
     GeneralTransform3 child_at(size_t index) const {
-        return GeneralTransform3(tc_transform_child_at(_t, index));
+        tc_entity_id child_id = tc_entity_pool_child_at(_pool, _id, index);
+        if (!tc_entity_id_valid(child_id)) return GeneralTransform3();
+        return GeneralTransform3(_pool, child_id);
     }
 
-    // Iterator support for children
-    struct ChildIterator {
-        tc_transform* _parent;
-        size_t _index;
+    // --- Entity (creates Entity view on same data) ---
 
-        GeneralTransform3 operator*() const {
-            return GeneralTransform3(tc_transform_child_at(_parent, _index));
-        }
-        ChildIterator& operator++() { ++_index; return *this; }
-        bool operator!=(const ChildIterator& other) const { return _index != other._index; }
-    };
-
-    struct ChildRange {
-        tc_transform* _t;
-        ChildIterator begin() const { return {_t, 0}; }
-        ChildIterator end() const { return {_t, tc_transform_children_count(_t)}; }
-    };
-
-    ChildRange children() const { return {_t}; }
-
-    // --- Entity back-pointer ---
-
-    ENTITY_API Entity* entity() const;
-    ENTITY_API void set_entity(Entity* e);
+    ENTITY_API Entity entity() const;
 
     // --- Name (from entity) ---
 
-    ENTITY_API const char* name() const;
+    const char* name() const {
+        return tc_entity_pool_name(_pool, _id);
+    }
 
     // --- Dirty tracking ---
 
-    bool is_dirty() const {
-        return tc_transform_is_dirty(_t);
-    }
-
-    uint32_t version() const {
-        return tc_transform_version(_t);
+    void mark_dirty() {
+        tc_entity_pool_mark_dirty(_pool, _id);
     }
 
     // --- Transformations ---
@@ -193,12 +191,13 @@ struct GeneralTransform3 {
     // --- Matrix ---
 
     void world_matrix(double* m) const {
-        global_pose().matrix4(m);
+        tc_entity_pool_get_world_matrix(_pool, _id, m);
     }
 
-    // --- Raw access ---
+    // --- Pool/ID access ---
 
-    tc_transform* raw() const { return _t; }
+    tc_entity_pool* pool() const { return _pool; }
+    tc_entity_id id() const { return _id; }
 };
 
 } // namespace termin

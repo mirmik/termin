@@ -11,56 +11,56 @@ static tc_python_callbacks g_py_callbacks = {0};
 // ============================================================================
 
 static void py_vtable_start(tc_component* c) {
-    if (g_py_callbacks.start && c->data) {
-        g_py_callbacks.start(c->data);
+    if (g_py_callbacks.start && c->py_wrap) {
+        g_py_callbacks.start(c->py_wrap);
     }
 }
 
 static void py_vtable_update(tc_component* c, float dt) {
-    if (g_py_callbacks.update && c->data) {
-        g_py_callbacks.update(c->data, dt);
+    if (g_py_callbacks.update && c->py_wrap) {
+        g_py_callbacks.update(c->py_wrap, dt);
     }
 }
 
 static void py_vtable_fixed_update(tc_component* c, float dt) {
-    if (g_py_callbacks.fixed_update && c->data) {
-        g_py_callbacks.fixed_update(c->data, dt);
+    if (g_py_callbacks.fixed_update && c->py_wrap) {
+        g_py_callbacks.fixed_update(c->py_wrap, dt);
     }
 }
 
 static void py_vtable_on_destroy(tc_component* c) {
-    if (g_py_callbacks.on_destroy && c->data) {
-        g_py_callbacks.on_destroy(c->data);
+    if (g_py_callbacks.on_destroy && c->py_wrap) {
+        g_py_callbacks.on_destroy(c->py_wrap);
     }
 }
 
 static void py_vtable_on_added_to_entity(tc_component* c) {
-    if (g_py_callbacks.on_added_to_entity && c->data) {
-        g_py_callbacks.on_added_to_entity(c->data);
+    if (g_py_callbacks.on_added_to_entity && c->py_wrap) {
+        g_py_callbacks.on_added_to_entity(c->py_wrap);
     }
 }
 
 static void py_vtable_on_removed_from_entity(tc_component* c) {
-    if (g_py_callbacks.on_removed_from_entity && c->data) {
-        g_py_callbacks.on_removed_from_entity(c->data);
+    if (g_py_callbacks.on_removed_from_entity && c->py_wrap) {
+        g_py_callbacks.on_removed_from_entity(c->py_wrap);
     }
 }
 
 static void py_vtable_on_added(tc_component* c, void* scene) {
-    if (g_py_callbacks.on_added && c->data) {
-        g_py_callbacks.on_added(c->data, scene);
+    if (g_py_callbacks.on_added && c->py_wrap) {
+        g_py_callbacks.on_added(c->py_wrap, scene);
     }
 }
 
 static void py_vtable_on_removed(tc_component* c) {
-    if (g_py_callbacks.on_removed && c->data) {
-        g_py_callbacks.on_removed(c->data);
+    if (g_py_callbacks.on_removed && c->py_wrap) {
+        g_py_callbacks.on_removed(c->py_wrap);
     }
 }
 
 static void py_vtable_on_editor_start(tc_component* c) {
-    if (g_py_callbacks.on_editor_start && c->data) {
-        g_py_callbacks.on_editor_start(c->data);
+    if (g_py_callbacks.on_editor_start && c->py_wrap) {
+        g_py_callbacks.on_editor_start(c->py_wrap);
     }
 }
 
@@ -103,20 +103,21 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
     tc_component_init(c, &g_python_vtable);
 
     // Store Python object pointer
-    c->data = py_self;
+    c->py_wrap = py_self;
+    c->python_allocated = true;
 
     // Set instance type name (overrides vtable->type_name)
     c->type_name = type_name;
 
-    // Python components are not native
-    c->is_native = false;
+    // Python components
+    c->kind = TC_PYTHON_COMPONENT;
 
     return c;
 }
 
 void tc_component_free_python(tc_component* c) {
     if (c) {
-        // Don't free c->data - Python manages its own objects
+        // Don't free c->py_wrap - Python manages its own objects
         free(c);
     }
 }

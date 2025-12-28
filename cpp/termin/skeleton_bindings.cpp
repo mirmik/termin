@@ -42,14 +42,9 @@ void bind_skeleton(py::module_& m) {
     // Note: Bone and SkeletonData are now in _skeleton_native module.
     // This module only binds SkeletonInstance which depends on Entity.
 
-    // SkeletonInstance
+    // SkeletonInstance - now uses Entity values instead of pointers
     py::class_<SkeletonInstance>(m, "SkeletonInstance")
         .def(py::init<>())
-        .def(py::init<SkeletonData*, std::vector<Entity*>, Entity*>(),
-             py::arg("skeleton_data"),
-             py::arg("bone_entities") = std::vector<Entity*>{},
-             py::arg("skeleton_root_entity") = nullptr,
-             py::keep_alive<1, 2>())  // instance keeps skeleton_data alive
         .def_property("skeleton_data",
             &SkeletonInstance::skeleton_data,
             &SkeletonInstance::set_skeleton_data,
@@ -57,9 +52,9 @@ void bind_skeleton(py::module_& m) {
         .def_property("bone_entities",
             [](const SkeletonInstance& si) {
                 py::list result;
-                for (Entity* e : si.bone_entities()) {
-                    if (e) {
-                        result.append(py::cast(e, py::return_value_policy::reference));
+                for (const Entity& e : si.bone_entities()) {
+                    if (e.valid()) {
+                        result.append(py::cast(e));
                     } else {
                         result.append(py::none());
                     }
@@ -67,24 +62,37 @@ void bind_skeleton(py::module_& m) {
                 return result;
             },
             [](SkeletonInstance& si, py::list entities) {
-                std::vector<Entity*> vec;
+                std::vector<Entity> vec;
                 for (auto item : entities) {
-                    if (item.is_none()) {
-                        vec.push_back(nullptr);
-                    } else {
-                        vec.push_back(item.cast<Entity*>());
+                    if (!item.is_none()) {
+                        vec.push_back(item.cast<Entity>());
                     }
                 }
                 si.set_bone_entities(std::move(vec));
             })
         .def_property("skeleton_root",
-            &SkeletonInstance::skeleton_root,
-            &SkeletonInstance::set_skeleton_root,
-            py::return_value_policy::reference)
-        .def("get_bone_entity", &SkeletonInstance::get_bone_entity,
-             py::arg("bone_index"), py::return_value_policy::reference)
-        .def("get_bone_entity_by_name", &SkeletonInstance::get_bone_entity_by_name,
-             py::arg("bone_name"), py::return_value_policy::reference)
+            [](const SkeletonInstance& si) -> py::object {
+                Entity root = si.skeleton_root();
+                if (root.valid()) return py::cast(root);
+                return py::none();
+            },
+            [](SkeletonInstance& si, py::object root_obj) {
+                if (root_obj.is_none()) {
+                    si.set_skeleton_root(Entity());
+                } else {
+                    si.set_skeleton_root(root_obj.cast<Entity>());
+                }
+            })
+        .def("get_bone_entity", [](const SkeletonInstance& si, int index) -> py::object {
+            Entity e = si.get_bone_entity(index);
+            if (e.valid()) return py::cast(e);
+            return py::none();
+        }, py::arg("bone_index"))
+        .def("get_bone_entity_by_name", [](const SkeletonInstance& si, const std::string& name) -> py::object {
+            Entity e = si.get_bone_entity_by_name(name);
+            if (e.valid()) return py::cast(e);
+            return py::none();
+        }, py::arg("bone_name"))
         .def("set_bone_transform_by_name", [](SkeletonInstance& si,
                 const std::string& bone_name,
                 py::object translation,

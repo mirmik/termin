@@ -12,7 +12,7 @@
 typedef struct tc_component_type_entry {
     const char* type_name;  // Interned string
     tc_component_factory factory;
-    bool is_native;
+    tc_component_kind kind;
 } tc_component_type_entry;
 
 typedef struct tc_component_registry {
@@ -57,7 +57,7 @@ static int tc_component_registry_find_index(const char* type_name) {
 void tc_component_registry_register(
     const char* type_name,
     tc_component_factory factory,
-    bool is_native
+    tc_component_kind kind
 ) {
     if (!type_name || !factory) return;
 
@@ -66,7 +66,7 @@ void tc_component_registry_register(
     if (idx >= 0) {
         // Update existing
         g_component_registry.entries[idx].factory = factory;
-        g_component_registry.entries[idx].is_native = is_native;
+        g_component_registry.entries[idx].kind = kind;
         return;
     }
 
@@ -77,7 +77,7 @@ void tc_component_registry_register(
     // Intern the string (caller must ensure it stays valid, or use tc_intern_string)
     g_component_registry.entries[g_component_registry.count].type_name = type_name;
     g_component_registry.entries[g_component_registry.count].factory = factory;
-    g_component_registry.entries[g_component_registry.count].is_native = is_native;
+    g_component_registry.entries[g_component_registry.count].kind = kind;
     g_component_registry.count++;
 }
 
@@ -107,7 +107,7 @@ tc_component* tc_component_registry_create(const char* type_name) {
 
     tc_component* c = factory();
     if (c) {
-        c->is_native = g_component_registry.entries[idx].is_native;
+        c->kind = g_component_registry.entries[idx].kind;
     }
     return c;
 }

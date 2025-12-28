@@ -309,9 +309,9 @@ void bind_frame_pass(py::module_& m) {
             rect.height = rect_py[3].cast<int>();
 
             // Convert entities
-            std::vector<Entity*> entities;
+            std::vector<Entity> entities;
             for (auto item : entities_py) {
-                entities.push_back(item.cast<Entity*>());
+                entities.push_back(item.cast<Entity>());
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)

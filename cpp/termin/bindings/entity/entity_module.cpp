@@ -46,6 +46,13 @@ inline bool check_heap_entity() { return true; }
 namespace py = pybind11;
 using namespace termin;
 
+// Global standalone pool for entities created outside of Scene
+// TODO: Remove this when all entities are created through Scene
+static tc_entity_pool* get_standalone_pool() {
+    static tc_entity_pool* pool = tc_entity_pool_create(1024);
+    return pool;
+}
+
 // --- trent <-> Python conversion ---
 
 static nos::trent py_to_trent(py::object obj) {
@@ -118,44 +125,42 @@ static py::object trent_to_py(const nos::trent& t) {
     return py::none();
 }
 
-/**
- * Trampoline class for Component.
- * Allows Python classes to inherit from C++ Component.
- */
-class PyComponent : public Component {
+// Trampoline class for CxxComponent.
+// Allows Python classes to inherit from C++ CxxComponent.
+class PyCxxComponent : public CxxComponent {
 public:
-    using Component::Component;
+    using CxxComponent::CxxComponent;
 
     void start() override {
-        PYBIND11_OVERRIDE(void, Component, start);
+        PYBIND11_OVERRIDE(void, CxxComponent, start);
     }
 
     void update(float dt) override {
-        PYBIND11_OVERRIDE(void, Component, update, dt);
+        PYBIND11_OVERRIDE(void, CxxComponent, update, dt);
     }
 
     void fixed_update(float dt) override {
-        PYBIND11_OVERRIDE(void, Component, fixed_update, dt);
+        PYBIND11_OVERRIDE(void, CxxComponent, fixed_update, dt);
     }
 
     void on_destroy() override {
-        PYBIND11_OVERRIDE(void, Component, on_destroy);
+        PYBIND11_OVERRIDE(void, CxxComponent, on_destroy);
     }
 
     void on_added_to_entity() override {
-        PYBIND11_OVERRIDE(void, Component, on_added_to_entity);
+        PYBIND11_OVERRIDE(void, CxxComponent, on_added_to_entity);
     }
 
     void on_removed_from_entity() override {
-        PYBIND11_OVERRIDE(void, Component, on_removed_from_entity);
+        PYBIND11_OVERRIDE(void, CxxComponent, on_removed_from_entity);
     }
 
     void on_added(py::object scene) override {
-        PYBIND11_OVERRIDE(void, Component, on_added, scene);
+        PYBIND11_OVERRIDE(void, CxxComponent, on_added, scene);
     }
 
     void on_removed() override {
-        PYBIND11_OVERRIDE(void, Component, on_removed);
+        PYBIND11_OVERRIDE(void, CxxComponent, on_removed);
     }
 };
 
@@ -184,57 +189,56 @@ static Quat numpy_to_quat(py::array_t<double> arr) {
 PYBIND11_MODULE(_entity_native, m) {
     m.doc() = "Entity native module (Component, Entity, EntityHandle, registries)";
 
-    // --- Component ---
-    py::class_<Component, PyComponent>(m, "Component")
+    // --- CxxComponent (also exported as Component for compatibility) ---
+    py::class_<CxxComponent, PyCxxComponent>(m, "Component")
         .def(py::init<>())
         .def(py::init([](bool enabled) {
-            auto c = new PyComponent();
+            auto c = new PyCxxComponent();
             c->enabled = enabled;
             return c;
         }), py::arg("enabled") = true)
-        .def("type_name", &Component::type_name)
-        .def("set_type_name", &Component::set_type_name, py::arg("name"))
-        .def("start", &Component::start)
-        .def("update", &Component::update, py::arg("dt"))
-        .def("fixed_update", &Component::fixed_update, py::arg("dt"))
-        .def("on_editor_start", &Component::on_editor_start)
-        .def("setup_editor_defaults", &Component::setup_editor_defaults)
-        .def("on_destroy", &Component::on_destroy)
-        .def("on_added_to_entity", &Component::on_added_to_entity)
-        .def("on_removed_from_entity", &Component::on_removed_from_entity)
-        .def("on_added", &Component::on_added, py::arg("scene"))
-        .def("on_removed", &Component::on_removed)
-        .def_readwrite("enabled", &Component::enabled)
-        .def_readwrite("active_in_editor", &Component::active_in_editor)
-        .def_readonly("is_native", &Component::is_native)
-        .def_readwrite("_started", &Component::_started)
-        .def_readwrite("has_update", &Component::has_update)
-        .def_readwrite("has_fixed_update", &Component::has_fixed_update)
-        .def("sync_to_c", &Component::sync_to_c)
-        .def("sync_from_c", &Component::sync_from_c)
-        .def("c_component", static_cast<tc_component* (Component::*)()>(&Component::c_component),
+        .def("type_name", &CxxComponent::type_name)
+        .def("set_type_name", &CxxComponent::set_type_name, py::arg("name"))
+        .def("start", &CxxComponent::start)
+        .def("update", &CxxComponent::update, py::arg("dt"))
+        .def("fixed_update", &CxxComponent::fixed_update, py::arg("dt"))
+        .def("on_editor_start", &CxxComponent::on_editor_start)
+        .def("setup_editor_defaults", &CxxComponent::setup_editor_defaults)
+        .def("on_destroy", &CxxComponent::on_destroy)
+        .def("on_added_to_entity", &CxxComponent::on_added_to_entity)
+        .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
+        .def("on_added", &CxxComponent::on_added, py::arg("scene"))
+        .def("on_removed", &CxxComponent::on_removed)
+        .def_readwrite("enabled", &CxxComponent::enabled)
+        .def_readwrite("active_in_editor", &CxxComponent::active_in_editor)
+        .def_readwrite("_started", &CxxComponent::_started)
+        .def_readwrite("has_update", &CxxComponent::has_update)
+        .def_readwrite("has_fixed_update", &CxxComponent::has_fixed_update)
+        .def("sync_to_c", &CxxComponent::sync_to_c)
+        .def("sync_from_c", &CxxComponent::sync_from_c)
+        .def("c_component", static_cast<tc_component* (CxxComponent::*)()>(&CxxComponent::c_component),
              py::return_value_policy::reference)
         .def_property("entity",
-            [](Component& c) -> py::object {
-                if (c.entity) {
-                    return py::cast(c.entity, py::return_value_policy::reference);
+            [](CxxComponent& c) -> py::object {
+                if (c.entity.valid()) {
+                    return py::cast(c.entity);
                 }
                 return py::none();
             },
-            [](Component& c, py::object obj) {
+            [](CxxComponent& c, py::object obj) {
                 if (obj.is_none()) {
-                    c.entity = nullptr;
+                    c.entity = Entity();  // Invalid entity
                 } else {
-                    c.entity = obj.cast<Entity*>();
+                    c.entity = obj.cast<Entity>();
                 }
             })
-        .def("serialize_data", [](Component& c) {
+        .def("serialize_data", [](CxxComponent& c) {
             return trent_to_py(c.serialize_data());
         })
-        .def("serialize", [](Component& c) {
+        .def("serialize", [](CxxComponent& c) {
             return trent_to_py(c.serialize());
         })
-        .def("deserialize_data", [](Component& c, py::object data, py::object) {
+        .def("deserialize_data", [](CxxComponent& c, py::object data, py::object) {
             c.deserialize_data(py_to_trent(data));
         });
 
@@ -269,15 +273,19 @@ PYBIND11_MODULE(_entity_native, m) {
 
     // --- Entity ---
     py::class_<Entity>(m, "Entity")
-        .def(py::init<const std::string&, const std::string&>(),
-             py::arg("name") = "entity", py::arg("uuid") = "")
+        .def(py::init([](const std::string& name, const std::string& uuid) {
+            // Create entity in standalone pool
+            // TODO: Entities should be created through Scene instead
+            Entity ent = Entity::create(get_standalone_pool(), name);
+            return ent;
+        }), py::arg("name") = "entity", py::arg("uuid") = "")
         .def(py::init([](py::object pose, const std::string& name, int priority,
                         bool pickable, bool selectable, bool serializable,
                         int layer, uint64_t flags, const std::string& uuid) {
-            Entity* ent;
-            if (pose.is_none()) {
-                ent = new Entity(name, uuid);
-            } else {
+            // Create entity in standalone pool
+            Entity ent = Entity::create(get_standalone_pool(), name);
+
+            if (!pose.is_none()) {
                 // Extract GeneralPose3 from Python object
                 GeneralPose3 gpose;
                 if (py::hasattr(pose, "lin") && py::hasattr(pose, "ang")) {
@@ -290,15 +298,15 @@ PYBIND11_MODULE(_entity_native, m) {
                         gpose.scale = numpy_to_vec3(scale);
                     }
                 }
-                ent = new Entity(gpose, name, uuid);
+                ent.transform().set_local_pose(gpose);
             }
             // Set additional attributes
-            ent->set_priority(priority);
-            ent->set_pickable(pickable);
-            ent->set_selectable(selectable);
-            ent->set_serializable(serializable);
-            ent->set_layer(static_cast<uint64_t>(layer));
-            ent->set_flags(flags);
+            ent.set_priority(priority);
+            ent.set_pickable(pickable);
+            ent.set_selectable(selectable);
+            ent.set_serializable(serializable);
+            ent.set_layer(static_cast<uint64_t>(layer));
+            ent.set_flags(flags);
             return ent;
         }), py::arg("pose") = py::none(), py::arg("name") = "entity",
             py::arg("priority") = 0, py::arg("pickable") = true,
@@ -359,11 +367,16 @@ PYBIND11_MODULE(_entity_native, m) {
 
         // Pose shortcuts
         .def("global_pose", [](Entity& e) {
-            const GeneralPose3& gp = e.global_pose();
+            GeneralPose3 gp = e.transform().global_pose();
             py::dict result;
             result["lin"] = vec3_to_numpy(gp.lin);
-            result["ang"] = py::array_t<double>({4}, {sizeof(double)},
-                &gp.ang.x);
+            auto ang_arr = py::array_t<double>(4);
+            auto ang_buf = ang_arr.mutable_unchecked<1>();
+            ang_buf(0) = gp.ang.x;
+            ang_buf(1) = gp.ang.y;
+            ang_buf(2) = gp.ang.z;
+            ang_buf(3) = gp.ang.w;
+            result["ang"] = ang_arr;
             result["scale"] = vec3_to_numpy(gp.scale);
             return result;
         })
@@ -372,7 +385,7 @@ PYBIND11_MODULE(_entity_native, m) {
             auto result = py::array_t<double>({4, 4});
             auto buf = result.mutable_unchecked<2>();
             double m[16];
-            e.model_matrix(m);
+            e.transform().world_matrix(m);
             // matrix4() already produces row-major, copy directly
             for (int i = 0; i < 4; ++i) {
                 for (int j = 0; j < 4; ++j) {
@@ -384,7 +397,7 @@ PYBIND11_MODULE(_entity_native, m) {
 
         .def("inverse_model_matrix", [](Entity& e) {
             // Get global pose and compute inverse matrix
-            const GeneralPose3& gp = e.global_pose();
+            GeneralPose3 gp = e.transform().global_pose();
             auto result = py::array_t<double>({4, 4});
             auto buf = result.mutable_unchecked<2>();
             double m[16];
@@ -400,8 +413,8 @@ PYBIND11_MODULE(_entity_native, m) {
 
         .def("set_visible", [](Entity& e, bool flag) {
             e.set_visible(flag);
-            for (Entity* child : e.children()) {
-                py::cast(child, py::return_value_policy::reference).attr("set_visible")(flag);
+            for (Entity child : e.children()) {
+                child.set_visible(flag);
             }
         }, py::arg("flag"))
 
@@ -409,11 +422,13 @@ PYBIND11_MODULE(_entity_native, m) {
             return e.pickable() && e.visible() && e.active();
         })
 
-        .def_static("lookup_by_pick_id", [](uint32_t pid) -> Entity* {
-            // Use C registry for lookup (C++ HashMap is not populated)
-            tc_entity* e = tc_entity_registry_find_by_pick_id(pid);
-            return entity_from_tc(e);
-        }, py::arg("pick_id"), py::return_value_policy::reference)
+        .def_static("lookup_by_pick_id", [](uint32_t pid) -> py::object {
+            Entity ent = EntityRegistry::instance().get_by_pick_id(pid);
+            if (ent.valid()) {
+                return py::cast(ent);
+            }
+            return py::none();
+        }, py::arg("pick_id"))
 
         // Component management
         // Accepts both C++ Component and PythonComponent (via py::object)
@@ -432,7 +447,7 @@ PYBIND11_MODULE(_entity_native, m) {
 
                 // Set entity reference on PythonComponent
                 if (py::hasattr(component, "entity")) {
-                    component.attr("entity") = py::cast(&e, py::return_value_policy::reference);
+                    component.attr("entity") = py::cast(e);
                 }
 
                 e.add_component_ptr(tc);
@@ -461,19 +476,15 @@ PYBIND11_MODULE(_entity_native, m) {
              py::arg("type_name"), py::return_value_policy::reference)
         .def("get_component", [](Entity& e, py::object type_class) -> py::object {
             // Get component by Python type class (like Unity's GetComponent<T>())
+            if (!e.valid()) {
+                return py::none();
+            }
             size_t count = e.component_count();
             for (size_t i = 0; i < count; i++) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                py::object py_comp;
-                if (tc->is_native) {
-                    Component* comp = static_cast<Component*>(tc->data);
-                    py_comp = py::cast(comp, py::return_value_policy::reference);
-                } else {
-                    // PythonComponent - data is PyObject*
-                    py_comp = py::reinterpret_borrow<py::object>((PyObject*)tc->data);
-                }
+                py::object py_comp = CxxComponent::tc_to_python(tc);
 
                 if (py::isinstance(py_comp, type_class)) {
                     return py_comp;
@@ -488,13 +499,7 @@ PYBIND11_MODULE(_entity_native, m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                py::object py_comp;
-                if (tc->is_native) {
-                    Component* comp = static_cast<Component*>(tc->data);
-                    py_comp = py::cast(comp, py::return_value_policy::reference);
-                } else {
-                    py_comp = py::reinterpret_borrow<py::object>((PyObject*)tc->data);
-                }
+                py::object py_comp = CxxComponent::tc_to_python(tc);
 
                 if (py::isinstance(py_comp, type_class)) {
                     return py_comp;
@@ -509,21 +514,27 @@ PYBIND11_MODULE(_entity_native, m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                if (tc->is_native) {
-                    Component* comp = static_cast<Component*>(tc->data);
-                    result.append(py::cast(comp, py::return_value_policy::reference));
-                } else {
-                    // PythonComponent - data is PyObject*
-                    result.append(py::reinterpret_borrow<py::object>((PyObject*)tc->data));
-                }
+                result.append(CxxComponent::tc_to_python(tc));
             }
             return result;
         })
 
         // Hierarchy
-        .def("set_parent", &Entity::set_parent, py::arg("parent"),
-             py::keep_alive<2, 1>())  // parent keeps child alive
-        .def_property_readonly("parent", &Entity::parent, py::return_value_policy::reference)
+        .def("set_parent", [](Entity& e, py::object parent_obj) {
+            if (parent_obj.is_none()) {
+                e.set_parent(Entity());  // Invalid entity = no parent
+            } else {
+                Entity parent = parent_obj.cast<Entity>();
+                e.set_parent(parent);
+            }
+        }, py::arg("parent"))
+        .def_property_readonly("parent", [](Entity& e) -> py::object {
+            Entity p = e.parent();
+            if (p.valid()) {
+                return py::cast(p);
+            }
+            return py::none();
+        })
         .def("children", &Entity::children)
 
         // Lifecycle
@@ -556,12 +567,7 @@ PYBIND11_MODULE(_entity_native, m) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                py::object py_comp;
-                if (tc->is_native) {
-                    py_comp = py::cast(static_cast<Component*>(tc->data), py::return_value_policy::reference);
-                } else {
-                    py_comp = py::reinterpret_borrow<py::object>((PyObject*)tc->data);
-                }
+                py::object py_comp = CxxComponent::tc_to_python(tc);
 
                 if (py::hasattr(py_comp, "serialize")) {
                     py::object comp_data = py_comp.attr("serialize")();
@@ -574,12 +580,11 @@ PYBIND11_MODULE(_entity_native, m) {
 
             // Serialize children recursively
             py::list children_list;
-            for (Entity* child : e.children()) {
-                if (child->serializable()) {
-                    py::object child_obj = py::cast(child, py::return_value_policy::reference);
-                    py::object child_data = child_obj.attr("serialize")();
-                    if (!child_data.is_none()) {
-                        children_list.append(child_data);
+            for (Entity child : e.children()) {
+                if (child.serializable()) {
+                    nos::trent child_data = child.serialize();
+                    if (!child_data.is_nil()) {
+                        children_list.append(trent_to_py(child_data));
                     }
                 }
             }
@@ -588,37 +593,41 @@ PYBIND11_MODULE(_entity_native, m) {
             return result;
         })
         .def_static("deserialize", [](py::object data, py::object context) -> py::object {
-            if (data.is_none()) {
-                return py::none();
-            }
-            nos::trent tdata = py_to_trent(data);
-            Entity* ent = Entity::deserialize(tdata);
-            if (!ent) {
-                return py::none();
-            }
-            return py::cast(ent, py::return_value_policy::take_ownership);
+            // TODO: deserialize needs a pool - requires Scene context
+            // For now, return None - deserialization should happen via Scene
+            return py::none();
         }, py::arg("data"), py::arg("context") = py::none());
 
     // --- EntityRegistry ---
     py::class_<EntityRegistry>(m, "EntityRegistry")
         .def_static("instance", &EntityRegistry::instance, py::return_value_policy::reference)
-        .def("get", &EntityRegistry::get, py::arg("uuid"),
-             py::return_value_policy::reference)
-        .def("get_by_pick_id", &EntityRegistry::get_by_pick_id, py::arg("pick_id"),
-             py::return_value_policy::reference)
+        .def("get", [](EntityRegistry& reg, const std::string& uuid) -> py::object {
+            Entity ent = reg.get(uuid);
+            if (ent.valid()) {
+                return py::cast(ent);
+            }
+            return py::none();
+        }, py::arg("uuid"))
+        .def("get_by_pick_id", [](EntityRegistry& reg, uint32_t pick_id) -> py::object {
+            Entity ent = reg.get_by_pick_id(pick_id);
+            if (ent.valid()) {
+                return py::cast(ent);
+            }
+            return py::none();
+        }, py::arg("pick_id"))
         .def("clear", &EntityRegistry::clear)
         .def_property_readonly("entity_count", &EntityRegistry::entity_count)
         .def("swap_registries", [](EntityRegistry& reg, py::object new_by_uuid, py::object new_by_pick_id) {
             // Convert Python dicts to C++ maps
-            std::unordered_map<std::string, Entity*> cpp_by_uuid;
-            std::unordered_map<uint32_t, Entity*> cpp_by_pick_id;
+            std::unordered_map<std::string, Entity> cpp_by_uuid;
+            std::unordered_map<uint32_t, Entity> cpp_by_pick_id;
 
             // new_by_uuid: dict[str, Entity] or WeakValueDictionary
             if (!new_by_uuid.is_none()) {
                 for (auto item : new_by_uuid.attr("items")()) {
                     auto pair = item.cast<py::tuple>();
                     std::string uuid = pair[0].cast<std::string>();
-                    Entity* ent = pair[1].cast<Entity*>();
+                    Entity ent = pair[1].cast<Entity>();
                     cpp_by_uuid[uuid] = ent;
                 }
             }
@@ -628,7 +637,7 @@ PYBIND11_MODULE(_entity_native, m) {
                 for (auto item : new_by_pick_id.attr("items")()) {
                     auto pair = item.cast<py::tuple>();
                     uint32_t pick_id = pair[0].cast<uint32_t>();
-                    Entity* ent = pair[1].cast<Entity*>();
+                    Entity ent = pair[1].cast<Entity>();
                     cpp_by_pick_id[pick_id] = ent;
                 }
             }
@@ -640,15 +649,15 @@ PYBIND11_MODULE(_entity_native, m) {
             // Convert old registries back to Python dicts
             py::dict py_old_by_uuid;
             for (auto& [uuid, ent] : old_by_uuid) {
-                if (ent) {
-                    py_old_by_uuid[py::str(uuid)] = py::cast(ent, py::return_value_policy::reference);
+                if (ent.valid()) {
+                    py_old_by_uuid[py::str(uuid)] = py::cast(ent);
                 }
             }
 
             py::dict py_old_by_pick_id;
             for (auto& [pick_id, ent] : old_by_pick_id) {
-                if (ent) {
-                    py_old_by_pick_id[py::int_(pick_id)] = py::cast(ent, py::return_value_policy::reference);
+                if (ent.valid()) {
+                    py_old_by_pick_id[py::int_(pick_id)] = py::cast(ent);
                 }
             }
 
@@ -659,8 +668,8 @@ PYBIND11_MODULE(_entity_native, m) {
     BIND_NATIVE_COMPONENT(m, CXXRotatorComponent)
         .def_readwrite("speed", &CXXRotatorComponent::speed);
 
-    // Register Component::enabled in InspectRegistry for all components to inherit
-    InspectRegistry::instance().add<Component, bool>(
-        "Component", &Component::enabled, "enabled", "Enabled", "bool"
+    // Register CxxComponent::enabled in InspectRegistry for all components to inherit
+    InspectRegistry::instance().add<CxxComponent, bool>(
+        "Component", &CxxComponent::enabled, "enabled", "Enabled", "bool"
     );
 }

@@ -1,20 +1,19 @@
 #include "entity_handle.hpp"
-#include "entity.hpp"
 #include "entity_registry.hpp"
 
 namespace termin {
 
-Entity* EntityHandle::get() const {
+Entity EntityHandle::get() const {
     if (uuid.empty()) {
-        return nullptr;
+        return Entity();
     }
     return EntityRegistry::instance().get(uuid);
 }
 
 std::string EntityHandle::name() const {
-    Entity* ent = get();
-    if (ent != nullptr) {
-        const char* n = ent->name();
+    Entity ent = get();
+    if (ent.valid()) {
+        const char* n = ent.name();
         return n ? n : "";
     }
     if (uuid.size() > 8) {
@@ -23,11 +22,11 @@ std::string EntityHandle::name() const {
     return "<" + uuid + ">";
 }
 
-EntityHandle EntityHandle::from_entity(Entity* entity) {
-    if (entity == nullptr) {
+EntityHandle EntityHandle::from_entity(const Entity& entity) {
+    if (!entity.valid()) {
         return EntityHandle();
     }
-    const char* u = entity->uuid();
+    const char* u = entity.uuid();
     return EntityHandle(u ? u : "");
 }
 

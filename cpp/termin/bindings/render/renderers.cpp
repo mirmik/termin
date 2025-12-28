@@ -72,13 +72,13 @@ void bind_renderers(py::module_& m) {
             }
 
             std::cerr << "[SkeletonController] Processing " << bone_entities_list.size() << " bone entities" << std::endl;
-            std::vector<Entity*> entities;
+            std::vector<Entity> entities;
             for (auto item : bone_entities_list) {
                 if (!item.is_none()) {
-                    entities.push_back(item.cast<Entity*>());
+                    entities.push_back(item.cast<Entity>());
                 }
             }
-            controller->set_bone_entities_from_ptrs(std::move(entities));
+            controller->set_bone_entities_from_entities(std::move(entities));
             std::cerr << "[SkeletonController] Bone entities set" << std::endl;
             if (!check_heap()) {
                 std::cerr << "[SkeletonController] HEAP CORRUPTED after bone entities!" << std::endl;
@@ -116,12 +116,12 @@ void bind_renderers(py::module_& m) {
             py::return_value_policy::reference)
         .def_property("bone_entities",
             [](const SkeletonController& self) {
-                // Return resolved Entity* list
+                // Return resolved Entity list
                 py::list result;
                 for (const auto& handle : self.bone_entities) {
-                    Entity* e = handle.get();
-                    if (e) {
-                        result.append(py::cast(e, py::return_value_policy::reference));
+                    Entity e = handle.get();
+                    if (e.valid()) {
+                        result.append(py::cast(e));
                     } else {
                         result.append(py::none());
                     }
@@ -129,28 +129,26 @@ void bind_renderers(py::module_& m) {
                 return result;
             },
             [](SkeletonController& self, py::list entities) {
-                std::vector<Entity*> vec;
+                std::vector<Entity> vec;
                 for (auto item : entities) {
-                    if (item.is_none()) {
-                        vec.push_back(nullptr);
-                    } else {
-                        vec.push_back(item.cast<Entity*>());
+                    if (!item.is_none()) {
+                        vec.push_back(item.cast<Entity>());
                     }
                 }
-                self.set_bone_entities_from_ptrs(std::move(vec));
+                self.set_bone_entities_from_entities(std::move(vec));
             })
         .def_property_readonly("skeleton_instance",
             &SkeletonController::skeleton_instance,
             py::return_value_policy::reference)
         .def("set_skeleton", &SkeletonController::set_skeleton)
         .def("set_bone_entities", [](SkeletonController& self, py::list entities) {
-            std::vector<Entity*> vec;
+            std::vector<Entity> vec;
             for (auto item : entities) {
                 if (!item.is_none()) {
-                    vec.push_back(item.cast<Entity*>());
+                    vec.push_back(item.cast<Entity>());
                 }
             }
-            self.set_bone_entities_from_ptrs(std::move(vec));
+            self.set_bone_entities_from_entities(std::move(vec));
         })
         .def("invalidate_instance", &SkeletonController::invalidate_instance);
 

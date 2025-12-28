@@ -10,6 +10,7 @@
 
 #include "tc_types.h"
 #include "tc_entity.h"
+#include "tc_entity_pool.h"
 #include "tc_component.h"
 
 #ifdef __cplusplus
@@ -22,6 +23,9 @@ extern "C" {
 
 TC_API tc_scene* tc_scene_new(void);
 TC_API void tc_scene_free(tc_scene* s);
+
+// Get the entity pool owned by this scene
+TC_API tc_entity_pool* tc_scene_entity_pool(tc_scene* s);
 
 // ============================================================================
 // Entity Management

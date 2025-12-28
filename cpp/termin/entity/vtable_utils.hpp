@@ -7,15 +7,15 @@ namespace termin {
 // Utility for detecting virtual method overrides via vtable inspection.
 // Inspects the vtable directly to check if a derived class overrides a virtual method.
 
-// Helper class that can instantiate Component (protected constructor).
-class ENTITY_API ComponentVTableProbe : public Component {
+// Helper class that can instantiate CxxComponent (protected constructor).
+class ENTITY_API ComponentVTableProbe : public CxxComponent {
 public:
     ComponentVTableProbe() = default;
 };
 
 // Probe class that overrides ONLY update() - used to find its vtable slot.
 // Implementation is in vtable_utils.cpp to prevent ICF optimization.
-class ENTITY_API UpdateProbe : public Component {
+class ENTITY_API UpdateProbe : public CxxComponent {
 public:
     UpdateProbe() = default;
     void update(float dt) override;
@@ -25,7 +25,7 @@ private:
 
 // Probe class that overrides ONLY fixed_update() - used to find its vtable slot.
 // Implementation is in vtable_utils.cpp to prevent ICF optimization.
-class ENTITY_API FixedUpdateProbe : public Component {
+class ENTITY_API FixedUpdateProbe : public CxxComponent {
 public:
     FixedUpdateProbe() = default;
     void fixed_update(float dt) override;
@@ -44,9 +44,7 @@ private:
     static VTableSlots compute();
 };
 
-/**
- * Check if type T overrides Component::update().
- */
+// Check if type T overrides CxxComponent::update().
 template<typename T>
 bool component_overrides_update() {
     int slot = VTableSlots::instance().update_slot;
@@ -55,15 +53,13 @@ bool component_overrides_update() {
     ComponentVTableProbe base;
     T derived;
 
-    void** base_vtable = *reinterpret_cast<void***>(static_cast<Component*>(&base));
-    void** derived_vtable = *reinterpret_cast<void***>(static_cast<Component*>(&derived));
+    void** base_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&base));
+    void** derived_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&derived));
 
     return base_vtable[slot] != derived_vtable[slot];
 }
 
-/**
- * Check if type T overrides Component::fixed_update().
- */
+// Check if type T overrides CxxComponent::fixed_update().
 template<typename T>
 bool component_overrides_fixed_update() {
     int slot = VTableSlots::instance().fixed_update_slot;
@@ -72,26 +68,23 @@ bool component_overrides_fixed_update() {
     ComponentVTableProbe base;
     T derived;
 
-    void** base_vtable = *reinterpret_cast<void***>(static_cast<Component*>(&base));
-    void** derived_vtable = *reinterpret_cast<void***>(static_cast<Component*>(&derived));
+    void** base_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&base));
+    void** derived_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&derived));
 
     return base_vtable[slot] != derived_vtable[slot];
 }
 
-/**
- * Macro for binding native C++ components to pybind11.
- * Automatically sets up the factory with proper flag detection.
- *
- * Usage:
- *   BIND_NATIVE_COMPONENT(m, MyComponent)
- *       .def_readwrite("speed", &MyComponent::speed);
- */
+// Macro for binding native C++ components to pybind11.
+// Automatically sets up the factory with proper flag detection.
+//
+// Usage:
+//   BIND_NATIVE_COMPONENT(m, MyComponent)
+//       .def_readwrite("speed", &MyComponent::speed);
 #define BIND_NATIVE_COMPONENT(module, ClassName) \
-    py::class_<ClassName, Component>(module, #ClassName) \
+    py::class_<ClassName, CxxComponent>(module, #ClassName) \
         .def(py::init([]() { \
             auto comp = new ClassName(); \
             comp->set_type_name(#ClassName); \
-            comp->is_native = true; \
             comp->has_update = component_overrides_update<ClassName>(); \
             comp->has_fixed_update = component_overrides_fixed_update<ClassName>(); \
             return comp; \

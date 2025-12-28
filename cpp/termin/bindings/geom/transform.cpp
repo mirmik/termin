@@ -76,8 +76,12 @@ void bind_transform(py::module_& m) {
         .def_property_readonly("children",
             [](const GeneralTransform3& self) -> py::list {
                 py::list result;
-                for (GeneralTransform3 child : self.children()) {
-                    result.append(py::cast(child));
+                size_t count = self.children_count();
+                for (size_t i = 0; i < count; i++) {
+                    GeneralTransform3 child = self.child_at(i);
+                    if (child.valid()) {
+                        result.append(py::cast(child));
+                    }
                 }
                 return result;
             })
@@ -85,14 +89,14 @@ void bind_transform(py::module_& m) {
         // Entity back-pointer
         .def_property_readonly("entity",
             [](const GeneralTransform3& self) -> py::object {
-                Entity* e = self.entity();
-                if (!e) return py::none();
-                return py::cast(e, py::return_value_policy::reference);
+                Entity e = self.entity();
+                if (!e.valid()) return py::none();
+                return py::cast(e);
             })
 
         // Pose access
-        .def("local_pose", &GeneralTransform3::local_pose, py::return_value_policy::reference)
-        .def("global_pose", &GeneralTransform3::global_pose, py::return_value_policy::reference)
+        .def("local_pose", &GeneralTransform3::local_pose)
+        .def("global_pose", &GeneralTransform3::global_pose)
         .def("set_local_pose", [](GeneralTransform3& self, py::object pose) {
             self.set_local_pose(py_pose_to_cpp(pose));
         })
@@ -164,7 +168,8 @@ void bind_transform(py::module_& m) {
 
         // Hierarchy
         .def("add_child", [](GeneralTransform3& self, GeneralTransform3 child) {
-            self.add_child(child);
+            // add_child is implemented as set_parent on the child
+            child.set_parent(self);
         })
         .def("set_parent", [](GeneralTransform3& self, py::object parent) {
             if (parent.is_none()) {
@@ -176,12 +181,13 @@ void bind_transform(py::module_& m) {
         .def("_unparent", &GeneralTransform3::unparent)
         .def("unparent", &GeneralTransform3::unparent)
         .def("link", [](GeneralTransform3& self, GeneralTransform3 child) {
-            self.add_child(child);
+            // link is implemented as set_parent on the child
+            child.set_parent(self);
         })
 
-        // Dirty tracking
-        .def("is_dirty", &GeneralTransform3::is_dirty)
-        .def_property_readonly("version", &GeneralTransform3::version)
+        // Dirty tracking - removed, pool handles this internally
+        // .def("is_dirty", ...) - not exposed in pool API
+        // .def_property_readonly("version", ...) - not exposed in pool API
 
         // Transformations - return numpy arrays
         .def("transform_point", [](const GeneralTransform3& self, py::array_t<double> point) {

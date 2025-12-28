@@ -1,54 +1,58 @@
-// component.cpp - Component implementation with tc_component wrapper
+// component.cpp - CxxComponent implementation
 #include "component.hpp"
 
 namespace termin {
 
 // Static vtable for C++ components - dispatches to virtual methods
-const tc_component_vtable Component::_cpp_vtable = {
+const tc_component_vtable CxxComponent::_cxx_vtable = {
     // type_name - set per-instance via _c.type_name, not here
-    "Component",
+    "CxxComponent",
     // Lifecycle
-    Component::_cb_start,
-    Component::_cb_update,
-    Component::_cb_fixed_update,
-    Component::_cb_on_destroy,
+    CxxComponent::_cb_start,
+    CxxComponent::_cb_update,
+    CxxComponent::_cb_fixed_update,
+    CxxComponent::_cb_on_destroy,
     // Entity relationship
-    Component::_cb_on_added_to_entity,
-    Component::_cb_on_removed_from_entity,
+    CxxComponent::_cb_on_added_to_entity,
+    CxxComponent::_cb_on_removed_from_entity,
     // Scene relationship
-    Component::_cb_on_added,
-    Component::_cb_on_removed,
+    CxxComponent::_cb_on_added,
+    CxxComponent::_cb_on_removed,
     // Editor
-    Component::_cb_on_editor_start,
-    Component::_cb_setup_editor_defaults,
-    // Memory management - NULL since Component is managed by C++/Python
+    CxxComponent::_cb_on_editor_start,
+    CxxComponent::_cb_setup_editor_defaults,
+    // Memory management - NULL since CxxComponent is managed by C++/Python
     nullptr,
     // Serialization - NULL, handled by InspectRegistry
     nullptr,
     nullptr
 };
 
-Component::Component() {
+CxxComponent::CxxComponent() {
     // Initialize the C component structure
-    tc_component_init(&_c, &_cpp_vtable);
-    _c.data = this;  // Store 'this' for callbacks
+    tc_component_init(&_c, &_cxx_vtable);
+    _c.kind = TC_CXX_COMPONENT;
     _c.type_name = _type_name;
     // Sync initial flags
     _c.enabled = enabled;
     _c.active_in_editor = active_in_editor;
-    _c.is_native = is_native;
     _c._started = _started;
     _c.has_update = has_update;
     _c.has_fixed_update = has_fixed_update;
 }
 
-Component::~Component() {
-    // Nothing special needed - _c is embedded, not dynamically allocated
+CxxComponent::~CxxComponent() {
+    // Release Python wrapper reference if we have one
+    if (_c.py_wrap) {
+        py::handle wrapper(reinterpret_cast<PyObject*>(_c.py_wrap));
+        wrapper.dec_ref();
+        _c.py_wrap = nullptr;
+    }
 }
 
 // Static callbacks that dispatch to C++ virtual methods
-void Component::_cb_start(tc_component* c) {
-    auto* self = static_cast<Component*>(c->data);
+void CxxComponent::_cb_start(tc_component* c) {
+    auto* self = from_tc(c);
     if (self) {
         self->start();
         self->_started = true;
@@ -56,44 +60,44 @@ void Component::_cb_start(tc_component* c) {
     }
 }
 
-void Component::_cb_update(tc_component* c, float dt) {
-    auto* self = static_cast<Component*>(c->data);
+void CxxComponent::_cb_update(tc_component* c, float dt) {
+    auto* self = from_tc(c);
     if (self) {
         self->update(dt);
     }
 }
 
-void Component::_cb_fixed_update(tc_component* c, float dt) {
-    auto* self = static_cast<Component*>(c->data);
+void CxxComponent::_cb_fixed_update(tc_component* c, float dt) {
+    auto* self = from_tc(c);
     if (self) {
         self->fixed_update(dt);
     }
 }
 
-void Component::_cb_on_destroy(tc_component* c) {
-    auto* self = static_cast<Component*>(c->data);
+void CxxComponent::_cb_on_destroy(tc_component* c) {
+    auto* self = from_tc(c);
     if (self) {
         self->on_destroy();
     }
 }
 
-void Component::_cb_on_added_to_entity(tc_component* c) {
-    auto* self = static_cast<Component*>(c->data);
+void CxxComponent::_cb_on_added_to_entity(tc_component* c) {
+    auto* self = from_tc(c);
     if (self) {
         self->on_added_to_entity();
     }
 }
 
-void Component::_cb_on_removed_from_entity(tc_component* c) {
-    auto* self = static_cast<Component*>(c->data);
+void CxxComponent::_cb_on_removed_from_entity(tc_component* c) {
+    auto* self = from_tc(c);
     if (self) {
         self->on_removed_from_entity();
     }
 }
 
-void Component::_cb_on_added(tc_component* c, void* scene) {
+void CxxComponent::_cb_on_added(tc_component* c, void* scene) {
     (void)scene;  // Ignore - might be tc_scene* or PyObject*
-    auto* self = static_cast<Component*>(c->data);
+    auto* self = from_tc(c);
     if (self) {
         // Get Python scene from global current_scene
         try {
@@ -106,22 +110,22 @@ void Component::_cb_on_added(tc_component* c, void* scene) {
     }
 }
 
-void Component::_cb_on_removed(tc_component* c) {
-    auto* self = static_cast<Component*>(c->data);
+void CxxComponent::_cb_on_removed(tc_component* c) {
+    auto* self = from_tc(c);
     if (self) {
         self->on_removed();
     }
 }
 
-void Component::_cb_on_editor_start(tc_component* c) {
-    auto* self = static_cast<Component*>(c->data);
+void CxxComponent::_cb_on_editor_start(tc_component* c) {
+    auto* self = from_tc(c);
     if (self) {
         self->on_editor_start();
     }
 }
 
-void Component::_cb_setup_editor_defaults(tc_component* c) {
-    auto* self = static_cast<Component*>(c->data);
+void CxxComponent::_cb_setup_editor_defaults(tc_component* c) {
+    auto* self = from_tc(c);
     if (self) {
         self->setup_editor_defaults();
     }

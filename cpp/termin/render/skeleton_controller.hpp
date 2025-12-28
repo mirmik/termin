@@ -15,14 +15,12 @@
 
 namespace termin {
 
-/**
- * SkeletonController - Component that manages skeleton for skinned meshes.
- *
- * Holds SkeletonHandle and bone Entity references.
- * Creates SkeletonInstance lazily on first access.
- * SkinnedMeshRenderer uses this to get bone matrices.
- */
-class SkeletonController : public Component {
+// SkeletonController - Component that manages skeleton for skinned meshes.
+//
+// Holds SkeletonHandle and bone Entity references.
+// Creates SkeletonInstance lazily on first access.
+// SkinnedMeshRenderer uses this to get bone matrices.
+class SkeletonController : public CxxComponent {
 public:
     // Skeleton handle (wraps SkeletonAsset)
     SkeletonHandle skeleton;
@@ -54,14 +52,14 @@ public:
     void set_bone_entities(std::vector<EntityHandle> handles);
 
     /**
-     * Set bone entities from Entity pointers. Invalidates cached instance.
+     * Set bone entities from Entity values. Invalidates cached instance.
      */
-    void set_bone_entities_from_ptrs(std::vector<Entity*> entities);
+    void set_bone_entities_from_entities(std::vector<Entity> entities);
 
     /**
      * Get resolved bone entities (for SkeletonInstance).
      */
-    std::vector<Entity*> get_resolved_bone_entities() const;
+    std::vector<Entity> get_resolved_bone_entities() const;
 
     /**
      * Get or create SkeletonInstance.

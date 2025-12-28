@@ -1,6 +1,7 @@
 #include "guard/guard.h"
 #include "termin/collision/collision.hpp"
 #include "termin/geom/general_transform3.hpp"
+#include "termin/entity/entity.hpp"
 #include <vector>
 #include <algorithm>
 
@@ -14,6 +15,7 @@ using termin::Ray3;
 using termin::AABB;
 using termin::GeneralTransform3;
 using termin::GeneralPose3;
+using termin::Entity;
 
 // ==================== BVH tests ====================
 

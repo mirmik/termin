@@ -26,8 +26,8 @@
 
 namespace termin {
 
-// Forward declaration for component (kept for compatibility)
-class Component;
+// Forward declaration for CxxComponent (kept for compatibility)
+class CxxComponent;
 
 // The new InspectRegistry is imported via inspect_registry_compat.hpp
 // All types (EnumChoice, InspectFieldInfo, KindHandler, InspectRegistry)

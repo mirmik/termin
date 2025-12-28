@@ -81,7 +81,7 @@ public:
         const FBOMap& reads_fbos,
         const FBOMap& writes_fbos,
         const Rect4i& rect,
-        const std::vector<Entity*>& entities,
+        const std::vector<Entity>& entities,
         const Mat44f& view,
         const Mat44f& projection,
         const Vec3& camera_position,
@@ -131,11 +131,9 @@ public:
     }
 
 private:
-    /**
-     * Collect draw calls from entities.
-     */
+    // Collect draw calls from entities.
     std::vector<PhaseDrawCall> collect_draw_calls(
-        const std::vector<Entity*>& entities,
+        const std::vector<Entity>& entities,
         const std::string& phase_mark
     );
 

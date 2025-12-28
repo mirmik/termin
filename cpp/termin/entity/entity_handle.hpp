@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "entity.hpp"
 
 // DLL export/import macros for Windows
 #ifdef _WIN32
@@ -15,7 +16,6 @@
 
 namespace termin {
 
-class Entity;
 class EntityRegistry;
 
 // EntityHandle - lazy reference to Entity by UUID.
@@ -28,25 +28,18 @@ public:
     EntityHandle() = default;
     explicit EntityHandle(const std::string& uuid) : uuid(uuid) {}
 
-    /**
-     * Get the referenced Entity. Resolves lazily.
-     */
-    Entity* get() const;
+    // Get the referenced Entity. Resolves lazily.
+    // Returns invalid Entity if not found.
+    Entity get() const;
 
-    /**
-     * Check if handle has a UUID set.
-     */
+    // Check if handle has a UUID set.
     bool is_valid() const { return !uuid.empty(); }
 
-    /**
-     * Get entity name, or UUID prefix if not resolved.
-     */
+    // Get entity name, or UUID prefix if not resolved.
     std::string name() const;
 
-    /**
-     * Create handle from existing Entity.
-     */
-    static EntityHandle from_entity(Entity* entity);
+    // Create handle from existing Entity.
+    static EntityHandle from_entity(const Entity& entity);
 
     bool operator==(const EntityHandle& other) const { return uuid == other.uuid; }
     bool operator!=(const EntityHandle& other) const { return uuid != other.uuid; }
