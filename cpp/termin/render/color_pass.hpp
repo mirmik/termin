@@ -4,6 +4,7 @@
 #include <string>
 #include <set>
 #include <algorithm>
+#include <memory>
 #include <pybind11/pybind11.h>
 
 #include "termin/render/render_frame_pass.hpp"
@@ -131,6 +132,9 @@ public:
     }
 
 private:
+    // Temporary storage for Python drawable wrappers during render
+    std::vector<std::unique_ptr<Drawable>> _py_drawable_wrappers;
+
     /**
      * Collect draw calls from entities.
      */

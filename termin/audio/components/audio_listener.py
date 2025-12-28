@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
 
 
-class AudioListener(Component):
+class AudioListener(PythonComponent):
     """
     Component that represents the audio listener (ears) in the scene.
 

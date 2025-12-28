@@ -9,7 +9,6 @@ namespace termin {
 
 MeshRenderer::MeshRenderer() {
     _type_name = "MeshRenderer";
-    is_native = true;
 }
 
 void MeshRenderer::set_mesh(const MeshHandle& handle) {

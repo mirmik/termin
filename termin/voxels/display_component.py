@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, List, Optional, Set, Tuple
 
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
@@ -91,7 +91,7 @@ CUBE_SCALE = 0.85  # Размер кубика относительно ячей
 MAX_VOXELS = 100_000
 
 
-class VoxelDisplayComponent(Component):
+class VoxelDisplayComponent(PythonComponent):
     """
     Компонент для отображения воксельной сетки из ResourceManager.
 
@@ -106,6 +106,7 @@ class VoxelDisplayComponent(Component):
             path="voxel_grid",
             label="Voxel Grid",
             kind="voxel_grid_handle",
+            getter=lambda obj: obj._grid_handle,
             setter=lambda obj, val: obj.set_voxel_grid(val),
         ),
         "color_below": InspectField(
@@ -228,13 +229,23 @@ class VoxelDisplayComponent(Component):
     def voxel_grid(self, value: Optional["VoxelGrid"]) -> None:
         self.set_voxel_grid(value)
 
-    def set_voxel_grid(self, grid: Optional["VoxelGrid"]) -> None:
-        """Установить воксельную сетку."""
-        if grid is None:
+    def set_voxel_grid(self, value) -> None:
+        """Установить воксельную сетку.
+
+        Args:
+            value: VoxelGrid, VoxelGridHandle, or None
+        """
+        if value is None:
             self._grid_handle = VoxelGridHandle()
             self._voxel_grid_name = ""
+        elif isinstance(value, VoxelGridHandle):
+            # Direct handle (from deserialization)
+            self._grid_handle = value
+            grid = value.get_grid()
+            self._voxel_grid_name = grid.name if grid else ""
         else:
-            # Создаём handle по имени для поддержки hot-reload
+            # VoxelGrid object
+            grid = value
             name = grid.name
             if name:
                 self._grid_handle = VoxelGridHandle.from_name(name)

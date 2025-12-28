@@ -3,6 +3,7 @@
 #include "../include/tc_profiler.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 // ============================================================================
 // Dynamic Array Helper
@@ -130,7 +131,8 @@ static size_t find_insert_index(tc_scene* s, int priority) {
     while (left < right) {
         size_t mid = left + (right - left) / 2;
         tc_entity* e = (tc_entity*)s->entities.items[mid];
-        if (tc_entity_priority(e) < priority) {
+        int ep = tc_entity_priority(e);
+        if (ep < priority) {
             left = mid + 1;
         } else {
             right = mid;

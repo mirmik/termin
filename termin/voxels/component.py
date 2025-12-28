@@ -6,14 +6,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.voxels.grid import VoxelGrid
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
 
 
-class VoxelGridComponent(Component):
+class VoxelGridComponent(PythonComponent):
     """
     Компонент, хранящий воксельную сетку.
 

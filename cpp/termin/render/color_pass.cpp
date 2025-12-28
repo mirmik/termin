@@ -6,6 +6,79 @@ namespace termin {
 
 namespace {
 
+// Wrapper for Python Drawable objects
+class PyDrawableWrapper : public Drawable {
+public:
+    py::object py_obj;
+    py::object py_drawable;  // Cached Drawable base class for isinstance check
+    std::vector<std::unique_ptr<MaterialPhase>> temp_phases;  // Temporary phases from Python
+
+    explicit PyDrawableWrapper(py::object obj) : py_obj(std::move(obj)) {}
+
+    std::set<std::string> get_phase_marks() const override {
+        std::set<std::string> marks;
+        try {
+            py::object phase_marks_attr = py_obj.attr("phase_marks");
+            for (auto mark : phase_marks_attr) {
+                marks.insert(mark.cast<std::string>());
+            }
+        } catch (...) {
+            // Ignore errors
+        }
+        return marks;
+    }
+
+    void draw_geometry(const RenderContext& context, const std::string& geometry_id = "") override {
+        try {
+            py::object draw_method = py_obj.attr("draw_geometry");
+            // Create a Python RenderContext - need to pass the C++ context
+            draw_method(py::cast(&context, py::return_value_policy::reference), geometry_id);
+        } catch (const py::error_already_set& e) {
+            // Log but don't crash
+            PyErr_Clear();
+        }
+    }
+
+    std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override {
+        std::vector<GeometryDrawCall> result;
+        temp_phases.clear();
+
+        try {
+            py::object draws;
+            if (phase_mark && !phase_mark->empty()) {
+                draws = py_obj.attr("get_geometry_draws")(*phase_mark);
+            } else {
+                draws = py_obj.attr("get_geometry_draws")(py::none());
+            }
+
+            for (auto item : draws) {
+                // item is a GeometryDrawCall from Python
+                py::object phase_obj = item.attr("phase");
+                if (phase_obj.is_none()) {
+                    continue;
+                }
+
+                // Get the C++ MaterialPhase pointer from Python object
+                MaterialPhase* phase = phase_obj.cast<MaterialPhase*>();
+                std::string geom_id = "";
+                if (py::hasattr(item, "geometry_id")) {
+                    py::object gid = item.attr("geometry_id");
+                    if (!gid.is_none()) {
+                        geom_id = gid.cast<std::string>();
+                    }
+                }
+
+                result.emplace_back(phase, geom_id);
+            }
+        } catch (const py::error_already_set& e) {
+            // Log but don't crash
+            PyErr_Clear();
+        }
+
+        return result;
+    }
+};
+
 /**
  * Get model matrix from Entity as Mat44f.
  * Entity::model_matrix outputs row-major double[16], Mat44f is column-major float.
@@ -73,6 +146,9 @@ std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
 ) {
     std::vector<PhaseDrawCall> draw_calls;
 
+    // Clear temporary Python drawable wrappers from previous frame
+    _py_drawable_wrappers.clear();
+
     for (Entity* entity : entities) {
         if (!entity->active() || !entity->visible()) {
             continue;
@@ -82,16 +158,44 @@ std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
         size_t comp_count = entity->component_count();
         for (size_t ci = 0; ci < comp_count; ci++) {
             tc_component* tc = entity->component_at(ci);
-            if (!tc || !tc->is_native || !tc->enabled) {
-                continue;
-            }
-            Component* component = static_cast<Component*>(tc->data);
-            if (!component) {
+            if (!tc || !tc->enabled) {
                 continue;
             }
 
-            // Try to cast to Drawable
-            Drawable* drawable = dynamic_cast<Drawable*>(component);
+            Drawable* drawable = nullptr;
+
+            if (tc->is_native) {
+                // C++ component - cast directly
+                Component* component = static_cast<Component*>(tc->data);
+                if (!component) {
+                    continue;
+                }
+                drawable = dynamic_cast<Drawable*>(component);
+            } else {
+                // Python component - check if it has get_geometry_draws method
+                if (!tc->data) {
+                    continue;
+                }
+
+                try {
+                    py::object py_comp = py::reinterpret_borrow<py::object>(
+                        reinterpret_cast<PyObject*>(tc->data)
+                    );
+
+                    // Has get_geometry_draws = can be drawn by ColorPass
+                    if (!py::hasattr(py_comp, "get_geometry_draws")) {
+                        continue;
+                    }
+
+                    // Create wrapper and store it
+                    auto wrapper = std::make_unique<PyDrawableWrapper>(py_comp);
+                    drawable = wrapper.get();
+                    _py_drawable_wrappers.push_back(std::move(wrapper));
+                } catch (...) {
+                    continue;
+                }
+            }
+
             if (!drawable) {
                 continue;
             }

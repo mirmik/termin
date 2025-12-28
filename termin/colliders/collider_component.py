@@ -4,11 +4,11 @@ from termin.colliders import (
     Collider, SphereCollider, BoxCollider, CapsuleCollider, AttachedCollider
 )
 from termin.geombase import Vec3
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.editor.inspect_field import InspectField
 
 
-class ColliderComponent(Component):
+class ColliderComponent(PythonComponent):
     """
     Компонент, навешиваемый на Entity.
     Оборачивает коллайдер в AttachedCollider, который следует за entity.transform.

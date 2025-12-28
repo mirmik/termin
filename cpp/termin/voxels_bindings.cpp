@@ -499,6 +499,13 @@ PYBIND11_MODULE(_voxels_native, m) {
         .def_static("from_name", &VoxelGridHandle::from_name, py::arg("name"))
         .def_static("from_asset", &VoxelGridHandle::from_asset, py::arg("asset"))
         .def_static("from_uuid", &VoxelGridHandle::from_uuid, py::arg("uuid"))
+        .def_static("from_grid", [](py::object grid) {
+            // Create VoxelGridAsset from grid, then wrap in handle
+            py::module_ assets = py::module_::import("termin.assets.voxel_grid_asset");
+            py::object VoxelGridAsset = assets.attr("VoxelGridAsset");
+            py::object asset = VoxelGridAsset.attr("from_grid")(grid);
+            return VoxelGridHandle(asset);
+        }, py::arg("grid"))
         .def_static("deserialize", &VoxelGridHandle::deserialize, py::arg("data"))
         .def_readwrite("asset", &VoxelGridHandle::asset)
         .def_property_readonly("is_valid", &VoxelGridHandle::is_valid)

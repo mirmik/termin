@@ -11,14 +11,14 @@ from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
 
 
-class PrefabInstanceMarker(Component):
+class PrefabInstanceMarker(PythonComponent):
     """
     Marker component linking an Entity to its source PrefabAsset.
 

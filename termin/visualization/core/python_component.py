@@ -33,9 +33,6 @@ class PythonComponent:
         self._tc = TcComponent(self, type_name)
         self._tc.enabled = enabled
 
-        # Entity reference (set by Entity.add_component)
-        self._entity: Optional[Entity] = None
-
         # Scene reference (set by on_added)
         self._scene: Optional[Scene] = None
 
@@ -43,8 +40,8 @@ class PythonComponent:
         """Called when a class inherits from PythonComponent."""
         super().__init_subclass__(**kwargs)
 
-        # Don't register the base class itself
-        if cls.__name__ == "PythonComponent":
+        # Don't register base classes
+        if cls.__name__ in ("PythonComponent", "InputPythonComponent"):
             return
 
         # Collect all inspect_fields from class hierarchy
@@ -120,11 +117,8 @@ class PythonComponent:
 
     @property
     def entity(self) -> Optional[Entity]:
-        return self._entity
-
-    @entity.setter
-    def entity(self, value: Optional[Entity]) -> None:
-        self._entity = value
+        """Get entity from C side (tc_component->entity)."""
+        return self._tc.entity
 
     # =========================================================================
     # Type identification
@@ -227,4 +221,32 @@ class PythonComponent:
         }
 
 
-__all__ = ["PythonComponent"]
+class InputPythonComponent(PythonComponent):
+    """
+    Python component capable of handling input events.
+
+    Provides the same input API as C++ InputComponent.
+    """
+
+    def __init__(self, enabled: bool = True, active_in_editor: bool = False):
+        super().__init__(enabled=enabled)
+        self.active_in_editor = active_in_editor
+
+    def on_mouse_button(self, event) -> None:
+        """Called on mouse button press/release."""
+        pass
+
+    def on_mouse_move(self, event) -> None:
+        """Called on mouse movement."""
+        pass
+
+    def on_scroll(self, event) -> None:
+        """Called on scroll wheel."""
+        pass
+
+    def on_key(self, event) -> None:
+        """Called on key press/release."""
+        pass
+
+
+__all__ = ["PythonComponent", "InputPythonComponent"]

@@ -29,17 +29,10 @@ const tc_component_vtable Component::_cpp_vtable = {
 };
 
 Component::Component() {
-    // Initialize the C component structure
+    // Initialize the C component structure (sets default flags)
     tc_component_init(&_c, &_cpp_vtable);
     _c.data = this;  // Store 'this' for callbacks
     _c.type_name = _type_name;
-    // Sync initial flags
-    _c.enabled = enabled;
-    _c.active_in_editor = active_in_editor;
-    _c.is_native = is_native;
-    _c._started = _started;
-    _c.has_update = has_update;
-    _c.has_fixed_update = has_fixed_update;
 }
 
 Component::~Component() {
@@ -51,7 +44,6 @@ void Component::_cb_start(tc_component* c) {
     auto* self = static_cast<Component*>(c->data);
     if (self) {
         self->start();
-        self->_started = true;
         c->_started = true;
     }
 }

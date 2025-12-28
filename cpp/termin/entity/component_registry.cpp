@@ -49,7 +49,6 @@ py::object ComponentRegistry::create(const std::string& name) const {
 
     if (info.is_native) {
         Component* comp = info.native_factory();
-        comp->is_native = true;
         return py::cast(comp, py::return_value_policy::take_ownership);
     } else {
         return info.python_class();
@@ -66,14 +65,12 @@ Component* ComponentRegistry::create_component(const std::string& name) const {
 
     if (info.is_native) {
         Component* comp = info.native_factory();
-        comp->is_native = true;
         return comp;
     } else {
         // Create Python component that inherits from C++ Component
         // is_native=true because storage mechanism is the same (embedded _c with data=this)
         py::object py_comp = info.python_class();
         Component* comp = py_comp.cast<Component*>();
-        comp->is_native = true;
         comp->set_type_name(name.c_str());
         // prevent python side destroy
         py_comp.inc_ref();
@@ -103,7 +100,6 @@ py::object ComponentRegistry::get_class(const std::string& name) const {
     if (info.is_native) {
         // For native components, create an instance and return its type
         Component* comp = info.native_factory();
-        comp->is_native = true;
         py::object py_comp = py::cast(comp, py::return_value_policy::take_ownership);
         return py::type::of(py_comp);
     } else {

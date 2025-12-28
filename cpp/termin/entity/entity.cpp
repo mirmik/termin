@@ -4,8 +4,6 @@
 #include "component_registry.hpp"
 #include "../inspect/inspect_registry.hpp"
 #include <algorithm>
-#include <iostream>
-#include <cstdio>
 
 namespace termin {
 
@@ -132,31 +130,30 @@ void Entity::add_component(Component* component) {
     if (!component || !_e) return;
 
     component->entity = this;
-    component->sync_to_c();
+    // tc_entity_add_component calls tc_component_on_added_to_entity via vtable
     tc_entity_add_component(_e, component->c_component());
-    component->on_added_to_entity();
 }
 
 void Entity::add_component_ptr(tc_component* c) {
     if (!c || !_e) return;
 
+    // tc_entity_add_component calls tc_component_on_added_to_entity via vtable
     tc_entity_add_component(_e, c);
-    tc_component_on_added_to_entity(c);
 }
 
 void Entity::remove_component(Component* component) {
     if (!component || !_e) return;
 
+    // tc_entity_remove_component calls tc_component_on_removed_from_entity via vtable
     tc_entity_remove_component(_e, component->c_component());
-    component->on_removed_from_entity();
     component->entity = nullptr;
 }
 
 void Entity::remove_component_ptr(tc_component* c) {
     if (!c || !_e) return;
 
+    // tc_entity_remove_component calls tc_component_on_removed_from_entity via vtable
     tc_entity_remove_component(_e, c);
-    tc_component_on_removed_from_entity(c);
 }
 
 Component* Entity::get_component_by_type(const std::string& type_name) {
@@ -339,16 +336,65 @@ Entity* Entity::deserialize(const nos::trent& data) {
             std::string comp_type = comp_data["type"].as_string_default("");
             if (comp_type.empty() || !reg.has(comp_type)) continue;
 
-            Component* comp = reg.create_component(comp_type);
-            if (!comp) continue;
+            // Use create() which returns py::object - works for both Component and PythonComponent
+            py::object py_comp = reg.create(comp_type);
+            if (py_comp.is_none()) continue;
 
-            // Deserialize component data via InspectRegistry
+            // Check if it's a C++ Component or PythonComponent BEFORE deserializing
+            // C++ Component can be cast to Component*
+            // PythonComponent has _tc attribute with c_ptr_int() method
             const nos::trent* inner = comp_data.get(nos::trent_path("data"));
-            if (inner && inner->is_dict()) {
-                InspectRegistry::instance().deserialize_all(comp, comp_type, *inner);
+
+            Component* cpp_comp = nullptr;
+            try {
+                cpp_comp = py_comp.cast<Component*>();
+            } catch (const py::cast_error&) {
+                cpp_comp = nullptr;
             }
 
-            ent->add_component(comp);
+            if (cpp_comp) {
+                // C++ Component - pass Component* to deserialize_all
+                if (inner && inner->is_dict()) {
+                    InspectRegistry::instance().deserialize_all(cpp_comp, comp_type, *inner);
+                }
+                ent->add_component(cpp_comp);
+                // Keep Python reference alive
+                py_comp.inc_ref();
+            } else if (py::hasattr(py_comp, "_tc")) {
+                // PythonComponent - deserialize using Python setattr directly
+                if (inner && inner->is_dict()) {
+                    auto& reg = InspectRegistry::instance();
+                    for (const auto& f : reg.all_fields(comp_type)) {
+                        if (f.non_serializable) continue;
+                        if (!inner->contains(f.path)) continue;
+                        const auto& field_data = (*inner)[f.path];
+                        if (field_data.is_nil()) continue;
+
+                        py::object val;
+                        auto* handler = reg.get_kind_handler(f.kind);
+                        if (handler && handler->deserialize) {
+                            val = handler->deserialize(field_data);
+                        } else {
+                            tc_value tv = tc::trent_to_tc_value(field_data);
+                            val = tc::tc_value_to_py(&tv);
+                            tc_value_free(&tv);
+                        }
+
+                        // Use Python setattr directly
+                        try {
+                            py::setattr(py_comp, f.path.c_str(), val);
+                        } catch (...) {}
+                    }
+                }
+                py::object tc_wrapper = py_comp.attr("_tc");
+                uintptr_t ptr = tc_wrapper.attr("c_ptr_int")().cast<uintptr_t>();
+                tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+                if (tc) {
+                    ent->add_component_ptr(tc);
+                    // Keep Python reference alive
+                    py_comp.inc_ref();
+                }
+            }
         }
     }
 

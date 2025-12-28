@@ -8,7 +8,6 @@ SkeletonController::SkeletonController()
     : Component()
 {
     _type_name = "SkeletonController";
-    is_native = true;
 }
 
 void SkeletonController::set_skeleton(const SkeletonHandle& handle) {

@@ -86,10 +86,9 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
 
         std::string path_copy = info.path;
 
+        // For Python-registered fields, obj is always PyObject*
         info.getter = [path_copy, py_getter](void* obj) -> py::object {
-            // Cast to Component* so pybind11 can find the registered type
-            py::object py_obj = py::cast(static_cast<termin::Component*>(obj),
-                                         py::return_value_policy::reference);
+            py::object py_obj = py::reinterpret_borrow<py::object>((PyObject*)obj);
             if (!py_getter.is_none()) {
                 return py_getter(py_obj);
             }
@@ -105,9 +104,7 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
 
         info.setter = [path_copy, py_setter](void* obj, py::object value) {
             try {
-                // Cast to Component* so pybind11 can find the registered type
-                py::object py_obj = py::cast(static_cast<termin::Component*>(obj),
-                                             py::return_value_policy::reference);
+                py::object py_obj = py::reinterpret_borrow<py::object>((PyObject*)obj);
                 if (!py_setter.is_none()) {
                     py_setter(py_obj, value);
                     return;

@@ -189,7 +189,7 @@ PYBIND11_MODULE(_entity_native, m) {
         .def(py::init<>())
         .def(py::init([](bool enabled) {
             auto c = new PyComponent();
-            c->enabled = enabled;
+            c->set_enabled(enabled);
             return c;
         }), py::arg("enabled") = true)
         .def("type_name", &Component::type_name)
@@ -204,14 +204,12 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("on_removed_from_entity", &Component::on_removed_from_entity)
         .def("on_added", &Component::on_added, py::arg("scene"))
         .def("on_removed", &Component::on_removed)
-        .def_readwrite("enabled", &Component::enabled)
-        .def_readwrite("active_in_editor", &Component::active_in_editor)
-        .def_readonly("is_native", &Component::is_native)
-        .def_readwrite("_started", &Component::_started)
-        .def_readwrite("has_update", &Component::has_update)
-        .def_readwrite("has_fixed_update", &Component::has_fixed_update)
-        .def("sync_to_c", &Component::sync_to_c)
-        .def("sync_from_c", &Component::sync_from_c)
+        .def_property("enabled", &Component::enabled, &Component::set_enabled)
+        .def_property("active_in_editor", &Component::active_in_editor, &Component::set_active_in_editor)
+        .def_property_readonly("is_native", &Component::is_native)
+        .def_property("_started", &Component::started, &Component::set_started)
+        .def_property("has_update", &Component::has_update, &Component::set_has_update)
+        .def_property("has_fixed_update", &Component::has_fixed_update, &Component::set_has_fixed_update)
         .def("c_component", static_cast<tc_component* (Component::*)()>(&Component::c_component),
              py::return_value_policy::reference)
         .def_property("entity",
@@ -429,12 +427,7 @@ PYBIND11_MODULE(_entity_native, m) {
             if (py::hasattr(component, "c_component_ptr")) {
                 uintptr_t ptr = component.attr("c_component_ptr")().cast<uintptr_t>();
                 tc_component* tc = reinterpret_cast<tc_component*>(ptr);
-
-                // Set entity reference on PythonComponent
-                if (py::hasattr(component, "entity")) {
-                    component.attr("entity") = py::cast(&e, py::return_value_policy::reference);
-                }
-
+                // Entity reference is set automatically in tc_entity_add_component
                 e.add_component_ptr(tc);
                 return component;
             }
@@ -660,7 +653,9 @@ PYBIND11_MODULE(_entity_native, m) {
         .def_readwrite("speed", &CXXRotatorComponent::speed);
 
     // Register Component::enabled in InspectRegistry for all components to inherit
-    InspectRegistry::instance().add<Component, bool>(
-        "Component", &Component::enabled, "enabled", "Enabled", "bool"
+    InspectRegistry::instance().add_with_accessors<Component, bool>(
+        "Component", "enabled", "Enabled", "bool",
+        [](Component* c) { return c->enabled(); },
+        [](Component* c, bool v) { c->set_enabled(v); }
     );
 }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.component import InputComponent
+from termin.visualization.core.python_component import InputPythonComponent
 from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEvent
 from termin.visualization.platform.backends.base import Action
 from termin.visualization.ui.widgets.ui import UI
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from termin.assets.ui_handle import UIHandle
 
 
-class UIComponent(InputComponent):
+class UIComponent(InputPythonComponent):
     """
     Component that manages a widget-based UI overlay.
 

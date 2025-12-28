@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 import numpy as np
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.scene import get_current_scene
 from termin.fem.dynamic_assembler import DynamicMatrixAssembler
 from termin.editor.inspect_field import InspectField
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from termin.physics.fem_revolute_joint_component import FEMRevoluteJointComponent
 
 
-class FEMPhysicsWorldComponent(Component):
+class FEMPhysicsWorldComponent(PythonComponent):
     """
     Компонент, управляющий FEM физической симуляцией.
 

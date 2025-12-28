@@ -75,12 +75,16 @@ def build_scene(world):
         intensity=1.0,
         shadows=LightShadowParams(enabled=True, map_resolution=2048),
     )
+    print("Adding LightComponent 222")
     light_entity.add_component(light_component)
+    print("Added LightComponent 222")
     # Направление света: [0.5, -1.0, 0.5] (совпадает с ShadowPass)
     # Для directional light направление берётся из трансформа сущности
     scene.add(light_entity)
+    print("Light entity added to scene 222")
 
     world.add_scene(scene)
+    print("Scene added to world")
 
     return scene
 
@@ -134,9 +138,11 @@ def run_editor():
     # Create world and scene
     world = VisualizationWorld()
     scene = build_scene(world)
+    print("Scene built")
 
     # Apply dark theme
     apply_dark_palette(app)
+    print("Dark palette applied")
 
     # Create editor window with SDL backend
     win = EditorWindow(world, scene, sdl_backend)
@@ -150,6 +156,7 @@ def run_editor():
     target_frame_time = 1.0 / target_fps
     last_time = time.perf_counter()
 
+    print("Entering main loop")
     while not win.should_close():
         current_time = time.perf_counter()
         dt = current_time - last_time

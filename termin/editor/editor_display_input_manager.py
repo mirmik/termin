@@ -114,11 +114,12 @@ class EditorDisplayInputManager:
     def _dispatch_to_camera(self, viewport: "Viewport", event_name: str, event) -> None:
         """Диспатчит событие в InputComponent'ы камеры viewport'а."""
         from termin.visualization.core.component import InputComponent
+        from termin.visualization.core.python_component import InputPythonComponent
         camera = viewport.camera
         if camera is None or camera.entity is None:
             return
         for comp in camera.entity.components:
-            if isinstance(comp, InputComponent):
+            if isinstance(comp, (InputComponent, InputPythonComponent)):
                 handler = getattr(comp, event_name, None)
                 if handler:
                     handler(event)

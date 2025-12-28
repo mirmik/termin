@@ -22,37 +22,41 @@ class Entity;  // Forward declaration
 // Internally wraps tc_component (C core) for future Scene integration.
 class ENTITY_API Component {
 public:
-    // --- Fields (public) ---
-
-    // Flags (synced to internal tc_component structure)
-    bool enabled = true;
-    bool active_in_editor = false;
-    // is_native=true means _c.data is Component* (including Python classes inheriting C++ Component)
-    // is_native=false means _c.data is PyObject* (pure Python components using TcComponent)
-    bool is_native = true;
-    bool _started = false;
-    bool has_update = false;
-    bool has_fixed_update = false;
+    // --- Fields ---
 
     // Owner entity (set by Entity::add_component)
     Entity* entity = nullptr;
 
 protected:
-    // --- Fields (protected) ---
-
     const char* _type_name = "Component";
-    tc_component _c;  // Internal C component structure
+    tc_component _c;  // All flags stored here
 
 private:
-    // --- Fields (private) ---
-
-    // Static vtable for C++ components - dispatches to virtual methods
     static const tc_component_vtable _cpp_vtable;
 
 public:
     // --- Methods ---
 
     virtual ~Component();
+
+    // --- Accessors for tc_component flags ---
+
+    bool enabled() const { return _c.enabled; }
+    void set_enabled(bool v) { _c.enabled = v; }
+
+    bool active_in_editor() const { return _c.active_in_editor; }
+    void set_active_in_editor(bool v) { _c.active_in_editor = v; }
+
+    bool is_native() const { return _c.is_native; }
+
+    bool started() const { return _c._started; }
+    void set_started(bool v) { _c._started = v; }
+
+    bool has_update() const { return _c.has_update; }
+    void set_has_update(bool v) { _c.has_update = v; }
+
+    bool has_fixed_update() const { return _c.has_fixed_update; }
+    void set_has_fixed_update(bool v) { _c.has_fixed_update = v; }
 
     // Type identification (for serialization)
     const char* type_name() const { return _type_name; }
@@ -129,26 +133,6 @@ public:
         }
     }
 
-    // Sync C++ fields to C structure (call before C code uses _c)
-    void sync_to_c() {
-        _c.enabled = enabled;
-        _c.active_in_editor = active_in_editor;
-        _c.is_native = is_native;
-        _c._started = _started;
-        _c.has_update = has_update;
-        _c.has_fixed_update = has_fixed_update;
-        _c.type_name = _type_name;
-    }
-
-    // Sync C structure back to C++ fields (call after C code modifies _c)
-    void sync_from_c() {
-        enabled = _c.enabled;
-        active_in_editor = _c.active_in_editor;
-        is_native = _c.is_native;
-        _started = _c._started;
-        has_update = _c.has_update;
-        has_fixed_update = _c.has_fixed_update;
-    }
 
 protected:
     Component();

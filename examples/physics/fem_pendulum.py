@@ -67,8 +67,11 @@ def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComp
         pose=Pose3.from_euler(np.deg2rad(-45), np.deg2rad(-45), 0),
         name="Light",
     )
+    print("Adding LightComponent")
     light_entity.add_component(LightComponent())
+    print("Added LightComponent")
     scene.add(light_entity)
+    print("Light entity added to scene")
 
     # --- Camera ---
     camera_entity = Entity(name="Camera")

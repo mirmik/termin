@@ -7,6 +7,7 @@ from typing import Callable, List, Sequence, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.core.component import Component, InputComponent
+from termin.visualization.core.python_component import InputPythonComponent
 from termin.visualization.core.entity import Entity
 from termin._native.scene import TcScene
 from termin.lighting import Light
@@ -299,7 +300,7 @@ class Scene:
             idx = i + 1
         self._entities.insert(idx, entity)
 
-        # Add to C core scene (registers components in tc_scene, calls on_added via vtable)
+        # Add to C core scene (registers components in tc_scene)
         prev_scene = _current_scene
         _current_scene = self
         try:
@@ -309,7 +310,14 @@ class Scene:
             for component in entity.components:
                 self._register_component_python_specific(component)
 
+            # Call on_added for entity first (sets up entity-scene relationship)
             entity.on_added(self)
+
+            # Then call on_added for components (they can now access entity and scene)
+            for component in entity.components:
+                if hasattr(component, 'on_added'):
+                    component.on_added(self)
+
             self._on_entity_added.emit(entity)
         finally:
             _current_scene = prev_scene
@@ -445,7 +453,7 @@ class Scene:
         if isinstance(component, LightComponent):
             self._lighting.register_light_component(component)
 
-        if isinstance(component, InputComponent):
+        if isinstance(component, (InputComponent, InputPythonComponent)):
             self._input_components.append(component)
 
     def register_component(self, component: Component):
@@ -470,8 +478,7 @@ class Scene:
             # Pure Python component - use pointer-based registration
             self._tc_scene.register_component_ptr(component.c_component_ptr())
         else:
-            # C++ Component - sync flags and use object-based registration
-            component.sync_to_c()
+            # C++ Component - use object-based registration
             self._tc_scene.register_component(component)
 
     def unregister_component(self, component: Component):
@@ -484,7 +491,7 @@ class Scene:
         if isinstance(component, LightComponent):
             self._lighting.unregister_light_component(component)
 
-        if isinstance(component, InputComponent) and component in self._input_components:
+        if isinstance(component, (InputComponent, InputPythonComponent)) and component in self._input_components:
             self._input_components.remove(component)
 
         # Unregister from TcScene

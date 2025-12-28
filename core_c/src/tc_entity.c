@@ -166,10 +166,12 @@ void tc_entity_free(tc_entity* e) {
         tc_component* c = e->components[i];
         if (c) {
             tc_component_on_removed_from_entity(c);
+            c->entity = NULL;  // Clear before freeing/leaving
             if (c->is_native) {
                 tc_component_drop(c);
                 free(c);
             }
+            // Python components: entity = NULL signals TcComponent destructor to free
         }
     }
     free(e->components);

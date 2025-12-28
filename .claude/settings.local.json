@@ -75,7 +75,8 @@
       "Bash(./termin_core_test:*)",
       "Bash(./termin_core_test_cpp)",
       "Bash(sort:*)",
-      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 10 python3:*)"
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 10 python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 5 python3:*)"
     ]
   }
 }

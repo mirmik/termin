@@ -10,19 +10,16 @@ namespace py = pybind11;
 namespace termin {
 
 // Helper to extract raw pointer from Python object
+// For Python-registered fields (register_python_fields), always returns PyObject*
 static void* get_raw_pointer(py::object obj) {
-    // Try Component first (covers all component types)
-    try {
-        return static_cast<void*>(obj.cast<Component*>());
-    } catch (const py::cast_error&) {}
-
-    // Material uses shared_ptr
+    // Material uses shared_ptr - handle specially
     try {
         return static_cast<void*>(obj.cast<Material*>());
     } catch (const py::cast_error&) {}
 
-    // Fallback
-    return py::cast<void*>(obj);
+    // For all Python objects (Component, PythonComponent, etc.), return PyObject*
+    // The getter/setter in register_python_fields expects PyObject*
+    return static_cast<void*>(obj.ptr());
 }
 
 void bind_inspect(py::module_& m) {

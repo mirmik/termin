@@ -21,9 +21,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            -2.440293312072754,
-            1.9213082790374756,
-            0.06276339292526245
+            -2.0434212684631348,
+            1.9810895919799805,
+            0.085258349776268
           ],
           "rotation": [
             -0.6772284224280383,
@@ -106,9 +106,9 @@
         "flags": 0,
         "pose": {
           "position": [
-            -3.59470272064209,
-            2.385007381439209,
-            -1.470747947692871
+            -2.5395829677581787,
+            2.637681722640991,
+            -1.2790718078613281
           ],
           "rotation": [
             0.07503165304660797,
@@ -167,7 +167,9 @@
             "type": "VoxelDisplayComponent",
             "data": {
               "enabled": false,
-              "voxel_grid": null,
+              "voxel_grid": {
+                "type": "none"
+              },
               "color_below": [
                 0.2,
                 0.6,
@@ -576,7 +578,7 @@
           {
             "type": "MeshRenderer",
             "data": {
-              "enabled": true,
+              "enabled": false,
               "mesh": {
                 "uuid": "150908e5-3116-488a-9a0e-77f14786003d",
                 "type": "path",
@@ -615,8 +617,12 @@
           {
             "type": "VoxelDisplayComponent",
             "data": {
-              "enabled": false,
-              "voxel_grid": null,
+              "enabled": true,
+              "voxel_grid": {
+                "uuid": "d871f151-019d-448c-a9e1-80410b8b55bb",
+                "type": "path",
+                "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Voxels/bulbasaur.voxels"
+              },
               "color_below": [
                 0.2,
                 0.6,
@@ -696,7 +702,9 @@
             "type": "VoxelDisplayComponent",
             "data": {
               "enabled": true,
-              "voxel_grid": null,
+              "voxel_grid": {
+                "type": "none"
+              },
               "color_below": [
                 0.2,
                 0.6,
@@ -873,7 +881,9 @@
             "type": "VoxelDisplayComponent",
             "data": {
               "enabled": false,
-              "voxel_grid": null,
+              "voxel_grid": {
+                "type": "none"
+              },
               "color_below": [
                 0.2,
                 0.6,
@@ -5411,7 +5421,7 @@
         "flags": 0,
         "pose": {
           "position": [
-            -2.353062868118286,
+            -1.6445165872573853,
             2.363551139831543,
             1.711883783340454
           ],
@@ -5776,8 +5786,8 @@
         "flags": 0,
         "pose": {
           "position": [
-            0,
-            4.800000190734863,
+            0.0048696985468268394,
+            5.269996166229248,
             -1.4470000267028809
           ],
           "rotation": [
@@ -5850,8 +5860,8 @@
         "pose": {
           "position": [
             0,
-            3.537313938140869,
-            0
+            3.9904112815856934,
+            0.3566361665725708
           ],
           "rotation": [
             0,
@@ -7272,6 +7282,79 @@
             }
           }
         ]
+      },
+      {
+        "uuid": "208a3f36-3ece-4393-9aa2-611552fb9012",
+        "name": "entity10_copy",
+        "priority": 0,
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            -0.014756051823496819,
+            3.3758273124694824,
+            2.8379268646240234
+          ],
+          "rotation": [
+            0,
+            0,
+            -0.005180361680686474,
+            0.9999866485595703
+          ]
+        },
+        "scale": [
+          3,
+          3,
+          3
+        ],
+        "children": [],
+        "components": [
+          {
+            "type": "RigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 1,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.5
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
+              },
+              "material": {
+                "type": "uuid",
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "box_size": [
+                1,
+                1,
+                1
+              ],
+              "sphere_radius": 0.5,
+              "capsule_height": 1,
+              "capsule_radius": 0.25
+            }
+          }
+        ]
       }
     ],
     "layer_names": {
@@ -7320,15 +7403,15 @@
   "editor": {
     "camera": {
       "target": [
-        1.4674190747744027,
-        4.52691759414711,
-        -0.03200999449245418
+        -2.3025593757629395,
+        -1.817510724067688,
+        -0.11637641489505768
       ],
-      "radius": 9.0,
-      "azimuth": 57.91351523968042,
-      "elevation": 0.4817108735504333
+      "radius": 18.5,
+      "azimuth": 57.62029992534543,
+      "elevation": 0.10471975511965828
     },
-    "selected_entity": "Pendulum2",
+    "selected_entity": "Bulba",
     "displays": [
       {
         "name": "Editor",
@@ -7337,7 +7420,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "dde47bb7-9c11-461c-8bfa-1b3ff389571f",
+            "uuid": "a0cf4eb0-0f00-4d90-8d4c-5d148f1639ed",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7357,8 +7440,8 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "d44237b3-b09c-4760-9e76-1bc01897905e",
-            "camera_entity": "GameCamera",
+            "uuid": "ac050d98-0c68-407d-aede-6288c39c5531",
+            "camera_entity": "camera",
             "rect": [
               0.0,
               0.0,
@@ -7372,13 +7455,13 @@
       }
     ],
     "expanded_entities": [
-      "editor_ui",
-      "[Root]",
-      "cube2",
       "camera",
-      "EditorEntities",
+      "cube1",
       "entity12_copy",
-      "cube1"
+      "[Root]",
+      "editor_ui",
+      "cube2",
+      "EditorEntities"
     ]
   },
   "resources": {

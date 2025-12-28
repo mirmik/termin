@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from termin.visualization.core.component import InputComponent
+from termin.visualization.core.python_component import InputPythonComponent
 from termin.visualization.core.input_events import MouseButtonEvent
 from termin.visualization.platform.backends.base import MouseButton, Action
 
 
-class TeleportComponent(InputComponent):
+class TeleportComponent(InputPythonComponent):
     """
     Компонент телепортации.
 

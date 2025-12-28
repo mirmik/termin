@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.component import Component
+from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.scene import get_current_scene
 from termin.editor.inspect_field import InspectField
 from termin.assets.audio_clip_handle import AudioClipHandle
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from termin.audio.components.audio_listener import AudioListener
 
 
-class AudioSource(Component):
+class AudioSource(PythonComponent):
     """
     Component for playing audio clips.
 

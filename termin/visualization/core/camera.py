@@ -24,12 +24,12 @@ import numpy as np
 from termin.geombase import Pose3
 
 from termin.editor.inspect_field import InspectField, inspect
-from termin.visualization.core.component import Component, InputComponent
+from termin.visualization.core.python_component import PythonComponent, InputPythonComponent
 from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEvent, ScrollEvent
 from termin.visualization.platform.backends.base import Action, MouseButton
 
 
-class CameraComponent(Component):
+class CameraComponent(PythonComponent):
     """
     Unified camera component supporting both perspective and orthographic projection.
 
@@ -288,11 +288,11 @@ class OrthographicCameraComponent(CameraComponent):
         )
 
 
-class CameraController(InputComponent):
+class CameraController(InputPythonComponent):
     """Base class for camera manipulation controllers."""
 
     def __init__(self, enabled: bool = True):
-        super().__init__(enabled)
+        super().__init__(enabled=enabled)
         self.camera_component: CameraComponent | None = None
 
     def on_added(self, scene):
