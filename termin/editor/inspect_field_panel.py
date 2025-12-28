@@ -25,14 +25,22 @@ if TYPE_CHECKING:
 
 
 def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
-    """Collect inspect_fields from C++ InspectRegistry (single source of truth)."""
+    """Collect inspect_fields from InspectRegistry."""
     result = {}
     cls = obj.__class__
+    type_name = cls.__name__
 
     try:
-        from termin._native.inspect import InspectRegistry
+        from termin._native.inspect import InspectRegistry, TypeBackend
         registry = InspectRegistry.instance()
-        type_name = cls.__name__
+
+        # For Python types, use inspect_fields directly (faster, no C++ overhead)
+        if registry.has_type(type_name):
+            backend = registry.get_type_backend(type_name)
+            if backend == TypeBackend.Python:
+                return dict(cls.inspect_fields)
+
+        # For C++ types (and fallback), use InspectRegistry
         cpp_fields = registry.all_fields(type_name)
         for info in cpp_fields:
             # Convert C++ EnumChoice list to Python tuple list

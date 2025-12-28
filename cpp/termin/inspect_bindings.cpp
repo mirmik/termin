@@ -11,7 +11,7 @@ namespace termin {
 
 // Helper to extract raw pointer from Python object
 static void* get_raw_pointer(py::object obj) {
-    // Try Component first (covers all component types)
+    // Try Component first (covers C++ component types)
     try {
         return static_cast<void*>(obj.cast<Component*>());
     } catch (const py::cast_error&) {}
@@ -21,11 +21,18 @@ static void* get_raw_pointer(py::object obj) {
         return static_cast<void*>(obj.cast<Material*>());
     } catch (const py::cast_error&) {}
 
-    // Fallback
-    return py::cast<void*>(obj);
+    // For pure Python objects (PythonComponent etc), return PyObject*
+    // The getter/setter lambdas in register_python_fields handle this case
+    return static_cast<void*>(obj.ptr());
 }
 
 void bind_inspect(py::module_& m) {
+    // TypeBackend enum
+    py::enum_<TypeBackend>(m, "TypeBackend")
+        .value("Cpp", TypeBackend::Cpp)
+        .value("Python", TypeBackend::Python)
+        .value("Rust", TypeBackend::Rust);
+
     // EnumChoice - value/label pair for enum fields
     py::class_<EnumChoice>(m, "EnumChoice")
         .def_readonly("value", &EnumChoice::value)
@@ -65,6 +72,12 @@ void bind_inspect(py::module_& m) {
         .def("register_python_fields", &InspectRegistry::register_python_fields,
              py::arg("type_name"), py::arg("fields_dict"),
              "Register fields from Python inspect_fields dict")
+        .def("get_type_backend", &InspectRegistry::get_type_backend,
+             py::arg("type_name"),
+             "Get the backend (Cpp/Python/Rust) for a type")
+        .def("has_type", &InspectRegistry::has_type,
+             py::arg("type_name"),
+             "Check if type is registered")
         .def("get", [](InspectRegistry& self, py::object obj, const std::string& field_path) {
             std::string type_name = py::str(py::type::of(obj).attr("__name__")).cast<std::string>();
             void* ptr = get_raw_pointer(obj);

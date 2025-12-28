@@ -14,6 +14,7 @@
 namespace termin {
 
 // Re-export types from tc namespace
+using TypeBackend = tc::TypeBackend;
 using EnumChoice = tc::EnumChoice;
 using InspectFieldInfo = tc::InspectFieldInfo;
 using KindHandler = tc::KindHandler;

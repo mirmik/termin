@@ -164,6 +164,16 @@ inline py::object tc_value_to_py(const tc_value* v) {
 }
 
 // ============================================================================
+// TypeBackend - language/runtime that implements the type
+// ============================================================================
+
+enum class TypeBackend {
+    Cpp,
+    Python,
+    Rust
+};
+
+// ============================================================================
 // EnumChoice wrapper
 // ============================================================================
 
@@ -248,6 +258,9 @@ class TC_INSPECT_API InspectRegistry {
     std::unordered_map<std::string, tc_type_vtable> _py_vtables;
     std::unordered_map<std::string, std::vector<tc_field_desc>> _py_field_descs;
 
+    // Type backend registry
+    std::unordered_map<std::string, TypeBackend> _type_backends;
+
 public:
     // Singleton - defined in entity_lib to ensure single instance
     static InspectRegistry& instance();
@@ -276,6 +289,27 @@ public:
 
         // Try to generate for parameterized types like list[T]
         return try_generate_handler(kind);
+    }
+
+    // ========================================================================
+    // Type backend registration
+    // ========================================================================
+
+    void set_type_backend(const std::string& type_name, TypeBackend backend) {
+        _type_backends[type_name] = backend;
+    }
+
+    TypeBackend get_type_backend(const std::string& type_name) const {
+        auto it = _type_backends.find(type_name);
+        if (it != _type_backends.end()) {
+            return it->second;
+        }
+        // Default to C++ for unknown types (legacy behavior)
+        return TypeBackend::Cpp;
+    }
+
+    bool has_type(const std::string& type_name) const {
+        return _type_backends.find(type_name) != _type_backends.end();
     }
 
     // ========================================================================
@@ -311,6 +345,7 @@ public:
         };
 
         _py_fields[type_name].push_back(std::move(info));
+        _type_backends[type_name] = TypeBackend::Cpp;
     }
 
     template<typename C, typename T>
@@ -337,6 +372,7 @@ public:
         };
 
         _py_fields[type_name].push_back(std::move(info));
+        _type_backends[type_name] = TypeBackend::Cpp;
     }
 
     // ========================================================================
