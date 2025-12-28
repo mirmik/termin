@@ -320,6 +320,19 @@ PYBIND11_MODULE(_entity_native, m) {
             if (u) return py::str(u);
             return py::none();
         })
+        // Equality based on (pool, id) - required for dict/set lookups
+        .def("__eq__", [](const Entity& a, const Entity& b) {
+            return a.pool() == b.pool() &&
+                   a.id().index == b.id().index &&
+                   a.id().generation == b.id().generation;
+        })
+        .def("__hash__", [](const Entity& e) {
+            // Hash based on pool pointer and entity id
+            size_t h = std::hash<void*>()(e.pool());
+            h ^= std::hash<uint32_t>()(e.id().index) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<uint32_t>()(e.id().generation) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            return h;
+        })
         .def_property("name",
             [](const Entity& e) -> py::object {
                 const char* n = e.name();
