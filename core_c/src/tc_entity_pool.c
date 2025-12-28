@@ -68,6 +68,9 @@ struct tc_entity_pool {
     bool* selectable;
     bool* serializable;
     bool* transform_dirty;
+    uint32_t* version_for_walking_to_proximal;
+    uint32_t* version_for_walking_to_distal;
+    uint32_t* version_only_my;
     int* priorities;
     uint64_t* layers;
     uint64_t* entity_flags;
@@ -213,6 +216,9 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->selectable = malloc(initial_capacity * sizeof(bool));
     pool->serializable = malloc(initial_capacity * sizeof(bool));
     pool->transform_dirty = malloc(initial_capacity * sizeof(bool));
+    pool->version_for_walking_to_proximal = calloc(initial_capacity, sizeof(uint32_t));
+    pool->version_for_walking_to_distal = calloc(initial_capacity, sizeof(uint32_t));
+    pool->version_only_my = calloc(initial_capacity, sizeof(uint32_t));
     pool->priorities = calloc(initial_capacity, sizeof(int));
     pool->layers = calloc(initial_capacity, sizeof(uint64_t));
     pool->entity_flags = calloc(initial_capacity, sizeof(uint64_t));
@@ -272,6 +278,9 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
     free(pool->selectable);
     free(pool->serializable);
     free(pool->transform_dirty);
+    free(pool->version_for_walking_to_proximal);
+    free(pool->version_for_walking_to_distal);
+    free(pool->version_only_my);
     free(pool->priorities);
     free(pool->layers);
     free(pool->entity_flags);
@@ -318,6 +327,12 @@ static void pool_grow(tc_entity_pool* pool) {
     pool->selectable = realloc(pool->selectable, new_cap * sizeof(bool));
     pool->serializable = realloc(pool->serializable, new_cap * sizeof(bool));
     pool->transform_dirty = realloc(pool->transform_dirty, new_cap * sizeof(bool));
+    pool->version_for_walking_to_proximal = realloc(pool->version_for_walking_to_proximal, new_cap * sizeof(uint32_t));
+    pool->version_for_walking_to_distal = realloc(pool->version_for_walking_to_distal, new_cap * sizeof(uint32_t));
+    pool->version_only_my = realloc(pool->version_only_my, new_cap * sizeof(uint32_t));
+    memset(pool->version_for_walking_to_proximal + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
+    memset(pool->version_for_walking_to_distal + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
+    memset(pool->version_only_my + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
     pool->priorities = realloc(pool->priorities, new_cap * sizeof(int));
     pool->layers = realloc(pool->layers, new_cap * sizeof(uint64_t));
     pool->entity_flags = realloc(pool->entity_flags, new_cap * sizeof(uint64_t));
@@ -372,6 +387,9 @@ tc_entity_id tc_entity_pool_alloc(tc_entity_pool* pool, const char* name) {
     pool->selectable[idx] = true;
     pool->serializable[idx] = true;
     pool->transform_dirty[idx] = true;
+    pool->version_for_walking_to_proximal[idx] = 0;
+    pool->version_for_walking_to_distal[idx] = 0;
+    pool->version_only_my[idx] = 0;
     pool->priorities[idx] = 0;
     pool->layers[idx] = 0;
     pool->entity_flags[idx] = 0;
@@ -607,26 +625,68 @@ void tc_entity_pool_set_local_scale(tc_entity_pool* pool, tc_entity_id id, const
     tc_entity_pool_mark_dirty(pool, id);
 }
 
-void tc_entity_pool_mark_dirty(tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) return;
+static uint32_t increment_version(uint32_t v) {
+    return (v + 1) % 0x7FFFFFFF;
+}
 
-    // Mark self and all descendants dirty
-    pool->transform_dirty[id.index] = true;
+// Spread changes toward leaves (distal) - increments version_for_walking_to_proximal
+static void spread_changes_to_distal(tc_entity_pool* pool, uint32_t idx) {
+    pool->version_for_walking_to_proximal[idx] = increment_version(pool->version_for_walking_to_proximal[idx]);
+    pool->transform_dirty[idx] = true;
 
-    EntityIdArray* ch = &pool->children[id.index];
+    EntityIdArray* ch = &pool->children[idx];
     for (size_t i = 0; i < ch->count; i++) {
-        tc_entity_pool_mark_dirty(pool, ch->items[i]);
+        tc_entity_id child = ch->items[i];
+        if (pool->alive[child.index]) {
+            spread_changes_to_distal(pool, child.index);
+        }
     }
 }
 
+// Spread changes toward root (proximal) - increments version_for_walking_to_distal
+static void spread_changes_to_proximal(tc_entity_pool* pool, uint32_t idx) {
+    pool->version_for_walking_to_distal[idx] = increment_version(pool->version_for_walking_to_distal[idx]);
+
+    uint32_t parent_idx = pool->parent_indices[idx];
+    if (parent_idx != UINT32_MAX && pool->alive[parent_idx]) {
+        spread_changes_to_proximal(pool, parent_idx);
+    }
+}
+
+void tc_entity_pool_mark_dirty(tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+
+    uint32_t idx = id.index;
+
+    // Increment own version
+    pool->version_only_my[idx] = increment_version(pool->version_only_my[idx]);
+
+    // Spread to ancestors (they know something below changed)
+    spread_changes_to_proximal(pool, idx);
+
+    // Spread to descendants (they need to recalculate world transform)
+    spread_changes_to_distal(pool, idx);
+}
+
+// Forward declarations for lazy update
+static void update_entity_transform(tc_entity_pool* pool, uint32_t idx);
+
 void tc_entity_pool_get_world_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
     if (!tc_entity_pool_alive(pool, id)) return;
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
     Vec3 p = pool->world_positions[id.index];
     xyz[0] = p.x; xyz[1] = p.y; xyz[2] = p.z;
 }
 
 void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id, double* m16) {
     if (!tc_entity_pool_alive(pool, id)) return;
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
     memcpy(m16, &pool->world_matrices[id.index * 16], 16 * sizeof(double));
 }
 
@@ -662,30 +722,83 @@ static Vec3 quat_rotate(Quat q, Vec3 v) {
 }
 
 static void compute_world_matrix(double* m, Vec3 pos, Quat rot, Vec3 scale) {
-    // Rotation matrix from quaternion
+    // Rotation matrix from quaternion - OUTPUT ROW-MAJOR for Python compatibility
+    // Row-major layout: m[row * 4 + col]
     double xx = rot.x * rot.x, yy = rot.y * rot.y, zz = rot.z * rot.z;
     double xy = rot.x * rot.y, xz = rot.x * rot.z, yz = rot.y * rot.z;
     double wx = rot.w * rot.x, wy = rot.w * rot.y, wz = rot.w * rot.z;
 
+    // Row 0
     m[0]  = (1 - 2*(yy + zz)) * scale.x;
-    m[1]  = 2*(xy + wz) * scale.x;
-    m[2]  = 2*(xz - wy) * scale.x;
-    m[3]  = 0;
+    m[1]  = 2*(xy - wz) * scale.y;
+    m[2]  = 2*(xz + wy) * scale.z;
+    m[3]  = pos.x;
 
-    m[4]  = 2*(xy - wz) * scale.y;
+    // Row 1
+    m[4]  = 2*(xy + wz) * scale.x;
     m[5]  = (1 - 2*(xx + zz)) * scale.y;
-    m[6]  = 2*(yz + wx) * scale.y;
-    m[7]  = 0;
+    m[6]  = 2*(yz - wx) * scale.z;
+    m[7]  = pos.y;
 
-    m[8]  = 2*(xz + wy) * scale.z;
-    m[9]  = 2*(yz - wx) * scale.z;
+    // Row 2
+    m[8]  = 2*(xz - wy) * scale.x;
+    m[9]  = 2*(yz + wx) * scale.y;
     m[10] = (1 - 2*(xx + yy)) * scale.z;
-    m[11] = 0;
+    m[11] = pos.z;
 
-    m[12] = pos.x;
-    m[13] = pos.y;
-    m[14] = pos.z;
+    // Row 3
+    m[12] = 0;
+    m[13] = 0;
+    m[14] = 0;
     m[15] = 1;
+}
+
+// Lazy update of a single entity's world transform
+static void update_entity_transform(tc_entity_pool* pool, uint32_t idx) {
+    if (!pool->transform_dirty[idx]) return;
+
+    uint32_t parent_idx = pool->parent_indices[idx];
+
+    if (parent_idx == UINT32_MAX) {
+        // Root entity - world = local
+        pool->world_positions[idx] = pool->local_positions[idx];
+        pool->world_rotations[idx] = pool->local_rotations[idx];
+        pool->world_scales[idx] = pool->local_scales[idx];
+    } else {
+        // Has parent - update parent first if dirty, then combine
+        if (pool->alive[parent_idx] && pool->transform_dirty[parent_idx]) {
+            update_entity_transform(pool, parent_idx);
+        }
+
+        Vec3 pw = pool->world_positions[parent_idx];
+        Quat rw = pool->world_rotations[parent_idx];
+        Vec3 sw = pool->world_scales[parent_idx];
+
+        Vec3 lp = pool->local_positions[idx];
+        Quat lr = pool->local_rotations[idx];
+        Vec3 ls = pool->local_scales[idx];
+
+        // Scale local position by parent scale, rotate, add parent position
+        Vec3 scaled_pos = {lp.x * sw.x, lp.y * sw.y, lp.z * sw.z};
+        Vec3 rotated_pos = quat_rotate(rw, scaled_pos);
+
+        pool->world_positions[idx] = (Vec3){
+            pw.x + rotated_pos.x,
+            pw.y + rotated_pos.y,
+            pw.z + rotated_pos.z
+        };
+        pool->world_rotations[idx] = quat_mul(rw, lr);
+        pool->world_scales[idx] = (Vec3){sw.x * ls.x, sw.y * ls.y, sw.z * ls.z};
+    }
+
+    compute_world_matrix(
+        &pool->world_matrices[idx * 16],
+        pool->world_positions[idx],
+        pool->world_rotations[idx],
+        pool->world_scales[idx]
+    );
+
+    pool->transform_dirty[idx] = false;
 }
 
 void tc_entity_pool_update_transforms(tc_entity_pool* pool) {
