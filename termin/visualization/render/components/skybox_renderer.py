@@ -27,7 +27,7 @@ class SkyboxRenderer(MeshRenderer):
         mesh_data = self._mesh_handle.mesh
         gpu = self._mesh_handle.gpu
         if mesh_data is not None and gpu is not None:
-            gpu.draw(context, mesh_data, self._mesh_handle.version)
+            gpu.draw(context, mesh_data.tc_mesh, self._mesh_handle.version)
 
         context.graphics.set_depth_func("less")
         context.graphics.set_depth_mask(True)

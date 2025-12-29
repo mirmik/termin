@@ -67,7 +67,7 @@ def _fbx_mesh_to_mesh3(fbx_mesh: FBXMeshData) -> Mesh3:
     vertices = fbx_mesh.vertices
     indices = fbx_mesh.indices.reshape(-1, 3)
 
-    mesh = Mesh3(vertices=vertices, triangles=indices, uvs=fbx_mesh.uvs)
+    mesh = Mesh3(name=fbx_mesh.name, vertices=vertices, triangles=indices, uvs=fbx_mesh.uvs)
 
     if fbx_mesh.normals is not None:
         mesh.vertex_normals = fbx_mesh.normals

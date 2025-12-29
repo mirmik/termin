@@ -3,6 +3,8 @@ project(termin_core C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Options
 option(TC_BUILD_SHARED "Build shared library" ON)
@@ -20,6 +22,8 @@ set(TC_SOURCES
     src/tc_inspect.c
     src/tc_mesh.c
     src/tc_mesh_registry.c
+    src/tc_log.c
+    src/tc_profiler.c
 )
 
 # Header files (for IDE integration)
@@ -54,8 +58,24 @@ target_include_directories(termin_core
         $<INSTALL_INTERFACE:include>
 )
 
-# Find Python
+# Find Python and pybind11
 find_package(Python3 COMPONENTS Development)
+
+# Find pybind11 via pip
+if(WIN32)
+    execute_process(
+        COMMAND python -m pybind11 --cmakedir
+        OUTPUT_VARIABLE pybind11_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    execute_process(
+        COMMAND python3 -m pybind11 --cmakedir
+        OUTPUT_VARIABLE pybind11_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+endif()
+find_package(pybind11 QUIET)
 
 # Platform-specific
 if(WIN32)
@@ -70,6 +90,11 @@ endif()
 if(Python3_FOUND)
     target_include_directories(termin_core PRIVATE ${Python3_INCLUDE_DIRS})
     target_link_libraries(termin_core PRIVATE ${Python3_LIBRARIES})
+endif()
+
+# Link pybind11 if found
+if(pybind11_FOUND)
+    target_link_libraries(termin_core PRIVATE pybind11::headers)
 endif()
 
 # Compiler warnings

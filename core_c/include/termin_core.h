@@ -28,6 +28,8 @@
 #include "tc_entity_pool.h"
 #include "tc_scene.h"
 #include "tc_inspect.h"
+#include "tc_mesh.h"
+#include "tc_mesh_registry.h"
 
 #ifdef __cplusplus
 extern "C" {

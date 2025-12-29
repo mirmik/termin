@@ -200,6 +200,10 @@ public:
         return std::make_unique<OpenGLMeshHandle>(mesh);
     }
 
+    GPUMeshHandlePtr create_mesh(const tc_mesh* mesh) override {
+        return std::make_unique<OpenGLTcMeshHandle>(mesh);
+    }
+
     GPUTextureHandlePtr create_texture(
         const uint8_t* data,
         int width,

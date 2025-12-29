@@ -19,11 +19,16 @@ TC_API void tc_mesh_shutdown(void);
 // ============================================================================
 
 // Add a new mesh with given UUID (or auto-generate if NULL)
-// Returns pointer to mesh, or NULL on failure
+// Returns pointer to mesh, or NULL on failure (including if UUID exists)
 TC_API tc_mesh* tc_mesh_add(const char* uuid);
 
 // Get mesh by UUID, returns NULL if not found
 TC_API tc_mesh* tc_mesh_get(const char* uuid);
+
+// Get existing mesh or create new one if not found
+// If created, ref_count is 1. If existing, ref_count is incremented.
+// IMPORTANT: After creating a new mesh, set mesh->name for debugging!
+TC_API tc_mesh* tc_mesh_get_or_create(const char* uuid);
 
 // Remove mesh by UUID, returns true if removed
 TC_API bool tc_mesh_remove(const char* uuid);
@@ -56,6 +61,7 @@ TC_API bool tc_mesh_set_indices(
 // Set both vertex and index data (copies data, increments version)
 TC_API bool tc_mesh_set_data(
     tc_mesh* mesh,
+    const char* name,
     const void* vertices,
     size_t vertex_count,
     const tc_vertex_layout* layout,

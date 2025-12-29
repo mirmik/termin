@@ -3159,11 +3159,10 @@
         2.9780328273773193,
         -1.231850028038025
       ],
-      "radius": 8.5,
-      "azimuth": 56.6219715932047,
-      "elevation": 0.38746309394274003
+      "radius": 13.5,
+      "azimuth": 55.69694708964776,
+      "elevation": 0.6283185307179578
     },
-    "selected_entity": "camera",
     "displays": [
       {
         "name": "Editor",
@@ -3172,7 +3171,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "bfcbcb66-caee-496a-a7ac-a9b1fc5bb9a9",
+            "uuid": "d8cfd199-5dd7-4322-bcba-f8a0cf5ce7ba",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3192,7 +3191,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "d55cde0c-6929-45ce-a4c1-2b1ee84762a6",
+            "uuid": "0ab657fe-9dba-46b5-bc9e-d2b499733379",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -3207,15 +3206,15 @@
       }
     ],
     "expanded_entities": [
-      "editor_ui",
       "Walls",
-      "entity13",
-      "entity12_copy",
-      "camera",
       "cube2",
+      "entity13",
+      "camera",
+      "editor_ui",
+      "cube1",
       "EditorEntities",
-      "[Root]",
-      "cube1"
+      "entity12_copy",
+      "[Root]"
     ]
   },
   "resources": {

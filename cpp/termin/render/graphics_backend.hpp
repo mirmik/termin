@@ -9,6 +9,10 @@
 #include "termin/render/handles.hpp"
 #include "termin/render/types.hpp"
 
+extern "C" {
+#include "termin_core.h"
+}
+
 namespace termin {
 
 // Forward declarations
@@ -71,6 +75,7 @@ public:
     ) = 0;
 
     virtual GPUMeshHandlePtr create_mesh(const Mesh3& mesh) = 0;
+    virtual GPUMeshHandlePtr create_mesh(const tc_mesh* mesh) = 0;
 
     virtual GPUTextureHandlePtr create_texture(
         const uint8_t* data,

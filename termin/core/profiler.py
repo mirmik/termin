@@ -109,16 +109,6 @@ class Profiler:
         self._tc.enabled = value
 
     @property
-    def profile_components(self) -> bool:
-        """Детальное профилирование компонентов (Update, FixedUpdate)."""
-        return self._tc.profile_components
-
-    @profile_components.setter
-    def profile_components(self, value: bool) -> None:
-        """Включает/выключает детальное профилирование компонентов."""
-        self._tc.profile_components = value
-
-    @property
     def history(self) -> List[FrameProfile]:
         """История профилей кадров (конвертируется из C данных)."""
         return self._convert_history()

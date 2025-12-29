@@ -15,11 +15,12 @@ import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh_handle import MeshHandle
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
+from termin.visualization.core.mesh_gpu import MeshGPU
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.voxels.voxel_mesh import VoxelMesh
 from termin.editor.inspect_field import InspectField
+from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -148,7 +149,8 @@ class VoxelDisplayComponent(PythonComponent):
         self._voxel_grid_name = grid_name or voxel_grid_name
         self.voxel_grid: VoxelGridHandle = VoxelGridHandle()
         self._last_version: int = -1  # Версия handle для отслеживания hot-reload
-        self._mesh_handle: Optional[MeshHandle] = None
+        self._voxel_mesh: Optional[VoxelMesh] = None
+        self._gpu: Optional[MeshGPU] = None
         self._material: Optional[Material] = None
         self._needs_rebuild = True
         self.active_in_editor = True  # Enable update() in editor mode
@@ -243,13 +245,18 @@ class VoxelDisplayComponent(PythonComponent):
         # Проверяем hot-reload перед отрисовкой
         self._check_hot_reload()
 
-        if self._mesh_handle is None:
+        if self._voxel_mesh is None:
             return
 
-        mesh_data = self._mesh_handle.mesh
-        gpu = self._mesh_handle.gpu
-        if mesh_data is not None and gpu is not None:
-            gpu.draw(context, mesh_data, self._mesh_handle.version)
+        tc_mesh = self._voxel_mesh.tc_mesh
+        if tc_mesh is None:
+            return
+
+        # Lazy create GPU resources
+        if self._gpu is None:
+            self._gpu = MeshGPU()
+
+        self._gpu.draw(context, tc_mesh, self._voxel_mesh.version)
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
@@ -292,8 +299,9 @@ class VoxelDisplayComponent(PythonComponent):
 
     def _rebuild_mesh(self) -> None:
         """Перестроить меш из воксельной сетки (без фильтрации, вся сетка)."""
-        # Очищаем старый меш (MeshHandle is just a wrapper, no explicit delete needed)
-        self._mesh_handle = None
+        # Очищаем старый меш
+        self._voxel_mesh = None
+        self._gpu = None
 
         grid = self.voxel_grid.get_grid()
 
@@ -369,14 +377,14 @@ class VoxelDisplayComponent(PythonComponent):
 
             idx += 1
 
-        mesh = VoxelMesh(
+        self._voxel_mesh = VoxelMesh(
+            name="voxel_display_mesh",
             vertices=vertices,
             triangles=triangles,
             uvs=uvs,
             vertex_colors=colors,
+            vertex_normals=normals,
         )
-        mesh.vertex_normals = normals
-        self._mesh_handle = MeshHandle.from_mesh3(mesh, name="voxel_display")
 
     # --- Lifecycle ---
 
@@ -392,11 +400,15 @@ class VoxelDisplayComponent(PythonComponent):
 
     def on_removed(self) -> None:
         """Очистить меш при удалении."""
-        self._mesh_handle = None
+        self._voxel_mesh = None
+        self._gpu = None
 
     def update(self, dt: float) -> None:
         """Обновить меш если нужно."""
         if self._needs_rebuild:
-            self._rebuild_mesh()
+            try:
+                self._rebuild_mesh()
+            except Exception as e:
+                log.error(f"[VoxelDisplayComponent.update] error rebuilding mesh: {e}")
             self._needs_rebuild = False
 

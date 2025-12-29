@@ -1,7 +1,14 @@
 """Primitive mesh shapes: Cube, Sphere, Cylinder, Cone, Plane, Ring."""
 
+import hashlib
 import numpy as np
 from .mesh import Mesh3
+
+
+def _primitive_uuid(name: str, *args) -> str:
+    """Compute UUID for primitive from name and parameters."""
+    key = f"{name}:{':'.join(str(a) for a in args)}"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
 class CubeMesh(Mesh3):
@@ -11,6 +18,9 @@ class CubeMesh(Mesh3):
             y = x
         if z is None:
             z = x
+
+        uuid = _primitive_uuid("CubeMesh", x, y, z)
+
         s_x = x * 0.5
         s_y = y * 0.5
         s_z = z * 0.5
@@ -54,7 +64,7 @@ class CubeMesh(Mesh3):
             [1.0, 1.0],
             [0.0, 1.0],
         ], dtype=float)
-        super().__init__(vertices=vertices, triangles=triangles, uvs=uvs)
+        super().__init__(uuid, "Cube", vertices=vertices, triangles=triangles, uvs=uvs)
 
 
 class TexturedCubeMesh(Mesh3):
@@ -64,6 +74,7 @@ class TexturedCubeMesh(Mesh3):
             y = x
         if z is None:
             z = x
+        uuid = _primitive_uuid("TexturedCubeMesh", x, y, z)
         s_x = x * 0.5
         s_y = y * 0.5
         s_z = z * 0.5
@@ -169,11 +180,12 @@ class TexturedCubeMesh(Mesh3):
         [31,30,32],
         [34,33,35],
             ])
-        super().__init__(vertices=vertices, triangles=triangles, uvs=uvs)
+        super().__init__(uuid, "TexturedCube", vertices=vertices, triangles=triangles, uvs=uvs)
 
 
 class UVSphereMesh(Mesh3):
     def __init__(self, radius: float = 1.0, n_meridians: int = 16, n_parallels: int = 16):
+        uuid = _primitive_uuid("UVSphereMesh", radius, n_meridians, n_parallels)
         rings = n_parallels
         segments = n_meridians
 
@@ -195,7 +207,7 @@ class UVSphereMesh(Mesh3):
                 next_s = (s + 1) % segments
                 triangles.append([r * segments + s, next_r * segments + s, next_r * segments + next_s])
                 triangles.append([r * segments + s, next_r * segments + next_s, r * segments + next_s])
-        super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
+        super().__init__(uuid, "UVSphere", vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
 
 class IcoSphereMesh(Mesh3):
@@ -245,7 +257,7 @@ class IcoSphereMesh(Mesh3):
             ],
             dtype=int,
         )
-        super().__init__(vertices=vertices, triangles=triangles)
+        super().__init__("IcoSphere", vertices=vertices, triangles=triangles)
         for _ in range(subdivisions):
             self._subdivide()
 
@@ -281,6 +293,7 @@ class IcoSphereMesh(Mesh3):
 
 class PlaneMesh(Mesh3):
     def __init__(self, width: float = 1.0, depth: float = 1.0, segments_w: int = 1, segments_d: int = 1):
+        uuid = _primitive_uuid("PlaneMesh", width, depth, segments_w, segments_d)
         vertices = []
         triangles = []
         for d in range(segments_d + 1):
@@ -296,11 +309,12 @@ class PlaneMesh(Mesh3):
                 v3 = v2 + 1
                 triangles.append([v0, v2, v1])
                 triangles.append([v1, v2, v3])
-        super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
+        super().__init__(uuid, "Plane", vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
 
 class CylinderMesh(Mesh3):
     def __init__(self, radius: float = 1.0, height: float = 1.0, segments: int = 16):
+        uuid = _primitive_uuid("CylinderMesh", radius, height, segments)
         vertices = []
         triangles = []
         half_height = height * 0.5
@@ -333,11 +347,12 @@ class CylinderMesh(Mesh3):
             triangles.append([bottom1, bottom_center_idx, bottom0])
             triangles.append([top0, top_center_idx, top1])
 
-        super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
+        super().__init__(uuid, "Cylinder", vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
 
 class ConeMesh(Mesh3):
     def __init__(self, radius: float = 1.0, height: float = 1.0, segments: int = 16):
+        uuid = _primitive_uuid("ConeMesh", radius, height, segments)
         vertices = []
         triangles = []
         half_height = height * 0.5
@@ -358,7 +373,7 @@ class ConeMesh(Mesh3):
             # Основание: нормаль вниз (-Y)
             triangles.append([base0, base1, len(vertices)])
         vertices.append(base_center)
-        super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
+        super().__init__(uuid, "Cone", vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
 
 
 class TorusMesh(Mesh3):
@@ -384,6 +399,7 @@ class TorusMesh(Mesh3):
         if minor_segments < 3:
             raise ValueError("TorusMesh: minor_segments must be >= 3")
 
+        uuid = _primitive_uuid("TorusMesh", major_radius, minor_radius, major_segments, minor_segments)
         vertices: list[list[float]] = []
         triangles: list[list[int]] = []
 
@@ -424,7 +440,7 @@ class TorusMesh(Mesh3):
         vertices_np = np.asarray(vertices, dtype=float)
         triangles_np = np.asarray(triangles, dtype=int)
 
-        super().__init__(vertices=vertices_np, triangles=triangles_np, uvs=None)
+        super().__init__(uuid, "Torus", vertices=vertices_np, triangles=triangles_np, uvs=None)
         self.compute_vertex_normals()
 
 
@@ -442,6 +458,8 @@ class RingMesh(Mesh3):
     ):
         if segments < 3:
             raise ValueError("RingMesh: segments must be >= 3")
+
+        uuid = _primitive_uuid("RingMesh", radius, thickness, segments)
 
         # внутренняя/внешняя окружности
         inner_radius = max(radius - thickness * 0.5, 1e-4)
@@ -479,7 +497,7 @@ class RingMesh(Mesh3):
         vertices_np = np.asarray(vertices, dtype=float)
         triangles_np = np.asarray(triangles, dtype=int)
 
-        super().__init__(vertices=vertices_np, triangles=triangles_np, uvs=None)
+        super().__init__(uuid, "Ring", vertices=vertices_np, triangles=triangles_np, uvs=None)
 
         # для более внятного освещения
         self.compute_vertex_normals()

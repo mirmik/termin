@@ -213,6 +213,7 @@ void tc_init(void) {
     if (g_initialized) return;
 
     tc_ensure_random_seeded();
+    tc_mesh_init();
     g_initialized = true;
 }
 
@@ -220,6 +221,7 @@ void tc_shutdown(void) {
     if (!g_initialized) return;
 
     // Cleanup in reverse order of dependency
+    tc_mesh_shutdown();
     tc_component_registry_cleanup();
     tc_inspect_cleanup();
     tc_kind_cleanup();

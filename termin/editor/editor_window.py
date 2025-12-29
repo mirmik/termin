@@ -2045,6 +2045,9 @@ class EditorWindow(QMainWindow):
         Handles rendering through unified RenderingController.
         Note: Game mode updates are handled by GameModeController's QTimer.
         """
+        from termin.core.profiler import Profiler
+        profiler = Profiler.instance()
+
         # In game mode - always render at target FPS
         # In editor mode - render only when needed (on-demand)
         is_playing = self.game_mode_controller.is_playing if self.game_mode_controller else False
@@ -2056,7 +2059,9 @@ class EditorWindow(QMainWindow):
 
         # Update active_in_editor components in editor mode
         if not is_playing:
-            self.scene.editor_update(dt)
+            profiler.begin_frame()
+            with profiler.section("Components"):
+                self.scene.editor_update(dt)
 
         # Check if any display needs render (unified check)
         needs_render = is_playing
@@ -2070,3 +2075,6 @@ class EditorWindow(QMainWindow):
             # Editor-specific post-render (picking, hover, etc.) for ALL displays
             for editor_features in self._editor_features.values():
                 editor_features.after_render()
+        elif not is_playing:
+            # No render needed - end frame started above
+            profiler.end_frame()

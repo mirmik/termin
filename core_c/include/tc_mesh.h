@@ -57,7 +57,9 @@ typedef struct tc_mesh {
     size_t index_count;          // total indices (not triangles)
     tc_vertex_layout layout;
     uint32_t version;            // incremented on data change (for GPU sync)
-    char uuid[40];               // unique identifier
+    uint32_t ref_count;          // reference count for ownership
+    char uuid[40];               // unique identifier (hash of data)
+    const char* name;            // human-readable name for debugging (interned string)
 } tc_mesh;
 
 // ============================================================================
@@ -119,6 +121,31 @@ TC_API tc_vertex_layout tc_vertex_layout_pos_normal_uv(void);
 
 // Position + Normal + UV + Color: vec3 position, vec3 normal, vec2 uv, vec4 color
 TC_API tc_vertex_layout tc_vertex_layout_pos_normal_uv_color(void);
+
+// Skinned mesh: vec3 position, vec3 normal, vec2 uv, vec4 joints, vec4 weights
+TC_API tc_vertex_layout tc_vertex_layout_skinned(void);
+
+// ============================================================================
+// Reference counting
+// ============================================================================
+
+// Increment reference count
+TC_API void tc_mesh_add_ref(tc_mesh* mesh);
+
+// Decrement reference count. Returns true if mesh was destroyed (ref_count reached 0)
+TC_API bool tc_mesh_release(tc_mesh* mesh);
+
+// ============================================================================
+// UUID computation
+// ============================================================================
+
+// Compute UUID from mesh data (FNV-1a hash)
+// Result is written to uuid_out (must be at least 40 bytes)
+TC_API void tc_mesh_compute_uuid(
+    const void* vertices, size_t vertex_size,
+    const uint32_t* indices, size_t index_count,
+    char* uuid_out
+);
 
 #ifdef __cplusplus
 }

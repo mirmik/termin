@@ -181,11 +181,15 @@ pybind11_add_module(_graphics_native
 target_include_directories(_graphics_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/termin/render/glad/include
 )
-target_link_libraries(_graphics_native PRIVATE OpenGL::GL)
+target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib)
 target_compile_options(_graphics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 target_precompile_headers(_graphics_native PRIVATE termin/pch.hpp)
+
+# Core C library
+set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 
 # Entity shared library (shared by _entity_native and _native)
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, EntityRegistry)
@@ -199,22 +203,12 @@ add_library(entity_lib SHARED
     termin/entity/vtable_utils.cpp
     termin/entity/components/rotator_component.cpp
     termin/geom/general_transform3.cpp
-    # C core
-    ../core_c/src/tc_core.c
-    ../core_c/src/tc_component.c
-    ../core_c/src/tc_component_python.c
-    ../core_c/src/tc_entity_pool.c
-    ../core_c/src/tc_hash_map.c
-    ../core_c/src/tc_scene.c
-    ../core_c/src/tc_inspect.c
     ../core_c/src/tc_inspect_instance.cpp
     ../core_c/src/tc_kind_instance.cpp
-    ../core_c/src/tc_profiler.c
-    ../core_c/src/tc_log.c
 )
-target_include_directories(entity_lib PRIVATE ../core_c/include)
-target_link_libraries(entity_lib PRIVATE trent pybind11::headers Python3::Python)
-target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS)
+target_include_directories(entity_lib PUBLIC ../core_c/include)
+target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent pybind11::headers Python3::Python)
+target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
@@ -344,7 +338,7 @@ endif()
 target_compile_options(_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_native REUSE_FROM entity_lib)
+# No precompiled headers for _native (contains glad.c which is C)
 
 # ---------------- Tests ----------------
 option(BUILD_TESTS "Build C++ tests" OFF)

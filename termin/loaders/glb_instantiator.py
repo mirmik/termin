@@ -28,9 +28,11 @@ def _glb_mesh_to_mesh3(glb_mesh: "GLBMeshData") -> Mesh3 | SkinnedMesh3:
     """Convert GLBMeshData to Mesh3 or SkinnedMesh3."""
     vertices = glb_mesh.vertices
     indices = glb_mesh.indices.reshape(-1, 3)
+    name = glb_mesh.name
 
     if glb_mesh.is_skinned:
         mesh = SkinnedMesh3(
+            name=name,
             vertices=vertices,
             triangles=indices,
             uvs=glb_mesh.uvs,
@@ -41,7 +43,7 @@ def _glb_mesh_to_mesh3(glb_mesh: "GLBMeshData") -> Mesh3 | SkinnedMesh3:
         if glb_mesh.normals is None:
             mesh.compute_vertex_normals()
     else:
-        mesh = Mesh3(vertices=vertices, triangles=indices, uvs=glb_mesh.uvs)
+        mesh = Mesh3(name=name, vertices=vertices, triangles=indices, uvs=glb_mesh.uvs)
         if glb_mesh.normals is not None:
             mesh.vertex_normals = glb_mesh.normals
         else:

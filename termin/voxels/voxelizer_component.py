@@ -289,25 +289,25 @@ class VoxelizerComponent(PythonComponent):
                 mesh_data = self._debug_mesh_handle.mesh
                 gpu = self._debug_mesh_handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data, self._debug_mesh_handle.version)
+                    gpu.draw(context, mesh_data.tc_mesh, self._debug_mesh_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_CONTOURS:
             if self.show_debug_contours and self._debug_contours_handle is not None:
                 mesh_data = self._debug_contours_handle.mesh
                 gpu = self._debug_contours_handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data, self._debug_contours_handle.version)
+                    gpu.draw(context, mesh_data.tc_mesh, self._debug_contours_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_MULTI_NORMAL:
             if self.show_multi_normal_voxels and self._debug_multi_normal_handle is not None:
                 mesh_data = self._debug_multi_normal_handle.mesh
                 gpu = self._debug_multi_normal_handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data, self._debug_multi_normal_handle.version)
+                    gpu.draw(context, mesh_data.tc_mesh, self._debug_multi_normal_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_BOUNDARY:
             if self.show_boundary_voxels and self._debug_boundary_handle is not None:
                 mesh_data = self._debug_boundary_handle.mesh
                 gpu = self._debug_boundary_handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data, self._debug_boundary_handle.version)
+                    gpu.draw(context, mesh_data.tc_mesh, self._debug_boundary_handle.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
@@ -891,7 +891,7 @@ class VoxelizerComponent(PythonComponent):
         self._debug_bounds_min = min_world - half_cube
         self._debug_bounds_max = max_world + half_cube
 
-        mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
+        mesh = VoxelMesh(name="voxel_mesh", vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
         mesh.vertex_normals = normals
         self._debug_mesh_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_mesh")
 
@@ -999,7 +999,7 @@ class VoxelizerComponent(PythonComponent):
         normals[:, 2] = 1.0  # Вверх по Z
         uvs = np.full((len(vertices), 2), [2.0, 0.0], dtype=np.float32)  # UV.x = 2.0 для vertex color
 
-        mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
+        mesh = VoxelMesh(name="voxel_mesh", vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
         mesh.vertex_normals = normals
         self._debug_contours_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_contours")
 
@@ -1047,7 +1047,7 @@ class VoxelizerComponent(PythonComponent):
             uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
             colors[v_offset:v_offset + verts_per_cube] = multi_color
 
-        mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
+        mesh = VoxelMesh(name="voxel_mesh", vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
         mesh.vertex_normals = normals
         self._debug_multi_normal_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_multi_normal")
 
@@ -1091,7 +1091,7 @@ class VoxelizerComponent(PythonComponent):
             uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
             colors[v_offset:v_offset + verts_per_cube] = boundary_color
 
-        mesh = VoxelMesh(vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
+        mesh = VoxelMesh(name="voxel_mesh", vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
         mesh.vertex_normals = normals
         self._debug_boundary_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_boundary")
 

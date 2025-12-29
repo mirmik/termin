@@ -28,6 +28,31 @@ void MeshGPU::draw(
     it->second->draw();
 }
 
+void MeshGPU::draw(
+    GraphicsBackend* graphics,
+    const tc_mesh* mesh,
+    int version,
+    int64_t context_key
+) {
+    if (!mesh) return;
+
+    // Check if we need to re-upload
+    if (uploaded_version != version) {
+        invalidate();
+        uploaded_version = version;
+    }
+
+    // Upload to this context if needed
+    auto it = handles.find(context_key);
+    if (it == handles.end()) {
+        auto handle = std::shared_ptr<GPUMeshHandle>(graphics->create_mesh(mesh).release());
+        it = handles.emplace(context_key, std::move(handle)).first;
+    }
+
+    // Draw
+    it->second->draw();
+}
+
 void MeshGPU::invalidate() {
     // Release all handles
     // Note: In multi-context scenario, we should switch contexts before deleting.

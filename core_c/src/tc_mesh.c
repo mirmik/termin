@@ -1,5 +1,8 @@
 #include "tc_mesh.h"
+#include "tc_mesh_registry.h"
+#include "tc_log.h"
 #include <string.h>
+#include <stdio.h>
 
 // ============================================================================
 // Attribute type helpers
@@ -103,4 +106,83 @@ tc_vertex_layout tc_vertex_layout_pos_normal_uv_color(void) {
     tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32);
     tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32);
     return layout;
+}
+
+tc_vertex_layout tc_vertex_layout_skinned(void) {
+    tc_vertex_layout layout;
+    tc_vertex_layout_init(&layout);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "joints", 4, TC_ATTRIB_FLOAT32);
+    tc_vertex_layout_add(&layout, "weights", 4, TC_ATTRIB_FLOAT32);
+    return layout;
+}
+
+// ============================================================================
+// Reference counting
+// ============================================================================
+
+void tc_mesh_add_ref(tc_mesh* mesh) {
+    if (mesh) {
+        mesh->ref_count++;
+        tc_log_debug("tc_mesh_add_ref: '%s' [%s] (ref=%u)",
+            mesh->name ? mesh->name : "?", mesh->uuid, mesh->ref_count);
+    }
+}
+
+bool tc_mesh_release(tc_mesh* mesh) {
+    if (!mesh) {
+        tc_log_warn("tc_mesh_release: null mesh");
+        return false;
+    }
+    if (mesh->ref_count == 0) {
+        tc_log_warn("tc_mesh_release: '%s' [%s] already at ref_count=0",
+            mesh->name ? mesh->name : "?", mesh->uuid);
+        return false;
+    }
+
+    mesh->ref_count--;
+    tc_log_debug("tc_mesh_release: '%s' [%s] (ref=%u)",
+        mesh->name ? mesh->name : "?", mesh->uuid, mesh->ref_count);
+
+    if (mesh->ref_count == 0) {
+        tc_log_debug("tc_mesh_release: destroying '%s' [%s]",
+            mesh->name ? mesh->name : "?", mesh->uuid);
+        // Remove from registry (this will free the mesh)
+        tc_mesh_remove(mesh->uuid);
+        return true;
+    }
+    return false;
+}
+
+// ============================================================================
+// UUID computation (FNV-1a hash)
+// ============================================================================
+
+static uint64_t fnv1a_hash(const uint8_t* data, size_t len) {
+    uint64_t hash = 14695981039346656037ULL;
+    for (size_t i = 0; i < len; i++) {
+        hash ^= data[i];
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
+void tc_mesh_compute_uuid(
+    const void* vertices, size_t vertex_size,
+    const uint32_t* indices, size_t index_count,
+    char* uuid_out
+) {
+    // Hash vertices
+    uint64_t h1 = fnv1a_hash((const uint8_t*)vertices, vertex_size);
+
+    // Hash indices
+    uint64_t h2 = fnv1a_hash((const uint8_t*)indices, index_count * sizeof(uint32_t));
+
+    // Combine hashes
+    uint64_t combined = h1 ^ (h2 * 1099511628211ULL);
+
+    // Format as hex string (16 chars)
+    snprintf(uuid_out, 40, "%016llx", (unsigned long long)combined);
 }

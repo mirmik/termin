@@ -37,6 +37,7 @@ void tc_log(tc_log_level level, const char* format, ...) {
 
     // Always print to stderr
     fprintf(stderr, "[%s] %s\n", level_names[level], buffer);
+    fflush(stderr);
 }
 
 void tc_log_debug(const char* format, ...) {

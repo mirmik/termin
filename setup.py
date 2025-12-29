@@ -72,17 +72,14 @@ class CMakeBuildExt(build_ext):
             for so in src_dir.glob(f"{module_name}.*"):
                 shutil.copy2(so, dst_dir / so.name)
 
-        # Copy shared libraries to termin/ directory
-        # Copy to BOTH source tree (for editable installs) and build_lib (for wheel)
+        # Copy shared libraries to termin/ directory (source tree for editable install)
         source_termin_dir = Path(directory) / "termin"
-        build_termin_dir = install_prefix  # build_lib/termin
 
         if sys.platform == "win32":
             # Windows: copy .dll files from bin/
             if bin_dir.exists():
                 for dll in bin_dir.glob("*.dll"):
                     shutil.copy2(dll, source_termin_dir / dll.name)
-                    shutil.copy2(dll, build_termin_dir / dll.name)
         else:
             # Linux/macOS: copy .so/.dylib from lib/ or install_prefix
             lib_dir = build_temp / "lib"
@@ -92,7 +89,6 @@ class CMakeBuildExt(build_ext):
                 if lib_dir.exists():
                     for lib in lib_dir.glob(pattern):
                         shutil.copy2(lib, source_termin_dir / lib.name)
-                        shutil.copy2(lib, build_termin_dir / lib.name)
 
 directory = os.path.dirname(os.path.realpath(__file__))
 

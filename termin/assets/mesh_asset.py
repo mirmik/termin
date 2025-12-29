@@ -156,6 +156,7 @@ class MeshAsset(DataAsset[Mesh3]):
             mesh_data.normals = spec.apply_to_normals(mesh_data.normals)
 
         mesh3 = Mesh3(
+            name=self._name,
             vertices=mesh_data.vertices,
             triangles=mesh_data.indices.reshape(-1, 3),
             vertex_normals=mesh_data.normals,
@@ -176,6 +177,7 @@ class MeshAsset(DataAsset[Mesh3]):
 
         mesh_data = scene_data.meshes[0]
         mesh3 = Mesh3(
+            name=self._name,
             vertices=mesh_data.vertices,
             triangles=mesh_data.indices.reshape(-1, 3),
         )
@@ -234,7 +236,7 @@ class MeshAsset(DataAsset[Mesh3]):
         name: str = "mesh",
     ) -> "MeshAsset":
         """Create MeshAsset from vertices and triangles arrays."""
-        mesh3 = Mesh3(vertices=vertices, triangles=triangles)
+        mesh3 = Mesh3(name=name, vertices=vertices, triangles=triangles)
         return cls(mesh_data=mesh3, name=name)
 
     # --- GPU access ---

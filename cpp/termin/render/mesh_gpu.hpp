@@ -7,6 +7,10 @@
 #include "termin/render/handles.hpp"
 #include "termin/render/render_context.hpp"
 
+extern "C" {
+#include "termin_core.h"
+}
+
 namespace termin {
 
 // Forward declarations
@@ -64,6 +68,24 @@ public:
      * Draw mesh using RenderContext (convenience overload).
      */
     void draw(const RenderContext& ctx, const Mesh3& mesh, int version) {
+        draw(ctx.graphics, mesh, version, ctx.context_key);
+    }
+
+    /**
+     * Draw mesh from tc_mesh directly.
+     * Used for Python-based mesh types like VoxelMesh.
+     */
+    void draw(
+        GraphicsBackend* graphics,
+        const tc_mesh* mesh,
+        int version,
+        int64_t context_key
+    );
+
+    /**
+     * Draw tc_mesh using RenderContext (convenience overload).
+     */
+    void draw(const RenderContext& ctx, const tc_mesh* mesh, int version) {
         draw(ctx.graphics, mesh, version, ctx.context_key);
     }
 
