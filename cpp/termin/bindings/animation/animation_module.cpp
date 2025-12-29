@@ -382,8 +382,17 @@ void register_animation_kind_handlers() {
         "animation_clip_handle",
         // serialize
         py::cpp_function([](py::object obj) -> py::object {
-            AnimationClipHandle handle = obj.cast<AnimationClipHandle>();
-            return handle.serialize();
+            std::cout << "[animation_clip_handle.serialize] obj type: " << py::str(obj.get_type()) << std::endl;
+            try {
+                AnimationClipHandle handle = obj.cast<AnimationClipHandle>();
+                std::cout << "[animation_clip_handle.serialize] handle.is_valid=" << handle.is_valid() << std::endl;
+                auto result = handle.serialize();
+                std::cout << "[animation_clip_handle.serialize] result: " << py::str(result) << std::endl;
+                return result;
+            } catch (const std::exception& e) {
+                std::cout << "[animation_clip_handle.serialize] ERROR: " << e.what() << std::endl;
+                return py::none();
+            }
         }),
         // deserialize
         py::cpp_function([](py::object data) -> py::object {
