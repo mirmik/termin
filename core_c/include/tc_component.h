@@ -18,6 +18,24 @@ typedef enum tc_component_kind {
 } tc_component_kind;
 
 // ============================================================================
+// Drawable VTable - for components that can render geometry
+// ============================================================================
+
+struct tc_drawable_vtable {
+    // Check if this drawable participates in a rendering phase
+    bool (*has_phase)(tc_component* self, const char* phase_mark);
+
+    // Draw geometry (shader already bound by pass)
+    // render_context is opaque (RenderContext* in C++)
+    void (*draw_geometry)(tc_component* self, void* render_context, const char* geometry_id);
+
+    // Get geometry draw calls for a phase
+    // Returns opaque pointer to be interpreted by caller (std::vector<GeometryDrawCall>* in C++)
+    // Caller must NOT free the returned pointer
+    void* (*get_geometry_draws)(tc_component* self, const char* phase_mark);
+};
+
+// ============================================================================
 // Component VTable - virtual method table for components
 // ============================================================================
 
@@ -61,6 +79,9 @@ struct tc_component {
     // Virtual method table
     const tc_component_vtable* vtable;
 
+    // Drawable vtable (NULL if component is not drawable)
+    const tc_drawable_vtable* drawable_vtable;
+
     // Owner entity (set by entity_add_component)
     tc_entity* entity;
 
@@ -92,6 +113,7 @@ struct tc_component {
 
 static inline void tc_component_init(tc_component* c, const tc_component_vtable* vtable) {
     c->vtable = vtable;
+    c->drawable_vtable = NULL;
     c->entity = NULL;
     c->type_name = NULL;
     c->kind = TC_CXX_COMPONENT;
@@ -170,6 +192,34 @@ static inline const char* tc_component_type_name(const tc_component* c) {
         if (c->vtable && c->vtable->type_name) return c->vtable->type_name;
     }
     return "Component";
+}
+
+// ============================================================================
+// Drawable dispatch (null-safe vtable dispatch)
+// ============================================================================
+
+static inline bool tc_component_is_drawable(const tc_component* c) {
+    return c && c->drawable_vtable != NULL;
+}
+
+static inline bool tc_component_has_phase(tc_component* c, const char* phase_mark) {
+    if (c && c->drawable_vtable && c->drawable_vtable->has_phase) {
+        return c->drawable_vtable->has_phase(c, phase_mark);
+    }
+    return false;
+}
+
+static inline void tc_component_draw_geometry(tc_component* c, void* render_context, const char* geometry_id) {
+    if (c && c->drawable_vtable && c->drawable_vtable->draw_geometry) {
+        c->drawable_vtable->draw_geometry(c, render_context, geometry_id);
+    }
+}
+
+static inline void* tc_component_get_geometry_draws(tc_component* c, const char* phase_mark) {
+    if (c && c->drawable_vtable && c->drawable_vtable->get_geometry_draws) {
+        return c->drawable_vtable->get_geometry_draws(c, phase_mark);
+    }
+    return NULL;
 }
 
 // ============================================================================

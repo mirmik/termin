@@ -51,6 +51,27 @@ typedef struct {
 // Must be called once from Python bindings before any Python components are created.
 TC_API void tc_component_set_python_callbacks(const tc_python_callbacks* callbacks);
 
+// ============================================================================
+// Python Drawable callbacks
+// ============================================================================
+
+typedef bool (*tc_py_drawable_has_phase_fn)(void* py_self, const char* phase_mark);
+typedef void (*tc_py_drawable_draw_geometry_fn)(void* py_self, void* render_context, const char* geometry_id);
+typedef void* (*tc_py_drawable_get_geometry_draws_fn)(void* py_self, const char* phase_mark);
+
+typedef struct {
+    tc_py_drawable_has_phase_fn has_phase;
+    tc_py_drawable_draw_geometry_fn draw_geometry;
+    tc_py_drawable_get_geometry_draws_fn get_geometry_draws;
+} tc_python_drawable_callbacks;
+
+// Set the global Python drawable callbacks.
+TC_API void tc_component_set_python_drawable_callbacks(const tc_python_drawable_callbacks* callbacks);
+
+// Install drawable vtable on a Python component.
+// Call this when the Python component implements Drawable protocol.
+TC_API void tc_component_install_python_drawable_vtable(tc_component* c);
+
 #ifdef __cplusplus
 }
 #endif

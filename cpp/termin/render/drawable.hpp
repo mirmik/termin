@@ -8,6 +8,8 @@
 #include "termin/render/material.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/entity/component.hpp"
+#include "../../../core_c/include/tc_component.h"
 
 namespace termin {
 
@@ -43,6 +45,10 @@ struct GeometryDrawCall {
  */
 class Drawable {
 public:
+    // Cached geometry draws for get_geometry_draws vtable callback
+    // (vtable returns pointer to this, caller must not free)
+    mutable std::vector<GeometryDrawCall> _cached_geometry_draws;
+
     virtual ~Drawable() = default;
 
     /**
@@ -85,12 +91,29 @@ public:
         auto marks = get_phase_marks();
         return marks.find(phase_mark) != marks.end();
     }
+
+    // Static drawable vtable for C components
+    static const tc_drawable_vtable cxx_drawable_vtable;
+
+protected:
+    // Set drawable_vtable on the C component (call from subclass constructor)
+    void install_drawable_vtable(tc_component* c) {
+        if (c) {
+            c->drawable_vtable = &cxx_drawable_vtable;
+        }
+    }
+
+private:
+    // Static callbacks for drawable vtable
+    static bool _cb_has_phase(tc_component* c, const char* phase_mark);
+    static void _cb_draw_geometry(tc_component* c, void* render_context, const char* geometry_id);
+    static void* _cb_get_geometry_draws(tc_component* c, const char* phase_mark);
 };
 
-// Draw call for passes - combines entity, drawable, phase, and geometry.
+// Draw call for passes - combines entity, component, phase, and geometry.
 struct PhaseDrawCall {
     Entity entity;
-    Drawable* drawable = nullptr;
+    tc_component* component = nullptr;  // Component with drawable_vtable
     MaterialPhase* phase = nullptr;
     int priority = 0;
     std::string geometry_id;

@@ -1,6 +1,7 @@
 #include "color_pass.hpp"
 
 #include <cmath>
+#include <cstdio>
 
 namespace termin {
 
@@ -78,33 +79,32 @@ std::vector<PhaseDrawCall> ColorPass::collect_draw_calls(
         size_t comp_count = ent.component_count();
         for (size_t ci = 0; ci < comp_count; ci++) {
             tc_component* tc = ent.component_at(ci);
-            if (!tc || tc->kind != TC_CXX_COMPONENT || !tc->enabled) {
-                continue;
-            }
-            CxxComponent* component = CxxComponent::from_tc(tc);
-            if (!component) {
+            if (!tc || !tc->enabled) {
                 continue;
             }
 
-            // Try to cast to Drawable
-            Drawable* drawable = dynamic_cast<Drawable*>(component);
-            if (!drawable) {
+            // Check if component is drawable via vtable
+            if (!tc_component_is_drawable(tc)) {
                 continue;
             }
 
             // Filter by phase_mark
-            if (!phase_mark.empty() && !drawable->has_phase(phase_mark)) {
+            if (!phase_mark.empty() && !tc_component_has_phase(tc, phase_mark.c_str())) {
                 continue;
             }
 
-            // Get geometry draws
-            std::vector<GeometryDrawCall> geometry_draws = drawable->get_geometry_draws(&phase_mark);
+            // Get geometry draws via vtable
+            void* draws_ptr = tc_component_get_geometry_draws(tc, phase_mark.c_str());
+            if (!draws_ptr) {
+                continue;
+            }
 
-            for (const auto& gd : geometry_draws) {
+            auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
+            for (const auto& gd : *geometry_draws) {
                 if (gd.phase) {
                     draw_calls.push_back(PhaseDrawCall{
                         ent,
-                        drawable,
+                        tc,
                         gd.phase,
                         gd.phase->priority,
                         gd.geometry_id
@@ -224,8 +224,8 @@ void ColorPass::execute_with_data(
             context.current_shader = dc.phase->shader.get();
         }
 
-        // Draw geometry
-        dc.drawable->draw_geometry(context, dc.geometry_id);
+        // Draw geometry via vtable
+        tc_component_draw_geometry(dc.component, &context, dc.geometry_id.c_str());
 
         // Check for debug blit
         if (!debug_symbol.empty() && ename && ename == debug_symbol) {

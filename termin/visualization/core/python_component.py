@@ -42,6 +42,12 @@ class PythonComponent:
         # Scene reference (set by on_added)
         self._scene: Optional[Scene] = None
 
+        # Install drawable vtable if this component implements Drawable protocol
+        # Check for phase_marks attribute (Drawable protocol requirement)
+        if hasattr(type(self), 'phase_marks') or hasattr(self, 'phase_marks'):
+            self._tc.install_drawable_vtable()
+            print(f"[Drawable] Installed drawable vtable for {type_name}, is_drawable={self._tc.is_drawable}")
+
     def __init_subclass__(cls, **kwargs):
         """Called when a class inherits from PythonComponent."""
         super().__init_subclass__(**kwargs)

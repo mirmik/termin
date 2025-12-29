@@ -5,6 +5,7 @@
 
 // Global Python callbacks (set once at initialization)
 static tc_python_callbacks g_py_callbacks = {0};
+static tc_python_drawable_callbacks g_py_drawable_callbacks = {0};
 
 // ============================================================================
 // Python vtable callbacks - these dispatch to global Python callbacks
@@ -119,5 +120,48 @@ void tc_component_free_python(tc_component* c) {
     if (c) {
         // Don't free c->py_wrap - Python manages its own objects
         free(c);
+    }
+}
+
+// ============================================================================
+// Python drawable vtable callbacks
+// ============================================================================
+
+static bool py_drawable_has_phase(tc_component* c, const char* phase_mark) {
+    if (g_py_drawable_callbacks.has_phase && c->py_wrap) {
+        return g_py_drawable_callbacks.has_phase(c->py_wrap, phase_mark);
+    }
+    return false;
+}
+
+static void py_drawable_draw_geometry(tc_component* c, void* render_context, const char* geometry_id) {
+    if (g_py_drawable_callbacks.draw_geometry && c->py_wrap) {
+        g_py_drawable_callbacks.draw_geometry(c->py_wrap, render_context, geometry_id);
+    }
+}
+
+static void* py_drawable_get_geometry_draws(tc_component* c, const char* phase_mark) {
+    if (g_py_drawable_callbacks.get_geometry_draws && c->py_wrap) {
+        return g_py_drawable_callbacks.get_geometry_draws(c->py_wrap, phase_mark);
+    }
+    return NULL;
+}
+
+// Python drawable vtable (shared by all Python drawable components)
+static const tc_drawable_vtable g_python_drawable_vtable = {
+    .has_phase = py_drawable_has_phase,
+    .draw_geometry = py_drawable_draw_geometry,
+    .get_geometry_draws = py_drawable_get_geometry_draws,
+};
+
+void tc_component_set_python_drawable_callbacks(const tc_python_drawable_callbacks* callbacks) {
+    if (callbacks) {
+        g_py_drawable_callbacks = *callbacks;
+    }
+}
+
+void tc_component_install_python_drawable_vtable(tc_component* c) {
+    if (c) {
+        c->drawable_vtable = &g_python_drawable_vtable;
     }
 }

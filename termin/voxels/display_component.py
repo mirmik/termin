@@ -208,7 +208,7 @@ class VoxelDisplayComponent(PythonComponent):
             self._material = Material(
                 shader=shader,
                 color=self.color_below,
-                phase_mark="editor",
+                phase_mark="transparent",
                 render_state=RenderState(
                     depth_test=True,
                     depth_write=True,

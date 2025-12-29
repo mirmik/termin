@@ -9,6 +9,7 @@ namespace termin {
 
 MeshRenderer::MeshRenderer() {
     _type_name = "MeshRenderer";
+    install_drawable_vtable(&_c);
 }
 
 void MeshRenderer::set_mesh(const MeshHandle& handle) {
