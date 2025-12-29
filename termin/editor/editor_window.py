@@ -662,8 +662,7 @@ class EditorWindow(QMainWindow):
         return None
 
     def _log_to_console(self, message: str) -> None:
-        """Log message to console output and terminal."""
-        print(message)
+        """Log message to console output (native logs already print to stderr)."""
         if self.consoleOutput is not None:
             self.consoleOutput.appendPlainText(message)
 

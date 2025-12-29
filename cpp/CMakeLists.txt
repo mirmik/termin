@@ -338,7 +338,9 @@ endif()
 target_compile_options(_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-# No precompiled headers for _native (contains glad.c which is C)
+# Exclude glad.c from precompiled headers (it's C, not C++)
+set_source_files_properties(termin/render/glad/src/glad.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+target_precompile_headers(_native REUSE_FROM entity_lib)
 
 # ---------------- Tests ----------------
 option(BUILD_TESTS "Build C++ tests" OFF)
@@ -396,8 +398,11 @@ if(BUILD_TESTS)
 endif()
 
 # Install to python packages
-# Install libtrent to root termin directory
-install(TARGETS trent DESTINATION ${CMAKE_INSTALL_PREFIX})
+# Install shared libraries to root termin directory
+install(TARGETS trent entity_lib termin_core
+    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}  # .dll on Windows
+    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}  # .so on Linux
+)
 
 # Set RPATH for modules that depend on libtrent
 set_target_properties(_mesh_native PROPERTIES

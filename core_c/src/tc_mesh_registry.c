@@ -115,7 +115,14 @@ tc_mesh* tc_mesh_get(const char* uuid) {
 
 static int debug_count = 0;
 
-tc_mesh* tc_mesh_get_or_create(const char* uuid) {
+TC_API tc_mesh* tc_mesh_get_or_create(const char* uuid) {
+    static int call_id = 0;
+    int my_call_id = call_id++;
+
+    fprintf(stderr, "[TRACE] tc_mesh_get_or_create ENTER call_id=%d uuid=%.16s this_func=%p\n",
+            my_call_id, uuid ? uuid : "(null)", (void*)&tc_mesh_get_or_create);
+    fflush(stderr);
+
     // Auto-initialize if needed
     if (!g_meshes) {
         tc_log_debug("tc_mesh_get_or_create: auto-initializing registry (g_meshes=%p)", (void*)&g_meshes);
@@ -132,12 +139,17 @@ tc_mesh* tc_mesh_get_or_create(const char* uuid) {
         mesh->ref_count++;
         tc_log_debug("tc_mesh_get_or_create: reusing '%s' [%s] (ref=%u)",
             mesh->name ? mesh->name : "?", uuid, mesh->ref_count);
+        fprintf(stderr, "[TRACE] tc_mesh_get_or_create EXIT call_id=%d REUSE ref=%u\n", my_call_id, mesh->ref_count);
+        fflush(stderr);
         return mesh;
     }
 
     // Create new
     tc_log_debug("tc_mesh_get_or_create: creating new [%s] (g_meshes=%p) (debug_count=%d)", uuid, (void*)g_meshes, debug_count++);
-    return tc_mesh_add(uuid);
+    mesh = tc_mesh_add(uuid);
+    fprintf(stderr, "[TRACE] tc_mesh_get_or_create EXIT call_id=%d NEW mesh=%p\n", my_call_id, (void*)mesh);
+    fflush(stderr);
+    return mesh;
 }
 
 bool tc_mesh_remove(const char* uuid) {

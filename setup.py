@@ -48,7 +48,6 @@ class CMakeBuildExt(build_ext):
             self._built_objects = getattr(self, "_built_objects", [])  # satisfy setuptools expectations
 
         # Copy all native modules into source tree for editable/pytest runs
-        bin_dir = build_temp / "bin"
         module_mappings = [
             ("tests", "_cpp_tests"),
             ("geombase", "_geom_native"),
@@ -73,22 +72,18 @@ class CMakeBuildExt(build_ext):
                 shutil.copy2(so, dst_dir / so.name)
 
         # Copy shared libraries to termin/ directory (source tree for editable install)
+        # All DLLs/SOs should come from install_prefix (single source of truth)
         source_termin_dir = Path(directory) / "termin"
 
         if sys.platform == "win32":
-            # Windows: copy .dll files from bin/
-            if bin_dir.exists():
-                for dll in bin_dir.glob("*.dll"):
-                    shutil.copy2(dll, source_termin_dir / dll.name)
+            # Windows: copy .dll files from install_prefix (where CMake installs them)
+            for dll in install_prefix.glob("*.dll"):
+                shutil.copy2(dll, source_termin_dir / dll.name)
         else:
-            # Linux/macOS: copy .so/.dylib from lib/ or install_prefix
-            lib_dir = build_temp / "lib"
+            # Linux/macOS: copy .so/.dylib from install_prefix
             for pattern in ["*.so", "*.so.*", "*.dylib"]:
                 for lib in install_prefix.glob(pattern):
                     shutil.copy2(lib, source_termin_dir / lib.name)
-                if lib_dir.exists():
-                    for lib in lib_dir.glob(pattern):
-                        shutil.copy2(lib, source_termin_dir / lib.name)
 
 directory = os.path.dirname(os.path.realpath(__file__))
 

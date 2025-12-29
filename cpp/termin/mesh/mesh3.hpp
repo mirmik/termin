@@ -482,8 +482,9 @@ private:
         tc_mesh_compute_uuid(buffer.data(), vertex_size, indices, index_count, uuid);
 
         // Debug
-        printf("[Mesh3] [1] name='%s' uuid=%.16s...\n", name, uuid);
-        fflush(stdout);
+        fprintf(stderr, "[Mesh3] [1] name='%s' uuid=%.16s... calling tc_mesh_get_or_create from %p\n",
+                name, uuid, (void*)&tc_mesh_get_or_create);
+        fflush(stderr);
 
         // Get or create mesh
         _mesh = tc_mesh_get_or_create(uuid);
@@ -503,8 +504,10 @@ private:
         const float* normals,
         const float* uvs
     ) {
-        
-        printf("[Mesh3] [2] name='%s' uuid=%.16s...\n", name, uuid);
+        fprintf(stderr, "[Mesh3] [2] name='%s' uuid=%.16s... calling tc_mesh_get_or_create from %p\n",
+                name, uuid, (void*)&tc_mesh_get_or_create);
+        fflush(stderr);
+
         // Try to get existing mesh first
         _mesh = tc_mesh_get_or_create(uuid);
         if (!_mesh) return;

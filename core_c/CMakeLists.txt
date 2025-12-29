@@ -52,6 +52,14 @@ else()
     add_library(termin_core STATIC ${TC_SOURCES} ${TC_HEADERS})
 endif()
 
+# Output directories (when built as subdirectory, inherit parent's bin/)
+set_target_properties(termin_core PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
 target_include_directories(termin_core
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

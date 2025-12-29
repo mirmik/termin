@@ -902,7 +902,9 @@ void bind_mesh(py::module_& m) {
        "Compute UUID from vertex and index data (hash-based)");
 
     m.def("tc_mesh_get_or_create", [](const std::string& uuid) {
-        fprintf(stderr, "tc_mesh_get_or_create: uuid=%s\n", uuid.c_str());
+        fprintf(stderr, "[PY] tc_mesh_get_or_create: uuid=%s func_ptr=%p\n",
+                uuid.c_str(), (void*)&tc_mesh_get_or_create);
+        fflush(stderr);
         tc_mesh* mesh = tc_mesh_get_or_create(uuid.c_str());
         return TcMeshHandle(mesh);  // TcMeshHandle takes ownership
     }, py::arg("uuid"),
