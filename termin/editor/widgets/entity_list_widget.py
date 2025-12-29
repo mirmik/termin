@@ -209,7 +209,7 @@ class EntityListWidget(QWidget):
             if handle.uuid == entity_uuid:
                 return
 
-        # Create new handle (resolves via EntityRegistry)
+        # Create new handle (resolves via scene pool)
         handle = EntityHandle(uuid=entity_uuid)
         self._handles.append(handle)
         self._rebuild_list()

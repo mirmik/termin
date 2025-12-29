@@ -8,7 +8,6 @@ import numpy as np
 
 from termin.visualization.core.component import Component, InputComponent
 from termin.visualization.core.entity import Entity
-from termin.visualization.core.entity_registry import EntityRegistry
 from termin._native.scene import TcScene
 from termin.lighting import Light
 from termin.visualization.render.components.light_component import LightComponent
@@ -325,9 +324,6 @@ class Scene:
             idx = i + 1
         self._entities.insert(idx, entity)
 
-        # Register entity in global registry (for lookup by uuid/pick_id)
-        EntityRegistry.instance().register_entity(entity)
-
         # Register all components with C core scene
         # This calls on_added via vtable for each component
         prev_scene = _current_scene
@@ -371,9 +367,6 @@ class Scene:
             idx = i + 1
         self._entities.insert(idx, entity)
 
-        # Register in global registry
-        EntityRegistry.instance().register_entity(entity)
-
         # Register components
         prev_scene = _current_scene
         _current_scene = self
@@ -416,6 +409,14 @@ class Scene:
     @on_entity_removed.setter
     def on_entity_removed(self, value: Event[Entity]):
         pass  # __iadd__ modifies in place, setter is no-op
+
+    def get_entity(self, uuid: str) -> Entity | None:
+        """O(1) lookup of entity by UUID using hash map."""
+        return self._tc_scene.get_entity(uuid)
+
+    def get_entity_by_pick_id(self, pick_id: int) -> Entity | None:
+        """O(1) lookup of entity by pick_id using hash map."""
+        return self._tc_scene.get_entity_by_pick_id(pick_id)
 
     def find_entity_by_uuid(self, uuid: str) -> Entity | None:
         """

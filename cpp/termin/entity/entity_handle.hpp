@@ -16,19 +16,24 @@
     #define ENTITY_API
 #endif
 
+// Forward declaration for C struct
+struct tc_entity_pool;
+
 namespace termin {
 
 class EntityRegistry;
 
 // EntityHandle - lazy reference to Entity by UUID.
 // Used when Entity might not exist yet during deserialization.
-// Resolves to actual Entity on first access via global EntityRegistry.
+// Resolves to actual Entity on first access via stored pool or global EntityRegistry.
 class ENTITY_API EntityHandle {
 public:
     std::string uuid;
+    tc_entity_pool* pool = nullptr;  // Pool to search in (set during deserialization)
 
     EntityHandle() = default;
     explicit EntityHandle(const std::string& uuid) : uuid(uuid) {}
+    EntityHandle(const std::string& uuid, tc_entity_pool* pool) : uuid(uuid), pool(pool) {}
 
     // Get the referenced Entity. Resolves lazily.
     // Returns invalid Entity if not found.
@@ -45,7 +50,9 @@ public:
 
     // Deserialize inplace from scene data.
     // Accepts either a string (uuid directly) or a dict with "uuid" key.
-    void deserialize_from(const nos::trent& data) {
+    // Pool can be set to enable scene-local lookup.
+    void deserialize_from(const nos::trent& data, tc_entity_pool* p = nullptr) {
+        pool = p;
         if (data.is_string()) {
             uuid = data.as_string();
         } else if (data.is_dict() && data.contains("uuid")) {

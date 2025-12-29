@@ -167,6 +167,28 @@ public:
         return Entity::create(pool, name);
     }
 
+    // Find entity by UUID in scene's pool
+    Entity get_entity(const std::string& uuid) const {
+        tc_entity_pool* pool = entity_pool();
+        if (!pool || uuid.empty()) return Entity();
+
+        tc_entity_id id = tc_entity_pool_find_by_uuid(pool, uuid.c_str());
+        if (!tc_entity_id_valid(id)) return Entity();
+
+        return Entity(pool, id);
+    }
+
+    // Find entity by pick_id in scene's pool
+    Entity get_entity_by_pick_id(uint32_t pick_id) const {
+        tc_entity_pool* pool = entity_pool();
+        if (!pool || pick_id == 0) return Entity();
+
+        tc_entity_id id = tc_entity_pool_find_by_pick_id(pool, pick_id);
+        if (!tc_entity_id_valid(id)) return Entity();
+
+        return Entity(pool, id);
+    }
+
     // Migrate entity to this scene's pool
     // Returns new Entity in scene's pool, old entity becomes invalid
     Entity migrate_entity(Entity& entity) {
@@ -238,6 +260,19 @@ void bind_tc_scene(py::module_& m) {
         // Entity migration
         .def("migrate_entity", &TcScene::migrate_entity, py::arg("entity"),
              "Migrate entity to scene's pool. Returns new Entity, old becomes invalid.")
+
+        // Entity lookup
+        .def("get_entity", [](TcScene& self, const std::string& uuid) -> py::object {
+            Entity e = self.get_entity(uuid);
+            if (e.valid()) return py::cast(e);
+            return py::none();
+        }, py::arg("uuid"), "Find entity by UUID. Returns None if not found.")
+
+        .def("get_entity_by_pick_id", [](TcScene& self, uint32_t pick_id) -> py::object {
+            Entity e = self.get_entity_by_pick_id(pick_id);
+            if (e.valid()) return py::cast(e);
+            return py::none();
+        }, py::arg("pick_id"), "Find entity by pick_id. Returns None if not found.")
         ;
 }
 

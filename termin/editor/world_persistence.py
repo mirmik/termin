@@ -115,8 +115,6 @@ class WorldPersistence:
         self._rescan_file_resources = rescan_file_resources
         self._current_scene_path: str | None = None
         self._resources_initialized: bool = False
-        # Saved registries during game mode (tuple: by_uuid, by_pick_id)
-        self._editor_registries: tuple | None = None
 
     def initialize_resources(self) -> None:
         """
@@ -456,22 +454,13 @@ class WorldPersistence:
         Returns:
             Game scene (копия) для переключения viewport'ов.
         """
-        from weakref import WeakValueDictionary
-        from termin.visualization.core.entity_registry import EntityRegistry
-
         if self._game_scene is not None:
             return self._game_scene
-
-        # Сохраняем реестры editor scene и заменяем на пустые
-        # Это предотвращает перезапись editor entities реестрами game entities
-        self._editor_registries = EntityRegistry.instance().swap_registries(
-            WeakValueDictionary(), {}
-        )
 
         # Сериализуем editor scene
         scene_data = self._editor_scene.serialize()
 
-        # Создаём копию
+        # Создаём копию (каждая сцена имеет свой entity pool)
         self._game_scene = self._create_new_scene()
         self._game_scene.load_from_data(scene_data, context=None, update_settings=True)
 
@@ -484,13 +473,5 @@ class WorldPersistence:
         Returns:
             Editor scene (оригинал) для переключения viewport'ов.
         """
-        from termin.visualization.core.entity_registry import EntityRegistry
-
-        # Восстанавливаем реестры editor scene
-        if self._editor_registries is not None:
-            by_uuid, by_pick_id = self._editor_registries
-            EntityRegistry.instance().swap_registries(by_uuid, by_pick_id)
-            self._editor_registries = None
-
         self._game_scene = None
         return self._editor_scene

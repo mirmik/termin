@@ -278,25 +278,32 @@ PYBIND11_MODULE(_entity_native, m) {
     py::class_<EntityHandle>(m, "EntityHandle")
         .def(py::init<>())
         .def(py::init<const std::string&>(), py::arg("uuid"))
+        .def(py::init([](const std::string& uuid, uintptr_t pool_ptr) {
+            return EntityHandle(uuid, reinterpret_cast<tc_entity_pool*>(pool_ptr));
+        }), py::arg("uuid"), py::arg("pool_ptr"))
         .def_readwrite("uuid", &EntityHandle::uuid)
+        .def_property("pool_ptr",
+            [](const EntityHandle& h) { return reinterpret_cast<uintptr_t>(h.pool); },
+            [](EntityHandle& h, uintptr_t ptr) { h.pool = reinterpret_cast<tc_entity_pool*>(ptr); })
         .def_property_readonly("entity", &EntityHandle::get, py::return_value_policy::reference)
         .def_property_readonly("is_valid", &EntityHandle::is_valid)
         .def_property_readonly("name", &EntityHandle::name)
         .def_static("from_entity", &EntityHandle::from_entity, py::arg("entity"))
         .def("get", &EntityHandle::get, py::return_value_policy::reference)
         .def("__repr__", [](const EntityHandle& h) {
-            std::string status = h.get() ? "resolved" : "unresolved";
+            std::string status = h.get().valid() ? "resolved" : "unresolved";
             std::string uuid_short = h.uuid.size() > 8 ? h.uuid.substr(0, 8) + "..." : h.uuid;
             return "<EntityHandle " + uuid_short + " (" + status + ")>";
         })
         .def("serialize", &EntityHandle::serialize)
-        .def_static("deserialize", [](py::dict d) -> EntityHandle {
+        .def_static("deserialize", [](py::dict d, uintptr_t pool_ptr) -> EntityHandle {
             EntityHandle h;
+            h.pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
             if (d.contains("uuid")) {
                 h.uuid = d["uuid"].cast<std::string>();
             }
             return h;
-        }, py::arg("data"));
+        }, py::arg("data"), py::arg("pool_ptr") = 0);
 
     // --- Entity ---
     py::class_<Entity>(m, "Entity")
@@ -465,14 +472,6 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("is_pickable", [](Entity& e) {
             return e.pickable() && e.visible() && e.active();
         })
-
-        .def_static("lookup_by_pick_id", [](uint32_t pid) -> py::object {
-            Entity ent = EntityRegistry::instance().get_by_pick_id(pid);
-            if (ent.valid()) {
-                return py::cast(ent);
-            }
-            return py::none();
-        }, py::arg("pick_id"))
 
         // Component management
         // Accepts both C++ Component and PythonComponent (via py::object)

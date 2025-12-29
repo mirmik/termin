@@ -230,6 +230,10 @@ class EditorDisplayInputManager:
         Возвращает:
             Entity или None.
         """
+        if viewport is None:
+            viewport = self._viewport_under_cursor(x, y)
+            if viewport is None:
+                return None
         color = self.pick_color_at(x, y, viewport, buffer_name="id")
         if color is None:
             return None
@@ -237,7 +241,7 @@ class EditorDisplayInputManager:
         pid = rgb_to_id(r, g, b)
         if pid == 0:
             return None
-        return Entity.lookup_by_pick_id(pid)
+        return viewport.scene.get_entity_by_pick_id(pid)
 
     def pick_depth_at(
         self,

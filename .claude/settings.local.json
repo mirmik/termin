@@ -80,7 +80,18 @@
       "Bash(PYTHONPATH=. timeout 5 python3:*)",
       "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 30 python:*)",
       "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 60 python -m pytest:*)",
-      "Bash(true ls -la /media/sf_Shared/termin/build/temp.linux-x86_64-cpython-310/*.so)"
+      "Bash(true ls -la /media/sf_Shared/termin/build/temp.linux-x86_64-cpython-310/*.so)",
+      "Bash(PYTHONPATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310:/media/sf_Shared/termin timeout 10 python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310/termin:/media/sf_Shared/termin/build/temp.linux-x86_64-cpython-310/bin:$LD_LIBRARY_PATH PYTHONPATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310:/media/sf_Shared/termin timeout 10 python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/build/temp.linux-x86_64-cpython-310/bin PYTHONPATH=/media/sf_Shared/termin timeout 10 python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310/termin:/media/sf_Shared/termin/build/temp.linux-x86_64-cpython-310/bin PYTHONPATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310:/media/sf_Shared/termin timeout 10 python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310/termin PYTHONPATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310:/media/sf_Shared/termin timeout 10 python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=/media/sf_Shared/termin timeout 10 python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310/termin PYTHONPATH=/media/sf_Shared/termin/build/lib.linux-x86_64-cpython-310:/media/sf_Shared/termin timeout 15 python3:*)",
+      "Bash(gcc:*)",
+      "Bash(LD_LIBRARY_PATH=. ./test_mesh:*)",
+      "Bash(./test_mesh)",
+      "Bash(LD_LIBRARY_PATH=. ./termin_core_test:*)"
     ]
   }
 }

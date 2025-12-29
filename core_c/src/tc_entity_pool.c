@@ -1,5 +1,6 @@
 // tc_entity_pool.c - Entity pool implementation
 #include "../include/tc_entity_pool.h"
+#include "../include/tc_hash_map.h"
 #include "../include/tc_component.h"
 #include <stdlib.h>
 #include <string.h>
@@ -100,11 +101,28 @@ struct tc_entity_pool {
 
     // User data
     void** user_data;
+
+    // Hash maps for O(1) lookup
+    tc_str_map* by_uuid;      // uuid string -> packed entity_id
+    tc_u32_map* by_pick_id;   // pick_id -> packed entity_id
 };
 
 // ============================================================================
 // Helper functions
 // ============================================================================
+
+// Pack entity_id into uint64 for hash map storage
+static uint64_t pack_entity_id(tc_entity_id id) {
+    return ((uint64_t)id.generation << 32) | id.index;
+}
+
+// Unpack entity_id from uint64
+static tc_entity_id unpack_entity_id(uint64_t packed) {
+    return (tc_entity_id){
+        .index = (uint32_t)packed,
+        .generation = (uint32_t)(packed >> 32)
+    };
+}
 
 static Quat quat_identity(void) {
     return (Quat){0, 0, 0, 1};
@@ -246,6 +264,10 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->components = calloc(initial_capacity, sizeof(ComponentArray));
     pool->user_data = calloc(initial_capacity, sizeof(void*));
 
+    // Create hash maps for O(1) lookup
+    pool->by_uuid = tc_str_map_new(initial_capacity);
+    pool->by_pick_id = tc_u32_map_new(initial_capacity);
+
     return pool;
 }
 
@@ -299,6 +321,10 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
     free(pool->children);
     free(pool->components);
     free(pool->user_data);
+
+    // Free hash maps
+    tc_str_map_free(pool->by_uuid);
+    tc_u32_map_free(pool->by_pick_id);
 
     free(pool);
 }
@@ -423,7 +449,13 @@ tc_entity_id tc_entity_pool_alloc(tc_entity_pool* pool, const char* name) {
     pool->user_data[idx] = NULL;
     pool->count++;
 
-    return (tc_entity_id){idx, gen};
+    tc_entity_id result = (tc_entity_id){idx, gen};
+
+    // Register in hash maps for O(1) lookup
+    tc_str_map_set(pool->by_uuid, pool->uuids[idx], pack_entity_id(result));
+    tc_u32_map_set(pool->by_pick_id, pool->pick_ids[idx], pack_entity_id(result));
+
+    return result;
 }
 
 void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
@@ -455,6 +487,12 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
             pool->parent_indices[child.index] = UINT32_MAX;
         }
     }
+
+    // Remove from hash maps before marking as dead
+    if (pool->uuids[idx]) {
+        tc_str_map_remove(pool->by_uuid, pool->uuids[idx]);
+    }
+    tc_u32_map_remove(pool->by_pick_id, pool->pick_ids[idx]);
 
     pool->alive[idx] = false;
     pool->generations[idx]++;
@@ -585,11 +623,29 @@ uint32_t tc_entity_pool_pick_id(const tc_entity_pool* pool, tc_entity_id id) {
     return pool->pick_ids[id.index];
 }
 
-tc_entity_id tc_entity_pool_find_by_pick_id(tc_entity_pool* pool, uint32_t pick_id) {
+tc_entity_id tc_entity_pool_find_by_pick_id(const tc_entity_pool* pool, uint32_t pick_id) {
     if (!pool || pick_id == 0) return TC_ENTITY_ID_INVALID;
-    for (size_t i = 0; i < pool->capacity; i++) {
-        if (pool->alive[i] && pool->pick_ids[i] == pick_id) {
-            return (tc_entity_id){(uint32_t)i, pool->generations[i]};
+
+    uint64_t packed;
+    if (tc_u32_map_get(pool->by_pick_id, pick_id, &packed)) {
+        tc_entity_id id = unpack_entity_id(packed);
+        // Verify entity is still alive with same generation
+        if (tc_entity_pool_alive(pool, id)) {
+            return id;
+        }
+    }
+    return TC_ENTITY_ID_INVALID;
+}
+
+tc_entity_id tc_entity_pool_find_by_uuid(const tc_entity_pool* pool, const char* uuid) {
+    if (!pool || !uuid || !uuid[0]) return TC_ENTITY_ID_INVALID;
+
+    uint64_t packed;
+    if (tc_str_map_get(pool->by_uuid, uuid, &packed)) {
+        tc_entity_id id = unpack_entity_id(packed);
+        // Verify entity is still alive with same generation
+        if (tc_entity_pool_alive(pool, id)) {
+            return id;
         }
     }
     return TC_ENTITY_ID_INVALID;
@@ -1047,6 +1103,12 @@ tc_entity_id tc_entity_pool_migrate(
             }
         }
     }
+
+    // Remove source entity from source hash maps
+    if (src_pool->uuids[src_idx]) {
+        tc_str_map_remove(src_pool->by_uuid, src_pool->uuids[src_idx]);
+    }
+    tc_u32_map_remove(src_pool->by_pick_id, src_pool->pick_ids[src_idx]);
 
     // Free source entity (bumps generation, invalidates old handles)
     // Note: components were already moved, so no Py_DECREF will happen

@@ -204,6 +204,7 @@ add_library(entity_lib SHARED
     ../core_c/src/tc_component.c
     ../core_c/src/tc_component_python.c
     ../core_c/src/tc_entity_pool.c
+    ../core_c/src/tc_hash_map.c
     ../core_c/src/tc_scene.c
     ../core_c/src/tc_inspect.c
     ../core_c/src/tc_inspect_instance.cpp
