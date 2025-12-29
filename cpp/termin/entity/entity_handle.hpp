@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <pybind11/pybind11.h>
 #include "entity.hpp"
 #include "../../trent/trent.h"
 
@@ -53,6 +54,13 @@ public:
 
     bool operator==(const EntityHandle& other) const { return uuid == other.uuid; }
     bool operator!=(const EntityHandle& other) const { return uuid != other.uuid; }
+
+    // Serialize to Python dict (for register_cpp_handle_kind)
+    pybind11::dict serialize() const {
+        pybind11::dict d;
+        d["uuid"] = uuid;
+        return d;
+    }
 };
 
 } // namespace termin

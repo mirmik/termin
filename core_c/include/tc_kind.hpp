@@ -3,6 +3,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <unordered_map>
 #include <functional>
 #include <any>
@@ -186,8 +187,10 @@ public:
 // ============================================================================
 
 // Register a C++ handle type that has serialize() and deserialize_from(trent)
+// Also registers list[kind_name] for std::vector<H>
 template<typename H>
 void register_cpp_handle_kind(const std::string& kind_name) {
+    // Single element handler
     KindRegistry::instance().register_cpp(kind_name,
         // serialize: std::any(H) → trent
         [](const std::any& value) -> nos::trent {
@@ -218,6 +221,56 @@ void register_cpp_handle_kind(const std::string& kind_name) {
         [](const std::any& value) -> py::object {
             const H& h = std::any_cast<const H&>(value);
             return py::cast(h);
+        }
+    );
+
+    // List handler for std::vector<H>
+    std::string list_kind = "list[" + kind_name + "]";
+    KindRegistry::instance().register_cpp(list_kind,
+        // serialize: std::any(vector<H>) → trent (list)
+        [](const std::any& value) -> nos::trent {
+            const auto& vec = std::any_cast<const std::vector<H>&>(value);
+            nos::trent result;
+            result.init(nos::trent_type::list);
+            for (const auto& h : vec) {
+                py::dict d = h.serialize();
+                nos::trent item;
+                item.init(nos::trent_type::dict);
+                for (auto kv : d) {
+                    std::string key = py::str(kv.first).cast<std::string>();
+                    py::object val = py::reinterpret_borrow<py::object>(kv.second);
+                    if (py::isinstance<py::str>(val)) {
+                        item[key] = nos::trent(val.cast<std::string>());
+                    } else if (py::isinstance<py::int_>(val)) {
+                        item[key] = nos::trent(val.cast<int64_t>());
+                    } else if (py::isinstance<py::float_>(val)) {
+                        item[key] = nos::trent(val.cast<double>());
+                    }
+                }
+                result.push_back(item);
+            }
+            return result;
+        },
+        // deserialize: trent → std::any(vector<H>)
+        [](const nos::trent& t) -> std::any {
+            std::vector<H> vec;
+            if (t.is_list()) {
+                for (const auto& item : t.as_list()) {
+                    H h;
+                    h.deserialize_from(item);
+                    vec.push_back(h);
+                }
+            }
+            return vec;
+        },
+        // to_python: std::any(vector<H>) → py::list
+        [](const std::any& value) -> py::object {
+            const auto& vec = std::any_cast<const std::vector<H>&>(value);
+            py::list result;
+            for (const auto& h : vec) {
+                result.append(py::cast(h));
+            }
+            return result;
         }
     );
 }
