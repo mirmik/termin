@@ -1,7 +1,6 @@
 #include "color_pass.hpp"
 
 #include <cmath>
-#include <cstdio>
 
 namespace termin {
 

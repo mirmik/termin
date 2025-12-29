@@ -10,7 +10,7 @@
     ],
     "entities": [
       {
-        "uuid": "0000000000000009",
+        "uuid": "0000000000000001",
         "name": "cube1",
         "priority": 0,
         "visible": true,
@@ -95,7 +95,7 @@
         ]
       },
       {
-        "uuid": "000000000000000a",
+        "uuid": "0000000000000002",
         "name": "cube2",
         "priority": 0,
         "visible": true,
@@ -241,7 +241,7 @@
         ]
       },
       {
-        "uuid": "000000000000000b",
+        "uuid": "0000000000000003",
         "name": "cube2",
         "priority": 0,
         "visible": true,
@@ -328,7 +328,7 @@
         ]
       },
       {
-        "uuid": "000000000000000c",
+        "uuid": "0000000000000004",
         "name": "GameCamera",
         "priority": 0,
         "visible": true,
@@ -383,7 +383,7 @@
         ]
       },
       {
-        "uuid": "000000000000000d",
+        "uuid": "0000000000000005",
         "name": "lines",
         "priority": 0,
         "visible": true,
@@ -448,7 +448,7 @@
         ]
       },
       {
-        "uuid": "000000000000000e",
+        "uuid": "0000000000000006",
         "name": "TransparentCube",
         "priority": 0,
         "visible": true,
@@ -544,7 +544,7 @@
         ]
       },
       {
-        "uuid": "000000000000000f",
+        "uuid": "0000000000000007",
         "name": "Bulba",
         "priority": 0,
         "visible": true,
@@ -576,7 +576,7 @@
           {
             "type": "MeshRenderer",
             "data": {
-              "enabled": true,
+              "enabled": false,
               "mesh": {
                 "uuid": "150908e5-3116-488a-9a0e-77f14786003d",
                 "type": "path",
@@ -633,7 +633,7 @@
                 0.2,
                 0.8
               ],
-              "fill_percent": 100.0,
+              "fill_percent": 57.0,
               "slice_axis": [
                 0.0,
                 0.0,
@@ -667,7 +667,7 @@
         ]
       },
       {
-        "uuid": "0000000000000010",
+        "uuid": "0000000000000008",
         "name": "BulbaViz",
         "priority": 0,
         "visible": true,
@@ -732,7 +732,7 @@
         ]
       },
       {
-        "uuid": "0000000000000011",
+        "uuid": "0000000000000009",
         "name": "Platform",
         "priority": 0,
         "visible": true,
@@ -761,7 +761,7 @@
         ],
         "children": [
           {
-            "uuid": "0000000000000012",
+            "uuid": "000000000000000a",
             "name": "A",
             "priority": 0,
             "visible": true,
@@ -791,7 +791,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000013",
+            "uuid": "000000000000000b",
             "name": "B",
             "priority": 0,
             "visible": true,
@@ -883,7 +883,7 @@
         ]
       },
       {
-        "uuid": "0000000000000014",
+        "uuid": "000000000000000c",
         "name": "animcube",
         "priority": 0,
         "visible": true,
@@ -912,7 +912,7 @@
         ],
         "children": [
           {
-            "uuid": "0000000000000015",
+            "uuid": "000000000000000d",
             "name": "Cube",
             "priority": 0,
             "visible": true,
@@ -945,7 +945,7 @@
         "components": []
       },
       {
-        "uuid": "0000000000000016",
+        "uuid": "000000000000000e",
         "name": "Light",
         "priority": 0,
         "visible": true,
@@ -992,7 +992,7 @@
         ]
       },
       {
-        "uuid": "0000000000000017",
+        "uuid": "000000000000000f",
         "name": "Arti",
         "priority": 0,
         "visible": true,
@@ -1021,7 +1021,7 @@
         ],
         "children": [
           {
-            "uuid": "0000000000000018",
+            "uuid": "0000000000000010",
             "name": "entity1",
             "priority": 0,
             "visible": true,
@@ -1051,7 +1051,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000019",
+            "uuid": "0000000000000011",
             "name": "entity2",
             "priority": 0,
             "visible": true,
@@ -1081,7 +1081,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000001a",
+            "uuid": "0000000000000012",
             "name": "entity3",
             "priority": 0,
             "visible": true,
@@ -1111,7 +1111,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000001b",
+            "uuid": "0000000000000013",
             "name": "entity4",
             "priority": 0,
             "visible": true,
@@ -1144,7 +1144,7 @@
         "components": []
       },
       {
-        "uuid": "000000000000001c",
+        "uuid": "0000000000000014",
         "name": "Glitch",
         "priority": 0,
         "visible": true,
@@ -1173,7 +1173,7 @@
         ],
         "children": [
           {
-            "uuid": "000000000000001d",
+            "uuid": "0000000000000015",
             "name": "BodyHit",
             "priority": 0,
             "visible": true,
@@ -1203,7 +1203,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000001e",
+            "uuid": "0000000000000016",
             "name": "gymuniformMesh",
             "priority": 0,
             "visible": true,
@@ -1233,7 +1233,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000001f",
+            "uuid": "0000000000000017",
             "name": "jammers3Mesh",
             "priority": 0,
             "visible": true,
@@ -1263,7 +1263,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000020",
+            "uuid": "0000000000000018",
             "name": "low-polyMesh",
             "priority": 0,
             "visible": true,
@@ -1293,7 +1293,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000021",
+            "uuid": "0000000000000019",
             "name": "male_muscle_13290Mesh",
             "priority": 0,
             "visible": true,
@@ -1323,7 +1323,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000022",
+            "uuid": "000000000000001a",
             "name": "male_muscle_13290Mesh.001",
             "priority": 0,
             "visible": true,
@@ -1353,7 +1353,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000023",
+            "uuid": "000000000000001b",
             "name": "MC-SciFi-Armor_HeliosMesh",
             "priority": 0,
             "visible": true,
@@ -1383,7 +1383,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000024",
+            "uuid": "000000000000001c",
             "name": "mens_shirt_untuck_elvbhp1fMesh",
             "priority": 0,
             "visible": true,
@@ -1413,7 +1413,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000025",
+            "uuid": "000000000000001d",
             "name": "mens_shirt_untuck_elvbhp1fMesh.001",
             "priority": 0,
             "visible": true,
@@ -1443,7 +1443,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000026",
+            "uuid": "000000000000001e",
             "name": "mens_tanks_elv1fMesh",
             "priority": 0,
             "visible": true,
@@ -1473,7 +1473,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000027",
+            "uuid": "000000000000001f",
             "name": "mens_trouser_f_elv_chrMesh",
             "priority": 0,
             "visible": true,
@@ -1503,7 +1503,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000028",
+            "uuid": "0000000000000020",
             "name": "mind_eyebrows_14Mesh",
             "priority": 0,
             "visible": true,
@@ -1533,7 +1533,7 @@
             "children": []
           },
           {
-            "uuid": "0000000000000029",
+            "uuid": "0000000000000021",
             "name": "mind_eyelashes_03Mesh",
             "priority": 0,
             "visible": true,
@@ -1563,7 +1563,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000002a",
+            "uuid": "0000000000000022",
             "name": "shoes06Mesh",
             "priority": 0,
             "visible": true,
@@ -1593,7 +1593,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000002b",
+            "uuid": "0000000000000023",
             "name": "spikyMesh",
             "priority": 0,
             "visible": true,
@@ -1623,7 +1623,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000002c",
+            "uuid": "0000000000000024",
             "name": "mixamorig:Hips",
             "priority": 0,
             "visible": true,
@@ -1652,7 +1652,7 @@
             ],
             "children": [
               {
-                "uuid": "000000000000002d",
+                "uuid": "0000000000000025",
                 "name": "mixamorig:Spine",
                 "priority": 0,
                 "visible": true,
@@ -1681,7 +1681,7 @@
                 ],
                 "children": [
                   {
-                    "uuid": "000000000000002e",
+                    "uuid": "0000000000000026",
                     "name": "mixamorig:Spine1",
                     "priority": 0,
                     "visible": true,
@@ -1710,7 +1710,7 @@
                     ],
                     "children": [
                       {
-                        "uuid": "000000000000002f",
+                        "uuid": "0000000000000027",
                         "name": "mixamorig:Spine2",
                         "priority": 0,
                         "visible": true,
@@ -1739,7 +1739,7 @@
                         ],
                         "children": [
                           {
-                            "uuid": "0000000000000030",
+                            "uuid": "0000000000000028",
                             "name": "mixamorig:Neck",
                             "priority": 0,
                             "visible": true,
@@ -1768,7 +1768,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "0000000000000031",
+                                "uuid": "0000000000000029",
                                 "name": "mixamorig:Head",
                                 "priority": 0,
                                 "visible": true,
@@ -1797,7 +1797,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "0000000000000032",
+                                    "uuid": "000000000000002a",
                                     "name": "mixamorig:HeadTop_End",
                                     "priority": 0,
                                     "visible": true,
@@ -1826,7 +1826,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "0000000000000033",
+                                        "uuid": "000000000000002b",
                                         "name": "mixamorig:HeadTop_End_end",
                                         "priority": 0,
                                         "visible": true,
@@ -1855,7 +1855,7 @@
                                         ],
                                         "children": [
                                           {
-                                            "uuid": "0000000000000034",
+                                            "uuid": "000000000000002c",
                                             "name": "mixamorig:HeadTop_End_end_end",
                                             "priority": 0,
                                             "visible": true,
@@ -1893,7 +1893,7 @@
                             ]
                           },
                           {
-                            "uuid": "0000000000000035",
+                            "uuid": "000000000000002d",
                             "name": "mixamorig:LeftShoulder",
                             "priority": 0,
                             "visible": true,
@@ -1922,7 +1922,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "0000000000000036",
+                                "uuid": "000000000000002e",
                                 "name": "mixamorig:LeftArm",
                                 "priority": 0,
                                 "visible": true,
@@ -1951,7 +1951,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "0000000000000037",
+                                    "uuid": "000000000000002f",
                                     "name": "mixamorig:LeftForeArm",
                                     "priority": 0,
                                     "visible": true,
@@ -1980,7 +1980,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "0000000000000038",
+                                        "uuid": "0000000000000030",
                                         "name": "mixamorig:LeftHand",
                                         "priority": 0,
                                         "visible": true,
@@ -2009,7 +2009,7 @@
                                         ],
                                         "children": [
                                           {
-                                            "uuid": "0000000000000039",
+                                            "uuid": "0000000000000031",
                                             "name": "mixamorig:LeftHandThumb1",
                                             "priority": 0,
                                             "visible": true,
@@ -2038,7 +2038,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "000000000000003a",
+                                                "uuid": "0000000000000032",
                                                 "name": "mixamorig:LeftHandThumb2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -2067,7 +2067,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "000000000000003b",
+                                                    "uuid": "0000000000000033",
                                                     "name": "mixamorig:LeftHandThumb3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -2096,7 +2096,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "000000000000003c",
+                                                        "uuid": "0000000000000034",
                                                         "name": "mixamorig:LeftHandThumb4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -2125,7 +2125,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "000000000000003d",
+                                                            "uuid": "0000000000000035",
                                                             "name": "mixamorig:LeftHandThumb4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -2154,7 +2154,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "000000000000003e",
+                                                                "uuid": "0000000000000036",
                                                                 "name": "mixamorig:LeftHandThumb4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -2194,7 +2194,7 @@
                                             ]
                                           },
                                           {
-                                            "uuid": "000000000000003f",
+                                            "uuid": "0000000000000037",
                                             "name": "mixamorig:LeftHandIndex1",
                                             "priority": 0,
                                             "visible": true,
@@ -2223,7 +2223,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "0000000000000040",
+                                                "uuid": "0000000000000038",
                                                 "name": "mixamorig:LeftHandIndex2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -2252,7 +2252,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "0000000000000041",
+                                                    "uuid": "0000000000000039",
                                                     "name": "mixamorig:LeftHandIndex3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -2281,7 +2281,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000042",
+                                                        "uuid": "000000000000003a",
                                                         "name": "mixamorig:LeftHandIndex4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -2310,7 +2310,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000043",
+                                                            "uuid": "000000000000003b",
                                                             "name": "mixamorig:LeftHandIndex4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -2339,7 +2339,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000044",
+                                                                "uuid": "000000000000003c",
                                                                 "name": "mixamorig:LeftHandIndex4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -2379,7 +2379,7 @@
                                             ]
                                           },
                                           {
-                                            "uuid": "0000000000000045",
+                                            "uuid": "000000000000003d",
                                             "name": "mixamorig:LeftHandMiddle1",
                                             "priority": 0,
                                             "visible": true,
@@ -2408,7 +2408,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "0000000000000046",
+                                                "uuid": "000000000000003e",
                                                 "name": "mixamorig:LeftHandMiddle2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -2437,7 +2437,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "0000000000000047",
+                                                    "uuid": "000000000000003f",
                                                     "name": "mixamorig:LeftHandMiddle3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -2466,7 +2466,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000048",
+                                                        "uuid": "0000000000000040",
                                                         "name": "mixamorig:LeftHandMiddle4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -2495,7 +2495,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000049",
+                                                            "uuid": "0000000000000041",
                                                             "name": "mixamorig:LeftHandMiddle4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -2524,7 +2524,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "000000000000004a",
+                                                                "uuid": "0000000000000042",
                                                                 "name": "mixamorig:LeftHandMiddle4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -2564,7 +2564,7 @@
                                             ]
                                           },
                                           {
-                                            "uuid": "000000000000004b",
+                                            "uuid": "0000000000000043",
                                             "name": "mixamorig:LeftHandRing1",
                                             "priority": 0,
                                             "visible": true,
@@ -2593,7 +2593,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "000000000000004c",
+                                                "uuid": "0000000000000044",
                                                 "name": "mixamorig:LeftHandRing2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -2622,7 +2622,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "000000000000004d",
+                                                    "uuid": "0000000000000045",
                                                     "name": "mixamorig:LeftHandRing3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -2651,7 +2651,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "000000000000004e",
+                                                        "uuid": "0000000000000046",
                                                         "name": "mixamorig:LeftHandRing4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -2680,7 +2680,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "000000000000004f",
+                                                            "uuid": "0000000000000047",
                                                             "name": "mixamorig:LeftHandRing4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -2709,7 +2709,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000050",
+                                                                "uuid": "0000000000000048",
                                                                 "name": "mixamorig:LeftHandRing4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -2749,7 +2749,7 @@
                                             ]
                                           },
                                           {
-                                            "uuid": "0000000000000051",
+                                            "uuid": "0000000000000049",
                                             "name": "mixamorig:LeftHandPinky1",
                                             "priority": 0,
                                             "visible": true,
@@ -2778,7 +2778,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "0000000000000052",
+                                                "uuid": "000000000000004a",
                                                 "name": "mixamorig:LeftHandPinky2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -2807,7 +2807,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "0000000000000053",
+                                                    "uuid": "000000000000004b",
                                                     "name": "mixamorig:LeftHandPinky3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -2836,7 +2836,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000054",
+                                                        "uuid": "000000000000004c",
                                                         "name": "mixamorig:LeftHandPinky4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -2865,7 +2865,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000055",
+                                                            "uuid": "000000000000004d",
                                                             "name": "mixamorig:LeftHandPinky4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -2894,7 +2894,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000056",
+                                                                "uuid": "000000000000004e",
                                                                 "name": "mixamorig:LeftHandPinky4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -2942,7 +2942,7 @@
                             ]
                           },
                           {
-                            "uuid": "0000000000000057",
+                            "uuid": "000000000000004f",
                             "name": "mixamorig:RightShoulder",
                             "priority": 0,
                             "visible": true,
@@ -2971,7 +2971,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "0000000000000058",
+                                "uuid": "0000000000000050",
                                 "name": "mixamorig:RightArm",
                                 "priority": 0,
                                 "visible": true,
@@ -3000,7 +3000,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "0000000000000059",
+                                    "uuid": "0000000000000051",
                                     "name": "mixamorig:RightForeArm",
                                     "priority": 0,
                                     "visible": true,
@@ -3029,7 +3029,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "000000000000005a",
+                                        "uuid": "0000000000000052",
                                         "name": "mixamorig:RightHand",
                                         "priority": 0,
                                         "visible": true,
@@ -3058,7 +3058,7 @@
                                         ],
                                         "children": [
                                           {
-                                            "uuid": "000000000000005b",
+                                            "uuid": "0000000000000053",
                                             "name": "mixamorig:RightHandThumb1",
                                             "priority": 0,
                                             "visible": true,
@@ -3087,7 +3087,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "000000000000005c",
+                                                "uuid": "0000000000000054",
                                                 "name": "mixamorig:RightHandThumb2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3116,7 +3116,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "000000000000005d",
+                                                    "uuid": "0000000000000055",
                                                     "name": "mixamorig:RightHandThumb3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -3145,7 +3145,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "000000000000005e",
+                                                        "uuid": "0000000000000056",
                                                         "name": "mixamorig:RightHandThumb4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -3174,7 +3174,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "000000000000005f",
+                                                            "uuid": "0000000000000057",
                                                             "name": "mixamorig:RightHandThumb4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -3203,7 +3203,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000060",
+                                                                "uuid": "0000000000000058",
                                                                 "name": "mixamorig:RightHandThumb4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3243,7 +3243,7 @@
                                             ]
                                           },
                                           {
-                                            "uuid": "0000000000000061",
+                                            "uuid": "0000000000000059",
                                             "name": "mixamorig:RightHandIndex1",
                                             "priority": 0,
                                             "visible": true,
@@ -3272,7 +3272,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "0000000000000062",
+                                                "uuid": "000000000000005a",
                                                 "name": "mixamorig:RightHandIndex2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3301,7 +3301,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "0000000000000063",
+                                                    "uuid": "000000000000005b",
                                                     "name": "mixamorig:RightHandIndex3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -3330,7 +3330,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000064",
+                                                        "uuid": "000000000000005c",
                                                         "name": "mixamorig:RightHandIndex4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -3359,7 +3359,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000065",
+                                                            "uuid": "000000000000005d",
                                                             "name": "mixamorig:RightHandIndex4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -3388,7 +3388,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000066",
+                                                                "uuid": "000000000000005e",
                                                                 "name": "mixamorig:RightHandIndex4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3428,7 +3428,7 @@
                                             ]
                                           },
                                           {
-                                            "uuid": "0000000000000067",
+                                            "uuid": "000000000000005f",
                                             "name": "mixamorig:RightHandMiddle1",
                                             "priority": 0,
                                             "visible": true,
@@ -3457,7 +3457,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "0000000000000068",
+                                                "uuid": "0000000000000060",
                                                 "name": "mixamorig:RightHandMiddle2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3486,7 +3486,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "0000000000000069",
+                                                    "uuid": "0000000000000061",
                                                     "name": "mixamorig:RightHandMiddle3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -3515,7 +3515,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "000000000000006a",
+                                                        "uuid": "0000000000000062",
                                                         "name": "mixamorig:RightHandMiddle4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -3544,7 +3544,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "000000000000006b",
+                                                            "uuid": "0000000000000063",
                                                             "name": "mixamorig:RightHandMiddle4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -3573,7 +3573,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "000000000000006c",
+                                                                "uuid": "0000000000000064",
                                                                 "name": "mixamorig:RightHandMiddle4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3613,7 +3613,7 @@
                                             ]
                                           },
                                           {
-                                            "uuid": "000000000000006d",
+                                            "uuid": "0000000000000065",
                                             "name": "mixamorig:RightHandRing1",
                                             "priority": 0,
                                             "visible": true,
@@ -3642,7 +3642,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "000000000000006e",
+                                                "uuid": "0000000000000066",
                                                 "name": "mixamorig:RightHandRing2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3671,7 +3671,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "000000000000006f",
+                                                    "uuid": "0000000000000067",
                                                     "name": "mixamorig:RightHandRing3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -3700,7 +3700,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000070",
+                                                        "uuid": "0000000000000068",
                                                         "name": "mixamorig:RightHandRing4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -3729,7 +3729,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000071",
+                                                            "uuid": "0000000000000069",
                                                             "name": "mixamorig:RightHandRing4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -3758,7 +3758,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000072",
+                                                                "uuid": "000000000000006a",
                                                                 "name": "mixamorig:RightHandRing4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3798,7 +3798,7 @@
                                             ]
                                           },
                                           {
-                                            "uuid": "0000000000000073",
+                                            "uuid": "000000000000006b",
                                             "name": "mixamorig:RightHandPinky1",
                                             "priority": 0,
                                             "visible": true,
@@ -3827,7 +3827,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "0000000000000074",
+                                                "uuid": "000000000000006c",
                                                 "name": "mixamorig:RightHandPinky2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3856,7 +3856,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "0000000000000075",
+                                                    "uuid": "000000000000006d",
                                                     "name": "mixamorig:RightHandPinky3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -3885,7 +3885,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "0000000000000076",
+                                                        "uuid": "000000000000006e",
                                                         "name": "mixamorig:RightHandPinky4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -3914,7 +3914,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "0000000000000077",
+                                                            "uuid": "000000000000006f",
                                                             "name": "mixamorig:RightHandPinky4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -3943,7 +3943,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "0000000000000078",
+                                                                "uuid": "0000000000000070",
                                                                 "name": "mixamorig:RightHandPinky4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3997,7 +3997,7 @@
                 ]
               },
               {
-                "uuid": "0000000000000079",
+                "uuid": "0000000000000071",
                 "name": "mixamorig:LeftUpLeg",
                 "priority": 0,
                 "visible": true,
@@ -4026,7 +4026,7 @@
                 ],
                 "children": [
                   {
-                    "uuid": "000000000000007a",
+                    "uuid": "0000000000000072",
                     "name": "mixamorig:LeftLeg",
                     "priority": 0,
                     "visible": true,
@@ -4055,7 +4055,7 @@
                     ],
                     "children": [
                       {
-                        "uuid": "000000000000007b",
+                        "uuid": "0000000000000073",
                         "name": "mixamorig:LeftFoot",
                         "priority": 0,
                         "visible": true,
@@ -4084,7 +4084,7 @@
                         ],
                         "children": [
                           {
-                            "uuid": "000000000000007c",
+                            "uuid": "0000000000000074",
                             "name": "mixamorig:LeftToeBase",
                             "priority": 0,
                             "visible": true,
@@ -4113,7 +4113,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "000000000000007d",
+                                "uuid": "0000000000000075",
                                 "name": "mixamorig:LeftToe_End",
                                 "priority": 0,
                                 "visible": true,
@@ -4142,7 +4142,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "000000000000007e",
+                                    "uuid": "0000000000000076",
                                     "name": "mixamorig:LeftToe_End_end",
                                     "priority": 0,
                                     "visible": true,
@@ -4171,7 +4171,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "000000000000007f",
+                                        "uuid": "0000000000000077",
                                         "name": "mixamorig:LeftToe_End_end_end",
                                         "priority": 0,
                                         "visible": true,
@@ -4213,7 +4213,7 @@
                 ]
               },
               {
-                "uuid": "0000000000000080",
+                "uuid": "0000000000000078",
                 "name": "mixamorig:RightUpLeg",
                 "priority": 0,
                 "visible": true,
@@ -4242,7 +4242,7 @@
                 ],
                 "children": [
                   {
-                    "uuid": "0000000000000081",
+                    "uuid": "0000000000000079",
                     "name": "mixamorig:RightLeg",
                     "priority": 0,
                     "visible": true,
@@ -4271,7 +4271,7 @@
                     ],
                     "children": [
                       {
-                        "uuid": "0000000000000082",
+                        "uuid": "000000000000007a",
                         "name": "mixamorig:RightFoot",
                         "priority": 0,
                         "visible": true,
@@ -4300,7 +4300,7 @@
                         ],
                         "children": [
                           {
-                            "uuid": "0000000000000083",
+                            "uuid": "000000000000007b",
                             "name": "mixamorig:RightToeBase",
                             "priority": 0,
                             "visible": true,
@@ -4329,7 +4329,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "0000000000000084",
+                                "uuid": "000000000000007c",
                                 "name": "mixamorig:RightToe_End",
                                 "priority": 0,
                                 "visible": true,
@@ -4358,7 +4358,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "0000000000000085",
+                                    "uuid": "000000000000007d",
                                     "name": "mixamorig:RightToe_End_end",
                                     "priority": 0,
                                     "visible": true,
@@ -4387,7 +4387,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "0000000000000086",
+                                        "uuid": "000000000000007e",
                                         "name": "mixamorig:RightToe_End_end_end",
                                         "priority": 0,
                                         "visible": true,
@@ -4456,7 +4456,7 @@
         ]
       },
       {
-        "uuid": "0000000000000087",
+        "uuid": "000000000000007f",
         "name": "Physics",
         "priority": 0,
         "visible": true,
@@ -4494,7 +4494,7 @@
         ]
       },
       {
-        "uuid": "0000000000000088",
+        "uuid": "0000000000000080",
         "name": "[Root]",
         "priority": 0,
         "visible": true,
@@ -4525,7 +4525,7 @@
         "components": []
       },
       {
-        "uuid": "0000000000000089",
+        "uuid": "0000000000000081",
         "name": "FEMPhysics",
         "priority": 0,
         "visible": true,
@@ -4572,7 +4572,7 @@
         ]
       },
       {
-        "uuid": "000000000000008a",
+        "uuid": "0000000000000082",
         "name": "Joint",
         "priority": 0,
         "visible": true,
@@ -4628,7 +4628,7 @@
         ]
       },
       {
-        "uuid": "000000000000008b",
+        "uuid": "0000000000000083",
         "name": "Pendulum",
         "priority": 0,
         "visible": true,
@@ -4690,7 +4690,7 @@
         ]
       },
       {
-        "uuid": "000000000000008c",
+        "uuid": "0000000000000084",
         "name": "Pendulum2",
         "priority": 0,
         "visible": true,
@@ -4752,7 +4752,7 @@
         ]
       },
       {
-        "uuid": "000000000000008d",
+        "uuid": "0000000000000085",
         "name": "JointAB",
         "priority": 0,
         "visible": true,
@@ -4798,7 +4798,7 @@
         ]
       },
       {
-        "uuid": "000000000000008e",
+        "uuid": "0000000000000086",
         "name": "TeleportCube",
         "priority": 0,
         "visible": true,
@@ -4852,7 +4852,7 @@
         ]
       },
       {
-        "uuid": "000000000000008f",
+        "uuid": "0000000000000087",
         "name": "entity5",
         "priority": 0,
         "visible": true,
@@ -4915,7 +4915,7 @@
         ]
       },
       {
-        "uuid": "0000000000000090",
+        "uuid": "0000000000000088",
         "name": "С2",
         "priority": 0,
         "visible": true,
@@ -4988,7 +4988,7 @@
         ]
       },
       {
-        "uuid": "0000000000000091",
+        "uuid": "0000000000000089",
         "name": "entity6",
         "priority": 0,
         "visible": true,
@@ -5061,7 +5061,7 @@
         ]
       },
       {
-        "uuid": "0000000000000092",
+        "uuid": "000000000000008a",
         "name": "entity7",
         "priority": 0,
         "visible": true,
@@ -5134,7 +5134,7 @@
         ]
       },
       {
-        "uuid": "0000000000000093",
+        "uuid": "000000000000008b",
         "name": "entity8",
         "priority": 0,
         "visible": true,
@@ -5207,7 +5207,7 @@
         ]
       },
       {
-        "uuid": "0000000000000094",
+        "uuid": "000000000000008c",
         "name": "entity9",
         "priority": 0,
         "visible": true,
@@ -5280,7 +5280,7 @@
         ]
       },
       {
-        "uuid": "0000000000000095",
+        "uuid": "000000000000008d",
         "name": "entity10",
         "priority": 0,
         "visible": true,
@@ -5353,7 +5353,7 @@
         ]
       },
       {
-        "uuid": "0000000000000096",
+        "uuid": "000000000000008e",
         "name": "entity11",
         "priority": 0,
         "visible": true,
@@ -5426,7 +5426,7 @@
         ]
       },
       {
-        "uuid": "0000000000000097",
+        "uuid": "000000000000008f",
         "name": "entity12",
         "priority": 0,
         "visible": true,
@@ -5499,7 +5499,7 @@
         ]
       },
       {
-        "uuid": "0000000000000098",
+        "uuid": "0000000000000090",
         "name": "Walls",
         "priority": 0,
         "visible": true,
@@ -5528,7 +5528,7 @@
         ],
         "children": [
           {
-            "uuid": "0000000000000099",
+            "uuid": "0000000000000091",
             "name": "entity14_copy_copy",
             "priority": 0,
             "visible": true,
@@ -5558,7 +5558,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000009a",
+            "uuid": "0000000000000092",
             "name": "entity14_copy",
             "priority": 0,
             "visible": true,
@@ -5588,7 +5588,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000009b",
+            "uuid": "0000000000000093",
             "name": "entity14_copy_copy_copy",
             "priority": 0,
             "visible": true,
@@ -5618,7 +5618,7 @@
             "children": []
           },
           {
-            "uuid": "000000000000009c",
+            "uuid": "0000000000000094",
             "name": "entity14",
             "priority": 0,
             "visible": true,
@@ -5651,7 +5651,7 @@
         "components": []
       },
       {
-        "uuid": "000000000000009d",
+        "uuid": "0000000000000095",
         "name": "entity12_copy",
         "priority": 0,
         "visible": true,
@@ -5724,7 +5724,7 @@
         ]
       },
       {
-        "uuid": "000000000000009e",
+        "uuid": "0000000000000096",
         "name": "entity13",
         "priority": 0,
         "visible": true,
@@ -5753,7 +5753,7 @@
         ],
         "children": [
           {
-            "uuid": "000000000000009f",
+            "uuid": "0000000000000097",
             "name": "entity15",
             "priority": 0,
             "visible": true,
@@ -5828,7 +5828,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a0",
+        "uuid": "0000000000000098",
         "name": "entity12_copy_copy",
         "priority": 0,
         "visible": true,
@@ -5901,7 +5901,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a1",
+        "uuid": "0000000000000099",
         "name": "entity12_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -5974,7 +5974,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a2",
+        "uuid": "000000000000009a",
         "name": "entity12_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6047,7 +6047,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a3",
+        "uuid": "000000000000009b",
         "name": "entity12_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6120,7 +6120,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a4",
+        "uuid": "000000000000009c",
         "name": "entity12_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6193,7 +6193,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a5",
+        "uuid": "000000000000009d",
         "name": "entity12_copy_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6266,7 +6266,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a6",
+        "uuid": "000000000000009e",
         "name": "entity12_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6339,7 +6339,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a7",
+        "uuid": "000000000000009f",
         "name": "entity12_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6412,7 +6412,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a8",
+        "uuid": "00000000000000a0",
         "name": "entity16",
         "priority": 0,
         "visible": true,
@@ -6466,7 +6466,7 @@
         ]
       },
       {
-        "uuid": "00000000000000a9",
+        "uuid": "00000000000000a1",
         "name": "TweenManager",
         "priority": 0,
         "visible": true,
@@ -6504,7 +6504,7 @@
         ]
       },
       {
-        "uuid": "00000000000000aa",
+        "uuid": "00000000000000a2",
         "name": "entity16_copy",
         "priority": 0,
         "visible": true,
@@ -6619,13 +6619,13 @@
   "editor": {
     "camera": {
       "target": [
-        5.819811820983887,
-        -4.6829376220703125,
-        0.36681875586509705
+        1.410279076906981,
+        -5.684746511297492,
+        -2.1872749944649583
       ],
-      "radius": 8.5,
-      "azimuth": 58.38475413771894,
-      "elevation": 0.5689773361501499
+      "radius": 14.5,
+      "azimuth": 57.78785153353696,
+      "elevation": 0.33859387488689874
     },
     "selected_entity": "Bulba",
     "displays": [
@@ -6636,7 +6636,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "d007c637-286d-4cc7-8b9f-dbdd569d465a",
+            "uuid": "5fe4687d-5664-4b16-9744-e15dfe57cf77",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -6656,7 +6656,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "4d5ab6ec-d248-491e-b9e3-7024907dd1bf",
+            "uuid": "21e331cb-8fbd-424c-9fb4-f8ab309d3383",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -6671,16 +6671,16 @@
       }
     ],
     "expanded_entities": [
-      "EditorEntities",
-      "Walls",
-      "camera",
-      "Glitch",
       "entity13",
+      "camera",
+      "Walls",
+      "EditorEntities",
+      "cube2",
+      "Glitch",
+      "[Root]",
       "entity12_copy",
       "cube1",
       "editor_ui",
-      "[Root]",
-      "cube2",
       "Arti"
     ]
   },

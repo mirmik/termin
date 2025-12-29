@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "7ca6f133-3347-4449-a877-b46fde410e96",
+    "uuid": "",
     "background_color": [
       0.05000000074505806,
       0.05000000074505806,
@@ -10,7 +10,7 @@
     ],
     "entities": [
       {
-        "uuid": "c18ff226-5b8e-4916-b998-e7ae1c6e4d18",
+        "uuid": "0000000000000001",
         "name": "cube1",
         "priority": 0,
         "visible": true,
@@ -40,42 +40,45 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RotatorComponent",
             "data": {
+              "enabled": true,
               "speed": 90.0,
               "axis": [
                 1.0,
                 3.0,
                 0.0
-              ],
-              "enabled": true
-            },
-            "type": "RotatorComponent"
+              ]
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -87,13 +90,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "9124293b-07a5-4bbd-a28d-25ace4794d96",
+        "uuid": "0000000000000002",
         "name": "cube2",
         "priority": 0,
         "visible": true,
@@ -123,30 +125,34 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000004"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "VoxelizerComponent",
             "data": {
+              "enabled": true,
               "grid_name": "Cube",
               "cell_size": 0.12,
+              "voxelize_mode": 4.0,
+              "voxelize_source": 0.0,
               "output_path": "Voxels/cube.voxels",
-              "voxelize_mode": 4,
-              "voxelize_source": 0,
               "navmesh_output_path": "Voxels/cube.navmesh",
               "normal_angle": 25.0,
               "expand_regions": false,
-              "navmesh_stage": 3,
+              "navmesh_stage": 3.0,
               "contour_epsilon": 0.1,
               "show_debug_voxels": false,
               "show_debug_contours": true,
@@ -154,14 +160,16 @@
               "stitch_contours": false,
               "share_boundary": false,
               "show_multi_normal_voxels": false,
-              "show_boundary_voxels": false,
-              "enabled": true
-            },
-            "type": "VoxelizerComponent"
+              "show_boundary_voxels": false
+            }
           },
           {
+            "type": "VoxelDisplayComponent",
             "data": {
               "enabled": false,
+              "voxel_grid": {
+                "type": "none"
+              },
               "color_below": [
                 0.2,
                 0.6,
@@ -186,12 +194,13 @@
                 0.3,
                 0.9
               ]
-            },
-            "type": "VoxelDisplayComponent"
+            }
           },
           {
+            "type": "NavMeshDisplayComponent",
             "data": {
               "enabled": false,
+              "navmesh": null,
               "color": [
                 0.2,
                 0.8,
@@ -202,20 +211,20 @@
               "show_normals": false,
               "show_contours": true,
               "contour_width": 0.05
-            },
-            "type": "NavMeshDisplayComponent"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -227,13 +236,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "485bcc5b-a948-4451-a4c9-4fb659391c93",
+        "uuid": "0000000000000003",
         "name": "cube2",
         "priority": 0,
         "visible": true,
@@ -263,22 +271,26 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
               },
-              "override_material": true,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "AudioSource",
             "data": {
               "enabled": true,
+              "clip": null,
               "volume": 1.0,
               "pitch": 1.0,
               "loop": false,
@@ -286,20 +298,20 @@
               "spatial_blend": 1.0,
               "min_distance": 1.0,
               "max_distance": 50.0
-            },
-            "type": "AudioSource"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": true,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -311,13 +323,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "899ac966-f244-40b5-99a8-921c052c9090",
+        "uuid": "0000000000000004",
         "name": "GameCamera",
         "priority": 0,
         "visible": true,
@@ -347,15 +358,18 @@
         "children": [],
         "components": [
           {
+            "type": "PerspectiveCameraComponent",
             "data": {
               "enabled": true,
+              "projection_type": "perspective",
               "fov_deg": 59.99999999999999,
+              "ortho_size": 5.0,
               "near": 0.1,
               "far": 100.0
-            },
-            "type": "PerspectiveCameraComponent"
+            }
           },
           {
+            "type": "OrbitCameraController",
             "data": {
               "enabled": true,
               "radius": 1.5,
@@ -364,13 +378,12 @@
                 0.8626692790576646,
                 -1.8832971154573008
               ]
-            },
-            "type": "OrbitCameraController"
+            }
           }
         ]
       },
       {
-        "uuid": "49ac959a-1a39-475b-bd3a-11a67f23e06f",
+        "uuid": "0000000000000005",
         "name": "lines",
         "priority": 0,
         "visible": true,
@@ -400,6 +413,7 @@
         "children": [],
         "components": [
           {
+            "type": "LineRenderer",
             "data": {
               "enabled": true,
               "points": [
@@ -429,13 +443,12 @@
               "material": {
                 "uuid": "e2c8d676-0d1a-4c70-bdad-0ede59a7fb61"
               }
-            },
-            "type": "LineRenderer"
+            }
           }
         ]
       },
       {
-        "uuid": "6f4f6307-150f-4f9b-967c-af7b980a1158",
+        "uuid": "0000000000000006",
         "name": "TransparentCube",
         "priority": 0,
         "visible": true,
@@ -465,30 +478,34 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "VoxelizerComponent",
             "data": {
+              "enabled": true,
               "grid_name": "",
               "cell_size": 0.25,
+              "voxelize_mode": 0.0,
+              "voxelize_source": 0.0,
               "output_path": "Voxels/cube.voxels",
-              "voxelize_mode": 0,
-              "voxelize_source": 0,
               "navmesh_output_path": "",
               "normal_angle": 25.0,
               "expand_regions": false,
-              "navmesh_stage": 0,
+              "navmesh_stage": 0.0,
               "contour_epsilon": 0.1,
               "show_debug_voxels": true,
               "show_debug_contours": true,
@@ -496,22 +513,21 @@
               "stitch_contours": false,
               "share_boundary": false,
               "show_multi_normal_voxels": false,
-              "show_boundary_voxels": false,
-              "enabled": true
-            },
-            "type": "VoxelizerComponent"
+              "show_boundary_voxels": false
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -523,13 +539,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "9cc6d2e1-33a4-44da-9d1c-852f292fe2e4",
+        "uuid": "0000000000000007",
         "name": "Bulba",
         "priority": 0,
         "visible": true,
@@ -559,30 +574,34 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
-              "enabled": true,
+              "enabled": false,
               "mesh": {
-                "uuid": "150908e5-3116-488a-9a0e-77f14786003d"
+                "uuid": "150908e5-3116-488a-9a0e-77f14786003d",
+                "type": "path",
+                "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Assets/bulbasaur.STL"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "30f0f2af-cf74-488c-8a39-6bc5208457fc"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "VoxelizerComponent",
             "data": {
+              "enabled": true,
               "grid_name": "Bulba",
               "cell_size": 0.02,
+              "voxelize_mode": 4.0,
+              "voxelize_source": 0.0,
               "output_path": "Voxels/bulbasaur.voxels",
-              "voxelize_mode": 4,
-              "voxelize_source": 0,
               "navmesh_output_path": "Voxels/bulbasaur.navmesh",
               "normal_angle": 9.0,
               "expand_regions": false,
-              "navmesh_stage": 3,
+              "navmesh_stage": 3.0,
               "contour_epsilon": 0.006999999999999931,
               "show_debug_voxels": false,
               "show_debug_contours": false,
@@ -590,16 +609,17 @@
               "stitch_contours": false,
               "share_boundary": true,
               "show_multi_normal_voxels": false,
-              "show_boundary_voxels": true,
-              "enabled": true
-            },
-            "type": "VoxelizerComponent"
+              "show_boundary_voxels": true
+            }
           },
           {
+            "type": "VoxelDisplayComponent",
             "data": {
-              "enabled": false,
+              "enabled": true,
               "voxel_grid": {
-                "uuid": "d871f151-019d-448c-a9e1-80410b8b55bb"
+                "uuid": "d871f151-019d-448c-a9e1-80410b8b55bb",
+                "type": "path",
+                "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Voxels/bulbasaur.voxels"
               },
               "color_below": [
                 0.2,
@@ -613,7 +633,7 @@
                 0.2,
                 0.8
               ],
-              "fill_percent": 100.0,
+              "fill_percent": 57.0,
               "slice_axis": [
                 0.0,
                 0.0,
@@ -625,12 +645,13 @@
                 0.3,
                 0.9
               ]
-            },
-            "type": "VoxelDisplayComponent"
+            }
           },
           {
+            "type": "NavMeshDisplayComponent",
             "data": {
               "enabled": false,
+              "navmesh": null,
               "color": [
                 0.2,
                 0.8,
@@ -641,13 +662,12 @@
               "show_normals": false,
               "show_contours": true,
               "contour_width": 0.005
-            },
-            "type": "NavMeshDisplayComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "9392b912-b1be-41fa-8f1f-3a2df710f3dc",
+        "uuid": "0000000000000008",
         "name": "BulbaViz",
         "priority": 0,
         "visible": true,
@@ -677,8 +697,12 @@
         "children": [],
         "components": [
           {
+            "type": "VoxelDisplayComponent",
             "data": {
               "enabled": true,
+              "voxel_grid": {
+                "type": "none"
+              },
               "color_below": [
                 0.2,
                 0.6,
@@ -703,13 +727,12 @@
                 0.3,
                 0.9
               ]
-            },
-            "type": "VoxelDisplayComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "8686fe04-c9be-484d-a5cf-6fe55575cc23",
+        "uuid": "0000000000000009",
         "name": "Platform",
         "priority": 0,
         "visible": true,
@@ -738,7 +761,7 @@
         ],
         "children": [
           {
-            "uuid": "5ce37be8-81ae-4d0c-ad1f-bf85548b772b",
+            "uuid": "000000000000000a",
             "name": "A",
             "priority": 0,
             "visible": true,
@@ -765,20 +788,10 @@
               10,
               0.5
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": false,
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "64e5084a-1050-460f-a6fe-a5b04217174f",
+            "uuid": "000000000000000b",
             "name": "B",
             "priority": 0,
             "visible": true,
@@ -805,31 +818,23 @@
               10,
               0.5
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": false,
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              }
-            ]
+            "children": []
           }
         ],
         "components": [
           {
+            "type": "VoxelizerComponent",
             "data": {
+              "enabled": true,
               "grid_name": "Platform",
               "cell_size": 0.12,
+              "voxelize_mode": 4.0,
+              "voxelize_source": 0.0,
               "output_path": "Voxels/Platform.voxels",
-              "voxelize_mode": 4,
-              "voxelize_source": 0,
               "navmesh_output_path": "Voxels/Platform.navmesh",
               "normal_angle": 25.0,
               "expand_regions": false,
-              "navmesh_stage": 0,
+              "navmesh_stage": 0.0,
               "contour_epsilon": 0.1,
               "show_debug_voxels": false,
               "show_debug_contours": false,
@@ -837,16 +842,17 @@
               "stitch_contours": false,
               "share_boundary": true,
               "show_multi_normal_voxels": false,
-              "show_boundary_voxels": true,
-              "enabled": true
-            },
-            "type": "VoxelizerComponent"
+              "show_boundary_voxels": true
+            }
           },
           {
+            "type": "VoxelDisplayComponent",
             "data": {
               "enabled": false,
               "voxel_grid": {
-                "uuid": "c848b7ee-2622-4587-9f61-344e7b7cccf5"
+                "uuid": "c848b7ee-2622-4587-9f61-344e7b7cccf5",
+                "type": "path",
+                "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Voxels/Platform.voxels"
               },
               "color_below": [
                 0.2,
@@ -872,13 +878,12 @@
                 0.3,
                 0.9
               ]
-            },
-            "type": "VoxelDisplayComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "11344f96-2f99-401e-8b08-3ad1521480d8",
+        "uuid": "000000000000000c",
         "name": "animcube",
         "priority": 0,
         "visible": true,
@@ -907,7 +912,7 @@
         ],
         "children": [
           {
-            "uuid": "34ef4888-bf7b-43f5-87ea-4b9f2daff2ee",
+            "uuid": "000000000000000d",
             "name": "Cube",
             "priority": 0,
             "visible": true,
@@ -934,23 +939,13 @@
               100,
               100
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              }
-            ]
+            "children": []
           }
         ],
         "components": []
       },
       {
-        "uuid": "43819aaa-aca9-48ee-bc46-e888088ffcfb",
+        "uuid": "000000000000000e",
         "name": "Light",
         "priority": 0,
         "visible": true,
@@ -980,8 +975,10 @@
         "children": [],
         "components": [
           {
+            "type": "LightComponent",
             "data": {
-              "light_type": 0,
+              "enabled": true,
+              "light_type": 0.0,
               "color": [
                 1.0,
                 1.0,
@@ -989,14 +986,13 @@
               ],
               "intensity": 1.0,
               "shadows_enabled": true,
-              "shadows_map_resolution": 4096
-            },
-            "type": "LightComponent"
+              "shadows_map_resolution": 4096.0
+            }
           }
         ]
       },
       {
-        "uuid": "3851757d-13b7-4630-9fb6-ecdfeb5fffac",
+        "uuid": "000000000000000f",
         "name": "Arti",
         "priority": 0,
         "visible": true,
@@ -1025,7 +1021,7 @@
         ],
         "children": [
           {
-            "uuid": "a6c0a8aa-4a1e-4252-bb86-610189d84ed6",
+            "uuid": "0000000000000010",
             "name": "entity1",
             "priority": 0,
             "visible": true,
@@ -1052,20 +1048,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "5d552c8d-bb7f-40cc-8cbd-0eca051387ba",
+            "uuid": "0000000000000011",
             "name": "entity2",
             "priority": 0,
             "visible": true,
@@ -1092,23 +1078,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "material": {
-                    "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "5482366d-b5f0-4c63-8679-9b1e4c708b55",
+            "uuid": "0000000000000012",
             "name": "entity3",
             "priority": 0,
             "visible": true,
@@ -1135,20 +1108,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "1af6b579-7596-45af-8467-d9a3348d00c2",
+            "uuid": "0000000000000013",
             "name": "entity4",
             "priority": 0,
             "visible": true,
@@ -1175,23 +1138,13 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              }
-            ]
+            "children": []
           }
         ],
         "components": []
       },
       {
-        "uuid": "f1423054-9997-4f15-b9cc-a4d073ad8405",
+        "uuid": "0000000000000014",
         "name": "Glitch",
         "priority": 0,
         "visible": true,
@@ -1220,7 +1173,7 @@
         ],
         "children": [
           {
-            "uuid": "5c1eee8d-3ae8-4d1a-8a28-9affc005e0bd",
+            "uuid": "0000000000000015",
             "name": "BodyHit",
             "priority": 0,
             "visible": true,
@@ -1247,23 +1200,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "8bd09416-9c7e-4e78-bda1-641d3482e506"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "195cf3f7-67a0-41d0-a306-10d865e354f6",
+            "uuid": "0000000000000016",
             "name": "gymuniformMesh",
             "priority": 0,
             "visible": true,
@@ -1290,23 +1230,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "786bb9bf-0e64-4dca-afec-d62b3dc9feae"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "17680897-0dd4-4586-82d1-1ccde72fb7df",
+            "uuid": "0000000000000017",
             "name": "jammers3Mesh",
             "priority": 0,
             "visible": true,
@@ -1333,23 +1260,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "287cc28b-657b-429c-9d00-e69195cb1887"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "855d7383-f14d-4c46-93d9-468cabd16f1f",
+            "uuid": "0000000000000018",
             "name": "low-polyMesh",
             "priority": 0,
             "visible": true,
@@ -1376,23 +1290,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "ed833ccb-7339-4d23-94d2-07d21d3e7b08"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "21e0210e-ad61-4917-ac17-9475573b2b30",
+            "uuid": "0000000000000019",
             "name": "male_muscle_13290Mesh",
             "priority": 0,
             "visible": true,
@@ -1419,26 +1320,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "f5ec0c5a-99cb-4bd8-a424-953aa97bf6b7"
-                  },
-                  "material": {
-                    "uuid": "7c9ef652-5e5b-48c9-b28a-194dd1deba1b"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "0293e675-e3aa-49fc-b9c2-5547f3dd1a45",
+            "uuid": "000000000000001a",
             "name": "male_muscle_13290Mesh.001",
             "priority": 0,
             "visible": true,
@@ -1465,23 +1350,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "7b49ace0-9ca3-42f4-a911-fcf77a6cbd3c"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "82c22d84-5dc1-4559-9989-894d497add78",
+            "uuid": "000000000000001b",
             "name": "MC-SciFi-Armor_HeliosMesh",
             "priority": 0,
             "visible": true,
@@ -1508,26 +1380,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "507bd6b6-819a-4ebb-92bf-a167f42ac354"
-                  },
-                  "material": {
-                    "uuid": "8ea1c94c-9960-4541-9083-01531d967c10"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "346e6857-16b9-473d-a0d8-b22ef8e97374",
+            "uuid": "000000000000001c",
             "name": "mens_shirt_untuck_elvbhp1fMesh",
             "priority": 0,
             "visible": true,
@@ -1554,26 +1410,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "6432a38a-882f-4c5c-8e47-a800cb44cc3e"
-                  },
-                  "material": {
-                    "uuid": "8ea1c94c-9960-4541-9083-01531d967c10"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "bff7ca36-c2dc-4535-b5e9-303910b0ac3d",
+            "uuid": "000000000000001d",
             "name": "mens_shirt_untuck_elvbhp1fMesh.001",
             "priority": 0,
             "visible": true,
@@ -1600,23 +1440,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "0cb882c2-d41b-4ebe-b500-72dd04b63e90"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "8193b298-98a6-4471-a043-bb6ac1095fd6",
+            "uuid": "000000000000001e",
             "name": "mens_tanks_elv1fMesh",
             "priority": 0,
             "visible": true,
@@ -1643,23 +1470,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "282bd2fd-dcd6-42ff-a07d-f76aaa11cec9"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "92bec569-da4a-4fff-aa38-976f89c52234",
+            "uuid": "000000000000001f",
             "name": "mens_trouser_f_elv_chrMesh",
             "priority": 0,
             "visible": true,
@@ -1686,23 +1500,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "c6513438-2b62-4d41-ab65-d7371067cd14"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "62608c0b-a3d2-475d-839e-124880b9a4e5",
+            "uuid": "0000000000000020",
             "name": "mind_eyebrows_14Mesh",
             "priority": 0,
             "visible": true,
@@ -1729,23 +1530,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "b7de39e1-9b44-4358-ac3f-40dffc2ca401"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "ab2ce2b1-5e70-4276-8ce9-1a14d276469e",
+            "uuid": "0000000000000021",
             "name": "mind_eyelashes_03Mesh",
             "priority": 0,
             "visible": true,
@@ -1772,23 +1560,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "35f6c7a0-80f6-437e-9c89-04c71d55e4cc"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "f82c9a43-a04b-4a7c-b2e2-c14b8f17921d",
+            "uuid": "0000000000000022",
             "name": "shoes06Mesh",
             "priority": 0,
             "visible": true,
@@ -1815,23 +1590,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "82ff9fa0-28ad-41fc-8007-54cda380f60c"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "3684e4ac-c4a5-48e3-ba4f-0c6c11b5e6b0",
+            "uuid": "0000000000000023",
             "name": "spikyMesh",
             "priority": 0,
             "visible": true,
@@ -1858,26 +1620,10 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "f995496f-6565-44b6-9df1-99b10b48ca81"
-                  },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000001"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "SkinnedMeshRenderer"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "3f9fd883-357f-4279-abf1-da15f6de1d29",
+            "uuid": "0000000000000024",
             "name": "mixamorig:Hips",
             "priority": 0,
             "visible": true,
@@ -1906,7 +1652,7 @@
             ],
             "children": [
               {
-                "uuid": "b1cb9e97-e939-47bb-b522-69906ffa05a0",
+                "uuid": "0000000000000025",
                 "name": "mixamorig:Spine",
                 "priority": 0,
                 "visible": true,
@@ -1935,7 +1681,7 @@
                 ],
                 "children": [
                   {
-                    "uuid": "eed16c4e-3668-439c-96f7-fce14bcf853f",
+                    "uuid": "0000000000000026",
                     "name": "mixamorig:Spine1",
                     "priority": 0,
                     "visible": true,
@@ -1964,7 +1710,7 @@
                     ],
                     "children": [
                       {
-                        "uuid": "96e3a70a-372f-4cda-8a18-4f5b43f36b97",
+                        "uuid": "0000000000000027",
                         "name": "mixamorig:Spine2",
                         "priority": 0,
                         "visible": true,
@@ -1993,7 +1739,7 @@
                         ],
                         "children": [
                           {
-                            "uuid": "277e148d-14ff-4129-8a66-948e060eead3",
+                            "uuid": "0000000000000028",
                             "name": "mixamorig:Neck",
                             "priority": 0,
                             "visible": true,
@@ -2022,7 +1768,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "ce33d26f-5f80-4234-b192-1ab6639f68f0",
+                                "uuid": "0000000000000029",
                                 "name": "mixamorig:Head",
                                 "priority": 0,
                                 "visible": true,
@@ -2051,7 +1797,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "9bc0b3c6-0d76-4434-9aa1-b7354a01cce8",
+                                    "uuid": "000000000000002a",
                                     "name": "mixamorig:HeadTop_End",
                                     "priority": 0,
                                     "visible": true,
@@ -2080,7 +1826,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "f6b384ac-cee2-4a6f-924a-9c4f5a7c65dd",
+                                        "uuid": "000000000000002b",
                                         "name": "mixamorig:HeadTop_End_end",
                                         "priority": 0,
                                         "visible": true,
@@ -2109,7 +1855,7 @@
                                         ],
                                         "children": [
                                           {
-                                            "uuid": "56639f77-adbe-4bfb-8426-3e19c7472ff8",
+                                            "uuid": "000000000000002c",
                                             "name": "mixamorig:HeadTop_End_end_end",
                                             "priority": 0,
                                             "visible": true,
@@ -2136,23 +1882,18 @@
                                               0.9999998807907104,
                                               0.9999999403953552
                                             ],
-                                            "children": [],
-                                            "components": []
+                                            "children": []
                                           }
-                                        ],
-                                        "components": []
+                                        ]
                                       }
-                                    ],
-                                    "components": []
+                                    ]
                                   }
-                                ],
-                                "components": []
+                                ]
                               }
-                            ],
-                            "components": []
+                            ]
                           },
                           {
-                            "uuid": "079743d7-f9ab-49eb-b416-b5bd1bda1873",
+                            "uuid": "000000000000002d",
                             "name": "mixamorig:LeftShoulder",
                             "priority": 0,
                             "visible": true,
@@ -2181,7 +1922,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "ae0b629b-9c81-4abb-b6f3-e0344ca199aa",
+                                "uuid": "000000000000002e",
                                 "name": "mixamorig:LeftArm",
                                 "priority": 0,
                                 "visible": true,
@@ -2210,7 +1951,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "5cc9f839-2c81-41a5-960e-7204e9db14ba",
+                                    "uuid": "000000000000002f",
                                     "name": "mixamorig:LeftForeArm",
                                     "priority": 0,
                                     "visible": true,
@@ -2239,7 +1980,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "8f122b69-962d-44de-9b09-824b4b4e3980",
+                                        "uuid": "0000000000000030",
                                         "name": "mixamorig:LeftHand",
                                         "priority": 0,
                                         "visible": true,
@@ -2268,7 +2009,7 @@
                                         ],
                                         "children": [
                                           {
-                                            "uuid": "46c001da-0315-4f83-a3ee-63e3b8bc1534",
+                                            "uuid": "0000000000000031",
                                             "name": "mixamorig:LeftHandThumb1",
                                             "priority": 0,
                                             "visible": true,
@@ -2297,7 +2038,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "0ec30394-6503-4916-addc-b86a4208c100",
+                                                "uuid": "0000000000000032",
                                                 "name": "mixamorig:LeftHandThumb2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -2326,7 +2067,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "0fa52e0c-3cb1-4c08-b9bc-582abbd7ca3a",
+                                                    "uuid": "0000000000000033",
                                                     "name": "mixamorig:LeftHandThumb3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -2355,7 +2096,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "cd45991b-b431-4213-ae3c-69d32d1c720f",
+                                                        "uuid": "0000000000000034",
                                                         "name": "mixamorig:LeftHandThumb4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -2384,7 +2125,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "5a8f26df-24b3-4587-a4ec-0b6f374d9fe6",
+                                                            "uuid": "0000000000000035",
                                                             "name": "mixamorig:LeftHandThumb4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -2413,7 +2154,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "b198a7f8-a189-45ad-8088-4fdc748897fb",
+                                                                "uuid": "0000000000000036",
                                                                 "name": "mixamorig:LeftHandThumb4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -2440,26 +2181,20 @@
                                                                   1,
                                                                   1
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           },
                                           {
-                                            "uuid": "4a8e4197-e4d7-4075-8b37-5c180b4fab27",
+                                            "uuid": "0000000000000037",
                                             "name": "mixamorig:LeftHandIndex1",
                                             "priority": 0,
                                             "visible": true,
@@ -2488,7 +2223,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "2066db2c-bca2-4de0-b9c5-707175617e96",
+                                                "uuid": "0000000000000038",
                                                 "name": "mixamorig:LeftHandIndex2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -2517,7 +2252,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "97e81d37-6b6f-4cde-aa2c-fe0fa5a40779",
+                                                    "uuid": "0000000000000039",
                                                     "name": "mixamorig:LeftHandIndex3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -2546,7 +2281,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "d04e3253-0234-455c-b3bd-1a77fa927af7",
+                                                        "uuid": "000000000000003a",
                                                         "name": "mixamorig:LeftHandIndex4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -2575,7 +2310,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "a536e46f-bd44-46e2-af44-0b9b96ac0477",
+                                                            "uuid": "000000000000003b",
                                                             "name": "mixamorig:LeftHandIndex4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -2604,7 +2339,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "ab5c9fc4-8ef1-4973-9f90-d41220a5e709",
+                                                                "uuid": "000000000000003c",
                                                                 "name": "mixamorig:LeftHandIndex4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -2631,26 +2366,20 @@
                                                                   1.0000001192092896,
                                                                   1.000000238418579
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           },
                                           {
-                                            "uuid": "be8268b9-5745-4ff9-a97d-16fdc0af8676",
+                                            "uuid": "000000000000003d",
                                             "name": "mixamorig:LeftHandMiddle1",
                                             "priority": 0,
                                             "visible": true,
@@ -2679,7 +2408,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "d935b740-78cc-400a-b948-f1ebec8ef6d3",
+                                                "uuid": "000000000000003e",
                                                 "name": "mixamorig:LeftHandMiddle2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -2708,7 +2437,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "ca452b6c-3ec6-4459-92ac-e1108ab6a36d",
+                                                    "uuid": "000000000000003f",
                                                     "name": "mixamorig:LeftHandMiddle3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -2737,7 +2466,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "9ab8a9df-58eb-47ba-bbad-1c5d90b0731a",
+                                                        "uuid": "0000000000000040",
                                                         "name": "mixamorig:LeftHandMiddle4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -2766,7 +2495,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "9d8860ce-c238-4f4e-9732-14a3e5218cab",
+                                                            "uuid": "0000000000000041",
                                                             "name": "mixamorig:LeftHandMiddle4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -2795,7 +2524,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "e1e6f41e-fb6f-4ab0-8cd8-b2824ae3a973",
+                                                                "uuid": "0000000000000042",
                                                                 "name": "mixamorig:LeftHandMiddle4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -2822,26 +2551,20 @@
                                                                   1,
                                                                   0.9999999403953552
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           },
                                           {
-                                            "uuid": "a88dc7f4-324d-4a7b-a45d-3e05336c834b",
+                                            "uuid": "0000000000000043",
                                             "name": "mixamorig:LeftHandRing1",
                                             "priority": 0,
                                             "visible": true,
@@ -2870,7 +2593,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "d121bbaa-5973-4ae4-9545-62489c5e57a0",
+                                                "uuid": "0000000000000044",
                                                 "name": "mixamorig:LeftHandRing2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -2899,7 +2622,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "316f0d6c-429b-4971-b12d-fd778cdc6e2a",
+                                                    "uuid": "0000000000000045",
                                                     "name": "mixamorig:LeftHandRing3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -2928,7 +2651,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "6478c7ed-a42e-445e-868d-eaee94763e9e",
+                                                        "uuid": "0000000000000046",
                                                         "name": "mixamorig:LeftHandRing4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -2957,7 +2680,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "5eceb315-9a17-46bf-9693-fdf316cc8b87",
+                                                            "uuid": "0000000000000047",
                                                             "name": "mixamorig:LeftHandRing4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -2986,7 +2709,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "f2cfad9c-46e0-4d75-bea4-8ecd2c5a514b",
+                                                                "uuid": "0000000000000048",
                                                                 "name": "mixamorig:LeftHandRing4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3013,26 +2736,20 @@
                                                                   1.0000001192092896,
                                                                   1.000000238418579
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           },
                                           {
-                                            "uuid": "71c6d25d-310d-435b-bae9-e4e39816f679",
+                                            "uuid": "0000000000000049",
                                             "name": "mixamorig:LeftHandPinky1",
                                             "priority": 0,
                                             "visible": true,
@@ -3061,7 +2778,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "93a0f7cc-ee32-49e5-a7c6-07612a2ef1e0",
+                                                "uuid": "000000000000004a",
                                                 "name": "mixamorig:LeftHandPinky2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3090,7 +2807,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "aeb534b2-30ac-47dd-8c82-721d217d34fa",
+                                                    "uuid": "000000000000004b",
                                                     "name": "mixamorig:LeftHandPinky3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -3119,7 +2836,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "f8a8dacf-8a9b-436c-850e-8b00479496ce",
+                                                        "uuid": "000000000000004c",
                                                         "name": "mixamorig:LeftHandPinky4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -3148,7 +2865,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "82624d1f-7cf5-46f4-a0cb-4dd95aeb456a",
+                                                            "uuid": "000000000000004d",
                                                             "name": "mixamorig:LeftHandPinky4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -3177,7 +2894,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "eb2c30d3-ccfd-4a4b-b0e5-53808051c972",
+                                                                "uuid": "000000000000004e",
                                                                 "name": "mixamorig:LeftHandPinky4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3204,38 +2921,28 @@
                                                                   1.0000001192092896,
                                                                   1
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           }
-                                        ],
-                                        "components": []
+                                        ]
                                       }
-                                    ],
-                                    "components": []
+                                    ]
                                   }
-                                ],
-                                "components": []
+                                ]
                               }
-                            ],
-                            "components": []
+                            ]
                           },
                           {
-                            "uuid": "d7c80526-3e8e-4f1b-b2b1-567a7ee2d909",
+                            "uuid": "000000000000004f",
                             "name": "mixamorig:RightShoulder",
                             "priority": 0,
                             "visible": true,
@@ -3264,7 +2971,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "151c8e3a-c5bc-4b5a-9c34-f2cbe198e079",
+                                "uuid": "0000000000000050",
                                 "name": "mixamorig:RightArm",
                                 "priority": 0,
                                 "visible": true,
@@ -3293,7 +3000,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "ab7ccff5-a1de-4105-92ee-13948543d178",
+                                    "uuid": "0000000000000051",
                                     "name": "mixamorig:RightForeArm",
                                     "priority": 0,
                                     "visible": true,
@@ -3322,7 +3029,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "cc14fc05-bd5e-455b-845d-e5eb0628194f",
+                                        "uuid": "0000000000000052",
                                         "name": "mixamorig:RightHand",
                                         "priority": 0,
                                         "visible": true,
@@ -3351,7 +3058,7 @@
                                         ],
                                         "children": [
                                           {
-                                            "uuid": "822b4f13-8719-4d0c-b50f-3014e4711fa4",
+                                            "uuid": "0000000000000053",
                                             "name": "mixamorig:RightHandThumb1",
                                             "priority": 0,
                                             "visible": true,
@@ -3380,7 +3087,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "68e8010d-3531-484e-8fa5-57a097fffed4",
+                                                "uuid": "0000000000000054",
                                                 "name": "mixamorig:RightHandThumb2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3409,7 +3116,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "62306bd4-16b2-41c1-8433-53e8ba66cbe1",
+                                                    "uuid": "0000000000000055",
                                                     "name": "mixamorig:RightHandThumb3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -3438,7 +3145,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "60911adc-adf2-4846-8cd7-c9544f8c73c0",
+                                                        "uuid": "0000000000000056",
                                                         "name": "mixamorig:RightHandThumb4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -3467,7 +3174,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "7aa54c84-7c5e-45e1-9330-2d4dc1db46aa",
+                                                            "uuid": "0000000000000057",
                                                             "name": "mixamorig:RightHandThumb4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -3496,7 +3203,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "393aca53-5f6a-44a5-a996-358783718750",
+                                                                "uuid": "0000000000000058",
                                                                 "name": "mixamorig:RightHandThumb4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3523,26 +3230,20 @@
                                                                   1.0000001192092896,
                                                                   1
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           },
                                           {
-                                            "uuid": "49d47ec3-f50d-403d-963b-a081ff861994",
+                                            "uuid": "0000000000000059",
                                             "name": "mixamorig:RightHandIndex1",
                                             "priority": 0,
                                             "visible": true,
@@ -3571,7 +3272,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "fc60751e-0871-4929-a511-e9f93557d0e7",
+                                                "uuid": "000000000000005a",
                                                 "name": "mixamorig:RightHandIndex2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3600,7 +3301,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "53b748ab-c961-4127-aaf2-f867e2067e40",
+                                                    "uuid": "000000000000005b",
                                                     "name": "mixamorig:RightHandIndex3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -3629,7 +3330,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "c5786cbd-2666-45d0-94a8-2dcbadff08a8",
+                                                        "uuid": "000000000000005c",
                                                         "name": "mixamorig:RightHandIndex4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -3658,7 +3359,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "3d7c8fa2-3af1-4a7f-a561-56707615be77",
+                                                            "uuid": "000000000000005d",
                                                             "name": "mixamorig:RightHandIndex4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -3687,7 +3388,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "c7e33595-b39a-4347-ba73-776a9b71d3c2",
+                                                                "uuid": "000000000000005e",
                                                                 "name": "mixamorig:RightHandIndex4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3714,26 +3415,20 @@
                                                                   1,
                                                                   1
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           },
                                           {
-                                            "uuid": "ee82795f-0fc0-4d25-a109-9c4e512ed310",
+                                            "uuid": "000000000000005f",
                                             "name": "mixamorig:RightHandMiddle1",
                                             "priority": 0,
                                             "visible": true,
@@ -3762,7 +3457,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "3af61c32-c9da-46c3-9668-bd4993dbc255",
+                                                "uuid": "0000000000000060",
                                                 "name": "mixamorig:RightHandMiddle2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3791,7 +3486,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "55a4c56f-3f12-404a-8de4-ef25e07fea38",
+                                                    "uuid": "0000000000000061",
                                                     "name": "mixamorig:RightHandMiddle3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -3820,7 +3515,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "c54fa1b5-632b-41a3-b8ce-9bf015c6b4fe",
+                                                        "uuid": "0000000000000062",
                                                         "name": "mixamorig:RightHandMiddle4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -3849,7 +3544,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "c22b4fd2-74eb-4010-b90b-ac15827cd051",
+                                                            "uuid": "0000000000000063",
                                                             "name": "mixamorig:RightHandMiddle4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -3878,7 +3573,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "927308aa-4d5c-4c9f-ac1c-bb7114aba354",
+                                                                "uuid": "0000000000000064",
                                                                 "name": "mixamorig:RightHandMiddle4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -3905,26 +3600,20 @@
                                                                   1,
                                                                   0.9999999403953552
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           },
                                           {
-                                            "uuid": "9f64f1aa-b4b8-47ed-9c2f-ea5696796386",
+                                            "uuid": "0000000000000065",
                                             "name": "mixamorig:RightHandRing1",
                                             "priority": 0,
                                             "visible": true,
@@ -3953,7 +3642,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "1e369828-3b9b-486a-89dd-63f81f5c9cc0",
+                                                "uuid": "0000000000000066",
                                                 "name": "mixamorig:RightHandRing2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -3982,7 +3671,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "a861b700-f295-4c12-9e6c-028a33ca90fd",
+                                                    "uuid": "0000000000000067",
                                                     "name": "mixamorig:RightHandRing3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -4011,7 +3700,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "b49b1314-72f8-43af-b066-d7ddf9f9eebb",
+                                                        "uuid": "0000000000000068",
                                                         "name": "mixamorig:RightHandRing4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -4040,7 +3729,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "4e523849-c97a-412f-8a5c-72427a050dea",
+                                                            "uuid": "0000000000000069",
                                                             "name": "mixamorig:RightHandRing4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -4069,7 +3758,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "a00188e5-be51-4e2a-aee0-38765f014777",
+                                                                "uuid": "000000000000006a",
                                                                 "name": "mixamorig:RightHandRing4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -4096,26 +3785,20 @@
                                                                   1,
                                                                   1
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           },
                                           {
-                                            "uuid": "389815b7-d011-4d53-a68d-a5728910e431",
+                                            "uuid": "000000000000006b",
                                             "name": "mixamorig:RightHandPinky1",
                                             "priority": 0,
                                             "visible": true,
@@ -4144,7 +3827,7 @@
                                             ],
                                             "children": [
                                               {
-                                                "uuid": "b7f1079e-b908-4340-84a8-643a3db0d122",
+                                                "uuid": "000000000000006c",
                                                 "name": "mixamorig:RightHandPinky2",
                                                 "priority": 0,
                                                 "visible": true,
@@ -4173,7 +3856,7 @@
                                                 ],
                                                 "children": [
                                                   {
-                                                    "uuid": "e994ad27-fdd6-44cb-96c3-3e0f4a26ad77",
+                                                    "uuid": "000000000000006d",
                                                     "name": "mixamorig:RightHandPinky3",
                                                     "priority": 0,
                                                     "visible": true,
@@ -4202,7 +3885,7 @@
                                                     ],
                                                     "children": [
                                                       {
-                                                        "uuid": "2ccc8985-9057-446a-b906-62d01721ba73",
+                                                        "uuid": "000000000000006e",
                                                         "name": "mixamorig:RightHandPinky4",
                                                         "priority": 0,
                                                         "visible": true,
@@ -4231,7 +3914,7 @@
                                                         ],
                                                         "children": [
                                                           {
-                                                            "uuid": "be649650-08a7-424c-83db-32248c997490",
+                                                            "uuid": "000000000000006f",
                                                             "name": "mixamorig:RightHandPinky4_end",
                                                             "priority": 0,
                                                             "visible": true,
@@ -4260,7 +3943,7 @@
                                                             ],
                                                             "children": [
                                                               {
-                                                                "uuid": "6afc2604-599c-429c-854f-b2ffab723358",
+                                                                "uuid": "0000000000000070",
                                                                 "name": "mixamorig:RightHandPinky4_end_end",
                                                                 "priority": 0,
                                                                 "visible": true,
@@ -4287,47 +3970,34 @@
                                                                   1.0000001192092896,
                                                                   0.9999999403953552
                                                                 ],
-                                                                "children": [],
-                                                                "components": []
+                                                                "children": []
                                                               }
-                                                            ],
-                                                            "components": []
+                                                            ]
                                                           }
-                                                        ],
-                                                        "components": []
+                                                        ]
                                                       }
-                                                    ],
-                                                    "components": []
+                                                    ]
                                                   }
-                                                ],
-                                                "components": []
+                                                ]
                                               }
-                                            ],
-                                            "components": []
+                                            ]
                                           }
-                                        ],
-                                        "components": []
+                                        ]
                                       }
-                                    ],
-                                    "components": []
+                                    ]
                                   }
-                                ],
-                                "components": []
+                                ]
                               }
-                            ],
-                            "components": []
+                            ]
                           }
-                        ],
-                        "components": []
+                        ]
                       }
-                    ],
-                    "components": []
+                    ]
                   }
-                ],
-                "components": []
+                ]
               },
               {
-                "uuid": "f653fded-f325-4e14-a20d-47ecd2b80453",
+                "uuid": "0000000000000071",
                 "name": "mixamorig:LeftUpLeg",
                 "priority": 0,
                 "visible": true,
@@ -4356,7 +4026,7 @@
                 ],
                 "children": [
                   {
-                    "uuid": "0903b831-8183-4582-bf76-b130a97e0395",
+                    "uuid": "0000000000000072",
                     "name": "mixamorig:LeftLeg",
                     "priority": 0,
                     "visible": true,
@@ -4385,7 +4055,7 @@
                     ],
                     "children": [
                       {
-                        "uuid": "57883338-363d-44d9-b8d7-c0a0c5d6e5fb",
+                        "uuid": "0000000000000073",
                         "name": "mixamorig:LeftFoot",
                         "priority": 0,
                         "visible": true,
@@ -4414,7 +4084,7 @@
                         ],
                         "children": [
                           {
-                            "uuid": "1951d498-700e-4715-bc55-20246bdad91f",
+                            "uuid": "0000000000000074",
                             "name": "mixamorig:LeftToeBase",
                             "priority": 0,
                             "visible": true,
@@ -4443,7 +4113,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "357100b0-6fbc-4de7-9d24-59d52cd637ce",
+                                "uuid": "0000000000000075",
                                 "name": "mixamorig:LeftToe_End",
                                 "priority": 0,
                                 "visible": true,
@@ -4472,7 +4142,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "2c08ad2c-5f3e-4180-b1f6-9bf6966539e7",
+                                    "uuid": "0000000000000076",
                                     "name": "mixamorig:LeftToe_End_end",
                                     "priority": 0,
                                     "visible": true,
@@ -4501,7 +4171,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "9a8d7915-051d-4159-8353-e99d9adfa782",
+                                        "uuid": "0000000000000077",
                                         "name": "mixamorig:LeftToe_End_end_end",
                                         "priority": 0,
                                         "visible": true,
@@ -4528,29 +4198,22 @@
                                           0.9999998807907104,
                                           0.9999999403953552
                                         ],
-                                        "children": [],
-                                        "components": []
+                                        "children": []
                                       }
-                                    ],
-                                    "components": []
+                                    ]
                                   }
-                                ],
-                                "components": []
+                                ]
                               }
-                            ],
-                            "components": []
+                            ]
                           }
-                        ],
-                        "components": []
+                        ]
                       }
-                    ],
-                    "components": []
+                    ]
                   }
-                ],
-                "components": []
+                ]
               },
               {
-                "uuid": "d9903213-27e7-4c95-9432-7b51bef1dca4",
+                "uuid": "0000000000000078",
                 "name": "mixamorig:RightUpLeg",
                 "priority": 0,
                 "visible": true,
@@ -4579,7 +4242,7 @@
                 ],
                 "children": [
                   {
-                    "uuid": "f394769a-c412-4dd2-9abb-1fda62b90de5",
+                    "uuid": "0000000000000079",
                     "name": "mixamorig:RightLeg",
                     "priority": 0,
                     "visible": true,
@@ -4608,7 +4271,7 @@
                     ],
                     "children": [
                       {
-                        "uuid": "1b4b9f61-5abe-4654-81a4-2ce3cf466111",
+                        "uuid": "000000000000007a",
                         "name": "mixamorig:RightFoot",
                         "priority": 0,
                         "visible": true,
@@ -4637,7 +4300,7 @@
                         ],
                         "children": [
                           {
-                            "uuid": "72cd9d02-329c-4222-98cf-8b609a9b2251",
+                            "uuid": "000000000000007b",
                             "name": "mixamorig:RightToeBase",
                             "priority": 0,
                             "visible": true,
@@ -4666,7 +4329,7 @@
                             ],
                             "children": [
                               {
-                                "uuid": "8e4565b1-8a3a-4fa8-9164-8a3868465db8",
+                                "uuid": "000000000000007c",
                                 "name": "mixamorig:RightToe_End",
                                 "priority": 0,
                                 "visible": true,
@@ -4695,7 +4358,7 @@
                                 ],
                                 "children": [
                                   {
-                                    "uuid": "07104027-993c-43ca-8852-6587c032ca84",
+                                    "uuid": "000000000000007d",
                                     "name": "mixamorig:RightToe_End_end",
                                     "priority": 0,
                                     "visible": true,
@@ -4724,7 +4387,7 @@
                                     ],
                                     "children": [
                                       {
-                                        "uuid": "c35ebc5c-dd2a-4d76-95be-042860cb5b60",
+                                        "uuid": "000000000000007e",
                                         "name": "mixamorig:RightToe_End_end_end",
                                         "priority": 0,
                                         "visible": true,
@@ -4751,165 +4414,49 @@
                                           1,
                                           0.9999999403953552
                                         ],
-                                        "children": [],
-                                        "components": []
+                                        "children": []
                                       }
-                                    ],
-                                    "components": []
+                                    ]
                                   }
-                                ],
-                                "components": []
+                                ]
                               }
-                            ],
-                            "components": []
+                            ]
                           }
-                        ],
-                        "components": []
+                        ]
                       }
-                    ],
-                    "components": []
+                    ]
                   }
-                ],
-                "components": []
+                ]
               }
-            ],
-            "components": []
+            ]
           }
         ],
         "components": [
           {
+            "type": "SkeletonController",
             "data": {
               "enabled": true,
               "skeleton": {
-                "uuid": "49cf1726-b337-44ec-b171-7ed5cb4c9ced"
+                "uuid": "49cf1726-b337-44ec-b171-7ed5cb4c9ced",
+                "type": "path",
+                "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Glitch.glb"
               },
-              "bone_entities": [
-                "3f9fd883-357f-4279-abf1-da15f6de1d29",
-                "b1cb9e97-e939-47bb-b522-69906ffa05a0",
-                "eed16c4e-3668-439c-96f7-fce14bcf853f",
-                "96e3a70a-372f-4cda-8a18-4f5b43f36b97",
-                "277e148d-14ff-4129-8a66-948e060eead3",
-                "ce33d26f-5f80-4234-b192-1ab6639f68f0",
-                "9bc0b3c6-0d76-4434-9aa1-b7354a01cce8",
-                "f6b384ac-cee2-4a6f-924a-9c4f5a7c65dd",
-                "56639f77-adbe-4bfb-8426-3e19c7472ff8",
-                "079743d7-f9ab-49eb-b416-b5bd1bda1873",
-                "ae0b629b-9c81-4abb-b6f3-e0344ca199aa",
-                "5cc9f839-2c81-41a5-960e-7204e9db14ba",
-                "8f122b69-962d-44de-9b09-824b4b4e3980",
-                "46c001da-0315-4f83-a3ee-63e3b8bc1534",
-                "0ec30394-6503-4916-addc-b86a4208c100",
-                "0fa52e0c-3cb1-4c08-b9bc-582abbd7ca3a",
-                "cd45991b-b431-4213-ae3c-69d32d1c720f",
-                "5a8f26df-24b3-4587-a4ec-0b6f374d9fe6",
-                "b198a7f8-a189-45ad-8088-4fdc748897fb",
-                "4a8e4197-e4d7-4075-8b37-5c180b4fab27",
-                "2066db2c-bca2-4de0-b9c5-707175617e96",
-                "97e81d37-6b6f-4cde-aa2c-fe0fa5a40779",
-                "d04e3253-0234-455c-b3bd-1a77fa927af7",
-                "a536e46f-bd44-46e2-af44-0b9b96ac0477",
-                "ab5c9fc4-8ef1-4973-9f90-d41220a5e709",
-                "be8268b9-5745-4ff9-a97d-16fdc0af8676",
-                "d935b740-78cc-400a-b948-f1ebec8ef6d3",
-                "ca452b6c-3ec6-4459-92ac-e1108ab6a36d",
-                "9ab8a9df-58eb-47ba-bbad-1c5d90b0731a",
-                "9d8860ce-c238-4f4e-9732-14a3e5218cab",
-                "e1e6f41e-fb6f-4ab0-8cd8-b2824ae3a973",
-                "a88dc7f4-324d-4a7b-a45d-3e05336c834b",
-                "d121bbaa-5973-4ae4-9545-62489c5e57a0",
-                "316f0d6c-429b-4971-b12d-fd778cdc6e2a",
-                "6478c7ed-a42e-445e-868d-eaee94763e9e",
-                "5eceb315-9a17-46bf-9693-fdf316cc8b87",
-                "f2cfad9c-46e0-4d75-bea4-8ecd2c5a514b",
-                "71c6d25d-310d-435b-bae9-e4e39816f679",
-                "93a0f7cc-ee32-49e5-a7c6-07612a2ef1e0",
-                "aeb534b2-30ac-47dd-8c82-721d217d34fa",
-                "f8a8dacf-8a9b-436c-850e-8b00479496ce",
-                "82624d1f-7cf5-46f4-a0cb-4dd95aeb456a",
-                "eb2c30d3-ccfd-4a4b-b0e5-53808051c972",
-                "d7c80526-3e8e-4f1b-b2b1-567a7ee2d909",
-                "151c8e3a-c5bc-4b5a-9c34-f2cbe198e079",
-                "ab7ccff5-a1de-4105-92ee-13948543d178",
-                "cc14fc05-bd5e-455b-845d-e5eb0628194f",
-                "822b4f13-8719-4d0c-b50f-3014e4711fa4",
-                "68e8010d-3531-484e-8fa5-57a097fffed4",
-                "62306bd4-16b2-41c1-8433-53e8ba66cbe1",
-                "60911adc-adf2-4846-8cd7-c9544f8c73c0",
-                "7aa54c84-7c5e-45e1-9330-2d4dc1db46aa",
-                "393aca53-5f6a-44a5-a996-358783718750",
-                "49d47ec3-f50d-403d-963b-a081ff861994",
-                "fc60751e-0871-4929-a511-e9f93557d0e7",
-                "53b748ab-c961-4127-aaf2-f867e2067e40",
-                "c5786cbd-2666-45d0-94a8-2dcbadff08a8",
-                "3d7c8fa2-3af1-4a7f-a561-56707615be77",
-                "c7e33595-b39a-4347-ba73-776a9b71d3c2",
-                "ee82795f-0fc0-4d25-a109-9c4e512ed310",
-                "3af61c32-c9da-46c3-9668-bd4993dbc255",
-                "55a4c56f-3f12-404a-8de4-ef25e07fea38",
-                "c54fa1b5-632b-41a3-b8ce-9bf015c6b4fe",
-                "c22b4fd2-74eb-4010-b90b-ac15827cd051",
-                "927308aa-4d5c-4c9f-ac1c-bb7114aba354",
-                "9f64f1aa-b4b8-47ed-9c2f-ea5696796386",
-                "1e369828-3b9b-486a-89dd-63f81f5c9cc0",
-                "a861b700-f295-4c12-9e6c-028a33ca90fd",
-                "b49b1314-72f8-43af-b066-d7ddf9f9eebb",
-                "4e523849-c97a-412f-8a5c-72427a050dea",
-                "a00188e5-be51-4e2a-aee0-38765f014777",
-                "389815b7-d011-4d53-a68d-a5728910e431",
-                "b7f1079e-b908-4340-84a8-643a3db0d122",
-                "e994ad27-fdd6-44cb-96c3-3e0f4a26ad77",
-                "2ccc8985-9057-446a-b906-62d01721ba73",
-                "be649650-08a7-424c-83db-32248c997490",
-                "6afc2604-599c-429c-854f-b2ffab723358",
-                "f653fded-f325-4e14-a20d-47ecd2b80453",
-                "0903b831-8183-4582-bf76-b130a97e0395",
-                "57883338-363d-44d9-b8d7-c0a0c5d6e5fb",
-                "1951d498-700e-4715-bc55-20246bdad91f",
-                "357100b0-6fbc-4de7-9d24-59d52cd637ce",
-                "2c08ad2c-5f3e-4180-b1f6-9bf6966539e7",
-                "9a8d7915-051d-4159-8353-e99d9adfa782",
-                "d9903213-27e7-4c95-9432-7b51bef1dca4",
-                "f394769a-c412-4dd2-9abb-1fda62b90de5",
-                "1b4b9f61-5abe-4654-81a4-2ce3cf466111",
-                "72cd9d02-329c-4222-98cf-8b609a9b2251",
-                "8e4565b1-8a3a-4fa8-9164-8a3868465db8",
-                "07104027-993c-43ca-8852-6587c032ca84",
-                "c35ebc5c-dd2a-4d76-95be-042860cb5b60"
-              ]
-            },
-            "type": "SkeletonController"
+              "bone_entities": null
+            }
           },
           {
+            "type": "AnimationPlayer",
             "data": {
               "enabled": true,
-              "clips": [
-                "d2ccc07e-eae7-4dfd-bd58-57421cf9da55",
-                "872dc4d7-8cea-4545-972e-ec56b78e483c",
-                "3e57fb7a-9883-4b55-9ea2-b7ef20b36809",
-                "de42581b-783c-472c-a76e-b91b2fc2c0d6",
-                "d26c236f-cfba-405b-bdc3-8cc867d7e9a5",
-                "48bd223c-be0d-48be-be4f-c431ea5b6809",
-                "0ec904f6-32ca-4549-8eed-dbb058de37b1",
-                "4f6c8fe4-84ed-4161-80a0-ac1be976aa7e",
-                "5fb119c1-7b0e-4595-8ebb-4afad5707d6f",
-                "f70beb73-114e-4e82-95ce-4252871b4e0a",
-                "3664add3-6497-4a45-bd59-409d7cdbf18a",
-                "f9da6bd5-6767-4b49-b1c0-8cca7b382927",
-                "190ec4e8-13d9-411d-a22b-51e5f7d0569e",
-                "e948fb08-eb17-4b67-ad07-169c21c4bb0a",
-                "476f1025-a4f9-4ea3-b7db-89a2f2ba872f",
-                "d62aec7b-0af7-4a90-ae4b-bde685a729db",
-                "8af80f7c-d7e7-4a9b-a385-0f3145b51cc5"
-              ],
+              "clips": [],
               "_current_clip_name": "Dance1",
               "playing": true
-            },
-            "type": "AnimationPlayer"
+            }
           }
         ]
       },
       {
-        "uuid": "277899a4-9f8a-4389-b348-bb7809b5cf43",
+        "uuid": "000000000000007f",
         "name": "Physics",
         "priority": 0,
         "visible": true,
@@ -4939,15 +4486,15 @@
         "children": [],
         "components": [
           {
+            "type": "PhysicsWorldComponent",
             "data": {
               "enabled": true
-            },
-            "type": "PhysicsWorldComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "40783d68-12c6-463e-b40d-23a23d3c00db",
+        "uuid": "0000000000000080",
         "name": "[Root]",
         "priority": 0,
         "visible": true,
@@ -4978,7 +4525,7 @@
         "components": []
       },
       {
-        "uuid": "5b70bf74-801f-4ca0-a483-93c1c9c1d99f",
+        "uuid": "0000000000000081",
         "name": "FEMPhysics",
         "priority": 0,
         "visible": true,
@@ -5008,6 +4555,7 @@
         "children": [],
         "components": [
           {
+            "type": "FEMPhysicsWorldComponent",
             "data": {
               "enabled": true,
               "gravity": [
@@ -5016,16 +4564,15 @@
                 -9.81
               ],
               "time_step": 0.01,
-              "substeps": 1,
+              "substeps": 1.0,
               "energy_stabilization": true,
               "strict_energy_mode": false
-            },
-            "type": "FEMPhysicsWorldComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "affc56a9-d31f-42fe-99fa-63c976944777",
+        "uuid": "0000000000000082",
         "name": "Joint",
         "priority": 0,
         "visible": true,
@@ -5055,31 +4602,33 @@
         "children": [],
         "components": [
           {
+            "type": "FEMFixedJointComponent",
             "data": {
               "enabled": true,
               "body_entity_name": "Pendulum",
               "damping": 0.0
-            },
-            "type": "FEMFixedJointComponent"
+            }
           },
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000004"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           }
         ]
       },
       {
-        "uuid": "10f2ee7d-6e16-45d7-baf1-e4d157c1a4ab",
+        "uuid": "0000000000000083",
         "name": "Pendulum",
         "priority": 0,
         "visible": true,
@@ -5109,20 +4658,23 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "FEMRigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
@@ -5133,13 +4685,12 @@
               ],
               "linear_damping": 0.0,
               "angular_damping": 0.0
-            },
-            "type": "FEMRigidBodyComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "c9238cbb-8281-4809-9f8d-12c25fc72b56",
+        "uuid": "0000000000000084",
         "name": "Pendulum2",
         "priority": 0,
         "visible": true,
@@ -5169,20 +4720,23 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "FEMRigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
@@ -5193,13 +4747,12 @@
               ],
               "linear_damping": 0.0,
               "angular_damping": 0.0
-            },
-            "type": "FEMRigidBodyComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "8775e3c4-9f4f-4832-8c89-92524fae3683",
+        "uuid": "0000000000000085",
         "name": "JointAB",
         "priority": 0,
         "visible": true,
@@ -5229,6 +4782,7 @@
         "children": [],
         "components": [
           {
+            "type": "FEMRevoluteJointComponent",
             "data": {
               "enabled": true,
               "body_a_entity_name": "Pendulum",
@@ -5239,13 +4793,12 @@
                 0.0
               ],
               "damping": 0.0
-            },
-            "type": "FEMRevoluteJointComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "bf0bc1c8-0abc-4203-854b-ebf2b589a30e",
+        "uuid": "0000000000000086",
         "name": "TeleportCube",
         "priority": 0,
         "visible": true,
@@ -5275,29 +4828,31 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "TeleportComponent",
             "data": {
               "enabled": true
-            },
-            "type": "TeleportComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "50a85ac4-e6ef-4c76-9e9d-bd934da80b66",
+        "uuid": "0000000000000087",
         "name": "entity5",
         "priority": 0,
         "visible": true,
@@ -5327,20 +4882,23 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "8626ab32-bde2-4551-924f-a50cf7c84eb0"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -5352,13 +4910,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "5e0d1c4b-f2c7-46d5-9b07-c62ad7c48311",
+        "uuid": "0000000000000088",
         "name": "С2",
         "priority": 0,
         "visible": true,
@@ -5388,20 +4945,23 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -5413,23 +4973,22 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "6cf25073-6b54-4b6c-875a-8e7ffa06021a",
+        "uuid": "0000000000000089",
         "name": "entity6",
         "priority": 0,
         "visible": true,
@@ -5459,20 +5018,23 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -5484,23 +5046,22 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "c24a54b3-9fca-41bd-a05b-050b5b6b3d8f",
+        "uuid": "000000000000008a",
         "name": "entity7",
         "priority": 0,
         "visible": true,
@@ -5530,20 +5091,23 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -5555,23 +5119,22 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "8d77c76a-3e8c-4fa6-9f0c-fe04b47cb382",
+        "uuid": "000000000000008b",
         "name": "entity8",
         "priority": 0,
         "visible": true,
@@ -5601,20 +5164,23 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -5626,23 +5192,22 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": true,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "9869ea68-15e1-4bb3-93fe-b216bfc68075",
+        "uuid": "000000000000008c",
         "name": "entity9",
         "priority": 0,
         "visible": true,
@@ -5672,30 +5237,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 5.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -5707,13 +5275,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "f67e8f92-5a92-4443-945f-9064acd8bd1f",
+        "uuid": "000000000000008d",
         "name": "entity10",
         "priority": 0,
         "visible": true,
@@ -5743,30 +5310,33 @@
         "children": [],
         "components": [
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -5778,13 +5348,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "24771530-9f95-450f-8d98-869ff4de44a2",
+        "uuid": "000000000000008e",
         "name": "entity11",
         "priority": 0,
         "visible": true,
@@ -5814,20 +5383,23 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -5839,23 +5411,22 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "ca4dcb49-6f03-4eeb-b5e5-f18a5ea94f02",
+        "uuid": "000000000000008f",
         "name": "entity12",
         "priority": 0,
         "visible": true,
@@ -5885,30 +5456,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -5920,13 +5494,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "d3a836bd-be3e-44c1-92fd-65d27b4c1838",
+        "uuid": "0000000000000090",
         "name": "Walls",
         "priority": 0,
         "visible": true,
@@ -5955,7 +5528,7 @@
         ],
         "children": [
           {
-            "uuid": "50342248-0fdc-47fd-b2e5-bc0514f0b2df",
+            "uuid": "0000000000000091",
             "name": "entity14_copy_copy",
             "priority": 0,
             "visible": true,
@@ -5982,51 +5555,10 @@
               0.5,
               2
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "00000000-0000-0000-0003-000000000001"
-                  },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000001"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "mass": 1.0,
-                  "is_static": true,
-                  "restitution": 0.3,
-                  "friction": 0.5
-                },
-                "type": "RigidBodyComponent"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "collider_type": "Box",
-                  "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
-                  ],
-                  "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
-                  "capsule_radius": 0.25
-                },
-                "type": "ColliderComponent"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "acc71f78-54bd-4992-a6ef-902361b6444a",
+            "uuid": "0000000000000092",
             "name": "entity14_copy",
             "priority": 0,
             "visible": true,
@@ -6053,51 +5585,10 @@
               0.5,
               2
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "00000000-0000-0000-0003-000000000001"
-                  },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000001"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "mass": 1.0,
-                  "is_static": true,
-                  "restitution": 0.3,
-                  "friction": 0.5
-                },
-                "type": "RigidBodyComponent"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "collider_type": "Box",
-                  "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
-                  ],
-                  "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
-                  "capsule_radius": 0.25
-                },
-                "type": "ColliderComponent"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "2fa27fa2-f753-44f3-ac7a-6163d5a17bb3",
+            "uuid": "0000000000000093",
             "name": "entity14_copy_copy_copy",
             "priority": 0,
             "visible": true,
@@ -6124,51 +5615,10 @@
               0.5,
               2
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "00000000-0000-0000-0003-000000000001"
-                  },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000001"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "mass": 1.0,
-                  "is_static": true,
-                  "restitution": 0.3,
-                  "friction": 0.5
-                },
-                "type": "RigidBodyComponent"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "collider_type": "Box",
-                  "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
-                  ],
-                  "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
-                  "capsule_radius": 0.25
-                },
-                "type": "ColliderComponent"
-              }
-            ]
+            "children": []
           },
           {
-            "uuid": "cfe5733c-8247-4586-a555-350f41ee3520",
+            "uuid": "0000000000000094",
             "name": "entity14",
             "priority": 0,
             "visible": true,
@@ -6195,54 +5645,13 @@
               0.5,
               2
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "00000000-0000-0000-0003-000000000001"
-                  },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000001"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "mass": 1.0,
-                  "is_static": true,
-                  "restitution": 0.3,
-                  "friction": 0.5
-                },
-                "type": "RigidBodyComponent"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "collider_type": "Box",
-                  "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
-                  ],
-                  "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
-                  "capsule_radius": 0.25
-                },
-                "type": "ColliderComponent"
-              }
-            ]
+            "children": []
           }
         ],
         "components": []
       },
       {
-        "uuid": "506aff42-d664-4b0b-b4f5-8a5c76435edf",
+        "uuid": "0000000000000095",
         "name": "entity12_copy",
         "priority": 0,
         "visible": true,
@@ -6272,30 +5681,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -6307,13 +5719,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "fec29b7d-cd2d-416f-a8a3-5c3f4958584b",
+        "uuid": "0000000000000096",
         "name": "entity13",
         "priority": 0,
         "visible": true,
@@ -6342,7 +5753,7 @@
         ],
         "children": [
           {
-            "uuid": "eccbef58-4104-4aca-8781-59ea20d75109",
+            "uuid": "0000000000000097",
             "name": "entity15",
             "priority": 0,
             "visible": true,
@@ -6369,66 +5780,28 @@
               1,
               1
             ],
-            "children": [],
-            "components": [
-              {
-                "data": {
-                  "enabled": true,
-                  "mesh": {
-                    "uuid": "00000000-0000-0000-0003-000000000001"
-                  },
-                  "material": {
-                    "uuid": "00000000-0000-0000-0002-000000000001"
-                  },
-                  "override_material": false,
-                  "cast_shadow": true
-                },
-                "type": "MeshRenderer"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "mass": 1.0,
-                  "is_static": false,
-                  "restitution": 0.3,
-                  "friction": 0.5
-                },
-                "type": "RigidBodyComponent"
-              },
-              {
-                "data": {
-                  "enabled": true,
-                  "collider_type": "Box",
-                  "box_size": [
-                    1.0,
-                    1.0,
-                    1.0
-                  ],
-                  "sphere_radius": 0.5,
-                  "capsule_height": 1.0,
-                  "capsule_radius": 0.25
-                },
-                "type": "ColliderComponent"
-              }
-            ]
+            "children": []
           }
         ],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -6440,23 +5813,22 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "1b473894-2d9f-481c-b690-f789926dc33b",
+        "uuid": "0000000000000098",
         "name": "entity12_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6486,30 +5858,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -6521,13 +5896,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "81fe8085-2f6b-4f5a-9c60-3ad04c74c5bc",
+        "uuid": "0000000000000099",
         "name": "entity12_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6557,30 +5931,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -6592,13 +5969,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "71d00a00-a0b1-4a99-911f-a39fc3a0f1e5",
+        "uuid": "000000000000009a",
         "name": "entity12_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6628,30 +6004,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -6663,13 +6042,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "95241d2d-6ba3-4a2f-9e11-57b746c9b5a0",
+        "uuid": "000000000000009b",
         "name": "entity12_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6699,30 +6077,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -6734,13 +6115,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "16d376d7-de89-4b5a-9a9f-25c151dada67",
+        "uuid": "000000000000009c",
         "name": "entity12_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6770,30 +6150,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -6805,13 +6188,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "94ed1525-a529-4311-a8d4-1fecd9e05bac",
+        "uuid": "000000000000009d",
         "name": "entity12_copy_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6841,30 +6223,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -6876,13 +6261,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "60aaaf1f-9bca-445d-839d-c4d3526bac3c",
+        "uuid": "000000000000009e",
         "name": "entity12_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6912,30 +6296,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -6947,13 +6334,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "5d701cea-a938-4af1-a1a0-0646de016d29",
+        "uuid": "000000000000009f",
         "name": "entity12_copy_copy_copy_copy_copy_copy",
         "priority": 0,
         "visible": true,
@@ -6983,30 +6369,33 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000002"
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "type": "named",
+                "name": "Sphere"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "RigidBodyComponent",
             "data": {
               "enabled": true,
               "mass": 1.0,
               "is_static": false,
               "restitution": 0.3,
               "friction": 0.5
-            },
-            "type": "RigidBodyComponent"
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Sphere",
@@ -7018,13 +6407,12 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "19b45a2f-b70b-4f63-99ab-dbbb64613d4d",
+        "uuid": "00000000000000a0",
         "name": "entity16",
         "priority": 0,
         "visible": true,
@@ -7054,29 +6442,31 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
+            "type": "TweenTest",
             "data": {
               "enabled": true
-            },
-            "type": "TweenTest"
+            }
           }
         ]
       },
       {
-        "uuid": "691ab5c0-c4fd-4309-ad5c-c252db4bf84b",
+        "uuid": "00000000000000a1",
         "name": "TweenManager",
         "priority": 0,
         "visible": true,
@@ -7106,15 +6496,15 @@
         "children": [],
         "components": [
           {
+            "type": "TweenManagerComponent",
             "data": {
               "enabled": true
-            },
-            "type": "TweenManagerComponent"
+            }
           }
         ]
       },
       {
-        "uuid": "00e7a50f-df7b-4876-8d03-c3b2e9255d86",
+        "uuid": "00000000000000a2",
         "name": "entity16_copy",
         "priority": 0,
         "visible": true,
@@ -7144,24 +6534,30 @@
         "children": [],
         "components": [
           {
+            "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "mesh": {
-                "uuid": "00000000-0000-0000-0003-000000000001"
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "type": "named",
+                "name": "Cube"
               },
               "material": {
+                "type": "uuid",
                 "uuid": "00000000-0000-0000-0002-000000000001"
               },
-              "override_material": false,
               "cast_shadow": true
-            },
-            "type": "MeshRenderer"
+            }
           },
           {
             "type": "CXXRotatorComponent",
-            "data": {}
+            "data": {
+              "enabled": true,
+              "speed": 1
+            }
           },
           {
+            "type": "ColliderComponent",
             "data": {
               "enabled": true,
               "collider_type": "Box",
@@ -7173,8 +6569,7 @@
               "sphere_radius": 0.5,
               "capsule_height": 1.0,
               "capsule_radius": 0.25
-            },
-            "type": "ColliderComponent"
+            }
           }
         ]
       }
@@ -7224,14 +6619,15 @@
   "editor": {
     "camera": {
       "target": [
-        3.827561855316162,
-        8.945001602172852,
-        -0.4784262180328369
+        1.4102790355682373,
+        -5.684746742248535,
+        -2.187274932861328
       ],
-      "radius": 8.5,
-      "azimuth": 58.11597343291181,
-      "elevation": 0.6352998477259345
+      "radius": 14.5,
+      "azimuth": 57.57492136479364,
+      "elevation": 0.4677482395344791
     },
+    "selected_entity": "Bulba",
     "displays": [
       {
         "name": "Editor",
@@ -7240,7 +6636,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "37c39c33-3aa2-4526-95f9-992aee3a1af4",
+            "uuid": "f90a9a92-0225-43d2-bacf-09024658c4ee",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7248,7 +6644,8 @@
               1.0,
               1.0
             ],
-            "depth": 0
+            "depth": 0,
+            "pipeline": "editor"
           }
         ]
       },
@@ -7259,7 +6656,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "f131c271-d99f-4100-b6ed-2a551336230c",
+            "uuid": "1164076c-88f6-4514-a117-fb8e027ce8b1",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -7267,20 +6664,22 @@
               1.0,
               1.0
             ],
-            "depth": 0
+            "depth": 0,
+            "pipeline": "default"
           }
         ]
       }
     ],
     "expanded_entities": [
-      "cube2",
-      "entity13",
-      "[Root]",
-      "Glitch",
-      "EditorEntities",
-      "cube1",
-      "Arti",
       "entity12_copy",
+      "editor_ui",
+      "[Root]",
+      "entity13",
+      "EditorEntities",
+      "Arti",
+      "cube1",
+      "cube2",
+      "Glitch",
       "camera",
       "Walls"
     ]

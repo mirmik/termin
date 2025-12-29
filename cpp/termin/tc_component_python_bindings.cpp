@@ -2,7 +2,6 @@
 // This allows Python components to use tc_component directly without C++ Component wrapper.
 #include <pybind11/pybind11.h>
 #include <unordered_map>
-#include <cstdio>
 
 #include "../../core_c/include/tc_component_python.h"
 #include "../../core_c/include/tc_log.h"
