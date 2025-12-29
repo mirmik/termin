@@ -59,6 +59,14 @@ void bind_transform(py::module_& m) {
             tc_entity_id id = tc_entity_pool_alloc(pool, "transform");
             return GeneralTransform3(pool, id);
         }))
+        // Constructor with pose
+        .def(py::init([](py::object pose) {
+            tc_entity_pool* pool = Entity::standalone_pool();
+            tc_entity_id id = tc_entity_pool_alloc(pool, "transform");
+            GeneralTransform3 t(pool, id);
+            t.set_local_pose(py_pose_to_cpp(pose));
+            return t;
+        }), py::arg("pose"))
 
         // Check validity
         .def("valid", &GeneralTransform3::valid)

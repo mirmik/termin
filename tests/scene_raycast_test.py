@@ -28,12 +28,12 @@ class SceneRaycastTest(unittest.TestCase):
         # Сфера, по которой точно попадёт луч
         sphere_hit = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(0.0, 0.0, 5.0)))
         e1, _ = self.make_entity_with_collider(sphere_hit)
-        scene.add(e1)
+        e1 = scene.add(e1)  # Entity migrates to scene pool
 
         # Сфера в стороне — пересечения нет
         sphere_miss = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(3.0, 0.0, 5.0)))
         e2, _ = self.make_entity_with_collider(sphere_miss)
-        scene.add(e2)
+        e2 = scene.add(e2)
 
         ray = Ray3(
             origin=np.array([0.0, 0.0, 0.0]),
@@ -42,7 +42,7 @@ class SceneRaycastTest(unittest.TestCase):
 
         hit = scene.raycast(ray)
         self.assertIsNotNone(hit)
-        self.assertIs(hit.entity, e1)
+        self.assertEqual(hit.entity, e1)
 
         # Точка пересечения
         np.testing.assert_array_almost_equal(hit.point, np.array([0.0, 0.0, 4.0]))
@@ -54,12 +54,12 @@ class SceneRaycastTest(unittest.TestCase):
         # Промах — но ближайшая сфера
         sphere1 = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(3.0, 0.0, 5.0)))
         e1, _ = self.make_entity_with_collider(sphere1)
-        scene.add(e1)
+        e1 = scene.add(e1)  # Entity migrates to scene pool
 
         # Далёкая сфера — точно проиграет
         sphere2 = SphereCollider(1.0, GeneralPose3(Quat.identity(), Vec3(10.0, 0.0, 5.0)))
         e2, _ = self.make_entity_with_collider(sphere2)
-        scene.add(e2)
+        e2 = scene.add(e2)
 
         ray = Ray3(
             origin=np.array([0.0, 0.0, 0.0]),
@@ -68,7 +68,7 @@ class SceneRaycastTest(unittest.TestCase):
 
         hit = scene.closest_to_ray(ray)
         self.assertIsNotNone(hit)
-        self.assertIs(hit.entity, e1)
+        self.assertEqual(hit.entity, e1)
 
         # Ближайшая точка на луче должна быть на z = 5
         np.testing.assert_array_almost_equal(hit.point, np.array([0.0, 0.0, 5.0]))

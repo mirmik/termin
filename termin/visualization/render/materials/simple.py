@@ -37,9 +37,8 @@ void main() {
 
 class ColorMaterial(Material):
     def __init__(self, color: tuple[float, float, float, float]):
-        self.color = color
-        self.shader = ShaderProgram(ColorMaterial_VERT, ColorMaterial_FRAG)
-        super().__init__(shader=self.shader, color=color)
+        shader = ShaderProgram(ColorMaterial_VERT, ColorMaterial_FRAG)
+        super().__init__(shader=shader, color=color)
 
 
 # Unlit shader - просто цвет без освещения

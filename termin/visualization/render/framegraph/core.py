@@ -15,7 +15,10 @@ class FramePass:
 
     reads  – какие ресурсы этот проход читает (по именам).
     writes – какие ресурсы он пишет.
-    enabled – включён ли проход; отключённые пассы игнорируются при построении графа.
+    enabled – включён ли проход; отключённые пассы полностью игнорируются
+              при построении графа (не участвуют в зависимостях, не вызывают конфликтов).
+    passthrough – если True, пасс остаётся в графе, но просто копирует input → output
+                  без реальной обработки (используется для временного отключения эффектов).
 
     Inplace-семантика определяется через get_inplace_aliases():
         Если метод возвращает непустой список пар [(read, write), ...],
@@ -31,6 +34,7 @@ class FramePass:
     reads: Set[str] = field(default_factory=set)
     writes: Set[str] = field(default_factory=set)
     enabled: bool = True
+    passthrough: bool = False
 
     # Конфигурация внутренней точки дебага.
     debug_internal_symbol: str | None = None
@@ -140,6 +144,7 @@ class FramePass:
             "type": self.__class__.__name__,
             "pass_name": self.pass_name,
             "enabled": self.enabled,
+            "passthrough": self.passthrough,
         }
         data.update(self._serialize_params())
         return data
@@ -189,6 +194,7 @@ class FramePass:
 
         # Восстанавливаем базовые поля
         instance.enabled = data.get("enabled", True)
+        instance.passthrough = data.get("passthrough", False)
 
         return instance
 
@@ -261,6 +267,10 @@ class FrameGraph:
 
         # 1) собираем writer-ов, reader-ов и валидируем inplace-пассы
         for idx, p in enumerate(self._passes):
+            # Пропускаем отключённые пассы — они не участвуют в графе
+            if not p.enabled:
+                continue
+
             # --- валидация inplace-пассов через get_inplace_aliases ---
             inplace_aliases = p.get_inplace_aliases()
             
@@ -305,6 +315,8 @@ class FrameGraph:
 
         # 2) обработка алиасов для inplace-пассов из get_inplace_aliases
         for p in self._passes:
+            if not p.enabled:
+                continue
             inplace_aliases = p.get_inplace_aliases()
             for src, dst in inplace_aliases:
                 src_canon = canonical.get(src, src)
@@ -330,6 +342,8 @@ class FrameGraph:
         # 4) Inplace пассы должны ждать всех других читателей своего input'а.
         #    Иначе inplace пасс "испортит" ресурс до того, как другие его прочитают.
         for idx, p in enumerate(self._passes):
+            if not p.enabled:
+                continue
             inplace_aliases = p.get_inplace_aliases()
             for src, _dst in inplace_aliases:
                 # Все читатели src (кроме самого inplace пасса) должны выполниться до него
@@ -360,6 +374,8 @@ class FrameGraph:
         adjacency, in_degree = self._build_dependency_graph()
         n = len(self._passes)
 
+        # Индексы только включённых пассов
+        enabled_indices = {i for i, p in enumerate(self._passes) if p.enabled}
         is_inplace = [p.inplace for p in self._passes]
 
         # две очереди:
@@ -369,6 +385,8 @@ class FrameGraph:
         ready_inplace: deque[int] = deque()
 
         for i in range(n):
+            if i not in enabled_indices:
+                continue
             if in_degree[i] == 0:
                 if is_inplace[i]:
                     ready_inplace.append(i)
@@ -388,13 +406,13 @@ class FrameGraph:
 
             for dep in adjacency[idx]:
                 in_degree[dep] -= 1
-                if in_degree[dep] == 0:
+                if in_degree[dep] == 0 and dep in enabled_indices:
                     if is_inplace[dep]:
                         ready_inplace.append(dep)
                     else:
                         ready_normal.append(dep)
 
-        if len(schedule_indices) != n:
+        if len(schedule_indices) != len(enabled_indices):
             # Остались вершины с in_degree > 0 → цикл
             problematic = [self._passes[i].pass_name for i, deg in in_degree.items() if deg > 0]
             raise FrameGraphCycleError(

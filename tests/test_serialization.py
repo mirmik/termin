@@ -303,7 +303,7 @@ def test_scene_serialize_only_root_entities():
     parent.transform.add_child(child.transform)
 
     scene.add(parent)
-    scene.add(child)  # Добавляем и ребёнка в список
+    # scene.add(child)  # ребёнок переносится рекурсивно
 
     data = scene.serialize()
 

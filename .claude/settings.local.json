@@ -77,7 +77,10 @@
       "Bash(sort:*)",
       "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 10 python3:*)",
       "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 5 python3:*)",
-      "Bash(PYTHONPATH=. timeout 5 python3:*)"
+      "Bash(PYTHONPATH=. timeout 5 python3:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 30 python:*)",
+      "Bash(LD_LIBRARY_PATH=/media/sf_Shared/termin/termin:$LD_LIBRARY_PATH PYTHONPATH=. timeout 60 python -m pytest:*)",
+      "Bash(true ls -la /media/sf_Shared/termin/build/temp.linux-x86_64-cpython-310/*.so)"
     ]
   }
 }

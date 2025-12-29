@@ -59,10 +59,10 @@ class TestPasses(unittest.TestCase):
 
             # Создаём сцену с кубом
             scene = Scene()
-            
+
             # Камера
             camera_entity = Entity(name="camera")
-            scene.add(camera_entity)
+            camera_entity = scene.add(camera_entity)  # Capture migrated entity
             camera = camera_entity.add_component(PerspectiveCameraComponent())
             camera_entity.transform.relocate(Pose3.looking_at(
                 eye=numpy.array([3.0, 3.0, 3.0]),
@@ -72,7 +72,7 @@ class TestPasses(unittest.TestCase):
 
             # Красный куб
             cube = Entity(name="cube")
-            scene.add(cube)
+            cube = scene.add(cube)  # Capture migrated entity
             material = ColorMaterial(color=(1.0, 0.0, 0.0, 1.0))
             cube.add_component(MeshRenderer(CubeMesh(), material=material))
 
@@ -106,8 +106,9 @@ class TestPasses(unittest.TestCase):
                 scene=scene,
                 camera=camera,
                 rect=(0.0, 0.0, 1.0, 1.0),
+                pipeline=pipeline,
             )
-            state = ViewportRenderState(pipeline=pipeline)
+            state = ViewportRenderState()
 
             # Создаём offscreen surface
             offscreen = OffscreenRenderSurface(graphics, width=320, height=240)
@@ -179,16 +180,16 @@ class TestPasses(unittest.TestCase):
 
             # Куб в центре мира
             cube_entity = Entity(name="cube")
+            cube_entity = scene.add(cube_entity)  # Capture migrated entity
             cube_mesh = CubeMesh()
             # Используем новый API: MeshRenderer принимает mesh напрямую
             material = ColorMaterial(color=(1.0, 0.0, 0.0, 1.0))
             cube_renderer = MeshRenderer(cube_mesh, material=material)
             cube_entity.add_component(cube_renderer)
-            scene.add(cube_entity)
 
             # Камера на (0, -3, 0), смотрит в центр (Y-forward convention)
             camera_entity = Entity(name="camera")
-            scene.add(camera_entity)
+            camera_entity = scene.add(camera_entity)  # Capture migrated entity
             camera = camera_entity.add_component(PerspectiveCameraComponent(
                 fov_y_degrees=60.0,
                 aspect=width / float(height),
@@ -348,7 +349,7 @@ void main() {
 
             # Камера
             camera_entity = Entity(name="camera")
-            scene.add(camera_entity)
+            camera_entity = scene.add(camera_entity)  # Capture migrated entity
             camera = camera_entity.add_component(PerspectiveCameraComponent())
             camera_entity.transform.relocate(Pose3.looking_at(
                 eye=numpy.array([3.0, 3.0, 3.0]),
@@ -358,7 +359,7 @@ void main() {
 
             # Куб с многофазным материалом
             cube = Entity(name="cube")
-            scene.add(cube)
+            cube = scene.add(cube)  # Capture migrated entity
             cube.add_component(MeshRenderer(CubeMesh(), material=material))
 
             # --- Тест 1: ColorPass с phase_mark="opaque" должен дать красный куб ---
@@ -387,8 +388,8 @@ void main() {
                 ],
             )
 
-            view = RenderView(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
-            state_opaque = ViewportRenderState(pipeline=pipeline_opaque)
+            view = RenderView(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0), pipeline=pipeline_opaque)
+            state_opaque = ViewportRenderState()
 
             offscreen = OffscreenRenderSurface(graphics, width=128, height=128)
             engine = RenderEngine(graphics)
@@ -430,11 +431,12 @@ void main() {
                 ],
             )
 
-            state_transparent = ViewportRenderState(pipeline=pipeline_transparent)
+            state_transparent = ViewportRenderState()
+            view_transparent = RenderView(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0), pipeline=pipeline_transparent)
 
             engine.render_single_view(
                 surface=offscreen,
-                view=view,
+                view=view_transparent,
                 state=state_transparent,
                 present=False,
             )
@@ -540,7 +542,7 @@ void main() {
 
                 # Камера
                 camera_entity = Entity(name="camera")
-                scene.add(camera_entity)
+                camera_entity = scene.add(camera_entity)  # Capture migrated entity
                 camera = camera_entity.add_component(PerspectiveCameraComponent())
                 camera_entity.transform.relocate(Pose3.looking_at(
                     eye=numpy.array([3.0, 3.0, 3.0]),
@@ -550,7 +552,7 @@ void main() {
 
                 # Куб с загруженным материалом
                 cube = Entity(name="cube")
-                scene.add(cube)
+                cube = scene.add(cube)  # Capture migrated entity
                 cube.add_component(MeshRenderer(CubeMesh(), material=material))
 
                 # Pipeline с phase_mark="opaque"
@@ -578,8 +580,8 @@ void main() {
                     ],
                 )
 
-                view = RenderView(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
-                state = ViewportRenderState(pipeline=pipeline)
+                view = RenderView(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0), pipeline=pipeline)
+                state = ViewportRenderState()
 
                 offscreen = OffscreenRenderSurface(graphics, width=128, height=128)
                 engine = RenderEngine(graphics)

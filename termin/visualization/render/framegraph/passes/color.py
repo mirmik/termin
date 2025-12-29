@@ -72,9 +72,12 @@ class ColorPass(_ColorPassNative):
         # Cache of entity names with MeshRenderer
         self._entity_names: List[str] = []
 
-    def _serialize_params(self) -> dict:
-        """Serialize ColorPass parameters."""
-        return {
+    def serialize(self) -> dict:
+        """Serialize ColorPass to dict."""
+        data = {
+            "type": self.__class__.__name__,
+            "pass_name": self.pass_name,
+            "enabled": self.enabled,
             "input_res": self.input_res,
             "output_res": self.output_res,
             "shadow_res": self.shadow_res,
@@ -82,6 +85,7 @@ class ColorPass(_ColorPassNative):
             "sort_by_distance": self.sort_by_distance,
             "clear_depth": self.clear_depth,
         }
+        return data
 
     @classmethod
     def _deserialize_instance(cls, data: dict, resource_manager=None) -> "ColorPass":

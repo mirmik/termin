@@ -105,25 +105,56 @@ struct GeneralTransform3 {
     }
 
     GeneralPose3 global_pose() const {
-        // TODO: need to ensure transforms are updated first
-        // For now, trigger update and get world data
         GeneralPose3 pose;
-        double pos[3];
+        double pos[3], rot[4], scale[3];
         tc_entity_pool_get_world_position(_pool, _id, pos);
+        tc_entity_pool_get_world_rotation(_pool, _id, rot);
+        tc_entity_pool_get_world_scale(_pool, _id, scale);
         pose.lin = Vec3{pos[0], pos[1], pos[2]};
-        // TODO: world rotation and scale not yet exposed in pool API
-        // For now, return local as approximation
-        double rot[4], scale[3];
-        tc_entity_pool_get_local_rotation(_pool, _id, rot);
-        tc_entity_pool_get_local_scale(_pool, _id, scale);
         pose.ang = Quat{rot[0], rot[1], rot[2], rot[3]};
         pose.scale = Vec3{scale[0], scale[1], scale[2]};
         return pose;
     }
 
-    void set_global_pose(const GeneralPose3& pose) {
-        // TODO: proper global-to-local conversion with parent
-        set_local_pose(pose);
+    void set_global_pose(const GeneralPose3& gpose) {
+        tc_entity_id parent_id = tc_entity_pool_parent(_pool, _id);
+        if (!tc_entity_id_valid(parent_id)) {
+            // No parent - global == local
+            set_local_pose(gpose);
+            return;
+        }
+
+        // Get parent's world transform
+        double ppos[3], prot[4], pscale[3];
+        tc_entity_pool_get_world_position(_pool, parent_id, ppos);
+        tc_entity_pool_get_world_rotation(_pool, parent_id, prot);
+        tc_entity_pool_get_world_scale(_pool, parent_id, pscale);
+
+        Quat parent_rot{prot[0], prot[1], prot[2], prot[3]};
+        Vec3 parent_pos{ppos[0], ppos[1], ppos[2]};
+        Vec3 parent_scale{pscale[0], pscale[1], pscale[2]};
+
+        // Convert global to local:
+        // local_pos = inverse_parent_rot * (global_pos - parent_pos) / parent_scale
+        // local_rot = inverse(parent_rot) * global_rot
+        // local_scale = global_scale / parent_scale
+        Quat inv_parent_rot = parent_rot.inverse();
+
+        Vec3 delta = gpose.lin - parent_pos;
+        Vec3 local_pos = inv_parent_rot.rotate(delta);
+        local_pos.x /= parent_scale.x;
+        local_pos.y /= parent_scale.y;
+        local_pos.z /= parent_scale.z;
+
+        Quat local_rot = inv_parent_rot * gpose.ang;
+
+        Vec3 local_scale{
+            gpose.scale.x / parent_scale.x,
+            gpose.scale.y / parent_scale.y,
+            gpose.scale.z / parent_scale.z
+        };
+
+        set_local_pose(GeneralPose3{local_rot, local_pos, local_scale});
     }
 
     void relocate_global(const GeneralPose3& gpose) {

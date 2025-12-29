@@ -691,6 +691,26 @@ void tc_entity_pool_get_world_position(const tc_entity_pool* pool, tc_entity_id 
     xyz[0] = p.x; xyz[1] = p.y; xyz[2] = p.z;
 }
 
+void tc_entity_pool_get_world_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    Quat q = pool->world_rotations[id.index];
+    xyzw[0] = q.x; xyzw[1] = q.y; xyzw[2] = q.z; xyzw[3] = q.w;
+}
+
+void tc_entity_pool_get_world_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    Vec3 s = pool->world_scales[id.index];
+    xyz[0] = s.x; xyz[1] = s.y; xyz[2] = s.z;
+}
+
 void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id, double* m16) {
     if (!tc_entity_pool_alive(pool, id)) return;
     // Lazy update if dirty

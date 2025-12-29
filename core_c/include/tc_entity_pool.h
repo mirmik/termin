@@ -123,6 +123,8 @@ TC_POOL_API void tc_entity_pool_set_local_scale(tc_entity_pool* pool, tc_entity_
 
 // World pose (cached, auto-updated)
 TC_POOL_API void tc_entity_pool_get_world_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
+TC_POOL_API void tc_entity_pool_get_world_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw);
+TC_POOL_API void tc_entity_pool_get_world_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
 TC_POOL_API void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id, double* m16);
 
 // Mark transform dirty (will be recalculated)

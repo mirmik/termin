@@ -99,7 +99,7 @@ class EditorCameraManager:
         if self.editor_entities is not None:
             self.editor_entities.transform.link(camera_entity.transform)
         self._scene.add(camera_entity)
-        self._scene.add(ui_entity)
+        # self._scene.add(ui_entity) # ui entry will be added recursively
         self.camera = camera
 
     @property

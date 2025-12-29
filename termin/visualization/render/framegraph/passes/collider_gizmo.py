@@ -45,7 +45,7 @@ class ColliderGizmoPass(RenderFramePass):
         input_res: str = "color",
         output_res: str = "color",
         pass_name: str = "ColliderGizmo",
-        enabled: bool = True,
+        passthrough: bool = False,
     ):
         super().__init__(
             pass_name=pass_name,
@@ -54,14 +54,13 @@ class ColliderGizmoPass(RenderFramePass):
         )
         self.input_res = input_res
         self.output_res = output_res
-        self.enabled = enabled
+        self.passthrough = passthrough
         self._renderer = WireframeRenderer()
 
     def _serialize_params(self) -> dict:
         return {
             "input_res": self.input_res,
             "output_res": self.output_res,
-            "enabled": self.enabled,
         }
 
     @classmethod
@@ -70,7 +69,6 @@ class ColliderGizmoPass(RenderFramePass):
             input_res=data.get("input_res", "color"),
             output_res=data.get("output_res", "color"),
             pass_name=data.get("pass_name", "ColliderGizmo"),
-            enabled=data.get("enabled", True),
         )
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
@@ -88,7 +86,7 @@ class ColliderGizmoPass(RenderFramePass):
         lights=None,
         canvas=None,
     ):
-        if not self.enabled:
+        if self.passthrough:
             return
 
         if scene is None or not scene.colliders:
