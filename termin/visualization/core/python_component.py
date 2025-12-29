@@ -42,6 +42,13 @@ class PythonComponent:
         # Scene reference (set by on_added)
         self._scene: Optional[Scene] = None
 
+        # Auto-detect if update/fixed_update are overridden
+        cls = type(self)
+        if cls.update is not PythonComponent.update:
+            self._tc.has_update = True
+        if cls.fixed_update is not PythonComponent.fixed_update:
+            self._tc.has_fixed_update = True
+
         # Install drawable vtable if this component implements Drawable protocol
         # Check for phase_marks attribute (Drawable protocol requirement)
         if hasattr(type(self), 'phase_marks') or hasattr(self, 'phase_marks'):

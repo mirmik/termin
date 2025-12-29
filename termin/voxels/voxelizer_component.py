@@ -651,12 +651,8 @@ class VoxelizerComponent(PythonComponent):
 
         self._last_voxel_count = grid.voxel_count
 
-        # Регистрируем в ResourceManager
-        rm = ResourceManager.instance()
-        rm.register_voxel_grid(name, grid)
-        print(f"VoxelizerComponent: registered '{name}' with {grid.voxel_count} voxels")
-
         # Сохраняем в файл
+        rm = ResourceManager.instance()
         try:
             output_path = Path(output)
 
@@ -673,6 +669,17 @@ class VoxelizerComponent(PythonComponent):
 
             VoxelPersistence.save(grid, output_path)
             print(f"VoxelizerComponent: saved to {output_path.absolute()}")
+
+            # Регистрируем в ResourceManager по имени файла (не внутреннему имени грида)
+            asset_name = output_path.stem
+            rm.register_voxel_grid(asset_name, grid)
+            print(f"VoxelizerComponent: registered '{asset_name}' with {grid.voxel_count} voxels")
+
+            # Mark asset as just saved to prevent hot-reload from file watcher
+            asset = rm.get_voxel_grid_asset(asset_name)
+            if asset is not None:
+                asset.mark_just_saved()
+
             return True
         except Exception as e:
             print(f"VoxelizerComponent: failed to save: {e}")
@@ -784,6 +791,13 @@ class VoxelizerComponent(PythonComponent):
 
             NavMeshPersistence.save(navmesh, output_path)
             print(f"VoxelizerComponent: saved NavMesh to {output_path.absolute()}")
+
+            # Mark asset as just saved to prevent hot-reload
+            asset_name = output_path.stem
+            asset = rm.get_navmesh_asset(asset_name)
+            if asset is not None:
+                asset.mark_just_saved()
+
             return True
         except Exception as e:
             print(f"VoxelizerComponent: failed to save NavMesh: {e}")

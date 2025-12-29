@@ -151,6 +151,7 @@ class VoxelDisplayComponent(PythonComponent):
         self._mesh_handle: Optional[MeshHandle] = None
         self._material: Optional[Material] = None
         self._needs_rebuild = True
+        self.active_in_editor = True  # Enable update() in editor mode
 
         # Цвета с альфа-каналом (RGBA)
         self.color_below: Tuple[float, float, float, float] = (0.2, 0.6, 1.0, 0.8)
@@ -254,9 +255,9 @@ class VoxelDisplayComponent(PythonComponent):
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
         current_version = self.voxel_grid.version
         if current_version != self._last_version:
-            print(f"[VoxelDisplayComponent] Hot-reload detected: version {self._last_version} -> {current_version}")
             self._last_version = current_version
-            self._rebuild_mesh()
+            # Defer rebuild to update() - don't rebuild during rendering
+            self._needs_rebuild = True
 
     _DEBUG_GET_PHASES = False  # Debug: отладка get_geometry_draws
 

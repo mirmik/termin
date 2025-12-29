@@ -667,71 +667,6 @@
         ]
       },
       {
-        "uuid": "0000000000000008",
-        "name": "BulbaViz",
-        "priority": 0,
-        "visible": true,
-        "active": true,
-        "pickable": true,
-        "selectable": true,
-        "layer": 0,
-        "flags": 0,
-        "pose": {
-          "position": [
-            -5.164,
-            -13.6,
-            -2.299
-          ],
-          "rotation": [
-            0,
-            0,
-            0,
-            1
-          ]
-        },
-        "scale": [
-          7,
-          7,
-          7
-        ],
-        "children": [],
-        "components": [
-          {
-            "type": "VoxelDisplayComponent",
-            "data": {
-              "enabled": true,
-              "voxel_grid": {
-                "type": "none"
-              },
-              "color_below": [
-                0.2,
-                0.6,
-                1.0,
-                0.8
-              ],
-              "color_above": [
-                1.0,
-                0.3000076413154602,
-                0.20000000298023224,
-                0.46399635076522827
-              ],
-              "fill_percent": 100.0,
-              "slice_axis": [
-                0.0,
-                0.0,
-                1.0
-              ],
-              "color_surface": [
-                0.2,
-                1.0,
-                0.3,
-                0.9
-              ]
-            }
-          }
-        ]
-      },
-      {
         "uuid": "0000000000000009",
         "name": "Platform",
         "priority": 0,
@@ -4436,11 +4371,7 @@
             "type": "SkeletonController",
             "data": {
               "enabled": true,
-              "skeleton": {
-                "uuid": "49cf1726-b337-44ec-b171-7ed5cb4c9ced",
-                "type": "path",
-                "path": "C:/Users/mirmik/project/Shared/termin/examples/project/Glitch.glb"
-              },
+              "skeleton": null,
               "bone_entities": null
             }
           },
@@ -6636,7 +6567,7 @@
         "block_input_in_editor": false,
         "viewports": [
           {
-            "uuid": "f90a9a92-0225-43d2-bacf-09024658c4ee",
+            "uuid": "93990edd-9bf1-42fb-826a-3a0956481e31",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -6656,7 +6587,7 @@
         "block_input_in_editor": true,
         "viewports": [
           {
-            "uuid": "1164076c-88f6-4514-a117-fb8e027ce8b1",
+            "uuid": "33156451-88f8-46bc-9728-dc28bc187640",
             "camera_entity": "camera",
             "rect": [
               0.0,
@@ -6671,17 +6602,17 @@
       }
     ],
     "expanded_entities": [
-      "entity12_copy",
+      "camera",
       "editor_ui",
-      "[Root]",
+      "cube2",
+      "Walls",
+      "entity12_copy",
+      "Glitch",
       "entity13",
       "EditorEntities",
-      "Arti",
+      "[Root]",
       "cube1",
-      "cube2",
-      "Glitch",
-      "camera",
-      "Walls"
+      "Arti"
     ]
   },
   "resources": {

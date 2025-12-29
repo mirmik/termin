@@ -576,7 +576,6 @@ class ResourceManager:
 
     def _reload_material_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload material from PreLoadResult."""
-        print(f"[RM._reload_material_file] {name}")
         asset = self._material_assets.get(name)
         if asset is None:
             return
@@ -629,7 +628,6 @@ class ResourceManager:
 
     def _reload_shader_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload shader from PreLoadResult."""
-        print(f"[RM._reload_shader_file] {name}")
         asset = self._shader_assets.get(name)
         if asset is None:
             return
@@ -682,7 +680,6 @@ class ResourceManager:
 
     def _reload_texture_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload texture from PreLoadResult."""
-        print(f"[RM._reload_texture_file] {name}")
         asset = self._texture_assets.get(name)
         if asset is None:
             return
@@ -734,7 +731,6 @@ class ResourceManager:
 
     def _reload_mesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload mesh from PreLoadResult."""
-        print(f"[RM._reload_mesh_file] {name}")
         asset = self._mesh_assets.get(name)
         if asset is None:
             return
@@ -786,7 +782,6 @@ class ResourceManager:
 
     def _reload_voxel_grid_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload voxel grid from PreLoadResult."""
-        print(f"[RM._reload_voxel_grid_file] {name}")
         asset = self._voxel_grid_assets.get(name)
         if asset is None:
             return
@@ -839,7 +834,6 @@ class ResourceManager:
 
     def _reload_navmesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload navmesh from PreLoadResult."""
-        print(f"[RM._reload_navmesh_file] {name}")
         asset = self._navmesh_assets.get(name)
         if asset is None:
             return
@@ -919,7 +913,6 @@ class ResourceManager:
 
     def _reload_glb_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload GLB from PreLoadResult."""
-        print(f"[RM._reload_glb_file] {name}")
         asset = self._glb_assets.get(name)
         if asset is None:
             return
@@ -963,7 +956,6 @@ class ResourceManager:
 
     def _reload_glsl_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload GLSL include file from PreLoadResult."""
-        print(f"[RM._reload_glsl_file] {name}")
         asset = self._glsl_registry.get_asset(name)
         if asset is None:
             return
@@ -1013,7 +1005,6 @@ class ResourceManager:
 
     def _reload_prefab_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload prefab from PreLoadResult (hot-reload)."""
-        print(f"[RM._reload_prefab_file] {name}")
         from termin.assets.prefab_asset import PrefabAsset
 
         asset = self._prefab_assets.get(name)
@@ -1061,7 +1052,6 @@ class ResourceManager:
 
     def _reload_audio_clip_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload audio clip from PreLoadResult."""
-        print(f"[RM._reload_audio_clip_file] {name}")
         asset = self._audio_clip_assets.get(name)
         if asset is None:
             return
@@ -1109,7 +1099,6 @@ class ResourceManager:
 
     def _reload_ui_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload UI layout from PreLoadResult."""
-        print(f"[RM._reload_ui_file] {name}")
         asset = self._ui_assets.get(name)
         if asset is None:
             return
@@ -1473,6 +1462,15 @@ class ResourceManager:
         from termin.assets.voxel_grid_asset import VoxelGridAsset
 
         grid.name = name
+
+        # Check if asset already exists - update it instead of creating new
+        existing_asset = self._voxel_grid_registry.get_asset(name)
+        if existing_asset is not None:
+            # Update existing asset's data (this bumps version via setter)
+            existing_asset.data = grid
+            self.voxel_grids[name] = grid
+            return
+
         asset = VoxelGridAsset.from_grid(grid, name=name, source_path=source_path)
         self._voxel_grid_registry.register(name, asset, source_path)
         self.voxel_grids[name] = grid
