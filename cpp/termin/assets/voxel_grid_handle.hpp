@@ -68,6 +68,14 @@ public:
     py::object grid() const { return get(); }
 
     /**
+     * Get version from asset (for change detection).
+     */
+    int version() const {
+        if (asset.is_none()) return 0;
+        return asset.attr("version").cast<int>();
+    }
+
+    /**
      * Serialize for scene saving.
      */
     py::dict serialize() const {

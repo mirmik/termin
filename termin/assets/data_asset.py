@@ -291,6 +291,23 @@ class DataAsset(Asset, Generic[T]):
         self._data = None
         self._loaded = False
 
+    def reload(self) -> bool:
+        """
+        Reload asset data from source_path (hot-reload).
+
+        Unloads current data first to force re-reading from file.
+
+        Returns:
+            True if reloaded successfully, False otherwise.
+        """
+        if self._source_path is None:
+            return False
+        self.unload()
+        result = self._load()
+        if result:
+            self._bump_version()
+        return result
+
     # --- For backwards compatibility ---
 
     def load_from_content(

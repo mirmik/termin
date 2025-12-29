@@ -505,6 +505,7 @@ PYBIND11_MODULE(_voxels_native, m) {
         .def_property_readonly("is_valid", &VoxelGridHandle::is_valid)
         .def_property_readonly("name", &VoxelGridHandle::name)
         .def_property_readonly("grid", &VoxelGridHandle::grid)
+        .def_property_readonly("version", &VoxelGridHandle::version)
         .def("get", &VoxelGridHandle::get)
         .def("get_grid", &VoxelGridHandle::get)
         .def("get_grid_or_none", &VoxelGridHandle::get)

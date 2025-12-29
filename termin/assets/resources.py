@@ -576,8 +576,13 @@ class ResourceManager:
 
     def _reload_material_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload material from PreLoadResult."""
+        print(f"[RM._reload_material_file] {name}")
         asset = self._material_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save
@@ -585,7 +590,7 @@ class ResourceManager:
             return
 
         # Reload from file
-        asset.ensure_loaded()
+        asset.reload()
 
         # Update legacy dict
         if asset.material is not None:
@@ -624,8 +629,13 @@ class ResourceManager:
 
     def _reload_shader_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload shader from PreLoadResult."""
+        print(f"[RM._reload_shader_file] {name}")
         asset = self._shader_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save
@@ -634,7 +644,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.ensure_loaded()
+        asset.reload()
 
         # Update legacy dict
         if asset.program is not None:
@@ -672,8 +682,13 @@ class ResourceManager:
 
     def _reload_texture_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload texture from PreLoadResult."""
+        print(f"[RM._reload_texture_file] {name}")
         asset = self._texture_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save
@@ -682,7 +697,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.ensure_loaded()
+        asset.reload()
 
         # Invalidate GPU texture to force re-upload
         asset.delete_gpu()
@@ -719,8 +734,13 @@ class ResourceManager:
 
     def _reload_mesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload mesh from PreLoadResult."""
+        print(f"[RM._reload_mesh_file] {name}")
         asset = self._mesh_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save
@@ -729,7 +749,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.ensure_loaded()
+        asset.reload()
 
         # Invalidate GPU mesh to force re-upload
         asset.delete_gpu()
@@ -766,8 +786,13 @@ class ResourceManager:
 
     def _reload_voxel_grid_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload voxel grid from PreLoadResult."""
+        print(f"[RM._reload_voxel_grid_file] {name}")
         asset = self._voxel_grid_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save
@@ -776,7 +801,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.ensure_loaded()
+        asset.reload()
 
         # Update legacy dict
         if asset.grid is not None:
@@ -814,8 +839,13 @@ class ResourceManager:
 
     def _reload_navmesh_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload navmesh from PreLoadResult."""
+        print(f"[RM._reload_navmesh_file] {name}")
         asset = self._navmesh_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save
@@ -824,7 +854,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.ensure_loaded()
+        asset.reload()
 
         # Update legacy dict
         if asset.navmesh is not None:
@@ -889,8 +919,13 @@ class ResourceManager:
 
     def _reload_glb_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload GLB from PreLoadResult."""
+        print(f"[RM._reload_glb_file] {name}")
         asset = self._glb_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save
@@ -899,7 +934,7 @@ class ResourceManager:
 
         # Parse spec for any updated settings, then reload
         asset.parse_spec(result.spec_data)
-        asset.ensure_loaded()
+        asset.reload()
 
         # Re-register child assets (may have new ones after reload)
         self._register_glb_child_assets(asset)
@@ -928,6 +963,7 @@ class ResourceManager:
 
     def _reload_glsl_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload GLSL include file from PreLoadResult."""
+        print(f"[RM._reload_glsl_file] {name}")
         asset = self._glsl_registry.get_asset(name)
         if asset is None:
             return
@@ -936,9 +972,13 @@ class ResourceManager:
         if not asset.should_reload_from_file():
             return
 
-        # Reload content
+        # GLSL includes must be loaded immediately for shader compilation
+        # No lazy loading - always ensure loaded
         asset.parse_spec(result.spec_data)
-        asset.reload()
+        if not asset.is_loaded:
+            asset.ensure_loaded()
+        else:
+            asset.reload()
 
     def _register_prefab_file(self, name: str, result: "PreLoadResult") -> None:
         """Register prefab from PreLoadResult."""
@@ -973,10 +1013,15 @@ class ResourceManager:
 
     def _reload_prefab_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload prefab from PreLoadResult (hot-reload)."""
+        print(f"[RM._reload_prefab_file] {name}")
         from termin.assets.prefab_asset import PrefabAsset
 
         asset = self._prefab_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save
@@ -1016,8 +1061,13 @@ class ResourceManager:
 
     def _reload_audio_clip_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload audio clip from PreLoadResult."""
+        print(f"[RM._reload_audio_clip_file] {name}")
         asset = self._audio_clip_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save
@@ -1059,8 +1109,13 @@ class ResourceManager:
 
     def _reload_ui_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload UI layout from PreLoadResult."""
+        print(f"[RM._reload_ui_file] {name}")
         asset = self._ui_assets.get(name)
         if asset is None:
+            return
+
+        # Skip if not loaded yet (lazy loading will handle it)
+        if not asset.is_loaded:
             return
 
         # Skip if this was our own save

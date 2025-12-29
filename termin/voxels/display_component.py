@@ -147,7 +147,7 @@ class VoxelDisplayComponent(PythonComponent):
         # grid_name is the canonical name, voxel_grid_name is deprecated alias
         self._voxel_grid_name = grid_name or voxel_grid_name
         self.voxel_grid: VoxelGridHandle = VoxelGridHandle()
-        self._last_grid: Optional["VoxelGrid"] = None  # Для отслеживания изменений
+        self._last_version: int = -1  # Версия handle для отслеживания hot-reload
         self._mesh_handle: Optional[MeshHandle] = None
         self._material: Optional[Material] = None
         self._needs_rebuild = True
@@ -252,8 +252,10 @@ class VoxelDisplayComponent(PythonComponent):
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
-        current_grid = self.voxel_grid.get_grid()
-        if current_grid is not self._last_grid:
+        current_version = self.voxel_grid.version
+        if current_version != self._last_version:
+            print(f"[VoxelDisplayComponent] Hot-reload detected: version {self._last_version} -> {current_version}")
+            self._last_version = current_version
             self._rebuild_mesh()
 
     _DEBUG_GET_PHASES = False  # Debug: отладка get_geometry_draws
@@ -289,13 +291,10 @@ class VoxelDisplayComponent(PythonComponent):
 
     def _rebuild_mesh(self) -> None:
         """Перестроить меш из воксельной сетки (без фильтрации, вся сетка)."""
-        # Очищаем старый меш
-        if self._mesh_handle is not None:
-            self._mesh_handle.delete()
-            self._mesh_handle = None
+        # Очищаем старый меш (MeshHandle is just a wrapper, no explicit delete needed)
+        self._mesh_handle = None
 
         grid = self.voxel_grid.get_grid()
-        self._last_grid = grid
 
         if grid is None:
             return
@@ -392,9 +391,7 @@ class VoxelDisplayComponent(PythonComponent):
 
     def on_removed(self) -> None:
         """Очистить меш при удалении."""
-        if self._mesh_handle is not None:
-            self._mesh_handle.delete()
-            self._mesh_handle = None
+        self._mesh_handle = None
 
     def update(self, dt: float) -> None:
         """Обновить меш если нужно."""
