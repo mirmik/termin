@@ -9,6 +9,8 @@
 #include "termin/skeleton/skeleton_data.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 #include "termin/entity/entity.hpp"
+#include "termin/assets/handles.hpp"
+#include "../../core_c/include/tc_kind.hpp"
 
 namespace py = pybind11;
 using namespace termin;
@@ -41,6 +43,9 @@ namespace termin {
 void bind_skeleton(py::module_& m) {
     // Note: Bone and SkeletonData are now in _skeleton_native module.
     // This module only binds SkeletonInstance which depends on Entity.
+
+    // Register skeleton_handle kind for InspectRegistry
+    tc::register_cpp_handle_kind<SkeletonHandle>("skeleton_handle");
 
     // SkeletonInstance - now uses Entity values instead of pointers
     py::class_<SkeletonInstance>(m, "SkeletonInstance")
