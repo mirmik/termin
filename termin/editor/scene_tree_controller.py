@@ -488,13 +488,14 @@ class SceneTreeController:
             return
 
         try:
-            result = instantiate_glb(glb_asset)
+            result = instantiate_glb(glb_asset, scene=self._scene)
         except Exception as e:
             print(f"Failed to load GLB: {e}")
             return
 
         entity = result.entity
         parent_transform = parent_entity.transform if parent_entity else None
+        # Entity is already in scene's pool, just add without migration
         cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
         self._undo_handler(cmd, merge=False)
 

@@ -287,6 +287,20 @@ class Scene:
         """Get all entities in the scene."""
         return self._entities
 
+    def create_entity(self, name: str = "") -> Entity:
+        """Create a new entity directly in scene's pool.
+
+        This is the preferred way to create entities that will be added to
+        this scene - avoids migration overhead.
+
+        Args:
+            name: Entity name (optional)
+
+        Returns:
+            New Entity in scene's pool
+        """
+        return self._tc_scene.create_entity(name)
+
     def add_non_recurse(self, entity: Entity) -> Entity:
         """Add entity to the scene, keeping the entities list sorted by priority.
 

@@ -126,21 +126,15 @@ class AnimationPlayer(PythonComponent):
         """Set target skeleton for bone animation."""
         self._target_skeleton = value
 
-    def add_clip(self, clip: AnimationClip, asset: "AnimationClipAsset | None" = None) -> AnimationClip:
+    def add_clip(self, clip: AnimationClip, asset: "AnimationClipAsset") -> AnimationClip:
         """Add animation clip to the player.
 
         Args:
             clip: AnimationClip to add
-            asset: Optional AnimationClipAsset (for proper UUID serialization)
+            asset: AnimationClipAsset (required for serialization)
         """
-        from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
-
         self.clips[clip.name] = clip
-
-        if asset is not None:
-            handle = AnimationClipHandle.from_asset(asset)
-        else:
-            handle = AnimationClipHandle.from_direct(clip)
+        handle = AnimationClipHandle.from_asset(asset)
         self._clip_handles.append(handle)
         return clip
 

@@ -20,6 +20,7 @@ from termin.visualization.animation.clip import AnimationClip
 
 if TYPE_CHECKING:
     from termin.visualization.core.glb_asset import GLBAsset
+    from termin.visualization.core.scene import Scene
     from termin.loaders.glb_loader import GLBSceneData, GLBMeshData
 
 
@@ -66,12 +67,20 @@ def _create_entity_from_node(
     glb_name: str = "",
     node_to_entity: Optional[Dict[int, Entity]] = None,
     pending_skinned: Optional[List[_PendingSkinnedMesh]] = None,
+    scene: Optional["Scene"] = None,
 ) -> Entity:
     """Recursively create Entity hierarchy from GLBNodeData."""
-    node = scene_data.nodes[node_index]
+    from termin.visualization.core.scene import Scene
 
+    node = scene_data.nodes[node_index]
     pose = GeneralPose3(lin=node.translation, ang=node.rotation, scale=node.scale)
-    entity = Entity(pose=pose, name=node.name)
+
+    # Create entity in scene's pool if scene provided, else standalone
+    if scene is not None:
+        entity = scene.create_entity(node.name)
+        entity.transform.relocate(pose)
+    else:
+        entity = Entity(pose=pose, name=node.name)
 
     if node_to_entity is not None:
         node_to_entity[node_index] = entity
@@ -106,7 +115,7 @@ def _create_entity_from_node(
     for child_index in node.children:
         child_entity = _create_entity_from_node(
             child_index, scene_data, mesh_handles, default_material, skinned_material,
-            glb_name, node_to_entity, pending_skinned
+            glb_name, node_to_entity, pending_skinned, scene
         )
         entity.transform.add_child(child_entity.transform)
 
@@ -139,18 +148,26 @@ class GLBInstantiateResult:
         return None
 
 
-def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstantiateResult:
+def instantiate_glb(
+    glb_asset: "GLBAsset",
+    name: str | None = None,
+    scene: Optional["Scene"] = None,
+) -> GLBInstantiateResult:
     """
     Create Entity hierarchy from GLBAsset.
 
     Args:
         glb_asset: GLBAsset to instantiate (will be loaded if not already).
         name: Optional name for the root entity. Defaults to asset name.
+        scene: Optional Scene - if provided, entities are created directly in
+               scene's pool (recommended). Otherwise entities are created in
+               standalone pool and migrated when added to scene.
 
     Returns:
         GLBInstantiateResult containing root Entity, SkeletonController, and AnimationPlayer.
     """
     from termin.visualization.core.resources import ResourceManager
+    from termin.visualization.core.scene import Scene
 
     # Access scene_data triggers lazy loading and populates child assets
     scene_data = glb_asset.scene_data
@@ -176,6 +193,14 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
     node_to_entity: Dict[int, Entity] = {}
     pending_skinned: List[_PendingSkinnedMesh] = []
 
+    # Helper to create entity in scene's pool or standalone
+    def create_entity(entity_name: str) -> Entity:
+        if scene is not None:
+            ent = scene.create_entity(entity_name)
+            ent.transform.relocate(Pose3.identity())
+            return ent
+        return Entity(pose=Pose3.identity(), name=entity_name)
+
     # Step 1: Create Entity hierarchy
     root_entity = None
     if scene_data.root_nodes:
@@ -189,10 +214,11 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
                 glb_name=name,
                 node_to_entity=node_to_entity,
                 pending_skinned=pending_skinned,
+                scene=scene,
             )
             root_entity.name = name
         else:
-            root_entity = Entity(pose=Pose3.identity(), name=name)
+            root_entity = create_entity(name)
             for root_index in scene_data.root_nodes:
                 child_entity = _create_entity_from_node(
                     root_index,
@@ -203,10 +229,11 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
                     glb_name=name,
                     node_to_entity=node_to_entity,
                     pending_skinned=pending_skinned,
+                    scene=scene,
                 )
                 root_entity.transform.add_child(child_entity.transform)
     else:
-        root_entity = Entity(pose=Pose3.identity(), name=name)
+        root_entity = create_entity(name)
         for i, glb_mesh in enumerate(scene_data.meshes):
             mesh_name = f"{name}_{glb_mesh.name}"
             mesh_handle = rm.get_mesh(mesh_name)
@@ -214,7 +241,7 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
                 raise RuntimeError(f"[glb_instantiator] Mesh '{mesh_name}' not found in ResourceManager")
 
             mesh_handles[i] = mesh_handle
-            mesh_entity = Entity(pose=Pose3.identity(), name=glb_mesh.name)
+            mesh_entity = create_entity(glb_mesh.name)
             renderer = MeshRenderer(mesh=mesh_handle, material=default_material)
             mesh_entity.add_component(renderer)
             root_entity.transform.add_child(mesh_entity.transform)
@@ -237,7 +264,7 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
         for node_idx in skin.joint_node_indices:
             entity = node_to_entity.get(node_idx)
             if entity is None:
-                entity = Entity(pose=Pose3.identity(), name=f"missing_bone_{node_idx}")
+                entity = create_entity(f"missing_bone_{node_idx}")
             bone_entities.append(entity)
 
         skeleton_controller = SkeletonController(
@@ -272,15 +299,11 @@ def instantiate_glb(glb_asset: "GLBAsset", name: str | None = None) -> GLBInstan
 
         if clips:
             root_entity.add_component(animation_player)
-            print("[glb_instantiator] AnimationPlayer added")
 
-    print("[glb_instantiator] Creating GLBInstantiateResult...")
-    result = GLBInstantiateResult(
+    return GLBInstantiateResult(
         entity=root_entity,
         skeleton_controller=skeleton_controller,
         animation_player=animation_player,
         _bone_entities=bone_entities,
         _clips=clips,
     )
-    print("[glb_instantiator] Returning result")
-    return result

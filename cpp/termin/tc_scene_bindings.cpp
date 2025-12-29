@@ -160,6 +160,13 @@ private:
     }
 
 public:
+    // Create a new entity directly in scene's pool
+    Entity create_entity(const std::string& name = "") {
+        tc_entity_pool* pool = entity_pool();
+        if (!pool) return Entity();
+        return Entity::create(pool, name);
+    }
+
     // Migrate entity to this scene's pool
     // Returns new Entity in scene's pool, old entity becomes invalid
     Entity migrate_entity(Entity& entity) {
@@ -223,6 +230,10 @@ void bind_tc_scene(py::module_& m) {
         .def("entity_pool_ptr", [](TcScene& self) {
             return reinterpret_cast<uintptr_t>(self.entity_pool());
         }, "Get scene's entity pool as uintptr_t")
+
+        // Entity creation in pool
+        .def("create_entity", &TcScene::create_entity, py::arg("name") = "",
+             "Create a new entity directly in scene's pool.")
 
         // Entity migration
         .def("migrate_entity", &TcScene::migrate_entity, py::arg("entity"),
