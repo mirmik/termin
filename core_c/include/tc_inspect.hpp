@@ -266,9 +266,13 @@ public:
 
     KindHandler* get_kind_handler(const std::string& kind) {
         auto* handler = KindRegistry::instance().get(kind);
-        if (handler) return handler;
-        // Try to auto-generate handler for list[...] kinds
-        return try_generate_handler(kind);
+        // Check if Python vtable exists, not just the kind itself
+        if (handler && handler->has_python()) return handler;
+        // Try to auto-generate Python handler for list[...] kinds
+        auto* generated = try_generate_handler(kind);
+        if (generated) return generated;
+        // Return existing handler even without Python vtable (for C++ usage)
+        return handler;
     }
 
     // ========================================================================
@@ -574,7 +578,7 @@ public:
 
     py::object convert_value_for_kind(py::object value, const std::string& kind) {
         auto* handler = get_kind_handler(kind);
-        if (handler && !handler->python.convert.is_none()) {
+        if (handler && handler->has_python()) {
             return handler->python.convert(value);
         }
         return value;
@@ -607,7 +611,7 @@ public:
                 // Python field
                 py::object val = f.py_getter(obj);
                 auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
-                if (handler && !handler->python.serialize.is_none()) {
+                if (handler && handler->has_python()) {
                     py::object serialized = handler->python.serialize(val);
                     result[f.path] = py_to_trent_compat(serialized);
                 } else {
@@ -676,7 +680,7 @@ public:
 
                 py::object val;
                 auto* handler = get_kind_handler(f.kind);
-                if (handler && !handler->python.deserialize.is_none()) {
+                if (handler && handler->has_python()) {
                     val = handler->python.deserialize(field_data);
                 } else {
                     val = field_data;
@@ -711,7 +715,7 @@ public:
             py::object val;
 
             auto* handler = get_kind_handler(f.kind);
-            if (handler && !handler->python.deserialize.is_none()) {
+            if (handler && handler->has_python()) {
                 val = handler->python.deserialize(field_data);
             } else {
                 val = field_data;
@@ -759,77 +763,8 @@ public:
     }
 
 private:
-    KindHandler* try_generate_handler(const std::string& kind) {
-        char container[64], element[64];
-        if (!tc_kind_parse(kind.c_str(), container, sizeof(container),
-                          element, sizeof(element))) {
-            return nullptr;
-        }
-
-        if (std::string(container) == "list") {
-            auto* elem_handler = KindRegistry::instance().get(element);
-            if (!elem_handler) {
-                return nullptr;
-            }
-
-            std::string elem_kind = element;
-            auto& list_handler = KindRegistry::instance().get_or_create(kind);
-
-            // serialize: py::object (list) -> py::object (list of serialized elements)
-            list_handler.python.serialize = py::cpp_function([this, elem_kind](py::object obj) -> py::object {
-                py::list result;
-                if (obj.is_none()) return result;
-
-                auto* elem_handler = get_kind_handler(elem_kind);
-                for (auto item : obj) {
-                    py::object py_item = py::reinterpret_borrow<py::object>(item);
-                    if (elem_handler && !elem_handler->python.serialize.is_none()) {
-                        result.append(elem_handler->python.serialize(py_item));
-                    } else {
-                        result.append(py_item);
-                    }
-                }
-                return result;
-            });
-
-            // deserialize: py::object (list) -> py::object (list of deserialized elements)
-            list_handler.python.deserialize = py::cpp_function([this, elem_kind](py::object data) -> py::object {
-                py::list result;
-                if (!py::isinstance<py::list>(data)) return result;
-
-                auto* elem_handler = get_kind_handler(elem_kind);
-                for (auto item : data) {
-                    py::object py_item = py::reinterpret_borrow<py::object>(item);
-                    if (elem_handler && !elem_handler->python.deserialize.is_none()) {
-                        result.append(elem_handler->python.deserialize(py_item));
-                    } else {
-                        result.append(py_item);
-                    }
-                }
-                return result;
-            });
-
-            list_handler.python.convert = py::cpp_function([this, elem_kind](py::object value) -> py::object {
-                if (value.is_none()) return py::list();
-
-                auto* elem_handler = get_kind_handler(elem_kind);
-                if (!elem_handler || elem_handler->python.convert.is_none()) {
-                    return value;
-                }
-
-                py::list result;
-                for (auto item : value) {
-                    py::object py_item = py::reinterpret_borrow<py::object>(item);
-                    result.append(elem_handler->python.convert(py_item));
-                }
-                return result;
-            });
-
-            return &list_handler;
-        }
-
-        return nullptr;
-    }
+    // Defined in tc_inspect_instance.cpp to ensure single DLL allocation
+    KindHandler* try_generate_handler(const std::string& kind);
 };
 
 // ============================================================================

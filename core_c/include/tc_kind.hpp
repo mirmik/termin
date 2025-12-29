@@ -28,6 +28,8 @@ namespace tc {
 // TcKind - per-kind serialization handlers for each language
 struct TcKind {
     std::string name;
+    bool _has_cpp = false;
+    bool _has_python = false;
 
     // C++ vtable - works with std::any and nos::trent
     struct CppVtable {
@@ -47,15 +49,8 @@ struct TcKind {
     TcKind() = default;
     explicit TcKind(const std::string& n) : name(n) {}
 
-    // Check if C++ vtable is set
-    bool has_cpp() const {
-        return cpp.serialize || cpp.deserialize;
-    }
-
-    // Check if Python vtable is set
-    bool has_python() const {
-        return !python.serialize.is_none() || !python.deserialize.is_none();
-    }
+    bool has_cpp() const { return _has_cpp; }
+    bool has_python() const { return _has_python; }
 };
 
 // KindRegistry - singleton registry for all kinds
@@ -106,6 +101,7 @@ public:
         kind.cpp.serialize = std::move(serialize);
         kind.cpp.deserialize = std::move(deserialize);
         kind.cpp.to_python = std::move(to_python);
+        kind._has_cpp = true;
     }
 
     // ========================================================================
@@ -122,6 +118,7 @@ public:
         kind.python.serialize = std::move(serialize);
         kind.python.deserialize = std::move(deserialize);
         kind.python.convert = std::move(convert);
+        kind._has_python = true;
     }
 
     // ========================================================================
@@ -159,7 +156,7 @@ public:
 
     py::object serialize_python(const std::string& kind_name, py::object obj) {
         auto* kind = get(kind_name);
-        if (kind && !kind->python.serialize.is_none()) {
+        if (kind && kind->has_python()) {
             return kind->python.serialize(obj);
         }
         return py::none();
@@ -167,7 +164,7 @@ public:
 
     py::object deserialize_python(const std::string& kind_name, py::object data) {
         auto* kind = get(kind_name);
-        if (kind && !kind->python.deserialize.is_none()) {
+        if (kind && kind->has_python()) {
             return kind->python.deserialize(data);
         }
         return py::none();
@@ -175,7 +172,7 @@ public:
 
     py::object convert_python(const std::string& kind_name, py::object value) {
         auto* kind = get(kind_name);
-        if (kind && !kind->python.convert.is_none()) {
+        if (kind && kind->has_python()) {
             return kind->python.convert(value);
         }
         return value;

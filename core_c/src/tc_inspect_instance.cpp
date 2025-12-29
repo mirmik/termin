@@ -137,4 +137,85 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
     _type_backends[type_name] = TypeBackend::Python;
 }
 
+KindHandler* InspectRegistry::try_generate_handler(const std::string& kind) {
+    char container[64], element[64];
+    if (!tc_kind_parse(kind.c_str(), container, sizeof(container),
+                      element, sizeof(element))) {
+        return nullptr;
+    }
+
+    if (std::string(container) == "list") {
+        auto* elem_handler = KindRegistry::instance().get(element);
+        if (!elem_handler) {
+            return nullptr;
+        }
+
+        std::string elem_kind = element;
+        auto& list_handler = KindRegistry::instance().get_or_create(kind);
+
+        // serialize: py::object (list) -> py::object (list of serialized elements)
+        list_handler.python.serialize = py::cpp_function([elem_kind](py::object obj) -> py::object {
+            py::list result;
+            if (obj.is_none()) {
+                return result;
+            }
+
+            auto* elem_handler = KindRegistry::instance().get(elem_kind);
+
+            for (auto item : obj) {
+                py::object py_item = py::reinterpret_borrow<py::object>(item);
+                if (elem_handler && elem_handler->has_python()) {
+                    result.append(elem_handler->python.serialize(py_item));
+                } else {
+                    result.append(py_item);
+                }
+            }
+            return result;
+        });
+
+        // deserialize: py::object (list) -> py::object (list of deserialized elements)
+        list_handler.python.deserialize = py::cpp_function([elem_kind](py::object data) -> py::object {
+            py::list result;
+            if (!py::isinstance<py::list>(data)) return result;
+
+            auto* elem_handler = KindRegistry::instance().get(elem_kind);
+            for (auto item : data) {
+                py::object py_item = py::reinterpret_borrow<py::object>(item);
+                if (elem_handler && elem_handler->has_python()) {
+                    result.append(elem_handler->python.deserialize(py_item));
+                } else {
+                    result.append(py_item);
+                }
+            }
+            return result;
+        });
+
+        list_handler.python.convert = py::cpp_function([elem_kind](py::object value) -> py::object {
+            if (value.is_none()) return py::list();
+
+            auto* elem_handler = KindRegistry::instance().get(elem_kind);
+            if (!elem_handler || !elem_handler->has_python()) {
+                return value;
+            }
+
+            py::list result;
+            for (auto item : value) {
+                py::object py_item = py::reinterpret_borrow<py::object>(item);
+                result.append(elem_handler->python.convert(py_item));
+            }
+            return result;
+        });
+
+        // Prevent Python GC from collecting these
+        list_handler.python.serialize.inc_ref();
+        list_handler.python.deserialize.inc_ref();
+        list_handler.python.convert.inc_ref();
+        list_handler._has_python = true;
+
+        return &list_handler;
+    }
+
+    return nullptr;
+}
+
 } // namespace tc
