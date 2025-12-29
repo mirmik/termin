@@ -24,7 +24,7 @@ class AnimationPlayer(PythonComponent):
     """
 
     _DEBUG_UPDATE = False
-    _DEBUG_LIFECYCLE = True
+    _DEBUG_LIFECYCLE = False
 
     inspect_fields = {
         "clips": InspectField(

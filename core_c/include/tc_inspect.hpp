@@ -606,16 +606,11 @@ public:
             if (f.py_getter) {
                 // Python field
                 py::object val = f.py_getter(obj);
-                std::cout << "[serialize_all] field=" << f.path << " kind=" << f.kind << std::endl;
                 auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
-                std::cout << "[serialize_all] handler=" << (handler ? "found" : "NULL") << std::endl;
                 if (handler && !handler->python.serialize.is_none()) {
-                    std::cout << "[serialize_all] calling handler->python.serialize" << std::endl;
                     py::object serialized = handler->python.serialize(val);
-                    std::cout << "[serialize_all] serialized=" << py::str(serialized) << std::endl;
                     result[f.path] = py_to_trent_compat(serialized);
                 } else {
-                    std::cout << "[serialize_all] no handler, using py_to_trent_compat directly" << std::endl;
                     result[f.path] = py_to_trent_compat(val);
                 }
             } else if (f.cpp_getter) {
@@ -765,18 +760,14 @@ public:
 
 private:
     KindHandler* try_generate_handler(const std::string& kind) {
-        std::cout << "[try_generate_handler] kind=" << kind << std::endl;
         char container[64], element[64];
         if (!tc_kind_parse(kind.c_str(), container, sizeof(container),
                           element, sizeof(element))) {
-            std::cout << "[try_generate_handler] failed to parse" << std::endl;
             return nullptr;
         }
-        std::cout << "[try_generate_handler] container=" << container << " element=" << element << std::endl;
 
         if (std::string(container) == "list") {
             auto* elem_handler = KindRegistry::instance().get(element);
-            std::cout << "[try_generate_handler] elem_handler=" << (elem_handler ? "found" : "NULL") << std::endl;
             if (!elem_handler) {
                 return nullptr;
             }
@@ -786,33 +777,18 @@ private:
 
             // serialize: py::object (list) -> py::object (list of serialized elements)
             list_handler.python.serialize = py::cpp_function([this, elem_kind](py::object obj) -> py::object {
-                std::cout << "[list.serialize] elem_kind=" << elem_kind << " obj=" << py::str(obj) << std::endl;
                 py::list result;
-                if (obj.is_none()) {
-                    std::cout << "[list.serialize] obj is None, returning empty list" << std::endl;
-                    return result;
-                }
+                if (obj.is_none()) return result;
 
                 auto* elem_handler = get_kind_handler(elem_kind);
-                std::cout << "[list.serialize] elem_handler=" << (elem_handler ? "found" : "NULL") << std::endl;
-                if (elem_handler) {
-                    std::cout << "[list.serialize] elem_handler->python.serialize.is_none()=" << elem_handler->python.serialize.is_none() << std::endl;
-                }
-
-                size_t idx = 0;
                 for (auto item : obj) {
                     py::object py_item = py::reinterpret_borrow<py::object>(item);
-                    std::cout << "[list.serialize] item[" << idx << "] type=" << py::str(py_item.get_type()) << std::endl;
                     if (elem_handler && !elem_handler->python.serialize.is_none()) {
-                        auto serialized = elem_handler->python.serialize(py_item);
-                        std::cout << "[list.serialize] item[" << idx << "] serialized=" << py::str(serialized) << std::endl;
-                        result.append(serialized);
+                        result.append(elem_handler->python.serialize(py_item));
                     } else {
                         result.append(py_item);
                     }
-                    idx++;
                 }
-                std::cout << "[list.serialize] result=" << py::str(result) << std::endl;
                 return result;
             });
 
