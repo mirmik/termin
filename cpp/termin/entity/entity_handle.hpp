@@ -44,9 +44,12 @@ public:
     static EntityHandle from_entity(const Entity& entity);
 
     // Deserialize inplace from scene data.
+    // Accepts either a string (uuid directly) or a dict with "uuid" key.
     void deserialize_from(const nos::trent& data) {
         if (data.is_string()) {
             uuid = data.as_string();
+        } else if (data.is_dict() && data.contains("uuid")) {
+            uuid = data["uuid"].as_string();
         } else {
             uuid.clear();
         }

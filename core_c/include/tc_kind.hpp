@@ -127,7 +127,7 @@ public:
 
     nos::trent serialize_cpp(const std::string& kind_name, const std::any& value) {
         auto* kind = get(kind_name);
-        if (kind && kind->cpp.serialize) {
+        if (kind && kind->has_cpp()) {
             return kind->cpp.serialize(value);
         }
         return nos::trent::nil();

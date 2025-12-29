@@ -11,6 +11,7 @@ Entity EntityHandle::get() const {
 }
 
 std::string EntityHandle::name() const {
+    fprintf(stderr, "[DEBUG EntityHandle::name] uuid='%s' size=%zu\n", uuid.c_str(), uuid.size());
     Entity ent = get();
     if (ent.valid()) {
         const char* n = ent.name();

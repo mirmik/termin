@@ -512,6 +512,8 @@ public:
     // ========================================================================
 
     py::object get(void* obj, const std::string& type_name, const std::string& field_path) const {
+        fprintf(stderr, "[DEBUG InspectRegistry::get] type=%s field=%s obj=%p\n",
+            type_name.c_str(), field_path.c_str(), obj);
         for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
                 if (f.py_getter) {
@@ -519,6 +521,7 @@ public:
                 }
                 // C++ field - get via cpp_getter
                 if (f.cpp_getter) {
+                    fprintf(stderr, "[DEBUG InspectRegistry::get] calling cpp_getter for %s\n", field_path.c_str());
                     std::any val = f.cpp_getter(obj);
                     // Try builtin types first
                     py::object result = any_to_py_builtin(val);
@@ -636,7 +639,6 @@ public:
 
     // Takes both raw C++ pointer (for cpp_setter) and py::object (for py_setter)
     void deserialize_fields_of_cxx_component_over_python(void* ptr, py::object obj, const std::string& type_name, const py::dict& data) {
-
         for (const auto& f : all_fields(type_name)) {
             if (f.non_serializable) continue;
 
