@@ -607,7 +607,7 @@ PYBIND11_MODULE(_entity_native, m) {
             [](const Entity& e) { return e.serializable(); },
             [](Entity& e, bool v) { e.set_serializable(v); })
         .def("serialize", [](Entity& e) -> py::object {
-            nos::trent data = e.serialize();
+            nos::trent data = e.serialize_base();
             if (data.is_nil()) {
                 return py::none();
             }

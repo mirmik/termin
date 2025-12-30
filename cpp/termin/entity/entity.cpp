@@ -118,7 +118,7 @@ void Entity::on_removed_from_scene() {
     // Nothing needed - pool manages lifetime
 }
 
-nos::trent Entity::serialize() const {
+nos::trent Entity::serialize_base() const {
     if (!valid() || !serializable()) {
         return nos::trent::nil();
     }
@@ -168,16 +168,6 @@ nos::trent Entity::serialize() const {
     scale_t.as_list().push_back(scale[1]);
     scale_t.as_list().push_back(scale[2]);
     data["scale"] = std::move(scale_t);
-
-    // Children
-    nos::trent children_data;
-    children_data.init(nos::trent_type::list);
-    for (const auto& child : children()) {
-        if (child.serializable()) {
-            children_data.as_list().push_back(child.serialize());
-        }
-    }
-    data["children"] = std::move(children_data);
 
     return data;
 }

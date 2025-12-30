@@ -148,7 +148,7 @@ public:
 
     // --- Serialization ---
 
-    nos::trent serialize() const;
+    nos::trent serialize_base() const;
     static Entity deserialize(tc_entity_pool* pool, const nos::trent& data);
 
     // --- User data (for back-pointer if needed) ---
