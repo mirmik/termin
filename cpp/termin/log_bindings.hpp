@@ -1,7 +1,7 @@
 #pragma once
 
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 
 namespace termin {
-void bind_log(pybind11::module_& m);
+void bind_log(nanobind::module_& m);
 }

@@ -4,14 +4,14 @@
 #include <cstdint>
 #include <cstddef>
 #include <unordered_set>
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 #include "../../trent/trent.h"
 #include "../inspect/inspect_registry.hpp"
 #include "../../../core_c/include/tc_component.h"
 #include "../../../core_c/include/tc_entity_pool.h"
 #include "entity.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -95,7 +95,7 @@ public:
     virtual void on_removed_from_entity() {}
 
     // Called when entity is added/removed from scene
-    virtual void on_added(py::object scene) { (void)scene; }
+    virtual void on_added(nb::object scene) { (void)scene; }
     virtual void on_removed() {}
 
     // Serialization - uses InspectRegistry for INSPECT_FIELD properties.
@@ -107,14 +107,14 @@ public:
         );
     }
     virtual void deserialize_data(const nos::trent& data) {
-        // Convert trent to py::dict and call over-python method
-        py::dict py_data = InspectRegistry::trent_to_py_dict(data);
-        py::object py_self = py::cast(this);
+        // Convert trent to nb::dict and call over-python method
+        nb::dict nb_data = InspectRegistry::trent_to_py_dict(data);
+        nb::object nb_self = nb::cast(this);
         InspectRegistry::instance().deserialize_component_fields_over_python(
             static_cast<void*>(this),
-            py_self,
+            nb_self,
             _type_name,
-            py_data
+            nb_data
         );
     }
 
@@ -130,37 +130,37 @@ public:
     const tc_component* c_component() const { return &_c; }
 
     // Get Python wrapper for this component (cached in _c.py_wrap)
-    py::object to_python() {
+    nb::object to_python() {
         if (!_c.py_wrap) {
-            py::object wrapper = py::cast(this, py::return_value_policy::reference);
+            nb::object wrapper = nb::cast(this, nb::rv_policy::reference);
             _c.py_wrap = wrapper.inc_ref().ptr();
         }
-        return py::reinterpret_borrow<py::object>(
+        return nb::borrow<nb::object>(
             reinterpret_cast<PyObject*>(_c.py_wrap)
         );
     }
 
     // Set cached Python wrapper (called from bindings when component is created)
-    void set_py_wrap(py::object self) {
+    void set_py_wrap(nb::object self) {
         if (_c.py_wrap) {
-            py::handle old(reinterpret_cast<PyObject*>(_c.py_wrap));
+            nb::handle old(reinterpret_cast<PyObject*>(_c.py_wrap));
             old.dec_ref();
         }
         _c.py_wrap = self.inc_ref().ptr();
     }
 
     // Convert any tc_component to Python object
-    static py::object tc_to_python(tc_component* c) {
-        if (!c) return py::none();
+    static nb::object tc_to_python(tc_component* c) {
+        if (!c) return nb::none();
 
         if (c->kind == TC_CXX_COMPONENT) {
             CxxComponent* cxx = from_tc(c);
-            if (!cxx) return py::none();
+            if (!cxx) return nb::none();
             return cxx->to_python();
         } else {
             // TC_PYTHON_COMPONENT: py_wrap holds the Python object
-            if (!c->py_wrap) return py::none();
-            return py::reinterpret_borrow<py::object>(
+            if (!c->py_wrap) return nb::none();
+            return nb::borrow<nb::object>(
                 reinterpret_cast<PyObject*>(c->py_wrap)
             );
         }

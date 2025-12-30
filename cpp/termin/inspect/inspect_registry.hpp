@@ -34,33 +34,33 @@ class CxxComponent;
 
 namespace compat {
 
-// py_to_trent - convert Python object to trent
-inline nos::trent py_to_trent(py::object obj) {
-    return tc::py_to_trent_compat(obj);
+// nb_to_trent - convert Python object to trent
+inline nos::trent nb_to_trent(nb::object obj) {
+    return tc::nb_to_trent_compat(obj);
 }
 
-// trent_to_py - convert trent to Python object
-inline py::object trent_to_py(const nos::trent& t) {
-    return tc::trent_to_py_compat(t);
+// trent_to_nb - convert trent to Python object
+inline nb::object trent_to_nb(const nos::trent& t) {
+    return tc::trent_to_nb_compat(t);
 }
 
-// py_dict_to_trent - convert Python dict to trent dict
-inline nos::trent py_dict_to_trent(py::dict d) {
-    return py_to_trent(d);
+// nb_dict_to_trent - convert Python dict to trent dict
+inline nos::trent nb_dict_to_trent(nb::dict d) {
+    return nb_to_trent(d);
 }
 
-// trent_to_py_dict - convert trent dict to Python dict
-inline py::dict trent_to_py_dict(const nos::trent& t) {
-    py::object result = trent_to_py(t);
-    if (py::isinstance<py::dict>(result)) {
-        return result.cast<py::dict>();
+// trent_to_nb_dict - convert trent dict to Python dict
+inline nb::dict trent_to_nb_dict(const nos::trent& t) {
+    nb::object result = trent_to_nb(t);
+    if (nb::isinstance<nb::dict>(result)) {
+        return nb::cast<nb::dict>(result);
     }
-    return py::dict();
+    return nb::dict();
 }
 
-// py_list_to_trent - convert Python list to trent list
-inline nos::trent py_list_to_trent(py::list lst) {
-    return py_to_trent(lst);
+// nb_list_to_trent - convert Python list to trent list
+inline nos::trent nb_list_to_trent(nb::list lst) {
+    return nb_to_trent(lst);
 }
 
 } // namespace compat

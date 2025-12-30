@@ -34,28 +34,29 @@ else()
     set(OPTIMIZE_FLAGS -O3 -march=native -ffast-math)
 endif()
 
-# Find pybind11 via pip (works on both Windows and Linux)
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
+
+# Find nanobind via pip
 if(WIN32)
     execute_process(
-        COMMAND python -m pybind11 --cmakedir
-        OUTPUT_VARIABLE pybind11_DIR
+        COMMAND python -m nanobind --cmake_dir
+        OUTPUT_VARIABLE nanobind_DIR
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 else()
     execute_process(
-        COMMAND python3 -m pybind11 --cmakedir
-        OUTPUT_VARIABLE pybind11_DIR
+        COMMAND python3 -m nanobind --cmake_dir
+        OUTPUT_VARIABLE nanobind_DIR
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 endif()
-find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-find_package(pybind11 CONFIG REQUIRED)
+find_package(nanobind CONFIG REQUIRED)
 
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-# Geom native module (Vec3, Quat, Pose3, Screw3, GeneralPose3, Transform, AABB)
-pybind11_add_module(_geom_native
+# Geom native module (Vec3, Quat, Pose3, Screw3, GeneralPose3, Transform, AABB) - using nanobind
+nanobind_add_module(_geom_native
     termin/bindings/geom/geom_module.cpp
     termin/bindings/geom/vec3.cpp
     termin/bindings/geom/quat.cpp
@@ -70,46 +71,40 @@ target_compile_options(_geom_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 target_link_libraries(_geom_native PRIVATE entity_lib)
-target_precompile_headers(_geom_native PRIVATE termin/pch.hpp)
 
-# Colliders native module (BoxCollider, SphereCollider)
-pybind11_add_module(_colliders_native termin/colliders_bindings.cpp)
+# Colliders native module (BoxCollider, SphereCollider) - using nanobind
+nanobind_add_module(_colliders_native termin/colliders_bindings.cpp)
 target_link_libraries(_colliders_native PRIVATE entity_lib)
 target_compile_options(_colliders_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_colliders_native PRIVATE termin/pch.hpp)
 
-# Physics native module (RigidBody, PhysicsWorld, Contact)
-pybind11_add_module(_physics_native termin/physics_bindings.cpp)
+# Physics native module (RigidBody, PhysicsWorld, Contact) - using nanobind
+nanobind_add_module(_physics_native termin/physics_bindings.cpp)
 target_link_libraries(_physics_native PRIVATE entity_lib)
 target_compile_options(_physics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_physics_native PRIVATE termin/pch.hpp)
 
-# Voxels native module (VoxelGrid, voxelization, VoxelGridHandle)
-pybind11_add_module(_voxels_native termin/voxels_bindings.cpp)
+# Voxels native module (VoxelGrid, voxelization, VoxelGridHandle) - using nanobind
+nanobind_add_module(_voxels_native termin/voxels_bindings.cpp)
 target_compile_options(_voxels_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
 target_link_libraries(_voxels_native PRIVATE entity_lib trent)
-target_precompile_headers(_voxels_native PRIVATE termin/pch.hpp)
 
-# Collision native module (BVH, CollisionWorld, ContactManifold)
-pybind11_add_module(_collision_native termin/collision_bindings.cpp)
+# Collision native module (BVH, CollisionWorld, ContactManifold) - using nanobind
+nanobind_add_module(_collision_native termin/collision_bindings.cpp)
 target_link_libraries(_collision_native PRIVATE entity_lib)
 target_compile_options(_collision_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_collision_native PRIVATE termin/pch.hpp)
 
-# Lighting native module (Light, AttenuationCoefficients)
-pybind11_add_module(_lighting_native termin/lighting_bindings.cpp)
+# Lighting native module (Light, AttenuationCoefficients) - using nanobind
+nanobind_add_module(_lighting_native termin/lighting_bindings.cpp)
 target_compile_options(_lighting_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_lighting_native PRIVATE termin/pch.hpp)
 
 # Trent library (shared by all resource modules)
 # trent library - STATIC on Windows (avoids DLL import library issues), SHARED on Linux
@@ -141,7 +136,8 @@ set_target_properties(trent PROPERTIES
 )
 
 # Mesh native module (Mesh3, SkinnedMesh3, MeshHandle) - separate module
-pybind11_add_module(_mesh_native
+# Mesh native module (Mesh3, SkinnedMesh3, MeshHandle) - using nanobind
+nanobind_add_module(_mesh_native
     termin/bindings/mesh/mesh_module.cpp
     termin/mesh_bindings.cpp
 )
@@ -149,32 +145,29 @@ target_link_libraries(_mesh_native PRIVATE trent entity_lib)
 target_compile_options(_mesh_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_mesh_native PRIVATE termin/pch.hpp)
 
-# Skeleton native module (Bone, SkeletonData, SkeletonHandle) - separate module
-pybind11_add_module(_skeleton_native
+# Skeleton native module (Bone, SkeletonData, SkeletonHandle) - using nanobind
+nanobind_add_module(_skeleton_native
     termin/bindings/skeleton/skeleton_module.cpp
 )
 target_link_libraries(_skeleton_native PRIVATE trent entity_lib)
 target_compile_options(_skeleton_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_skeleton_native PRIVATE termin/pch.hpp)
 
-# Texture native module (TextureData) - separate module
-pybind11_add_module(_texture_native
+# Texture native module (TextureData) - using nanobind
+nanobind_add_module(_texture_native
     termin/bindings/texture/texture_module.cpp
 )
 target_compile_options(_texture_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_texture_native PRIVATE termin/pch.hpp)
 
 # Find OpenGL (needed by _graphics_native and _native)
 find_package(OpenGL REQUIRED)
 
-# Graphics native module (GraphicsBackend, OpenGLGraphicsBackend, GPU handles)
-pybind11_add_module(_graphics_native
+# Graphics native module (GraphicsBackend, OpenGLGraphicsBackend, GPU handles) - nanobind
+nanobind_add_module(_graphics_native
     termin/bindings/graphics/graphics_module.cpp
     termin/render/glad/src/glad.c
 )
@@ -185,7 +178,6 @@ target_link_libraries(_graphics_native PRIVATE OpenGL::GL entity_lib)
 target_compile_options(_graphics_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_graphics_native PRIVATE termin/pch.hpp)
 
 # Core C library
 set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -207,7 +199,7 @@ add_library(entity_lib SHARED
     ../core_c/src/tc_kind_instance.cpp
 )
 target_include_directories(entity_lib PUBLIC ../core_c/include)
-target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent pybind11::headers Python3::Python)
+target_link_libraries(entity_lib PUBLIC termin_core PRIVATE trent nanobind-static Python::Python)
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
@@ -219,24 +211,22 @@ set_target_properties(entity_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-# Entity native module (Component, Entity, EntityHandle, registries)
-pybind11_add_module(_entity_native
+# Entity native module (Component, Entity, EntityHandle, registries) - nanobind
+nanobind_add_module(_entity_native
     termin/bindings/entity/entity_module.cpp
 )
 target_link_libraries(_entity_native PRIVATE entity_lib trent)
 target_compile_options(_entity_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_entity_native REUSE_FROM entity_lib)
 
-# Animation native module (Channel, Clip, AnimationClipHandle)
+# Animation native module (Channel, Clip, AnimationClipHandle) - nanobind
 # Must be after entity_lib since it links against it
-pybind11_add_module(_animation_native termin/bindings/animation/animation_module.cpp)
+nanobind_add_module(_animation_native termin/bindings/animation/animation_module.cpp)
 target_link_libraries(_animation_native PRIVATE trent entity_lib)
 target_compile_options(_animation_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-target_precompile_headers(_animation_native REUSE_FROM entity_lib)
 set_target_properties(_animation_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/.."
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -282,11 +272,11 @@ else()
     endif()
 endif()
 
-# Unified native module (Render + SDL + Scene + Skeleton + Inspect + Assets)
+# Unified native module (Render + SDL + Scene + Skeleton + Inspect + Assets) - nanobind
 # Note: Mesh3/SkinnedMesh3 are in separate _mesh_native module, imported at runtime
 # Note: Graphics types (Color4, Size2i, etc), GraphicsBackend, handles are in _graphics_native
 # Note: Component, Entity, EntityHandle are in _entity_native module, imported at runtime
-pybind11_add_module(_native
+nanobind_add_module(_native
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
     termin/bindings/render/shader.cpp
@@ -340,7 +330,6 @@ target_compile_options(_native PRIVATE
 )
 # Exclude glad.c from precompiled headers (it's C, not C++)
 set_source_files_properties(termin/render/glad/src/glad.c PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-target_precompile_headers(_native REUSE_FROM entity_lib)
 
 # ---------------- Tests ----------------
 option(BUILD_TESTS "Build C++ tests" OFF)
@@ -372,8 +361,8 @@ if(BUILD_TESTS)
     )
     add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
 
-    # Pybind module to run C++ tests from Python
-    pybind11_add_module(_cpp_tests
+    # Nanobind module to run C++ tests from Python
+    nanobind_add_module(_cpp_tests
         tests/tests_binding.cpp
         tests/tests_general_pose3.cpp
         tests/tests_colliders.cpp

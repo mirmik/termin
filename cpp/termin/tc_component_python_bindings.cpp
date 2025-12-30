@@ -1,14 +1,16 @@
 // tc_component_python_bindings.cpp - Python bindings for pure Python components
 // This allows Python components to use tc_component directly without C++ Component wrapper.
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
 #include <unordered_map>
 
 #include "../../core_c/include/tc_component_python.h"
 #include "../../core_c/include/tc_log.h"
 #include "render/drawable.hpp"
 #include "render/render_context.hpp"
+#include "tc_component_python_bindings.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -21,11 +23,11 @@ namespace termin {
 static void py_cb_start(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "start")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "start")) {
             self.attr("start")();
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         // Log but don't crash
         PyErr_Print();
     }
@@ -35,11 +37,11 @@ static void py_cb_start(void* py_self) {
 static void py_cb_update(void* py_self, float dt) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "update")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "update")) {
             self.attr("update")(dt);
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -48,11 +50,11 @@ static void py_cb_update(void* py_self, float dt) {
 static void py_cb_fixed_update(void* py_self, float dt) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "fixed_update")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "fixed_update")) {
             self.attr("fixed_update")(dt);
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -61,11 +63,11 @@ static void py_cb_fixed_update(void* py_self, float dt) {
 static void py_cb_on_destroy(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "on_destroy")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_destroy")) {
             self.attr("on_destroy")();
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -74,11 +76,11 @@ static void py_cb_on_destroy(void* py_self) {
 static void py_cb_on_added_to_entity(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "on_added_to_entity")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_added_to_entity")) {
             self.attr("on_added_to_entity")();
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -87,11 +89,11 @@ static void py_cb_on_added_to_entity(void* py_self) {
 static void py_cb_on_removed_from_entity(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "on_removed_from_entity")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_removed_from_entity")) {
             self.attr("on_removed_from_entity")();
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -101,14 +103,14 @@ static void py_cb_on_added(void* py_self, void* scene) {
     (void)scene;  // tc_scene* - not used, we use get_current_scene() instead
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "on_added")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_added")) {
             // Get Python Scene from get_current_scene()
-            py::object scene_module = py::module_::import("termin.visualization.core.scene._scene");
-            py::object py_scene = scene_module.attr("get_current_scene")();
+            nb::object scene_module = nb::module_::import_("termin.visualization.core.scene._scene");
+            nb::object py_scene = scene_module.attr("get_current_scene")();
             self.attr("on_added")(py_scene);
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -117,11 +119,11 @@ static void py_cb_on_added(void* py_self, void* scene) {
 static void py_cb_on_removed(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "on_removed")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_removed")) {
             self.attr("on_removed")();
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -130,11 +132,11 @@ static void py_cb_on_removed(void* py_self) {
 static void py_cb_on_editor_start(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "on_editor_start")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_editor_start")) {
             self.attr("on_editor_start")();
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -148,15 +150,15 @@ static bool py_drawable_cb_has_phase(void* py_self, const char* phase_mark) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     bool result = false;
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "phase_marks")) {
-            py::object marks = self.attr("phase_marks");
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "phase_marks")) {
+            nb::object marks = self.attr("phase_marks");
             if (!marks.is_none()) {
                 std::string pm = phase_mark ? phase_mark : "";
-                result = marks.attr("__contains__")(pm).cast<bool>();
+                result = nb::cast<bool>(marks.attr("__contains__")(pm));
             }
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -166,16 +168,16 @@ static bool py_drawable_cb_has_phase(void* py_self, const char* phase_mark) {
 static void py_drawable_cb_draw_geometry(void* py_self, void* render_context, const char* geometry_id) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "draw_geometry")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "draw_geometry")) {
             // Cast C++ RenderContext pointer to Python object
             RenderContext* ctx = static_cast<RenderContext*>(render_context);
-            py::object py_ctx = py::cast(ctx, py::return_value_policy::reference);
+            nb::object py_ctx = nb::cast(ctx, nb::rv_policy::reference);
 
             std::string gid = geometry_id ? geometry_id : "";
             self.attr("draw_geometry")(py_ctx, gid);
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         tc_log_warn("[Drawable] Python draw_geometry exception: %s", e.what());
     }
     PyGILState_Release(gstate);
@@ -189,10 +191,10 @@ static void* py_drawable_cb_get_geometry_draws(void* py_self, const char* phase_
     PyGILState_STATE gstate = PyGILState_Ensure();
     void* result = nullptr;
     try {
-        py::handle self((PyObject*)py_self);
-        if (py::hasattr(self, "get_geometry_draws")) {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "get_geometry_draws")) {
             std::string pm = phase_mark ? phase_mark : "";
-            py::object py_draws = self.attr("get_geometry_draws")(pm.empty() ? py::none() : py::cast(pm));
+            nb::object py_draws = self.attr("get_geometry_draws")(pm.empty() ? nb::none() : nb::cast(pm));
 
             // Convert Python list to C++ vector
             auto& cached = g_py_geometry_draw_cache[py_self];
@@ -202,21 +204,21 @@ static void* py_drawable_cb_get_geometry_draws(void* py_self, const char* phase_
                 for (auto item : py_draws) {
                     GeometryDrawCall dc;
                     // Get phase from draw call
-                    py::object phase_obj = item.attr("phase");
+                    nb::object phase_obj = item.attr("phase");
                     if (!phase_obj.is_none()) {
-                        dc.phase = phase_obj.cast<MaterialPhase*>();
+                        dc.phase = nb::cast<MaterialPhase*>(phase_obj);
                     }
                     // Get geometry_id
-                    py::object gid_obj = item.attr("geometry_id");
+                    nb::object gid_obj = item.attr("geometry_id");
                     if (!gid_obj.is_none()) {
-                        dc.geometry_id = gid_obj.cast<std::string>();
+                        dc.geometry_id = nb::cast<std::string>(gid_obj);
                     }
                     cached.push_back(dc);
                 }
             }
             result = &cached;
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const std::exception& e) {
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -263,11 +265,11 @@ static void ensure_callbacks_initialized() {
 class TcComponent {
 public:
     tc_component* _c = nullptr;
-    py::object _py_self;  // Strong reference to Python object
+    nb::object _py_self;  // Strong reference to Python object
     std::string _interned_type_name;  // Keep type name alive
 
     // Create a new TcComponent wrapping a Python object
-    TcComponent(py::object py_self, const std::string& type_name) {
+    TcComponent(nb::object py_self, const std::string& type_name) {
         ensure_callbacks_initialized();
 
         // Keep Python object alive
@@ -336,21 +338,21 @@ public:
 // Module bindings
 // ============================================================================
 
-void bind_tc_component_python(py::module_& m) {
-    py::class_<TcComponent>(m, "TcComponent")
-        .def(py::init<py::object, const std::string&>(),
-             py::arg("py_self"), py::arg("type_name"))
+void bind_tc_component_python(nb::module_& m) {
+    nb::class_<TcComponent>(m, "TcComponent")
+        .def(nb::init<nb::object, const std::string&>(),
+             nb::arg("py_self"), nb::arg("type_name"))
         .def("type_name", &TcComponent::type_name)
-        .def_property("enabled", &TcComponent::get_enabled, &TcComponent::set_enabled)
-        .def_property("active_in_editor", &TcComponent::get_active_in_editor, &TcComponent::set_active_in_editor)
-        .def_property_readonly("is_cxx_component", &TcComponent::is_cxx_component)
-        .def_property_readonly("is_python_component", &TcComponent::is_python_component)
-        .def_property("_started", &TcComponent::get_started, &TcComponent::set_started)
-        .def_property("has_update", &TcComponent::get_has_update, &TcComponent::set_has_update)
-        .def_property("has_fixed_update", &TcComponent::get_has_fixed_update, &TcComponent::set_has_fixed_update)
+        .def_prop_rw("enabled", &TcComponent::get_enabled, &TcComponent::set_enabled)
+        .def_prop_rw("active_in_editor", &TcComponent::get_active_in_editor, &TcComponent::set_active_in_editor)
+        .def_prop_ro("is_cxx_component", &TcComponent::is_cxx_component)
+        .def_prop_ro("is_python_component", &TcComponent::is_python_component)
+        .def_prop_rw("_started", &TcComponent::get_started, &TcComponent::set_started)
+        .def_prop_rw("has_update", &TcComponent::get_has_update, &TcComponent::set_has_update)
+        .def_prop_rw("has_fixed_update", &TcComponent::get_has_fixed_update, &TcComponent::set_has_fixed_update)
         .def("c_ptr_int", &TcComponent::c_ptr_int)
         .def("install_drawable_vtable", &TcComponent::install_drawable_vtable)
-        .def_property_readonly("is_drawable", &TcComponent::is_drawable)
+        .def_prop_ro("is_drawable", &TcComponent::is_drawable)
         ;
 }
 

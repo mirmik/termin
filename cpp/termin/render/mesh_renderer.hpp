@@ -142,7 +142,7 @@ public:
      */
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
 
-    // --- Serialization (py::dict based) ---
+    // --- Serialization (nb::dict based) ---
 
     // nos::trent serialize_data() const;
     // void deserialize_data(const nos::trent& data);

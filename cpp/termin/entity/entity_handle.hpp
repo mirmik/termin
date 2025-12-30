@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 #include "entity.hpp"
 #include "../../trent/trent.h"
 
@@ -66,8 +66,8 @@ public:
     bool operator!=(const EntityHandle& other) const { return uuid != other.uuid; }
 
     // Serialize to Python dict (for register_cpp_handle_kind)
-    pybind11::dict serialize() const {
-        pybind11::dict d;
+    nanobind::dict serialize() const {
+        nanobind::dict d;
         d["uuid"] = uuid;
         return d;
     }

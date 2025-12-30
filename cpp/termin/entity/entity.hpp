@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 #include "../geom/general_transform3.hpp"
 #include "../../trent/trent.h"
 #include "../../../core_c/include/tc_entity_pool.h"
@@ -20,7 +20,7 @@
     #define ENTITY_API
 #endif
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -143,7 +143,7 @@ public:
     // --- Lifecycle ---
 
     void update(float dt);
-    void on_added_to_scene(py::object scene);
+    void on_added_to_scene(nb::object scene);
     void on_removed_from_scene();
 
     // --- Serialization ---

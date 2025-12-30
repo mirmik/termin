@@ -17,10 +17,12 @@
 #include <algorithm>
 #include <cmath>
 
-// pybind11
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/functional.h>
-#include <pybind11/numpy.h>
+// nanobind
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/function.h>
+#include <nanobind/ndarray.h>
 
 #endif // __cplusplus

@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <functional>
 #include <any>
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 #include "trent/trent.h"
 
 // DLL export/import macros (same as InspectRegistry)
@@ -21,7 +21,7 @@
     #define TC_KIND_API
 #endif
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace tc {
 
@@ -35,15 +35,15 @@ struct TcKind {
     struct CppVtable {
         std::function<nos::trent(const std::any&)> serialize;
         std::function<std::any(const nos::trent&)> deserialize;
-        std::function<py::object(const std::any&)> to_python;  // for inspector get()
+        std::function<nb::object(const std::any&)> to_python;  // for inspector get()
     } cpp;
 
-    // Python vtable - works with py::object and py::dict
+    // Python vtable - works with nb::object and nb::dict
     // These store Python callables directly
     struct PyVtable {
-        py::object serialize;    // callable(obj) -> dict
-        py::object deserialize;  // callable(dict) -> obj
-        py::object convert;      // callable(obj) -> obj
+        nb::object serialize;    // callable(obj) -> dict
+        nb::object deserialize;  // callable(dict) -> obj
+        nb::object convert;      // callable(obj) -> obj
     } python;
 
     TcKind() = default;
@@ -95,7 +95,7 @@ public:
         const std::string& name,
         std::function<nos::trent(const std::any&)> serialize,
         std::function<std::any(const nos::trent&)> deserialize,
-        std::function<py::object(const std::any&)> to_python = nullptr
+        std::function<nb::object(const std::any&)> to_python = nullptr
     ) {
         auto& kind = get_or_create(name);
         kind.cpp.serialize = std::move(serialize);
@@ -110,9 +110,9 @@ public:
 
     void register_python(
         const std::string& name,
-        py::object serialize,
-        py::object deserialize,
-        py::object convert = py::none()
+        nb::object serialize,
+        nb::object deserialize,
+        nb::object convert = nb::none()
     ) {
         auto& kind = get_or_create(name);
         kind.python.serialize = std::move(serialize);
@@ -141,36 +141,36 @@ public:
         return std::any{};
     }
 
-    // Convert std::any to py::object using registered to_python handler
-    py::object to_python_cpp(const std::string& kind_name, const std::any& value) {
+    // Convert std::any to nb::object using registered to_python handler
+    nb::object to_python_cpp(const std::string& kind_name, const std::any& value) {
         auto* kind = get(kind_name);
         if (kind && kind->cpp.to_python) {
             return kind->cpp.to_python(value);
         }
-        return py::none();
+        return nb::none();
     }
 
     // ========================================================================
     // Python serialization helpers
     // ========================================================================
 
-    py::object serialize_python(const std::string& kind_name, py::object obj) {
+    nb::object serialize_python(const std::string& kind_name, nb::object obj) {
         auto* kind = get(kind_name);
         if (kind && kind->has_python()) {
             return kind->python.serialize(obj);
         }
-        return py::none();
+        return nb::none();
     }
 
-    py::object deserialize_python(const std::string& kind_name, py::object data) {
+    nb::object deserialize_python(const std::string& kind_name, nb::object data) {
         auto* kind = get(kind_name);
         if (kind && kind->has_python()) {
             return kind->python.deserialize(data);
         }
-        return py::none();
+        return nb::none();
     }
 
-    py::object convert_python(const std::string& kind_name, py::object value) {
+    nb::object convert_python(const std::string& kind_name, nb::object value) {
         auto* kind = get(kind_name);
         if (kind && kind->has_python()) {
             return kind->python.convert(value);
@@ -192,18 +192,18 @@ void register_cpp_handle_kind(const std::string& kind_name) {
         // serialize: std::any(H) → trent
         [](const std::any& value) -> nos::trent {
             const H& h = std::any_cast<const H&>(value);
-            py::dict d = h.serialize();
+            nb::dict d = h.serialize();
             nos::trent result;
             result.init(nos::trent_type::dict);
             for (auto item : d) {
-                std::string key = py::str(item.first).cast<std::string>();
-                py::object val = py::reinterpret_borrow<py::object>(item.second);
-                if (py::isinstance<py::str>(val)) {
-                    result[key] = nos::trent(val.cast<std::string>());
-                } else if (py::isinstance<py::int_>(val)) {
-                    result[key] = nos::trent(val.cast<int64_t>());
-                } else if (py::isinstance<py::float_>(val)) {
-                    result[key] = nos::trent(val.cast<double>());
+                std::string key = nb::cast<std::string>(nb::str(item.first));
+                nb::object val = nb::borrow<nb::object>(item.second);
+                if (nb::isinstance<nb::str>(val)) {
+                    result[key] = nos::trent(nb::cast<std::string>(val));
+                } else if (nb::isinstance<nb::int_>(val)) {
+                    result[key] = nos::trent(nb::cast<int64_t>(val));
+                } else if (nb::isinstance<nb::float_>(val)) {
+                    result[key] = nos::trent(nb::cast<double>(val));
                 }
             }
             return result;
@@ -214,10 +214,10 @@ void register_cpp_handle_kind(const std::string& kind_name) {
             h.deserialize_from(t);
             return h;
         },
-        // to_python: std::any(H) → py::object
-        [](const std::any& value) -> py::object {
+        // to_python: std::any(H) → nb::object
+        [](const std::any& value) -> nb::object {
             const H& h = std::any_cast<const H&>(value);
-            return py::cast(h);
+            return nb::cast(h);
         }
     );
 
@@ -230,18 +230,18 @@ void register_cpp_handle_kind(const std::string& kind_name) {
             nos::trent result;
             result.init(nos::trent_type::list);
             for (const auto& h : vec) {
-                py::dict d = h.serialize();
+                nb::dict d = h.serialize();
                 nos::trent item;
                 item.init(nos::trent_type::dict);
                 for (auto kv : d) {
-                    std::string key = py::str(kv.first).cast<std::string>();
-                    py::object val = py::reinterpret_borrow<py::object>(kv.second);
-                    if (py::isinstance<py::str>(val)) {
-                        item[key] = nos::trent(val.cast<std::string>());
-                    } else if (py::isinstance<py::int_>(val)) {
-                        item[key] = nos::trent(val.cast<int64_t>());
-                    } else if (py::isinstance<py::float_>(val)) {
-                        item[key] = nos::trent(val.cast<double>());
+                    std::string key = nb::cast<std::string>(nb::str(kv.first));
+                    nb::object val = nb::borrow<nb::object>(kv.second);
+                    if (nb::isinstance<nb::str>(val)) {
+                        item[key] = nos::trent(nb::cast<std::string>(val));
+                    } else if (nb::isinstance<nb::int_>(val)) {
+                        item[key] = nos::trent(nb::cast<int64_t>(val));
+                    } else if (nb::isinstance<nb::float_>(val)) {
+                        item[key] = nos::trent(nb::cast<double>(val));
                     }
                 }
                 result.push_back(item);
@@ -260,12 +260,12 @@ void register_cpp_handle_kind(const std::string& kind_name) {
             }
             return vec;
         },
-        // to_python: std::any(vector<H>) → py::list
-        [](const std::any& value) -> py::object {
+        // to_python: std::any(vector<H>) → nb::list
+        [](const std::any& value) -> nb::object {
             const auto& vec = std::any_cast<const std::vector<H>&>(value);
-            py::list result;
+            nb::list result;
             for (const auto& h : vec) {
-                result.append(py::cast(h));
+                result.append(nb::cast(h));
             }
             return result;
         }

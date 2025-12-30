@@ -1,9 +1,6 @@
 #include "mesh_renderer.hpp"
 
 #include <algorithm>
-#include <pybind11/pybind11.h>
-
-namespace py = pybind11;
 
 namespace termin {
 

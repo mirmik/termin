@@ -10,7 +10,7 @@
 
 namespace termin {
 
-void bind_render(py::module_& m) {
+void bind_render(nb::module_& m) {
     // Order matters - dependencies must be bound first
 
     // NOTE: Basic types (Color4, Size2i, etc), enums (PolygonMode, etc),

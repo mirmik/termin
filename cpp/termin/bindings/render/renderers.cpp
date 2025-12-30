@@ -29,40 +29,39 @@ inline bool check_heap() { return true; }
 
 namespace termin {
 
-void bind_renderers(py::module_& m) {
-    // Import _entity_native so pybind11 can find Component type for inheritance
-    py::module_::import("termin.entity._entity_native");
+void bind_renderers(nb::module_& m) {
+    // Import _entity_native so nanobind can find Component type for inheritance
+    nb::module_::import_("termin.entity._entity_native");
 
     // SkeletonController - inherits from Component
-    // Use py::nodelete because Entity owns and deletes components
-    py::class_<SkeletonController, Component, std::unique_ptr<SkeletonController, py::nodelete>>(m, "SkeletonController")
-        .def(py::init<>())
-        .def(py::init([](py::object skeleton_arg, py::list bone_entities_list) {
+    nb::class_<SkeletonController, Component>(m, "SkeletonController")
+        .def(nb::init<>())
+        .def("__init__", [](SkeletonController* self, nb::object skeleton_arg, nb::list bone_entities_list) {
             std::cerr << "[SkeletonController] Constructor start" << std::endl;
             if (!check_heap()) {
                 std::cerr << "[SkeletonController] HEAP CORRUPTED at start!" << std::endl;
             }
 
-            auto controller = new SkeletonController();
+            new (self) SkeletonController();
 
             // Handle skeleton argument: SkeletonHandle, SkeletonAsset, or SkeletonData*
             if (!skeleton_arg.is_none()) {
                 std::cerr << "[SkeletonController] Processing skeleton arg" << std::endl;
-                if (py::isinstance<SkeletonHandle>(skeleton_arg)) {
-                    controller->skeleton = skeleton_arg.cast<SkeletonHandle>();
-                } else if (py::hasattr(skeleton_arg, "resource")) {
+                if (nb::isinstance<SkeletonHandle>(skeleton_arg)) {
+                    self->skeleton = nb::cast<SkeletonHandle>(skeleton_arg);
+                } else if (nb::hasattr(skeleton_arg, "resource")) {
                     // SkeletonAsset - wrap in handle
-                    controller->skeleton = SkeletonHandle::from_asset(skeleton_arg);
+                    self->skeleton = SkeletonHandle::from_asset(skeleton_arg);
                 } else {
                     // Raw SkeletonData* - wrap in handle via asset
-                    auto skel_data = skeleton_arg.cast<SkeletonData*>();
+                    auto skel_data = nb::cast<SkeletonData*>(skeleton_arg);
                     if (skel_data != nullptr) {
                         // Create minimal asset and set skeleton_data
-                        py::object rm_module = py::module_::import("termin.assets.resources");
-                        py::object rm = rm_module.attr("ResourceManager").attr("instance")();
-                        py::object asset = rm.attr("get_or_create_skeleton_asset")(py::arg("name") = "skeleton");
+                        nb::object rm_module = nb::module_::import_("termin.assets.resources");
+                        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+                        nb::object asset = rm.attr("get_or_create_skeleton_asset")(nb::arg("name") = "skeleton");
                         asset.attr("skeleton_data") = skeleton_arg;
-                        controller->skeleton = SkeletonHandle::from_asset(asset);
+                        self->skeleton = SkeletonHandle::from_asset(asset);
                     }
                 }
                 std::cerr << "[SkeletonController] Skeleton set" << std::endl;
@@ -75,77 +74,76 @@ void bind_renderers(py::module_& m) {
             std::vector<Entity> entities;
             for (auto item : bone_entities_list) {
                 if (!item.is_none()) {
-                    entities.push_back(item.cast<Entity>());
+                    entities.push_back(nb::cast<Entity>(item));
                 }
             }
-            controller->set_bone_entities_from_entities(std::move(entities));
+            self->set_bone_entities_from_entities(std::move(entities));
             std::cerr << "[SkeletonController] Bone entities set" << std::endl;
             if (!check_heap()) {
                 std::cerr << "[SkeletonController] HEAP CORRUPTED after bone entities!" << std::endl;
             }
 
             std::cerr << "[SkeletonController] Constructor done" << std::endl;
-            return controller;
-        }),
-            py::arg("skeleton") = py::none(),
-            py::arg("bone_entities") = py::list())
-        .def_readwrite("skeleton", &SkeletonController::skeleton)
-        .def_property("skeleton_data",
+        },
+            nb::arg("skeleton") = nb::none(),
+            nb::arg("bone_entities") = nb::list())
+        .def_rw("skeleton", &SkeletonController::skeleton)
+        .def_prop_rw("skeleton_data",
             &SkeletonController::skeleton_data,
-            [](SkeletonController& self, py::object skel_arg) {
+            [](SkeletonController& self, nb::object skel_arg) {
                 // Setter accepts SkeletonData*, SkeletonAsset, or SkeletonHandle
                 if (skel_arg.is_none()) {
                     self.skeleton = SkeletonHandle();
                     return;
                 }
-                if (py::isinstance<SkeletonHandle>(skel_arg)) {
-                    self.set_skeleton(skel_arg.cast<SkeletonHandle>());
-                } else if (py::hasattr(skel_arg, "resource")) {
+                if (nb::isinstance<SkeletonHandle>(skel_arg)) {
+                    self.set_skeleton(nb::cast<SkeletonHandle>(skel_arg));
+                } else if (nb::hasattr(skel_arg, "resource")) {
                     self.set_skeleton(SkeletonHandle::from_asset(skel_arg));
                 } else {
-                    auto skel_data = skel_arg.cast<SkeletonData*>();
+                    auto skel_data = nb::cast<SkeletonData*>(skel_arg);
                     if (skel_data != nullptr) {
-                        py::object rm_module = py::module_::import("termin.assets.resources");
-                        py::object rm = rm_module.attr("ResourceManager").attr("instance")();
-                        py::object asset = rm.attr("get_or_create_skeleton_asset")(py::arg("name") = "skeleton");
+                        nb::object rm_module = nb::module_::import_("termin.assets.resources");
+                        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+                        nb::object asset = rm.attr("get_or_create_skeleton_asset")(nb::arg("name") = "skeleton");
                         asset.attr("skeleton_data") = skel_arg;
                         self.set_skeleton(SkeletonHandle::from_asset(asset));
                     }
                 }
             },
-            py::return_value_policy::reference)
-        .def_property("bone_entities",
+            nb::rv_policy::reference)
+        .def_prop_rw("bone_entities",
             [](const SkeletonController& self) {
                 // Return resolved Entity list
-                py::list result;
+                nb::list result;
                 for (const auto& handle : self.bone_entities) {
                     Entity e = handle.get();
                     if (e.valid()) {
-                        result.append(py::cast(e));
+                        result.append(nb::cast(e));
                     } else {
-                        result.append(py::none());
+                        result.append(nb::none());
                     }
                 }
                 return result;
             },
-            [](SkeletonController& self, py::list entities) {
+            [](SkeletonController& self, nb::list entities) {
                 std::vector<Entity> vec;
                 for (auto item : entities) {
                     if (!item.is_none()) {
-                        vec.push_back(item.cast<Entity>());
+                        vec.push_back(nb::cast<Entity>(item));
                     }
                 }
                 self.set_bone_entities_from_entities(std::move(vec));
             })
-        .def_property_readonly("skeleton_instance",
+        .def_prop_ro("skeleton_instance",
             &SkeletonController::skeleton_instance,
-            py::return_value_policy::reference)
+            nb::rv_policy::reference)
         .def("set_skeleton", &SkeletonController::set_skeleton)
-        .def("set_bone_entities", [](SkeletonController& self, py::list entities) {
+        .def("set_bone_entities", [](SkeletonController& self, nb::list entities) {
             std::vector<Entity> vec;
             for (auto item : entities) {
                 if (!item.is_none()) {
-                    vec.push_back(item.cast<Entity>());
+                    vec.push_back(nb::cast<Entity>(item));
                 }
             }
             self.set_bone_entities_from_entities(std::move(vec));
@@ -153,21 +151,20 @@ void bind_renderers(py::module_& m) {
         .def("invalidate_instance", &SkeletonController::invalidate_instance);
 
     // MeshRenderer - inherits from Component
-    // Use py::nodelete because Entity owns and deletes components
-    py::class_<MeshRenderer, Component, std::unique_ptr<MeshRenderer, py::nodelete>>(m, "MeshRenderer")
-        .def(py::init<>())
+    nb::class_<MeshRenderer, Component>(m, "MeshRenderer")
+        .def(nb::init<>())
         // Constructor with mesh and material (for Python compatibility)
-        .def(py::init([](py::object mesh_arg, py::object material_arg, bool cast_shadow) {
-            auto renderer = new MeshRenderer();
-            renderer->cast_shadow = cast_shadow;
+        .def("__init__", [](MeshRenderer* self, nb::object mesh_arg, nb::object material_arg, bool cast_shadow) {
+            new (self) MeshRenderer();
+            self->cast_shadow = cast_shadow;
 
             if (!mesh_arg.is_none()) {
-                if (py::isinstance<MeshHandle>(mesh_arg)) {
-                    renderer->mesh = mesh_arg.cast<MeshHandle>();
-                } else if (py::hasattr(mesh_arg, "_handle")) {
-                    py::object handle = mesh_arg.attr("_handle");
-                    if (py::isinstance<MeshHandle>(handle)) {
-                        renderer->mesh = handle.cast<MeshHandle>();
+                if (nb::isinstance<MeshHandle>(mesh_arg)) {
+                    self->mesh = nb::cast<MeshHandle>(mesh_arg);
+                } else if (nb::hasattr(mesh_arg, "_handle")) {
+                    nb::object handle = mesh_arg.attr("_handle");
+                    if (nb::isinstance<MeshHandle>(handle)) {
+                        self->mesh = nb::cast<MeshHandle>(handle);
                     }
                 }
             }
@@ -175,66 +172,64 @@ void bind_renderers(py::module_& m) {
             if (!material_arg.is_none()) {
                 // Check if it's a Material directly or a MaterialAsset
                 try {
-                    auto mat = material_arg.cast<Material*>();
-                    renderer->material = MaterialHandle::from_direct(mat);
-                } catch (const py::cast_error&) {
-                    renderer->material = MaterialHandle::from_asset(material_arg);
+                    auto mat = nb::cast<Material*>(material_arg);
+                    self->material = MaterialHandle::from_direct(mat);
+                } catch (const nb::cast_error&) {
+                    self->material = MaterialHandle::from_asset(material_arg);
                 }
             }
-
-            return renderer;
-        }), py::arg("mesh") = py::none(), py::arg("material") = py::none(), py::arg("cast_shadow") = true)
-        .def_readwrite("mesh", &MeshRenderer::mesh)
-        .def_readwrite("material", &MeshRenderer::material)
-        .def_readwrite("cast_shadow", &MeshRenderer::cast_shadow)
-        .def_readwrite("_override_material", &MeshRenderer::_override_material)
+        }, nb::arg("mesh") = nb::none(), nb::arg("material") = nb::none(), nb::arg("cast_shadow") = true)
+        .def_rw("mesh", &MeshRenderer::mesh)
+        .def_rw("material", &MeshRenderer::material)
+        .def_rw("cast_shadow", &MeshRenderer::cast_shadow)
+        .def_rw("_override_material", &MeshRenderer::_override_material)
         .def("mesh_handle", [](MeshRenderer& self) -> MeshHandle& {
             return self.mesh_handle();
-        }, py::return_value_policy::reference_internal)
+        }, nb::rv_policy::reference_internal)
         .def("material_handle", [](MeshRenderer& self) -> MaterialHandle& {
             return self.material_handle();
-        }, py::return_value_policy::reference_internal)
+        }, nb::rv_policy::reference_internal)
         .def("set_mesh", &MeshRenderer::set_mesh)
         .def("set_mesh_by_name", &MeshRenderer::set_mesh_by_name)
-        .def("get_material", &MeshRenderer::get_material, py::return_value_policy::reference)
-        .def("get_base_material", &MeshRenderer::get_base_material, py::return_value_policy::reference)
+        .def("get_material", &MeshRenderer::get_material, nb::rv_policy::reference)
+        .def("get_base_material", &MeshRenderer::get_base_material, nb::rv_policy::reference)
         .def("set_material", &MeshRenderer::set_material)
         .def("set_material_handle", &MeshRenderer::set_material_handle)
         .def("set_material_by_name", &MeshRenderer::set_material_by_name)
-        .def_property("override_material",
+        .def_prop_rw("override_material",
             &MeshRenderer::override_material,
             &MeshRenderer::set_override_material)
         .def("set_override_material", &MeshRenderer::set_override_material)
-        .def("overridden_material", &MeshRenderer::overridden_material, py::return_value_policy::reference)
-        .def_property_readonly("phase_marks", [](MeshRenderer& self) {
-            py::set marks;
+        .def("overridden_material", &MeshRenderer::overridden_material, nb::rv_policy::reference)
+        .def_prop_ro("phase_marks", [](MeshRenderer& self) {
+            nb::set marks;
             for (const auto& mark : self.phase_marks()) {
-                marks.add(mark);
+                marks.add(nb::str(mark.c_str()));
             }
             return marks;
         })
         .def("draw_geometry", &MeshRenderer::draw_geometry,
-            py::arg("context"), py::arg("geometry_id") = "")
+            nb::arg("context"), nb::arg("geometry_id") = "")
         .def("get_phases_for_mark", &MeshRenderer::get_phases_for_mark,
-            py::arg("phase_mark"))
+            nb::arg("phase_mark"))
         .def("get_geometry_draws", &MeshRenderer::get_geometry_draws,
-            py::arg("phase_mark") = "");
+            nb::arg("phase_mark") = "");
 
-    // Use py::nodelete because Entity owns and deletes components
-    py::class_<SkinnedMeshRenderer, MeshRenderer, std::unique_ptr<SkinnedMeshRenderer, py::nodelete>>(m, "SkinnedMeshRenderer")
-        .def(py::init<>())
+    // SkinnedMeshRenderer - inherits from MeshRenderer
+    nb::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
+        .def(nb::init<>())
         // Constructor with mesh, material, skeleton_controller
-        .def(py::init([](py::object mesh_arg, py::object material_arg, SkeletonController* skeleton_controller, bool cast_shadow) {
-            auto renderer = new SkinnedMeshRenderer();
-            renderer->cast_shadow = cast_shadow;
+        .def("__init__", [](SkinnedMeshRenderer* self, nb::object mesh_arg, nb::object material_arg, SkeletonController* skeleton_controller, bool cast_shadow) {
+            new (self) SkinnedMeshRenderer();
+            self->cast_shadow = cast_shadow;
 
             if (!mesh_arg.is_none()) {
-                if (py::isinstance<MeshHandle>(mesh_arg)) {
-                    renderer->mesh = mesh_arg.cast<MeshHandle>();
-                } else if (py::hasattr(mesh_arg, "_handle")) {
-                    py::object handle = mesh_arg.attr("_handle");
-                    if (py::isinstance<MeshHandle>(handle)) {
-                        renderer->mesh = handle.cast<MeshHandle>();
+                if (nb::isinstance<MeshHandle>(mesh_arg)) {
+                    self->mesh = nb::cast<MeshHandle>(mesh_arg);
+                } else if (nb::hasattr(mesh_arg, "_handle")) {
+                    nb::object handle = mesh_arg.attr("_handle");
+                    if (nb::isinstance<MeshHandle>(handle)) {
+                        self->mesh = nb::cast<MeshHandle>(handle);
                     }
                 }
             }
@@ -242,45 +237,48 @@ void bind_renderers(py::module_& m) {
             if (!material_arg.is_none()) {
                 // Check if it's a Material directly or a MaterialAsset
                 try {
-                    auto mat = material_arg.cast<Material*>();
-                    renderer->material = MaterialHandle::from_direct(mat);
-                } catch (const py::cast_error&) {
-                    renderer->material = MaterialHandle::from_asset(material_arg);
+                    auto mat = nb::cast<Material*>(material_arg);
+                    self->material = MaterialHandle::from_direct(mat);
+                } catch (const nb::cast_error&) {
+                    self->material = MaterialHandle::from_asset(material_arg);
                 }
             }
 
             if (skeleton_controller != nullptr) {
-                renderer->set_skeleton_controller(skeleton_controller);
+                self->set_skeleton_controller(skeleton_controller);
             }
-
-            return renderer;
-        }),
-            py::arg("mesh") = py::none(),
-            py::arg("material") = py::none(),
-            py::arg("skeleton_controller") = nullptr,
-            py::arg("cast_shadow") = true)
-        .def_readwrite("_skeleton_controller", &SkinnedMeshRenderer::_skeleton_controller)
-        .def_property("skeleton_controller",
+        },
+            nb::arg("mesh") = nb::none(),
+            nb::arg("material") = nb::none(),
+            nb::arg("skeleton_controller") = nullptr,
+            nb::arg("cast_shadow") = true)
+        .def_rw("_skeleton_controller", &SkinnedMeshRenderer::_skeleton_controller)
+        .def_prop_rw("skeleton_controller",
             &SkinnedMeshRenderer::skeleton_controller,
             &SkinnedMeshRenderer::set_skeleton_controller,
-            py::return_value_policy::reference)
-        .def_property_readonly("skeleton_instance",
+            nb::rv_policy::reference)
+        .def_prop_ro("skeleton_instance",
             &SkinnedMeshRenderer::skeleton_instance,
-            py::return_value_policy::reference)
+            nb::rv_policy::reference)
         .def("update_bone_matrices", &SkinnedMeshRenderer::update_bone_matrices)
         .def("upload_bone_matrices", &SkinnedMeshRenderer::upload_bone_matrices)
         .def("get_skinned_material", &SkinnedMeshRenderer::get_skinned_material,
-            py::return_value_policy::reference)
-        .def_readonly("_bone_count", &SkinnedMeshRenderer::_bone_count)
+            nb::rv_policy::reference)
+        .def_ro("_bone_count", &SkinnedMeshRenderer::_bone_count)
         .def("get_bone_matrices_flat", [](SkinnedMeshRenderer& self) {
             if (self._bone_count == 0) {
-                return py::array_t<float>();
+                // Return empty array
+                size_t shape[3] = {0, 4, 4};
+                return nb::ndarray<nb::numpy, float>(nullptr, 3, shape);
             }
-            return py::array_t<float>(
-                {self._bone_count, 4, 4},
-                {16 * sizeof(float), 4 * sizeof(float), sizeof(float)},
-                self._bone_matrices_flat.data()
-            );
+            // Create a copy of the data with capsule ownership
+            size_t data_size = self._bone_count * 16;
+            float* buf = new float[data_size];
+            std::copy(self._bone_matrices_flat.data(),
+                      self._bone_matrices_flat.data() + data_size, buf);
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[3] = {static_cast<size_t>(self._bone_count), 4, 4};
+            return nb::ndarray<nb::numpy, float>(buf, 3, shape, owner);
         });
 }
 

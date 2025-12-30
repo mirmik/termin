@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <functional>
 #include <vector>
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 
 #include "component.hpp"
 #include "vtable_utils.hpp"
@@ -21,7 +21,7 @@
     #define ENTITY_API
 #endif
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -38,7 +38,7 @@ public:
         std::string name;
         tc_component_kind kind;
         NativeFactory native_factory;  // For C++ components
-        py::object python_class;       // For Python components
+        nb::object python_class;       // For Python components
     };
 
     // Singleton access
@@ -46,13 +46,13 @@ public:
 
     // Registration
     void register_native(const std::string& name, NativeFactory factory);
-    void register_python(const std::string& name, py::object cls);
+    void register_python(const std::string& name, nb::object cls);
 
     // Unregistration (for hot-reload)
     void unregister(const std::string& name);
 
-    // Creation - returns py::object (for Python compatibility)
-    py::object create(const std::string& name) const;
+    // Creation - returns nb::object (for Python compatibility)
+    nb::object create(const std::string& name) const;
 
     // Creation - returns raw CxxComponent* (for Entity::deserialize)
     // Only works for native C++ components
@@ -61,7 +61,7 @@ public:
     // Queries
     bool has(const std::string& name) const;
     const ComponentInfo* get_info(const std::string& name) const;
-    py::object get_class(const std::string& name) const;
+    nb::object get_class(const std::string& name) const;
 
     // Listing
     std::vector<std::string> list_all() const;

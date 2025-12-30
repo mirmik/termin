@@ -1,9 +1,11 @@
 // SkeletonInstance bindings only.
 // Bone and SkeletonData are in _skeleton_native module.
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/array.h>
 
 #include "termin/skeleton/bone.hpp"
 #include "termin/skeleton/skeleton_data.hpp"
@@ -11,36 +13,39 @@
 #include "termin/entity/entity.hpp"
 #include "termin/assets/handles.hpp"
 #include "../../core_c/include/tc_kind.hpp"
+#include "skeleton_bindings.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 using namespace termin;
 
 // Helper: numpy (3,) -> std::array<double, 3>
-static std::array<double, 3> numpy_to_vec3(py::object obj) {
-    auto arr = py::array_t<double>::ensure(obj);
-    if (arr && arr.size() >= 3) {
-        auto buf = arr.unchecked<1>();
-        return {buf(0), buf(1), buf(2)};
+static std::array<double, 3> numpy_to_vec3(nb::object obj) {
+    try {
+        auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(obj);
+        const double* data = arr.data();
+        return {data[0], data[1], data[2]};
+    } catch (...) {
+        nb::list seq = nb::cast<nb::list>(obj);
+        return {nb::cast<double>(seq[0]), nb::cast<double>(seq[1]), nb::cast<double>(seq[2])};
     }
-    auto seq = obj.cast<py::sequence>();
-    return {seq[0].cast<double>(), seq[1].cast<double>(), seq[2].cast<double>()};
 }
 
 // Helper: numpy (4,) -> std::array<double, 4>
-static std::array<double, 4> numpy_to_vec4(py::object obj) {
-    auto arr = py::array_t<double>::ensure(obj);
-    if (arr && arr.size() >= 4) {
-        auto buf = arr.unchecked<1>();
-        return {buf(0), buf(1), buf(2), buf(3)};
+static std::array<double, 4> numpy_to_vec4(nb::object obj) {
+    try {
+        auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(obj);
+        const double* data = arr.data();
+        return {data[0], data[1], data[2], data[3]};
+    } catch (...) {
+        nb::list seq = nb::cast<nb::list>(obj);
+        return {nb::cast<double>(seq[0]), nb::cast<double>(seq[1]),
+                nb::cast<double>(seq[2]), nb::cast<double>(seq[3])};
     }
-    auto seq = obj.cast<py::sequence>();
-    return {seq[0].cast<double>(), seq[1].cast<double>(),
-            seq[2].cast<double>(), seq[3].cast<double>()};
 }
 
 namespace termin {
 
-void bind_skeleton(py::module_& m) {
+void bind_skeleton(nb::module_& m) {
     // Note: Bone and SkeletonData are now in _skeleton_native module.
     // This module only binds SkeletonInstance which depends on Entity.
 
@@ -48,61 +53,61 @@ void bind_skeleton(py::module_& m) {
     tc::register_cpp_handle_kind<SkeletonHandle>("skeleton_handle");
 
     // SkeletonInstance - now uses Entity values instead of pointers
-    py::class_<SkeletonInstance>(m, "SkeletonInstance")
-        .def(py::init<>())
-        .def_property("skeleton_data",
+    nb::class_<SkeletonInstance>(m, "SkeletonInstance")
+        .def(nb::init<>())
+        .def_prop_rw("skeleton_data",
             &SkeletonInstance::skeleton_data,
             &SkeletonInstance::set_skeleton_data,
-            py::return_value_policy::reference)
-        .def_property("bone_entities",
+            nb::rv_policy::reference)
+        .def_prop_rw("bone_entities",
             [](const SkeletonInstance& si) {
-                py::list result;
+                nb::list result;
                 for (const Entity& e : si.bone_entities()) {
                     if (e.valid()) {
-                        result.append(py::cast(e));
+                        result.append(nb::cast(e));
                     } else {
-                        result.append(py::none());
+                        result.append(nb::none());
                     }
                 }
                 return result;
             },
-            [](SkeletonInstance& si, py::list entities) {
+            [](SkeletonInstance& si, nb::list entities) {
                 std::vector<Entity> vec;
                 for (auto item : entities) {
                     if (!item.is_none()) {
-                        vec.push_back(item.cast<Entity>());
+                        vec.push_back(nb::cast<Entity>(item));
                     }
                 }
                 si.set_bone_entities(std::move(vec));
             })
-        .def_property("skeleton_root",
-            [](const SkeletonInstance& si) -> py::object {
+        .def_prop_rw("skeleton_root",
+            [](const SkeletonInstance& si) -> nb::object {
                 Entity root = si.skeleton_root();
-                if (root.valid()) return py::cast(root);
-                return py::none();
+                if (root.valid()) return nb::cast(root);
+                return nb::none();
             },
-            [](SkeletonInstance& si, py::object root_obj) {
+            [](SkeletonInstance& si, nb::object root_obj) {
                 if (root_obj.is_none()) {
                     si.set_skeleton_root(Entity());
                 } else {
-                    si.set_skeleton_root(root_obj.cast<Entity>());
+                    si.set_skeleton_root(nb::cast<Entity>(root_obj));
                 }
             })
-        .def("get_bone_entity", [](const SkeletonInstance& si, int index) -> py::object {
+        .def("get_bone_entity", [](const SkeletonInstance& si, int index) -> nb::object {
             Entity e = si.get_bone_entity(index);
-            if (e.valid()) return py::cast(e);
-            return py::none();
-        }, py::arg("bone_index"))
-        .def("get_bone_entity_by_name", [](const SkeletonInstance& si, const std::string& name) -> py::object {
+            if (e.valid()) return nb::cast(e);
+            return nb::none();
+        }, nb::arg("bone_index"))
+        .def("get_bone_entity_by_name", [](const SkeletonInstance& si, const std::string& name) -> nb::object {
             Entity e = si.get_bone_entity_by_name(name);
-            if (e.valid()) return py::cast(e);
-            return py::none();
-        }, py::arg("bone_name"))
+            if (e.valid()) return nb::cast(e);
+            return nb::none();
+        }, nb::arg("bone_name"))
         .def("set_bone_transform_by_name", [](SkeletonInstance& si,
                 const std::string& bone_name,
-                py::object translation,
-                py::object rotation,
-                py::object scale) {
+                nb::object translation,
+                nb::object rotation,
+                nb::object scale) {
             std::array<double, 3> t_arr;
             std::array<double, 4> r_arr;
             std::array<double, 3> s_arr;
@@ -120,8 +125,8 @@ void bind_skeleton(py::module_& m) {
             }
             if (!scale.is_none()) {
                 // Handle both scalar and vec3 scale
-                if (py::isinstance<py::float_>(scale) || py::isinstance<py::int_>(scale)) {
-                    double s = scale.cast<double>();
+                if (nb::isinstance<nb::float_>(scale) || nb::isinstance<nb::int_>(scale)) {
+                    double s = nb::cast<double>(scale);
                     s_arr = {s, s, s};
                 } else {
                     s_arr = numpy_to_vec3(scale);
@@ -129,39 +134,41 @@ void bind_skeleton(py::module_& m) {
                 s_ptr = s_arr.data();
             }
             si.set_bone_transform_by_name(bone_name, t_ptr, r_ptr, s_ptr);
-        }, py::arg("bone_name"),
-           py::arg("translation") = py::none(),
-           py::arg("rotation") = py::none(),
-           py::arg("scale") = py::none())
+        }, nb::arg("bone_name"),
+           nb::arg("translation") = nb::none(),
+           nb::arg("rotation") = nb::none(),
+           nb::arg("scale") = nb::none())
         .def("update", &SkeletonInstance::update)
         .def("get_bone_matrices", [](SkeletonInstance& si) {
             si.update();
             int n = si.bone_count();
-            auto result = py::array_t<float>({n, 4, 4});
-            auto buf = result.mutable_unchecked<3>();
+            float* buf = new float[n * 16];
             for (int i = 0; i < n; ++i) {
                 const Mat44& m = si.get_bone_matrix(i);
                 // Convert column-major Mat44 to row-major numpy array
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        buf(i, row, col) = static_cast<float>(m(col, row));
+                        buf[i * 16 + row * 4 + col] = static_cast<float>(m(col, row));
                     }
                 }
             }
-            return result;
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[3] = {static_cast<size_t>(n), 4, 4};
+            return nb::ndarray<nb::numpy, float>(buf, 3, shape, owner);
         })
         .def("bone_count", &SkeletonInstance::bone_count)
         .def("get_bone_world_matrix", [](const SkeletonInstance& si, int bone_index) {
             Mat44 m = si.get_bone_world_matrix(bone_index);
-            auto result = py::array_t<float>({4, 4});
-            auto buf = result.mutable_unchecked<2>();
+            float* buf = new float[16];
             for (int row = 0; row < 4; ++row) {
                 for (int col = 0; col < 4; ++col) {
-                    buf(row, col) = static_cast<float>(m(col, row));
+                    buf[row * 4 + col] = static_cast<float>(m(col, row));
                 }
             }
-            return result;
-        }, py::arg("bone_index"))
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[2] = {4, 4};
+            return nb::ndarray<nb::numpy, float>(buf, 2, shape, owner);
+        }, nb::arg("bone_index"))
         .def("__repr__", [](const SkeletonInstance& si) {
             bool has_entities = !si.bone_entities().empty();
             return "<SkeletonInstance bones=" + std::to_string(si.bone_count()) +

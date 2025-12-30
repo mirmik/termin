@@ -1,6 +1,8 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/shared_ptr.h>
+#include <nanobind/ndarray.h>
 
 #include "texture_data.hpp"
 #include "handles.hpp"
@@ -11,69 +13,66 @@
 #include "termin/entity/entity_handle.hpp"
 #include "../../../core_c/include/tc_kind.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
 // Forward declaration
 void register_kind_handlers();
 
-void bind_assets(py::module_& m) {
+void bind_assets(nb::module_& m) {
     // Note: TextureData is now in _texture_native module
     // Note: MeshHandle is now in _mesh_native module
 
     // ========== TextureHandle ==========
-    py::class_<TextureHandle>(m, "TextureHandle")
-        .def(py::init<>())
-        .def(py::init<py::object>(), py::arg("asset"))
-        .def_static("from_name", &TextureHandle::from_name, py::arg("name"))
-        .def_static("from_asset", &TextureHandle::from_asset, py::arg("asset"))
+    nb::class_<TextureHandle>(m, "TextureHandle")
+        .def(nb::init<>())
+        .def(nb::init<nb::object>(), nb::arg("asset"))
+        .def_static("from_name", &TextureHandle::from_name, nb::arg("name"))
+        .def_static("from_asset", &TextureHandle::from_asset, nb::arg("asset"))
         .def_static("from_file", &TextureHandle::from_file,
-            py::arg("path"), py::arg("name") = "")
+            nb::arg("path"), nb::arg("name") = "")
         .def_static("from_texture_data", &TextureHandle::from_texture_data,
-            py::arg("texture_data"), py::arg("name") = "texture")
-        .def_static("deserialize", &TextureHandle::deserialize, py::arg("data"))
-        .def_readwrite("asset", &TextureHandle::asset)
-        .def_property_readonly("is_valid", &TextureHandle::is_valid)
-        .def_property_readonly("name", &TextureHandle::name)
-        .def_property_readonly("version", &TextureHandle::version)
-        .def_property_readonly("gpu", &TextureHandle::gpu, py::return_value_policy::reference)
-        .def_property_readonly("source_path", &TextureHandle::source_path)
-        .def("get", &TextureHandle::get, py::return_value_policy::reference)
+            nb::arg("texture_data"), nb::arg("name") = "texture")
+        .def_static("deserialize", &TextureHandle::deserialize, nb::arg("data"))
+        .def_rw("asset", &TextureHandle::asset)
+        .def_prop_ro("is_valid", &TextureHandle::is_valid)
+        .def_prop_ro("name", &TextureHandle::name)
+        .def_prop_ro("version", &TextureHandle::version)
+        .def_prop_ro("gpu", &TextureHandle::gpu, nb::rv_policy::reference)
+        .def_prop_ro("source_path", &TextureHandle::source_path)
+        .def("get", &TextureHandle::get, nb::rv_policy::reference)
         .def("get_asset", [](const TextureHandle& self) { return self.asset; })
         .def("bind", &TextureHandle::bind,
-            py::arg("graphics"), py::arg("unit") = 0, py::arg("context_key") = 0)
+            nb::arg("graphics"), nb::arg("unit") = 0, nb::arg("context_key") = 0)
         .def("serialize", &TextureHandle::serialize);
 
     // ========== MaterialHandle ==========
-    py::class_<MaterialHandle>(m, "MaterialHandle")
-        .def(py::init<>())
-        .def(py::init<Material*>(), py::arg("material"))
-        .def_static("from_direct", &MaterialHandle::from_direct, py::arg("material"),
-            py::return_value_policy::reference)
-        .def_static("from_material", &MaterialHandle::from_direct, py::arg("material"),
-            py::return_value_policy::reference)  // alias for from_direct
-        .def_static("from_asset", &MaterialHandle::from_asset, py::arg("asset"))
-        .def_static("from_name", &MaterialHandle::from_name, py::arg("name"))
-        .def_static("deserialize", &MaterialHandle::deserialize, py::arg("data"))
-        .def_readwrite("_direct", &MaterialHandle::_direct)
-        .def_readwrite("asset", &MaterialHandle::asset)
-        .def_property_readonly("is_valid", &MaterialHandle::is_valid)
-        .def_property_readonly("is_direct", &MaterialHandle::is_direct)
-        .def_property_readonly("name", &MaterialHandle::name)
-        .def_property_readonly("material", &MaterialHandle::get_material_or_none,
-            py::return_value_policy::reference)
-        .def("get", &MaterialHandle::get, py::return_value_policy::reference)
+    nb::class_<MaterialHandle>(m, "MaterialHandle")
+        .def(nb::init<>())
+        .def(nb::init<Material*>(), nb::arg("material"))
+        .def_static("from_direct", &MaterialHandle::from_direct, nb::arg("material"),
+            nb::rv_policy::reference)
+        .def_static("from_material", &MaterialHandle::from_direct, nb::arg("material"),
+            nb::rv_policy::reference)  // alias for from_direct
+        .def_static("from_asset", &MaterialHandle::from_asset, nb::arg("asset"))
+        .def_static("from_name", &MaterialHandle::from_name, nb::arg("name"))
+        .def_static("deserialize", &MaterialHandle::deserialize, nb::arg("data"))
+        .def_rw("_direct", &MaterialHandle::_direct)
+        .def_rw("asset", &MaterialHandle::asset)
+        .def_prop_ro("is_valid", &MaterialHandle::is_valid)
+        .def_prop_ro("is_direct", &MaterialHandle::is_direct)
+        .def_prop_ro("name", &MaterialHandle::name)
+        .def_prop_ro("material", &MaterialHandle::get_material_or_none,
+            nb::rv_policy::reference)
+        .def("get", &MaterialHandle::get, nb::rv_policy::reference)
         .def("get_asset", [](const MaterialHandle& self) { return self.asset; })
-        .def("get_material", &MaterialHandle::get_material, py::return_value_policy::reference)
+        .def("get_material", &MaterialHandle::get_material, nb::rv_policy::reference)
         .def("get_material_or_none", &MaterialHandle::get_material_or_none,
-            py::return_value_policy::reference)
+            nb::rv_policy::reference)
         .def("serialize", &MaterialHandle::serialize);
 
-    // Allow implicit conversion from Material (shared_ptr) to MaterialHandle
-    py::implicitly_convertible<std::shared_ptr<Material>, MaterialHandle>();
-    // Allow implicit conversion from Material* to MaterialHandle
-    py::implicitly_convertible<Material*, MaterialHandle>();
+    // Note: nanobind doesn't have implicitly_convertible - handle via explicit constructors
 
     // Note: SkeletonHandle is now in _skeleton_native module
 
@@ -96,24 +95,24 @@ void register_kind_handlers() {
     tc::KindRegistry::instance().register_python(
         "material_handle",
         // serialize
-        py::cpp_function([](py::object obj) -> py::object {
-            MaterialHandle handle = obj.cast<MaterialHandle>();
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            MaterialHandle handle = nb::cast<MaterialHandle>(obj);
             return handle.serialize();
         }),
         // deserialize
-        py::cpp_function([](py::object data) -> py::object {
+        nb::cpp_function([](nb::object data) -> nb::object {
             if (data.is_none()) {
-                return py::cast(MaterialHandle());
+                return nb::cast(MaterialHandle());
             }
-            py::dict d = data.cast<py::dict>();
-            return py::cast(MaterialHandle::deserialize(d));
+            nb::dict d = nb::cast<nb::dict>(data);
+            return nb::cast(MaterialHandle::deserialize(d));
         }),
         // convert
-        py::cpp_function([](py::object value) -> py::object {
+        nb::cpp_function([](nb::object value) -> nb::object {
             if (value.is_none()) {
-                return py::cast(MaterialHandle());
+                return nb::cast(MaterialHandle());
             }
-            if (py::isinstance<MaterialHandle>(value)) {
+            if (nb::isinstance<MaterialHandle>(value)) {
                 return value;
             }
             return value;
@@ -138,10 +137,10 @@ void register_kind_handlers() {
             h.deserialize_from(t);
             return h;
         },
-        // to_python: std::any(EntityHandle) → py::object
-        [](const std::any& value) -> py::object {
+        // to_python: std::any(EntityHandle) → nb::object
+        [](const std::any& value) -> nb::object {
             const EntityHandle& h = std::any_cast<const EntityHandle&>(value);
-            return py::cast(h);
+            return nb::cast(h);
         }
     );
 
@@ -149,27 +148,27 @@ void register_kind_handlers() {
     tc::KindRegistry::instance().register_python(
         "entity_handle",
         // serialize
-        py::cpp_function([](py::object obj) -> py::object {
+        nb::cpp_function([](nb::object obj) -> nb::object {
             if (obj.is_none()) {
-                return py::none();
+                return nb::none();
             }
             try {
-                EntityHandle handle = obj.cast<EntityHandle>();
+                EntityHandle handle = nb::cast<EntityHandle>(obj);
                 if (!handle.uuid.empty()) {
-                    return py::str(handle.uuid);
+                    return nb::str(handle.uuid.c_str());
                 }
-            } catch (const py::cast_error&) {}
-            return py::none();
+            } catch (const nb::cast_error&) {}
+            return nb::none();
         }),
         // deserialize
-        py::cpp_function([](py::object data) -> py::object {
-            if (py::isinstance<py::str>(data)) {
-                return py::cast(EntityHandle(data.cast<std::string>()));
+        nb::cpp_function([](nb::object data) -> nb::object {
+            if (nb::isinstance<nb::str>(data)) {
+                return nb::cast(EntityHandle(nb::cast<std::string>(data)));
             }
-            return py::cast(EntityHandle());
+            return nb::cast(EntityHandle());
         }),
         // convert
-        py::none()
+        nb::none()
     );
     // list[entity_handle] is auto-generated by InspectRegistry
 }

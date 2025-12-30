@@ -1,4 +1,4 @@
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 
 #include "render_bindings.hpp"
 #include "sdl_bindings.hpp"
@@ -11,25 +11,25 @@
 #include "tc_component_python_bindings.hpp"
 #include "assets/assets_bindings.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
-PYBIND11_MODULE(_native, m) {
+NB_MODULE(_native, m) {
     m.doc() = "Native C++ module for termin";
 
     // Import _mesh_native and re-export as submodule
     // This allows types to be shared across modules
-    py::module_ mesh_native = py::module_::import("termin.mesh._mesh_native");
+    nb::module_ mesh_native = nb::module_::import_("termin.mesh._mesh_native");
     m.attr("mesh") = mesh_native;
 
     // Import _graphics_native and re-export as submodule
     // Types like GraphicsBackend, ShaderHandle, etc. are defined there
-    py::module_ graphics_native = py::module_::import("termin.graphics._graphics_native");
+    nb::module_ graphics_native = nb::module_::import_("termin.graphics._graphics_native");
     m.attr("graphics") = graphics_native;
 
     // Import _entity_native and re-export as submodule
     // Types like Component, Entity, EntityHandle are defined there
     // Must be imported before render (MeshRenderer inherits Component)
-    py::module_ entity_native = py::module_::import("termin.entity._entity_native");
+    nb::module_ entity_native = nb::module_::import_("termin.entity._entity_native");
     m.attr("entity") = entity_native;
 
     // Create submodules

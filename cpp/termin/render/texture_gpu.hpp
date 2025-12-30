@@ -24,7 +24,7 @@ public:
     // Uploaded version (-1 = never uploaded)
     int uploaded_version = -1;
 
-    // GPU handles per context (shared_ptr for pybind11 compatibility)
+    // GPU handles per context (shared_ptr for nanobind compatibility)
     std::unordered_map<int64_t, std::shared_ptr<GPUTextureHandle>> handles;
 
     TextureGPU() = default;

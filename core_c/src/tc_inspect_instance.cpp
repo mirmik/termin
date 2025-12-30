@@ -15,104 +15,104 @@ InspectRegistry& InspectRegistry::instance() {
     return reg;
 }
 
-void InspectRegistry::register_python_fields(const std::string& type_name, py::dict fields_dict) {
+void InspectRegistry::register_python_fields(const std::string& type_name, nb::dict fields_dict) {
     _py_fields.erase(type_name);
 
     for (auto item : fields_dict) {
-        std::string field_name = item.first.cast<std::string>();
-        py::object field_obj = py::reinterpret_borrow<py::object>(item.second);
+        std::string field_name = nb::cast<std::string>(item.first);
+        nb::object field_obj = nb::borrow<nb::object>(item.second);
 
         InspectFieldInfo info;
         info.type_name = type_name;
 
         // Extract attributes
         info.path = field_name;
-        if (py::hasattr(field_obj, "path") && !field_obj.attr("path").is_none()) {
-            info.path = field_obj.attr("path").cast<std::string>();
+        if (nb::hasattr(field_obj, "path") && !field_obj.attr("path").is_none()) {
+            info.path = nb::cast<std::string>(field_obj.attr("path"));
         }
 
         info.label = field_name;
-        if (py::hasattr(field_obj, "label") && !field_obj.attr("label").is_none()) {
-            info.label = field_obj.attr("label").cast<std::string>();
+        if (nb::hasattr(field_obj, "label") && !field_obj.attr("label").is_none()) {
+            info.label = nb::cast<std::string>(field_obj.attr("label"));
         }
 
         info.kind = "float";
-        if (py::hasattr(field_obj, "kind")) {
-            info.kind = field_obj.attr("kind").cast<std::string>();
+        if (nb::hasattr(field_obj, "kind")) {
+            info.kind = nb::cast<std::string>(field_obj.attr("kind"));
         }
 
-        if (py::hasattr(field_obj, "min") && !field_obj.attr("min").is_none()) {
-            info.min = field_obj.attr("min").cast<double>();
+        if (nb::hasattr(field_obj, "min") && !field_obj.attr("min").is_none()) {
+            info.min = nb::cast<double>(field_obj.attr("min"));
         }
-        if (py::hasattr(field_obj, "max") && !field_obj.attr("max").is_none()) {
-            info.max = field_obj.attr("max").cast<double>();
+        if (nb::hasattr(field_obj, "max") && !field_obj.attr("max").is_none()) {
+            info.max = nb::cast<double>(field_obj.attr("max"));
         }
-        if (py::hasattr(field_obj, "step") && !field_obj.attr("step").is_none()) {
-            info.step = field_obj.attr("step").cast<double>();
+        if (nb::hasattr(field_obj, "step") && !field_obj.attr("step").is_none()) {
+            info.step = nb::cast<double>(field_obj.attr("step"));
         }
 
-        if (py::hasattr(field_obj, "non_serializable")) {
-            info.non_serializable = field_obj.attr("non_serializable").cast<bool>();
+        if (nb::hasattr(field_obj, "non_serializable")) {
+            info.non_serializable = nb::cast<bool>(field_obj.attr("non_serializable"));
         }
 
         // Choices for enum
-        if (py::hasattr(field_obj, "choices") && !field_obj.attr("choices").is_none()) {
+        if (nb::hasattr(field_obj, "choices") && !field_obj.attr("choices").is_none()) {
             for (auto c : field_obj.attr("choices")) {
-                py::tuple t = c.cast<py::tuple>();
+                nb::tuple t = nb::cast<nb::tuple>(c);
                 if (t.size() >= 2) {
                     EnumChoice choice;
-                    choice.value = py::reinterpret_borrow<py::object>(t[0]);
-                    choice.label = t[1].cast<std::string>();
+                    choice.value = nb::borrow<nb::object>(t[0]);
+                    choice.label = nb::cast<std::string>(t[1]);
                     info.choices.push_back(choice);
                 }
             }
         }
 
         // Action for button
-        if (py::hasattr(field_obj, "action") && !field_obj.attr("action").is_none()) {
+        if (nb::hasattr(field_obj, "action") && !field_obj.attr("action").is_none()) {
             info.action = field_obj.attr("action");
         }
 
         // Custom getter/setter
-        py::object py_getter = py::none();
-        py::object py_setter = py::none();
-        if (py::hasattr(field_obj, "getter") && !field_obj.attr("getter").is_none()) {
+        nb::object py_getter = nb::none();
+        nb::object py_setter = nb::none();
+        if (nb::hasattr(field_obj, "getter") && !field_obj.attr("getter").is_none()) {
             py_getter = field_obj.attr("getter");
         }
-        if (py::hasattr(field_obj, "setter") && !field_obj.attr("setter").is_none()) {
+        if (nb::hasattr(field_obj, "setter") && !field_obj.attr("setter").is_none()) {
             py_setter = field_obj.attr("setter");
         }
 
         std::string path_copy = info.path;
 
-        info.py_getter = [path_copy, py_getter](void* obj) -> py::object {
+        info.py_getter = [path_copy, py_getter](void* obj) -> nb::object {
             // obj is PyObject* from get_raw_pointer for Python types
-            py::object py_obj = py::reinterpret_borrow<py::object>(
-                py::handle(static_cast<PyObject*>(obj)));
+            nb::object py_obj = nb::borrow<nb::object>(
+                nb::handle(static_cast<PyObject*>(obj)));
             if (!py_getter.is_none()) {
                 return py_getter(py_obj);
             }
             // Use getattr for path resolution
-            py::object result = py_obj;
+            nb::object result = py_obj;
             size_t start = 0, end;
             while ((end = path_copy.find('.', start)) != std::string::npos) {
-                result = py::getattr(result, path_copy.substr(start, end - start).c_str());
+                result = nb::getattr(result, path_copy.substr(start, end - start).c_str());
                 start = end + 1;
             }
-            return py::getattr(result, path_copy.substr(start).c_str());
+            return nb::getattr(result, path_copy.substr(start).c_str());
         };
 
-        info.py_setter = [path_copy, py_setter](void* obj, py::object value) {
+        info.py_setter = [path_copy, py_setter](void* obj, nb::object value) {
             try {
                 // obj is PyObject* from get_raw_pointer for Python types
-                py::object py_obj = py::reinterpret_borrow<py::object>(
-                    py::handle(static_cast<PyObject*>(obj)));
+                nb::object py_obj = nb::borrow<nb::object>(
+                    nb::handle(static_cast<PyObject*>(obj)));
                 if (!py_setter.is_none()) {
                     py_setter(py_obj, value);
                     return;
                 }
                 // Use setattr for path resolution
-                py::object target = py_obj;
+                nb::object target = py_obj;
                 std::vector<std::string> parts;
                 size_t start = 0, end;
                 while ((end = path_copy.find('.', start)) != std::string::npos) {
@@ -122,9 +122,9 @@ void InspectRegistry::register_python_fields(const std::string& type_name, py::d
                 parts.push_back(path_copy.substr(start));
 
                 for (size_t i = 0; i < parts.size() - 1; ++i) {
-                    target = py::getattr(target, parts[i].c_str());
+                    target = nb::getattr(target, parts[i].c_str());
                 }
-                py::setattr(target, parts.back().c_str(), value);
+                nb::setattr(target, parts.back().c_str(), value);
             } catch (const std::exception& e) {
                 std::cerr << "[Python setter error] path=" << path_copy
                           << " error=" << e.what() << std::endl;
@@ -153,9 +153,9 @@ KindHandler* InspectRegistry::try_generate_handler(const std::string& kind) {
         std::string elem_kind = element;
         auto& list_handler = KindRegistry::instance().get_or_create(kind);
 
-        // serialize: py::object (list) -> py::object (list of serialized elements)
-        list_handler.python.serialize = py::cpp_function([elem_kind](py::object obj) -> py::object {
-            py::list result;
+        // serialize: nb::object (list) -> nb::object (list of serialized elements)
+        list_handler.python.serialize = nb::cpp_function([elem_kind](nb::object obj) -> nb::object {
+            nb::list result;
             if (obj.is_none()) {
                 return result;
             }
@@ -163,45 +163,45 @@ KindHandler* InspectRegistry::try_generate_handler(const std::string& kind) {
             auto* elem_handler = KindRegistry::instance().get(elem_kind);
 
             for (auto item : obj) {
-                py::object py_item = py::reinterpret_borrow<py::object>(item);
+                nb::object nb_item = nb::borrow<nb::object>(item);
                 if (elem_handler && elem_handler->has_python()) {
-                    result.append(elem_handler->python.serialize(py_item));
+                    result.append(elem_handler->python.serialize(nb_item));
                 } else {
-                    result.append(py_item);
+                    result.append(nb_item);
                 }
             }
             return result;
         });
 
-        // deserialize: py::object (list) -> py::object (list of deserialized elements)
-        list_handler.python.deserialize = py::cpp_function([elem_kind](py::object data) -> py::object {
-            py::list result;
-            if (!py::isinstance<py::list>(data)) return result;
+        // deserialize: nb::object (list) -> nb::object (list of deserialized elements)
+        list_handler.python.deserialize = nb::cpp_function([elem_kind](nb::object data) -> nb::object {
+            nb::list result;
+            if (!nb::isinstance<nb::list>(data)) return result;
 
             auto* elem_handler = KindRegistry::instance().get(elem_kind);
             for (auto item : data) {
-                py::object py_item = py::reinterpret_borrow<py::object>(item);
+                nb::object nb_item = nb::borrow<nb::object>(item);
                 if (elem_handler && elem_handler->has_python()) {
-                    result.append(elem_handler->python.deserialize(py_item));
+                    result.append(elem_handler->python.deserialize(nb_item));
                 } else {
-                    result.append(py_item);
+                    result.append(nb_item);
                 }
             }
             return result;
         });
 
-        list_handler.python.convert = py::cpp_function([elem_kind](py::object value) -> py::object {
-            if (value.is_none()) return py::list();
+        list_handler.python.convert = nb::cpp_function([elem_kind](nb::object value) -> nb::object {
+            if (value.is_none()) return nb::list();
 
             auto* elem_handler = KindRegistry::instance().get(elem_kind);
             if (!elem_handler || !elem_handler->has_python()) {
                 return value;
             }
 
-            py::list result;
+            nb::list result;
             for (auto item : value) {
-                py::object py_item = py::reinterpret_borrow<py::object>(item);
-                result.append(elem_handler->python.convert(py_item));
+                nb::object nb_item = nb::borrow<nb::object>(item);
+                result.append(elem_handler->python.convert(nb_item));
             }
             return result;
         });

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 
 namespace termin {
-void bind_tc_scene(pybind11::module_& m);
+void bind_tc_scene(nanobind::module_& m);
 }

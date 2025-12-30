@@ -2,20 +2,21 @@
 
 namespace termin {
 
-void bind_screw3(py::module_& m) {
-    py::class_<Screw3>(m, "Screw3")
-        .def(py::init<>())
-        .def(py::init<const Vec3&, const Vec3&>(), py::arg("ang"), py::arg("lin"))
-        .def(py::init([](py::array_t<double> ang_arr, py::array_t<double> lin_arr) {
-            return Screw3(numpy_to_vec3(ang_arr), numpy_to_vec3(lin_arr));
-        }), py::arg("ang"), py::arg("lin"))
-        .def_readwrite("ang", &Screw3::ang)
-        .def_readwrite("lin", &Screw3::lin)
-        .def(py::self + py::self)
-        .def(py::self - py::self)
-        .def(py::self * double())
-        .def(double() * py::self)
-        .def(-py::self)
+void bind_screw3(nb::module_& m) {
+    nb::class_<Screw3>(m, "Screw3")
+        .def(nb::init<>())
+        .def(nb::init<const Vec3&, const Vec3&>(), nb::arg("ang"), nb::arg("lin"))
+        .def("__init__", [](Screw3* self, nb::ndarray<double, nb::c_contig, nb::device::cpu> ang_arr,
+                                          nb::ndarray<double, nb::c_contig, nb::device::cpu> lin_arr) {
+            new (self) Screw3(numpy_to_vec3(ang_arr), numpy_to_vec3(lin_arr));
+        }, nb::arg("ang"), nb::arg("lin"))
+        .def_rw("ang", &Screw3::ang)
+        .def_rw("lin", &Screw3::lin)
+        .def(nb::self + nb::self)
+        .def(nb::self - nb::self)
+        .def(nb::self * double())
+        .def(double() * nb::self)
+        .def(-nb::self)
         .def("dot", &Screw3::dot)
         .def("cross_motion", &Screw3::cross_motion)
         .def("cross_force", &Screw3::cross_force)
@@ -25,37 +26,19 @@ void bind_screw3(py::module_& m) {
         .def("as_pose3", &Screw3::to_pose)  // alias for compatibility
         .def("scaled", &Screw3::scaled)
         // Adjoint overloads
-        .def("adjoint", py::overload_cast<const Pose3&>(&Screw3::adjoint, py::const_))
-        .def("adjoint", py::overload_cast<const Vec3&>(&Screw3::adjoint, py::const_))
-        .def("adjoint", [](const Screw3& s, py::array_t<double> arm_arr) {
-            return s.adjoint(numpy_to_vec3(arm_arr));
-        })
-        .def("adjoint_inv", py::overload_cast<const Pose3&>(&Screw3::adjoint_inv, py::const_))
-        .def("adjoint_inv", py::overload_cast<const Vec3&>(&Screw3::adjoint_inv, py::const_))
-        .def("adjoint_inv", [](const Screw3& s, py::array_t<double> arm_arr) {
-            return s.adjoint_inv(numpy_to_vec3(arm_arr));
-        })
-        .def("coadjoint", py::overload_cast<const Pose3&>(&Screw3::coadjoint, py::const_))
-        .def("coadjoint", py::overload_cast<const Vec3&>(&Screw3::coadjoint, py::const_))
-        .def("coadjoint", [](const Screw3& s, py::array_t<double> arm_arr) {
-            return s.coadjoint(numpy_to_vec3(arm_arr));
-        })
-        .def("coadjoint_inv", py::overload_cast<const Pose3&>(&Screw3::coadjoint_inv, py::const_))
-        .def("coadjoint_inv", py::overload_cast<const Vec3&>(&Screw3::coadjoint_inv, py::const_))
-        .def("coadjoint_inv", [](const Screw3& s, py::array_t<double> arm_arr) {
-            return s.coadjoint_inv(numpy_to_vec3(arm_arr));
-        })
+        .def("adjoint", nb::overload_cast<const Pose3&>(&Screw3::adjoint, nb::const_))
+        .def("adjoint", nb::overload_cast<const Vec3&>(&Screw3::adjoint, nb::const_))
+        .def("adjoint_inv", nb::overload_cast<const Pose3&>(&Screw3::adjoint_inv, nb::const_))
+        .def("adjoint_inv", nb::overload_cast<const Vec3&>(&Screw3::adjoint_inv, nb::const_))
+        .def("coadjoint", nb::overload_cast<const Pose3&>(&Screw3::coadjoint, nb::const_))
+        .def("coadjoint", nb::overload_cast<const Vec3&>(&Screw3::coadjoint, nb::const_))
+        .def("coadjoint_inv", nb::overload_cast<const Pose3&>(&Screw3::coadjoint_inv, nb::const_))
+        .def("coadjoint_inv", nb::overload_cast<const Vec3&>(&Screw3::coadjoint_inv, nb::const_))
         // Aliases for compatibility
-        .def("kinematic_carry", py::overload_cast<const Vec3&>(&Screw3::adjoint, py::const_))
-        .def("kinematic_carry", [](const Screw3& s, py::array_t<double> arm_arr) {
-            return s.adjoint(numpy_to_vec3(arm_arr));
-        })
-        .def("twist_carry", py::overload_cast<const Vec3&>(&Screw3::adjoint, py::const_))
-        .def("force_carry", py::overload_cast<const Vec3&>(&Screw3::coadjoint, py::const_))
-        .def("force_carry", [](const Screw3& s, py::array_t<double> arm_arr) {
-            return s.coadjoint(numpy_to_vec3(arm_arr));
-        })
-        .def("wrench_carry", py::overload_cast<const Vec3&>(&Screw3::coadjoint, py::const_))
+        .def("kinematic_carry", nb::overload_cast<const Vec3&>(&Screw3::adjoint, nb::const_))
+        .def("twist_carry", nb::overload_cast<const Vec3&>(&Screw3::adjoint, nb::const_))
+        .def("force_carry", nb::overload_cast<const Vec3&>(&Screw3::coadjoint, nb::const_))
+        .def("wrench_carry", nb::overload_cast<const Vec3&>(&Screw3::coadjoint, nb::const_))
         .def_static("zero", &Screw3::zero)
         .def("__repr__", [](const Screw3& s) {
             return "Screw3(ang=Vec3(" + std::to_string(s.ang.x) + ", " +

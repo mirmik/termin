@@ -1,56 +1,62 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/unordered_map.h>
+#include <nanobind/stl/optional.h>
 
 #include "termin/voxels/voxel_grid.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../core_c/include/tc_kind.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 using namespace termin::voxels;
 using namespace termin;
 
 // Helper: numpy array to vector of Vec3
-std::vector<Vec3> numpy_to_vec3_vector(py::array_t<double> arr) {
-    auto buf = arr.unchecked<2>();
-    if (buf.shape(1) != 3) {
+std::vector<Vec3> numpy_to_vec3_vector(nb::ndarray<double, nb::c_contig, nb::device::cpu> arr) {
+    size_t n = arr.shape(0);
+    double* ptr = arr.data();
+    size_t stride = arr.shape(1);
+    if (stride != 3) {
         throw std::runtime_error("Expected Nx3 array for vertices");
     }
     std::vector<Vec3> result;
-    result.reserve(static_cast<size_t>(buf.shape(0)));
-    for (py::ssize_t i = 0; i < buf.shape(0); i++) {
-        result.emplace_back(buf(i, 0), buf(i, 1), buf(i, 2));
+    result.reserve(n);
+    for (size_t i = 0; i < n; i++) {
+        result.emplace_back(ptr[i * stride + 0], ptr[i * stride + 1], ptr[i * stride + 2]);
     }
     return result;
 }
 
 // Helper: numpy array to vector of triangles
-std::vector<std::tuple<int, int, int>> numpy_to_triangles(py::array_t<int> arr) {
-    auto buf = arr.unchecked<2>();
-    if (buf.shape(1) != 3) {
+std::vector<std::tuple<int, int, int>> numpy_to_triangles(nb::ndarray<int, nb::c_contig, nb::device::cpu> arr) {
+    size_t n = arr.shape(0);
+    int* ptr = arr.data();
+    size_t stride = arr.shape(1);
+    if (stride != 3) {
         throw std::runtime_error("Expected Mx3 array for triangles");
     }
     std::vector<std::tuple<int, int, int>> result;
-    result.reserve(static_cast<size_t>(buf.shape(0)));
-    for (py::ssize_t i = 0; i < buf.shape(0); i++) {
-        result.emplace_back(buf(i, 0), buf(i, 1), buf(i, 2));
+    result.reserve(n);
+    for (size_t i = 0; i < n; i++) {
+        result.emplace_back(ptr[i * stride + 0], ptr[i * stride + 1], ptr[i * stride + 2]);
     }
     return result;
 }
 
 // Helper: surface normals to dict (list of normals per voxel)
-py::dict surface_normals_to_dict(const std::unordered_map<VoxelKey, std::vector<Vec3>, ChunkKeyHash>& normals) {
-    py::dict result;
+nb::dict surface_normals_to_dict(const std::unordered_map<VoxelKey, std::vector<Vec3>, ChunkKeyHash>& normals) {
+    nb::dict result;
     for (const auto& [key, normal_list] : normals) {
-        py::tuple py_key = py::make_tuple(std::get<0>(key), std::get<1>(key), std::get<2>(key));
-        py::list py_normals;
+        nb::tuple py_key = nb::make_tuple(std::get<0>(key), std::get<1>(key), std::get<2>(key));
+        nb::list py_normals;
         for (const auto& normal : normal_list) {
-            py::array_t<double> py_normal(3);
-            auto buf = py_normal.mutable_unchecked<1>();
-            buf(0) = normal.x;
-            buf(1) = normal.y;
-            buf(2) = normal.z;
+            double* data = new double[3]{normal.x, normal.y, normal.z};
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            auto py_normal = nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner);
             py_normals.append(py_normal);
         }
         result[py_key] = py_normals;
@@ -58,7 +64,7 @@ py::dict surface_normals_to_dict(const std::unordered_map<VoxelKey, std::vector<
     return result;
 }
 
-PYBIND11_MODULE(_voxels_native, m) {
+NB_MODULE(_voxels_native, m) {
     m.doc() = "Native C++ voxelization module";
 
     // Constants
@@ -68,54 +74,56 @@ PYBIND11_MODULE(_voxels_native, m) {
     m.attr("VOXEL_SURFACE") = VOXEL_SURFACE;
 
     // VoxelChunk class
-    py::class_<VoxelChunk>(m, "VoxelChunk")
-        .def(py::init<>())
+    nb::class_<VoxelChunk>(m, "VoxelChunk")
+        .def(nb::init<>())
         .def("get", &VoxelChunk::get)
         .def("set", &VoxelChunk::set)
         .def("fill", &VoxelChunk::fill)
         .def("clear", &VoxelChunk::clear)
-        .def_property_readonly("is_empty", &VoxelChunk::is_empty)
-        .def_property_readonly("non_empty_count", &VoxelChunk::non_empty_count)
+        .def_prop_ro("is_empty", &VoxelChunk::is_empty)
+        .def_prop_ro("non_empty_count", &VoxelChunk::non_empty_count)
         .def("iter_non_empty", &VoxelChunk::iter_non_empty)
-        .def_property_readonly("data", [](const VoxelChunk& c) {
+        .def_prop_ro("data", [](const VoxelChunk& c) {
             // Return as numpy array
-            py::array_t<uint8_t> result({CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE});
-            auto buf = result.mutable_unchecked<3>();
-            const auto& data = c.data();
+            uint8_t* data = new uint8_t[CHUNK_VOLUME];
+            const auto& chunk_data = c.data();
             for (int z = 0; z < CHUNK_SIZE; z++) {
                 for (int y = 0; y < CHUNK_SIZE; y++) {
                     for (int x = 0; x < CHUNK_SIZE; x++) {
-                        buf(x, y, z) = data[x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE];
+                        data[x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE] =
+                            chunk_data[x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE];
                     }
                 }
             }
-            return result;
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<uint8_t*>(p); });
+            size_t shape[3] = {CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE};
+            return nb::ndarray<nb::numpy, uint8_t>(data, 3, shape, owner);
         })
         .def("serialize", [](const VoxelChunk& c) {
-            py::module_ gzip = py::module_::import("gzip");
-            py::module_ base64 = py::module_::import("base64");
+            nb::module_ gzip = nb::module_::import_("gzip");
+            nb::module_ base64 = nb::module_::import_("base64");
 
             // Get raw data as bytes
             const auto& data = c.data();
-            py::bytes raw_bytes(reinterpret_cast<const char*>(data.data()), CHUNK_VOLUME);
+            nb::bytes raw_bytes(reinterpret_cast<const char*>(data.data()), CHUNK_VOLUME);
 
             // Compress and encode
-            py::bytes compressed = gzip.attr("compress")(raw_bytes);
-            py::object encoded = base64.attr("b64encode")(compressed).attr("decode")("ascii");
+            nb::bytes compressed = nb::cast<nb::bytes>(gzip.attr("compress")(raw_bytes));
+            nb::object encoded = base64.attr("b64encode")(compressed).attr("decode")("ascii");
 
-            py::dict result;
+            nb::dict result;
             result["data"] = encoded;
             result["count"] = c.non_empty_count();
             return result;
         })
-        .def_static("deserialize", [](const py::dict& data) {
-            py::module_ gzip = py::module_::import("gzip");
-            py::module_ base64 = py::module_::import("base64");
+        .def_static("deserialize", [](const nb::dict& data) {
+            nb::module_ gzip = nb::module_::import_("gzip");
+            nb::module_ base64 = nb::module_::import_("base64");
 
-            py::bytes compressed = base64.attr("b64decode")(data["data"]);
-            py::bytes raw = gzip.attr("decompress")(compressed);
+            nb::bytes compressed = nb::cast<nb::bytes>(base64.attr("b64decode")(data["data"]));
+            nb::bytes raw = nb::cast<nb::bytes>(gzip.attr("decompress")(compressed));
 
-            std::string raw_str = raw.cast<std::string>();
+            std::string raw_str = nb::cast<std::string>(raw);
 
             VoxelChunk chunk;
             // Set data directly
@@ -138,48 +146,47 @@ PYBIND11_MODULE(_voxels_native, m) {
         });
 
     // VoxelGrid class
-    py::class_<VoxelGrid>(m, "VoxelGrid")
-        .def(py::init([](double cell_size, py::object origin, std::string name, std::string source_path) {
+    nb::class_<VoxelGrid>(m, "VoxelGrid")
+        .def("__init__", [](VoxelGrid* self, double cell_size, nb::object origin, std::string name, std::string source_path) {
             Vec3 o = Vec3::zero();
             if (!origin.is_none()) {
-                if (py::isinstance<py::tuple>(origin)) {
-                    py::tuple t = origin.cast<py::tuple>();
-                    o = Vec3(t[0].cast<double>(), t[1].cast<double>(), t[2].cast<double>());
-                } else if (py::isinstance<py::list>(origin)) {
-                    py::list l = origin.cast<py::list>();
-                    o = Vec3(l[0].cast<double>(), l[1].cast<double>(), l[2].cast<double>());
+                if (nb::isinstance<nb::tuple>(origin)) {
+                    nb::tuple t = nb::cast<nb::tuple>(origin);
+                    o = Vec3(nb::cast<double>(t[0]), nb::cast<double>(t[1]), nb::cast<double>(t[2]));
+                } else if (nb::isinstance<nb::list>(origin)) {
+                    nb::list l = nb::cast<nb::list>(origin);
+                    o = Vec3(nb::cast<double>(l[0]), nb::cast<double>(l[1]), nb::cast<double>(l[2]));
                 } else {
                     // Try numpy array
-                    auto arr = origin.cast<py::array_t<double>>();
-                    auto buf = arr.unchecked<1>();
-                    o = Vec3(buf(0), buf(1), buf(2));
+                    auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(origin);
+                    double* ptr = arr.data();
+                    o = Vec3(ptr[0], ptr[1], ptr[2]);
                 }
             }
-            return VoxelGrid(cell_size, o, name, source_path);
-        }),
-             py::arg("cell_size") = 0.25,
-             py::arg("origin") = py::none(),
-             py::arg("name") = "",
-             py::arg("source_path") = "")
+            new (self) VoxelGrid(cell_size, o, name, source_path);
+        },
+             nb::arg("cell_size") = 0.25,
+             nb::arg("origin") = nb::none(),
+             nb::arg("name") = "",
+             nb::arg("source_path") = "")
 
         // Properties (as Python properties, not methods, for compatibility)
-        .def_property_readonly("cell_size", &VoxelGrid::cell_size)
-        .def_property_readonly("chunk_count", &VoxelGrid::chunk_count)
-        .def_property_readonly("voxel_count", &VoxelGrid::voxel_count)
-        .def_property("name",
+        .def_prop_ro("cell_size", &VoxelGrid::cell_size)
+        .def_prop_ro("chunk_count", &VoxelGrid::chunk_count)
+        .def_prop_ro("voxel_count", &VoxelGrid::voxel_count)
+        .def_prop_rw("name",
             [](const VoxelGrid& g) { return g.name(); },
             [](VoxelGrid& g, const std::string& n) { g.set_name(n); })
-        .def_property("source_path",
+        .def_prop_rw("source_path",
             [](const VoxelGrid& g) { return g.source_path(); },
             [](VoxelGrid& g, const std::string& p) { g.set_source_path(p); })
-        .def_property_readonly("origin", [](const VoxelGrid& g) {
+        .def_prop_ro("origin", [](const VoxelGrid& g) {
             Vec3 o = g.origin();
-            py::array_t<double> result(3);
-            auto buf = result.mutable_unchecked<1>();
-            buf(0) = o.x; buf(1) = o.y; buf(2) = o.z;
-            return result;
+            double* data = new double[3]{o.x, o.y, o.z};
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            return nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner);
         })
-        .def_property_readonly("surface_normals", [](const VoxelGrid& grid) {
+        .def_prop_ro("surface_normals", [](const VoxelGrid& grid) {
             return surface_normals_to_dict(grid.surface_normals());
         })
 
@@ -188,40 +195,39 @@ PYBIND11_MODULE(_voxels_native, m) {
         .def("set", &VoxelGrid::set)
         .def("clear", &VoxelGrid::clear)
 
-        .def("get_at_world", [](const VoxelGrid& grid, py::array_t<double> pos) {
-            auto buf = pos.unchecked<1>();
-            return grid.get_at_world(Vec3(buf(0), buf(1), buf(2)));
+        .def("get_at_world", [](const VoxelGrid& grid, nb::ndarray<double, nb::c_contig, nb::device::cpu> pos) {
+            double* ptr = pos.data();
+            return grid.get_at_world(Vec3(ptr[0], ptr[1], ptr[2]));
         })
-        .def("set_at_world", [](VoxelGrid& grid, py::array_t<double> pos, uint8_t value) {
-            auto buf = pos.unchecked<1>();
-            grid.set_at_world(Vec3(buf(0), buf(1), buf(2)), value);
+        .def("set_at_world", [](VoxelGrid& grid, nb::ndarray<double, nb::c_contig, nb::device::cpu> pos, uint8_t value) {
+            double* ptr = pos.data();
+            grid.set_at_world(Vec3(ptr[0], ptr[1], ptr[2]), value);
         })
 
-        .def("world_to_voxel", [](const VoxelGrid& grid, py::array_t<double> pos) {
-            auto buf = pos.unchecked<1>();
-            return grid.world_to_voxel(Vec3(buf(0), buf(1), buf(2)));
+        .def("world_to_voxel", [](const VoxelGrid& grid, nb::ndarray<double, nb::c_contig, nb::device::cpu> pos) {
+            double* ptr = pos.data();
+            return grid.world_to_voxel(Vec3(ptr[0], ptr[1], ptr[2]));
         })
 
         .def("voxel_to_world", [](const VoxelGrid& grid, int vx, int vy, int vz) {
             Vec3 w = grid.voxel_to_world(vx, vy, vz);
-            py::array_t<double> result(3);
-            auto buf = result.mutable_unchecked<1>();
-            buf(0) = w.x; buf(1) = w.y; buf(2) = w.z;
-            return result;
+            double* data = new double[3]{w.x, w.y, w.z};
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            return nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner);
         })
 
         // Chunk access
-        .def("get_chunk", [](const VoxelGrid& grid, int cx, int cy, int cz) -> py::object {
+        .def("get_chunk", [](const VoxelGrid& grid, int cx, int cy, int cz) -> nb::object {
             const VoxelChunk* chunk = grid.get_chunk(cx, cy, cz);
-            if (!chunk) return py::none();
+            if (!chunk) return nb::none();
             // Return copy to avoid dangling pointer issues
-            return py::cast(*chunk);
+            return nb::cast(*chunk);
         })
         .def("iter_chunks", [](const VoxelGrid& grid) {
-            py::list result;
+            nb::list result;
             for (const auto& [key, chunk_ptr] : grid.iter_chunks()) {
-                py::tuple py_key = py::make_tuple(std::get<0>(key), std::get<1>(key), std::get<2>(key));
-                result.append(py::make_tuple(py_key, *chunk_ptr));
+                nb::tuple py_key = nb::make_tuple(std::get<0>(key), std::get<1>(key), std::get<2>(key));
+                result.append(nb::make_tuple(py_key, *chunk_ptr));
             }
             return result;
         })
@@ -229,95 +235,94 @@ PYBIND11_MODULE(_voxels_native, m) {
         .def("iter_non_empty", &VoxelGrid::iter_non_empty)
 
         // Bounds
-        .def("bounds", [](const VoxelGrid& grid) -> py::object {
+        .def("bounds", [](const VoxelGrid& grid) -> nb::object {
             auto b = grid.bounds();
-            if (!b) return py::none();
+            if (!b) return nb::none();
             auto [min_v, max_v] = *b;
-            return py::make_tuple(
-                py::make_tuple(std::get<0>(min_v), std::get<1>(min_v), std::get<2>(min_v)),
-                py::make_tuple(std::get<0>(max_v), std::get<1>(max_v), std::get<2>(max_v))
+            return nb::make_tuple(
+                nb::make_tuple(std::get<0>(min_v), std::get<1>(min_v), std::get<2>(min_v)),
+                nb::make_tuple(std::get<0>(max_v), std::get<1>(max_v), std::get<2>(max_v))
             );
         })
-        .def("world_bounds", [](const VoxelGrid& grid) -> py::object {
+        .def("world_bounds", [](const VoxelGrid& grid) -> nb::object {
             auto b = grid.world_bounds();
-            if (!b) return py::none();
+            if (!b) return nb::none();
             auto [min_w, max_w] = *b;
-            py::array_t<double> min_arr(3), max_arr(3);
-            auto buf_min = min_arr.mutable_unchecked<1>();
-            auto buf_max = max_arr.mutable_unchecked<1>();
-            buf_min(0) = min_w.x; buf_min(1) = min_w.y; buf_min(2) = min_w.z;
-            buf_max(0) = max_w.x; buf_max(1) = max_w.y; buf_max(2) = max_w.z;
-            return py::make_tuple(min_arr, max_arr);
+            double* min_data = new double[3]{min_w.x, min_w.y, min_w.z};
+            double* max_data = new double[3]{max_w.x, max_w.y, max_w.z};
+            nb::capsule min_owner(min_data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            nb::capsule max_owner(max_data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            auto min_arr = nb::ndarray<nb::numpy, double, nb::shape<3>>(min_data, {3}, min_owner);
+            auto max_arr = nb::ndarray<nb::numpy, double, nb::shape<3>>(max_data, {3}, max_owner);
+            return nb::make_tuple(min_arr, max_arr);
         })
 
         // Voxelization
         .def("voxelize_mesh", [](VoxelGrid& grid,
-                                  py::array_t<double> vertices,
-                                  py::array_t<int> triangles,
+                                  nb::ndarray<double, nb::c_contig, nb::device::cpu> vertices,
+                                  nb::ndarray<int, nb::c_contig, nb::device::cpu> triangles,
                                   uint8_t voxel_type) {
             auto verts = numpy_to_vec3_vector(vertices);
             auto tris = numpy_to_triangles(triangles);
             return grid.voxelize_mesh(verts, tris, voxel_type);
-        }, py::arg("vertices"), py::arg("triangles"), py::arg("voxel_type") = VOXEL_SOLID)
+        }, nb::arg("vertices"), nb::arg("triangles"), nb::arg("voxel_type") = VOXEL_SOLID)
 
         .def("fill_interior", &VoxelGrid::fill_interior,
-             py::arg("fill_value") = VOXEL_SOLID)
+             nb::arg("fill_value") = VOXEL_SOLID)
 
         .def("mark_surface", &VoxelGrid::mark_surface,
-             py::arg("surface_value") = VOXEL_SURFACE)
+             nb::arg("surface_value") = VOXEL_SURFACE)
 
         .def("clear_by_type", &VoxelGrid::clear_by_type,
-             py::arg("type_to_clear") = VOXEL_SOLID)
+             nb::arg("type_to_clear") = VOXEL_SOLID)
 
         .def("extract_surface", &VoxelGrid::extract_surface,
-             py::arg("surface_value") = VOXEL_SOLID)
+             nb::arg("surface_value") = VOXEL_SOLID)
 
         // Surface normals
         .def("compute_surface_normals", [](VoxelGrid& grid,
-                                           py::array_t<double> vertices,
-                                           py::array_t<int> triangles) {
+                                           nb::ndarray<double, nb::c_contig, nb::device::cpu> vertices,
+                                           nb::ndarray<int, nb::c_contig, nb::device::cpu> triangles) {
             auto verts = numpy_to_vec3_vector(vertices);
             auto tris = numpy_to_triangles(triangles);
             return grid.compute_surface_normals(verts, tris);
         })
 
-        .def("get_surface_normal", [](const VoxelGrid& grid, int vx, int vy, int vz) -> py::object {
+        .def("get_surface_normal", [](const VoxelGrid& grid, int vx, int vy, int vz) -> nb::object {
             if (!grid.has_surface_normal(vx, vy, vz)) {
-                return py::none();
+                return nb::none();
             }
             Vec3 n = grid.get_surface_normal(vx, vy, vz);
-            py::array_t<double> result(3);
-            auto buf = result.mutable_unchecked<1>();
-            buf(0) = n.x; buf(1) = n.y; buf(2) = n.z;
-            return result;
+            double* data = new double[3]{n.x, n.y, n.z};
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            return nb::cast(nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner));
         })
 
-        .def("get_surface_normals", [](const VoxelGrid& grid, int vx, int vy, int vz) -> py::object {
+        .def("get_surface_normals", [](const VoxelGrid& grid, int vx, int vy, int vz) -> nb::object {
             const auto& normals = grid.get_surface_normals(vx, vy, vz);
-            if (normals.empty()) return py::none();
-            py::list result;
+            if (normals.empty()) return nb::none();
+            nb::list result;
             for (const auto& n : normals) {
-                py::array_t<double> arr(3);
-                auto buf = arr.mutable_unchecked<1>();
-                buf(0) = n.x; buf(1) = n.y; buf(2) = n.z;
-                result.append(arr);
+                double* data = new double[3]{n.x, n.y, n.z};
+                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+                result.append(nb::cast(nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner)));
             }
             return result;
         })
 
         .def("has_surface_normal", &VoxelGrid::has_surface_normal)
 
-        .def("add_surface_normal", [](VoxelGrid& grid, int vx, int vy, int vz, py::array_t<double> normal) {
-            auto buf = normal.unchecked<1>();
-            grid.add_surface_normal(vx, vy, vz, Vec3(buf(0), buf(1), buf(2)));
+        .def("add_surface_normal", [](VoxelGrid& grid, int vx, int vy, int vz, nb::ndarray<double, nb::c_contig, nb::device::cpu> normal) {
+            double* ptr = normal.data();
+            grid.add_surface_normal(vx, vy, vz, Vec3(ptr[0], ptr[1], ptr[2]));
         })
 
-        .def("set_surface_normals", [](VoxelGrid& grid, int vx, int vy, int vz, py::list normals) {
+        .def("set_surface_normals", [](VoxelGrid& grid, int vx, int vy, int vz, nb::list normals) {
             std::vector<Vec3> vec_normals;
             for (auto item : normals) {
-                py::array_t<double> arr = item.cast<py::array_t<double>>();
-                auto buf = arr.unchecked<1>();
-                vec_normals.emplace_back(buf(0), buf(1), buf(2));
+                auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(item);
+                double* ptr = arr.data();
+                vec_normals.emplace_back(ptr[0], ptr[1], ptr[2]);
             }
             grid.set_surface_normals(vx, vy, vz, vec_normals);
         })
@@ -325,19 +330,19 @@ PYBIND11_MODULE(_voxels_native, m) {
         // Serialization
         .def("serialize", [](const VoxelGrid& grid) {
             if (!grid.source_path().empty()) {
-                py::dict result;
+                nb::dict result;
                 result["type"] = "path";
                 result["path"] = grid.source_path();
                 return result;
             }
             // Inline serialization
-            py::dict result;
+            nb::dict result;
             result["type"] = "inline";
             Vec3 o = grid.origin();
-            result["origin"] = py::make_tuple(o.x, o.y, o.z);
+            result["origin"] = nb::make_tuple(o.x, o.y, o.z);
             result["cell_size"] = grid.cell_size();
 
-            py::dict chunks_dict;
+            nb::dict chunks_dict;
             for (const auto& [key, chunk_ptr] : grid.iter_chunks()) {
                 int cx = std::get<0>(key);
                 int cy = std::get<1>(key);
@@ -345,71 +350,71 @@ PYBIND11_MODULE(_voxels_native, m) {
                 std::string key_str = std::to_string(cx) + "," + std::to_string(cy) + "," + std::to_string(cz);
 
                 // Serialize chunk
-                py::module_ gzip = py::module_::import("gzip");
-                py::module_ base64 = py::module_::import("base64");
+                nb::module_ gzip = nb::module_::import_("gzip");
+                nb::module_ base64 = nb::module_::import_("base64");
                 const auto& data = chunk_ptr->data();
-                py::bytes raw_bytes(reinterpret_cast<const char*>(data.data()), CHUNK_VOLUME);
-                py::bytes compressed = gzip.attr("compress")(raw_bytes);
-                py::object encoded = base64.attr("b64encode")(compressed).attr("decode")("ascii");
+                nb::bytes raw_bytes(reinterpret_cast<const char*>(data.data()), CHUNK_VOLUME);
+                nb::bytes compressed = nb::cast<nb::bytes>(gzip.attr("compress")(raw_bytes));
+                nb::object encoded = base64.attr("b64encode")(compressed).attr("decode")("ascii");
 
-                py::dict chunk_data;
+                nb::dict chunk_data;
                 chunk_data["data"] = encoded;
                 chunk_data["count"] = chunk_ptr->non_empty_count();
-                chunks_dict[py::str(key_str)] = chunk_data;
+                chunks_dict[nb::str(key_str.c_str())] = chunk_data;
             }
             result["chunks"] = chunks_dict;
             return result;
         })
         .def("direct_serialize", [](const VoxelGrid& grid) {
-            py::dict result;
+            nb::dict result;
             result["type"] = "inline";
             Vec3 o = grid.origin();
-            result["origin"] = py::make_tuple(o.x, o.y, o.z);
+            result["origin"] = nb::make_tuple(o.x, o.y, o.z);
             result["cell_size"] = grid.cell_size();
 
-            py::dict chunks_dict;
+            nb::dict chunks_dict;
             for (const auto& [key, chunk_ptr] : grid.iter_chunks()) {
                 int cx = std::get<0>(key);
                 int cy = std::get<1>(key);
                 int cz = std::get<2>(key);
                 std::string key_str = std::to_string(cx) + "," + std::to_string(cy) + "," + std::to_string(cz);
 
-                py::module_ gzip = py::module_::import("gzip");
-                py::module_ base64 = py::module_::import("base64");
+                nb::module_ gzip = nb::module_::import_("gzip");
+                nb::module_ base64 = nb::module_::import_("base64");
                 const auto& data = chunk_ptr->data();
-                py::bytes raw_bytes(reinterpret_cast<const char*>(data.data()), CHUNK_VOLUME);
-                py::bytes compressed = gzip.attr("compress")(raw_bytes);
-                py::object encoded = base64.attr("b64encode")(compressed).attr("decode")("ascii");
+                nb::bytes raw_bytes(reinterpret_cast<const char*>(data.data()), CHUNK_VOLUME);
+                nb::bytes compressed = nb::cast<nb::bytes>(gzip.attr("compress")(raw_bytes));
+                nb::object encoded = base64.attr("b64encode")(compressed).attr("decode")("ascii");
 
-                py::dict chunk_data;
+                nb::dict chunk_data;
                 chunk_data["data"] = encoded;
                 chunk_data["count"] = chunk_ptr->non_empty_count();
-                chunks_dict[py::str(key_str)] = chunk_data;
+                chunks_dict[nb::str(key_str.c_str())] = chunk_data;
             }
             result["chunks"] = chunks_dict;
             return result;
         })
-        .def_static("deserialize", [](const py::dict& data) {
-            py::object origin_obj = data["origin"];
-            py::tuple origin_tuple = origin_obj.cast<py::tuple>();
+        .def_static("deserialize", [](const nb::dict& data) {
+            nb::object origin_obj = data["origin"];
+            nb::tuple origin_tuple = nb::cast<nb::tuple>(origin_obj);
             Vec3 origin(
-                origin_tuple[0].cast<double>(),
-                origin_tuple[1].cast<double>(),
-                origin_tuple[2].cast<double>()
+                nb::cast<double>(origin_tuple[0]),
+                nb::cast<double>(origin_tuple[1]),
+                nb::cast<double>(origin_tuple[2])
             );
-            double cell_size = data["cell_size"].cast<double>();
-            std::string source_path = data.contains("path") ? data["path"].cast<std::string>() : "";
+            double cell_size = nb::cast<double>(data["cell_size"]);
+            std::string source_path = data.contains("path") ? nb::cast<std::string>(data["path"]) : "";
 
             VoxelGrid grid(cell_size, origin, "", source_path);
 
             if (data.contains("chunks")) {
-                py::dict chunks_dict = data["chunks"].cast<py::dict>();
-                py::module_ gzip = py::module_::import("gzip");
-                py::module_ base64 = py::module_::import("base64");
+                nb::dict chunks_dict = nb::cast<nb::dict>(data["chunks"]);
+                nb::module_ gzip = nb::module_::import_("gzip");
+                nb::module_ base64 = nb::module_::import_("base64");
 
                 for (auto item : chunks_dict) {
-                    std::string key_str = item.first.cast<std::string>();
-                    py::dict chunk_data = item.second.cast<py::dict>();
+                    std::string key_str = nb::cast<std::string>(item.first);
+                    nb::dict chunk_data = nb::cast<nb::dict>(item.second);
 
                     // Parse key "cx,cy,cz"
                     size_t pos1 = key_str.find(',');
@@ -419,9 +424,9 @@ PYBIND11_MODULE(_voxels_native, m) {
                     int cz = std::stoi(key_str.substr(pos2 + 1));
 
                     // Deserialize chunk data
-                    py::bytes compressed = base64.attr("b64decode")(chunk_data["data"]);
-                    py::bytes raw = gzip.attr("decompress")(compressed);
-                    std::string raw_str = raw.cast<std::string>();
+                    nb::bytes compressed = nb::cast<nb::bytes>(base64.attr("b64decode")(chunk_data["data"]));
+                    nb::bytes raw = nb::cast<nb::bytes>(gzip.attr("decompress")(compressed));
+                    std::string raw_str = nb::cast<std::string>(raw);
 
                     for (int z = 0; z < CHUNK_SIZE; z++) {
                         for (int y = 0; y < CHUNK_SIZE; y++) {
@@ -441,28 +446,28 @@ PYBIND11_MODULE(_voxels_native, m) {
             }
             return grid;
         })
-        .def_static("direct_deserialize", [](const py::dict& data) {
+        .def_static("direct_deserialize", [](const nb::dict& data) {
             // Same as deserialize
-            py::object origin_obj = data["origin"];
-            py::tuple origin_tuple = origin_obj.cast<py::tuple>();
+            nb::object origin_obj = data["origin"];
+            nb::tuple origin_tuple = nb::cast<nb::tuple>(origin_obj);
             Vec3 origin(
-                origin_tuple[0].cast<double>(),
-                origin_tuple[1].cast<double>(),
-                origin_tuple[2].cast<double>()
+                nb::cast<double>(origin_tuple[0]),
+                nb::cast<double>(origin_tuple[1]),
+                nb::cast<double>(origin_tuple[2])
             );
-            double cell_size = data["cell_size"].cast<double>();
-            std::string source_path = data.contains("path") ? data["path"].cast<std::string>() : "";
+            double cell_size = nb::cast<double>(data["cell_size"]);
+            std::string source_path = data.contains("path") ? nb::cast<std::string>(data["path"]) : "";
 
             VoxelGrid grid(cell_size, origin, "", source_path);
 
             if (data.contains("chunks")) {
-                py::dict chunks_dict = data["chunks"].cast<py::dict>();
-                py::module_ gzip = py::module_::import("gzip");
-                py::module_ base64 = py::module_::import("base64");
+                nb::dict chunks_dict = nb::cast<nb::dict>(data["chunks"]);
+                nb::module_ gzip = nb::module_::import_("gzip");
+                nb::module_ base64 = nb::module_::import_("base64");
 
                 for (auto item : chunks_dict) {
-                    std::string key_str = item.first.cast<std::string>();
-                    py::dict chunk_data = item.second.cast<py::dict>();
+                    std::string key_str = nb::cast<std::string>(item.first);
+                    nb::dict chunk_data = nb::cast<nb::dict>(item.second);
 
                     size_t pos1 = key_str.find(',');
                     size_t pos2 = key_str.find(',', pos1 + 1);
@@ -470,9 +475,9 @@ PYBIND11_MODULE(_voxels_native, m) {
                     int cy = std::stoi(key_str.substr(pos1 + 1, pos2 - pos1 - 1));
                     int cz = std::stoi(key_str.substr(pos2 + 1));
 
-                    py::bytes compressed = base64.attr("b64decode")(chunk_data["data"]);
-                    py::bytes raw = gzip.attr("decompress")(compressed);
-                    std::string raw_str = raw.cast<std::string>();
+                    nb::bytes compressed = nb::cast<nb::bytes>(base64.attr("b64decode")(chunk_data["data"]));
+                    nb::bytes raw = nb::cast<nb::bytes>(gzip.attr("decompress")(compressed));
+                    std::string raw_str = nb::cast<std::string>(raw);
 
                     for (int z = 0; z < CHUNK_SIZE; z++) {
                         for (int y = 0; y < CHUNK_SIZE; y++) {
@@ -494,18 +499,20 @@ PYBIND11_MODULE(_voxels_native, m) {
         });
 
     // ========== VoxelGridHandle ==========
-    py::class_<VoxelGridHandle>(m, "VoxelGridHandle")
-        .def(py::init<>())
-        .def(py::init<py::object>(), py::arg("asset"))
-        .def_static("from_name", &VoxelGridHandle::from_name, py::arg("name"))
-        .def_static("from_asset", &VoxelGridHandle::from_asset, py::arg("asset"))
-        .def_static("from_uuid", &VoxelGridHandle::from_uuid, py::arg("uuid"))
-        .def_static("deserialize", &VoxelGridHandle::deserialize, py::arg("data"))
-        .def_readwrite("asset", &VoxelGridHandle::asset)
-        .def_property_readonly("is_valid", &VoxelGridHandle::is_valid)
-        .def_property_readonly("name", &VoxelGridHandle::name)
-        .def_property_readonly("grid", &VoxelGridHandle::grid)
-        .def_property_readonly("version", &VoxelGridHandle::version)
+    nb::class_<VoxelGridHandle>(m, "VoxelGridHandle")
+        .def(nb::init<>())
+        .def("__init__", [](VoxelGridHandle* self, nb::object asset) {
+            new (self) VoxelGridHandle(asset);
+        }, nb::arg("asset"))
+        .def_static("from_name", &VoxelGridHandle::from_name, nb::arg("name"))
+        .def_static("from_asset", &VoxelGridHandle::from_asset, nb::arg("asset"))
+        .def_static("from_uuid", &VoxelGridHandle::from_uuid, nb::arg("uuid"))
+        .def_static("deserialize", &VoxelGridHandle::deserialize, nb::arg("data"))
+        .def_rw("asset", &VoxelGridHandle::asset)
+        .def_prop_ro("is_valid", &VoxelGridHandle::is_valid)
+        .def_prop_ro("name", &VoxelGridHandle::name)
+        .def_prop_ro("grid", &VoxelGridHandle::grid)
+        .def_prop_ro("version", &VoxelGridHandle::version)
         .def("get", &VoxelGridHandle::get)
         .def("get_grid", &VoxelGridHandle::get)
         .def("get_grid_or_none", &VoxelGridHandle::get)
@@ -520,29 +527,29 @@ PYBIND11_MODULE(_voxels_native, m) {
     tc::KindRegistry::instance().register_python(
         "voxel_grid_handle",
         // serialize
-        py::cpp_function([](py::object obj) -> py::object {
-            VoxelGridHandle handle = obj.cast<VoxelGridHandle>();
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            VoxelGridHandle handle = nb::cast<VoxelGridHandle>(obj);
             return handle.serialize();
         }),
         // deserialize
-        py::cpp_function([](py::object data) -> py::object {
+        nb::cpp_function([](nb::object data) -> nb::object {
             // Handle UUID string
-            if (py::isinstance<py::str>(data)) {
-                return py::cast(VoxelGridHandle::from_uuid(data.cast<std::string>()));
+            if (nb::isinstance<nb::str>(data)) {
+                return nb::cast(VoxelGridHandle::from_uuid(nb::cast<std::string>(data)));
             }
             // Handle dict format
-            if (py::isinstance<py::dict>(data)) {
-                py::dict d = data.cast<py::dict>();
-                return py::cast(VoxelGridHandle::deserialize(d));
+            if (nb::isinstance<nb::dict>(data)) {
+                nb::dict d = nb::cast<nb::dict>(data);
+                return nb::cast(VoxelGridHandle::deserialize(d));
             }
-            return py::cast(VoxelGridHandle());
+            return nb::cast(VoxelGridHandle());
         }),
         // convert
-        py::cpp_function([](py::object value) -> py::object {
+        nb::cpp_function([](nb::object value) -> nb::object {
             if (value.is_none()) {
-                return py::cast(VoxelGridHandle());
+                return nb::cast(VoxelGridHandle());
             }
-            if (py::isinstance<VoxelGridHandle>(value)) {
+            if (nb::isinstance<VoxelGridHandle>(value)) {
                 return value;
             }
             return value;
@@ -551,24 +558,24 @@ PYBIND11_MODULE(_voxels_native, m) {
 
     // Standalone function for testing
     m.def("triangle_aabb_intersect", [](
-        py::array_t<double> v0,
-        py::array_t<double> v1,
-        py::array_t<double> v2,
-        py::array_t<double> center,
-        py::array_t<double> half_size
+        nb::ndarray<double, nb::c_contig, nb::device::cpu> v0,
+        nb::ndarray<double, nb::c_contig, nb::device::cpu> v1,
+        nb::ndarray<double, nb::c_contig, nb::device::cpu> v2,
+        nb::ndarray<double, nb::c_contig, nb::device::cpu> center,
+        nb::ndarray<double, nb::c_contig, nb::device::cpu> half_size
     ) {
-        auto b0 = v0.unchecked<1>();
-        auto b1 = v1.unchecked<1>();
-        auto b2 = v2.unchecked<1>();
-        auto bc = center.unchecked<1>();
-        auto bh = half_size.unchecked<1>();
+        double* b0 = v0.data();
+        double* b1 = v1.data();
+        double* b2 = v2.data();
+        double* bc = center.data();
+        double* bh = half_size.data();
 
         return triangle_aabb_intersect(
-            Vec3(b0(0), b0(1), b0(2)),
-            Vec3(b1(0), b1(1), b1(2)),
-            Vec3(b2(0), b2(1), b2(2)),
-            Vec3(bc(0), bc(1), bc(2)),
-            Vec3(bh(0), bh(1), bh(2))
+            Vec3(b0[0], b0[1], b0[2]),
+            Vec3(b1[0], b1[1], b1[2]),
+            Vec3(b2[0], b2[1], b2[2]),
+            Vec3(bc[0], bc[1], bc[2]),
+            Vec3(bh[0], bh[1], bh[2])
         );
     });
 }

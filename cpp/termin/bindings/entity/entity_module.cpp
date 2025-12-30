@@ -6,9 +6,12 @@
  * to properly inherit from Component.
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/unordered_map.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/trampoline.h>
 #include <unordered_set>
 #include <iostream>
 #include <cstdio>
@@ -42,10 +45,11 @@ inline bool check_heap_entity() { return true; }
 #include "termin/entity/entity_registry.hpp"
 #include "termin/entity/components/rotator_component.hpp"
 #include "termin/geom/general_transform3.hpp"
+#include "termin/geom/pose3.hpp"
 #include "trent/trent.h"
 #include "../../../../core_c/include/tc_kind.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 using namespace termin;
 
 // Shortcut for standalone pool
@@ -76,179 +80,179 @@ static Entity migrate_entity_to_pool(Entity& entity, tc_entity_pool* dst_pool) {
 
 // --- trent <-> Python conversion ---
 
-static nos::trent py_to_trent(py::object obj) {
+static nos::trent py_to_trent(nb::object obj) {
     if (obj.is_none()) {
         return nos::trent::nil();
     }
-    if (py::isinstance<py::bool_>(obj)) {
-        return nos::trent(obj.cast<bool>());
+    if (nb::isinstance<nb::bool_>(obj)) {
+        return nos::trent(nb::cast<bool>(obj));
     }
-    if (py::isinstance<py::int_>(obj)) {
-        return nos::trent(obj.cast<int64_t>());
+    if (nb::isinstance<nb::int_>(obj)) {
+        return nos::trent(nb::cast<int64_t>(obj));
     }
-    if (py::isinstance<py::float_>(obj)) {
-        return nos::trent(obj.cast<double>());
+    if (nb::isinstance<nb::float_>(obj)) {
+        return nos::trent(nb::cast<double>(obj));
     }
-    if (py::isinstance<py::str>(obj)) {
-        return nos::trent(obj.cast<std::string>());
+    if (nb::isinstance<nb::str>(obj)) {
+        return nos::trent(nb::cast<std::string>(obj));
     }
-    if (py::isinstance<py::list>(obj)) {
+    if (nb::isinstance<nb::list>(obj)) {
         nos::trent result;
         result.init(nos::trent_type::list);
         for (auto item : obj) {
-            result.as_list().push_back(py_to_trent(py::reinterpret_borrow<py::object>(item)));
+            result.as_list().push_back(py_to_trent(nb::borrow<nb::object>(item)));
         }
         return result;
     }
-    if (py::isinstance<py::dict>(obj)) {
+    if (nb::isinstance<nb::dict>(obj)) {
         nos::trent result;
         result.init(nos::trent_type::dict);
-        for (auto item : obj.cast<py::dict>()) {
-            std::string key = item.first.cast<std::string>();
-            result[key] = py_to_trent(py::reinterpret_borrow<py::object>(item.second));
+        for (auto item : nb::cast<nb::dict>(obj)) {
+            std::string key = nb::cast<std::string>(item.first);
+            result[key] = py_to_trent(nb::borrow<nb::object>(item.second));
         }
         return result;
     }
     return nos::trent::nil();
 }
 
-static py::object trent_to_py(const nos::trent& t) {
+static nb::object trent_to_py(const nos::trent& t) {
     switch (t.get_type()) {
         case nos::trent_type::nil:
-            return py::none();
+            return nb::none();
         case nos::trent_type::boolean:
-            return py::bool_(t.as_bool());
+            return nb::bool_(t.as_bool());
         case nos::trent_type::numer: {
             double val = t.as_numer();
             // Return int if it's a whole number
             if (val == static_cast<int64_t>(val)) {
-                return py::int_(static_cast<int64_t>(val));
+                return nb::int_(static_cast<int64_t>(val));
             }
-            return py::float_(val);
+            return nb::float_(val);
         }
         case nos::trent_type::string:
-            return py::str(t.as_string());
+            return nb::str(t.as_string().c_str());
         case nos::trent_type::list: {
-            py::list result;
+            nb::list result;
             for (const auto& item : t.as_list()) {
                 result.append(trent_to_py(item));
             }
             return result;
         }
         case nos::trent_type::dict: {
-            py::dict result;
+            nb::dict result;
             for (const auto& [key, val] : t.as_dict()) {
-                result[py::str(key)] = trent_to_py(val);
+                result[nb::str(key.c_str())] = trent_to_py(val);
             }
             return result;
         }
     }
-    return py::none();
+    return nb::none();
 }
 
 // Trampoline class for CxxComponent.
 // Allows Python classes to inherit from C++ CxxComponent.
 class PyCxxComponent : public CxxComponent {
 public:
-    using CxxComponent::CxxComponent;
+    NB_TRAMPOLINE(CxxComponent, 8);
 
     void start() override {
-        PYBIND11_OVERRIDE(void, CxxComponent, start);
+        NB_OVERRIDE(start);
     }
 
     void update(float dt) override {
-        PYBIND11_OVERRIDE(void, CxxComponent, update, dt);
+        NB_OVERRIDE(update, dt);
     }
 
     void fixed_update(float dt) override {
-        PYBIND11_OVERRIDE(void, CxxComponent, fixed_update, dt);
+        NB_OVERRIDE(fixed_update, dt);
     }
 
     void on_destroy() override {
-        PYBIND11_OVERRIDE(void, CxxComponent, on_destroy);
+        NB_OVERRIDE(on_destroy);
     }
 
     void on_added_to_entity() override {
-        PYBIND11_OVERRIDE(void, CxxComponent, on_added_to_entity);
+        NB_OVERRIDE(on_added_to_entity);
     }
 
     void on_removed_from_entity() override {
-        PYBIND11_OVERRIDE(void, CxxComponent, on_removed_from_entity);
+        NB_OVERRIDE(on_removed_from_entity);
     }
 
-    void on_added(py::object scene) override {
-        PYBIND11_OVERRIDE(void, CxxComponent, on_added, scene);
+    void on_added(nb::object scene) override {
+        NB_OVERRIDE(on_added, scene);
     }
 
     void on_removed() override {
-        PYBIND11_OVERRIDE(void, CxxComponent, on_removed);
+        NB_OVERRIDE(on_removed);
     }
 };
 
 // Helper: numpy array (3,) -> Vec3
-static Vec3 numpy_to_vec3(py::array_t<double> arr) {
-    auto buf = arr.unchecked<1>();
-    return Vec3{buf(0), buf(1), buf(2)};
+static Vec3 numpy_to_vec3(nb::ndarray<double, nb::c_contig, nb::device::cpu> arr) {
+    const double* data = arr.data();
+    return Vec3{data[0], data[1], data[2]};
 }
 
 // Helper: Vec3 -> numpy array (3,)
-static py::array_t<double> vec3_to_numpy(const Vec3& v) {
-    auto result = py::array_t<double>(3);
-    auto buf = result.mutable_unchecked<1>();
-    buf(0) = v.x;
-    buf(1) = v.y;
-    buf(2) = v.z;
-    return result;
+static nb::ndarray<nb::numpy, double> vec3_to_numpy(const Vec3& v) {
+    double* buf = new double[3];
+    buf[0] = v.x;
+    buf[1] = v.y;
+    buf[2] = v.z;
+    nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+    size_t shape[1] = {3};
+    return nb::ndarray<nb::numpy, double>(buf, 1, shape, owner);
 }
 
 // Helper: numpy array (4,) -> Quat
-static Quat numpy_to_quat(py::array_t<double> arr) {
-    auto buf = arr.unchecked<1>();
-    return Quat{buf(0), buf(1), buf(2), buf(3)};
+static Quat numpy_to_quat(nb::ndarray<double, nb::c_contig, nb::device::cpu> arr) {
+    const double* data = arr.data();
+    return Quat{data[0], data[1], data[2], data[3]};
 }
 
-PYBIND11_MODULE(_entity_native, m) {
+NB_MODULE(_entity_native, m) {
     m.doc() = "Entity native module (Component, Entity, EntityHandle, registries)";
 
     // --- CxxComponent (also exported as Component for compatibility) ---
-    py::class_<CxxComponent, PyCxxComponent>(m, "Component")
-        .def(py::init<>())
-        .def(py::init([](bool enabled) {
-            auto c = new PyCxxComponent();
-            c->set_enabled(enabled);
-            return c;
-        }), py::arg("enabled") = true)
+    nb::class_<CxxComponent, PyCxxComponent>(m, "Component")
+        .def(nb::init<>())
+        .def("__init__", [](CxxComponent* self, bool enabled) {
+            new (self) PyCxxComponent();
+            self->set_enabled(enabled);
+        }, nb::arg("enabled") = true)
         .def("type_name", &CxxComponent::type_name)
-        .def("set_type_name", &CxxComponent::set_type_name, py::arg("name"))
+        .def("set_type_name", &CxxComponent::set_type_name, nb::arg("name"))
         .def("start", &CxxComponent::start)
-        .def("update", &CxxComponent::update, py::arg("dt"))
-        .def("fixed_update", &CxxComponent::fixed_update, py::arg("dt"))
+        .def("update", &CxxComponent::update, nb::arg("dt"))
+        .def("fixed_update", &CxxComponent::fixed_update, nb::arg("dt"))
         .def("on_editor_start", &CxxComponent::on_editor_start)
         .def("setup_editor_defaults", &CxxComponent::setup_editor_defaults)
         .def("on_destroy", &CxxComponent::on_destroy)
         .def("on_added_to_entity", &CxxComponent::on_added_to_entity)
         .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
-        .def("on_added", &CxxComponent::on_added, py::arg("scene"))
+        .def("on_added", &CxxComponent::on_added, nb::arg("scene"))
         .def("on_removed", &CxxComponent::on_removed)
-        .def_property("enabled", &CxxComponent::enabled, &CxxComponent::set_enabled)
-        .def_property("active_in_editor", &CxxComponent::active_in_editor, &CxxComponent::set_active_in_editor)
-        .def_property("_started", &CxxComponent::started, &CxxComponent::set_started)
-        .def_property("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
-        .def_property("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
+        .def_prop_rw("enabled", &CxxComponent::enabled, &CxxComponent::set_enabled)
+        .def_prop_rw("active_in_editor", &CxxComponent::active_in_editor, &CxxComponent::set_active_in_editor)
+        .def_prop_rw("_started", &CxxComponent::started, &CxxComponent::set_started)
+        .def_prop_rw("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
+        .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
         .def("c_component", static_cast<tc_component* (CxxComponent::*)()>(&CxxComponent::c_component),
-             py::return_value_policy::reference)
-        .def_property("entity",
-            [](CxxComponent& c) -> py::object {
+             nb::rv_policy::reference)
+        .def_prop_rw("entity",
+            [](CxxComponent& c) -> nb::object {
                 if (c.entity.valid()) {
-                    return py::cast(c.entity);
+                    return nb::cast(c.entity);
                 }
-                return py::none();
+                return nb::none();
             },
-            [](CxxComponent& c, py::object obj) {
+            [](CxxComponent& c, nb::object obj) {
                 if (obj.is_none()) {
                     c.entity = Entity();  // Invalid entity
                 } else {
-                    c.entity = obj.cast<Entity>();
+                    c.entity = nb::cast<Entity>(obj);
                 }
             })
         .def("serialize_data", [](CxxComponent& c) {
@@ -257,105 +261,122 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("serialize", [](CxxComponent& c) {
             return trent_to_py(c.serialize());
         })
-        .def("deserialize_data", [](CxxComponent& c, py::object data, py::object) {
+        .def("deserialize_data", [](CxxComponent& c, nb::object data, nb::object) {
             c.deserialize_data(py_to_trent(data));
         });
 
     // --- ComponentRegistry ---
-    py::class_<ComponentRegistry>(m, "ComponentRegistry")
-        .def_static("instance", &ComponentRegistry::instance, py::return_value_policy::reference)
+    nb::class_<ComponentRegistry>(m, "ComponentRegistry")
+        .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
         .def("register_python", &ComponentRegistry::register_python,
-             py::arg("name"), py::arg("cls"))
-        .def("unregister", &ComponentRegistry::unregister, py::arg("name"))
-        .def("create", &ComponentRegistry::create, py::arg("name"))
-        .def("has", &ComponentRegistry::has, py::arg("name"))
+             nb::arg("name"), nb::arg("cls"))
+        .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
+        .def("create", &ComponentRegistry::create, nb::arg("name"))
+        .def("has", &ComponentRegistry::has, nb::arg("name"))
         .def("list_all", &ComponentRegistry::list_all)
         .def("list_native", &ComponentRegistry::list_native)
         .def("list_python", &ComponentRegistry::list_python)
         .def("clear", &ComponentRegistry::clear);
 
     // --- EntityHandle ---
-    py::class_<EntityHandle>(m, "EntityHandle")
-        .def(py::init<>())
-        .def(py::init<const std::string&>(), py::arg("uuid"))
-        .def(py::init([](const std::string& uuid, uintptr_t pool_ptr) {
-            return EntityHandle(uuid, reinterpret_cast<tc_entity_pool*>(pool_ptr));
-        }), py::arg("uuid"), py::arg("pool_ptr"))
-        .def_readwrite("uuid", &EntityHandle::uuid)
-        .def_property("pool_ptr",
+    nb::class_<EntityHandle>(m, "EntityHandle")
+        .def(nb::init<>())
+        .def(nb::init<const std::string&>(), nb::arg("uuid"))
+        .def("__init__", [](EntityHandle* self, const std::string& uuid, uintptr_t pool_ptr) {
+            new (self) EntityHandle(uuid, reinterpret_cast<tc_entity_pool*>(pool_ptr));
+        }, nb::arg("uuid"), nb::arg("pool_ptr"))
+        .def_rw("uuid", &EntityHandle::uuid)
+        .def_prop_rw("pool_ptr",
             [](const EntityHandle& h) { return reinterpret_cast<uintptr_t>(h.pool); },
             [](EntityHandle& h, uintptr_t ptr) { h.pool = reinterpret_cast<tc_entity_pool*>(ptr); })
-        .def_property_readonly("entity", &EntityHandle::get, py::return_value_policy::reference)
-        .def_property_readonly("is_valid", &EntityHandle::is_valid)
-        .def_property_readonly("name", &EntityHandle::name)
-        .def_static("from_entity", &EntityHandle::from_entity, py::arg("entity"))
-        .def("get", &EntityHandle::get, py::return_value_policy::reference)
+        .def_prop_ro("entity", &EntityHandle::get, nb::rv_policy::reference)
+        .def_prop_ro("is_valid", &EntityHandle::is_valid)
+        .def_prop_ro("name", &EntityHandle::name)
+        .def_static("from_entity", &EntityHandle::from_entity, nb::arg("entity"))
+        .def("get", &EntityHandle::get, nb::rv_policy::reference)
         .def("__repr__", [](const EntityHandle& h) {
             std::string status = h.get().valid() ? "resolved" : "unresolved";
             std::string uuid_short = h.uuid.size() > 8 ? h.uuid.substr(0, 8) + "..." : h.uuid;
             return "<EntityHandle " + uuid_short + " (" + status + ")>";
         })
         .def("serialize", &EntityHandle::serialize)
-        .def_static("deserialize", [](py::dict d, uintptr_t pool_ptr) -> EntityHandle {
+        .def_static("deserialize", [](nb::dict d, uintptr_t pool_ptr) -> EntityHandle {
             EntityHandle h;
             h.pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
             if (d.contains("uuid")) {
-                h.uuid = d["uuid"].cast<std::string>();
+                h.uuid = nb::cast<std::string>(d["uuid"]);
             }
             return h;
-        }, py::arg("data"), py::arg("pool_ptr") = 0);
+        }, nb::arg("data"), nb::arg("pool_ptr") = 0);
 
     // --- Entity ---
-    py::class_<Entity>(m, "Entity")
-        .def(py::init([](const std::string& name, const std::string& uuid) {
+    nb::class_<Entity>(m, "Entity")
+        .def("__init__", [](Entity* self, const std::string& name, const std::string& uuid) {
             // Create entity in standalone pool
-            // TODO: Entities should be created through Scene instead
-            Entity ent = Entity::create(get_standalone_pool(), name);
-            return ent;
-        }), py::arg("name") = "entity", py::arg("uuid") = "")
-        .def(py::init([](py::object pose, const std::string& name, int priority,
+            new (self) Entity(Entity::create(get_standalone_pool(), name));
+        }, nb::arg("name") = "entity", nb::arg("uuid") = "")
+        .def("__init__", [](Entity* self, nb::object pose, const std::string& name, int priority,
                         bool pickable, bool selectable, bool serializable,
                         int layer, uint64_t flags, const std::string& uuid) {
             // Create entity in standalone pool
-            Entity ent = Entity::create(get_standalone_pool(), name);
+            new (self) Entity(Entity::create(get_standalone_pool(), name));
 
             if (!pose.is_none()) {
-                // Extract GeneralPose3 from Python object
-                GeneralPose3 gpose;
-                if (py::hasattr(pose, "lin") && py::hasattr(pose, "ang")) {
-                    auto lin = pose.attr("lin").cast<py::array_t<double>>();
-                    auto ang = pose.attr("ang").cast<py::array_t<double>>();
-                    gpose.lin = numpy_to_vec3(lin);
-                    gpose.ang = numpy_to_quat(ang);
-                    if (py::hasattr(pose, "scale")) {
-                        auto scale = pose.attr("scale").cast<py::array_t<double>>();
-                        gpose.scale = numpy_to_vec3(scale);
+                // Try direct cast to GeneralPose3 or Pose3 first
+                try {
+                    GeneralPose3 gpose = nb::cast<GeneralPose3>(pose);
+                    self->transform().set_local_pose(gpose);
+                } catch (const nb::cast_error&) {
+                    try {
+                        Pose3 p = nb::cast<Pose3>(pose);
+                        self->transform().set_local_pose(GeneralPose3(p.ang, p.lin, Vec3{1, 1, 1}));
+                    } catch (const nb::cast_error&) {
+                        // Fall back to extracting from Python object with numpy arrays
+                        GeneralPose3 gpose;
+                        if (nb::hasattr(pose, "lin") && nb::hasattr(pose, "ang")) {
+                            try {
+                                auto lin = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(pose.attr("lin"));
+                                auto ang = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(pose.attr("ang"));
+                                gpose.lin = numpy_to_vec3(lin);
+                                gpose.ang = numpy_to_quat(ang);
+                                if (nb::hasattr(pose, "scale")) {
+                                    auto scale = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(pose.attr("scale"));
+                                    gpose.scale = numpy_to_vec3(scale);
+                                }
+                            } catch (const nb::cast_error&) {
+                                // Try extracting Vec3/Quat directly
+                                gpose.lin = nb::cast<Vec3>(pose.attr("lin"));
+                                gpose.ang = nb::cast<Quat>(pose.attr("ang"));
+                                if (nb::hasattr(pose, "scale")) {
+                                    gpose.scale = nb::cast<Vec3>(pose.attr("scale"));
+                                }
+                            }
+                        }
+                        self->transform().set_local_pose(gpose);
                     }
                 }
-                ent.transform().set_local_pose(gpose);
             }
             // Set additional attributes
-            ent.set_priority(priority);
-            ent.set_pickable(pickable);
-            ent.set_selectable(selectable);
-            ent.set_serializable(serializable);
-            ent.set_layer(static_cast<uint64_t>(layer));
-            ent.set_flags(flags);
-            return ent;
-        }), py::arg("pose") = py::none(), py::arg("name") = "entity",
-            py::arg("priority") = 0, py::arg("pickable") = true,
-            py::arg("selectable") = true, py::arg("serializable") = true,
-            py::arg("layer") = 0, py::arg("flags") = 0, py::arg("uuid") = "")
+            self->set_priority(priority);
+            self->set_pickable(pickable);
+            self->set_selectable(selectable);
+            self->set_serializable(serializable);
+            self->set_layer(static_cast<uint64_t>(layer));
+            self->set_flags(flags);
+        }, nb::arg("pose") = nb::none(), nb::arg("name") = "entity",
+            nb::arg("priority") = 0, nb::arg("pickable") = true,
+            nb::arg("selectable") = true, nb::arg("serializable") = true,
+            nb::arg("layer") = 0, nb::arg("flags") = 0, nb::arg("uuid") = "")
 
         // Validity
         .def("valid", &Entity::valid)
         .def("__bool__", &Entity::valid)
 
         // Identity
-        .def_property_readonly("uuid", [](const Entity& e) -> py::object {
+        .def_prop_ro("uuid", [](const Entity& e) -> nb::object {
             const char* u = e.uuid();
-            if (u) return py::str(u);
-            return py::none();
+            if (u) return nb::str(u);
+            return nb::none();
         })
         // Equality based on (pool, id) - required for dict/set lookups
         .def("__eq__", [](const Entity& a, const Entity& b) {
@@ -370,96 +391,89 @@ PYBIND11_MODULE(_entity_native, m) {
             h ^= std::hash<uint32_t>()(e.id().generation) + 0x9e3779b9 + (h << 6) + (h >> 2);
             return h;
         })
-        .def_property("name",
-            [](const Entity& e) -> py::object {
+        .def_prop_rw("name",
+            [](const Entity& e) -> nb::object {
                 const char* n = e.name();
-                if (n) return py::str(n);
-                return py::none();
+                if (n) return nb::str(n);
+                return nb::none();
             },
             [](Entity& e, const std::string& n) {
                 e.set_name(n);
             })
-        .def_property_readonly("runtime_id", [](const Entity& e) -> uint64_t {
+        .def_prop_ro("runtime_id", [](const Entity& e) -> uint64_t {
             return e.runtime_id();
         })
 
         // Flags
-        .def_property("visible",
+        .def_prop_rw("visible",
             [](const Entity& e) { return e.visible(); },
             [](Entity& e, bool v) { e.set_visible(v); })
-        .def_property("active",
+        .def_prop_rw("active",
             [](const Entity& e) { return e.active(); },
             [](Entity& e, bool v) { e.set_active(v); })
-        .def_property("pickable",
+        .def_prop_rw("pickable",
             [](const Entity& e) { return e.pickable(); },
             [](Entity& e, bool v) { e.set_pickable(v); })
-        .def_property("selectable",
+        .def_prop_rw("selectable",
             [](const Entity& e) { return e.selectable(); },
             [](Entity& e, bool v) { e.set_selectable(v); })
 
         // Rendering
-        .def_property("priority",
+        .def_prop_rw("priority",
             [](const Entity& e) { return e.priority(); },
             [](Entity& e, int p) { e.set_priority(p); })
-        .def_property("layer",
+        .def_prop_rw("layer",
             [](const Entity& e) { return e.layer(); },
             [](Entity& e, uint64_t l) { e.set_layer(l); })
-        .def_property("flags",
+        .def_prop_rw("flags",
             [](const Entity& e) { return e.flags(); },
             [](Entity& e, uint64_t f) { e.set_flags(f); })
 
         // Pick ID
-        .def_property_readonly("pick_id", &Entity::pick_id)
+        .def_prop_ro("pick_id", &Entity::pick_id)
 
         // Transform access - returns the GeneralTransform3 wrapper
-        .def_property_readonly("transform", [](Entity& e) -> GeneralTransform3 {
+        .def_prop_ro("transform", [](Entity& e) -> GeneralTransform3 {
             return e.transform();
         })
 
         // Pose shortcuts
         .def("global_pose", [](Entity& e) {
             GeneralPose3 gp = e.transform().global_pose();
-            py::dict result;
+            nb::dict result;
             result["lin"] = vec3_to_numpy(gp.lin);
-            auto ang_arr = py::array_t<double>(4);
-            auto ang_buf = ang_arr.mutable_unchecked<1>();
-            ang_buf(0) = gp.ang.x;
-            ang_buf(1) = gp.ang.y;
-            ang_buf(2) = gp.ang.z;
-            ang_buf(3) = gp.ang.w;
-            result["ang"] = ang_arr;
+            double* ang_buf = new double[4];
+            ang_buf[0] = gp.ang.x;
+            ang_buf[1] = gp.ang.y;
+            ang_buf[2] = gp.ang.z;
+            ang_buf[3] = gp.ang.w;
+            nb::capsule owner(ang_buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            size_t shape[1] = {4};
+            result["ang"] = nb::ndarray<nb::numpy, double>(ang_buf, 1, shape, owner);
             result["scale"] = vec3_to_numpy(gp.scale);
             return result;
         })
 
         .def("model_matrix", [](Entity& e) {
-            auto result = py::array_t<double>({4, 4});
-            auto buf = result.mutable_unchecked<2>();
             double m[16];
             e.transform().world_matrix(m);
-            // matrix4() already produces row-major, copy directly
-            for (int i = 0; i < 4; ++i) {
-                for (int j = 0; j < 4; ++j) {
-                    buf(i, j) = m[i * 4 + j];
-                }
-            }
-            return result;
+            double* buf = new double[16];
+            for (int i = 0; i < 16; ++i) buf[i] = m[i];
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            size_t shape[2] = {4, 4};
+            return nb::ndarray<nb::numpy, double>(buf, 2, shape, owner);
         })
 
         .def("inverse_model_matrix", [](Entity& e) {
             // Get global pose and compute inverse matrix
             GeneralPose3 gp = e.transform().global_pose();
-            auto result = py::array_t<double>({4, 4});
-            auto buf = result.mutable_unchecked<2>();
             double m[16];
             gp.inverse_matrix4(m);
-            // inverse_matrix4() already produces row-major, copy directly
-            for (int i = 0; i < 4; ++i) {
-                for (int j = 0; j < 4; ++j) {
-                    buf(i, j) = m[i * 4 + j];
-                }
-            }
-            return result;
+            double* buf = new double[16];
+            for (int i = 0; i < 16; ++i) buf[i] = m[i];
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            size_t shape[2] = {4, 4};
+            return nb::ndarray<nb::numpy, double>(buf, 2, shape, owner);
         })
 
         .def("set_visible", [](Entity& e, bool flag) {
@@ -467,19 +481,19 @@ PYBIND11_MODULE(_entity_native, m) {
             for (Entity child : e.children()) {
                 child.set_visible(flag);
             }
-        }, py::arg("flag"))
+        }, nb::arg("flag"))
 
         .def("is_pickable", [](Entity& e) {
             return e.pickable() && e.visible() && e.active();
         })
 
         // Component management
-        // Accepts both C++ Component and PythonComponent (via py::object)
+        // Accepts both C++ Component and PythonComponent (via nb::object)
         // Note: Scene registration is handled by Python Scene.add(), not here
-        .def("add_component", [](Entity& e, py::object component) -> py::object {
+        .def("add_component", [](Entity& e, nb::object component) -> nb::object {
             // Check if it's a C++ Component
-            if (py::isinstance<Component>(component)) {
-                Component* c = component.cast<Component*>();
+            if (nb::isinstance<Component>(component)) {
+                Component* c = nb::cast<Component*>(component);
                 // Store Python wrapper in py_wrap to keep it alive while attached to entity
                 // set_py_wrap does INCREF
                 c->set_py_wrap(component);
@@ -488,13 +502,13 @@ PYBIND11_MODULE(_entity_native, m) {
             }
 
             // Check if it's a PythonComponent (has c_component_ptr method)
-            if (py::hasattr(component, "c_component_ptr")) {
-                uintptr_t ptr = component.attr("c_component_ptr")().cast<uintptr_t>();
+            if (nb::hasattr(component, "c_component_ptr")) {
+                uintptr_t ptr = nb::cast<uintptr_t>(component.attr("c_component_ptr")());
                 tc_component* tc = reinterpret_cast<tc_component*>(ptr);
 
                 // Set entity reference on PythonComponent
-                if (py::hasattr(component, "entity")) {
-                    component.attr("entity") = py::cast(e);
+                if (nb::hasattr(component, "entity")) {
+                    component.attr("entity") = nb::cast(e);
                 }
 
                 e.add_component_ptr(tc);
@@ -502,66 +516,66 @@ PYBIND11_MODULE(_entity_native, m) {
             }
 
             throw std::runtime_error("add_component requires Component or PythonComponent");
-        }, py::arg("component"))
-        .def("remove_component", [](Entity& e, py::object component) {
+        }, nb::arg("component"))
+        .def("remove_component", [](Entity& e, nb::object component) {
             // Check if it's a C++ Component
-            if (py::isinstance<Component>(component)) {
-                e.remove_component(component.cast<Component*>());
+            if (nb::isinstance<Component>(component)) {
+                e.remove_component(nb::cast<Component*>(component));
                 return;
             }
 
             // Check if it's a PythonComponent
-            if (py::hasattr(component, "c_component_ptr")) {
-                uintptr_t ptr = component.attr("c_component_ptr")().cast<uintptr_t>();
+            if (nb::hasattr(component, "c_component_ptr")) {
+                uintptr_t ptr = nb::cast<uintptr_t>(component.attr("c_component_ptr")());
                 e.remove_component_ptr(reinterpret_cast<tc_component*>(ptr));
                 return;
             }
 
             throw std::runtime_error("remove_component requires Component or PythonComponent");
-        }, py::arg("component"))
+        }, nb::arg("component"))
         .def("get_component_by_type", &Entity::get_component_by_type,
-             py::arg("type_name"), py::return_value_policy::reference)
-        .def("get_component", [](Entity& e, py::object type_class) -> py::object {
+             nb::arg("type_name"), nb::rv_policy::reference)
+        .def("get_component", [](Entity& e, nb::object type_class) -> nb::object {
             // Get component by Python type class (like Unity's GetComponent<T>())
             if (!e.valid()) {
-                return py::none();
+                return nb::none();
             }
             size_t count = e.component_count();
             for (size_t i = 0; i < count; i++) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                py::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = CxxComponent::tc_to_python(tc);
 
-                if (py::isinstance(py_comp, type_class)) {
+                if (nb::isinstance(py_comp, type_class)) {
                     return py_comp;
                 }
             }
-            return py::none();
-        }, py::arg("component_type"))
-        .def("find_component", [](Entity& e, py::object type_class) -> py::object {
+            return nb::none();
+        }, nb::arg("component_type"))
+        .def("find_component", [](Entity& e, nb::object type_class) -> nb::object {
             // Get component by Python type class, raise if not found
             size_t count = e.component_count();
             for (size_t i = 0; i < count; i++) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                py::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = CxxComponent::tc_to_python(tc);
 
-                if (py::isinstance(py_comp, type_class)) {
+                if (nb::isinstance(py_comp, type_class)) {
                     return py_comp;
                 }
             }
             throw std::runtime_error("Component not found");
-        }, py::arg("component_type"))
-        .def_property_readonly("components", [](Entity& e) {
-            py::list result;
+        }, nb::arg("component_type"))
+        .def_prop_ro("components", [](Entity& e) {
+            nb::list result;
             size_t count = e.component_count();
             for (size_t i = 0; i < count; i++) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                py::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = CxxComponent::tc_to_python(tc);
                 if (!py_comp.is_none()) {
                     result.append(py_comp);
                 }
@@ -570,31 +584,31 @@ PYBIND11_MODULE(_entity_native, m) {
         })
 
         // Hierarchy
-        .def("set_parent", [](Entity& e, py::object parent_obj) {
+        .def("set_parent", [](Entity& e, nb::object parent_obj) {
             if (parent_obj.is_none()) {
                 e.set_parent(Entity());  // Invalid entity = no parent
             } else {
-                Entity parent = parent_obj.cast<Entity>();
+                Entity parent = nb::cast<Entity>(parent_obj);
                 e.set_parent(parent);
             }
-        }, py::arg("parent"))
-        .def_property_readonly("parent", [](Entity& e) -> py::object {
+        }, nb::arg("parent"))
+        .def_prop_ro("parent", [](Entity& e) -> nb::object {
             Entity p = e.parent();
             if (p.valid()) {
-                return py::cast(p);
+                return nb::cast(p);
             }
-            return py::none();
+            return nb::none();
         })
         .def("children", &Entity::children)
 
         // Lifecycle
-        .def("update", &Entity::update, py::arg("dt"))
-        .def("on_added_to_scene", &Entity::on_added_to_scene, py::arg("scene"))
+        .def("update", &Entity::update, nb::arg("dt"))
+        .def("on_added_to_scene", &Entity::on_added_to_scene, nb::arg("scene"))
         .def("on_removed_from_scene", &Entity::on_removed_from_scene)
         // Lifecycle - Scene handles component registration in Python
-        .def("on_added", [](Entity& e, py::object scene) {
+        .def("on_added", [](Entity& e, nb::object scene) {
             e.on_added_to_scene(scene);
-        }, py::arg("scene"))
+        }, nb::arg("scene"))
         .def("on_removed", [](Entity& e) {
             e.on_removed_from_scene();
         })
@@ -603,27 +617,27 @@ PYBIND11_MODULE(_entity_native, m) {
         .def("validate_components", &Entity::validate_components)
 
         // Serialization
-        .def_property("serializable",
+        .def_prop_rw("serializable",
             [](const Entity& e) { return e.serializable(); },
             [](Entity& e, bool v) { e.set_serializable(v); })
-        .def("serialize", [](Entity& e) -> py::object {
+        .def("serialize", [](Entity& e) -> nb::object {
             nos::trent data = e.serialize_base();
             if (data.is_nil()) {
-                return py::none();
+                return nb::none();
             }
-            py::dict result = trent_to_py(data).cast<py::dict>();
+            nb::dict result = nb::cast<nb::dict>(trent_to_py(data));
 
             // Serialize components by calling their Python serialize() methods
-            py::list comp_list;
+            nb::list comp_list;
             size_t count = e.component_count();
             for (size_t i = 0; i < count; i++) {
                 tc_component* tc = e.component_at(i);
                 if (!tc) continue;
 
-                py::object py_comp = CxxComponent::tc_to_python(tc);
+                nb::object py_comp = CxxComponent::tc_to_python(tc);
 
-                if (py::hasattr(py_comp, "serialize")) {
-                    py::object comp_data = py_comp.attr("serialize")();
+                if (nb::hasattr(py_comp, "serialize")) {
+                    nb::object comp_data = py_comp.attr("serialize")();
                     if (!comp_data.is_none()) {
                         comp_list.append(comp_data);
                     }
@@ -632,11 +646,11 @@ PYBIND11_MODULE(_entity_native, m) {
             result["components"] = comp_list;
 
             // Serialize children recursively (call Python serialize to include components)
-            py::list children_list;
+            nb::list children_list;
             for (Entity child : e.children()) {
                 if (child.serializable()) {
-                    py::object py_child = py::cast(child);
-                    py::object child_data = py_child.attr("serialize")();
+                    nb::object py_child = nb::cast(child);
+                    nb::object child_data = py_child.attr("serialize")();
                     if (!child_data.is_none()) {
                         children_list.append(child_data);
                     }
@@ -646,155 +660,210 @@ PYBIND11_MODULE(_entity_native, m) {
 
             return result;
         })
-        .def_static("deserialize", [](py::object data, py::object context) -> py::object {
-            if (data.is_none() || !py::isinstance<py::dict>(data)) {
-                return py::none();
-            }
+        .def_static("deserialize", [](nb::object data, nb::object context) -> nb::object {
+            try {
+                if (data.is_none() || !nb::isinstance<nb::dict>(data)) {
+                    return nb::none();
+                }
 
-            py::dict dict_data = data.cast<py::dict>();
+                nb::dict dict_data = nb::cast<nb::dict>(data);
 
-            // Get entity name
-            std::string name = "entity";
-            if (dict_data.contains("name")) {
-                name = dict_data["name"].cast<std::string>();
-            }
+                // Get entity name
+                std::string name = "entity";
+                if (dict_data.contains("name")) {
+                    nb::object name_obj = dict_data["name"];
+                    name = nb::cast<std::string>(name_obj);
+                }
 
-            // Create entity using standalone pool
-            Entity ent = Entity::create(get_standalone_pool(), name);
-            if (!ent.valid()) {
-                return py::none();
-            }
+                // Create entity using standalone pool
+                tc_entity_pool* pool = get_standalone_pool();
+                if (!pool) {
+                    fprintf(stderr, "[ERROR] Entity::deserialize: standalone pool is null\n");
+                    return nb::none();
+                }
+                Entity ent = Entity::create(pool, name);
+                if (!ent.valid()) {
+                    fprintf(stderr, "[ERROR] Entity::deserialize: failed to create entity '%s'\n", name.c_str());
+                    return nb::none();
+                }
 
-            // TODO: UUID is set at creation time, need Entity::create_with_uuid
-            // For now, skip UUID restoration - entity gets a new UUID
-            (void)dict_data;  // suppress unused warning if uuid handling removed
+                // Restore flags
+                if (dict_data.contains("priority")) {
+                    nb::object val = dict_data["priority"];
+                    ent.set_priority(nb::cast<int>(val));
+                }
+                if (dict_data.contains("visible")) {
+                    nb::object val = dict_data["visible"];
+                    ent.set_visible(nb::cast<bool>(val));
+                }
+                if (dict_data.contains("active")) {
+                    nb::object val = dict_data["active"];
+                    ent.set_active(nb::cast<bool>(val));
+                }
+                if (dict_data.contains("pickable")) {
+                    nb::object val = dict_data["pickable"];
+                    ent.set_pickable(nb::cast<bool>(val));
+                }
+                if (dict_data.contains("selectable")) {
+                    nb::object val = dict_data["selectable"];
+                    ent.set_selectable(nb::cast<bool>(val));
+                }
+                if (dict_data.contains("layer")) {
+                    nb::object val = dict_data["layer"];
+                    ent.set_layer(nb::cast<uint64_t>(val));
+                }
+                if (dict_data.contains("flags")) {
+                    nb::object val = dict_data["flags"];
+                    ent.set_flags(nb::cast<uint64_t>(val));
+                }
 
-            // Restore flags
-            if (dict_data.contains("priority")) {
-                ent.set_priority(dict_data["priority"].cast<int>());
-            }
-            if (dict_data.contains("visible")) {
-                ent.set_visible(dict_data["visible"].cast<bool>());
-            }
-            if (dict_data.contains("active")) {
-                ent.set_active(dict_data["active"].cast<bool>());
-            }
-            if (dict_data.contains("pickable")) {
-                ent.set_pickable(dict_data["pickable"].cast<bool>());
-            }
-            if (dict_data.contains("selectable")) {
-                ent.set_selectable(dict_data["selectable"].cast<bool>());
-            }
-            if (dict_data.contains("layer")) {
-                ent.set_layer(dict_data["layer"].cast<uint64_t>());
-            }
-            if (dict_data.contains("flags")) {
-                ent.set_flags(dict_data["flags"].cast<uint64_t>());
-            }
-
-            // Restore pose
-            if (dict_data.contains("pose") && py::isinstance<py::dict>(dict_data["pose"])) {
-                py::dict pose = dict_data["pose"].cast<py::dict>();
-                if (pose.contains("position") && py::isinstance<py::list>(pose["position"])) {
-                    py::list pos = pose["position"].cast<py::list>();
-                    if (pos.size() >= 3) {
-                        double xyz[3] = {pos[0].cast<double>(), pos[1].cast<double>(), pos[2].cast<double>()};
-                        ent.set_local_position(xyz);
+                // Restore pose
+                if (dict_data.contains("pose")) {
+                    nb::object pose_obj = dict_data["pose"];
+                    if (nb::isinstance<nb::dict>(pose_obj)) {
+                        nb::dict pose = nb::cast<nb::dict>(pose_obj);
+                        if (pose.contains("position")) {
+                            nb::object pos_obj = pose["position"];
+                            if (nb::isinstance<nb::list>(pos_obj)) {
+                                nb::list pos = nb::cast<nb::list>(pos_obj);
+                                if (nb::len(pos) >= 3) {
+                                    nb::object p0 = pos[0], p1 = pos[1], p2 = pos[2];
+                                    double xyz[3] = {nb::cast<double>(p0), nb::cast<double>(p1), nb::cast<double>(p2)};
+                                    ent.set_local_position(xyz);
+                                }
+                            }
+                        }
+                        if (pose.contains("rotation")) {
+                            nb::object rot_obj = pose["rotation"];
+                            if (nb::isinstance<nb::list>(rot_obj)) {
+                                nb::list rot = nb::cast<nb::list>(rot_obj);
+                                if (nb::len(rot) >= 4) {
+                                    nb::object r0 = rot[0], r1 = rot[1], r2 = rot[2], r3 = rot[3];
+                                    double xyzw[4] = {nb::cast<double>(r0), nb::cast<double>(r1), nb::cast<double>(r2), nb::cast<double>(r3)};
+                                    ent.set_local_rotation(xyzw);
+                                }
+                            }
+                        }
                     }
                 }
-                if (pose.contains("rotation") && py::isinstance<py::list>(pose["rotation"])) {
-                    py::list rot = pose["rotation"].cast<py::list>();
-                    if (rot.size() >= 4) {
-                        double xyzw[4] = {rot[0].cast<double>(), rot[1].cast<double>(), rot[2].cast<double>(), rot[3].cast<double>()};
-                        ent.set_local_rotation(xyzw);
+
+                // Restore scale
+                if (dict_data.contains("scale")) {
+                    nb::object scl_obj = dict_data["scale"];
+                    if (nb::isinstance<nb::list>(scl_obj)) {
+                        nb::list scl = nb::cast<nb::list>(scl_obj);
+                        if (nb::len(scl) >= 3) {
+                            nb::object s0 = scl[0], s1 = scl[1], s2 = scl[2];
+                            double xyz[3] = {nb::cast<double>(s0), nb::cast<double>(s1), nb::cast<double>(s2)};
+                            ent.set_local_scale(xyz);
+                        }
                     }
                 }
-            }
 
-            // Restore scale
-            if (dict_data.contains("scale") && py::isinstance<py::list>(dict_data["scale"])) {
-                py::list scl = dict_data["scale"].cast<py::list>();
-                if (scl.size() >= 3) {
-                    double xyz[3] = {scl[0].cast<double>(), scl[1].cast<double>(), scl[2].cast<double>()};
-                    ent.set_local_scale(xyz);
-                }
-            }
-
-            // Deserialize components via ComponentRegistry
-            if (dict_data.contains("components") && py::isinstance<py::list>(dict_data["components"])) {
-                py::list components = dict_data["components"].cast<py::list>();
-
-                // Use C++ ComponentRegistry
-                auto& registry = ComponentRegistry::instance();
-
-                for (auto comp_data_item : components) {
-                    if (!py::isinstance<py::dict>(comp_data_item)) continue;
-                    py::dict comp_data = comp_data_item.cast<py::dict>();
-
-                    if (!comp_data.contains("type")) continue;
-
-                    std::string type_name = comp_data["type"].cast<std::string>();
-
-                    // Check if component type is registered
-                    if (!registry.has(type_name)) {
-                        fprintf(stderr, "[Warning] Unknown component type: %s (skipping)\n", type_name.c_str());
-                        continue;
+                // Deserialize components via ComponentRegistry
+                if (dict_data.contains("components")) {
+                    nb::object comp_list_obj = dict_data["components"];
+                    if (!nb::isinstance<nb::list>(comp_list_obj)) {
+                        return nb::cast(ent);
                     }
+                    nb::list components = nb::cast<nb::list>(comp_list_obj);
 
-                    try {
-                        // Create component via ComponentRegistry
-                        py::object comp = registry.create(type_name);
-                        if (comp.is_none()) continue;
+                    // Use C++ ComponentRegistry
+                    auto& registry = ComponentRegistry::instance();
 
-                        // Deserialize data if component has deserialize_data method
-                        if (py::hasattr(comp, "deserialize_data")) {
-                            py::object data_field = comp_data.contains("data") ? comp_data["data"] : py::dict();
-                            comp.attr("deserialize_data")(data_field, context);
+                    for (size_t i = 0; i < nb::len(components); ++i) {
+                        nb::object comp_data_item = components[i];
+                        if (!nb::isinstance<nb::dict>(comp_data_item)) continue;
+                        nb::dict comp_data = nb::cast<nb::dict>(comp_data_item);
+
+                        if (!comp_data.contains("type")) continue;
+
+                        nb::object type_obj = comp_data["type"];
+                        std::string type_name = nb::cast<std::string>(type_obj);
+
+                        // Check if component type is registered
+                        if (!registry.has(type_name)) {
+                            fprintf(stderr, "[Warning] Unknown component type: %s (skipping)\n", type_name.c_str());
+                            continue;
                         }
 
-                        // Add to entity via Python add_component
-                        py::object py_ent = py::cast(ent);
-                        py_ent.attr("add_component")(comp);
+                        try {
+                            // Create component via ComponentRegistry
+                            nb::object comp = registry.create(type_name);
+                            if (comp.is_none()) continue;
 
-                        // Validate after each component add
-                        if (!ent.validate_components()) {
-                            fprintf(stderr, "[ERROR] Component validation failed after adding %s\n", type_name.c_str());
+                            // Get data field
+                            nb::object data_field;
+                            if (comp_data.contains("data")) {
+                                data_field = comp_data["data"];
+                            } else {
+                                data_field = nb::dict();
+                            }
+
+                            // Deserialize based on component kind
+                            const auto* info = registry.get_info(type_name);
+                            if (info && info->kind == TC_CXX_COMPONENT) {
+                                // Native component: use InspectRegistry directly
+                                if (nb::isinstance<nb::dict>(data_field)) {
+                                    nb::dict data_dict = nb::cast<nb::dict>(data_field);
+                                    void* raw_ptr = nb::inst_ptr<void>(comp);
+                                    InspectRegistry::instance().deserialize_component_fields_over_python(
+                                        raw_ptr, comp, type_name, data_dict);
+                                }
+                            } else {
+                                // Python component: call deserialize_data method
+                                if (nb::hasattr(comp, "deserialize_data")) {
+                                    comp.attr("deserialize_data")(data_field, context);
+                                }
+                            }
+
+                            // Add to entity via Python add_component
+                            nb::object py_ent = nb::cast(ent);
+                            py_ent.attr("add_component")(comp);
+
+                            // Validate after each component add
+                            if (!ent.validate_components()) {
+                                fprintf(stderr, "[ERROR] Component validation failed after adding %s\n", type_name.c_str());
+                            }
+                        } catch (const std::exception& e) {
+                            fprintf(stderr, "[Warning] Failed to deserialize component %s: %s\n", type_name.c_str(), e.what());
                         }
-                    } catch (const std::exception& e) {
-                        fprintf(stderr, "[Warning] Failed to deserialize component %s: %s\n", type_name.c_str(), e.what());
                     }
                 }
-            }
 
-            return py::cast(ent);
-        }, py::arg("data"), py::arg("context") = py::none());
+                return nb::cast(ent);
+            } catch (const std::exception& e) {
+                fprintf(stderr, "[ERROR] Entity::deserialize failed: %s\n", e.what());
+                return nb::none();
+            }
+        }, nb::arg("data"), nb::arg("context") = nb::none());
 
     // --- EntityRegistry ---
-    py::class_<EntityRegistry>(m, "EntityRegistry")
-        .def_static("instance", &EntityRegistry::instance, py::return_value_policy::reference)
-        .def("get", [](EntityRegistry& reg, const std::string& uuid) -> py::object {
+    nb::class_<EntityRegistry>(m, "EntityRegistry")
+        .def_static("instance", &EntityRegistry::instance, nb::rv_policy::reference)
+        .def("get", [](EntityRegistry& reg, const std::string& uuid) -> nb::object {
             Entity ent = reg.get(uuid);
             if (ent.valid()) {
-                return py::cast(ent);
+                return nb::cast(ent);
             }
-            return py::none();
-        }, py::arg("uuid"))
-        .def("get_by_pick_id", [](EntityRegistry& reg, uint32_t pick_id) -> py::object {
+            return nb::none();
+        }, nb::arg("uuid"))
+        .def("get_by_pick_id", [](EntityRegistry& reg, uint32_t pick_id) -> nb::object {
             Entity ent = reg.get_by_pick_id(pick_id);
             if (ent.valid()) {
-                return py::cast(ent);
+                return nb::cast(ent);
             }
-            return py::none();
-        }, py::arg("pick_id"))
+            return nb::none();
+        }, nb::arg("pick_id"))
         .def("register_entity", [](EntityRegistry& reg, const Entity& entity) {
             reg.register_entity(entity);
-        }, py::arg("entity"))
+        }, nb::arg("entity"))
         .def("unregister_entity", [](EntityRegistry& reg, const Entity& entity) {
             reg.unregister_entity(entity);
-        }, py::arg("entity"))
+        }, nb::arg("entity"))
         .def("clear", &EntityRegistry::clear)
-        .def_property_readonly("entity_count", &EntityRegistry::entity_count)
-        .def("swap_registries", [](EntityRegistry& reg, py::object new_by_uuid, py::object new_by_pick_id) {
+        .def_prop_ro("entity_count", &EntityRegistry::entity_count)
+        .def("swap_registries", [](EntityRegistry& reg, nb::object new_by_uuid, nb::object new_by_pick_id) {
             // Convert Python dicts to C++ maps
             std::unordered_map<std::string, Entity> cpp_by_uuid;
             std::unordered_map<uint32_t, Entity> cpp_by_pick_id;
@@ -802,9 +871,9 @@ PYBIND11_MODULE(_entity_native, m) {
             // new_by_uuid: dict[str, Entity] or WeakValueDictionary
             if (!new_by_uuid.is_none()) {
                 for (auto item : new_by_uuid.attr("items")()) {
-                    auto pair = item.cast<py::tuple>();
-                    std::string uuid = pair[0].cast<std::string>();
-                    Entity ent = pair[1].cast<Entity>();
+                    auto pair = nb::cast<nb::tuple>(item);
+                    std::string uuid = nb::cast<std::string>(pair[0]);
+                    Entity ent = nb::cast<Entity>(pair[1]);
                     cpp_by_uuid[uuid] = ent;
                 }
             }
@@ -812,9 +881,9 @@ PYBIND11_MODULE(_entity_native, m) {
             // new_by_pick_id: dict[int, Entity]
             if (!new_by_pick_id.is_none()) {
                 for (auto item : new_by_pick_id.attr("items")()) {
-                    auto pair = item.cast<py::tuple>();
-                    uint32_t pick_id = pair[0].cast<uint32_t>();
-                    Entity ent = pair[1].cast<Entity>();
+                    auto pair = nb::cast<nb::tuple>(item);
+                    uint32_t pick_id = nb::cast<uint32_t>(pair[0]);
+                    Entity ent = nb::cast<Entity>(pair[1]);
                     cpp_by_pick_id[pick_id] = ent;
                 }
             }
@@ -824,26 +893,26 @@ PYBIND11_MODULE(_entity_native, m) {
                 std::move(cpp_by_uuid), std::move(cpp_by_pick_id));
 
             // Convert old registries back to Python dicts
-            py::dict py_old_by_uuid;
+            nb::dict py_old_by_uuid;
             for (auto& [uuid, ent] : old_by_uuid) {
                 if (ent.valid()) {
-                    py_old_by_uuid[py::str(uuid)] = py::cast(ent);
+                    py_old_by_uuid[nb::str(uuid.c_str())] = nb::cast(ent);
                 }
             }
 
-            py::dict py_old_by_pick_id;
+            nb::dict py_old_by_pick_id;
             for (auto& [pick_id, ent] : old_by_pick_id) {
                 if (ent.valid()) {
-                    py_old_by_pick_id[py::int_(pick_id)] = py::cast(ent);
+                    py_old_by_pick_id[nb::int_(pick_id)] = nb::cast(ent);
                 }
             }
 
-            return py::make_tuple(py_old_by_uuid, py_old_by_pick_id);
-        }, py::arg("new_by_uuid"), py::arg("new_by_pick_id"));
+            return nb::make_tuple(py_old_by_uuid, py_old_by_pick_id);
+        }, nb::arg("new_by_uuid"), nb::arg("new_by_pick_id"));
 
     // --- Native Components ---
     BIND_NATIVE_COMPONENT(m, CXXRotatorComponent)
-        .def_readwrite("speed", &CXXRotatorComponent::speed);
+        .def_rw("speed", &CXXRotatorComponent::speed);
 
     // Register CxxComponent::enabled in InspectRegistry
     InspectRegistry::instance().add_with_accessors<CxxComponent, bool>(
@@ -863,7 +932,7 @@ PYBIND11_MODULE(_entity_native, m) {
     m.def("migrate_entity", [](Entity& entity, uintptr_t dst_pool_ptr) -> Entity {
         tc_entity_pool* dst_pool = reinterpret_cast<tc_entity_pool*>(dst_pool_ptr);
         return migrate_entity_to_pool(entity, dst_pool);
-    }, py::arg("entity"), py::arg("dst_pool"),
+    }, nb::arg("entity"), nb::arg("dst_pool"),
        "Migrate entity to destination pool. Returns new Entity, old becomes invalid.");
 
     // ===== Register entity_handle kind handler =====
@@ -874,33 +943,33 @@ PYBIND11_MODULE(_entity_native, m) {
     tc::KindRegistry::instance().register_python(
         "entity_handle",
         // serialize
-        py::cpp_function([](py::object obj) -> py::object {
-            EntityHandle handle = obj.cast<EntityHandle>();
-            py::dict d;
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            EntityHandle handle = nb::cast<EntityHandle>(obj);
+            nb::dict d;
             d["uuid"] = handle.uuid;
             return d;
         }),
         // deserialize
-        py::cpp_function([](py::object data) -> py::object {
+        nb::cpp_function([](nb::object data) -> nb::object {
             // Handle UUID string (legacy format)
-            if (py::isinstance<py::str>(data)) {
-                return py::cast(EntityHandle(data.cast<std::string>()));
+            if (nb::isinstance<nb::str>(data)) {
+                return nb::cast(EntityHandle(nb::cast<std::string>(data)));
             }
             // Handle dict format
-            if (py::isinstance<py::dict>(data)) {
-                py::dict d = data.cast<py::dict>();
+            if (nb::isinstance<nb::dict>(data)) {
+                nb::dict d = nb::cast<nb::dict>(data);
                 if (d.contains("uuid")) {
-                    return py::cast(EntityHandle(d["uuid"].cast<std::string>()));
+                    return nb::cast(EntityHandle(nb::cast<std::string>(d["uuid"])));
                 }
             }
-            return py::cast(EntityHandle());
+            return nb::cast(EntityHandle());
         }),
         // convert
-        py::cpp_function([](py::object value) -> py::object {
+        nb::cpp_function([](nb::object value) -> nb::object {
             if (value.is_none()) {
-                return py::cast(EntityHandle());
+                return nb::cast(EntityHandle());
             }
-            if (py::isinstance<EntityHandle>(value)) {
+            if (nb::isinstance<EntityHandle>(value)) {
                 return value;
             }
             return value;

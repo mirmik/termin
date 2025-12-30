@@ -88,14 +88,14 @@ Material* SkinnedMeshRenderer::get_skinned_material() {
 
     // Create skinned variant via Python
     try {
-        py::object skinning_module = py::module_::import("termin.visualization.render.shader_skinning");
-        py::object skinned_mat_obj = skinning_module.attr("get_skinned_material")(base_mat);
+        nb::object skinning_module = nb::module_::import_("termin.visualization.render.shader_skinning");
+        nb::object skinned_mat_obj = skinning_module.attr("get_skinned_material")(base_mat);
         if (!skinned_mat_obj.is_none()) {
-            _skinned_material_cache = skinned_mat_obj.cast<Material*>();
+            _skinned_material_cache = nb::cast<Material*>(skinned_mat_obj);
             _cached_base_material_id = base_mat_id;
             return _skinned_material_cache;
         }
-    } catch (const py::error_already_set& e) {
+    } catch (const nb::python_error& e) {
         // Failed to get skinned material, use base
         PyErr_Clear();
     }

@@ -1,9 +1,9 @@
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 #include "guard/guard.h"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
-PYBIND11_MODULE(_cpp_tests, m)
+NB_MODULE(_cpp_tests, m)
 {
     m.doc() = "C++ test runner for guard-based tests";
     m.def(
@@ -20,6 +20,6 @@ PYBIND11_MODULE(_cpp_tests, m)
             }
             return rc;
         },
-        py::arg("filter") = "",
-        py::arg("verbose") = false);
+        nb::arg("filter") = "",
+        nb::arg("verbose") = false);
 }

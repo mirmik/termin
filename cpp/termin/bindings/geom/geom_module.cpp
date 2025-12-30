@@ -2,7 +2,7 @@
 
 namespace termin {
 
-PYBIND11_MODULE(_geom_native, m) {
+NB_MODULE(_geom_native, m) {
     m.doc() = "Native C++ geometry module for termin";
 
     // Bind all geometry types in order of dependencies

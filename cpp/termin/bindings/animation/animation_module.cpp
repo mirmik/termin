@@ -1,222 +1,225 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/unordered_map.h>
+#include <nanobind/stl/vector.h>
 
 #include "termin/animation/animation.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../../../core_c/include/tc_kind.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 using namespace termin;
 using namespace termin::animation;
 
 // Helper: numpy array (3,) -> Vec3
-static Vec3 numpy_to_vec3(py::array_t<double> arr) {
-    auto buf = arr.unchecked<1>();
-    return Vec3{buf(0), buf(1), buf(2)};
+static Vec3 numpy_to_vec3(nb::ndarray<double, nb::c_contig, nb::device::cpu> arr) {
+    const double* data = arr.data();
+    return Vec3{data[0], data[1], data[2]};
 }
 
 // Helper: Vec3 -> numpy array (3,)
-static py::array_t<double> vec3_to_numpy(const Vec3& v) {
-    auto result = py::array_t<double>(3);
-    auto buf = result.mutable_unchecked<1>();
-    buf(0) = v.x;
-    buf(1) = v.y;
-    buf(2) = v.z;
-    return result;
+static nb::object vec3_to_numpy(const Vec3& v) {
+    double* buf = new double[3];
+    buf[0] = v.x;
+    buf[1] = v.y;
+    buf[2] = v.z;
+    nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+    size_t shape[1] = {3};
+    return nb::cast(nb::ndarray<nb::numpy, double>(buf, 1, shape, owner));
 }
 
 // Helper: numpy array (4,) -> Quat
-static Quat numpy_to_quat(py::array_t<double> arr) {
-    auto buf = arr.unchecked<1>();
-    return Quat{buf(0), buf(1), buf(2), buf(3)};
+static Quat numpy_to_quat(nb::ndarray<double, nb::c_contig, nb::device::cpu> arr) {
+    const double* data = arr.data();
+    return Quat{data[0], data[1], data[2], data[3]};
 }
 
 // Helper: Quat -> numpy array (4,)
-static py::array_t<double> quat_to_numpy(const Quat& q) {
-    auto result = py::array_t<double>(4);
-    auto buf = result.mutable_unchecked<1>();
-    buf(0) = q.x;
-    buf(1) = q.y;
-    buf(2) = q.z;
-    buf(3) = q.w;
-    return result;
+static nb::object quat_to_numpy(const Quat& q) {
+    double* buf = new double[4];
+    buf[0] = q.x;
+    buf[1] = q.y;
+    buf[2] = q.z;
+    buf[3] = q.w;
+    nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+    size_t shape[1] = {4};
+    return nb::cast(nb::ndarray<nb::numpy, double>(buf, 1, shape, owner));
 }
 
-void bind_animation_keyframe(py::module_& m) {
-    py::class_<AnimationKeyframe>(m, "AnimationKeyframe")
-        .def(py::init<>())
-        .def(py::init<double>(), py::arg("time"))
-        .def(py::init([](double time, py::object translation, py::object rotation, py::object scale) {
-            AnimationKeyframe kf(time);
+void bind_animation_keyframe(nb::module_& m) {
+    nb::class_<AnimationKeyframe>(m, "AnimationKeyframe")
+        .def(nb::init<>())
+        .def(nb::init<double>(), nb::arg("time"))
+        .def("__init__", [](AnimationKeyframe* self, double time, nb::object translation, nb::object rotation, nb::object scale) {
+            new (self) AnimationKeyframe(time);
             if (!translation.is_none()) {
-                kf.translation = numpy_to_vec3(py::array_t<double>::ensure(translation));
+                self->translation = numpy_to_vec3(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(translation));
             }
             if (!rotation.is_none()) {
-                kf.rotation = numpy_to_quat(py::array_t<double>::ensure(rotation));
+                self->rotation = numpy_to_quat(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(rotation));
             }
             if (!scale.is_none()) {
-                kf.scale = scale.cast<double>();
+                self->scale = nb::cast<double>(scale);
             }
-            return kf;
-        }), py::arg("time"), py::arg("translation") = py::none(), py::arg("rotation") = py::none(), py::arg("scale") = py::none())
-        .def_readwrite("time", &AnimationKeyframe::time)
-        .def_property("translation",
-            [](const AnimationKeyframe& kf) -> py::object {
+        }, nb::arg("time"), nb::arg("translation") = nb::none(), nb::arg("rotation") = nb::none(), nb::arg("scale") = nb::none())
+        .def_rw("time", &AnimationKeyframe::time)
+        .def_prop_rw("translation",
+            [](const AnimationKeyframe& kf) -> nb::object {
                 if (kf.translation) {
                     return vec3_to_numpy(*kf.translation);
                 }
-                return py::none();
+                return nb::none();
             },
-            [](AnimationKeyframe& kf, py::object val) {
+            [](AnimationKeyframe& kf, nb::object val) {
                 if (val.is_none()) {
                     kf.translation = std::nullopt;
                 } else {
-                    kf.translation = numpy_to_vec3(py::array_t<double>::ensure(val));
+                    kf.translation = numpy_to_vec3(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(val));
                 }
             })
-        .def_property("rotation",
-            [](const AnimationKeyframe& kf) -> py::object {
+        .def_prop_rw("rotation",
+            [](const AnimationKeyframe& kf) -> nb::object {
                 if (kf.rotation) {
                     return quat_to_numpy(*kf.rotation);
                 }
-                return py::none();
+                return nb::none();
             },
-            [](AnimationKeyframe& kf, py::object val) {
+            [](AnimationKeyframe& kf, nb::object val) {
                 if (val.is_none()) {
                     kf.rotation = std::nullopt;
                 } else {
-                    kf.rotation = numpy_to_quat(py::array_t<double>::ensure(val));
+                    kf.rotation = numpy_to_quat(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(val));
                 }
             })
-        .def_property("scale",
-            [](const AnimationKeyframe& kf) -> py::object {
+        .def_prop_rw("scale",
+            [](const AnimationKeyframe& kf) -> nb::object {
                 if (kf.scale) {
-                    return py::float_(*kf.scale);
+                    return nb::float_(*kf.scale);
                 }
-                return py::none();
+                return nb::none();
             },
-            [](AnimationKeyframe& kf, py::object val) {
+            [](AnimationKeyframe& kf, nb::object val) {
                 if (val.is_none()) {
                     kf.scale = std::nullopt;
                 } else {
-                    kf.scale = val.cast<double>();
+                    kf.scale = nb::cast<double>(val);
                 }
             });
 }
 
-void bind_animation_channel_sample(py::module_& m) {
-    py::class_<AnimationChannelSample>(m, "AnimationChannelSample")
-        .def(py::init<>())
-        .def_property_readonly("translation",
-            [](const AnimationChannelSample& s) -> py::object {
+void bind_animation_channel_sample(nb::module_& m) {
+    nb::class_<AnimationChannelSample>(m, "AnimationChannelSample")
+        .def(nb::init<>())
+        .def_prop_ro("translation",
+            [](const AnimationChannelSample& s) -> nb::object {
                 if (s.translation) {
                     return vec3_to_numpy(*s.translation);
                 }
-                return py::none();
+                return nb::none();
             })
-        .def_property_readonly("rotation",
-            [](const AnimationChannelSample& s) -> py::object {
+        .def_prop_ro("rotation",
+            [](const AnimationChannelSample& s) -> nb::object {
                 if (s.rotation) {
                     return quat_to_numpy(*s.rotation);
                 }
-                return py::none();
+                return nb::none();
             })
-        .def_property_readonly("scale",
-            [](const AnimationChannelSample& s) -> py::object {
+        .def_prop_ro("scale",
+            [](const AnimationChannelSample& s) -> nb::object {
                 if (s.scale) {
-                    return py::float_(*s.scale);
+                    return nb::float_(*s.scale);
                 }
-                return py::none();
+                return nb::none();
             })
-        .def("__getitem__", [](const AnimationChannelSample& s, int i) -> py::object {
+        .def("__getitem__", [](const AnimationChannelSample& s, int i) -> nb::object {
             switch (i) {
                 case 0:
                     if (s.translation) return vec3_to_numpy(*s.translation);
-                    return py::none();
+                    return nb::none();
                 case 1:
                     if (s.rotation) return quat_to_numpy(*s.rotation);
-                    return py::none();
+                    return nb::none();
                 case 2:
-                    if (s.scale) return py::float_(*s.scale);
-                    return py::none();
+                    if (s.scale) return nb::float_(*s.scale);
+                    return nb::none();
                 default:
-                    throw py::index_error("Index out of range");
+                    throw nb::index_error("Index out of range");
             }
         })
         .def("__len__", [](const AnimationChannelSample&) { return 3; });
 }
 
-void bind_animation_channel(py::module_& m) {
-    py::class_<AnimationChannel>(m, "AnimationChannel")
-        .def(py::init<>())
-        .def(py::init([](py::list tr_keys, py::list rot_keys, py::list sc_keys) {
+void bind_animation_channel(nb::module_& m) {
+    nb::class_<AnimationChannel>(m, "AnimationChannel")
+        .def(nb::init<>())
+        .def("__init__", [](AnimationChannel* self, nb::list tr_keys, nb::list rot_keys, nb::list sc_keys) {
             std::vector<AnimationKeyframe> tr, rot, sc;
 
             for (auto item : tr_keys) {
-                auto tuple = item.cast<py::tuple>();
-                double time = tuple[0].cast<double>();
-                auto arr = py::array_t<double>::ensure(tuple[1]);
+                nb::tuple tuple = nb::cast<nb::tuple>(item);
+                double time = nb::cast<double>(tuple[0]);
+                auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(tuple[1]);
                 AnimationKeyframe kf(time);
                 kf.translation = numpy_to_vec3(arr);
                 tr.push_back(kf);
             }
 
             for (auto item : rot_keys) {
-                auto tuple = item.cast<py::tuple>();
-                double time = tuple[0].cast<double>();
-                auto arr = py::array_t<double>::ensure(tuple[1]);
+                nb::tuple tuple = nb::cast<nb::tuple>(item);
+                double time = nb::cast<double>(tuple[0]);
+                auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(tuple[1]);
                 AnimationKeyframe kf(time);
                 kf.rotation = numpy_to_quat(arr);
                 rot.push_back(kf);
             }
 
             for (auto item : sc_keys) {
-                auto tuple = item.cast<py::tuple>();
-                double time = tuple[0].cast<double>();
-                double scale = tuple[1].cast<double>();
+                nb::tuple tuple = nb::cast<nb::tuple>(item);
+                double time = nb::cast<double>(tuple[0]);
+                double scale = nb::cast<double>(tuple[1]);
                 AnimationKeyframe kf(time);
                 kf.scale = scale;
                 sc.push_back(kf);
             }
 
-            return AnimationChannel(std::move(tr), std::move(rot), std::move(sc));
-        }), py::arg("translation_keys"), py::arg("rotation_keys"), py::arg("scale_keys"))
-        .def_readonly("duration", &AnimationChannel::duration)
-        .def_property_readonly("translation_keys", [](const AnimationChannel& ch) {
-            py::list result;
+            new (self) AnimationChannel(std::move(tr), std::move(rot), std::move(sc));
+        }, nb::arg("translation_keys"), nb::arg("rotation_keys"), nb::arg("scale_keys"))
+        .def_ro("duration", &AnimationChannel::duration)
+        .def_prop_ro("translation_keys", [](const AnimationChannel& ch) {
+            nb::list result;
             for (const auto& kf : ch.translation_keys) {
                 result.append(kf);
             }
             return result;
         })
-        .def_property_readonly("rotation_keys", [](const AnimationChannel& ch) {
-            py::list result;
+        .def_prop_ro("rotation_keys", [](const AnimationChannel& ch) {
+            nb::list result;
             for (const auto& kf : ch.rotation_keys) {
                 result.append(kf);
             }
             return result;
         })
-        .def_property_readonly("scale_keys", [](const AnimationChannel& ch) {
-            py::list result;
+        .def_prop_ro("scale_keys", [](const AnimationChannel& ch) {
+            nb::list result;
             for (const auto& kf : ch.scale_keys) {
                 result.append(kf);
             }
             return result;
         })
-        .def("sample", &AnimationChannel::sample, py::arg("t_ticks"))
-        .def("serialize", [](const AnimationChannel& ch) -> py::dict {
-            py::dict result;
-            py::list tr_list, rot_list, sc_list;
+        .def("sample", &AnimationChannel::sample, nb::arg("t_ticks"))
+        .def("serialize", [](const AnimationChannel& ch) -> nb::dict {
+            nb::dict result;
+            nb::list tr_list, rot_list, sc_list;
             for (const auto& kf : ch.translation_keys) {
-                tr_list.append(py::make_tuple(kf.time, vec3_to_numpy(*kf.translation)));
+                tr_list.append(nb::make_tuple(kf.time, vec3_to_numpy(*kf.translation)));
             }
             for (const auto& kf : ch.rotation_keys) {
-                rot_list.append(py::make_tuple(kf.time, quat_to_numpy(*kf.rotation)));
+                rot_list.append(nb::make_tuple(kf.time, quat_to_numpy(*kf.rotation)));
             }
             for (const auto& kf : ch.scale_keys) {
-                sc_list.append(py::make_tuple(kf.time, *kf.scale));
+                sc_list.append(nb::make_tuple(kf.time, *kf.scale));
             }
             result["translation"] = tr_list;
             result["rotation"] = rot_list;
@@ -225,155 +228,156 @@ void bind_animation_channel(py::module_& m) {
         });
 }
 
-void bind_animation_clip(py::module_& m) {
-    py::class_<AnimationClip>(m, "AnimationClip")
-        .def(py::init<>())
-        .def(py::init([](std::string name,
-                         py::dict channels_dict,
+void bind_animation_clip(nb::module_& m) {
+    nb::class_<AnimationClip>(m, "AnimationClip")
+        .def(nb::init<>())
+        .def("__init__", [](AnimationClip* self,
+                         std::string name,
+                         nb::dict channels_dict,
                          double tps,
                          bool loop) {
             std::unordered_map<std::string, AnimationChannel> channels;
 
             for (auto item : channels_dict) {
-                std::string channel_name = item.first.cast<std::string>();
-                AnimationChannel channel = item.second.cast<AnimationChannel>();
+                std::string channel_name = nb::cast<std::string>(item.first);
+                AnimationChannel channel = nb::cast<AnimationChannel>(item.second);
                 channels[channel_name] = std::move(channel);
             }
 
-            return AnimationClip(std::move(name), std::move(channels), tps, loop);
-        }), py::arg("name"), py::arg("channels"), py::arg("tps"), py::arg("loop") = true)
-        .def_readwrite("name", &AnimationClip::name)
-        .def_readwrite("tps", &AnimationClip::tps)
-        .def_readwrite("duration", &AnimationClip::duration)
-        .def_readwrite("loop", &AnimationClip::loop)
-        .def_property_readonly("channels",
+            new (self) AnimationClip(std::move(name), std::move(channels), tps, loop);
+        }, nb::arg("name"), nb::arg("channels"), nb::arg("tps"), nb::arg("loop") = true)
+        .def_rw("name", &AnimationClip::name)
+        .def_rw("tps", &AnimationClip::tps)
+        .def_rw("duration", &AnimationClip::duration)
+        .def_rw("loop", &AnimationClip::loop)
+        .def_prop_ro("channels",
             [](const AnimationClip& clip) {
-                py::dict result;
+                nb::dict result;
                 for (const auto& [name, channel] : clip.channels) {
-                    result[py::str(name)] = channel;
+                    result[nb::str(name.c_str())] = channel;
                 }
                 return result;
             })
-        .def("sample", &AnimationClip::sample, py::arg("t_seconds"))
-        .def("sample_dict", [](const AnimationClip& clip, double t_seconds) -> py::dict {
+        .def("sample", &AnimationClip::sample, nb::arg("t_seconds"))
+        .def("sample_dict", [](const AnimationClip& clip, double t_seconds) -> nb::dict {
             auto samples = clip.sample(t_seconds);
-            py::dict result;
+            nb::dict result;
             for (const auto& [name, sample] : samples) {
-                py::object tr = sample.translation ? py::object(vec3_to_numpy(*sample.translation)) : py::none();
-                py::object rot = sample.rotation ? py::object(quat_to_numpy(*sample.rotation)) : py::none();
-                py::object sc = sample.scale ? py::object(py::float_(*sample.scale)) : py::none();
-                result[py::str(name)] = py::make_tuple(tr, rot, sc);
+                nb::object tr = sample.translation ? vec3_to_numpy(*sample.translation) : nb::none();
+                nb::object rot = sample.rotation ? quat_to_numpy(*sample.rotation) : nb::none();
+                nb::object sc = sample.scale ? nb::cast(nb::float_(*sample.scale)) : nb::none();
+                result[nb::str(name.c_str())] = nb::make_tuple(tr, rot, sc);
             }
             return result;
-        }, py::arg("t_seconds"))
-        .def("serialize", [](const AnimationClip& clip) -> py::dict {
-            py::dict result;
+        }, nb::arg("t_seconds"))
+        .def("serialize", [](const AnimationClip& clip) -> nb::dict {
+            nb::dict result;
             result["name"] = clip.name;
             result["tps"] = clip.tps;
             result["loop"] = clip.loop;
-            py::dict channels_dict;
+            nb::dict channels_dict;
             for (const auto& [name, ch] : clip.channels) {
-                py::dict ch_data;
-                py::list tr_list, rot_list, sc_list;
+                nb::dict ch_data;
+                nb::list tr_list, rot_list, sc_list;
                 for (const auto& kf : ch.translation_keys) {
-                    tr_list.append(py::make_tuple(kf.time, vec3_to_numpy(*kf.translation)));
+                    tr_list.append(nb::make_tuple(kf.time, vec3_to_numpy(*kf.translation)));
                 }
                 for (const auto& kf : ch.rotation_keys) {
-                    rot_list.append(py::make_tuple(kf.time, quat_to_numpy(*kf.rotation)));
+                    rot_list.append(nb::make_tuple(kf.time, quat_to_numpy(*kf.rotation)));
                 }
                 for (const auto& kf : ch.scale_keys) {
-                    sc_list.append(py::make_tuple(kf.time, *kf.scale));
+                    sc_list.append(nb::make_tuple(kf.time, *kf.scale));
                 }
                 ch_data["translation"] = tr_list;
                 ch_data["rotation"] = rot_list;
                 ch_data["scale"] = sc_list;
-                channels_dict[py::str(name)] = ch_data;
+                channels_dict[nb::str(name.c_str())] = ch_data;
             }
             result["channels"] = channels_dict;
             return result;
         });
 }
 
-void bind_animation_clip_handle(py::module_& m) {
-    py::class_<AnimationClipHandle>(m, "AnimationClipHandle")
-        .def(py::init<>())
-        .def(py::init<py::object>(), py::arg("asset"))
-        .def_static("from_name", &AnimationClipHandle::from_name, py::arg("name"))
-        .def_static("from_asset", &AnimationClipHandle::from_asset, py::arg("asset"))
-        .def_static("from_uuid", &AnimationClipHandle::from_uuid, py::arg("uuid"))
-        .def_static("deserialize", &AnimationClipHandle::deserialize, py::arg("data"))
-        .def_readwrite("asset", &AnimationClipHandle::asset)
-        .def_property_readonly("is_valid", &AnimationClipHandle::is_valid)
-        .def_property_readonly("name", &AnimationClipHandle::name)
-        .def_property_readonly("clip", &AnimationClipHandle::clip,
-            py::return_value_policy::reference)
-        .def("get", &AnimationClipHandle::get, py::return_value_policy::reference)
+void bind_animation_clip_handle(nb::module_& m) {
+    nb::class_<AnimationClipHandle>(m, "AnimationClipHandle")
+        .def(nb::init<>())
+        .def("__init__", [](AnimationClipHandle* self, nb::object asset) {
+            new (self) AnimationClipHandle(asset);
+        }, nb::arg("asset"))
+        .def_static("from_name", &AnimationClipHandle::from_name, nb::arg("name"))
+        .def_static("from_asset", &AnimationClipHandle::from_asset, nb::arg("asset"))
+        .def_static("from_uuid", &AnimationClipHandle::from_uuid, nb::arg("uuid"))
+        .def_static("deserialize", &AnimationClipHandle::deserialize, nb::arg("data"))
+        .def_rw("asset", &AnimationClipHandle::asset)
+        .def_prop_ro("is_valid", &AnimationClipHandle::is_valid)
+        .def_prop_ro("name", &AnimationClipHandle::name)
+        .def_prop_ro("clip", &AnimationClipHandle::clip, nb::rv_policy::reference)
+        .def("get", &AnimationClipHandle::get, nb::rv_policy::reference)
         .def("get_asset", [](const AnimationClipHandle& self) { return self.asset; })
         .def("serialize", &AnimationClipHandle::serialize);
 }
 
-void bind_deserialize_functions(py::module_& m) {
-    m.def("deserialize_channel", [](py::dict data) -> AnimationChannel {
+void bind_deserialize_functions(nb::module_& m) {
+    m.def("deserialize_channel", [](nb::dict data) -> AnimationChannel {
         std::vector<AnimationKeyframe> tr, rot, sc;
 
-        for (auto item : data["translation"].cast<py::list>()) {
-            auto t = item.cast<py::tuple>();
-            AnimationKeyframe kf(t[0].cast<double>());
-            kf.translation = numpy_to_vec3(py::array_t<double>::ensure(t[1]));
+        for (auto item : nb::cast<nb::list>(data["translation"])) {
+            auto t = nb::cast<nb::tuple>(item);
+            AnimationKeyframe kf(nb::cast<double>(t[0]));
+            kf.translation = numpy_to_vec3(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(t[1]));
             tr.push_back(kf);
         }
-        for (auto item : data["rotation"].cast<py::list>()) {
-            auto t = item.cast<py::tuple>();
-            AnimationKeyframe kf(t[0].cast<double>());
-            kf.rotation = numpy_to_quat(py::array_t<double>::ensure(t[1]));
+        for (auto item : nb::cast<nb::list>(data["rotation"])) {
+            auto t = nb::cast<nb::tuple>(item);
+            AnimationKeyframe kf(nb::cast<double>(t[0]));
+            kf.rotation = numpy_to_quat(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(t[1]));
             rot.push_back(kf);
         }
-        for (auto item : data["scale"].cast<py::list>()) {
-            auto t = item.cast<py::tuple>();
-            AnimationKeyframe kf(t[0].cast<double>());
-            kf.scale = t[1].cast<double>();
+        for (auto item : nb::cast<nb::list>(data["scale"])) {
+            auto t = nb::cast<nb::tuple>(item);
+            AnimationKeyframe kf(nb::cast<double>(t[0]));
+            kf.scale = nb::cast<double>(t[1]);
             sc.push_back(kf);
         }
         return AnimationChannel(std::move(tr), std::move(rot), std::move(sc));
-    }, py::arg("data"));
+    }, nb::arg("data"));
 
-    m.def("deserialize_clip", [](py::dict data) -> AnimationClip {
-        std::string name = data["name"].cast<std::string>();
-        double tps = data["tps"].cast<double>();
-        bool loop = data["loop"].cast<bool>();
+    m.def("deserialize_clip", [](nb::dict data) -> AnimationClip {
+        std::string name = nb::cast<std::string>(data["name"]);
+        double tps = nb::cast<double>(data["tps"]);
+        bool loop = nb::cast<bool>(data["loop"]);
 
         std::unordered_map<std::string, AnimationChannel> channels;
-        for (auto item : data["channels"].cast<py::dict>()) {
-            std::string ch_name = item.first.cast<std::string>();
-            py::dict ch_data = item.second.cast<py::dict>();
+        for (auto item : nb::cast<nb::dict>(data["channels"])) {
+            std::string ch_name = nb::cast<std::string>(item.first);
+            nb::dict ch_data = nb::cast<nb::dict>(item.second);
 
             std::vector<AnimationKeyframe> tr, rot, sc;
-            for (auto kf_item : ch_data["translation"].cast<py::list>()) {
-                auto t = kf_item.cast<py::tuple>();
-                AnimationKeyframe kf(t[0].cast<double>());
-                kf.translation = numpy_to_vec3(py::array_t<double>::ensure(t[1]));
+            for (auto kf_item : nb::cast<nb::list>(ch_data["translation"])) {
+                auto t = nb::cast<nb::tuple>(kf_item);
+                AnimationKeyframe kf(nb::cast<double>(t[0]));
+                kf.translation = numpy_to_vec3(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(t[1]));
                 tr.push_back(kf);
             }
-            for (auto kf_item : ch_data["rotation"].cast<py::list>()) {
-                auto t = kf_item.cast<py::tuple>();
-                AnimationKeyframe kf(t[0].cast<double>());
-                kf.rotation = numpy_to_quat(py::array_t<double>::ensure(t[1]));
+            for (auto kf_item : nb::cast<nb::list>(ch_data["rotation"])) {
+                auto t = nb::cast<nb::tuple>(kf_item);
+                AnimationKeyframe kf(nb::cast<double>(t[0]));
+                kf.rotation = numpy_to_quat(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(t[1]));
                 rot.push_back(kf);
             }
-            for (auto kf_item : ch_data["scale"].cast<py::list>()) {
-                auto t = kf_item.cast<py::tuple>();
-                AnimationKeyframe kf(t[0].cast<double>());
-                kf.scale = t[1].cast<double>();
+            for (auto kf_item : nb::cast<nb::list>(ch_data["scale"])) {
+                auto t = nb::cast<nb::tuple>(kf_item);
+                AnimationKeyframe kf(nb::cast<double>(t[0]));
+                kf.scale = nb::cast<double>(t[1]);
                 sc.push_back(kf);
             }
             channels[ch_name] = AnimationChannel(std::move(tr), std::move(rot), std::move(sc));
         }
         return AnimationClip(std::move(name), std::move(channels), tps, loop);
-    }, py::arg("data"));
+    }, nb::arg("data"));
 }
 
 void register_animation_kind_handlers() {
-    // ===== animation_clip_handle kind =====
     // C++ handler for C++ fields
     tc::register_cpp_handle_kind<AnimationClipHandle>("animation_clip_handle");
 
@@ -381,38 +385,37 @@ void register_animation_kind_handlers() {
     tc::KindRegistry::instance().register_python(
         "animation_clip_handle",
         // serialize
-        py::cpp_function([](py::object obj) -> py::object {
-            AnimationClipHandle handle = obj.cast<AnimationClipHandle>();
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            AnimationClipHandle handle = nb::cast<AnimationClipHandle>(obj);
             return handle.serialize();
         }),
         // deserialize
-        py::cpp_function([](py::object data) -> py::object {
+        nb::cpp_function([](nb::object data) -> nb::object {
             // Handle UUID string (legacy format)
-            if (py::isinstance<py::str>(data)) {
-                return py::cast(AnimationClipHandle::from_uuid(data.cast<std::string>()));
+            if (nb::isinstance<nb::str>(data)) {
+                return nb::cast(AnimationClipHandle::from_uuid(nb::cast<std::string>(data)));
             }
             // Handle dict format
-            if (py::isinstance<py::dict>(data)) {
-                py::dict d = data.cast<py::dict>();
-                return py::cast(AnimationClipHandle::deserialize(d));
+            if (nb::isinstance<nb::dict>(data)) {
+                nb::dict d = nb::cast<nb::dict>(data);
+                return nb::cast(AnimationClipHandle::deserialize(d));
             }
-            return py::cast(AnimationClipHandle());
+            return nb::cast(AnimationClipHandle());
         }),
         // convert
-        py::cpp_function([](py::object value) -> py::object {
+        nb::cpp_function([](nb::object value) -> nb::object {
             if (value.is_none()) {
-                return py::cast(AnimationClipHandle());
+                return nb::cast(AnimationClipHandle());
             }
-            if (py::isinstance<AnimationClipHandle>(value)) {
+            if (nb::isinstance<AnimationClipHandle>(value)) {
                 return value;
             }
             return value;
         })
     );
-    // list[animation_clip_handle] is auto-generated by InspectRegistry
 }
 
-PYBIND11_MODULE(_animation_native, m) {
+NB_MODULE(_animation_native, m) {
     m.doc() = "Native C++ animation module for termin";
 
     bind_animation_keyframe(m);

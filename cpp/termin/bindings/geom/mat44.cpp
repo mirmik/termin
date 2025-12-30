@@ -1,10 +1,11 @@
 #include "common.hpp"
+#include <nanobind/stl/pair.h>
 
 namespace termin {
 
-void bind_mat44(py::module_& m) {
-    py::class_<Mat44>(m, "Mat44")
-        .def(py::init<>())
+void bind_mat44(nb::module_& m) {
+    nb::class_<Mat44>(m, "Mat44")
+        .def(nb::init<>())
         .def("__call__", [](const Mat44& m, int col, int row) { return m(col, row); })
         .def("__getitem__", [](const Mat44& m, std::pair<int, int> idx) {
             return m(idx.first, idx.second);
@@ -12,7 +13,7 @@ void bind_mat44(py::module_& m) {
         .def("__setitem__", [](Mat44& m, std::pair<int, int> idx, double val) {
             m(idx.first, idx.second) = val;
         })
-        .def(py::self * py::self)
+        .def(nb::self * nb::self)
         .def("transform_point", &Mat44::transform_point)
         .def("transform_direction", &Mat44::transform_direction)
         .def("transposed", &Mat44::transposed)
@@ -21,44 +22,46 @@ void bind_mat44(py::module_& m) {
         .def("get_scale", &Mat44::get_scale)
         .def_static("identity", &Mat44::identity)
         .def_static("zero", &Mat44::zero)
-        .def_static("translation", py::overload_cast<const Vec3&>(&Mat44::translation))
-        .def_static("translation", py::overload_cast<double, double, double>(&Mat44::translation))
-        .def_static("scale", py::overload_cast<const Vec3&>(&Mat44::scale))
-        .def_static("scale", py::overload_cast<double>(&Mat44::scale))
+        .def_static("translation", nb::overload_cast<const Vec3&>(&Mat44::translation))
+        .def_static("translation", nb::overload_cast<double, double, double>(&Mat44::translation))
+        .def_static("scale", nb::overload_cast<const Vec3&>(&Mat44::scale))
+        .def_static("scale", nb::overload_cast<double>(&Mat44::scale))
         .def_static("rotation", &Mat44::rotation)
         .def_static("rotation_axis_angle", &Mat44::rotation_axis_angle)
         .def_static("perspective", &Mat44::perspective,
-            py::arg("fov_y"), py::arg("aspect"), py::arg("near"), py::arg("far"),
+            nb::arg("fov_y"), nb::arg("aspect"), nb::arg("near"), nb::arg("far"),
             "Perspective projection (Y-forward, Z-up)")
         .def_static("orthographic", &Mat44::orthographic,
-            py::arg("left"), py::arg("right"), py::arg("bottom"), py::arg("top"),
-            py::arg("near"), py::arg("far"),
+            nb::arg("left"), nb::arg("right"), nb::arg("bottom"), nb::arg("top"),
+            nb::arg("near"), nb::arg("far"),
             "Orthographic projection (Y-forward, Z-up)")
         .def_static("look_at", &Mat44::look_at,
-            py::arg("eye"), py::arg("target"), py::arg("up") = Vec3::unit_z(),
+            nb::arg("eye"), nb::arg("target"), nb::arg("up") = Vec3::unit_z(),
             "Look-at view matrix (Y-forward, Z-up)")
         .def_static("compose", &Mat44::compose,
-            py::arg("translation"), py::arg("rotation"), py::arg("scale"),
+            nb::arg("translation"), nb::arg("rotation"), nb::arg("scale"),
             "Compose TRS matrix")
-        .def("to_numpy", [](const Mat44& m) {
-            auto result = py::array_t<double>({4, 4});
-            auto buf = result.mutable_unchecked<2>();
+        .def("to_numpy", [](const Mat44& mat) {
+            double* data = new double[16];
             for (int col = 0; col < 4; ++col) {
                 for (int row = 0; row < 4; ++row) {
-                    buf(row, col) = m(col, row);
+                    data[row * 4 + col] = mat(col, row);
                 }
             }
-            return result;
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+            size_t shape[2] = {4, 4};
+            return nb::ndarray<nb::numpy, double, nb::shape<4, 4>>(data, 2, shape, owner);
         })
-        .def("to_numpy_f32", [](const Mat44& m) {
-            auto result = py::array_t<float>({4, 4});
-            auto buf = result.mutable_unchecked<2>();
+        .def("to_numpy_f32", [](const Mat44& mat) {
+            float* data = new float[16];
             for (int col = 0; col < 4; ++col) {
                 for (int row = 0; row < 4; ++row) {
-                    buf(row, col) = static_cast<float>(m(col, row));
+                    data[row * 4 + col] = static_cast<float>(mat(col, row));
                 }
             }
-            return result;
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[2] = {4, 4};
+            return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, 2, shape, owner);
         })
         .def("__repr__", [](const Mat44& m) {
             return "<Mat44>";

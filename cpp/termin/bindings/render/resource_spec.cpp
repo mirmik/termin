@@ -1,143 +1,143 @@
 #include "common.hpp"
+#include <nanobind/stl/optional.h>
 #include "termin/render/resource_spec.hpp"
 
 namespace termin {
 
-void bind_resource_spec(py::module_& m) {
-    py::class_<ResourceSpec>(m, "ResourceSpec")
-        .def(py::init<>())
-        .def(py::init<std::string, std::string>(),
-             py::arg("resource"),
-             py::arg("resource_type") = "fbo")
+void bind_resource_spec(nb::module_& m) {
+    nb::class_<ResourceSpec>(m, "ResourceSpec")
+        .def(nb::init<>())
+        .def(nb::init<std::string, std::string>(),
+             nb::arg("resource"),
+             nb::arg("resource_type") = "fbo")
         // Full constructor
-        .def(py::init([](
+        .def("__init__", [](ResourceSpec* self,
             const std::string& resource,
             const std::string& resource_type,
-            py::object size,
-            py::object clear_color,
-            py::object clear_depth,
-            py::object format,
+            nb::object size,
+            nb::object clear_color,
+            nb::object clear_depth,
+            nb::object format,
             int samples
         ) {
-            ResourceSpec spec;
-            spec.resource = resource;
-            spec.resource_type = resource_type;
-            spec.samples = samples;
+            new (self) ResourceSpec();
+            self->resource = resource;
+            self->resource_type = resource_type;
+            self->samples = samples;
 
             if (!size.is_none()) {
-                auto t = size.cast<py::tuple>();
-                spec.size = std::make_pair(t[0].cast<int>(), t[1].cast<int>());
+                nb::tuple t = nb::cast<nb::tuple>(size);
+                self->size = std::make_pair(nb::cast<int>(t[0]), nb::cast<int>(t[1]));
             }
             if (!clear_color.is_none()) {
-                auto t = clear_color.cast<py::tuple>();
-                spec.clear_color = std::array<double, 4>{
-                    t[0].cast<double>(), t[1].cast<double>(),
-                    t[2].cast<double>(), t[3].cast<double>()
+                nb::tuple t = nb::cast<nb::tuple>(clear_color);
+                self->clear_color = std::array<double, 4>{
+                    nb::cast<double>(t[0]), nb::cast<double>(t[1]),
+                    nb::cast<double>(t[2]), nb::cast<double>(t[3])
                 };
             }
             if (!clear_depth.is_none()) {
-                spec.clear_depth = clear_depth.cast<float>();
+                self->clear_depth = nb::cast<float>(clear_depth);
             }
             if (!format.is_none()) {
-                spec.format = format.cast<std::string>();
+                self->format = nb::cast<std::string>(format);
             }
-            return spec;
-        }),
-            py::arg("resource"),
-            py::arg("resource_type") = "fbo",
-            py::arg("size") = py::none(),
-            py::arg("clear_color") = py::none(),
-            py::arg("clear_depth") = py::none(),
-            py::arg("format") = py::none(),
-            py::arg("samples") = 1
+        },
+            nb::arg("resource"),
+            nb::arg("resource_type") = "fbo",
+            nb::arg("size") = nb::none(),
+            nb::arg("clear_color") = nb::none(),
+            nb::arg("clear_depth") = nb::none(),
+            nb::arg("format") = nb::none(),
+            nb::arg("samples") = 1
         )
-        .def_readwrite("resource", &ResourceSpec::resource)
-        .def_readwrite("resource_type", &ResourceSpec::resource_type)
-        .def_readwrite("samples", &ResourceSpec::samples)
+        .def_rw("resource", &ResourceSpec::resource)
+        .def_rw("resource_type", &ResourceSpec::resource_type)
+        .def_rw("samples", &ResourceSpec::samples)
         // size property: optional<pair<int,int>> <-> tuple or None
-        .def_property("size",
-            [](const ResourceSpec& self) -> py::object {
+        .def_prop_rw("size",
+            [](const ResourceSpec& self) -> nb::object {
                 if (self.size) {
-                    return py::make_tuple(self.size->first, self.size->second);
+                    return nb::make_tuple(self.size->first, self.size->second);
                 }
-                return py::none();
+                return nb::none();
             },
-            [](ResourceSpec& self, py::object val) {
+            [](ResourceSpec& self, nb::object val) {
                 if (val.is_none()) {
                     self.size = std::nullopt;
                 } else {
-                    auto t = val.cast<py::tuple>();
-                    self.size = std::make_pair(t[0].cast<int>(), t[1].cast<int>());
+                    nb::tuple t = nb::cast<nb::tuple>(val);
+                    self.size = std::make_pair(nb::cast<int>(t[0]), nb::cast<int>(t[1]));
                 }
             }
         )
         // clear_color property: optional<array<float,4>> <-> tuple or None
-        .def_property("clear_color",
-            [](const ResourceSpec& self) -> py::object {
+        .def_prop_rw("clear_color",
+            [](const ResourceSpec& self) -> nb::object {
                 if (self.clear_color) {
                     auto& c = *self.clear_color;
-                    return py::make_tuple(c[0], c[1], c[2], c[3]);
+                    return nb::make_tuple(c[0], c[1], c[2], c[3]);
                 }
-                return py::none();
+                return nb::none();
             },
-            [](ResourceSpec& self, py::object val) {
+            [](ResourceSpec& self, nb::object val) {
                 if (val.is_none()) {
                     self.clear_color = std::nullopt;
                 } else {
-                    auto t = val.cast<py::tuple>();
+                    nb::tuple t = nb::cast<nb::tuple>(val);
                     self.clear_color = std::array<double, 4>{
-                        t[0].cast<double>(), t[1].cast<double>(),
-                        t[2].cast<double>(), t[3].cast<double>()
+                        nb::cast<double>(t[0]), nb::cast<double>(t[1]),
+                        nb::cast<double>(t[2]), nb::cast<double>(t[3])
                     };
                 }
             }
         )
         // clear_depth property: optional<float> <-> float or None
-        .def_property("clear_depth",
-            [](const ResourceSpec& self) -> py::object {
+        .def_prop_rw("clear_depth",
+            [](const ResourceSpec& self) -> nb::object {
                 if (self.clear_depth) {
-                    return py::cast(*self.clear_depth);
+                    return nb::cast(*self.clear_depth);
                 }
-                return py::none();
+                return nb::none();
             },
-            [](ResourceSpec& self, py::object val) {
+            [](ResourceSpec& self, nb::object val) {
                 if (val.is_none()) {
                     self.clear_depth = std::nullopt;
                 } else {
-                    self.clear_depth = val.cast<float>();
+                    self.clear_depth = nb::cast<float>(val);
                 }
             }
         )
         // format property: optional<string> <-> str or None
-        .def_property("format",
-            [](const ResourceSpec& self) -> py::object {
+        .def_prop_rw("format",
+            [](const ResourceSpec& self) -> nb::object {
                 if (self.format) {
-                    return py::cast(*self.format);
+                    return nb::cast(*self.format);
                 }
-                return py::none();
+                return nb::none();
             },
-            [](ResourceSpec& self, py::object val) {
+            [](ResourceSpec& self, nb::object val) {
                 if (val.is_none()) {
                     self.format = std::nullopt;
                 } else {
-                    self.format = val.cast<std::string>();
+                    self.format = nb::cast<std::string>(val);
                 }
             }
         )
         // serialize() method - returns lists for JSON compatibility
-        .def("serialize", [](const ResourceSpec& self) -> py::dict {
-            py::dict data;
+        .def("serialize", [](const ResourceSpec& self) -> nb::dict {
+            nb::dict data;
             data["resource"] = self.resource;
             data["resource_type"] = self.resource_type;
             if (self.size) {
-                py::list size_list;
+                nb::list size_list;
                 size_list.append(self.size->first);
                 size_list.append(self.size->second);
                 data["size"] = size_list;
             }
             if (self.clear_color) {
                 auto& c = *self.clear_color;
-                py::list color_list;
+                nb::list color_list;
                 color_list.append(c[0]);
                 color_list.append(c[1]);
                 color_list.append(c[2]);
@@ -156,39 +156,39 @@ void bind_resource_spec(py::module_& m) {
             return data;
         })
         // deserialize() classmethod - handles both list and tuple
-        .def_static("deserialize", [](py::dict data) -> ResourceSpec {
+        .def_static("deserialize", [](nb::dict data) -> ResourceSpec {
             ResourceSpec spec;
             spec.resource = data.contains("resource") ?
-                data["resource"].cast<std::string>() : "";
+                nb::cast<std::string>(data["resource"]) : "";
             spec.resource_type = data.contains("resource_type") ?
-                data["resource_type"].cast<std::string>() : "fbo";
+                nb::cast<std::string>(data["resource_type"]) : "fbo";
             spec.samples = data.contains("samples") ?
-                data["samples"].cast<int>() : 1;
+                nb::cast<int>(data["samples"]) : 1;
 
             if (data.contains("size")) {
-                py::object size_obj = data["size"];
+                nb::object size_obj = data["size"];
                 spec.size = std::make_pair(
-                    size_obj[py::int_(0)].cast<int>(),
-                    size_obj[py::int_(1)].cast<int>()
+                    nb::cast<int>(size_obj[nb::int_(0)]),
+                    nb::cast<int>(size_obj[nb::int_(1)])
                 );
             }
             if (data.contains("clear_color")) {
-                py::object color_obj = data["clear_color"];
+                nb::object color_obj = data["clear_color"];
                 spec.clear_color = std::array<double, 4>{
-                    color_obj[py::int_(0)].cast<double>(),
-                    color_obj[py::int_(1)].cast<double>(),
-                    color_obj[py::int_(2)].cast<double>(),
-                    color_obj[py::int_(3)].cast<double>()
+                    nb::cast<double>(color_obj[nb::int_(0)]),
+                    nb::cast<double>(color_obj[nb::int_(1)]),
+                    nb::cast<double>(color_obj[nb::int_(2)]),
+                    nb::cast<double>(color_obj[nb::int_(3)])
                 };
             }
             if (data.contains("clear_depth")) {
-                spec.clear_depth = data["clear_depth"].cast<float>();
+                spec.clear_depth = nb::cast<float>(data["clear_depth"]);
             }
             if (data.contains("format")) {
-                spec.format = data["format"].cast<std::string>();
+                spec.format = nb::cast<std::string>(data["format"]);
             }
             return spec;
-        }, py::arg("data"));
+        }, nb::arg("data"));
 }
 
 } // namespace termin

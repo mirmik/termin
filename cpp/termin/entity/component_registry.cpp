@@ -20,7 +20,7 @@ void ComponentRegistry::register_native(const std::string& name, NativeFactory f
     registry_[name] = std::move(info);
 }
 
-void ComponentRegistry::register_python(const std::string& name, py::object cls) {
+void ComponentRegistry::register_python(const std::string& name, nb::object cls) {
     auto it = registry_.find(name);
     if (it != registry_.end() && it->second.kind == TC_CXX_COMPONENT) {
         // Don't overwrite native components with Python
@@ -39,7 +39,7 @@ void ComponentRegistry::unregister(const std::string& name) {
     registry_.erase(name);
 }
 
-py::object ComponentRegistry::create(const std::string& name) const {
+nb::object ComponentRegistry::create(const std::string& name) const {
     auto it = registry_.find(name);
     if (it == registry_.end()) {
         throw std::runtime_error("Unknown component type: " + name);
@@ -48,8 +48,14 @@ py::object ComponentRegistry::create(const std::string& name) const {
     const auto& info = it->second;
 
     if (info.kind == TC_CXX_COMPONENT) {
-        CxxComponent* comp = info.native_factory();
-        return py::cast(comp, py::return_value_policy::take_ownership);
+        // For native components, we need to call the Python class constructor
+        // because nb::cast(CxxComponent*) doesn't know the derived type.
+        // Get the Python class and call its constructor.
+        nb::object cls = get_class(name);
+        if (cls.is_none()) {
+            throw std::runtime_error("Cannot find Python class for native component: " + name);
+        }
+        return cls();
     } else {
         return info.python_class();
     }
@@ -84,18 +90,35 @@ const ComponentRegistry::ComponentInfo* ComponentRegistry::get_info(const std::s
     return &it->second;
 }
 
-py::object ComponentRegistry::get_class(const std::string& name) const {
+nb::object ComponentRegistry::get_class(const std::string& name) const {
     auto it = registry_.find(name);
     if (it == registry_.end()) {
-        return py::none();
+        return nb::none();
     }
 
     const auto& info = it->second;
     if (info.kind == TC_CXX_COMPONENT) {
-        // For native components, create an instance and return its type
-        CxxComponent* comp = info.native_factory();
-        py::object py_comp = py::cast(comp, py::return_value_policy::take_ownership);
-        return py::type::of(py_comp);
+        // For native components, look up the class in the appropriate module
+        try {
+            // Try entity module first (for CXXRotatorComponent, etc.)
+            nb::object entity_mod = nb::module_::import_("termin.entity._entity_native");
+            if (nb::hasattr(entity_mod, name.c_str())) {
+                return entity_mod.attr(name.c_str());
+            }
+            // Then render module (for MeshRenderer, SkinnedMeshRenderer)
+            nb::object render_mod = nb::module_::import_("termin._native.render");
+            if (nb::hasattr(render_mod, name.c_str())) {
+                return render_mod.attr(name.c_str());
+            }
+            // Then skeleton module
+            nb::object skeleton_mod = nb::module_::import_("termin._native.skeleton");
+            if (nb::hasattr(skeleton_mod, name.c_str())) {
+                return skeleton_mod.attr(name.c_str());
+            }
+        } catch (...) {
+            // Ignore import errors
+        }
+        return nb::none();
     } else {
         return info.python_class;
     }

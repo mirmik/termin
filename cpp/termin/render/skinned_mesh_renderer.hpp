@@ -1,13 +1,13 @@
 #pragma once
 
 #include <vector>
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 

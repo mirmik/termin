@@ -4,7 +4,7 @@
 #include <string>
 #include <set>
 #include <algorithm>
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 
 #include "termin/render/render_frame_pass.hpp"
 #include "termin/render/resource_spec.hpp"
@@ -20,7 +20,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/entity/component.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -42,8 +42,8 @@ public:
     bool wireframe = false;  // Render as wireframe (override polygon mode)
 
     // Debugger support (Python objects)
-    py::object debugger_window;         // Window for debug blit
-    py::object depth_capture_callback;  // Callback for depth buffer capture
+    nb::object debugger_window;         // Window for debug blit
+    nb::object depth_capture_callback;  // Callback for depth buffer capture
 
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
@@ -118,7 +118,7 @@ public:
      * Set debugger window for debug blitting.
      * Matches Python API: set_debugger_window(window, depth_callback)
      */
-    void set_debugger_window(py::object window, py::object callback = py::none()) {
+    void set_debugger_window(nb::object window, nb::object callback = nb::none()) {
         debugger_window = window;
         depth_capture_callback = callback;
     }
@@ -126,7 +126,7 @@ public:
     /**
      * Get debugger window.
      */
-    py::object get_debugger_window() const {
+    nb::object get_debugger_window() const {
         return debugger_window;
     }
 

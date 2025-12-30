@@ -74,20 +74,19 @@ bool component_overrides_fixed_update() {
     return base_vtable[slot] != derived_vtable[slot];
 }
 
-// Macro for binding native C++ components to pybind11.
+// Macro for binding native C++ components to nanobind.
 // Automatically sets up the factory with proper flag detection.
 //
 // Usage:
 //   BIND_NATIVE_COMPONENT(m, MyComponent)
-//       .def_readwrite("speed", &MyComponent::speed);
+//       .def_rw("speed", &MyComponent::speed);
 #define BIND_NATIVE_COMPONENT(module, ClassName) \
-    py::class_<ClassName, CxxComponent>(module, #ClassName) \
-        .def(py::init([]() { \
-            auto comp = new ClassName(); \
-            comp->set_type_name(#ClassName); \
-            comp->set_has_update(component_overrides_update<ClassName>()); \
-            comp->set_has_fixed_update(component_overrides_fixed_update<ClassName>()); \
-            return comp; \
-        }))
+    nb::class_<ClassName, CxxComponent>(module, #ClassName) \
+        .def("__init__", [](ClassName* self) { \
+            new (self) ClassName(); \
+            self->set_type_name(#ClassName); \
+            self->set_has_update(component_overrides_update<ClassName>()); \
+            self->set_has_fixed_update(component_overrides_fixed_update<ClassName>()); \
+        })
 
 } // namespace termin

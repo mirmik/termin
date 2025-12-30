@@ -11,7 +11,7 @@ std::string MaterialHandle::name() const {
         return _direct->name;
     }
     if (asset.is_none()) return "";
-    return asset.attr("name").cast<std::string>();
+    return nb::cast<std::string>(asset.attr("name"));
 }
 
 Material* MaterialHandle::get() const {
@@ -19,9 +19,9 @@ Material* MaterialHandle::get() const {
         return _direct;
     }
     if (asset.is_none()) return nullptr;
-    py::object res = asset.attr("resource");
+    nb::object res = asset.attr("resource");
     if (res.is_none()) return nullptr;
-    return res.cast<Material*>();
+    return nb::cast<Material*>(res);
 }
 
 Material* MaterialHandle::get_material() const {
@@ -30,16 +30,16 @@ Material* MaterialHandle::get_material() const {
         return mat;
     }
     try {
-        py::object mat_module = py::module_::import("termin.visualization.core.material");
-        py::object error_mat = mat_module.attr("get_error_material")();
-        return error_mat.cast<Material*>();
-    } catch (const py::error_already_set&) {
+        nb::object mat_module = nb::module_::import_("termin.visualization.core.material");
+        nb::object error_mat = mat_module.attr("get_error_material")();
+        return nb::cast<Material*>(error_mat);
+    } catch (const nb::python_error&) {
         return nullptr;
     }
 }
 
-py::dict MaterialHandle::serialize() const {
-    py::dict d;
+nb::dict MaterialHandle::serialize() const {
+    nb::dict d;
     if (_direct != nullptr || asset.is_none()) {
         d["type"] = "none";
         return d;

@@ -1,15 +1,23 @@
-from termin.core.profiler import Profiler
-import time
+print("Test 1: Import entity module")
+from termin.visualization.core.entity import Entity
+print("  OK")
 
-p = Profiler.instance()
-p.enabled = True
+print("Test 2: Import ComponentRegistry")
+from termin.entity._entity_native import ComponentRegistry
+reg = ComponentRegistry.instance()
+print("  OK")
 
-for i in range(5):
-    p.begin_frame()
-    with p.section("Test"):
-        time.sleep(0.01)
-        with p.section("Inner"):
-            time.sleep(0.005)
-    p.end_frame()
+print("Test 3: Create MeshRenderer via registry")
+mr = reg.create("MeshRenderer")
+print(f"  OK: {mr}")
 
-p.print_report()
+print("Test 4: Entity deserialize with MeshRenderer")
+e = Entity.deserialize({
+    "name": "test",
+    "components": [
+        {"type": "MeshRenderer", "data": {}}
+    ]
+}, None)
+print(f"  OK: {e}")
+
+print("All tests passed!")

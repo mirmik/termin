@@ -49,7 +49,7 @@ class SkyboxManager:
             fragment_source=SKYBOX_FRAGMENT_SHADER,
         )
         material = Material(shader=shader)
-        material.color = None
+        # Note: color is already None/unset by default
         return material
 
     def _create_solid_skybox_material(self) -> "Material":
@@ -62,7 +62,7 @@ class SkyboxManager:
             fragment_source=SKYBOX_SOLID_FRAGMENT_SHADER,
         )
         material = Material(shader=shader)
-        material.color = None
+        # Note: color is already None/unset by default
         return material
 
     @property

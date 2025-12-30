@@ -24,8 +24,8 @@ using InspectFieldCallbackRegistrar = tc::InspectFieldCallbackRegistrar<C, T>;
 // Re-export trent conversion functions
 using tc::trent_to_tc_value;
 using tc::tc_value_to_trent;
-using tc::py_to_trent_compat;
-using tc::trent_to_py_compat;
+using tc::nb_to_trent_compat;
+using tc::trent_to_nb_compat;
 
 } // namespace termin
 

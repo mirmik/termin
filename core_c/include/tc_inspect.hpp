@@ -1,10 +1,11 @@
-// tc_inspect.hpp - C++ wrapper for tc_inspect with pybind11 support
+// tc_inspect.hpp - C++ wrapper for tc_inspect with nanobind support
 #pragma once
 
 #include "tc_inspect.h"
 #include "tc_log.h"
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -14,102 +15,102 @@
 #include "trent/trent.h"
 #include "tc_kind.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace tc {
 
 // ============================================================================
-// py::object <-> tc_value conversion
+// nb::object <-> tc_value conversion
 // ============================================================================
 
-inline tc_value py_to_tc_value(py::object obj);
-inline py::object tc_value_to_py(const tc_value* v);
+inline tc_value nb_to_tc_value(nb::object obj);
+inline nb::object tc_value_to_nb(const tc_value* v);
 
-inline tc_value py_to_tc_value(py::object obj) {
+inline tc_value nb_to_tc_value(nb::object obj) {
     if (obj.is_none()) {
         return tc_value_nil();
     }
 
-    if (py::isinstance<py::bool_>(obj)) {
-        return tc_value_bool(obj.cast<bool>());
+    if (nb::isinstance<nb::bool_>(obj)) {
+        return tc_value_bool(nb::cast<bool>(obj));
     }
 
-    if (py::isinstance<py::int_>(obj)) {
-        return tc_value_int(obj.cast<int64_t>());
+    if (nb::isinstance<nb::int_>(obj)) {
+        return tc_value_int(nb::cast<int64_t>(obj));
     }
 
-    if (py::isinstance<py::float_>(obj)) {
-        return tc_value_double(obj.cast<double>());
+    if (nb::isinstance<nb::float_>(obj)) {
+        return tc_value_double(nb::cast<double>(obj));
     }
 
-    if (py::isinstance<py::str>(obj)) {
-        return tc_value_string(obj.cast<std::string>().c_str());
+    if (nb::isinstance<nb::str>(obj)) {
+        return tc_value_string(nb::cast<std::string>(obj).c_str());
     }
 
-    if (py::isinstance<py::list>(obj) || py::isinstance<py::tuple>(obj)) {
+    if (nb::isinstance<nb::list>(obj) || nb::isinstance<nb::tuple>(obj)) {
         tc_value list = tc_value_list_new();
         for (auto item : obj) {
-            tc_value_list_push(&list, py_to_tc_value(py::reinterpret_borrow<py::object>(item)));
+            tc_value_list_push(&list, nb_to_tc_value(nb::borrow<nb::object>(item)));
         }
         return list;
     }
 
-    if (py::isinstance<py::dict>(obj)) {
+    if (nb::isinstance<nb::dict>(obj)) {
         tc_value dict = tc_value_dict_new();
-        for (auto item : obj.cast<py::dict>()) {
-            std::string key = py::str(item.first).cast<std::string>();
+        for (auto item : nb::cast<nb::dict>(obj)) {
+            std::string key = nb::cast<std::string>(nb::str(item.first));
             tc_value_dict_set(&dict, key.c_str(),
-                py_to_tc_value(py::reinterpret_borrow<py::object>(item.second)));
+                nb_to_tc_value(nb::borrow<nb::object>(item.second)));
         }
         return dict;
     }
 
     // Try numpy array / vec3-like
-    if (py::hasattr(obj, "__len__") && py::len(obj) == 3) {
+    if (nb::hasattr(obj, "__len__") && nb::len(obj) == 3) {
         try {
-            py::list lst = obj.cast<py::list>();
+            nb::list lst = nb::cast<nb::list>(obj);
             tc_vec3 v = {
-                lst[0].cast<double>(),
-                lst[1].cast<double>(),
-                lst[2].cast<double>()
+                nb::cast<double>(lst[0]),
+                nb::cast<double>(lst[1]),
+                nb::cast<double>(lst[2])
             };
             return tc_value_vec3(v);
         } catch (...) {}
     }
 
     // Fallback: try tolist() for numpy
-    if (py::hasattr(obj, "tolist")) {
-        return py_to_tc_value(obj.attr("tolist")());
+    if (nb::hasattr(obj, "tolist")) {
+        return nb_to_tc_value(obj.attr("tolist")());
     }
 
     return tc_value_nil();
 }
 
-inline py::object tc_value_to_py(const tc_value* v) {
-    if (!v) return py::none();
+inline nb::object tc_value_to_nb(const tc_value* v) {
+    if (!v) return nb::none();
 
     switch (v->type) {
     case TC_VALUE_NIL:
-        return py::none();
+        return nb::none();
 
     case TC_VALUE_BOOL:
-        return py::bool_(v->data.b);
+        return nb::bool_(v->data.b);
 
     case TC_VALUE_INT:
-        return py::int_(v->data.i);
+        return nb::int_(v->data.i);
 
     case TC_VALUE_FLOAT:
-        return py::float_(v->data.f);
+        return nb::float_(v->data.f);
 
     case TC_VALUE_DOUBLE:
-        return py::float_(v->data.d);
+        return nb::float_(v->data.d);
 
     case TC_VALUE_STRING:
-        if (v->data.s) return py::str(v->data.s);
-        return py::none();
+        if (v->data.s) return nb::str(v->data.s);
+        return nb::none();
 
     case TC_VALUE_VEC3: {
-        py::list lst;
+        nb::list lst;
         lst.append(v->data.v3.x);
         lst.append(v->data.v3.y);
         lst.append(v->data.v3.z);
@@ -117,7 +118,7 @@ inline py::object tc_value_to_py(const tc_value* v) {
     }
 
     case TC_VALUE_QUAT: {
-        py::list lst;
+        nb::list lst;
         lst.append(v->data.q.x);
         lst.append(v->data.q.y);
         lst.append(v->data.q.z);
@@ -126,18 +127,18 @@ inline py::object tc_value_to_py(const tc_value* v) {
     }
 
     case TC_VALUE_LIST: {
-        py::list lst;
+        nb::list lst;
         for (size_t i = 0; i < v->data.list.count; i++) {
-            lst.append(tc_value_to_py(&v->data.list.items[i]));
+            lst.append(tc_value_to_nb(&v->data.list.items[i]));
         }
         return lst;
     }
 
     case TC_VALUE_DICT: {
-        py::dict d;
+        nb::dict d;
         for (size_t i = 0; i < v->data.dict.count; i++) {
-            d[py::str(v->data.dict.entries[i].key)] =
-                tc_value_to_py(v->data.dict.entries[i].value);
+            d[nb::str(v->data.dict.entries[i].key)] =
+                tc_value_to_nb(v->data.dict.entries[i].value);
         }
         return d;
     }
@@ -147,15 +148,15 @@ inline py::object tc_value_to_py(const tc_value* v) {
         const tc_kind_handler* h = tc_kind_get(v->kind);
         if (h && h->serialize) {
             tc_value serialized = h->serialize(v);
-            py::object result = tc_value_to_py(&serialized);
+            nb::object result = tc_value_to_nb(&serialized);
             tc_value_free(&serialized);
             return result;
         }
-        return py::none();
+        return nb::none();
     }
 
     default:
-        return py::none();
+        return nb::none();
     }
 }
 
@@ -174,7 +175,7 @@ enum class TypeBackend {
 // ============================================================================
 
 struct EnumChoice {
-    py::object value;
+    nb::object value;
     std::string label;
 };
 
@@ -192,14 +193,14 @@ struct InspectFieldInfo {
     double step = 0.01;
     bool non_serializable = false;
     std::vector<EnumChoice> choices;
-    py::object action;
+    nb::object action;
 
     // Which language backend owns this field
     TypeBackend backend = TypeBackend::Python;
 
     // Python getter/setter - for Python fields only
-    std::function<py::object(void*)> py_getter;
-    std::function<void(void*, py::object)> py_setter;
+    std::function<nb::object(void*)> py_getter;
+    std::function<void(void*, nb::object)> py_setter;
 
     // C++ getter/setter - for C++ fields only
     std::function<std::any(void*)> cpp_getter;
@@ -212,8 +213,8 @@ struct InspectFieldInfo {
 
 tc_value trent_to_tc_value(const nos::trent& t);
 nos::trent tc_value_to_trent(const tc_value* v);
-nos::trent py_to_trent_compat(py::object obj);
-py::object trent_to_py_compat(const nos::trent& t);
+nos::trent nb_to_trent_compat(nb::object obj);
+nb::object trent_to_nb_compat(const nos::trent& t);
 
 // ============================================================================
 // KindHandler - alias to TcKind from tc_kind.hpp
@@ -423,7 +424,7 @@ public:
     // ========================================================================
 
     // Defined in tc_inspect_instance.cpp (needs Component full definition)
-    void register_python_fields(const std::string& type_name, py::dict fields_dict);
+    void register_python_fields(const std::string& type_name, nb::dict fields_dict);
 
     // ========================================================================
     // Field queries
@@ -465,35 +466,35 @@ public:
     // Builtin type conversion helpers
     // ========================================================================
 
-    // Convert std::any to py::object for builtin types
-    // Returns py::none() if not a builtin type (caller should use KindRegistry)
-    static py::object any_to_py_builtin(const std::any& val) {
-        if (auto* v = std::any_cast<bool>(&val)) return py::cast(*v);
-        if (auto* v = std::any_cast<int>(&val)) return py::cast(*v);
-        if (auto* v = std::any_cast<int64_t>(&val)) return py::cast(*v);
-        if (auto* v = std::any_cast<float>(&val)) return py::cast(*v);
-        if (auto* v = std::any_cast<double>(&val)) return py::cast(*v);
-        if (auto* v = std::any_cast<std::string>(&val)) return py::cast(*v);
-        return py::none();
+    // Convert std::any to nb::object for builtin types
+    // Returns nb::none() if not a builtin type (caller should use KindRegistry)
+    static nb::object any_to_nb_builtin(const std::any& val) {
+        if (auto* v = std::any_cast<bool>(&val)) return nb::cast(*v);
+        if (auto* v = std::any_cast<int>(&val)) return nb::cast(*v);
+        if (auto* v = std::any_cast<int64_t>(&val)) return nb::cast(*v);
+        if (auto* v = std::any_cast<float>(&val)) return nb::cast(*v);
+        if (auto* v = std::any_cast<double>(&val)) return nb::cast(*v);
+        if (auto* v = std::any_cast<std::string>(&val)) return nb::cast(*v);
+        return nb::none();
     }
 
-    // Convert py::object to std::any for builtin types based on kind
+    // Convert nb::object to std::any for builtin types based on kind
     // Returns empty std::any if not a builtin kind (caller should use KindRegistry)
-    static std::any py_to_any_builtin(py::object value, const std::string& kind) {
+    static std::any nb_to_any_builtin(nb::object value, const std::string& kind) {
         if (kind == "bool" || kind == "checkbox") {
-            return value.cast<bool>();
+            return nb::cast<bool>(value);
         }
         if (kind == "int" || kind == "slider_int") {
-            return value.cast<int>();
+            return nb::cast<int>(value);
         }
         if (kind == "float" || kind == "slider" || kind == "drag_float") {
-            return value.cast<float>();
+            return nb::cast<float>(value);
         }
         if (kind == "double") {
-            return value.cast<double>();
+            return nb::cast<double>(value);
         }
         if (kind == "string" || kind == "text" || kind == "multiline_text") {
-            return value.cast<std::string>();
+            return nb::cast<std::string>(value);
         }
         return std::any{};
     }
@@ -508,10 +509,10 @@ public:
     }
 
     // ========================================================================
-    // Field access (Python interop - converts C++ fields via py::cast)
+    // Field access (Python interop - converts C++ fields via nb::cast)
     // ========================================================================
 
-    py::object get(void* obj, const std::string& type_name, const std::string& field_path) const {
+    nb::object get(void* obj, const std::string& type_name, const std::string& field_path) const {
         for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
                 if (f.py_getter) {
@@ -521,7 +522,7 @@ public:
                 if (f.cpp_getter) {
                     std::any val = f.cpp_getter(obj);
                     // Try builtin types first
-                    py::object result = any_to_py_builtin(val);
+                    nb::object result = any_to_nb_builtin(val);
                     if (!result.is_none()) {
                         return result;
                     }
@@ -534,49 +535,49 @@ public:
                     tc_log_warn("get %s.%s (kind=%s): no to_python handler, returning dict",
                         type_name.c_str(), field_path.c_str(), f.kind.c_str());
                     nos::trent t = KindRegistry::instance().serialize_cpp(f.kind, val);
-                    return trent_to_py_compat(t);
+                    return trent_to_nb_compat(t);
                 }
-                throw py::type_error("No getter for field: " + field_path);
+                throw nb::type_error(("No getter for field: " + field_path).c_str());
             }
         }
-        throw py::attribute_error("Field not found: " + field_path);
+        throw nb::attribute_error(("Field not found: " + field_path).c_str());
     }
 
-    void set(void* obj, const std::string& type_name, const std::string& field_path, py::object value) {
+    void set(void* obj, const std::string& type_name, const std::string& field_path, nb::object value) {
         for (const auto& f : all_fields(type_name)) {
             if (f.path == field_path) {
                 if (f.py_setter) {
-                    py::object converted = convert_value_for_kind(value, f.kind);
+                    nb::object converted = convert_value_for_kind(value, f.kind);
                     f.py_setter(obj, converted);
                     return;
                 }
                 // C++ field - set via cpp_setter
                 if (f.cpp_setter) {
                     // Try builtin types first
-                    std::any val = py_to_any_builtin(value, f.kind);
+                    std::any val = nb_to_any_builtin(value, f.kind);
                     if (val.has_value()) {
                         f.cpp_setter(obj, val);
                         return;
                     }
                     // Custom kinds - use KindRegistry
-                    nos::trent t = py_to_trent_compat(value);
+                    nos::trent t = nb_to_trent_compat(value);
                     val = KindRegistry::instance().deserialize_cpp(f.kind, t);
                     if (val.has_value()) {
                         f.cpp_setter(obj, val);
                     }
                     return;
                 }
-                throw py::type_error("No setter for field: " + field_path);
+                throw nb::type_error(("No setter for field: " + field_path).c_str());
             }
         }
-        throw py::attribute_error("Field not found: " + field_path);
+        throw nb::attribute_error(("Field not found: " + field_path).c_str());
     }
 
     // ========================================================================
     // Value conversion
     // ========================================================================
 
-    py::object convert_value_for_kind(py::object value, const std::string& kind) {
+    nb::object convert_value_for_kind(nb::object value, const std::string& kind) {
         auto* handler = get_kind_handler(kind);
         if (handler && handler->has_python()) {
             return handler->python.convert(value);
@@ -609,13 +610,13 @@ public:
 
             if (f.py_getter) {
                 // Python field
-                py::object val = f.py_getter(obj);
+                nb::object val = f.py_getter(obj);
                 auto* handler = const_cast<InspectRegistry*>(this)->get_kind_handler(f.kind);
                 if (handler && handler->has_python()) {
-                    py::object serialized = handler->python.serialize(val);
-                    result[f.path] = py_to_trent_compat(serialized);
+                    nb::object serialized = handler->python.serialize(val);
+                    result[f.path] = nb_to_trent_compat(serialized);
                 } else {
-                    result[f.path] = py_to_trent_compat(val);
+                    result[f.path] = nb_to_trent_compat(val);
                 }
             } else if (f.cpp_getter) {
                 // C++ field
@@ -634,19 +635,19 @@ public:
         return result;
     }
 
-    // Takes both raw C++ pointer (for cpp_setter) and py::object (for py_setter)
-    void deserialize_fields_of_cxx_component_over_python(void* ptr, py::object obj, const std::string& type_name, const py::dict& data) {
+    // Takes both raw C++ pointer (for cpp_setter) and nb::object (for py_setter)
+    void deserialize_fields_of_cxx_component_over_python(void* ptr, nb::object obj, const std::string& type_name, const nb::dict& data) {
         for (const auto& f : all_fields(type_name)) {
             if (f.non_serializable) continue;
 
-            py::str key(f.path);
+            nb::str key(f.path.c_str());
             if (!data.contains(key)) continue;
 
-            py::object field_data = data[key];
+            nb::object field_data = data[key];
             if (field_data.is_none()) continue;
 
             if (f.backend == TypeBackend::Cpp) {
-                // C++ field: py::object → std::any → cpp_setter
+                // C++ field: nb::object → std::any → cpp_setter
                 if (!f.cpp_setter) {
                     tc_log_warn("deserialize %s.%s (kind=%s, backend=Cpp): no cpp_setter",
                         type_name.c_str(), f.path.c_str(), f.kind.c_str());
@@ -654,14 +655,14 @@ public:
                 }
 
                 // Try builtin types first
-                std::any val = py_to_any_builtin(field_data, f.kind);
+                std::any val = nb_to_any_builtin(field_data, f.kind);
                 if (val.has_value()) {
                     f.cpp_setter(ptr, val);
                     continue;
                 }
 
                 // Custom kinds - use KindRegistry
-                nos::trent t = py_to_trent_compat(field_data);
+                nos::trent t = nb_to_trent_compat(field_data);
                 val = KindRegistry::instance().deserialize_cpp(f.kind, t);
                 if (val.has_value()) {
                     f.cpp_setter(ptr, val);
@@ -677,7 +678,7 @@ public:
                     continue;
                 }
 
-                py::object val;
+                nb::object val;
                 auto* handler = get_kind_handler(f.kind);
                 if (handler && handler->has_python()) {
                     val = handler->python.deserialize(field_data);
@@ -689,7 +690,7 @@ public:
         }
     }
 
-    void deserialize_fields_of_python_component_over_python(py::object obj, const std::string& type_name, const py::dict& data) {
+    void deserialize_fields_of_python_component_over_python(nb::object obj, const std::string& type_name, const nb::dict& data) {
         for (const auto& f : all_fields(type_name)) {
             if (f.backend == TypeBackend::Cpp) {
                 tc_log_warn("deserialize %s.%s (kind=%s): C++ backend field in Python component",
@@ -699,10 +700,10 @@ public:
 
             if (f.non_serializable) continue;
 
-            py::str key(f.path);
+            nb::str key(f.path.c_str());
             if (!data.contains(key)) continue;
 
-            py::object field_data = data[key];
+            nb::object field_data = data[key];
             if (field_data.is_none()) continue;
 
             if (!f.py_setter) {
@@ -711,7 +712,7 @@ public:
                 continue;
             }
 
-            py::object val;
+            nb::object val;
 
             auto* handler = get_kind_handler(f.kind);
             if (handler && handler->has_python()) {
@@ -727,7 +728,7 @@ public:
     // Dispatches based on type backend
     // For C++ components: ptr is the actual C++ object pointer (e.g. this)
     // For Python components: ptr is unused, obj.ptr() is used for setters
-    void deserialize_component_fields_over_python(void* ptr, py::object obj, const std::string& type_name, const py::dict& data) {
+    void deserialize_component_fields_over_python(void* ptr, nb::object obj, const std::string& type_name, const nb::dict& data) {
         if (get_type_backend(type_name) == TypeBackend::Cpp) {
             deserialize_fields_of_cxx_component_over_python(ptr, obj, type_name, data);
         } else {
@@ -737,28 +738,28 @@ public:
 
 
     // Compatibility static methods
-    static py::object trent_to_py(const nos::trent& t) {
-        return trent_to_py_compat(t);
+    static nb::object trent_to_py(const nos::trent& t) {
+        return trent_to_nb_compat(t);
     }
 
-    static py::dict trent_to_py_dict(const nos::trent& t) {
-        py::object result = trent_to_py_compat(t);
-        if (py::isinstance<py::dict>(result)) {
-            return result.cast<py::dict>();
+    static nb::dict trent_to_py_dict(const nos::trent& t) {
+        nb::object result = trent_to_nb_compat(t);
+        if (nb::isinstance<nb::dict>(result)) {
+            return nb::cast<nb::dict>(result);
         }
-        return py::dict();
+        return nb::dict();
     }
 
-    static nos::trent py_to_trent(py::object obj) {
-        return py_to_trent_compat(obj);
+    static nos::trent py_to_trent(nb::object obj) {
+        return nb_to_trent_compat(obj);
     }
 
-    static nos::trent py_dict_to_trent(py::dict d) {
-        return py_to_trent_compat(d);
+    static nos::trent py_dict_to_trent(nb::dict d) {
+        return nb_to_trent_compat(d);
     }
 
-    static nos::trent py_list_to_trent(py::list lst) {
-        return py_to_trent_compat(lst);
+    static nos::trent py_list_to_trent(nb::list lst) {
+        return nb_to_trent_compat(lst);
     }
 
 private:
@@ -883,17 +884,17 @@ inline nos::trent tc_value_to_trent(const tc_value* v) {
     }
 }
 
-// py::object <-> trent (for backward compatibility)
-inline nos::trent py_to_trent_compat(py::object obj) {
-    tc_value v = py_to_tc_value(obj);
+// nb::object <-> trent (for backward compatibility)
+inline nos::trent nb_to_trent_compat(nb::object obj) {
+    tc_value v = nb_to_tc_value(obj);
     nos::trent result = tc_value_to_trent(&v);
     tc_value_free(&v);
     return result;
 }
 
-inline py::object trent_to_py_compat(const nos::trent& t) {
+inline nb::object trent_to_nb_compat(const nos::trent& t) {
     tc_value v = trent_to_tc_value(t);
-    py::object result = tc_value_to_py(&v);
+    nb::object result = tc_value_to_nb(&v);
     tc_value_free(&v);
     return result;
 }

@@ -2,11 +2,11 @@
 
 #include <string>
 
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 
 #include "termin/geom/mat44.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -25,11 +25,11 @@ struct RenderContext {
     Mat44f view;
     Mat44f projection;
 
-    // Camera (py::object - can be C++ Camera or Python CameraComponent)
-    py::object camera;
+    // Camera (nb::object - can be C++ Camera or Python CameraComponent)
+    nb::object camera;
 
-    // Scene (stored as py::object - not migrated to C++ yet)
-    py::object scene;
+    // Scene (stored as nb::object - not migrated to C++ yet)
+    nb::object scene;
 
     // Context key for VAO/shader caching
     int64_t context_key = 0;
@@ -43,14 +43,14 @@ struct RenderContext {
     // Model matrix (set by pass before drawing each entity)
     Mat44f model = Mat44f::identity();
 
-    // Shadow mapping data (stored as py::object - not migrated to C++ yet)
-    py::object shadow_data;
+    // Shadow mapping data (stored as nb::object - not migrated to C++ yet)
+    nb::object shadow_data;
 
     // Currently bound shader (for setting additional uniforms)
     ShaderProgram* current_shader = nullptr;
 
-    // Extra uniforms to copy when switching shader variants (py::dict in Python)
-    py::object extra_uniforms;
+    // Extra uniforms to copy when switching shader variants (nb::dict in Python)
+    nb::object extra_uniforms;
 
     // Helper to set model matrix
     void set_model(const Mat44f& m) { model = m; }

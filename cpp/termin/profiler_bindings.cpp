@@ -1,9 +1,11 @@
 // profiler_bindings.cpp - Python bindings for tc_profiler
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
 #include "../../core_c/include/tc_profiler.h"
+#include "profiler_bindings.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -69,10 +71,10 @@ public:
 
     int history_count() const { return tc_profiler_history_count(); }
 
-    py::object history_at(int index) {
+    nb::object history_at(int index) {
         tc_frame_profile* frame = tc_profiler_history_at(index);
-        if (!frame) return py::none();
-        return py::cast(convert_frame(frame));
+        if (!frame) return nb::none();
+        return nb::cast(convert_frame(frame));
     }
 
     std::vector<PyFrameProfile> history() {
@@ -89,49 +91,49 @@ public:
 
     void clear_history() { tc_profiler_clear_history(); }
 
-    py::object current_frame() {
+    nb::object current_frame() {
         tc_frame_profile* frame = tc_profiler_current_frame();
-        if (!frame) return py::none();
-        return py::cast(convert_frame(frame));
+        if (!frame) return nb::none();
+        return nb::cast(convert_frame(frame));
     }
 
 private:
     TcProfiler() = default;
 };
 
-void bind_profiler(py::module_& m) {
+void bind_profiler(nb::module_& m) {
     // Section timing struct
-    py::class_<PySectionTiming>(m, "SectionTiming")
-        .def_readonly("name", &PySectionTiming::name)
-        .def_readonly("cpu_ms", &PySectionTiming::cpu_ms)
-        .def_readonly("call_count", &PySectionTiming::call_count)
-        .def_readonly("parent_index", &PySectionTiming::parent_index)
-        .def_readonly("first_child", &PySectionTiming::first_child)
-        .def_readonly("next_sibling", &PySectionTiming::next_sibling)
+    nb::class_<PySectionTiming>(m, "SectionTiming")
+        .def_ro("name", &PySectionTiming::name)
+        .def_ro("cpu_ms", &PySectionTiming::cpu_ms)
+        .def_ro("call_count", &PySectionTiming::call_count)
+        .def_ro("parent_index", &PySectionTiming::parent_index)
+        .def_ro("first_child", &PySectionTiming::first_child)
+        .def_ro("next_sibling", &PySectionTiming::next_sibling)
         ;
 
     // Frame profile struct
-    py::class_<PyFrameProfile>(m, "FrameProfile")
-        .def_readonly("frame_number", &PyFrameProfile::frame_number)
-        .def_readonly("total_ms", &PyFrameProfile::total_ms)
-        .def_readonly("sections", &PyFrameProfile::sections)
+    nb::class_<PyFrameProfile>(m, "FrameProfile")
+        .def_ro("frame_number", &PyFrameProfile::frame_number)
+        .def_ro("total_ms", &PyFrameProfile::total_ms)
+        .def_ro("sections", &PyFrameProfile::sections)
         ;
 
     // TcProfiler singleton
-    py::class_<TcProfiler>(m, "TcProfiler")
-        .def_static("instance", &TcProfiler::instance, py::return_value_policy::reference)
-        .def_property("enabled", &TcProfiler::enabled, &TcProfiler::set_enabled)
-        .def_property("profile_components", &TcProfiler::profile_components, &TcProfiler::set_profile_components)
+    nb::class_<TcProfiler>(m, "TcProfiler")
+        .def_static("instance", &TcProfiler::instance, nb::rv_policy::reference)
+        .def_prop_rw("enabled", &TcProfiler::enabled, &TcProfiler::set_enabled)
+        .def_prop_rw("profile_components", &TcProfiler::profile_components, &TcProfiler::set_profile_components)
         .def("begin_frame", &TcProfiler::begin_frame)
         .def("end_frame", &TcProfiler::end_frame)
-        .def("begin_section", &TcProfiler::begin_section, py::arg("name"))
+        .def("begin_section", &TcProfiler::begin_section, nb::arg("name"))
         .def("end_section", &TcProfiler::end_section)
-        .def_property_readonly("frame_count", &TcProfiler::frame_count)
-        .def_property_readonly("history_count", &TcProfiler::history_count)
-        .def("history_at", &TcProfiler::history_at, py::arg("index"))
-        .def_property_readonly("history", &TcProfiler::history)
+        .def_prop_ro("frame_count", &TcProfiler::frame_count)
+        .def_prop_ro("history_count", &TcProfiler::history_count)
+        .def("history_at", &TcProfiler::history_at, nb::arg("index"))
+        .def_prop_ro("history", &TcProfiler::history)
         .def("clear_history", &TcProfiler::clear_history)
-        .def_property_readonly("current_frame", &TcProfiler::current_frame)
+        .def_prop_ro("current_frame", &TcProfiler::current_frame)
         ;
 }
 

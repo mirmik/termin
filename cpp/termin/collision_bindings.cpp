@@ -1,59 +1,59 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
-#include <pybind11/functional.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/pair.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/string.h>
 
 #include "termin/collision/collision.hpp"
 
-namespace py = pybind11;
-using namespace termin;
+namespace nb = nanobind;
 using namespace termin;
 using namespace termin::collision;
 using namespace termin::colliders;
 
-PYBIND11_MODULE(_collision_native, m) {
+NB_MODULE(_collision_native, m) {
     m.doc() = "Native C++ collision detection module for termin";
 
     // Import dependencies
-    py::module_::import("termin.geombase._geom_native");
-    py::module_::import("termin.colliders._colliders_native");
+    nb::module_::import_("termin.geombase._geom_native");
+    nb::module_::import_("termin.colliders._colliders_native");
 
     // ==================== ContactID ====================
 
-    py::class_<ContactID>(m, "ContactID")
-        .def(py::init<>())
-        .def_readwrite("feature_a", &ContactID::feature_a)
-        .def_readwrite("feature_b", &ContactID::feature_b)
+    nb::class_<ContactID>(m, "ContactID")
+        .def(nb::init<>())
+        .def_rw("feature_a", &ContactID::feature_a)
+        .def_rw("feature_b", &ContactID::feature_b)
         .def("__eq__", &ContactID::operator==)
         .def("__ne__", &ContactID::operator!=);
 
     // ==================== ContactPoint ====================
 
-    py::class_<ContactPoint>(m, "ContactPoint")
-        .def(py::init<>())
-        .def_readwrite("position", &ContactPoint::position)
-        .def_readwrite("local_a", &ContactPoint::local_a)
-        .def_readwrite("local_b", &ContactPoint::local_b)
-        .def_readwrite("penetration", &ContactPoint::penetration)
-        .def_readwrite("id", &ContactPoint::id)
-        .def_readwrite("normal_impulse", &ContactPoint::normal_impulse)
-        .def_readwrite("tangent1_impulse", &ContactPoint::tangent1_impulse)
-        .def_readwrite("tangent2_impulse", &ContactPoint::tangent2_impulse);
+    nb::class_<ContactPoint>(m, "ContactPoint")
+        .def(nb::init<>())
+        .def_rw("position", &ContactPoint::position)
+        .def_rw("local_a", &ContactPoint::local_a)
+        .def_rw("local_b", &ContactPoint::local_b)
+        .def_rw("penetration", &ContactPoint::penetration)
+        .def_rw("id", &ContactPoint::id)
+        .def_rw("normal_impulse", &ContactPoint::normal_impulse)
+        .def_rw("tangent1_impulse", &ContactPoint::tangent1_impulse)
+        .def_rw("tangent2_impulse", &ContactPoint::tangent2_impulse);
 
     // ==================== ContactManifold ====================
 
-    py::class_<ContactManifold>(m, "ContactManifold")
-        .def(py::init<>())
-        .def_readonly_static("MAX_POINTS", &ContactManifold::MAX_POINTS)
-        .def_readwrite("collider_a", &ContactManifold::collider_a)
-        .def_readwrite("collider_b", &ContactManifold::collider_b)
-        .def_readwrite("normal", &ContactManifold::normal)
-        .def_readwrite("point_count", &ContactManifold::point_count)
-        .def_readwrite("body_a", &ContactManifold::body_a)
-        .def_readwrite("body_b", &ContactManifold::body_b)
-        .def("add_point", &ContactManifold::add_point, py::arg("point"))
+    nb::class_<ContactManifold>(m, "ContactManifold")
+        .def(nb::init<>())
+        .def_ro_static("MAX_POINTS", &ContactManifold::MAX_POINTS)
+        .def_rw("collider_a", &ContactManifold::collider_a)
+        .def_rw("collider_b", &ContactManifold::collider_b)
+        .def_rw("normal", &ContactManifold::normal)
+        .def_rw("point_count", &ContactManifold::point_count)
+        .def_rw("body_a", &ContactManifold::body_a)
+        .def_rw("body_b", &ContactManifold::body_b)
+        .def("add_point", &ContactManifold::add_point, nb::arg("point"))
         .def("clear", &ContactManifold::clear)
-        .def("same_pair", &ContactManifold::same_pair, py::arg("other"))
+        .def("same_pair", &ContactManifold::same_pair, nb::arg("other"))
         .def("pair_key", &ContactManifold::pair_key)
         .def("get_points", [](const ContactManifold& m) {
             std::vector<ContactPoint> result;
@@ -65,43 +65,43 @@ PYBIND11_MODULE(_collision_native, m) {
 
     // ==================== RayHit (collision namespace version) ====================
 
-    py::class_<collision::RayHit>(m, "RayHit")
-        .def(py::init<>())
-        .def_readwrite("collider", &collision::RayHit::collider)
-        .def_readwrite("point", &collision::RayHit::point)
-        .def_readwrite("normal", &collision::RayHit::normal)
-        .def_readwrite("distance", &collision::RayHit::distance)
+    nb::class_<collision::RayHit>(m, "RayHit")
+        .def(nb::init<>())
+        .def_rw("collider", &collision::RayHit::collider)
+        .def_rw("point", &collision::RayHit::point)
+        .def_rw("normal", &collision::RayHit::normal)
+        .def_rw("distance", &collision::RayHit::distance)
         .def("hit", &collision::RayHit::hit);
 
     // ==================== ColliderPair ====================
 
-    py::class_<ColliderPair>(m, "ColliderPair")
-        .def(py::init<>())
-        .def_readwrite("a", &ColliderPair::a)
-        .def_readwrite("b", &ColliderPair::b)
+    nb::class_<ColliderPair>(m, "ColliderPair")
+        .def(nb::init<>())
+        .def_rw("a", &ColliderPair::a)
+        .def_rw("b", &ColliderPair::b)
         .def("__eq__", &ColliderPair::operator==);
 
     // ==================== BVH ====================
 
-    py::class_<BVH>(m, "BVH")
-        .def(py::init<>())
-        .def("insert", &BVH::insert, py::arg("collider"), py::arg("aabb"))
-        .def("remove", &BVH::remove, py::arg("collider"))
-        .def("update", &BVH::update, py::arg("collider"), py::arg("new_aabb"))
+    nb::class_<BVH>(m, "BVH")
+        .def(nb::init<>())
+        .def("insert", &BVH::insert, nb::arg("collider"), nb::arg("aabb"))
+        .def("remove", &BVH::remove, nb::arg("collider"))
+        .def("update", &BVH::update, nb::arg("collider"), nb::arg("new_aabb"))
         .def("query_aabb", [](const BVH& bvh, const AABB& aabb) {
             std::vector<Collider*> result;
             bvh.query_aabb(aabb, [&](Collider* c) {
                 result.push_back(c);
             });
             return result;
-        }, py::arg("aabb"))
+        }, nb::arg("aabb"))
         .def("query_ray", [](const BVH& bvh, const Ray3& ray) {
             std::vector<std::tuple<Collider*, double, double>> result;
             bvh.query_ray(ray, [&](Collider* c, double t_min, double t_max) {
                 result.push_back({c, t_min, t_max});
             });
             return result;
-        }, py::arg("ray"))
+        }, nb::arg("ray"))
         .def("query_all_pairs", [](const BVH& bvh) {
             std::vector<std::pair<Collider*, Collider*>> result;
             bvh.query_all_pairs([&](Collider* a, Collider* b) {
@@ -117,39 +117,39 @@ PYBIND11_MODULE(_collision_native, m) {
 
     // ==================== CollisionWorld ====================
 
-    py::class_<CollisionWorld>(m, "CollisionWorld")
-        .def(py::init<>())
-        .def("add", &CollisionWorld::add, py::arg("collider"),
-             py::keep_alive<1, 2>())  // Keep collider alive while in world
-        .def("remove", &CollisionWorld::remove, py::arg("collider"))
-        .def("update_pose", &CollisionWorld::update_pose, py::arg("collider"))
+    nb::class_<CollisionWorld>(m, "CollisionWorld")
+        .def(nb::init<>())
+        .def("add", &CollisionWorld::add, nb::arg("collider"),
+             nb::keep_alive<1, 2>())  // Keep collider alive while in world
+        .def("remove", &CollisionWorld::remove, nb::arg("collider"))
+        .def("update_pose", &CollisionWorld::update_pose, nb::arg("collider"))
         .def("update_all", &CollisionWorld::update_all)
-        .def("contains", &CollisionWorld::contains, py::arg("collider"))
+        .def("contains", &CollisionWorld::contains, nb::arg("collider"))
         .def("size", &CollisionWorld::size)
         .def("detect_contacts", &CollisionWorld::detect_contacts)
-        .def("query_aabb", &CollisionWorld::query_aabb, py::arg("aabb"))
-        .def("raycast", &CollisionWorld::raycast, py::arg("ray"))
-        .def("raycast_closest", &CollisionWorld::raycast_closest, py::arg("ray"))
-        .def_property_readonly("bvh", [](const CollisionWorld& w) -> const BVH& {
+        .def("query_aabb", &CollisionWorld::query_aabb, nb::arg("aabb"))
+        .def("raycast", &CollisionWorld::raycast, nb::arg("ray"))
+        .def("raycast_closest", &CollisionWorld::raycast_closest, nb::arg("ray"))
+        .def_prop_ro("bvh", [](const CollisionWorld& w) -> const BVH& {
             return w.bvh();
-        }, py::return_value_policy::reference_internal);
+        }, nb::rv_policy::reference_internal);
 
     // ==================== AABB (if not already exposed) ====================
 
     // Check if AABB is already exposed in geombase, if not expose it here
     try {
-        py::module_::import("termin.geombase._geom_native").attr("AABB");
+        nb::module_::import_("termin.geombase._geom_native").attr("AABB");
     } catch (...) {
-        py::class_<AABB>(m, "AABB")
-            .def(py::init<>())
-            .def(py::init<const Vec3&, const Vec3&>(),
-                 py::arg("min_point"), py::arg("max_point"))
-            .def_readwrite("min_point", &AABB::min_point)
-            .def_readwrite("max_point", &AABB::max_point)
-            .def("extend", &AABB::extend, py::arg("point"))
-            .def("intersects", &AABB::intersects, py::arg("other"))
-            .def("contains", &AABB::contains, py::arg("point"))
-            .def("merge", &AABB::merge, py::arg("other"))
+        nb::class_<AABB>(m, "AABB")
+            .def(nb::init<>())
+            .def(nb::init<const Vec3&, const Vec3&>(),
+                 nb::arg("min_point"), nb::arg("max_point"))
+            .def_rw("min_point", &AABB::min_point)
+            .def_rw("max_point", &AABB::max_point)
+            .def("extend", &AABB::extend, nb::arg("point"))
+            .def("intersects", &AABB::intersects, nb::arg("other"))
+            .def("contains", &AABB::contains, nb::arg("point"))
+            .def("merge", &AABB::merge, nb::arg("other"))
             .def("center", &AABB::center)
             .def("size", &AABB::size)
             .def("half_size", &AABB::half_size)

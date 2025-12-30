@@ -110,7 +110,7 @@ void Entity::update(float dt) {
     }
 }
 
-void Entity::on_added_to_scene(py::object scene) {
+void Entity::on_added_to_scene(nb::object scene) {
     // Nothing needed - pool manages lifetime
 }
 

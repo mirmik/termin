@@ -6,60 +6,60 @@ namespace termin {
 
 inline VoxelGridHandle VoxelGridHandle::from_name(const std::string& name) {
     try {
-        py::object rm_module = py::module_::import("termin.assets.resources");
-        py::object rm = rm_module.attr("ResourceManager").attr("instance")();
-        py::object asset = rm.attr("get_voxel_grid_asset")(name);
+        nb::object rm_module = nb::module_::import_("termin.assets.resources");
+        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+        nb::object asset = rm.attr("get_voxel_grid_asset")(name);
         if (asset.is_none()) {
             return VoxelGridHandle();
         }
         return VoxelGridHandle(asset);
-    } catch (const py::error_already_set&) {
+    } catch (const nb::python_error&) {
         return VoxelGridHandle();
     }
 }
 
 inline VoxelGridHandle VoxelGridHandle::from_uuid(const std::string& uuid) {
     try {
-        py::object rm_module = py::module_::import("termin.assets.resources");
-        py::object rm = rm_module.attr("ResourceManager").attr("instance")();
-        py::object asset = rm.attr("get_voxel_grid_asset_by_uuid")(uuid);
+        nb::object rm_module = nb::module_::import_("termin.assets.resources");
+        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+        nb::object asset = rm.attr("get_voxel_grid_asset_by_uuid")(uuid);
         if (asset.is_none()) {
             return VoxelGridHandle();
         }
         return VoxelGridHandle(asset);
-    } catch (const py::error_already_set&) {
+    } catch (const nb::python_error&) {
         return VoxelGridHandle();
     }
 }
 
-inline py::object VoxelGridHandle::get() const {
-    if (asset.is_none()) return py::none();
-    py::object res = asset.attr("resource");
+inline nb::object VoxelGridHandle::get() const {
+    if (asset.is_none()) return nb::none();
+    nb::object res = asset.attr("resource");
     return res;  // Returns the VoxelGrid object (or None)
 }
 
-inline VoxelGridHandle VoxelGridHandle::deserialize(const py::dict& data) {
+inline VoxelGridHandle VoxelGridHandle::deserialize(const nb::dict& data) {
     // Try UUID first
     if (data.contains("uuid")) {
         try {
-            std::string uuid = data["uuid"].cast<std::string>();
-            py::object rm_module = py::module_::import("termin.assets.resources");
-            py::object rm = rm_module.attr("ResourceManager").attr("instance")();
-            py::object asset = rm.attr("get_voxel_grid_asset_by_uuid")(uuid);
+            std::string uuid = nb::cast<std::string>(data["uuid"]);
+            nb::object rm_module = nb::module_::import_("termin.assets.resources");
+            nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            nb::object asset = rm.attr("get_voxel_grid_asset_by_uuid")(uuid);
             if (!asset.is_none()) {
                 return VoxelGridHandle(asset);
             }
-        } catch (const py::error_already_set&) {}
+        } catch (const nb::python_error&) {}
     }
 
-    std::string type = data.contains("type") ? data["type"].cast<std::string>() : "none";
+    std::string type = data.contains("type") ? nb::cast<std::string>(data["type"]) : "none";
 
     if (type == "named") {
-        std::string name = data["name"].cast<std::string>();
+        std::string name = nb::cast<std::string>(data["name"]);
         return from_name(name);
     } else if (type == "path") {
         try {
-            std::string path = data["path"].cast<std::string>();
+            std::string path = nb::cast<std::string>(data["path"]);
             size_t last_slash = path.find_last_of("/\\");
             std::string filename = (last_slash != std::string::npos)
                 ? path.substr(last_slash + 1) : path;
@@ -67,7 +67,7 @@ inline VoxelGridHandle VoxelGridHandle::deserialize(const py::dict& data) {
             std::string name = (last_dot != std::string::npos)
                 ? filename.substr(0, last_dot) : filename;
             return from_name(name);
-        } catch (const py::error_already_set&) {
+        } catch (const nb::python_error&) {
             return VoxelGridHandle();
         }
     }
@@ -77,16 +77,16 @@ inline VoxelGridHandle VoxelGridHandle::deserialize(const py::dict& data) {
 
 inline void VoxelGridHandle::deserialize_from(const nos::trent& data) {
     if (!data.is_dict()) {
-        asset = py::none();
+        asset = nb::none();
         return;
     }
 
     if (data.contains("uuid")) {
         try {
             std::string uuid = data["uuid"].as_string();
-            py::object rm_module = py::module_::import("termin.assets.resources");
-            py::object rm = rm_module.attr("ResourceManager").attr("instance")();
-            py::object found = rm.attr("get_voxel_grid_asset_by_uuid")(uuid);
+            nb::object rm_module = nb::module_::import_("termin.assets.resources");
+            nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            nb::object found = rm.attr("get_voxel_grid_asset_by_uuid")(uuid);
             if (!found.is_none()) {
                 asset = found;
                 return;
@@ -109,7 +109,7 @@ inline void VoxelGridHandle::deserialize_from(const nos::trent& data) {
             ? filename.substr(0, last_dot) : filename;
         asset = from_name(name).asset;
     } else {
-        asset = py::none();
+        asset = nb::none();
     }
 }
 

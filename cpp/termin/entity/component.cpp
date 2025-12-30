@@ -44,7 +44,7 @@ CxxComponent::CxxComponent() {
 CxxComponent::~CxxComponent() {
     // Release Python wrapper reference if we have one
     if (_c.py_wrap) {
-        py::handle wrapper(reinterpret_cast<PyObject*>(_c.py_wrap));
+        nb::handle wrapper(reinterpret_cast<PyObject*>(_c.py_wrap));
         wrapper.dec_ref();
         _c.py_wrap = nullptr;
     }
@@ -100,10 +100,10 @@ void CxxComponent::_cb_on_added(tc_component* c, void* scene) {
     if (self) {
         // Get Python scene from global current_scene
         try {
-            py::module_ scene_mod = py::module_::import("termin.visualization.core.scene");
-            py::object py_scene = scene_mod.attr("get_current_scene")();
+            nb::module_ scene_mod = nb::module_::import_("termin.visualization.core.scene");
+            nb::object py_scene = scene_mod.attr("get_current_scene")();
             self->on_added(py_scene);
-        } catch (const py::error_already_set&) {
+        } catch (const nb::python_error&) {
             // Module not available or scene not set - ignore
         }
     }

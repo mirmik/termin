@@ -1,12 +1,13 @@
 // tc_scene_bindings.cpp - Direct bindings for tc_scene C API
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
 
 #include "entity/entity.hpp"
 #include "entity/component.hpp"
 #include "../../core_c/include/tc_scene.h"
+#include "scene_bindings.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -145,10 +146,10 @@ private:
                 }
             } else if (tc->kind == TC_PYTHON_COMPONENT && tc->py_wrap) {
                 // Python component - update via Python attribute
-                py::gil_scoped_acquire gil;
-                py::object py_comp = py::reinterpret_borrow<py::object>((PyObject*)tc->py_wrap);
-                if (py::hasattr(py_comp, "entity")) {
-                    py_comp.attr("entity") = py::cast(ent);
+                nb::gil_scoped_acquire gil;
+                nb::object py_comp = nb::borrow<nb::object>((PyObject*)tc->py_wrap);
+                if (nb::hasattr(py_comp, "entity")) {
+                    py_comp.attr("entity") = nb::cast(ent);
                 }
             }
         }
@@ -217,36 +218,36 @@ public:
     }
 };
 
-void bind_tc_scene(py::module_& m) {
-    py::class_<TcScene>(m, "TcScene")
-        .def(py::init<>())
+void bind_tc_scene(nb::module_& m) {
+    nb::class_<TcScene>(m, "TcScene")
+        .def(nb::init<>())
 
         // Entity management
-        .def("add_entity", &TcScene::add_entity, py::arg("entity"))
-        .def("remove_entity", &TcScene::remove_entity, py::arg("entity"))
+        .def("add_entity", &TcScene::add_entity, nb::arg("entity"))
+        .def("remove_entity", &TcScene::remove_entity, nb::arg("entity"))
         .def("entity_count", &TcScene::entity_count)
 
         // Component registration (C++ Component)
-        .def("register_component", &TcScene::register_component, py::arg("component"))
-        .def("unregister_component", &TcScene::unregister_component, py::arg("component"))
+        .def("register_component", &TcScene::register_component, nb::arg("component"))
+        .def("unregister_component", &TcScene::unregister_component, nb::arg("component"))
 
         // Component registration by pointer (for pure Python components)
-        .def("register_component_ptr", &TcScene::register_component_ptr, py::arg("ptr"))
-        .def("unregister_component_ptr", &TcScene::unregister_component_ptr, py::arg("ptr"))
+        .def("register_component_ptr", &TcScene::register_component_ptr, nb::arg("ptr"))
+        .def("unregister_component_ptr", &TcScene::unregister_component_ptr, nb::arg("ptr"))
 
         // Update loop
-        .def("update", &TcScene::update, py::arg("dt"))
-        .def("editor_update", &TcScene::editor_update, py::arg("dt"))
+        .def("update", &TcScene::update, nb::arg("dt"))
+        .def("editor_update", &TcScene::editor_update, nb::arg("dt"))
 
         // Fixed timestep
-        .def_property("fixed_timestep", &TcScene::fixed_timestep, &TcScene::set_fixed_timestep)
-        .def_property_readonly("accumulated_time", &TcScene::accumulated_time)
+        .def_prop_rw("fixed_timestep", &TcScene::fixed_timestep, &TcScene::set_fixed_timestep)
+        .def_prop_ro("accumulated_time", &TcScene::accumulated_time)
         .def("reset_accumulated_time", &TcScene::reset_accumulated_time)
 
         // Component queries
-        .def_property_readonly("pending_start_count", &TcScene::pending_start_count)
-        .def_property_readonly("update_list_count", &TcScene::update_list_count)
-        .def_property_readonly("fixed_update_list_count", &TcScene::fixed_update_list_count)
+        .def_prop_ro("pending_start_count", &TcScene::pending_start_count)
+        .def_prop_ro("update_list_count", &TcScene::update_list_count)
+        .def_prop_ro("fixed_update_list_count", &TcScene::fixed_update_list_count)
 
         // Pool access
         .def("entity_pool_ptr", [](TcScene& self) {
@@ -254,25 +255,25 @@ void bind_tc_scene(py::module_& m) {
         }, "Get scene's entity pool as uintptr_t")
 
         // Entity creation in pool
-        .def("create_entity", &TcScene::create_entity, py::arg("name") = "",
+        .def("create_entity", &TcScene::create_entity, nb::arg("name") = "",
              "Create a new entity directly in scene's pool.")
 
         // Entity migration
-        .def("migrate_entity", &TcScene::migrate_entity, py::arg("entity"),
+        .def("migrate_entity", &TcScene::migrate_entity, nb::arg("entity"),
              "Migrate entity to scene's pool. Returns new Entity, old becomes invalid.")
 
         // Entity lookup
-        .def("get_entity", [](TcScene& self, const std::string& uuid) -> py::object {
+        .def("get_entity", [](TcScene& self, const std::string& uuid) -> nb::object {
             Entity e = self.get_entity(uuid);
-            if (e.valid()) return py::cast(e);
-            return py::none();
-        }, py::arg("uuid"), "Find entity by UUID. Returns None if not found.")
+            if (e.valid()) return nb::cast(e);
+            return nb::none();
+        }, nb::arg("uuid"), "Find entity by UUID. Returns None if not found.")
 
-        .def("get_entity_by_pick_id", [](TcScene& self, uint32_t pick_id) -> py::object {
+        .def("get_entity_by_pick_id", [](TcScene& self, uint32_t pick_id) -> nb::object {
             Entity e = self.get_entity_by_pick_id(pick_id);
-            if (e.valid()) return py::cast(e);
-            return py::none();
-        }, py::arg("pick_id"), "Find entity by pick_id. Returns None if not found.")
+            if (e.valid()) return nb::cast(e);
+            return nb::none();
+        }, nb::arg("pick_id"), "Find entity by pick_id. Returns None if not found.")
         ;
 }
 

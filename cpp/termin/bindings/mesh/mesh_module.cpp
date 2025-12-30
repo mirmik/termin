@@ -1,36 +1,37 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
 
 #include "termin/mesh_bindings.hpp"
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../../../core_c/include/tc_kind.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace {
 
-void bind_mesh_handle(py::module_& m) {
-    py::class_<termin::MeshHandle>(m, "MeshHandle")
-        .def(py::init<>())
-        .def(py::init<py::object>(), py::arg("asset"))
-        .def_static("from_name", &termin::MeshHandle::from_name, py::arg("name"))
-        .def_static("from_asset", &termin::MeshHandle::from_asset, py::arg("asset"))
+void bind_mesh_handle(nb::module_& m) {
+    nb::class_<termin::MeshHandle>(m, "MeshHandle")
+        .def(nb::init<>())
+        .def("__init__", [](termin::MeshHandle* self, nb::object asset) {
+            new (self) termin::MeshHandle(asset);
+        }, nb::arg("asset"))
+        .def_static("from_name", &termin::MeshHandle::from_name, nb::arg("name"))
+        .def_static("from_asset", &termin::MeshHandle::from_asset, nb::arg("asset"))
         .def_static("from_mesh3", &termin::MeshHandle::from_mesh3,
-            py::arg("mesh"), py::arg("name") = "mesh", py::arg("source_path") = "")
+            nb::arg("mesh"), nb::arg("name") = "mesh", nb::arg("source_path") = "")
         .def_static("from_mesh", &termin::MeshHandle::from_mesh3,  // alias
-            py::arg("mesh"), py::arg("name") = "mesh", py::arg("source_path") = "")
+            nb::arg("mesh"), nb::arg("name") = "mesh", nb::arg("source_path") = "")
         .def_static("from_vertices_indices", &termin::MeshHandle::from_vertices_indices,
-            py::arg("vertices"), py::arg("indices"), py::arg("name") = "mesh")
-        .def_static("deserialize", &termin::MeshHandle::deserialize, py::arg("data"))
-        .def_readwrite("asset", &termin::MeshHandle::asset)
-        .def_property_readonly("is_valid", &termin::MeshHandle::is_valid)
-        .def_property_readonly("name", &termin::MeshHandle::name)
-        .def_property_readonly("version", &termin::MeshHandle::version)
-        .def_property_readonly("mesh", &termin::MeshHandle::mesh)
-        .def_property_readonly("gpu", &termin::MeshHandle::gpu, py::return_value_policy::reference)
-        .def("get", &termin::MeshHandle::get, py::return_value_policy::reference)
+            nb::arg("vertices"), nb::arg("indices"), nb::arg("name") = "mesh")
+        .def_static("deserialize", &termin::MeshHandle::deserialize, nb::arg("data"))
+        .def_rw("asset", &termin::MeshHandle::asset)
+        .def_prop_ro("is_valid", &termin::MeshHandle::is_valid)
+        .def_prop_ro("name", &termin::MeshHandle::name)
+        .def_prop_ro("version", &termin::MeshHandle::version)
+        .def_prop_ro("mesh", &termin::MeshHandle::mesh)
+        .def_prop_ro("gpu", &termin::MeshHandle::gpu, nb::rv_policy::reference)
+        .def("get", &termin::MeshHandle::get, nb::rv_policy::reference)
         .def("get_mesh", &termin::MeshHandle::mesh)
         .def("get_mesh_or_none", &termin::MeshHandle::mesh)
         .def("get_asset", [](const termin::MeshHandle& self) { return self.asset; })
@@ -45,24 +46,24 @@ void register_mesh_kind() {
     tc::KindRegistry::instance().register_python(
         "mesh_handle",
         // serialize
-        py::cpp_function([](py::object obj) -> py::object {
-            termin::MeshHandle handle = obj.cast<termin::MeshHandle>();
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            termin::MeshHandle handle = nb::cast<termin::MeshHandle>(obj);
             return handle.serialize();
         }),
         // deserialize
-        py::cpp_function([](py::object data) -> py::object {
-            if (!py::isinstance<py::dict>(data)) {
-                return py::cast(termin::MeshHandle());
+        nb::cpp_function([](nb::object data) -> nb::object {
+            if (!nb::isinstance<nb::dict>(data)) {
+                return nb::cast(termin::MeshHandle());
             }
-            py::dict d = data.cast<py::dict>();
-            return py::cast(termin::MeshHandle::deserialize(d));
+            nb::dict d = nb::cast<nb::dict>(data);
+            return nb::cast(termin::MeshHandle::deserialize(d));
         }),
         // convert
-        py::cpp_function([](py::object value) -> py::object {
+        nb::cpp_function([](nb::object value) -> nb::object {
             if (value.is_none()) {
-                return py::cast(termin::MeshHandle());
+                return nb::cast(termin::MeshHandle());
             }
-            if (py::isinstance<termin::MeshHandle>(value)) {
+            if (nb::isinstance<termin::MeshHandle>(value)) {
                 return value;
             }
             return value;
@@ -72,7 +73,7 @@ void register_mesh_kind() {
 
 } // anonymous namespace
 
-PYBIND11_MODULE(_mesh_native, m) {
+NB_MODULE(_mesh_native, m) {
     m.doc() = "Native C++ mesh module (Mesh3, SkinnedMesh3, MeshHandle)";
 
     // Bind Mesh3 and SkinnedMesh3

@@ -1,4 +1,5 @@
 #include "common.hpp"
+#include <nanobind/stl/set.h>
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/frame_graph.hpp"
 #include "termin/render/render_context.hpp"
@@ -12,21 +13,24 @@
 
 namespace termin {
 
-void bind_frame_pass(py::module_& m) {
+void bind_frame_pass(nb::module_& m) {
     // FramePass base class
-    py::class_<FramePass>(m, "FramePass")
-        .def(py::init<>())
-        .def(py::init<std::string, std::set<std::string>, std::set<std::string>>(),
-             py::arg("pass_name"),
-             py::arg("reads") = std::set<std::string>{},
-             py::arg("writes") = std::set<std::string>{})
-        .def_readwrite("pass_name", &FramePass::pass_name)
-        .def_readwrite("reads", &FramePass::reads)
-        .def_readwrite("writes", &FramePass::writes)
-        .def_readwrite("enabled", &FramePass::enabled)
+    nb::class_<FramePass>(m, "FramePass")
+        .def(nb::init<>())
+        .def("__init__", [](FramePass* self, std::string pass_name,
+                            std::set<std::string> reads, std::set<std::string> writes) {
+            new (self) FramePass(pass_name, reads, writes);
+        },
+             nb::arg("pass_name"),
+             nb::arg("reads") = std::set<std::string>{},
+             nb::arg("writes") = std::set<std::string>{})
+        .def_rw("pass_name", &FramePass::pass_name)
+        .def_rw("reads", &FramePass::reads)
+        .def_rw("writes", &FramePass::writes)
+        .def_rw("enabled", &FramePass::enabled)
         .def("get_inplace_aliases", &FramePass::get_inplace_aliases)
         .def("is_inplace", &FramePass::is_inplace)
-        .def_property_readonly("inplace", &FramePass::is_inplace)
+        .def_prop_ro("inplace", &FramePass::is_inplace)
         .def("get_internal_symbols", &FramePass::get_internal_symbols)
         .def("set_debug_internal_point", &FramePass::set_debug_internal_point)
         .def("clear_debug_internal_point", &FramePass::clear_debug_internal_point)
@@ -37,24 +41,24 @@ void bind_frame_pass(py::module_& m) {
         });
 
     // FrameGraph errors
-    py::register_exception<FrameGraphError>(m, "FrameGraphError");
-    py::register_exception<FrameGraphMultiWriterError>(m, "FrameGraphMultiWriterError");
-    py::register_exception<FrameGraphCycleError>(m, "FrameGraphCycleError");
+    nb::exception<FrameGraphError>(m, "FrameGraphError");
+    nb::exception<FrameGraphMultiWriterError>(m, "FrameGraphMultiWriterError");
+    nb::exception<FrameGraphCycleError>(m, "FrameGraphCycleError");
 
     // FrameGraph
-    py::class_<FrameGraph>(m, "FrameGraph")
-        .def(py::init([](py::list passes) {
+    nb::class_<FrameGraph>(m, "FrameGraph")
+        .def("__init__", [](FrameGraph* self, nb::list passes) {
             std::vector<FramePass*> pass_ptrs;
             for (auto item : passes) {
-                pass_ptrs.push_back(item.cast<FramePass*>());
+                pass_ptrs.push_back(nb::cast<FramePass*>(item));
             }
-            return FrameGraph(pass_ptrs);
-        }), py::arg("passes"))
+            new (self) FrameGraph(pass_ptrs);
+        }, nb::arg("passes"))
         .def("build_schedule", [](FrameGraph& self) {
             auto schedule = self.build_schedule();
-            py::list result;
+            nb::list result;
             for (auto* p : schedule) {
-                result.append(py::cast(p, py::return_value_policy::reference));
+                result.append(nb::cast(p, nb::rv_policy::reference));
             }
             return result;
         })
@@ -62,240 +66,234 @@ void bind_frame_pass(py::module_& m) {
         .def("fbo_alias_groups", &FrameGraph::fbo_alias_groups);
 
     // RenderContext
-    py::class_<RenderContext>(m, "RenderContext")
-        .def(py::init<>())
+    nb::class_<RenderContext>(m, "RenderContext")
+        .def(nb::init<>())
         // Constructor with keyword arguments for Python compatibility
-        .def(py::init([](py::kwargs kwargs) {
-            auto ctx = new RenderContext();
+        .def("__init__", [](RenderContext* self, nb::kwargs kwargs) {
+            new (self) RenderContext();
 
             if (kwargs.contains("context_key")) {
-                ctx->context_key = kwargs["context_key"].cast<int64_t>();
+                self->context_key = nb::cast<int64_t>(kwargs["context_key"]);
             }
             if (kwargs.contains("phase")) {
-                ctx->phase = kwargs["phase"].cast<std::string>();
+                self->phase = nb::cast<std::string>(kwargs["phase"]);
             }
             if (kwargs.contains("scene")) {
-                ctx->scene = kwargs["scene"];
+                self->scene = nb::borrow<nb::object>(kwargs["scene"]);
             }
             if (kwargs.contains("shadow_data")) {
-                ctx->shadow_data = kwargs["shadow_data"];
+                self->shadow_data = nb::borrow<nb::object>(kwargs["shadow_data"]);
             }
             if (kwargs.contains("extra_uniforms")) {
-                ctx->extra_uniforms = kwargs["extra_uniforms"];
+                self->extra_uniforms = nb::borrow<nb::object>(kwargs["extra_uniforms"]);
             }
             if (kwargs.contains("camera")) {
-                ctx->camera = kwargs["camera"];
+                self->camera = nb::borrow<nb::object>(kwargs["camera"]);
             }
             if (kwargs.contains("graphics")) {
-                py::object g_obj = kwargs["graphics"];
+                nb::object g_obj = nb::borrow<nb::object>(kwargs["graphics"]);
                 if (!g_obj.is_none()) {
-                    ctx->graphics = g_obj.cast<GraphicsBackend*>();
+                    self->graphics = nb::cast<GraphicsBackend*>(g_obj);
                 }
             }
             if (kwargs.contains("current_shader")) {
-                py::object s_obj = kwargs["current_shader"];
+                nb::object s_obj = nb::borrow<nb::object>(kwargs["current_shader"]);
                 if (!s_obj.is_none()) {
-                    ctx->current_shader = s_obj.cast<ShaderProgram*>();
+                    self->current_shader = nb::cast<ShaderProgram*>(s_obj);
                 }
             }
             if (kwargs.contains("view")) {
-                py::array_t<float> arr = kwargs["view"].cast<py::array_t<float>>();
-                auto buf = arr.unchecked<2>();
+                nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(kwargs["view"]);
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        ctx->view.data[col * 4 + row] = buf(row, col);
+                        self->view.data[col * 4 + row] = arr(row, col);
                     }
                 }
             }
             if (kwargs.contains("projection")) {
-                py::array_t<float> arr = kwargs["projection"].cast<py::array_t<float>>();
-                auto buf = arr.unchecked<2>();
+                nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(kwargs["projection"]);
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        ctx->projection.data[col * 4 + row] = buf(row, col);
+                        self->projection.data[col * 4 + row] = arr(row, col);
                     }
                 }
             }
             if (kwargs.contains("model")) {
-                py::array_t<float> arr = kwargs["model"].cast<py::array_t<float>>();
-                auto buf = arr.unchecked<2>();
+                nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr = nb::cast<nb::ndarray<nb::numpy, float, nb::shape<4, 4>>>(kwargs["model"]);
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        ctx->model.data[col * 4 + row] = buf(row, col);
+                        self->model.data[col * 4 + row] = arr(row, col);
                     }
                 }
             }
-
-            return ctx;
-        }))
-        .def_readwrite("context_key", &RenderContext::context_key)
-        .def_readwrite("phase", &RenderContext::phase)
-        .def_readwrite("scene", &RenderContext::scene)
-        .def_readwrite("shadow_data", &RenderContext::shadow_data)
-        .def_readwrite("extra_uniforms", &RenderContext::extra_uniforms)  // py::object (dict)
-        .def_readwrite("camera", &RenderContext::camera)  // py::object (Camera or CameraComponent)
+        })
+        .def_rw("context_key", &RenderContext::context_key)
+        .def_rw("phase", &RenderContext::phase)
+        .def_rw("scene", &RenderContext::scene)
+        .def_rw("shadow_data", &RenderContext::shadow_data)
+        .def_rw("extra_uniforms", &RenderContext::extra_uniforms)
+        .def_rw("camera", &RenderContext::camera)
         // graphics
-        .def_property("graphics",
+        .def_prop_rw("graphics",
             [](const RenderContext& self) -> GraphicsBackend* { return self.graphics; },
             [](RenderContext& self, GraphicsBackend* g) { self.graphics = g; },
-            py::return_value_policy::reference)
+            nb::rv_policy::reference)
         // current_shader
-        .def_property("current_shader",
+        .def_prop_rw("current_shader",
             [](const RenderContext& self) -> ShaderProgram* { return self.current_shader; },
             [](RenderContext& self, ShaderProgram* s) { self.current_shader = s; },
-            py::return_value_policy::reference)
+            nb::rv_policy::reference)
         // view matrix
-        .def_property("view",
+        .def_prop_rw("view",
             [](const RenderContext& self) {
-                py::array_t<float> result({4, 4});
-                auto buf = result.mutable_unchecked<2>();
+                float* data = new float[16];
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        buf(row, col) = self.view.data[col * 4 + row];
+                        data[row * 4 + col] = self.view.data[col * 4 + row];
                     }
                 }
-                return result;
+                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+                return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, {4, 4}, owner);
             },
-            [](RenderContext& self, py::array_t<float> arr) {
-                auto buf = arr.unchecked<2>();
+            [](RenderContext& self, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        self.view.data[col * 4 + row] = buf(row, col);
+                        self.view.data[col * 4 + row] = arr(row, col);
                     }
                 }
             }
         )
         // projection matrix
-        .def_property("projection",
+        .def_prop_rw("projection",
             [](const RenderContext& self) {
-                py::array_t<float> result({4, 4});
-                auto buf = result.mutable_unchecked<2>();
+                float* data = new float[16];
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        buf(row, col) = self.projection.data[col * 4 + row];
+                        data[row * 4 + col] = self.projection.data[col * 4 + row];
                     }
                 }
-                return result;
+                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+                return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, {4, 4}, owner);
             },
-            [](RenderContext& self, py::array_t<float> arr) {
-                auto buf = arr.unchecked<2>();
+            [](RenderContext& self, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        self.projection.data[col * 4 + row] = buf(row, col);
+                        self.projection.data[col * 4 + row] = arr(row, col);
                     }
                 }
             }
         )
         // model matrix
-        .def_property("model",
+        .def_prop_rw("model",
             [](const RenderContext& self) {
-                py::array_t<float> result({4, 4});
-                auto buf = result.mutable_unchecked<2>();
+                float* data = new float[16];
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        buf(row, col) = self.model.data[col * 4 + row];
+                        data[row * 4 + col] = self.model.data[col * 4 + row];
                     }
                 }
-                return result;
+                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+                return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, {4, 4}, owner);
             },
-            [](RenderContext& self, py::array_t<float> arr) {
-                auto buf = arr.unchecked<2>();
+            [](RenderContext& self, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
                 for (int row = 0; row < 4; ++row) {
                     for (int col = 0; col < 4; ++col) {
-                        self.model.data[col * 4 + row] = buf(row, col);
+                        self.model.data[col * 4 + row] = arr(row, col);
                     }
                 }
             }
         )
-        .def("set_model", [](RenderContext& self, py::array_t<float> arr) {
-            auto buf = arr.unchecked<2>();
+        .def("set_model", [](RenderContext& self, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
             for (int row = 0; row < 4; ++row) {
                 for (int col = 0; col < 4; ++col) {
-                    self.model.data[col * 4 + row] = buf(row, col);
+                    self.model.data[col * 4 + row] = arr(row, col);
                 }
             }
         })
         .def("mvp", [](const RenderContext& self) {
             Mat44f mvp = self.mvp();
-            py::array_t<float> result({4, 4});
-            auto buf = result.mutable_unchecked<2>();
+            float* data = new float[16];
             for (int row = 0; row < 4; ++row) {
                 for (int col = 0; col < 4; ++col) {
-                    buf(row, col) = mvp.data[col * 4 + row];
+                    data[row * 4 + col] = mvp.data[col * 4 + row];
                 }
             }
-            return result;
+            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            return nb::ndarray<nb::numpy, float, nb::shape<4, 4>>(data, {4, 4}, owner);
         });
 
     // ColorPass - main color rendering pass
-    py::class_<ColorPass, FramePass>(m, "ColorPass")
-        .def(py::init<const std::string&, const std::string&, const std::string&,
-                      const std::string&, const std::string&, bool, bool>(),
-             py::arg("input_res") = "empty",
-             py::arg("output_res") = "color",
-             py::arg("shadow_res") = "shadow_maps",
-             py::arg("phase_mark") = "opaque",
-             py::arg("pass_name") = "Color",
-             py::arg("sort_by_distance") = false,
-             py::arg("clear_depth") = false)
-        .def_readwrite("input_res", &ColorPass::input_res)
-        .def_readwrite("output_res", &ColorPass::output_res)
-        .def_readwrite("shadow_res", &ColorPass::shadow_res)
-        .def_readwrite("phase_mark", &ColorPass::phase_mark)
-        .def_readwrite("sort_by_distance", &ColorPass::sort_by_distance)
-        .def_readwrite("clear_depth", &ColorPass::clear_depth)
-        .def_readwrite("wireframe", &ColorPass::wireframe)
+    nb::class_<ColorPass, FramePass>(m, "ColorPass")
+        .def("__init__", [](ColorPass* self, const std::string& input_res, const std::string& output_res,
+                            const std::string& shadow_res, const std::string& phase_mark,
+                            const std::string& pass_name, bool sort_by_distance, bool clear_depth) {
+            new (self) ColorPass(input_res, output_res, shadow_res, phase_mark, pass_name, sort_by_distance, clear_depth);
+        },
+             nb::arg("input_res") = "empty",
+             nb::arg("output_res") = "color",
+             nb::arg("shadow_res") = "shadow_maps",
+             nb::arg("phase_mark") = "opaque",
+             nb::arg("pass_name") = "Color",
+             nb::arg("sort_by_distance") = false,
+             nb::arg("clear_depth") = false)
+        .def_rw("input_res", &ColorPass::input_res)
+        .def_rw("output_res", &ColorPass::output_res)
+        .def_rw("shadow_res", &ColorPass::shadow_res)
+        .def_rw("phase_mark", &ColorPass::phase_mark)
+        .def_rw("sort_by_distance", &ColorPass::sort_by_distance)
+        .def_rw("clear_depth", &ColorPass::clear_depth)
+        .def_rw("wireframe", &ColorPass::wireframe)
         .def("get_resource_specs", &ColorPass::get_resource_specs)
         .def("get_internal_symbols", &ColorPass::get_internal_symbols)
         .def("set_debugger_window", &ColorPass::set_debugger_window,
-             py::arg("window"),
-             py::arg("depth_callback") = py::none())
+             nb::arg("window"),
+             nb::arg("depth_callback") = nb::none())
         .def("get_debugger_window", &ColorPass::get_debugger_window)
-        .def_readwrite("debugger_window", &ColorPass::debugger_window)
-        .def_readwrite("depth_capture_callback", &ColorPass::depth_capture_callback)
-        .def_property("_debugger_window",
+        .def_rw("debugger_window", &ColorPass::debugger_window)
+        .def_rw("depth_capture_callback", &ColorPass::depth_capture_callback)
+        .def_prop_rw("_debugger_window",
             [](const ColorPass& self) { return self.debugger_window; },
-            [](ColorPass& self, py::object val) { self.debugger_window = val; })
-        .def_property("_depth_capture_callback",
+            [](ColorPass& self, nb::object val) { self.debugger_window = val; })
+        .def_prop_rw("_depth_capture_callback",
             [](const ColorPass& self) { return self.depth_capture_callback; },
-            [](ColorPass& self, py::object val) { self.depth_capture_callback = val; })
+            [](ColorPass& self, nb::object val) { self.depth_capture_callback = val; })
         .def("execute_with_data", [](
             ColorPass& self,
             GraphicsBackend* graphics,
-            py::dict reads_fbos_py,
-            py::dict writes_fbos_py,
-            py::tuple rect_py,
-            py::list entities_py,
-            py::array_t<float> view_py,
-            py::array_t<float> projection_py,
-            py::array_t<double> camera_position_py,
+            nb::dict reads_fbos_py,
+            nb::dict writes_fbos_py,
+            nb::tuple rect_py,
+            nb::list entities_py,
+            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py,
+            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py,
+            nb::ndarray<nb::numpy, double, nb::shape<3>> camera_position_py,
             int64_t context_key,
-            py::list lights_py,
-            py::array_t<double> ambient_color_py,
+            nb::list lights_py,
+            nb::ndarray<nb::numpy, double, nb::shape<3>> ambient_color_py,
             float ambient_intensity,
-            py::object shadow_array_py,
-            py::object shadow_settings_py
+            nb::object shadow_array_py,
+            nb::object shadow_settings_py
         ) {
             // Convert FBO maps (skip non-FBO resources like ShadowMapArrayResource)
             FBOMap reads_fbos, writes_fbos;
             for (auto item : reads_fbos_py) {
-                std::string key = py::str(item.first);
-                py::object val = py::reinterpret_borrow<py::object>(item.second);
+                std::string key = nb::cast<std::string>(nb::str(item.first));
+                nb::object val = nb::borrow<nb::object>(item.second);
                 if (!val.is_none()) {
                     try {
-                        reads_fbos[key] = val.cast<FramebufferHandle*>();
-                    } catch (const py::cast_error&) {
+                        reads_fbos[key] = nb::cast<FramebufferHandle*>(val);
+                    } catch (const nb::cast_error&) {
                         // Skip non-FBO resources (e.g., ShadowMapArrayResource)
                     }
                 }
             }
             for (auto item : writes_fbos_py) {
-                std::string key = py::str(item.first);
-                py::object val = py::reinterpret_borrow<py::object>(item.second);
+                std::string key = nb::cast<std::string>(nb::str(item.first));
+                nb::object val = nb::borrow<nb::object>(item.second);
                 if (!val.is_none()) {
                     try {
-                        writes_fbos[key] = val.cast<FramebufferHandle*>();
-                    } catch (const py::cast_error&) {
+                        writes_fbos[key] = nb::cast<FramebufferHandle*>(val);
+                    } catch (const nb::cast_error&) {
                         // Skip non-FBO resources
                     }
                 }
@@ -303,67 +301,62 @@ void bind_frame_pass(py::module_& m) {
 
             // Convert rect
             Rect4i rect;
-            rect.x = rect_py[0].cast<int>();
-            rect.y = rect_py[1].cast<int>();
-            rect.width = rect_py[2].cast<int>();
-            rect.height = rect_py[3].cast<int>();
+            rect.x = nb::cast<int>(rect_py[0]);
+            rect.y = nb::cast<int>(rect_py[1]);
+            rect.width = nb::cast<int>(rect_py[2]);
+            rect.height = nb::cast<int>(rect_py[3]);
 
             // Convert entities
             std::vector<Entity> entities;
             for (auto item : entities_py) {
-                entities.push_back(item.cast<Entity>());
+                entities.push_back(nb::cast<Entity>(item));
             }
 
             // Convert view matrix (row-major numpy -> column-major Mat44f)
             Mat44f view;
-            auto view_buf = view_py.unchecked<2>();
             for (int row = 0; row < 4; ++row) {
                 for (int col = 0; col < 4; ++col) {
-                    view(col, row) = view_buf(row, col);
+                    view(col, row) = view_py(row, col);
                 }
             }
 
             // Convert projection matrix
             Mat44f projection;
-            auto proj_buf = projection_py.unchecked<2>();
             for (int row = 0; row < 4; ++row) {
                 for (int col = 0; col < 4; ++col) {
-                    projection(col, row) = proj_buf(row, col);
+                    projection(col, row) = projection_py(row, col);
                 }
             }
 
             // Convert camera position
-            auto cam_buf = camera_position_py.unchecked<1>();
-            Vec3 camera_position{cam_buf(0), cam_buf(1), cam_buf(2)};
+            Vec3 camera_position{camera_position_py(0), camera_position_py(1), camera_position_py(2)};
 
             // Convert lights
             std::vector<Light> lights;
             for (auto item : lights_py) {
-                lights.push_back(item.cast<Light>());
+                lights.push_back(nb::cast<Light>(item));
             }
 
             // Convert ambient color
-            auto amb_buf = ambient_color_py.unchecked<1>();
-            Vec3 ambient_color{amb_buf(0), amb_buf(1), amb_buf(2)};
+            Vec3 ambient_color{ambient_color_py(0), ambient_color_py(1), ambient_color_py(2)};
 
             // Convert shadow maps
             std::vector<ShadowMapEntry> shadow_maps;
             if (!shadow_array_py.is_none()) {
-                py::ssize_t count = py::len(shadow_array_py);
-                for (py::ssize_t i = 0; i < count; ++i) {
-                    py::object entry = shadow_array_py[py::int_(i)];
+                size_t count = nb::len(shadow_array_py);
+                for (size_t i = 0; i < count; ++i) {
+                    nb::object entry = shadow_array_py[nb::int_(i)];
 
                     // Get light_space_matrix as numpy array (compute_light_space_matrix returns float64)
-                    py::array_t<double> matrix_py = entry.attr("light_space_matrix").cast<py::array_t<double>>();
-                    auto matrix_buf = matrix_py.unchecked<2>();
+                    nb::ndarray<nb::numpy, double, nb::shape<4, 4>> matrix_py = nb::cast<nb::ndarray<nb::numpy, double, nb::shape<4, 4>>>(entry.attr("light_space_matrix"));
                     Mat44f matrix;
                     for (int row = 0; row < 4; ++row) {
                         for (int col = 0; col < 4; ++col) {
-                            matrix(col, row) = static_cast<float>(matrix_buf(row, col));
+                            matrix(col, row) = static_cast<float>(matrix_py(row, col));
                         }
                     }
 
-                    int light_index = entry.attr("light_index").cast<int>();
+                    int light_index = nb::cast<int>(entry.attr("light_index"));
                     shadow_maps.emplace_back(matrix, light_index);
                 }
             }
@@ -371,9 +364,9 @@ void bind_frame_pass(py::module_& m) {
             // Convert shadow settings
             ShadowSettings shadow_settings;
             if (!shadow_settings_py.is_none()) {
-                shadow_settings.method = shadow_settings_py.attr("method").cast<int>();
-                shadow_settings.softness = shadow_settings_py.attr("softness").cast<double>();
-                shadow_settings.bias = shadow_settings_py.attr("bias").cast<double>();
+                shadow_settings.method = nb::cast<int>(shadow_settings_py.attr("method"));
+                shadow_settings.softness = nb::cast<double>(shadow_settings_py.attr("softness"));
+                shadow_settings.bias = nb::cast<double>(shadow_settings_py.attr("bias"));
             }
 
             // Call C++ execute_with_data
@@ -394,20 +387,20 @@ void bind_frame_pass(py::module_& m) {
                 shadow_settings
             );
         },
-        py::arg("graphics"),
-        py::arg("reads_fbos"),
-        py::arg("writes_fbos"),
-        py::arg("rect"),
-        py::arg("entities"),
-        py::arg("view"),
-        py::arg("projection"),
-        py::arg("camera_position"),
-        py::arg("context_key"),
-        py::arg("lights"),
-        py::arg("ambient_color"),
-        py::arg("ambient_intensity"),
-        py::arg("shadow_array") = py::none(),
-        py::arg("shadow_settings") = py::none())
+        nb::arg("graphics"),
+        nb::arg("reads_fbos"),
+        nb::arg("writes_fbos"),
+        nb::arg("rect"),
+        nb::arg("entities"),
+        nb::arg("view"),
+        nb::arg("projection"),
+        nb::arg("camera_position"),
+        nb::arg("context_key"),
+        nb::arg("lights"),
+        nb::arg("ambient_color"),
+        nb::arg("ambient_intensity"),
+        nb::arg("shadow_array") = nb::none(),
+        nb::arg("shadow_settings") = nb::none())
         .def("__repr__", [](const ColorPass& p) {
             return "<ColorPass '" + p.pass_name + "' phase='" + p.phase_mark + "'>";
         });

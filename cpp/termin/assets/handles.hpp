@@ -1,8 +1,8 @@
 #pragma once
 
 #include <string>
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 
 #include "../../trent/trent.h"
 #include "termin/render/handles.hpp"
@@ -11,7 +11,7 @@
 #include "termin/mesh/custom_mesh.hpp"
 #include "termin/assets/texture_data.hpp"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace termin {
 
@@ -21,7 +21,7 @@ class Material;
 /**
  * MeshHandle - smart reference to mesh asset.
  *
- * Stores py::object pointing to Python MeshAsset.
+ * Stores nb::object pointing to Python MeshAsset.
  * Provides access to:
  * - Mesh3 data (via asset.resource)
  * - GPUMeshHandle for rendering (via asset.gpu)
@@ -36,11 +36,11 @@ class Material;
 class MeshHandle {
 public:
     // Python asset object (MeshAsset or None)
-    py::object asset;
+    nb::object asset;
 
-    MeshHandle() : asset(py::none()) {}
+    MeshHandle() : asset(nb::none()) {}
 
-    explicit MeshHandle(py::object asset_) : asset(std::move(asset_)) {}
+    explicit MeshHandle(nb::object asset_) : asset(std::move(asset_)) {}
 
     /**
      * Create handle by name lookup in ResourceManager.
@@ -50,7 +50,7 @@ public:
     /**
      * Create handle from Python MeshAsset.
      */
-    static MeshHandle from_asset(py::object asset) {
+    static MeshHandle from_asset(nb::object asset) {
         return MeshHandle(std::move(asset));
     }
 
@@ -58,7 +58,7 @@ public:
      * Create handle from Mesh3 by creating a MeshAsset.
      */
     static MeshHandle from_mesh3(
-        py::object mesh,
+        nb::object mesh,
         const std::string& name = "mesh",
         const std::string& source_path = ""
     );
@@ -67,8 +67,8 @@ public:
      * Create handle from vertices and indices.
      */
     static MeshHandle from_vertices_indices(
-        py::array_t<float> vertices,
-        py::array_t<uint32_t> indices,
+        nb::ndarray<nb::numpy, float> vertices,
+        nb::ndarray<nb::numpy, uint32_t> indices,
         const std::string& name = "mesh"
     );
 
@@ -84,7 +84,7 @@ public:
      */
     std::string name() const {
         if (asset.is_none()) return "";
-        return asset.attr("name").cast<std::string>();
+        return nb::cast<std::string>(asset.attr("name"));
     }
 
     /**
@@ -92,14 +92,14 @@ public:
      */
     int version() const {
         if (asset.is_none()) return 0;
-        return asset.attr("version").cast<int>();
+        return nb::cast<int>(asset.attr("version"));
     }
 
     /**
-     * Get Mesh3 data as py::object (for Python interop).
+     * Get Mesh3 data as nb::object (for Python interop).
      */
-    py::object mesh() const {
-        if (asset.is_none()) return py::none();
+    nb::object mesh() const {
+        if (asset.is_none()) return nb::none();
         return asset.attr("resource");
     }
 
@@ -109,9 +109,9 @@ public:
      */
     CustomMesh* get() const {
         if (asset.is_none()) return nullptr;
-        py::object res = asset.attr("resource");
+        nb::object res = asset.attr("resource");
         if (res.is_none()) return nullptr;
-        return res.cast<CustomMesh*>();
+        return nb::cast<CustomMesh*>(res);
     }
 
     /**
@@ -120,29 +120,29 @@ public:
      */
     MeshGPU* gpu() const {
         if (asset.is_none()) return nullptr;
-        py::object gpu_obj = asset.attr("gpu");
+        nb::object gpu_obj = asset.attr("gpu");
         if (gpu_obj.is_none()) return nullptr;
-        return gpu_obj.cast<MeshGPU*>();
+        return nb::cast<MeshGPU*>(gpu_obj);
     }
 
     /**
      * Serialize for scene saving.
      * Always includes UUID for reliable deserialization.
      */
-    py::dict serialize() const {
+    nb::dict serialize() const {
         if (asset.is_none()) {
-            py::dict d;
+            nb::dict d;
             d["type"] = "none";
             return d;
         }
-        py::dict d;
+        nb::dict d;
         // Always include UUID for reliable lookup
         d["uuid"] = asset.attr("uuid");
         // Also include path/name for debugging and fallback
-        py::object source_path = asset.attr("source_path");
+        nb::object source_path = asset.attr("source_path");
         if (!source_path.is_none()) {
             d["type"] = "path";
-            d["path"] = py::str(source_path.attr("as_posix")());
+            d["path"] = nb::str(source_path.attr("as_posix")());
         } else {
             d["type"] = "named";
             d["name"] = asset.attr("name");
@@ -153,7 +153,7 @@ public:
     /**
      * Deserialize from scene data.
      */
-    static MeshHandle deserialize(const py::dict& data);
+    static MeshHandle deserialize(const nb::dict& data);
 
     /**
      * Deserialize inplace from scene data.
@@ -170,11 +170,11 @@ public:
 class TextureHandle {
 public:
     // Python asset object (TextureAsset or None)
-    py::object asset;
+    nb::object asset;
 
-    TextureHandle() : asset(py::none()) {}
+    TextureHandle() : asset(nb::none()) {}
 
-    explicit TextureHandle(py::object asset_) : asset(std::move(asset_)) {}
+    explicit TextureHandle(nb::object asset_) : asset(std::move(asset_)) {}
 
     /**
      * Create handle by name lookup in ResourceManager.
@@ -184,7 +184,7 @@ public:
     /**
      * Create handle from Python TextureAsset.
      */
-    static TextureHandle from_asset(py::object asset) {
+    static TextureHandle from_asset(nb::object asset) {
         return TextureHandle(std::move(asset));
     }
 
@@ -200,7 +200,7 @@ public:
      * Create handle from TextureData.
      */
     static TextureHandle from_texture_data(
-        py::object texture_data,
+        nb::object texture_data,
         const std::string& name = "texture"
     );
 
@@ -216,7 +216,7 @@ public:
      */
     std::string name() const {
         if (asset.is_none()) return "";
-        return asset.attr("name").cast<std::string>();
+        return nb::cast<std::string>(asset.attr("name"));
     }
 
     /**
@@ -224,7 +224,7 @@ public:
      */
     int version() const {
         if (asset.is_none()) return 0;
-        return asset.attr("version").cast<int>();
+        return nb::cast<int>(asset.attr("version"));
     }
 
     /**
@@ -233,9 +233,9 @@ public:
      */
     TextureData* get() const {
         if (asset.is_none()) return nullptr;
-        py::object res = asset.attr("resource");
+        nb::object res = asset.attr("resource");
         if (res.is_none()) return nullptr;
-        return res.cast<TextureData*>();
+        return nb::cast<TextureData*>(res);
     }
 
     /**
@@ -244,9 +244,9 @@ public:
      */
     TextureGPU* gpu() const {
         if (asset.is_none()) return nullptr;
-        py::object gpu_obj = asset.attr("gpu");
+        nb::object gpu_obj = asset.attr("gpu");
         if (gpu_obj.is_none()) return nullptr;
-        return gpu_obj.cast<TextureGPU*>();
+        return nb::cast<TextureGPU*>(gpu_obj);
     }
 
     /**
@@ -260,29 +260,29 @@ public:
      */
     std::string source_path() const {
         if (asset.is_none()) return "";
-        py::object sp = asset.attr("source_path");
+        nb::object sp = asset.attr("source_path");
         if (sp.is_none()) return "";
-        return py::str(sp.attr("as_posix")()).cast<std::string>();
+        return nb::cast<std::string>(nb::str(sp.attr("as_posix")()));
     }
 
     /**
      * Serialize for scene saving.
      * Always includes UUID for reliable deserialization.
      */
-    py::dict serialize() const {
+    nb::dict serialize() const {
         if (asset.is_none()) {
-            py::dict d;
+            nb::dict d;
             d["type"] = "none";
             return d;
         }
-        py::dict d;
+        nb::dict d;
         // Always include UUID for reliable lookup
         d["uuid"] = asset.attr("uuid");
         // Also include path/name for debugging and fallback
-        py::object source_path = asset.attr("source_path");
+        nb::object source_path = asset.attr("source_path");
         if (!source_path.is_none()) {
             d["type"] = "path";
-            d["path"] = py::str(source_path.attr("as_posix")());
+            d["path"] = nb::str(source_path.attr("as_posix")());
         } else {
             d["type"] = "named";
             d["name"] = asset.attr("name");
@@ -293,7 +293,7 @@ public:
     /**
      * Deserialize from scene data.
      */
-    static TextureHandle deserialize(const py::dict& data);
+    static TextureHandle deserialize(const nb::dict& data);
 
     /**
      * Deserialize inplace from scene data.
@@ -312,7 +312,7 @@ TextureHandle get_white_texture_handle();
  *
  * Two modes:
  * 1. Direct - stores Material* directly
- * 2. Asset - stores MaterialAsset via py::object
+ * 2. Asset - stores MaterialAsset via nb::object
  */
 class MaterialHandle {
 public:
@@ -320,13 +320,13 @@ public:
     Material* _direct = nullptr;
 
     // Python asset object (MaterialAsset or None)
-    py::object asset;
+    nb::object asset;
 
-    MaterialHandle() : asset(py::none()) {}
+    MaterialHandle() : asset(nb::none()) {}
 
-    explicit MaterialHandle(py::object asset_) : _direct(nullptr), asset(std::move(asset_)) {}
+    explicit MaterialHandle(nb::object asset_) : _direct(nullptr), asset(std::move(asset_)) {}
 
-    explicit MaterialHandle(Material* direct) : _direct(direct), asset(py::none()) {}
+    explicit MaterialHandle(Material* direct) : _direct(direct), asset(nb::none()) {}
 
     /**
      * Create handle from direct Material.
@@ -338,7 +338,7 @@ public:
     /**
      * Create handle from Python MaterialAsset.
      */
-    static MaterialHandle from_asset(py::object asset) {
+    static MaterialHandle from_asset(nb::object asset) {
         return MaterialHandle(std::move(asset));
     }
 
@@ -387,12 +387,12 @@ public:
     /**
      * Serialize for scene saving.
      */
-    py::dict serialize() const;
+    nb::dict serialize() const;
 
     /**
      * Deserialize from scene data.
      */
-    static MaterialHandle deserialize(const py::dict& data);
+    static MaterialHandle deserialize(const nb::dict& data);
 
     /**
      * Deserialize inplace from scene data.
@@ -407,18 +407,18 @@ class SkeletonData;
 /**
  * SkeletonHandle - smart reference to skeleton asset.
  *
- * Wraps SkeletonAsset py::object, provides:
+ * Wraps SkeletonAsset nb::object, provides:
  * - Access to SkeletonData
  * - Serialization/deserialization with UUID
  */
 class SkeletonHandle {
 public:
     // Python asset object (SkeletonAsset or None)
-    py::object asset;
+    nb::object asset;
 
-    SkeletonHandle() : asset(py::none()) {}
+    SkeletonHandle() : asset(nb::none()) {}
 
-    explicit SkeletonHandle(py::object asset_) : asset(std::move(asset_)) {}
+    explicit SkeletonHandle(nb::object asset_) : asset(std::move(asset_)) {}
 
     /**
      * Create handle by name lookup in ResourceManager.
@@ -428,7 +428,7 @@ public:
     /**
      * Create handle from Python SkeletonAsset.
      */
-    static SkeletonHandle from_asset(py::object asset) {
+    static SkeletonHandle from_asset(nb::object asset) {
         return SkeletonHandle(std::move(asset));
     }
 
@@ -444,7 +444,7 @@ public:
      */
     std::string name() const {
         if (asset.is_none()) return "";
-        return asset.attr("name").cast<std::string>();
+        return nb::cast<std::string>(asset.attr("name"));
     }
 
     /**
@@ -456,18 +456,18 @@ public:
     /**
      * Serialize for scene saving.
      */
-    py::dict serialize() const {
+    nb::dict serialize() const {
         if (asset.is_none()) {
-            py::dict d;
+            nb::dict d;
             d["type"] = "none";
             return d;
         }
-        py::dict d;
+        nb::dict d;
         d["uuid"] = asset.attr("uuid");
-        py::object source_path = asset.attr("source_path");
+        nb::object source_path = asset.attr("source_path");
         if (!source_path.is_none()) {
             d["type"] = "path";
-            d["path"] = py::str(source_path.attr("as_posix")());
+            d["path"] = nb::str(source_path.attr("as_posix")());
         } else {
             d["type"] = "named";
             d["name"] = asset.attr("name");
@@ -478,7 +478,7 @@ public:
     /**
      * Deserialize from scene data.
      */
-    static SkeletonHandle deserialize(const py::dict& data);
+    static SkeletonHandle deserialize(const nb::dict& data);
 
     /**
      * Deserialize inplace from scene data.
@@ -494,18 +494,18 @@ class AnimationClip;
 /**
  * AnimationClipHandle - smart reference to animation clip asset.
  *
- * Wraps AnimationClipAsset py::object, provides:
+ * Wraps AnimationClipAsset nb::object, provides:
  * - Access to AnimationClip
  * - Serialization/deserialization with UUID
  */
 class AnimationClipHandle {
 public:
     // Python asset object (AnimationClipAsset or None)
-    py::object asset;
+    nb::object asset;
 
-    AnimationClipHandle() : asset(py::none()) {}
+    AnimationClipHandle() : asset(nb::none()) {}
 
-    explicit AnimationClipHandle(py::object asset_) : asset(std::move(asset_)) {}
+    explicit AnimationClipHandle(nb::object asset_) : asset(std::move(asset_)) {}
 
     /**
      * Create handle by name lookup in ResourceManager.
@@ -515,7 +515,7 @@ public:
     /**
      * Create handle from Python AnimationClipAsset.
      */
-    static AnimationClipHandle from_asset(py::object asset) {
+    static AnimationClipHandle from_asset(nb::object asset) {
         return AnimationClipHandle(std::move(asset));
     }
 
@@ -536,7 +536,7 @@ public:
      */
     std::string name() const {
         if (asset.is_none()) return "";
-        return asset.attr("name").cast<std::string>();
+        return nb::cast<std::string>(asset.attr("name"));
     }
 
     /**
@@ -553,18 +553,18 @@ public:
     /**
      * Serialize for scene saving.
      */
-    py::dict serialize() const {
+    nb::dict serialize() const {
         if (asset.is_none()) {
-            py::dict d;
+            nb::dict d;
             d["type"] = "none";
             return d;
         }
-        py::dict d;
+        nb::dict d;
         d["uuid"] = asset.attr("uuid");
-        py::object source_path = asset.attr("source_path");
+        nb::object source_path = asset.attr("source_path");
         if (!source_path.is_none()) {
             d["type"] = "path";
-            d["path"] = py::str(source_path.attr("as_posix")());
+            d["path"] = nb::str(source_path.attr("as_posix")());
         } else {
             d["type"] = "named";
             d["name"] = asset.attr("name");
@@ -575,7 +575,7 @@ public:
     /**
      * Deserialize from scene data.
      */
-    static AnimationClipHandle deserialize(const py::dict& data);
+    static AnimationClipHandle deserialize(const nb::dict& data);
 
     /**
      * Deserialize inplace from scene data.

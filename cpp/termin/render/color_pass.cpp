@@ -264,13 +264,13 @@ void ColorPass::maybe_blit_to_debugger(
     try {
         // Call Python debugger_window.blit_from_pass(fb, width, height, depth_callback)
         debugger_window.attr("blit_from_pass")(
-            py::cast(fb, py::return_value_policy::reference),
-            py::cast(graphics, py::return_value_policy::reference),
+            nb::cast(fb, nb::rv_policy::reference),
+            nb::cast(graphics, nb::rv_policy::reference),
             width,
             height,
             depth_capture_callback
         );
-    } catch (const py::error_already_set& e) {
+    } catch (const nb::python_error& e) {
         // Log error but don't crash rendering
         // In production, you might want proper logging
     }
