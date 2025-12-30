@@ -631,13 +631,14 @@ PYBIND11_MODULE(_entity_native, m) {
             }
             result["components"] = comp_list;
 
-            // Serialize children recursively
+            // Serialize children recursively (call Python serialize to include components)
             py::list children_list;
             for (Entity child : e.children()) {
                 if (child.serializable()) {
-                    nos::trent child_data = child.serialize();
-                    if (!child_data.is_nil()) {
-                        children_list.append(trent_to_py(child_data));
+                    py::object py_child = py::cast(child);
+                    py::object child_data = py_child.attr("serialize")();
+                    if (!child_data.is_none()) {
+                        children_list.append(child_data);
                     }
                 }
             }
