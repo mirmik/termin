@@ -150,7 +150,9 @@ NB_MODULE(_voxels_native, m) {
         .def("__init__", [](VoxelGrid* self, double cell_size, nb::object origin, std::string name, std::string source_path) {
             Vec3 o = Vec3::zero();
             if (!origin.is_none()) {
-                if (nb::isinstance<nb::tuple>(origin)) {
+                if (nb::isinstance<Vec3>(origin)) {
+                    o = nb::cast<Vec3>(origin);
+                } else if (nb::isinstance<nb::tuple>(origin)) {
                     nb::tuple t = nb::cast<nb::tuple>(origin);
                     o = Vec3(nb::cast<double>(t[0]), nb::cast<double>(t[1]), nb::cast<double>(t[2]));
                 } else if (nb::isinstance<nb::list>(origin)) {
