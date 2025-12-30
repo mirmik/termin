@@ -103,7 +103,7 @@ class SkyBoxPass(RenderFramePass):
 
         mesh = scene.skybox_mesh()
         material = scene.skybox_material()
-
+        
         if mesh is None or material is None:
             return
 

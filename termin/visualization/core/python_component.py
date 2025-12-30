@@ -230,6 +230,12 @@ class PythonComponent:
         """Called when entity is removed from scene."""
         self._scene = None
 
+    def destroy(self) -> None:
+        """Explicitly release all resources. Called by Scene.destroy()."""
+        self.on_destroy()
+        self._entity = None
+        self._scene = None
+
     # =========================================================================
     # Serialization
     # =========================================================================

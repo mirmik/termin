@@ -126,8 +126,6 @@ tc_vertex_layout tc_vertex_layout_skinned(void) {
 void tc_mesh_add_ref(tc_mesh* mesh) {
     if (mesh) {
         mesh->ref_count++;
-        tc_log_debug("tc_mesh_add_ref: '%s' [%s] (ref=%u)",
-            mesh->name ? mesh->name : "?", mesh->uuid, mesh->ref_count);
     }
 }
 
@@ -143,12 +141,8 @@ bool tc_mesh_release(tc_mesh* mesh) {
     }
 
     mesh->ref_count--;
-    tc_log_debug("tc_mesh_release: '%s' [%s] (ref=%u)",
-        mesh->name ? mesh->name : "?", mesh->uuid, mesh->ref_count);
 
     if (mesh->ref_count == 0) {
-        tc_log_debug("tc_mesh_release: destroying '%s' [%s]",
-            mesh->name ? mesh->name : "?", mesh->uuid);
         // Remove from registry (this will free the mesh)
         tc_mesh_remove(mesh->uuid);
         return true;

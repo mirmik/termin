@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <memory>
 #include <cstdint>
+#include <cstdio>
 
 #include "termin/render/handles.hpp"
 #include "termin/render/render_context.hpp"
@@ -31,8 +32,17 @@ public:
     // GPU handles per context (shared_ptr for pybind11 compatibility)
     std::unordered_map<int64_t, std::shared_ptr<GPUMeshHandle>> handles;
 
+    // Cached mesh pointer (with ref count)
+    tc_mesh* _cached_mesh = nullptr;
+
     MeshGPU() = default;
-    ~MeshGPU() = default;
+
+    ~MeshGPU() {
+        if (_cached_mesh) {
+            tc_mesh_release(_cached_mesh);
+            _cached_mesh = nullptr;
+        }
+    }
 
     // Non-copyable (owns GPU resources)
     MeshGPU(const MeshGPU&) = delete;
@@ -100,6 +110,10 @@ public:
     void delete_resources() {
         invalidate();
         uploaded_version = -1;
+        if (_cached_mesh) {
+            tc_mesh_release(_cached_mesh);
+            _cached_mesh = nullptr;
+        }
     }
 };
 

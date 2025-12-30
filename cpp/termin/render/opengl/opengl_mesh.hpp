@@ -79,10 +79,10 @@ private:
 
         // Upload indices
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
-        size_t index_count = mesh._mesh ? mesh._mesh->index_count : 0;
-        const uint32_t* indices = mesh.raw_indices();
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, index_count * sizeof(uint32_t), indices, GL_STATIC_DRAW);
-        index_count_ = static_cast<GLsizei>(index_count);
+        size_t idx_count = mesh.index_count();
+        const uint32_t* indices = mesh.indices_data();
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx_count * sizeof(uint32_t), indices, GL_STATIC_DRAW);
+        index_count_ = static_cast<GLsizei>(idx_count);
 
         // Vertex layout: pos(3) + normal(3) + uv(2) = 8 floats = 32 bytes stride
         constexpr GLsizei stride = 8 * sizeof(float);

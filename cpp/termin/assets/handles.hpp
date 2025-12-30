@@ -8,7 +8,7 @@
 #include "termin/render/handles.hpp"
 #include "termin/render/mesh_gpu.hpp"
 #include "termin/render/texture_gpu.hpp"
-#include "termin/mesh/mesh3.hpp"
+#include "termin/mesh/custom_mesh.hpp"
 #include "termin/assets/texture_data.hpp"
 
 namespace py = pybind11;
@@ -104,14 +104,14 @@ public:
     }
 
     /**
-     * Get Mesh3 data pointer.
+     * Get mesh data pointer (CustomMesh base class).
      * Returns nullptr if asset is empty or resource is None.
      */
-    Mesh3* get() const {
+    CustomMesh* get() const {
         if (asset.is_none()) return nullptr;
         py::object res = asset.attr("resource");
         if (res.is_none()) return nullptr;
-        return res.cast<Mesh3*>();
+        return res.cast<CustomMesh*>();
     }
 
     /**

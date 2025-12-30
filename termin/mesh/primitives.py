@@ -64,7 +64,7 @@ class CubeMesh(Mesh3):
             [1.0, 1.0],
             [0.0, 1.0],
         ], dtype=float)
-        super().__init__(uuid, "Cube", vertices=vertices, triangles=triangles, uvs=uvs)
+        super().__init__(vertices=vertices, triangles=triangles, uvs=uvs, name="Cube", uuid=uuid)
 
 
 class TexturedCubeMesh(Mesh3):
@@ -180,7 +180,7 @@ class TexturedCubeMesh(Mesh3):
         [31,30,32],
         [34,33,35],
             ])
-        super().__init__(uuid, "TexturedCube", vertices=vertices, triangles=triangles, uvs=uvs)
+        super().__init__(vertices=vertices, triangles=triangles, uvs=uvs, name="TexturedCube", uuid=uuid)
 
 
 class UVSphereMesh(Mesh3):
@@ -207,7 +207,7 @@ class UVSphereMesh(Mesh3):
                 next_s = (s + 1) % segments
                 triangles.append([r * segments + s, next_r * segments + s, next_r * segments + next_s])
                 triangles.append([r * segments + s, next_r * segments + next_s, r * segments + next_s])
-        super().__init__(uuid, "UVSphere", vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
+        super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int), name="UVSphere", uuid=uuid)
 
 
 class IcoSphereMesh(Mesh3):
@@ -257,7 +257,7 @@ class IcoSphereMesh(Mesh3):
             ],
             dtype=int,
         )
-        super().__init__("IcoSphere", vertices=vertices, triangles=triangles)
+        super().__init__(vertices=vertices, triangles=triangles, name="IcoSphere")
         for _ in range(subdivisions):
             self._subdivide()
 
@@ -309,7 +309,7 @@ class PlaneMesh(Mesh3):
                 v3 = v2 + 1
                 triangles.append([v0, v2, v1])
                 triangles.append([v1, v2, v3])
-        super().__init__(uuid, "Plane", vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
+        super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int), name="Plane", uuid=uuid)
 
 
 class CylinderMesh(Mesh3):
@@ -347,7 +347,7 @@ class CylinderMesh(Mesh3):
             triangles.append([bottom1, bottom_center_idx, bottom0])
             triangles.append([top0, top_center_idx, top1])
 
-        super().__init__(uuid, "Cylinder", vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
+        super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int), name="Cylinder", uuid=uuid)
 
 
 class ConeMesh(Mesh3):
@@ -373,7 +373,7 @@ class ConeMesh(Mesh3):
             # Основание: нормаль вниз (-Y)
             triangles.append([base0, base1, len(vertices)])
         vertices.append(base_center)
-        super().__init__(uuid, "Cone", vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int))
+        super().__init__(vertices=np.array(vertices, dtype=float), triangles=np.array(triangles, dtype=int), name="Cone", uuid=uuid)
 
 
 class TorusMesh(Mesh3):
@@ -440,7 +440,7 @@ class TorusMesh(Mesh3):
         vertices_np = np.asarray(vertices, dtype=float)
         triangles_np = np.asarray(triangles, dtype=int)
 
-        super().__init__(uuid, "Torus", vertices=vertices_np, triangles=triangles_np, uvs=None)
+        super().__init__(vertices=vertices_np, triangles=triangles_np, name="Torus", uuid=uuid)
         self.compute_vertex_normals()
 
 
@@ -497,7 +497,7 @@ class RingMesh(Mesh3):
         vertices_np = np.asarray(vertices, dtype=float)
         triangles_np = np.asarray(triangles, dtype=int)
 
-        super().__init__(uuid, "Ring", vertices=vertices_np, triangles=triangles_np, uvs=None)
+        super().__init__(vertices=vertices_np, triangles=triangles_np, name="Ring", uuid=uuid)
 
         # для более внятного освещения
         self.compute_vertex_normals()

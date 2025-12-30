@@ -59,14 +59,15 @@ TC_API bool tc_mesh_set_indices(
 );
 
 // Set both vertex and index data (copies data, increments version)
+// name is optional (can be NULL)
 TC_API bool tc_mesh_set_data(
     tc_mesh* mesh,
-    const char* name,
     const void* vertices,
     size_t vertex_count,
     const tc_vertex_layout* layout,
     const uint32_t* indices,
-    size_t index_count
+    size_t index_count,
+    const char* name
 );
 
 // Bump version manually (e.g., after modifying data in-place)

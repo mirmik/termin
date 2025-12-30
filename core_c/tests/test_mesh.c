@@ -95,7 +95,7 @@ static int test_mesh_data(void) {
     };
     uint32_t idx[] = { 0, 1, 2 };
 
-    tc_mesh_set_data(mesh, verts, 3, &layout, idx, 3);
+    tc_mesh_set_data(mesh, verts, 3, &layout, idx, 3, "data-test");
 
     TEST_ASSERT(mesh->vertex_count == 3, "vertex count");
     TEST_ASSERT(mesh->index_count == 3, "index count");
@@ -111,6 +111,46 @@ static int test_mesh_data(void) {
     return 0;
 }
 
+static int test_ref_counting(void) {
+    printf("Testing Ref Counting...\n");
+
+    tc_mesh_init();
+
+    // get_or_create creates with ref=1
+    tc_mesh* mesh1 = tc_mesh_get_or_create("ref-test");
+    TEST_ASSERT(mesh1 != NULL, "get_or_create returns mesh");
+    TEST_ASSERT(mesh1->ref_count == 1, "initial ref_count is 1");
+    TEST_ASSERT(tc_mesh_count() == 1, "count is 1");
+
+    // get_or_create again increments ref
+    tc_mesh* mesh2 = tc_mesh_get_or_create("ref-test");
+    TEST_ASSERT(mesh2 == mesh1, "same mesh returned");
+    TEST_ASSERT(mesh1->ref_count == 2, "ref_count is 2");
+    TEST_ASSERT(tc_mesh_count() == 1, "count still 1");
+
+    // add_ref increments
+    tc_mesh_add_ref(mesh1);
+    TEST_ASSERT(mesh1->ref_count == 3, "ref_count is 3");
+
+    // release decrements
+    tc_mesh_release(mesh1);
+    TEST_ASSERT(mesh1->ref_count == 2, "ref_count is 2");
+    TEST_ASSERT(tc_mesh_count() == 1, "mesh still exists");
+
+    tc_mesh_release(mesh1);
+    TEST_ASSERT(mesh1->ref_count == 1, "ref_count is 1");
+
+    // Last release destroys mesh
+    tc_mesh_release(mesh1);
+    TEST_ASSERT(tc_mesh_count() == 0, "mesh destroyed");
+    TEST_ASSERT(tc_mesh_get("ref-test") == NULL, "mesh gone from registry");
+
+    tc_mesh_shutdown();
+
+    printf("  Ref Counting: PASS\n");
+    return 0;
+}
+
 int main(void) {
     printf("=== Mesh Tests ===\n\n");
 
@@ -118,6 +158,7 @@ int main(void) {
     result |= test_vertex_layout();
     result |= test_mesh_global_api();
     result |= test_mesh_data();
+    result |= test_ref_counting();
 
     printf("\n");
     if (result == 0) {

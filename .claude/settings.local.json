@@ -91,7 +91,8 @@
       "Bash(gcc:*)",
       "Bash(LD_LIBRARY_PATH=. ./test_mesh:*)",
       "Bash(./test_mesh)",
-      "Bash(LD_LIBRARY_PATH=. ./termin_core_test:*)"
+      "Bash(LD_LIBRARY_PATH=. ./termin_core_test:*)",
+      "Bash(LD_LIBRARY_PATH=./bin ./termin_mesh_test:*)"
     ]
   }
 }

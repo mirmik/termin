@@ -106,12 +106,12 @@ std::set<std::string> MeshRenderer::get_phase_marks() const {
 }
 
 void MeshRenderer::draw_geometry(const RenderContext& context, const std::string& geometry_id) {
-    Mesh3* mesh_data = mesh.get();
+    CustomMesh* mesh_data = mesh.get();
     MeshGPU* gpu = mesh.gpu();
     if (mesh_data == nullptr || gpu == nullptr) {
         return;
     }
-    gpu->draw(context, *mesh_data, mesh.version());
+    gpu->draw(context, mesh_data->raw(), mesh.version());
 }
 
 std::vector<MaterialPhase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {

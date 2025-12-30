@@ -67,7 +67,7 @@ target_include_directories(termin_core
 )
 
 # Find Python and pybind11
-find_package(Python3 COMPONENTS Development)
+find_package(Python3 COMPONENTS Interpreter Development)
 
 # Find pybind11 via pip
 if(WIN32)
@@ -116,13 +116,18 @@ endif()
 if(TC_BUILD_TESTS)
     enable_testing()
 
-    # C tests
+    # C tests - main
     add_executable(termin_core_test tests/test_main.c)
     target_link_libraries(termin_core_test termin_core)
     if(UNIX AND NOT APPLE)
         target_link_libraries(termin_core_test m)
     endif()
     add_test(NAME termin_core_test COMMAND termin_core_test)
+
+    # C tests - mesh
+    add_executable(termin_mesh_test tests/test_mesh.c)
+    target_link_libraries(termin_mesh_test termin_core)
+    add_test(NAME termin_mesh_test COMMAND termin_mesh_test)
 
     # C++ tests (disabled - termin_core.hpp needs updating)
     # add_executable(termin_core_test_cpp tests/test_cpp.cpp)

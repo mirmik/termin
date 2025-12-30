@@ -46,11 +46,15 @@ def get_current_scene() -> "Scene | None":
 class Scene:
     """Container for renderable entities and lighting data."""
 
+    _destroyed: bool = False
+
     def __init__(
         self,
         background_color: Sequence[float] = (0.05, 0.05, 0.08, 1.0),
         uuid: str | None = None,
     ):
+        self._destroyed = False
+
         # C core scene for optimized entity/component management
         self._tc_scene = TcScene()
 
@@ -696,3 +700,48 @@ class Scene:
                 child.set_parent(ent)
 
         return ent
+
+    # --- Destroy ---
+
+    def destroy(self) -> None:
+        """
+        Explicitly destroy scene and release all resources.
+
+        Breaks cyclic references that prevent Python GC from collecting scene.
+        Call this when scene is no longer needed (e.g., exit_game_mode, scene change).
+        """
+        if self._destroyed:
+            return
+        self._destroyed = True
+
+        # Destroy all components in all entities
+        for entity in self._entities:
+            for component in entity.components:
+                if hasattr(component, 'destroy'):
+                    component.destroy()
+
+        # Clear entity list
+        self._entities.clear()
+
+        # Clear input components and colliders
+        self._input_components.clear()
+        self.colliders.clear()
+
+        # Destroy managers
+        if self._skybox is not None:
+            self._skybox.destroy()
+            self._skybox = None
+
+        if self._lighting is not None:
+            self._lighting.destroy()
+            self._lighting = None
+
+        # Clear collision world
+        self._collision_world = None
+
+        # Clear events (break subscriber references)
+        self._on_entity_added.clear()
+        self._on_entity_removed.clear()
+
+        # Release C core scene
+        self._tc_scene = None

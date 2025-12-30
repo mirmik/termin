@@ -101,6 +101,7 @@ void tc_scene_free(tc_scene* s) {
     free(s);
 }
 
+
 tc_entity_pool* tc_scene_entity_pool(tc_scene* s) {
     return s ? s->pool : NULL;
 }

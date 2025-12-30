@@ -509,6 +509,7 @@ class MaterialInspector(QWidget):
                 "Save Material",
                 f"{self._material.name or 'material'}.material",
                 "Material Files (*.material);;All Files (*)",
+                options=QFileDialog.Option.DontUseNativeDialog,
             )
             if not path:
                 return False

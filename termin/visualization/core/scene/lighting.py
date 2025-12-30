@@ -122,3 +122,8 @@ class LightingManager:
         self.ambient_intensity = data.get("ambient_intensity", 0.1)
         if "shadow_settings" in data:
             self.shadow_settings.load_from_data(data["shadow_settings"])
+
+    def destroy(self) -> None:
+        """Release all resources."""
+        self.light_components.clear()
+        self.lights.clear()

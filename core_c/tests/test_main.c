@@ -492,7 +492,7 @@ static int test_mesh(void) {
     };
     uint32_t idx[] = { 0, 1, 2 };
 
-    tc_mesh_set_data(mesh1, verts, 3, &layout, idx, 3);
+    tc_mesh_set_data(mesh1, verts, 3, &layout, idx, 3, "test-mesh");
     TEST_ASSERT(mesh1->vertex_count == 3, "vertex count");
     TEST_ASSERT(mesh1->index_count == 3, "index count");
     TEST_ASSERT(mesh1->version == 2, "version is 2");

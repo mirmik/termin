@@ -297,6 +297,19 @@ class VoxelDisplayComponent(PythonComponent):
 
     # --- Построение меша ---
 
+    def _compute_mesh_uuid(self) -> str | None:
+        """Compute deterministic UUID based on asset path and version."""
+        import hashlib
+        asset = self.voxel_grid.asset
+        if asset is None:
+            return None
+        path = asset.source_path
+        version = asset.version
+        if path is None:
+            return None
+        key = f"voxel_display:{path.as_posix()}:v{version}"
+        return hashlib.sha256(key.encode()).hexdigest()[:32]
+
     def _rebuild_mesh(self) -> None:
         """Перестроить меш из воксельной сетки (без фильтрации, вся сетка)."""
         # Очищаем старый меш
@@ -330,6 +343,14 @@ class VoxelDisplayComponent(PythonComponent):
         half_cell = grid.cell_size * CUBE_SCALE * 0.5
         self._bounds_min = min_world - half_cell
         self._bounds_max = max_world + half_cell
+
+        # Try to get cached mesh by deterministic UUID
+        mesh_uuid = self._compute_mesh_uuid()
+        if mesh_uuid:
+            cached = VoxelMesh.from_uuid(mesh_uuid)
+            if cached is not None:
+                self._voxel_mesh = cached
+                return
 
         # Ограничение для производительности
         display_count = len(all_voxels)
@@ -384,6 +405,7 @@ class VoxelDisplayComponent(PythonComponent):
             uvs=uvs,
             vertex_colors=colors,
             vertex_normals=normals,
+            uuid=mesh_uuid,  # Use deterministic UUID for caching
         )
 
     # --- Lifecycle ---
@@ -400,8 +422,15 @@ class VoxelDisplayComponent(PythonComponent):
 
     def on_removed(self) -> None:
         """Очистить меш при удалении."""
+        self.destroy()
+
+    def destroy(self) -> None:
+        """Release all resources."""
         self._voxel_mesh = None
-        self._gpu = None
+        if self._gpu is not None:
+            self._gpu.delete_resources()
+            self._gpu = None
+        self._material = None
 
     def update(self, dt: float) -> None:
         """Обновить меш если нужно."""

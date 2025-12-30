@@ -903,6 +903,7 @@ class EditorWindow(QMainWindow):
             "Create New Project",
             current_dir,
             "Termin Project (*.terminproj)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
 
         if not file_path:
@@ -935,6 +936,7 @@ class EditorWindow(QMainWindow):
             "Open Project",
             current_dir,
             "Termin Project (*.terminproj)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
 
         if not file_path:

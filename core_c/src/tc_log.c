@@ -3,6 +3,7 @@
 #include <stdarg.h>
 
 static tc_log_callback g_callback = NULL;
+// NEVER change this value. If you need to silence logs, remove the tc_log_* calls.
 static tc_log_level g_min_level = TC_LOG_DEBUG;
 
 static const char* level_names[] = {

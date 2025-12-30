@@ -106,3 +106,46 @@ __all__ = ["MyClass"]
 ```
 
 If additional Python-only functionality is needed (e.g., exception classes), keep it minimal alongside the re-exports.
+
+### Exception Handling
+
+Never silently swallow exceptions. Exceptions must either:
+1. Crash the program (let it propagate), or
+2. Log an error message before returning a fallback value
+
+Bad:
+```cpp
+try {
+    do_something();
+    return result;
+} catch (const std::exception&) {
+    return default_value;  // Silent failure - impossible to debug
+}
+```
+
+Good:
+```cpp
+try {
+    do_something();
+    return result;
+} catch (const std::exception& e) {
+    fprintf(stderr, "[ERROR] do_something failed: %s\n", e.what());
+    return default_value;
+}
+```
+
+Same applies to Python:
+```python
+# Bad
+try:
+    result = do_something()
+except Exception:
+    result = None
+
+# Good
+try:
+    result = do_something()
+except Exception as e:
+    print(f"[ERROR] do_something failed: {e}")
+    result = None
+```

@@ -36,6 +36,13 @@ void MeshGPU::draw(
 ) {
     if (!mesh) return;
 
+    // Update cached mesh reference
+    if (_cached_mesh != mesh) {
+        if (_cached_mesh) tc_mesh_release(_cached_mesh);
+        _cached_mesh = const_cast<tc_mesh*>(mesh);
+        tc_mesh_add_ref(_cached_mesh);
+    }
+
     // Check if we need to re-upload
     if (uploaded_version != version) {
         invalidate();

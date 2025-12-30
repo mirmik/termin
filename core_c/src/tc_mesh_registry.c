@@ -1,6 +1,7 @@
 #include "tc_mesh_registry.h"
 #include "tc_resource_map.h"
 #include "tc_log.h"
+#include "termin_core.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -39,7 +40,6 @@ void tc_mesh_init(void) {
     }
     g_meshes = tc_resource_map_new(mesh_destructor);
     g_next_uuid = 1;
-    tc_log_debug("tc_mesh_init: mesh registry initialized");
 }
 
 void tc_mesh_shutdown(void) {
@@ -47,8 +47,6 @@ void tc_mesh_shutdown(void) {
         tc_log_warn("tc_mesh_shutdown: not initialized");
         return;
     }
-    size_t count = tc_resource_map_count(g_meshes);
-    tc_log_debug("tc_mesh_shutdown: freeing %zu meshes", count);
     tc_resource_map_free(g_meshes);
     g_meshes = NULL;
     g_next_uuid = 1;
@@ -61,7 +59,6 @@ void tc_mesh_shutdown(void) {
 tc_mesh* tc_mesh_add(const char* uuid) {
     // Auto-initialize if needed
     if (!g_meshes) {
-        tc_log_debug("tc_mesh_add: auto-initializing registry");
         tc_mesh_init();
     }
 
@@ -88,7 +85,7 @@ tc_mesh* tc_mesh_add(const char* uuid) {
     strncpy(mesh->uuid, final_uuid, sizeof(mesh->uuid) - 1);
     mesh->uuid[sizeof(mesh->uuid) - 1] = '\0';
     mesh->version = 1;
-    mesh->ref_count = 1;
+    mesh->ref_count = 0;  // No owners yet
     mesh->name = NULL;
 
     if (!tc_resource_map_add(g_meshes, mesh->uuid, mesh)) {
@@ -97,7 +94,6 @@ tc_mesh* tc_mesh_add(const char* uuid) {
         return NULL;
     }
 
-    tc_log_debug("tc_mesh_add: created '%s' (ref=1)", mesh->uuid);
     return mesh;
 }
 
@@ -106,26 +102,12 @@ tc_mesh* tc_mesh_get(const char* uuid) {
         tc_log_warn("tc_mesh_get: registry not initialized");
         return NULL;
     }
-    tc_mesh* mesh = (tc_mesh*)tc_resource_map_get(g_meshes, uuid);
-    if (!mesh) {
-        tc_log_debug("tc_mesh_get: '%s' not found", uuid ? uuid : "(null)");
-    }
-    return mesh;
+    return (tc_mesh*)tc_resource_map_get(g_meshes, uuid);
 }
 
-static int debug_count = 0;
-
-TC_API tc_mesh* tc_mesh_get_or_create(const char* uuid) {
-    static int call_id = 0;
-    int my_call_id = call_id++;
-
-    fprintf(stderr, "[TRACE] tc_mesh_get_or_create ENTER call_id=%d uuid=%.16s this_func=%p\n",
-            my_call_id, uuid ? uuid : "(null)", (void*)&tc_mesh_get_or_create);
-    fflush(stderr);
-
+tc_mesh* tc_mesh_get_or_create(const char* uuid) {
     // Auto-initialize if needed
     if (!g_meshes) {
-        tc_log_debug("tc_mesh_get_or_create: auto-initializing registry (g_meshes=%p)", (void*)&g_meshes);
         tc_mesh_init();
     }
     if (!uuid || uuid[0] == '\0') {
@@ -133,23 +115,14 @@ TC_API tc_mesh* tc_mesh_get_or_create(const char* uuid) {
         return NULL;
     }
 
-    // Try to get existing
+    // Try to get existing (no ref increment - caller must take ownership)
     tc_mesh* mesh = (tc_mesh*)tc_resource_map_get(g_meshes, uuid);
     if (mesh) {
-        mesh->ref_count++;
-        tc_log_debug("tc_mesh_get_or_create: reusing '%s' [%s] (ref=%u)",
-            mesh->name ? mesh->name : "?", uuid, mesh->ref_count);
-        fprintf(stderr, "[TRACE] tc_mesh_get_or_create EXIT call_id=%d REUSE ref=%u\n", my_call_id, mesh->ref_count);
-        fflush(stderr);
         return mesh;
     }
 
     // Create new
-    tc_log_debug("tc_mesh_get_or_create: creating new [%s] (g_meshes=%p) (debug_count=%d)", uuid, (void*)g_meshes, debug_count++);
-    mesh = tc_mesh_add(uuid);
-    fprintf(stderr, "[TRACE] tc_mesh_get_or_create EXIT call_id=%d NEW mesh=%p\n", my_call_id, (void*)mesh);
-    fflush(stderr);
-    return mesh;
+    return tc_mesh_add(uuid);
 }
 
 bool tc_mesh_remove(const char* uuid) {
@@ -157,13 +130,7 @@ bool tc_mesh_remove(const char* uuid) {
         tc_log_warn("tc_mesh_remove: registry not initialized");
         return false;
     }
-    bool removed = tc_resource_map_remove(g_meshes, uuid);
-    if (removed) {
-        tc_log_debug("tc_mesh_remove: removed '%s'", uuid ? uuid : "(null)");
-    } else {
-        tc_log_warn("tc_mesh_remove: '%s' not found", uuid ? uuid : "(null)");
-    }
-    return removed;
+    return tc_resource_map_remove(g_meshes, uuid);
 }
 
 bool tc_mesh_contains(const char* uuid) {
@@ -242,16 +209,18 @@ bool tc_mesh_set_indices(
 
 bool tc_mesh_set_data(
     tc_mesh* mesh,
-    const char* name,
     const void* vertices,
     size_t vertex_count,
     const tc_vertex_layout* layout,
     const uint32_t* indices,
-    size_t index_count
+    size_t index_count,
+    const char* name
 ) {
-    if (!mesh || !layout || !name) return false;
+    if (!mesh || !layout) return false;
 
-    mesh->name = tc_intern_string(name);
+    if (name) {
+        mesh->name = tc_intern_string(name);
+    }
 
     size_t vertex_size = vertex_count * layout->stride;
     void* new_vertices = NULL;

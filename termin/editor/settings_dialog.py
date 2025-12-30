@@ -95,6 +95,7 @@ class SettingsDialog(QDialog):
             "Select Text Editor",
             "",
             filter_str,
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
 
         if file_path:

@@ -296,11 +296,10 @@ def get_skinned_material(material: Material) -> Material:
         return _skinned_material_cache[material]
 
     # Create new material with skinned phases
-    skinned_mat = Material.__new__(Material)
+    skinned_mat = Material()
     skinned_mat.name = f"{material.name}_Skinned" if material.name else "Skinned"
     skinned_mat.source_path = material.source_path
     skinned_mat.shader_name = material.shader_name
-    skinned_mat.phases = []
 
     for phase in material.phases:
         skinned_shader = get_skinned_shader(phase.shader_programm)

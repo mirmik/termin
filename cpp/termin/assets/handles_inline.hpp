@@ -24,7 +24,8 @@ inline MeshHandle MeshHandle::from_name(const std::string& name) {
             return MeshHandle();
         }
         return MeshHandle(asset);
-    } catch (const py::error_already_set&) {
+    } catch (const py::error_already_set& e) {
+        fprintf(stderr, "[ERROR] MeshHandle::from_name('%s') failed: %s\n", name.c_str(), e.what());
         return MeshHandle();
     }
 }
@@ -52,7 +53,8 @@ inline MeshHandle MeshHandle::from_mesh3(
             );
         }
         return MeshHandle(asset);
-    } catch (const py::error_already_set&) {
+    } catch (const py::error_already_set& e) {
+        fprintf(stderr, "[ERROR] MeshHandle::from_mesh3('%s') failed: %s\n", name.c_str(), e.what());
         return MeshHandle();
     }
 }
@@ -67,10 +69,12 @@ inline MeshHandle MeshHandle::from_vertices_indices(
         py::object Mesh3 = mesh_module.attr("Mesh3");
         py::object mesh = Mesh3(
             py::arg("vertices") = vertices,
-            py::arg("triangles") = indices
+            py::arg("triangles") = indices,
+            py::arg("name") = name
         );
         return from_mesh3(mesh, name);
-    } catch (const py::error_already_set&) {
+    } catch (const py::error_already_set& e) {
+        fprintf(stderr, "[ERROR] MeshHandle::from_vertices_indices failed: %s\n", e.what());
         return MeshHandle();
     }
 }

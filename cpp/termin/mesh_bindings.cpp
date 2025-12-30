@@ -2,7 +2,9 @@
 
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+#include <optional>
 
+#include "termin/mesh/custom_mesh.hpp"
 #include "termin/mesh/mesh3.hpp"
 #include "termin/mesh/skinned_mesh3.hpp"
 
@@ -11,10 +13,34 @@ namespace py = pybind11;
 namespace termin {
 
 void bind_mesh(py::module_& m) {
-    py::class_<Mesh3>(m, "Mesh3")
+    // CustomMesh - base class for all mesh types
+    py::class_<CustomMesh>(m, "CustomMesh")
         .def(py::init<>())
-        .def(py::init([](std::string name, py::array_t<float> vertices, py::array_t<uint32_t> triangles,
-                         py::object uvs_obj, py::object normals_obj, py::object source_path_obj) {
+        .def("is_valid", &CustomMesh::is_valid)
+        .def_property_readonly("uuid", [](const CustomMesh& m) { return std::string(m.uuid()); })
+        .def_property_readonly("name", [](const CustomMesh& m) { return std::string(m.name()); })
+        .def_property_readonly("vertex_count", &CustomMesh::vertex_count)
+        .def_property_readonly("index_count", &CustomMesh::index_count)
+        .def_property_readonly("triangle_count", &CustomMesh::triangle_count)
+        .def_property_readonly("version", &CustomMesh::version)
+        .def_property_readonly("tc_mesh", [](const CustomMesh& m) { return m.raw(); }, py::return_value_policy::reference)
+        .def("has_attribute", &CustomMesh::has_attribute, py::arg("name"))
+        .def("get_indices", &CustomMesh::get_indices)
+        .def("bump_version", &CustomMesh::bump_version)
+        .def_property("source_path",
+            [](const CustomMesh&) -> std::string {
+                throw std::runtime_error("source_path is not supported for technical reasons");
+            },
+            [](CustomMesh&, const std::string&) {
+                throw std::runtime_error("source_path is not supported for technical reasons");
+            });
+
+    // Mesh3 - triangle mesh with pos, normal, uv
+    py::class_<Mesh3, CustomMesh>(m, "Mesh3")
+        .def(py::init<>())
+        .def(py::init([](py::array_t<float> vertices, py::array_t<uint32_t> triangles,
+                         py::object uvs_obj, py::object normals_obj,
+                         std::string name) {
             // Get vertex data (Nx3)
             auto v_buf = vertices.unchecked<2>();
             size_t num_verts = v_buf.shape(0);
@@ -64,31 +90,24 @@ void bind_mesh(py::module_& m) {
                 }
             }
 
-            Mesh3 mesh(
-                name.c_str(),
+            return Mesh3(
                 verts_flat.data(), num_verts,
                 tris_flat.data(), tris_flat.size(),
                 normals_flat.empty() ? nullptr : normals_flat.data(),
-                uvs_flat.empty() ? nullptr : uvs_flat.data()
+                uvs_flat.empty() ? nullptr : uvs_flat.data(),
+                name.empty() ? nullptr : name.c_str()
             );
-
-            // Store source path if provided
-            if (!source_path_obj.is_none()) {
-                mesh.source_path = source_path_obj.cast<std::string>();
-            }
-
-            return mesh;
         }),
-             py::arg("name"),
              py::arg("vertices"),
              py::arg("triangles"),
              py::arg("uvs") = py::none(),
              py::arg("vertex_normals") = py::none(),
-             py::arg("source_path") = py::none())
+             py::arg("name") = "")
 
-        // Constructor with explicit UUID (for primitives)
-        .def(py::init([](std::string uuid, std::string name, py::array_t<float> vertices, py::array_t<uint32_t> triangles,
-                         py::object uvs_obj, py::object normals_obj) {
+        // Constructor with explicit UUID (for primitives) - uuid at end
+        .def(py::init([](py::array_t<float> vertices, py::array_t<uint32_t> triangles,
+                         py::object uvs_obj, py::object normals_obj,
+                         std::string name, std::string uuid) {
             auto v_buf = vertices.unchecked<2>();
             size_t num_verts = v_buf.shape(0);
 
@@ -135,19 +154,20 @@ void bind_mesh(py::module_& m) {
             }
 
             return Mesh3(
-                uuid.c_str(), name.c_str(),
+                uuid.c_str(),
                 verts_flat.data(), num_verts,
                 tris_flat.data(), tris_flat.size(),
                 normals_flat.empty() ? nullptr : normals_flat.data(),
-                uvs_flat.empty() ? nullptr : uvs_flat.data()
+                uvs_flat.empty() ? nullptr : uvs_flat.data(),
+                name.empty() ? nullptr : name.c_str()
             );
         }),
-             py::arg("uuid"),
-             py::arg("name"),
              py::arg("vertices"),
              py::arg("triangles"),
              py::arg("uvs") = py::none(),
-             py::arg("vertex_normals") = py::none())
+             py::arg("vertex_normals") = py::none(),
+             py::arg("name") = "",
+             py::arg("uuid"))
 
         // Properties as numpy arrays
         .def_property("vertices",
@@ -256,7 +276,13 @@ void bind_mesh(py::module_& m) {
                 // No-op for compatibility
             })
 
-        .def_readwrite("source_path", &Mesh3::source_path)
+        .def_property("source_path",
+            [](const Mesh3&) -> std::string {
+                throw std::runtime_error("source_path is not supported for technical reasons");
+            },
+            [](Mesh3&, const std::string&) {
+                throw std::runtime_error("source_path is not supported for technical reasons");
+            })
 
         // Type property - Mesh3 always stores triangles
         .def_property_readonly("type", [](const Mesh3&) { return "triangles"; })
@@ -265,7 +291,7 @@ void bind_mesh(py::module_& m) {
         .def_property_readonly("uuid", [](const Mesh3& m) { return std::string(m.uuid()); })
 
         // tc_mesh pointer (for MeshGPU.draw)
-        .def_property_readonly("tc_mesh", [](const Mesh3& m) { return m._mesh; }, py::return_value_policy::reference)
+        .def_property_readonly("tc_mesh", [](const Mesh3& m) { return m.raw(); }, py::return_value_policy::reference)
 
         // Name property (for debugging)
         .def_property("name",
@@ -290,7 +316,7 @@ void bind_mesh(py::module_& m) {
         .def("scale", &Mesh3::scale, py::arg("factor"))
 
         .def("compute_vertex_normals", [](Mesh3& m) {
-            m.compute_vertex_normals();
+            m.compute_normals();
             // Return the computed normals
             auto normals = m.get_normals();
             size_t n = normals.size() / 3;
@@ -344,13 +370,6 @@ void bind_mesh(py::module_& m) {
         // Serialization
         .def("direct_serialize", [](const Mesh3& m) {
             py::dict result;
-
-            if (!m.source_path.empty()) {
-                result["type"] = "path";
-                result["path"] = m.source_path;
-                return result;
-            }
-
             result["type"] = "inline";
             result["uuid"] = std::string(m.uuid());
 
@@ -472,20 +491,13 @@ void bind_mesh(py::module_& m) {
                 mesh_name = "deserialized_mesh";
             }
 
-            Mesh3 mesh(
+            return Mesh3(
                 mesh_name.c_str(),
                 verts_flat.data(), nv,
                 tris_flat.data(), tris_flat.size(),
                 normals_flat.empty() ? nullptr : normals_flat.data(),
                 uvs_flat.empty() ? nullptr : uvs_flat.data()
             );
-
-            // Source path
-            if (data.contains("path")) {
-                mesh.source_path = data["path"].cast<std::string>();
-            }
-
-            return mesh;
         }, py::arg("data"))
 
         .def("__repr__", [](const Mesh3& m) {
@@ -494,13 +506,13 @@ void bind_mesh(py::module_& m) {
                    " uuid=" + std::string(m.uuid()) + ">";
         });
 
-    // SkinnedMesh3 - extends Mesh3 with skeletal animation data
-    py::class_<SkinnedMesh3, Mesh3>(m, "SkinnedMesh3")
+    // SkinnedMesh3 - extends CustomMesh with skeletal animation data
+    py::class_<SkinnedMesh3, CustomMesh>(m, "SkinnedMesh3")
         .def(py::init<>())
-        .def(py::init([](std::string name, py::array_t<float> vertices, py::array_t<uint32_t> triangles,
+        .def(py::init([](py::array_t<float> vertices, py::array_t<uint32_t> triangles,
                          py::object uvs_obj, py::object normals_obj,
                          py::object joint_indices_obj, py::object joint_weights_obj,
-                         py::object source_path_obj) {
+                         std::string name) {
             // Get vertex data (Nx3)
             auto v_buf = vertices.unchecked<2>();
             size_t num_verts = v_buf.shape(0);
@@ -580,31 +592,119 @@ void bind_mesh(py::module_& m) {
                 }
             }
 
-            SkinnedMesh3 mesh(
-                name.c_str(),
+            return SkinnedMesh3(
                 verts_flat.data(), num_verts,
                 tris_flat.data(), tris_flat.size(),
                 normals_flat.empty() ? nullptr : normals_flat.data(),
                 uvs_flat.empty() ? nullptr : uvs_flat.data(),
                 joints_flat.empty() ? nullptr : joints_flat.data(),
-                weights_flat.empty() ? nullptr : weights_flat.data()
+                weights_flat.empty() ? nullptr : weights_flat.data(),
+                name.empty() ? nullptr : name.c_str()
             );
-
-            // Store source path if provided
-            if (!source_path_obj.is_none()) {
-                mesh.source_path = source_path_obj.cast<std::string>();
-            }
-
-            return mesh;
         }),
-             py::arg("name"),
              py::arg("vertices"),
              py::arg("triangles"),
              py::arg("uvs") = py::none(),
              py::arg("vertex_normals") = py::none(),
              py::arg("joint_indices") = py::none(),
              py::arg("joint_weights") = py::none(),
-             py::arg("source_path") = py::none())
+             py::arg("name") = "")
+
+        // Properties as numpy arrays (same as Mesh3)
+        .def_property("vertices",
+            [](const SkinnedMesh3& m) {
+                auto verts = m.get_vertices();
+                size_t n = verts.size() / 3;
+                auto result = py::array_t<float>({n, size_t(3)});
+                auto buf = result.mutable_unchecked<2>();
+                for (size_t i = 0; i < n; ++i) {
+                    buf(i, 0) = verts[i * 3];
+                    buf(i, 1) = verts[i * 3 + 1];
+                    buf(i, 2) = verts[i * 3 + 2];
+                }
+                return result;
+            },
+            [](SkinnedMesh3& m, py::array_t<float> arr) {
+                throw std::runtime_error("SkinnedMesh3 vertices are immutable after creation");
+            })
+
+        .def_property("triangles",
+            [](const SkinnedMesh3& m) {
+                auto indices = m.get_indices();
+                size_t n = indices.size() / 3;
+                auto result = py::array_t<uint32_t>({n, size_t(3)});
+                auto buf = result.mutable_unchecked<2>();
+                for (size_t i = 0; i < n; ++i) {
+                    buf(i, 0) = indices[i * 3];
+                    buf(i, 1) = indices[i * 3 + 1];
+                    buf(i, 2) = indices[i * 3 + 2];
+                }
+                return result;
+            },
+            [](SkinnedMesh3& m, py::array_t<uint32_t> arr) {
+                throw std::runtime_error("SkinnedMesh3 triangles are immutable after creation");
+            })
+
+        .def_property("indices",
+            [](const SkinnedMesh3& m) {
+                auto indices = m.get_indices();
+                size_t n = indices.size() / 3;
+                auto result = py::array_t<uint32_t>({n, size_t(3)});
+                auto buf = result.mutable_unchecked<2>();
+                for (size_t i = 0; i < n; ++i) {
+                    buf(i, 0) = indices[i * 3];
+                    buf(i, 1) = indices[i * 3 + 1];
+                    buf(i, 2) = indices[i * 3 + 2];
+                }
+                return result;
+            },
+            [](SkinnedMesh3& m, py::array_t<uint32_t> arr) {
+                throw std::runtime_error("SkinnedMesh3 indices are immutable after creation");
+            })
+
+        .def_property("uvs",
+            [](const SkinnedMesh3& m) -> py::object {
+                auto uvs = m.get_uvs();
+                if (uvs.empty()) return py::none();
+                size_t n = uvs.size() / 2;
+                auto result = py::array_t<float>({n, size_t(2)});
+                auto buf = result.mutable_unchecked<2>();
+                for (size_t i = 0; i < n; ++i) {
+                    buf(i, 0) = uvs[i * 2];
+                    buf(i, 1) = uvs[i * 2 + 1];
+                }
+                return result;
+            },
+            [](SkinnedMesh3& m, py::object obj) {
+                throw std::runtime_error("SkinnedMesh3 uvs are immutable after creation");
+            })
+
+        .def_property("vertex_normals",
+            [](const SkinnedMesh3& m) -> py::object {
+                auto normals = m.get_normals();
+                if (normals.empty()) return py::none();
+                bool all_zero = true;
+                for (float f : normals) {
+                    if (f != 0.0f) { all_zero = false; break; }
+                }
+                if (all_zero) return py::none();
+
+                size_t n = normals.size() / 3;
+                auto result = py::array_t<float>({n, size_t(3)});
+                auto buf = result.mutable_unchecked<2>();
+                for (size_t i = 0; i < n; ++i) {
+                    buf(i, 0) = normals[i * 3];
+                    buf(i, 1) = normals[i * 3 + 1];
+                    buf(i, 2) = normals[i * 3 + 2];
+                }
+                return result;
+            },
+            [](SkinnedMesh3& m, py::object obj) {
+                throw std::runtime_error("SkinnedMesh3 vertex_normals are immutable after creation");
+            })
+
+        // Type property
+        .def_property_readonly("type", [](const SkinnedMesh3&) { return "triangles"; })
 
         // Joint indices property (Nx4)
         .def_property("joint_indices",
@@ -695,7 +795,7 @@ void bind_mesh(py::module_& m) {
         // Override interleaved_buffer for skinned mesh (16 floats per vertex)
         .def("interleaved_buffer", [](const SkinnedMesh3& m) {
             auto buf = m.build_interleaved_buffer();
-            size_t n = m.get_vertex_count();
+            size_t n = m.vertex_count();
             auto result = py::array_t<float>({n, size_t(16)});
             auto out = result.mutable_unchecked<2>();
             for (size_t i = 0; i < n; ++i) {
@@ -708,7 +808,7 @@ void bind_mesh(py::module_& m) {
 
         .def("build_interleaved_buffer", [](const SkinnedMesh3& m) {
             auto buf = m.build_interleaved_buffer();
-            size_t n = m.get_vertex_count();
+            size_t n = m.vertex_count();
             auto result = py::array_t<float>({n, size_t(16)});
             auto out = result.mutable_unchecked<2>();
             for (size_t i = 0; i < n; ++i) {
@@ -721,9 +821,29 @@ void bind_mesh(py::module_& m) {
 
         .def("copy", &SkinnedMesh3::copy)
 
+        // source_path field
+        .def_property("source_path",
+            [](const SkinnedMesh3&) -> std::string {
+                throw std::runtime_error("source_path is not supported for technical reasons");
+            },
+            [](SkinnedMesh3&, const std::string&) {
+                throw std::runtime_error("source_path is not supported for technical reasons");
+            })
+
+        // Compatibility methods (delegate to CustomMesh)
+        .def("get_vertex_count", &SkinnedMesh3::vertex_count)
+        .def("get_face_count", &SkinnedMesh3::triangle_count)
+        .def("has_uvs", [](const SkinnedMesh3& m) { return m.has_attribute("uv"); })
+        .def("has_vertex_normals", [](const SkinnedMesh3& m) { return m.has_attribute("normal"); })
+        .def("is_valid", &SkinnedMesh3::is_valid)
+
+        .def_static("from_uuid", [](const std::string& uuid) {
+            return SkinnedMesh3::from_uuid(uuid.c_str());
+        }, py::arg("uuid"), "Get existing skinned mesh from registry by UUID")
+
         .def("__repr__", [](const SkinnedMesh3& m) {
-            return "<SkinnedMesh3 vertices=" + std::to_string(m.get_vertex_count()) +
-                   " triangles=" + std::to_string(m.get_face_count()) +
+            return "<SkinnedMesh3 vertices=" + std::to_string(m.vertex_count()) +
+                   " triangles=" + std::to_string(m.triangle_count()) +
                    " skinning=" + (m.has_skinning() ? "yes" : "no") +
                    " uuid=" + std::string(m.uuid()) + ">";
         });
@@ -806,7 +926,9 @@ void bind_mesh(py::module_& m) {
         tc_mesh* mesh = nullptr;
 
         TcMeshHandle() = default;
-        TcMeshHandle(tc_mesh* m) : mesh(m) {}
+        TcMeshHandle(tc_mesh* m) : mesh(m) {
+            if (mesh) tc_mesh_add_ref(mesh);
+        }
         TcMeshHandle(const TcMeshHandle& other) : mesh(other.mesh) {
             if (mesh) tc_mesh_add_ref(mesh);
         }
@@ -901,27 +1023,34 @@ void bind_mesh(py::module_& m) {
     }, py::arg("vertices"), py::arg("indices"),
        "Compute UUID from vertex and index data (hash-based)");
 
-    m.def("tc_mesh_get_or_create", [](const std::string& uuid) {
-        fprintf(stderr, "[PY] tc_mesh_get_or_create: uuid=%s func_ptr=%p\n",
-                uuid.c_str(), (void*)&tc_mesh_get_or_create);
-        fflush(stderr);
-        tc_mesh* mesh = tc_mesh_get_or_create(uuid.c_str());
-        return TcMeshHandle(mesh);  // TcMeshHandle takes ownership
+    m.def("tc_mesh_get", [](const std::string& uuid) -> std::optional<TcMeshHandle> {
+        tc_mesh* mesh = tc_mesh_get(uuid.c_str());
+        if (!mesh) return std::nullopt;
+        return TcMeshHandle(mesh);
     }, py::arg("uuid"),
-       "Get existing mesh or create new one (increments ref count)");
+       "Get existing mesh by UUID (returns None if not found)");
 
-    m.def("tc_mesh_set_data", [](TcMeshHandle& handle, const std::string& name,
+    m.def("tc_mesh_get_or_create", [](const std::string& uuid) {
+        tc_mesh* mesh = tc_mesh_get_or_create(uuid.c_str());
+        return TcMeshHandle(mesh);  // Constructor adds ref
+    }, py::arg("uuid"),
+       "Get existing mesh or create new one");
+
+    m.def("tc_mesh_set_data", [](TcMeshHandle& handle,
                                   py::array_t<float> vertices, size_t vertex_count,
                                   const tc_vertex_layout& layout,
-                                  py::array_t<uint32_t> indices) {
+                                  py::array_t<uint32_t> indices,
+                                  const std::string& name) {
         if (!handle.mesh) return false;
         auto v_buf = vertices.request();
         auto i_buf = indices.request();
-        return tc_mesh_set_data(handle.mesh, name.c_str(),
+        return tc_mesh_set_data(handle.mesh,
                                v_buf.ptr, vertex_count, &layout,
-                               (const uint32_t*)i_buf.ptr, i_buf.size);
-    }, py::arg("handle"), py::arg("name"), py::arg("vertices"),
+                               (const uint32_t*)i_buf.ptr, i_buf.size,
+                               name.empty() ? nullptr : name.c_str());
+    }, py::arg("handle"), py::arg("vertices"),
        py::arg("vertex_count"), py::arg("layout"), py::arg("indices"),
+       py::arg("name") = "",
        "Set mesh vertex and index data");
 
     m.def("tc_mesh_contains", [](const std::string& uuid) {

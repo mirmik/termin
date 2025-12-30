@@ -9,6 +9,7 @@ import numpy as np
 if TYPE_CHECKING:
     from termin.visualization.core.mesh_handle import MeshHandle
     from termin.visualization.core.material import Material
+    from termin._native import log
 
 
 class SkyboxManager:
@@ -67,7 +68,11 @@ class SkyboxManager:
     @property
     def mesh(self) -> "MeshHandle":
         """Get skybox cube mesh."""
-        return self._ensure_skybox_mesh()
+        try:
+            return self._ensure_skybox_mesh()
+        except Exception as e:
+            log.error(f"[SkyboxManager] Error ensuring skybox mesh: {e}")
+            raise
 
     @property
     def material(self) -> "Material | None":
@@ -111,3 +116,8 @@ class SkyboxManager:
             data.get("skybox_bottom_color", [0.6, 0.5, 0.4]),
             dtype=np.float32
         )
+
+    def destroy(self) -> None:
+        """Release all resources."""
+        self._skybox_mesh = None
+        self._skybox_material = None

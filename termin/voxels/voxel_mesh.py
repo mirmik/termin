@@ -13,6 +13,7 @@ from termin.mesh._mesh_native import (
     TcVertexLayout,
     TcAttribType,
     tc_mesh_compute_uuid,
+    tc_mesh_get,
     tc_mesh_get_or_create,
     tc_mesh_set_data,
 )
@@ -43,16 +44,32 @@ class VoxelMesh:
             cls._tc_layout = layout
         return cls._tc_layout
 
+    @classmethod
+    def from_uuid(cls, uuid: str) -> "VoxelMesh | None":
+        """
+        Create VoxelMesh from existing mesh in registry.
+
+        Returns None if mesh with given UUID doesn't exist.
+        """
+        handle = tc_mesh_get(uuid)
+        if handle is None or not handle.is_valid:
+            return None
+        mesh = object.__new__(cls)
+        mesh._name = handle.name or "voxel_mesh"
+        mesh._handle = handle
+        return mesh
+
     def __init__(
         self,
-        name: str,
         vertices: np.ndarray,
         triangles: np.ndarray,
         uvs: np.ndarray | None = None,
         vertex_colors: np.ndarray | None = None,
         vertex_normals: np.ndarray | None = None,
+        uuid: str | None = None,
+        name: str = "",
     ):
-        self._name = name
+        self._name = name if name else "voxel_mesh"
         self._handle: TcMeshHandle | None = None
 
         # Convert inputs to proper arrays
@@ -80,11 +97,9 @@ class VoxelMesh:
         # Build interleaved buffer: pos(3) + normal(3) + uv(2) + color(3) = 11 floats
         interleaved = np.hstack([verts, normals_arr, uvs_arr, colors_arr]).astype(np.float32)
 
-        # Compute UUID from data
-        uuid = tc_mesh_compute_uuid(interleaved.flatten(), tris)
-
-        # Debug: print mesh name and uuid
-        print(f"[VoxelMesh] name='{name}' uuid={uuid[:16]}...")
+        # Use provided UUID or compute from data
+        if uuid is None:
+            uuid = tc_mesh_compute_uuid(interleaved.flatten(), tris)
 
         # Get or create mesh in registry
         self._handle = tc_mesh_get_or_create(uuid)
@@ -92,7 +107,7 @@ class VoxelMesh:
         # Set data if newly created (version == 1 and no vertices)
         if self._handle.is_valid and self._handle.vertex_count == 0:
             layout = self._get_tc_layout()
-            tc_mesh_set_data(self._handle, name, interleaved.flatten(), num_verts, layout, tris)
+            tc_mesh_set_data(self._handle, interleaved.flatten(), num_verts, layout, tris, name)
 
     @property
     def name(self) -> str:
@@ -243,7 +258,7 @@ class VoxelMesh:
         normals = normals / norms
 
         # Rebuild mesh with new normals
-        self.__init__(self._name, verts, tris, uvs, colors, normals)
+        self.__init__(verts, tris, uvs, colors, normals, name=self._name)
 
     def __repr__(self) -> str:
         if self._handle and self._handle.is_valid:
