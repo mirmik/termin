@@ -196,14 +196,14 @@ static Vec3 numpy_to_vec3(nb::ndarray<double, nb::c_contig, nb::device::cpu> arr
 }
 
 // Helper: Vec3 -> numpy array (3,)
-static nb::ndarray<nb::numpy, double> vec3_to_numpy(const Vec3& v) {
+static nb::object vec3_to_numpy(const Vec3& v) {
     double* buf = new double[3];
     buf[0] = v.x;
     buf[1] = v.y;
     buf[2] = v.z;
     nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
     size_t shape[1] = {3};
-    return nb::ndarray<nb::numpy, double>(buf, 1, shape, owner);
+    return nb::cast(nb::ndarray<nb::numpy, double>(buf, 1, shape, owner));
 }
 
 // Helper: numpy array (4,) -> Quat

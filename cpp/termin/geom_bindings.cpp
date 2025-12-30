@@ -10,10 +10,10 @@ namespace nb = nanobind;
 using namespace termin;
 
 // Helper to create numpy array from Vec3
-static nb::ndarray<nb::numpy, double, nb::shape<3>> vec3_to_numpy(const Vec3& v) {
+static nb::object vec3_to_numpy(const Vec3& v) {
     double* data = new double[3]{v.x, v.y, v.z};
     nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-    return nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner);
+    return nb::cast(nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner));
 }
 
 // Helper to create Vec3 from numpy array
@@ -23,10 +23,10 @@ static Vec3 numpy_to_vec3(nb::ndarray<double, nb::c_contig, nb::device::cpu> arr
 }
 
 // Helper to create numpy array from Quat
-static nb::ndarray<nb::numpy, double, nb::shape<4>> quat_to_numpy(const Quat& q) {
+static nb::object quat_to_numpy(const Quat& q) {
     double* data = new double[4]{q.x, q.y, q.z, q.w};
     nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-    return nb::ndarray<nb::numpy, double, nb::shape<4>>(data, {4}, owner);
+    return nb::cast(nb::ndarray<nb::numpy, double, nb::shape<4>>(data, {4}, owner));
 }
 
 // Helper to create Quat from numpy array

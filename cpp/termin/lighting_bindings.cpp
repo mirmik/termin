@@ -11,10 +11,10 @@ namespace nb = nanobind;
 using namespace termin;
 
 // Helper: Vec3 to numpy array
-static nb::ndarray<nb::numpy, double, nb::shape<3>> vec3_to_numpy(const Vec3& v) {
+static nb::object vec3_to_numpy(const Vec3& v) {
     double* data = new double[3]{v.x, v.y, v.z};
     nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-    return nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner);
+    return nb::cast(nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner));
 }
 
 // Helper: numpy array to Vec3
