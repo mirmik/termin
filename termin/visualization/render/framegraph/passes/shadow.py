@@ -61,10 +61,6 @@ class ShadowPass(RenderFramePass):
         ShadowMapArray с текстурами и матрицами для всех источников.
     """
 
-    _DEBUG_FIRST_FRAMES = False  # Debug: track first frames
-    _DEBUG_DRAW_COUNT = False  # Log draw call count
-    _debug_frame_count = 0
-
     inspect_fields = {
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
         "default_resolution": InspectField(
@@ -291,16 +287,6 @@ class ShadowPass(RenderFramePass):
             if light.type == LightType.DIRECTIONAL and light.shadows.enabled:
                 shadow_lights.append((i, light))
 
-        # Debug: log first frames
-        ShadowPass._debug_frame_count += 1
-        if ShadowPass._DEBUG_FIRST_FRAMES and ShadowPass._debug_frame_count <= 5:
-            print(f"\n=== ShadowPass frame {ShadowPass._debug_frame_count} ===")
-            print(f"  lights count: {len(lights)}")
-            print(f"  shadow_lights count: {len(shadow_lights)}")
-            for i, lt in enumerate(lights):
-                print(f"  Light[{i}]: type={lt.type}, shadows.enabled={lt.shadows.enabled}, dir={lt.direction}")
-            print(f"=== end ===\n")
-
         # Создаём ShadowMapArrayResource
         shadow_array = ShadowMapArrayResource(resolution=self.default_resolution)
         self._shadow_map_array = shadow_array
@@ -390,10 +376,6 @@ class ShadowPass(RenderFramePass):
                 light_space_matrix=light_space_matrix,
                 light_index=light_index,
             )
-
-        if self._DEBUG_DRAW_COUNT:
-            total_draws = len(draw_calls) * len(shadow_lights)
-            log.debug(f"[ShadowPass] draw_calls: {len(draw_calls)}, lights: {len(shadow_lights)}, total: {total_draws}")
 
         # Сбрасываем состояние
         graphics.apply_render_state(RenderState())

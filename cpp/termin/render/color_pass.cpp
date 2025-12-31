@@ -211,8 +211,8 @@ void ColorPass::execute_with_data(
                 static_cast<float>(camera_position.y),
                 static_cast<float>(camera_position.z));
 
-            // Upload lights
-            upload_lights_to_shader(dc.phase->shader.get(), lights);
+            // Upload lights with entity name for debugging
+            upload_lights_to_shader(dc.phase->shader.get(), lights, ename);
 
             // Upload ambient
             upload_ambient_to_shader(dc.phase->shader.get(), ambient_color, ambient_intensity);

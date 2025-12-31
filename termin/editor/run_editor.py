@@ -120,7 +120,14 @@ def apply_dark_palette(app: QApplication):
     app.setPalette(palette)
 
 
-def run_editor():
+def run_editor(debug_resource: str | None = None):
+    """
+    Run the editor.
+
+    Args:
+        debug_resource: If set, open framegraph debugger with this resource
+                       (e.g., "shadow_maps", "color") from the first frame.
+    """
     # Create Qt application
     app = QApplication(sys.argv)
 
@@ -142,8 +149,17 @@ def run_editor():
     win = EditorWindow(world, scene, sdl_backend)
     win.showMaximized()
 
-    # Request initial render
-    win.viewport_controller.request_update()
+    # Process events to ensure window is visible
+    app.processEvents()
+
+    # Open debugger with specific resource if requested
+    if debug_resource:
+        win.open_framegraph_debugger(initial_resource=debug_resource)
+        app.processEvents()  # Process debugger show event
+
+    # Render first frame immediately to avoid showing uninitialized buffer
+    sdl_backend.poll_events()
+    win.tick(0.016)  # Render first frame
 
     # Main render loop
     target_fps = 60
@@ -174,4 +190,13 @@ def run_editor():
 
 
 if __name__ == "__main__":
-    run_editor()
+    import argparse
+    parser = argparse.ArgumentParser(description="Run termin editor")
+    parser.add_argument(
+        "--debug-resource",
+        type=str,
+        default=None,
+        help="Open framegraph debugger with this resource (e.g., shadow_maps, color)"
+    )
+    args = parser.parse_args()
+    run_editor(debug_resource=args.debug_resource)

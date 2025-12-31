@@ -524,11 +524,20 @@ class EditorWindow(QMainWindow):
 
     def _show_framegraph_debugger(self) -> None:
         """Opens framegraph texture viewer dialog."""
+        self.open_framegraph_debugger()
+
+    def open_framegraph_debugger(self, initial_resource: str | None = None) -> None:
+        """Opens framegraph texture viewer dialog.
+
+        Args:
+            initial_resource: Resource to show initially (e.g., "shadow_maps", "color").
+        """
         debugger = self._dialog_manager.show_framegraph_debugger(
             window_backend=self._sdl_backend,
             graphics=self.world.graphics,
             rendering_controller=self._rendering_controller,
             on_request_update=self._request_viewport_update,
+            initial_resource=initial_resource,
         )
         # Connect debugger to editor viewport for updates in after_render
         if self.editor_viewport is not None:

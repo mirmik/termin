@@ -116,8 +116,16 @@ class DialogManager:
         graphics: "GraphicsBackend",
         rendering_controller,
         on_request_update=None,
+        initial_resource: str | None = None,
     ):
         """Opens framegraph texture viewer dialog.
+
+        Args:
+            window_backend: SDL window backend.
+            graphics: Graphics backend.
+            rendering_controller: Rendering controller.
+            on_request_update: Callback for requesting render update.
+            initial_resource: Initial resource to show (e.g., "shadow_maps").
 
         Returns:
             The FramegraphDebugDialog instance.
@@ -132,6 +140,9 @@ class DialogManager:
                 on_request_update=on_request_update,
                 parent=self._parent,
             )
+
+        if initial_resource:
+            self._framegraph_debugger.set_initial_resource(initial_resource)
 
         self._framegraph_debugger.debugger_request_update()
         self._framegraph_debugger.show()

@@ -42,7 +42,7 @@ inline int light_type_to_int(LightType type) {
  *   u_light_inner_angle[i]: float
  *   u_light_outer_angle[i]: float
  */
-inline void upload_lights_to_shader(ShaderProgram* shader, const std::vector<Light>& lights) {
+inline void upload_lights_to_shader(ShaderProgram* shader, const std::vector<Light>& lights, const char* entity_name = nullptr) {
     int count = static_cast<int>(std::min(lights.size(), static_cast<size_t>(MAX_LIGHTS)));
     shader->set_uniform_int("u_light_count", count);
 

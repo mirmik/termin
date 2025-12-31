@@ -1515,6 +1515,22 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._pause_check.setChecked(self._debug_paused)
         self._pause_check.blockSignals(False)
 
+    def set_initial_resource(self, resource_name: str) -> None:
+        """
+        Устанавливает начальный ресурс для отображения.
+
+        Полезно для запуска дебаггера с определённым ресурсом с первого кадра.
+        """
+        self._debug_source_res = resource_name
+        self._gl_widget.set_resource_name(resource_name)
+
+        # Синхронизируем комбобокс
+        index = self._resource_combo.findText(resource_name)
+        if index >= 0:
+            self._resource_combo.blockSignals(True)
+            self._resource_combo.setCurrentIndex(index)
+            self._resource_combo.blockSignals(False)
+
     def debugger_request_update(self) -> None:
         """
         Вызывается редактором при обновлении основного viewport.

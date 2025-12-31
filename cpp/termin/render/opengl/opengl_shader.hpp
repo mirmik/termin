@@ -97,6 +97,7 @@ public:
         if (loc >= 0) {
             glUniform1i(loc, value);
         }
+        // Note: u_light_count missing is expected for non-lit shaders (gizmo, voxel, etc.)
     }
 
     void set_uniform_float(const char* name, float value) override {

@@ -32,9 +32,6 @@ class ColorPass(_ColorPassNative):
     shadow mapping and debug features.
     """
 
-    _DEBUG_FIRST_FRAMES = False
-    _DEBUG_DRAW_COUNT = False
-    _debug_frame_count = 0
 
     inspect_fields = {
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
