@@ -94,6 +94,9 @@ class ComponentsPanel(QWidget):
 
     def _get_component_library(self) -> list[str]:
         from termin.entity import ComponentRegistry
+        # Import native modules to trigger static component registration
+        import termin._native.render  # noqa: F401 - registers MeshRenderer, etc.
+        import termin._native.skeleton  # noqa: F401 - registers SkeletonController
         return ComponentRegistry.instance().list_all()
 
     def _show_add_component_menu(self) -> None:
