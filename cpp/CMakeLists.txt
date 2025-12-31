@@ -227,10 +227,6 @@ target_link_libraries(_animation_native PRIVATE trent entity_lib)
 target_compile_options(_animation_native PRIVATE
     $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>
 )
-set_target_properties(_animation_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN/.."
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 
 # Find SDL2 (required)
 if(WIN32)
@@ -393,7 +389,46 @@ install(TARGETS trent entity_lib termin_core
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}  # .so on Linux
 )
 
-# Set RPATH for modules that depend on libtrent
+# Set RPATH for shared libraries to find each other in the same directory
+set_target_properties(entity_lib PROPERTIES
+    INSTALL_RPATH "$ORIGIN"
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+
+# Set RPATH for all modules that depend on entity_lib/trent
+# Modules in subdirectories need $ORIGIN/.. to find libs in parent (termin/)
+set_target_properties(_geom_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_colliders_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_physics_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_voxels_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_collision_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_lighting_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_texture_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_graphics_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
 set_target_properties(_mesh_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/.."
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -404,6 +439,10 @@ set_target_properties(_skeleton_native PROPERTIES
 )
 set_target_properties(_entity_native PROPERTIES
     INSTALL_RPATH "$ORIGIN/.."
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+set_target_properties(_animation_native PROPERTIES
+    INSTALL_RPATH "$ORIGIN/../.."
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_native PROPERTIES

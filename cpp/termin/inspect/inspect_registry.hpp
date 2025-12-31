@@ -9,16 +9,7 @@
 #include "../../../core_c/include/tc_inspect.hpp"
 #include "../../../core_c/include/inspect_registry_compat.hpp"
 
-// DLL export/import macros for Windows (kept for compatibility)
-#ifdef _WIN32
-    #ifdef ENTITY_LIB_EXPORTS
-        #define ENTITY_API __declspec(dllexport)
-    #else
-        #define ENTITY_API __declspec(dllimport)
-    #endif
-#else
-    #define ENTITY_API
-#endif
+#include "../export.hpp"
 
 namespace termin {
 

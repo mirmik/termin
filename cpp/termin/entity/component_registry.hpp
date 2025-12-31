@@ -10,16 +10,7 @@
 #include "vtable_utils.hpp"
 #include "../../../core_c/include/tc_inspect.hpp"
 
-// DLL export/import macros for Windows
-#ifdef _WIN32
-    #ifdef ENTITY_LIB_EXPORTS
-        #define ENTITY_API __declspec(dllexport)
-    #else
-        #define ENTITY_API __declspec(dllimport)
-    #endif
-#else
-    #define ENTITY_API
-#endif
+#include "../export.hpp"
 
 namespace nb = nanobind;
 

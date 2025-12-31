@@ -4,16 +4,7 @@
 #include "general_pose3.hpp"
 #include "../../../core_c/include/tc_entity_pool.h"
 
-// DLL export/import macros for Windows
-#ifdef _WIN32
-    #ifdef ENTITY_LIB_EXPORTS
-        #define ENTITY_API __declspec(dllexport)
-    #else
-        #define ENTITY_API __declspec(dllimport)
-    #endif
-#else
-    #define ENTITY_API
-#endif
+#include "../export.hpp"
 
 namespace termin {
 
