@@ -240,43 +240,11 @@ class ShadowPass(RenderFramePass):
                 if not component.enabled:
                     continue
 
-                # DEBUG: find problematic component
-                print(f"DEBUG: checking component {type(component).__name__} on entity {entity.name}", flush=True)
-                print(f"  component id={id(component)}, repr={repr(component)}", flush=True)
-                # Check material handle
-                if hasattr(component, "material"):
-                    mat_handle = component.material
-                    print(f"  material_handle={mat_handle}, asset={mat_handle.asset if hasattr(mat_handle, 'asset') else 'N/A'}", flush=True)
-                    # Check _direct material
-                    if hasattr(mat_handle, '_direct'):
-                        direct = mat_handle._direct
-                        print(f"  _direct={direct}", flush=True)
-                        if direct is not None:
-                            print(f"    name={direct.name if hasattr(direct, 'name') else 'N/A'}", flush=True)
-                            if hasattr(direct, 'phases'):
-                                print(f"    phases count={len(direct.phases)}", flush=True)
-                                for i, p in enumerate(direct.phases):
-                                    print(f"      phase[{i}]: mark={p.phase_mark}, shader={p.shader}", flush=True)
-                # Bypass isinstance to debug which attribute causes segfault
-                print(f"  trying to get phase_marks directly...", flush=True)
-                try:
-                    pm = component.phase_marks
-                    print(f"  phase_marks={pm}", flush=True)
-                    has_pm = True
-                except Exception as e:
-                    print(f"  phase_marks EXCEPTION: {e}", flush=True)
-                    has_pm = False
-                if not has_pm:
-                    continue
-                print(f"  hasattr draw_geometry...", flush=True)
-                has_dg = hasattr(component, "draw_geometry")
-                print(f"  has_dg={has_dg}", flush=True)
-                if not has_dg:
-                    continue
-                print(f"  hasattr get_geometry_draws...", flush=True)
-                has_ggd = hasattr(component, "get_geometry_draws")
-                print(f"  has_ggd={has_ggd}", flush=True)
-                if not has_ggd:
+                # DEBUG
+                print(f"[shadow] {entity.name}: {type(component).__name__}", flush=True)
+
+                # Check if component is Drawable
+                if not isinstance(component, Drawable):
                     continue
 
                 # Пропускаем объекты без метки "shadow"
