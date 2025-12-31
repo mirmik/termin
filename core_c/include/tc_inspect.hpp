@@ -235,7 +235,7 @@ using KindHandler = TcKind;
         #define TC_INSPECT_API __declspec(dllimport)
     #endif
 #else
-    #define TC_INSPECT_API
+    #define TC_INSPECT_API __attribute__((visibility("default")))
 #endif
 
 class TC_INSPECT_API InspectRegistry {
