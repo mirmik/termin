@@ -260,17 +260,17 @@ void main() {
 
         if geometry_id == "" or geometry_id == self.GEOMETRY_MESH:
             if self._mesh_handle is not None:
-                mesh_data = self._mesh_handle.mesh
+                tc_mesh = self._mesh_handle.get()
                 gpu = self._mesh_handle.gpu
-                if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.mesh, self._mesh_handle.version)
+                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+                    gpu.draw(context, tc_mesh.mesh, self._mesh_handle.version)
 
         if geometry_id == self.GEOMETRY_CONTOURS:
             if self._contour_handle is not None:
-                mesh_data = self._contour_handle.mesh
+                tc_mesh = self._contour_handle.get()
                 gpu = self._contour_handle.gpu
-                if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.mesh, self._contour_handle.version)
+                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+                    gpu.draw(context, tc_mesh.mesh, self._contour_handle.version)
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""

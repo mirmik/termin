@@ -167,10 +167,10 @@ class SkyBoxPass(RenderFramePass):
         )
 
         # Draw via MeshHandle's gpu
-        tc_mesh = mesh.raw()
+        tc_mesh = mesh.get()
         gpu = mesh.gpu
-        if tc_mesh is not None and gpu is not None:
-            gpu.draw(render_context, tc_mesh, mesh.version)
+        if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+            gpu.draw(render_context, tc_mesh.mesh, mesh.version)
 
         # Возвращаем стандартные настройки глубины
         graphics.set_depth_func("less")

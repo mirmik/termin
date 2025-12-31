@@ -18,7 +18,8 @@ from termin.visualization.core.material import Material
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
 from termin.visualization.core.mesh_gpu import MeshGPU
 from termin.visualization.render.drawable import GeometryDrawCall
-from termin.voxels.voxel_mesh import VoxelMesh
+from termin.voxels.voxel_mesh import create_voxel_mesh
+from termin.mesh._mesh_native import TcMesh
 from termin.editor.inspect_field import InspectField
 from termin._native import log
 
@@ -149,7 +150,7 @@ class VoxelDisplayComponent(PythonComponent):
         self._voxel_grid_name = grid_name or voxel_grid_name
         self.voxel_grid: VoxelGridHandle = VoxelGridHandle()
         self._last_version: int = -1  # Версия handle для отслеживания hot-reload
-        self._voxel_mesh: Optional[VoxelMesh] = None
+        self._voxel_mesh: Optional[TcMesh] = None
         self._gpu: Optional[MeshGPU] = None
         self._material: Optional[Material] = None
         self._needs_rebuild = True
@@ -347,8 +348,8 @@ class VoxelDisplayComponent(PythonComponent):
         # Try to get cached mesh by deterministic UUID
         mesh_uuid = self._compute_mesh_uuid()
         if mesh_uuid:
-            cached = VoxelMesh.from_uuid(mesh_uuid)
-            if cached is not None:
+            cached = TcMesh.from_uuid(mesh_uuid)
+            if cached is not None and cached.is_valid:
                 self._voxel_mesh = cached
                 return
 
@@ -398,14 +399,14 @@ class VoxelDisplayComponent(PythonComponent):
 
             idx += 1
 
-        self._voxel_mesh = VoxelMesh(
-            name="voxel_display_mesh",
+        self._voxel_mesh = create_voxel_mesh(
             vertices=vertices,
             triangles=triangles,
             uvs=uvs,
             vertex_colors=colors,
             vertex_normals=normals,
-            uuid=mesh_uuid,  # Use deterministic UUID for caching
+            name="voxel_display_mesh",
+            uuid=mesh_uuid or "",  # Use deterministic UUID for caching
         )
 
     # --- Lifecycle ---

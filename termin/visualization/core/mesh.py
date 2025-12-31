@@ -124,12 +124,14 @@ class MeshDrawable:
 
     def draw(self, context: RenderContext):
         """Рисует меш."""
-        mesh = self._handle.get()
+        tc_mesh = self._handle.get()
         asset = self._handle.get_asset()
-        if mesh is None:
+        if tc_mesh is None or not tc_mesh.is_valid:
+            from termin._native import log
+            log.warn(f"MeshDrawable.draw: invalid mesh (asset={asset})")
             return
         version = asset.version if asset else 0
-        self._gpu.draw(context, mesh.mesh, version)
+        self._gpu.draw(context, tc_mesh.mesh, version)
 
     def delete(self):
         """Удаляет GPU ресурсы."""

@@ -16,6 +16,7 @@ from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.material import Material
 from termin.visualization.core.mesh_handle import MeshHandle
 from termin.mesh.mesh import Mesh3
+from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
 
@@ -286,28 +287,28 @@ class VoxelizerComponent(PythonComponent):
         """Рисует отладочную геометрию."""
         if geometry_id == "" or geometry_id == self.GEOMETRY_VOXELS:
             if self.show_debug_voxels and self._debug_mesh_handle is not None:
-                mesh_data = self._debug_mesh_handle.mesh
+                tc_mesh = self._debug_mesh_handle.get()
                 gpu = self._debug_mesh_handle.gpu
-                if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.mesh, self._debug_mesh_handle.version)
+                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+                    gpu.draw(context, tc_mesh.mesh, self._debug_mesh_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_CONTOURS:
             if self.show_debug_contours and self._debug_contours_handle is not None:
-                mesh_data = self._debug_contours_handle.mesh
+                tc_mesh = self._debug_contours_handle.get()
                 gpu = self._debug_contours_handle.gpu
-                if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.mesh, self._debug_contours_handle.version)
+                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+                    gpu.draw(context, tc_mesh.mesh, self._debug_contours_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_MULTI_NORMAL:
             if self.show_multi_normal_voxels and self._debug_multi_normal_handle is not None:
-                mesh_data = self._debug_multi_normal_handle.mesh
+                tc_mesh = self._debug_multi_normal_handle.get()
                 gpu = self._debug_multi_normal_handle.gpu
-                if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.mesh, self._debug_multi_normal_handle.version)
+                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+                    gpu.draw(context, tc_mesh.mesh, self._debug_multi_normal_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_BOUNDARY:
             if self.show_boundary_voxels and self._debug_boundary_handle is not None:
-                mesh_data = self._debug_boundary_handle.mesh
+                tc_mesh = self._debug_boundary_handle.get()
                 gpu = self._debug_boundary_handle.gpu
-                if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.mesh, self._debug_boundary_handle.version)
+                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+                    gpu.draw(context, tc_mesh.mesh, self._debug_boundary_handle.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
@@ -809,7 +810,6 @@ class VoxelizerComponent(PythonComponent):
             _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS,
             VERTS_PER_CUBE, TRIS_PER_CUBE, CUBE_SCALE,
         )
-        from termin.voxels.voxel_mesh import VoxelMesh
         import random
 
         # Очищаем старые handles
@@ -891,9 +891,15 @@ class VoxelizerComponent(PythonComponent):
         self._debug_bounds_min = min_world - half_cube
         self._debug_bounds_max = max_world + half_cube
 
-        mesh = VoxelMesh(name="voxel_mesh", vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
-        mesh.vertex_normals = normals
-        self._debug_mesh_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_mesh")
+        tc_mesh = create_voxel_mesh(
+            vertices=vertices,
+            triangles=triangles,
+            uvs=uvs,
+            vertex_colors=colors,
+            vertex_normals=normals,
+            name="voxelizer_debug_mesh",
+        )
+        self._debug_mesh_handle = MeshHandle.from_direct(tc_mesh)
 
         # Строим контуры для всех регионов
         self._build_debug_contours(grid, region_colors)
@@ -914,7 +920,6 @@ class VoxelizerComponent(PythonComponent):
         """Построить контуры для всех регионов с vertex colors."""
         from termin.navmesh.polygon_builder import PolygonBuilder
         from termin.navmesh.display_component import _build_line_ribbon
-        from termin.voxels.voxel_mesh import VoxelMesh
 
         builder = PolygonBuilder()
         contour_width = grid.cell_size * 0.15
@@ -999,9 +1004,15 @@ class VoxelizerComponent(PythonComponent):
         normals[:, 2] = 1.0  # Вверх по Z
         uvs = np.full((len(vertices), 2), [2.0, 0.0], dtype=np.float32)  # UV.x = 2.0 для vertex color
 
-        mesh = VoxelMesh(name="voxel_mesh", vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
-        mesh.vertex_normals = normals
-        self._debug_contours_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_contours")
+        tc_mesh = create_voxel_mesh(
+            vertices=vertices,
+            triangles=triangles,
+            uvs=uvs,
+            vertex_colors=colors,
+            vertex_normals=normals,
+            name="voxelizer_debug_contours",
+        )
+        self._debug_contours_handle = MeshHandle.from_direct(tc_mesh)
 
     def _build_debug_multi_normal(
         self,
@@ -1014,8 +1025,6 @@ class VoxelizerComponent(PythonComponent):
         tris_per_cube: int,
     ) -> None:
         """Построить меш для вокселей с несколькими нормалями."""
-        from termin.voxels.voxel_mesh import VoxelMesh
-
         # Собираем воксели с более чем одной нормалью
         multi_normal_voxels: list[tuple[int, int, int]] = []
         for coord, normals_list in grid.surface_normals.items():
@@ -1047,9 +1056,15 @@ class VoxelizerComponent(PythonComponent):
             uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
             colors[v_offset:v_offset + verts_per_cube] = multi_color
 
-        mesh = VoxelMesh(name="voxel_mesh", vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
-        mesh.vertex_normals = normals
-        self._debug_multi_normal_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_multi_normal")
+        tc_mesh = create_voxel_mesh(
+            vertices=vertices,
+            triangles=triangles,
+            uvs=uvs,
+            vertex_colors=colors,
+            vertex_normals=normals,
+            name="voxelizer_debug_multi_normal",
+        )
+        self._debug_multi_normal_handle = MeshHandle.from_direct(tc_mesh)
 
         print(f"VoxelizerComponent: {count} voxels with multiple normals")
 
@@ -1064,8 +1079,6 @@ class VoxelizerComponent(PythonComponent):
         tris_per_cube: int,
     ) -> None:
         """Построить меш для граничных вокселей (общих между регионами)."""
-        from termin.voxels.voxel_mesh import VoxelMesh
-
         if not self._debug_boundary_voxels:
             return
 
@@ -1091,9 +1104,15 @@ class VoxelizerComponent(PythonComponent):
             uvs[v_offset:v_offset + verts_per_cube, 0] = 2.0  # vertex color mode
             colors[v_offset:v_offset + verts_per_cube] = boundary_color
 
-        mesh = VoxelMesh(name="voxel_mesh", vertices=vertices, triangles=triangles, uvs=uvs, vertex_colors=colors)
-        mesh.vertex_normals = normals
-        self._debug_boundary_handle = MeshHandle.from_mesh3(mesh, name="voxelizer_debug_boundary")
+        tc_mesh = create_voxel_mesh(
+            vertices=vertices,
+            triangles=triangles,
+            uvs=uvs,
+            vertex_colors=colors,
+            vertex_normals=normals,
+            name="voxelizer_debug_boundary",
+        )
+        self._debug_boundary_handle = MeshHandle.from_direct(tc_mesh)
 
         print(f"VoxelizerComponent: {count} boundary voxels")
 

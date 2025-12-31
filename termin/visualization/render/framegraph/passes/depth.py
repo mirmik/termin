@@ -175,10 +175,10 @@ class DepthPass(RenderFramePass):
 
             if mr.mesh is not None:
                 mesh_handle = mr.mesh
-                mesh_data = mesh_handle.mesh
+                tc_mesh = mesh_handle.get()
                 gpu = mesh_handle.gpu
-                if mesh_data is not None and gpu is not None:
-                    gpu.draw(render_ctx, mesh_data.mesh, mesh_handle.version)
+                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+                    gpu.draw(render_ctx, tc_mesh.mesh, mesh_handle.version)
 
             # TODO: реализовать дебаг через debugger_window
 

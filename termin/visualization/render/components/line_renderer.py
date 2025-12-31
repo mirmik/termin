@@ -421,10 +421,10 @@ class LineRenderer(PythonComponent):
         else:
             handle = self._get_ribbon_handle()
             if handle is not None:
-                mesh_data = handle.mesh
+                tc_mesh = handle.get()
                 gpu = handle.gpu
-                if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.mesh, handle.version)
+                if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+                    gpu.draw(context, tc_mesh.mesh, handle.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """

@@ -24,10 +24,10 @@ class SkyboxRenderer(MeshRenderer):
         self.material.apply(self.entity.model_matrix(), view_no_translation, context.projection, graphics=context.graphics, context_key=context.context_key)
 
         # Draw via MeshHandle's gpu
-        mesh_data = self._mesh_handle.mesh
+        tc_mesh = self._mesh_handle.get()
         gpu = self._mesh_handle.gpu
-        if mesh_data is not None and gpu is not None:
-            gpu.draw(context, mesh_data.mesh, self._mesh_handle.version)
+        if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
+            gpu.draw(context, tc_mesh.mesh, self._mesh_handle.version)
 
         context.graphics.set_depth_func("less")
         context.graphics.set_depth_mask(True)
