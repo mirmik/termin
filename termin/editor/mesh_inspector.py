@@ -3,6 +3,7 @@ MeshInspector — inspector panel for mesh files.
 
 Displays mesh information: vertex count, triangle count, bounds, etc.
 Also allows editing import settings (scale, axis mapping) via .meta files.
+Includes 3D preview with orbit camera.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Callable, Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -19,12 +20,15 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
 
 if TYPE_CHECKING:
     from termin.visualization.core.mesh_handle import MeshHandle
+    from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
+    from termin.visualization.platform.backends.base import GraphicsBackend
 
 
 class MeshInspector(QWidget):
@@ -32,6 +36,7 @@ class MeshInspector(QWidget):
     Inspector panel for mesh files.
 
     Shows:
+    - 3D preview with orbit camera
     - File name
     - Vertex count
     - Triangle count
@@ -46,6 +51,8 @@ class MeshInspector(QWidget):
         self,
         parent: Optional[QWidget] = None,
         on_spec_changed: Optional[Callable[[str], None]] = None,
+        window_backend: Optional["SDLEmbeddedWindowBackend"] = None,
+        graphics: Optional["GraphicsBackend"] = None,
     ):
         super().__init__(parent)
 
@@ -53,6 +60,13 @@ class MeshInspector(QWidget):
         self._mesh_name: str = ""
         self._file_path: str = ""
         self._on_spec_changed = on_spec_changed
+        self._window_backend = window_backend
+        self._graphics = graphics
+        self._preview_widget = None
+        self._current_mesh3 = None
+
+        # Render timer for preview updates
+        self._render_timer: Optional[QTimer] = None
 
         self._init_ui()
 
@@ -65,6 +79,23 @@ class MeshInspector(QWidget):
         header = QLabel("Mesh")
         header.setStyleSheet("font-weight: bold; font-size: 14px;")
         layout.addWidget(header)
+
+        # Preview widget (if backend available)
+        if self._window_backend is not None and self._graphics is not None:
+            from termin.editor.mesh_preview_widget import MeshPreviewWidget
+
+            self._preview_widget = MeshPreviewWidget(
+                window_backend=self._window_backend,
+                graphics=self._graphics,
+                parent=self,
+            )
+            self._preview_widget.setMinimumHeight(180)
+            layout.addWidget(self._preview_widget)
+
+            # Start render timer
+            self._render_timer = QTimer(self)
+            self._render_timer.timeout.connect(self._on_render_timer)
+            self._render_timer.start(33)  # ~30 FPS
 
         # Info Form
         form = QFormLayout()
@@ -190,6 +221,10 @@ class MeshInspector(QWidget):
         if mesh3 is None:
             self._clear()
             return
+
+        # Store mesh3 for preview
+        self._current_mesh3 = mesh3
+        self._update_preview()
 
         # Vertex count
         vertex_count = mesh3.get_vertex_count()
@@ -337,6 +372,7 @@ class MeshInspector(QWidget):
         self._mesh_handle = None
         self._mesh_name = ""
         self._file_path = ""
+        self._current_mesh3 = None
         self._name_label.setText("-")
         self._uuid_label.setText("-")
         self._vertex_count_label.setText("-")
@@ -347,6 +383,10 @@ class MeshInspector(QWidget):
         self._file_size_label.setText("-")
         self._path_label.setText("-")
 
+        # Clear preview
+        if self._preview_widget is not None:
+            self._preview_widget.set_mesh(None)
+
     def _format_size(self, size: int) -> str:
         """Format file size in human-readable format."""
         if size < 1024:
@@ -355,3 +395,34 @@ class MeshInspector(QWidget):
             return f"{size / 1024:.1f} KB"
         else:
             return f"{size / (1024 * 1024):.2f} MB"
+
+    def _on_render_timer(self) -> None:
+        """Render preview on timer tick."""
+        if self._preview_widget is not None and self.isVisible():
+            self._preview_widget.render()
+
+    def _update_preview(self) -> None:
+        """Update preview with current mesh."""
+        if self._preview_widget is not None and self._current_mesh3 is not None:
+            self._preview_widget.set_mesh(self._current_mesh3)
+
+    def hideEvent(self, event) -> None:
+        """Stop render timer when hidden."""
+        if self._render_timer is not None:
+            self._render_timer.stop()
+        super().hideEvent(event)
+
+    def showEvent(self, event) -> None:
+        """Start render timer when shown."""
+        if self._render_timer is not None:
+            self._render_timer.start(33)
+        super().showEvent(event)
+
+    def cleanup(self) -> None:
+        """Clean up resources."""
+        if self._render_timer is not None:
+            self._render_timer.stop()
+            self._render_timer = None
+        if self._preview_widget is not None:
+            self._preview_widget.cleanup()
+            self._preview_widget = None

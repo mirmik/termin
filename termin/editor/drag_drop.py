@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtCore import QMimeData
 
+from termin._native import log
+
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
 
@@ -56,7 +58,8 @@ def parse_entity_mime_data(mime: QMimeData) -> dict | None:
     try:
         raw = mime.data(EditorMimeTypes.ENTITY).data()
         return json.loads(raw.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        log.debug(f"[DragDrop] Failed to parse entity MIME data: {e}")
         return None
 
 
@@ -84,7 +87,8 @@ def parse_asset_path_mime_data(mime: QMimeData) -> str | None:
         raw = mime.data(EditorMimeTypes.ASSET_PATH).data()
         data = json.loads(raw.decode("utf-8"))
         return data.get("path")
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        log.debug(f"[DragDrop] Failed to parse asset path MIME data: {e}")
         return None
 
 
@@ -139,5 +143,6 @@ def parse_resource_ref_mime_data(
         raw = mime.data(mime_type).data()
         data = json.loads(raw.decode("utf-8"))
         return data.get("name")
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        log.debug(f"[DragDrop] Failed to parse {resource_type} ref MIME data: {e}")
         return None

@@ -261,3 +261,73 @@ bool tc_mesh_set_data(
 
     return true;
 }
+
+// ============================================================================
+// Iteration
+// ============================================================================
+
+// Adapter for tc_resource_map_foreach -> tc_mesh_iter_fn
+typedef struct {
+    tc_mesh_iter_fn callback;
+    void* user_data;
+} mesh_iter_ctx;
+
+static bool mesh_iter_adapter(const char* uuid, void* resource, void* ctx_ptr) {
+    (void)uuid;
+    mesh_iter_ctx* ctx = (mesh_iter_ctx*)ctx_ptr;
+    return ctx->callback((const tc_mesh*)resource, ctx->user_data);
+}
+
+void tc_mesh_foreach(tc_mesh_iter_fn callback, void* user_data) {
+    if (!g_meshes || !callback) return;
+    mesh_iter_ctx ctx = { callback, user_data };
+    tc_resource_map_foreach(g_meshes, mesh_iter_adapter, &ctx);
+}
+
+// Helper struct for collecting mesh info
+typedef struct {
+    tc_mesh_info* infos;
+    size_t count;
+    size_t capacity;
+} info_collector;
+
+static bool collect_mesh_info(const tc_mesh* mesh, void* user_data) {
+    info_collector* collector = (info_collector*)user_data;
+
+    tc_mesh_info info;
+    strncpy(info.uuid, mesh->uuid, sizeof(info.uuid) - 1);
+    info.uuid[sizeof(info.uuid) - 1] = '\0';
+    info.name = mesh->name;
+    info.ref_count = mesh->ref_count;
+    info.version = mesh->version;
+    info.vertex_count = mesh->vertex_count;
+    info.index_count = mesh->index_count;
+    info.stride = mesh->layout.stride;
+    info.memory_bytes = mesh->vertex_count * mesh->layout.stride +
+                        mesh->index_count * sizeof(uint32_t);
+
+    collector->infos[collector->count++] = info;
+    return true;
+}
+
+tc_mesh_info* tc_mesh_get_all_info(size_t* count) {
+    if (!count) return NULL;
+    *count = 0;
+
+    if (!g_meshes) return NULL;
+
+    size_t mesh_count = tc_resource_map_count(g_meshes);
+    if (mesh_count == 0) return NULL;
+
+    tc_mesh_info* infos = (tc_mesh_info*)malloc(mesh_count * sizeof(tc_mesh_info));
+    if (!infos) {
+        tc_log_error("tc_mesh_get_all_info: allocation failed");
+        return NULL;
+    }
+
+    info_collector collector = { infos, 0, mesh_count };
+    tc_mesh_foreach(collect_mesh_info, &collector);
+
+    *count = collector.count;
+    return infos;
+}

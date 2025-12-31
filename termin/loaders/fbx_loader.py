@@ -554,8 +554,8 @@ def load_fbx_file(path) -> FBXSceneData:
                     try:
                         if hasattr(tex, 'content_size') and tex.content_size > 0:
                             content = bytes(tex.content[:tex.content_size])
-                    except Exception:
-                        pass  # Some textures may not have accessible content
+                    except Exception as e:
+                        log.debug(f"[FBX] Failed to extract embedded texture content: {e}")
 
                 tex_data_list.append({
                     'name': tex.name if tex.name else tex.filename,

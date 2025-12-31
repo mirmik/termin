@@ -67,10 +67,10 @@ class WorldPersistence:
 
     def __init__(
         self,
-        scene: "Scene",
+        scene: "Scene | None",
         resource_manager: "ResourceManager",
         scene_factory: Optional[Callable[[], "Scene"]] = None,
-        on_scene_changed: Optional[Callable[["Scene"], None]] = None,
+        on_scene_changed: Optional[Callable[["Scene | None"], None]] = None,
         get_editor_camera_data: Optional[Callable[[], dict]] = None,
         set_editor_camera_data: Optional[Callable[[dict], None]] = None,
         get_selected_entity_name: Optional[Callable[[], str | None]] = None,
@@ -129,15 +129,15 @@ class WorldPersistence:
             self._rescan_file_resources()
 
     @property
-    def scene(self) -> "Scene":
-        """Текущая сцена. Возвращает game scene если в game mode, иначе editor scene."""
+    def scene(self) -> "Scene | None":
+        """Текущая сцена. Возвращает game scene если в game mode, иначе editor scene. None если сцена закрыта."""
         if self._game_scene is not None:
             return self._game_scene
         return self._editor_scene
 
     @property
-    def editor_scene(self) -> "Scene":
-        """Editor scene (оригинал). Используется для undo/redo."""
+    def editor_scene(self) -> "Scene | None":
+        """Editor scene (оригинал). Используется для undo/redo. None если сцена закрыта."""
         return self._editor_scene
 
     @property
@@ -306,6 +306,18 @@ class WorldPersistence:
         # Создаём новую пустую сцену
         new_scene = self._create_new_scene()
         self._replace_editor_scene(new_scene)
+
+    def close_scene(self) -> None:
+        """
+        Закрывает текущую сцену (переход в no-scene mode).
+        После вызова scene будет None.
+        """
+        self._current_scene_path = None
+        self._editor_scene = None
+
+        # Уведомляем подписчиков
+        if self._on_scene_changed is not None:
+            self._on_scene_changed(None)
 
     def save_state(self) -> dict:
         """

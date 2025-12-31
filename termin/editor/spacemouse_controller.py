@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Optional
 
+from termin._native import log
+
 if TYPE_CHECKING:
     from termin.visualization.core.camera import OrbitCameraController
 
@@ -67,7 +69,8 @@ class SpaceMouseController:
             return False
         except ImportError:
             return False
-        except Exception:
+        except Exception as e:
+            log.debug(f"[SpaceMouse] Failed to open device: {e}")
             return False
 
     def close(self) -> None:
@@ -75,8 +78,8 @@ class SpaceMouseController:
         if self._device_open and self._pyspacemouse is not None:
             try:
                 self._pyspacemouse.close()
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[SpaceMouse] Failed to close device: {e}")
             self._device_open = False
 
     @property
@@ -115,7 +118,8 @@ class SpaceMouseController:
 
         try:
             state = self._pyspacemouse.read()
-        except Exception:
+        except Exception as e:
+            log.debug(f"[SpaceMouse] Failed to read device state: {e}")
             return False
 
         # Apply deadzone
@@ -189,5 +193,6 @@ class SpaceMouseController:
         try:
             state = self._pyspacemouse.read()
             return list(state.buttons) if hasattr(state, 'buttons') else []
-        except Exception:
+        except Exception as e:
+            log.debug(f"[SpaceMouse] Failed to read buttons: {e}")
             return []

@@ -21,6 +21,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from termin.editor.color_dialog import ColorDialog
 from termin.editor.undo_stack import UndoCommand
 from termin.visualization.core.scene import Scene
+from termin._native import log
 
 
 class ScenePropertyEditCommand(UndoCommand):
@@ -91,8 +92,8 @@ def _to_qcolor(value) -> QColor:
                 max(0.0, min(1.0, b)),
                 max(0.0, min(1.0, a)),
             )
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"[SceneInspector] Failed to convert value to QColor: {e}")
     return QColor(255, 255, 255)
 
 

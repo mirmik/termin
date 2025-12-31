@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from termin._native import log
+
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
     from termin.visualization.core.resources import ResourceManager
@@ -77,8 +79,8 @@ class PrefabPersistence:
                 with open(file_path, "r", encoding="utf-8") as f:
                     existing_data = json.load(f)
                 uuid = existing_data.get("uuid")
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[PrefabPersistence] Failed to read existing UUID from {file_path}: {e}")
 
         # Serialize entity hierarchy
         entity_data = entity.serialize()

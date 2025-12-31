@@ -327,7 +327,7 @@ void WireframeRenderer::_ensure_initialized() {
 
     // Check if OpenGL context is available, load glad if needed
     if (!glCreateShader) {
-        if (!gladLoadGL()) {
+        if (!gladLoaderLoadGL()) {
             return;
         }
     }

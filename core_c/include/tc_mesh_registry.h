@@ -40,6 +40,32 @@ TC_API bool tc_mesh_contains(const char* uuid);
 TC_API size_t tc_mesh_count(void);
 
 // ============================================================================
+// Iteration
+// ============================================================================
+
+// Mesh info for debugging/inspection
+typedef struct tc_mesh_info {
+    char uuid[40];
+    const char* name;
+    uint32_t ref_count;
+    uint32_t version;
+    size_t vertex_count;
+    size_t index_count;
+    size_t stride;
+    size_t memory_bytes;  // vertices + indices
+} tc_mesh_info;
+
+// Iterator callback: return true to continue, false to stop
+typedef bool (*tc_mesh_iter_fn)(const tc_mesh* mesh, void* user_data);
+
+// Iterate over all meshes
+TC_API void tc_mesh_foreach(tc_mesh_iter_fn callback, void* user_data);
+
+// Get info for all meshes (caller must free() returned array)
+// Returns NULL if no meshes, sets *count to number of entries
+TC_API tc_mesh_info* tc_mesh_get_all_info(size_t* count);
+
+// ============================================================================
 // Mesh data helpers
 // ============================================================================
 

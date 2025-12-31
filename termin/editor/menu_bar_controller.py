@@ -34,6 +34,7 @@ class MenuBarController:
         on_save_scene: Callable,
         on_save_scene_as: Callable,
         on_load_scene: Callable,
+        on_close_scene: Callable,
         on_load_material: Callable,
         on_load_components: Callable,
         on_deploy_stdlib: Callable,
@@ -50,6 +51,7 @@ class MenuBarController:
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
         on_show_audio_debugger: Callable,
+        on_show_core_registry_viewer: Callable,
         on_toggle_profiler: Callable,
         on_toggle_fullscreen: Callable,
         # State getters
@@ -77,6 +79,7 @@ class MenuBarController:
             on_save_scene=on_save_scene,
             on_save_scene_as=on_save_scene_as,
             on_load_scene=on_load_scene,
+            on_close_scene=on_close_scene,
             on_load_material=on_load_material,
             on_load_components=on_load_components,
             on_deploy_stdlib=on_deploy_stdlib,
@@ -93,6 +96,7 @@ class MenuBarController:
             on_show_framegraph_debugger=on_show_framegraph_debugger,
             on_show_resource_manager_viewer=on_show_resource_manager_viewer,
             on_show_audio_debugger=on_show_audio_debugger,
+            on_show_core_registry_viewer=on_show_core_registry_viewer,
             on_toggle_profiler=on_toggle_profiler,
             on_toggle_fullscreen=on_toggle_fullscreen,
         )
@@ -106,6 +110,7 @@ class MenuBarController:
         on_save_scene: Callable,
         on_save_scene_as: Callable,
         on_load_scene: Callable,
+        on_close_scene: Callable,
         on_load_material: Callable,
         on_load_components: Callable,
         on_deploy_stdlib: Callable,
@@ -122,6 +127,7 @@ class MenuBarController:
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
         on_show_audio_debugger: Callable,
+        on_show_core_registry_viewer: Callable,
         on_toggle_profiler: Callable,
         on_toggle_fullscreen: Callable,
     ) -> None:
@@ -159,6 +165,10 @@ class MenuBarController:
         load_scene_action = file_menu.addAction("Load Scene...")
         load_scene_action.setShortcut("Ctrl+O")
         load_scene_action.triggered.connect(on_load_scene)
+
+        close_scene_action = file_menu.addAction("Close Scene")
+        close_scene_action.setShortcut("Ctrl+W")
+        close_scene_action.triggered.connect(on_close_scene)
 
         file_menu.addSeparator()
 
@@ -236,6 +246,9 @@ class MenuBarController:
 
         audio_debug_action = debug_menu.addAction("Audio Debugger...")
         audio_debug_action.triggered.connect(on_show_audio_debugger)
+
+        core_registry_action = debug_menu.addAction("Core Registry...")
+        core_registry_action.triggered.connect(on_show_core_registry_viewer)
 
         self.update_undo_redo_actions()
 

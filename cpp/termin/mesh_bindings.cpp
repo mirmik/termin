@@ -848,6 +848,28 @@ void bind_mesh(nb::module_& m) {
     m.def("tc_mesh_count", []() {
         return tc_mesh_count();
     }, "Get number of meshes in registry");
+
+    m.def("tc_mesh_get_all_info", []() {
+        nb::list result;
+        size_t count = 0;
+        tc_mesh_info* infos = tc_mesh_get_all_info(&count);
+        if (infos) {
+            for (size_t i = 0; i < count; ++i) {
+                nb::dict d;
+                d["uuid"] = std::string(infos[i].uuid);
+                d["name"] = infos[i].name ? std::string(infos[i].name) : "";
+                d["ref_count"] = infos[i].ref_count;
+                d["version"] = infos[i].version;
+                d["vertex_count"] = infos[i].vertex_count;
+                d["index_count"] = infos[i].index_count;
+                d["stride"] = infos[i].stride;
+                d["memory_bytes"] = infos[i].memory_bytes;
+                result.append(d);
+            }
+            free(infos);
+        }
+        return result;
+    }, "Get info for all meshes in registry");
 }
 
 } // namespace termin

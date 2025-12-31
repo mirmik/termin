@@ -22,7 +22,7 @@ namespace termin {
  * Returns true on success.
  */
 inline bool init_opengl() {
-    return gladLoadGL() != 0;
+    return gladLoaderLoadGL() != 0;
 }
 
 /**
@@ -45,7 +45,7 @@ public:
 
         // Initialize GLAD if not already done
         if (!glad_initialized_) {
-            if (!gladLoadGL()) {
+            if (!gladLoaderLoadGL()) {
                 throw std::runtime_error("Failed to initialize GLAD");
             }
             glad_initialized_ = true;

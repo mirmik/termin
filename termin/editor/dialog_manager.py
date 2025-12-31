@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from termin.editor.framegraph_debugger import FramegraphDebugDialog
     from termin.editor.resource_manager_viewer import ResourceManagerViewer
     from termin.editor.audio_debugger import AudioDebugDialog
+    from termin.editor.core_registry_viewer import CoreRegistryViewer
     from termin.editor.project_file_watcher import ProjectFileWatcher
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.resources import ResourceManager
@@ -55,6 +56,7 @@ class DialogManager:
         self._framegraph_debugger: "FramegraphDebugDialog | None" = None
         self._resource_manager_viewer: "ResourceManagerViewer | None" = None
         self._audio_debugger: "AudioDebugDialog | None" = None
+        self._core_registry_viewer: "CoreRegistryViewer | None" = None
 
     @property
     def framegraph_debugger(self) -> "FramegraphDebugDialog | None":
@@ -176,6 +178,18 @@ class DialogManager:
         self._audio_debugger.show()
         self._audio_debugger.raise_()
         self._audio_debugger.activateWindow()
+
+    def show_core_registry_viewer(self) -> None:
+        """Opens core registry viewer dialog."""
+        if self._core_registry_viewer is None:
+            from termin.editor.core_registry_viewer import CoreRegistryViewer
+
+            self._core_registry_viewer = CoreRegistryViewer(parent=self._parent)
+
+        self._core_registry_viewer.refresh()
+        self._core_registry_viewer.show()
+        self._core_registry_viewer.raise_()
+        self._core_registry_viewer.activateWindow()
 
     def show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""

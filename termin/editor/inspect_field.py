@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+from termin._native import log
+
 
 @dataclass
 class InspectField:
@@ -72,8 +74,8 @@ def _resolve_path_set(obj, path: str, value):
         if isinstance(arr, np.ndarray):
             arr[...] = value
             return
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"[InspectField] numpy in-place update failed for '{path}': {e}")
 
     setattr(cur, last, value)
 

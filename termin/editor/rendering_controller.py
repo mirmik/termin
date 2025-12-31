@@ -990,8 +990,10 @@ class RenderingController:
             sorted_viewports = sorted(display.viewports, key=lambda v: v.depth)
 
             for viewport in sorted_viewports:
-                # Skip viewports without pipeline
+                # Skip viewports without pipeline or scene
                 if viewport.pipeline is None:
+                    continue
+                if viewport.scene is None:
                     continue
 
                 state = self._get_or_create_viewport_state(display_id, viewport)

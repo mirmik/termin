@@ -120,13 +120,14 @@ def apply_dark_palette(app: QApplication):
     app.setPalette(palette)
 
 
-def run_editor(debug_resource: str | None = None):
+def run_editor(debug_resource: str | None = None, no_scene: bool = False):
     """
     Run the editor.
 
     Args:
         debug_resource: If set, open framegraph debugger with this resource
                        (e.g., "shadow_maps", "color") from the first frame.
+        no_scene: If True, start editor without any scene (no-scene mode).
     """
     # Create Qt application
     app = QApplication(sys.argv)
@@ -140,7 +141,10 @@ def run_editor(debug_resource: str | None = None):
 
     # Create world and scene
     world = VisualizationWorld()
-    scene = build_scene(world)
+    if no_scene:
+        scene = None
+    else:
+        scene = build_scene(world)
 
     # Apply dark theme
     apply_dark_palette(app)
@@ -198,5 +202,10 @@ if __name__ == "__main__":
         default=None,
         help="Open framegraph debugger with this resource (e.g., shadow_maps, color)"
     )
+    parser.add_argument(
+        "--no-scene",
+        action="store_true",
+        help="Start editor without opening a scene"
+    )
     args = parser.parse_args()
-    run_editor(debug_resource=args.debug_resource)
+    run_editor(debug_resource=args.debug_resource, no_scene=args.no_scene)

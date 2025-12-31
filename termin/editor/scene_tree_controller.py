@@ -43,12 +43,15 @@ class SceneTreeController:
         self._on_object_selected = on_object_selected
         self._request_viewport_update = request_viewport_update
 
-        self._model: SceneTreeModel = SceneTreeModel(self._scene)
+        self._model: SceneTreeModel | None = None
         self._setup_tree_once()
-        self._apply_model(expand_all=True)
+
+        if self._scene is not None:
+            self._model = SceneTreeModel(self._scene)
+            self._apply_model(expand_all=True)
 
     @property
-    def model(self) -> SceneTreeModel:
+    def model(self) -> SceneTreeModel | None:
         return self._model
 
     def _setup_tree_once(self) -> None:
@@ -86,6 +89,12 @@ class SceneTreeController:
         Перестраивает модель по текущей сцене и опционально выделяет объект.
         Вызывается, когда структура сцены поменялась (Add/Delete/Rename, undo/redo).
         """
+        if self._scene is None:
+            # No scene - clear tree
+            self._tree.setModel(None)
+            self._model = None
+            return
+
         # Save expanded state before rebuilding
         expanded_names = self._get_expanded_entity_names()
 
@@ -101,7 +110,8 @@ class SceneTreeController:
     def _get_expanded_entity_names(self) -> set[str]:
         """Collect names of expanded entities."""
         expanded = set()
-        self._collect_expanded_recursive(self._model.root, expanded)
+        if self._model is not None:
+            self._collect_expanded_recursive(self._model.root, expanded)
         return expanded
 
     def _collect_expanded_recursive(self, node, expanded: set[str]) -> None:

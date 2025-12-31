@@ -246,6 +246,8 @@ class EditorWindow(QMainWindow):
             on_transform_changed=self._on_inspector_transform_changed,
             on_component_changed=self._on_inspector_component_changed,
             on_material_changed=self._on_material_inspector_changed,
+            window_backend=self._sdl_backend,
+            graphics=self.world.graphics,
         )
 
         # Для обратной совместимости
@@ -427,6 +429,7 @@ class EditorWindow(QMainWindow):
             on_save_scene=self._save_scene,
             on_save_scene_as=self._save_scene_as,
             on_load_scene=self._load_scene,
+            on_close_scene=self._close_scene,
             on_load_material=self._load_material_from_file,
             on_load_components=self._load_components_from_file,
             on_deploy_stdlib=self._deploy_stdlib,
@@ -443,6 +446,7 @@ class EditorWindow(QMainWindow):
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
             on_show_audio_debugger=self._show_audio_debugger,
+            on_show_core_registry_viewer=self._show_core_registry_viewer,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_fullscreen=self._toggle_fullscreen,
             can_undo=lambda: self.undo_stack.can_undo,
@@ -550,6 +554,10 @@ class EditorWindow(QMainWindow):
     def _show_audio_debugger(self) -> None:
         """Opens audio debugger dialog."""
         self._dialog_manager.show_audio_debugger()
+
+    def _show_core_registry_viewer(self) -> None:
+        """Opens core registry viewer dialog."""
+        self._dialog_manager.show_core_registry_viewer()
 
     def _toggle_profiler(self, checked: bool) -> None:
         """Toggle profiler panel visibility."""
@@ -1676,8 +1684,8 @@ class EditorWindow(QMainWindow):
     def _on_scene_changed(self, new_scene) -> None:
         """
         Callback from WorldPersistence when scene changes.
-        Called on reset(), load(), restore_state().
-        Recreates all editor entities in the new scene.
+        Called on reset(), load(), restore_state(), close_scene().
+        Recreates all editor entities in the new scene, or clears them if new_scene is None.
         """
         # Clear undo stack
         self.undo_stack.clear()
@@ -1688,10 +1696,14 @@ class EditorWindow(QMainWindow):
         if self.selection_manager is not None:
             self.selection_manager.clear()
 
-        # Recreate editor entities in new scene
-        self._camera_manager.recreate_in_scene(new_scene)
-        self.editor_entities = self._camera_manager.editor_entities
-        self.camera = self._camera_manager.camera
+        if new_scene is not None:
+            # Recreate editor entities in new scene
+            self._camera_manager.recreate_in_scene(new_scene)
+            self.editor_entities = self._camera_manager.editor_entities
+            self.camera = self._camera_manager.camera
+        else:
+            # No scene - clear editor entities but keep camera
+            self.editor_entities = []
 
         # Clear gizmo target for new scene
         if self.editor_viewport is not None:
@@ -1700,7 +1712,8 @@ class EditorWindow(QMainWindow):
         # Update all EditorViewportFeatures
         for editor_features in self._editor_features.values():
             editor_features.set_scene(new_scene)
-            editor_features.set_camera(self._camera_manager.camera)
+            if new_scene is not None:
+                editor_features.set_camera(self._camera_manager.camera)
             editor_features.selected_entity_id = 0
             editor_features.hover_entity_id = 0
 
@@ -1738,6 +1751,10 @@ class EditorWindow(QMainWindow):
     def _load_scene_from_file(self, file_path: str) -> None:
         """Load scene from specified file."""
         self._scene_file_controller.load_scene_from_file(file_path)
+
+    def _close_scene(self) -> None:
+        """Close current scene (enter no-scene mode)."""
+        self.world_persistence.close_scene()
 
     def _on_after_scene_new(self) -> None:
         """Callback after new scene created."""
