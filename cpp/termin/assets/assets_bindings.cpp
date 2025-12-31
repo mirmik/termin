@@ -63,7 +63,8 @@ void bind_assets(nb::module_& m) {
         .def_static("from_asset", &MaterialHandle::from_asset, nb::arg("asset"))
         .def_static("from_name", &MaterialHandle::from_name, nb::arg("name"))
         .def_static("deserialize", &MaterialHandle::deserialize, nb::arg("data"))
-        .def_rw("_direct", &MaterialHandle::_direct)
+        .def_prop_ro("_direct", [](MaterialHandle& self) { return self._direct; },
+            nb::rv_policy::reference)
         .def_rw("asset", &MaterialHandle::asset)
         .def_prop_ro("is_valid", &MaterialHandle::is_valid)
         .def_prop_ro("is_direct", &MaterialHandle::is_direct)
