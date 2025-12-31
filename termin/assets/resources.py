@@ -453,6 +453,9 @@ class ResourceManager:
             cls._creating_singleton = True
             try:
                 cls._instance = cls()
+                # Register built-in resources on first creation
+                from termin.visualization.core.builtin_resources import register_all_builtins
+                register_all_builtins(cls._instance)
             finally:
                 cls._creating_singleton = False
         return cls._instance
