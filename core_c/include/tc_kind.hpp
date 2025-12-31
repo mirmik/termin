@@ -87,6 +87,16 @@ public:
         return result;
     }
 
+    // Clear all Python references (call before Python finalization)
+    void clear_python() {
+        for (auto& [name, kind] : _kinds) {
+            kind.python.serialize = nb::object();
+            kind.python.deserialize = nb::object();
+            kind.python.convert = nb::object();
+            kind._has_python = false;
+        }
+    }
+
     // ========================================================================
     // C++ registration
     // ========================================================================
