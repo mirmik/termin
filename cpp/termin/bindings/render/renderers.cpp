@@ -179,8 +179,14 @@ void bind_renderers(nb::module_& m) {
                 }
             }
         }, nb::arg("mesh") = nb::none(), nb::arg("material") = nb::none(), nb::arg("cast_shadow") = true)
-        .def_rw("mesh", &MeshRenderer::mesh)
-        .def_rw("material", &MeshRenderer::material)
+        .def_prop_rw("mesh",
+            [](MeshRenderer& self) -> MeshHandle& { return self.mesh; },
+            [](MeshRenderer& self, const MeshHandle& h) { self.mesh = h; },
+            nb::rv_policy::reference_internal)
+        .def_prop_rw("material",
+            [](MeshRenderer& self) -> MaterialHandle& { return self.material; },
+            [](MeshRenderer& self, const MaterialHandle& h) { self.material = h; },
+            nb::rv_policy::reference_internal)
         .def_rw("cast_shadow", &MeshRenderer::cast_shadow)
         .def_rw("_override_material", &MeshRenderer::_override_material)
         .def("mesh_handle", [](MeshRenderer& self) -> MeshHandle& {
