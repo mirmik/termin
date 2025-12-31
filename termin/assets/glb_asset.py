@@ -207,7 +207,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
 
     def _populate_child_assets(self) -> None:
         """Fill all child assets with extracted data from loaded GLB."""
-        from termin.loaders.glb_instantiator import _glb_mesh_to_mesh3
+        from termin.loaders.glb_instantiator import _glb_mesh_to_tc_mesh
         from termin.visualization.animation.clip import clip_from_glb
         from termin.skeleton import SkeletonData
 
@@ -218,7 +218,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
             if asset._data is None:
                 for glb_mesh in self._data.meshes:
                     if glb_mesh.name == mesh_name:
-                        asset._data = _glb_mesh_to_mesh3(glb_mesh)
+                        asset._data = _glb_mesh_to_tc_mesh(glb_mesh)
                         asset._loaded = True
                         break
 

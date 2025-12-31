@@ -5,7 +5,6 @@
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../../../core_c/include/tc_kind.hpp"
-#include "cpu_mesh3_bindings.hpp"
 #include "tc_log.hpp"
 
 namespace nb = nanobind;
@@ -72,10 +71,10 @@ void register_mesh_kind() {
             if (nb::isinstance<termin::MeshHandle>(value)) {
                 return value;
             }
-            // Try CustomMesh* (base class for Mesh3, etc.)
-            if (nb::isinstance<termin::CustomMesh>(value)) {
-                auto* mesh = nb::cast<termin::CustomMesh*>(value);
-                return nb::cast(termin::MeshHandle::from_direct(mesh));
+            // Try TcMesh (GPU-ready mesh)
+            if (nb::isinstance<termin::TcMesh>(value)) {
+                auto mesh = nb::cast<termin::TcMesh>(value);
+                return nb::cast(termin::MeshHandle::from_direct(std::move(mesh)));
             }
             // Try MeshAsset (has 'resource' attribute)
             if (nb::hasattr(value, "resource")) {
@@ -93,13 +92,10 @@ void register_mesh_kind() {
 } // anonymous namespace
 
 NB_MODULE(_mesh_native, m) {
-    m.doc() = "Native C++ mesh module (Mesh3, SkinnedMesh3, CpuMesh3, MeshHandle)";
+    m.doc() = "Native C++ mesh module (Mesh3, TcMesh, MeshHandle)";
 
-    // Bind Mesh3 and SkinnedMesh3 (old, tc_mesh based)
+    // Bind Mesh3 (CPU mesh) and TcMesh (GPU-ready mesh in tc_mesh registry)
     termin::bind_mesh(m);
-
-    // Bind CpuMesh3 (new, pure CPU mesh)
-    bind_cpu_mesh3(m);
 
     // Bind MeshHandle
     bind_mesh_handle(m);

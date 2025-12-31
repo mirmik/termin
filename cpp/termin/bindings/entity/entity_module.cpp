@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include <iostream>
 #include <cstdio>
+#include <functional>
 
 #include "tc_log.hpp"
 
@@ -838,6 +839,41 @@ NB_MODULE(_entity_native, m) {
                 tc::Log::error(e, "Entity::deserialize");
                 return nb::none();
             }
+        }, nb::arg("data"), nb::arg("context") = nb::none())
+
+        .def_static("deserialize_with_children", [](nb::object data, nb::object context) -> nb::object {
+            // Recursive helper function
+            std::function<nb::object(nb::object, nb::object)> deserialize_recursive;
+            deserialize_recursive = [&deserialize_recursive](nb::object data, nb::object context) -> nb::object {
+                // Get Entity class and call deserialize
+                nb::object entity_cls = nb::module_::import_("termin.entity").attr("Entity");
+                nb::object ent = entity_cls.attr("deserialize")(data, context);
+                if (ent.is_none()) {
+                    return nb::none();
+                }
+
+                // Deserialize children
+                if (nb::isinstance<nb::dict>(data)) {
+                    nb::dict dict_data = nb::cast<nb::dict>(data);
+                    if (dict_data.contains("children")) {
+                        nb::object children_obj = dict_data["children"];
+                        if (nb::isinstance<nb::list>(children_obj)) {
+                            nb::list children = nb::cast<nb::list>(children_obj);
+                            for (size_t i = 0; i < nb::len(children); ++i) {
+                                nb::object child_data = children[i];
+                                nb::object child = deserialize_recursive(child_data, context);
+                                if (!child.is_none()) {
+                                    child.attr("set_parent")(ent);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return ent;
+            };
+
+            return deserialize_recursive(data, context);
         }, nb::arg("data"), nb::arg("context") = nb::none());
 
     // --- EntityRegistry ---

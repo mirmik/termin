@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from termin._native import log
 from termin.mesh.mesh import Mesh3
+from termin.mesh._mesh_native import TcMesh
 from termin.assets.data_asset import DataAsset
 
 if TYPE_CHECKING:
@@ -15,14 +16,14 @@ if TYPE_CHECKING:
     from termin.visualization.core.mesh_gpu import MeshGPU
 
 
-class MeshAsset(DataAsset[Mesh3]):
+class MeshAsset(DataAsset[TcMesh]):
     """
     Asset for 3D mesh geometry.
 
     IMPORTANT: Create through ResourceManager.get_or_create_mesh_asset(),
     not directly. This ensures proper registration and avoids duplicates.
 
-    Stores Mesh3 (CPU data: vertices, triangles, normals, UVs).
+    Stores TcMesh (handle to tc_mesh in C registry).
     Does NOT handle GPU upload - that's MeshGPU's responsibility.
 
     Can be loaded from:
@@ -34,7 +35,7 @@ class MeshAsset(DataAsset[Mesh3]):
 
     def __init__(
         self,
-        mesh_data: Mesh3 | None = None,
+        mesh_data: TcMesh | None = None,
         name: str = "mesh",
         source_path: Path | str | None = None,
         uuid: str | None = None,
@@ -51,22 +52,16 @@ class MeshAsset(DataAsset[Mesh3]):
         self._axis_z: str = "z"
         self._flip_uv_v: bool = False
 
-        # Compute normals if mesh data provided and normals missing
-        if self._data is not None and self._data.vertex_normals is None:
-            self._data.compute_vertex_normals()
-
     # --- Convenience property ---
 
     @property
-    def mesh_data(self) -> Mesh3 | None:
+    def mesh_data(self) -> TcMesh | None:
         """Mesh geometry data (lazy-loaded via parent's data property)."""
         return self.data
 
     @mesh_data.setter
-    def mesh_data(self, value: Mesh3 | None) -> None:
+    def mesh_data(self, value: TcMesh | None) -> None:
         """Set mesh data and bump version."""
-        if value is not None and value.vertex_normals is None:
-            value.compute_vertex_normals()
         self.data = value
 
     # --- Spec parsing ---
@@ -109,7 +104,7 @@ class MeshAsset(DataAsset[Mesh3]):
 
     # --- Content parsing ---
 
-    def _parse_content(self, content: bytes) -> Mesh3 | None:
+    def _parse_content(self, content: bytes) -> TcMesh | None:
         """Parse mesh content (STL or OBJ based on file extension)."""
         if self._source_path is None:
             return None
@@ -127,7 +122,7 @@ class MeshAsset(DataAsset[Mesh3]):
             log.warn(f"[MeshAsset] Unsupported format: {ext}")
             return None
 
-    def _parse_stl_content(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:
+    def _parse_stl_content(self, content: bytes, spec: "MeshSpec") -> TcMesh | None:
         """Parse STL content from bytes."""
         import io
 
@@ -162,11 +157,12 @@ class MeshAsset(DataAsset[Mesh3]):
             triangles=mesh_data.indices.reshape(-1, 3),
             vertex_normals=mesh_data.normals,
         )
-        if mesh3.vertex_normals is None:
-            mesh3.compute_vertex_normals()
-        return mesh3
+        if not mesh3.has_normals():
+            mesh3.compute_normals()
+        # Create TcMesh from Mesh3 (registers in tc_mesh registry)
+        return TcMesh.from_mesh3(mesh3, self._name)
 
-    def _parse_obj_content(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:
+    def _parse_obj_content(self, content: bytes, spec: "MeshSpec") -> TcMesh | None:
         """Parse OBJ content from bytes."""
         from termin.loaders.obj_loader import parse_obj_text
 
@@ -181,41 +177,49 @@ class MeshAsset(DataAsset[Mesh3]):
             name=self._name,
             vertices=mesh_data.vertices,
             triangles=mesh_data.indices.reshape(-1, 3),
+            vertex_normals=mesh_data.normals,
+            uvs=mesh_data.uvs,
         )
-        if mesh_data.normals is not None:
-            mesh3.vertex_normals = mesh_data.normals
-        if mesh_data.uvs is not None:
-            mesh3.uvs = mesh_data.uvs
-
-        if mesh3.vertex_normals is None:
-            mesh3.compute_vertex_normals()
-        return mesh3
+        if not mesh3.has_normals():
+            mesh3.compute_normals()
+        # Create TcMesh from Mesh3 (registers in tc_mesh registry)
+        return TcMesh.from_mesh3(mesh3, self._name)
 
     # --- Convenience methods for mesh manipulation ---
 
     def get_vertex_count(self) -> int:
         """Get number of vertices."""
         data = self.data
-        if data is None or data.vertices is None:
+        if data is None or not data.is_valid:
             return 0
-        return len(data.vertices)
+        return data.vertex_count
 
     def get_triangle_count(self) -> int:
         """Get number of triangles."""
         data = self.data
-        if data is None or data.triangles is None:
+        if data is None or not data.is_valid:
             return 0
-        return len(data.triangles)
+        return data.triangle_count
 
     def interleaved_buffer(self):
         """Get interleaved vertex buffer for GPU upload."""
         data = self.data
-        return data.interleaved_buffer() if data else None
+        if data is None or not data.is_valid:
+            return None
+        return data.get_vertices_buffer()
 
     def get_vertex_layout(self):
         """Get vertex layout for shader binding."""
-        data = self.data
-        return data.get_vertex_layout() if data else None
+        from termin.mesh.mesh import VertexLayout, VertexAttribute, VertexAttribType
+        # TcMesh uses pos(3) + normal(3) + uv(2) = 8 floats = 32 bytes
+        return VertexLayout(
+            stride=32,
+            attributes=[
+                VertexAttribute("position", 3, VertexAttribType.FLOAT32, 0),
+                VertexAttribute("normal", 3, VertexAttribType.FLOAT32, 12),
+                VertexAttribute("uv", 2, VertexAttribType.FLOAT32, 24),
+            ]
+        )
 
     # --- Factory methods ---
 
@@ -226,8 +230,10 @@ class MeshAsset(DataAsset[Mesh3]):
         name: str = "mesh",
         source_path: Path | str | None = None,
     ) -> "MeshAsset":
-        """Create MeshAsset from existing Mesh3."""
-        return cls(mesh_data=mesh3, name=name, source_path=source_path)
+        """Create MeshAsset from existing Mesh3 (CPU mesh)."""
+        # Create TcMesh from Mesh3 (registers in tc_mesh registry)
+        tc_mesh = TcMesh.from_mesh3(mesh3, name)
+        return cls(mesh_data=tc_mesh, name=name, source_path=source_path)
 
     @classmethod
     def from_vertices_triangles(
@@ -238,7 +244,8 @@ class MeshAsset(DataAsset[Mesh3]):
     ) -> "MeshAsset":
         """Create MeshAsset from vertices and triangles arrays."""
         mesh3 = Mesh3(name=name, vertices=vertices, triangles=triangles)
-        return cls(mesh_data=mesh3, name=name)
+        tc_mesh = TcMesh.from_mesh3(mesh3, name)
+        return cls(mesh_data=tc_mesh, name=name)
 
     # --- GPU access ---
 

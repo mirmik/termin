@@ -255,7 +255,7 @@ def test_entity_serialize_with_children():
 
 
 def test_entity_deserialize_with_children():
-    """Entity десериализуется с дочерними Entity."""
+    """Entity десериализуется с дочерними Entity через deserialize_with_children."""
     from termin.visualization.core.entity import Entity
     from termin.geombase import Pose3
 
@@ -264,7 +264,7 @@ def test_entity_deserialize_with_children():
     parent.transform.add_child(child.transform)
 
     data = parent.serialize()
-    restored = Entity.deserialize(data)
+    restored = Entity.deserialize_with_children(data)
 
     assert restored.name == "parent"
     assert len(restored.transform.children) == 1

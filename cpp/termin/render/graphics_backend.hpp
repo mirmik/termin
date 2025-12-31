@@ -15,9 +15,6 @@ extern "C" {
 
 namespace termin {
 
-// Forward declarations
-class Mesh3;
-
 /**
  * Abstract graphics backend interface.
  *
@@ -74,7 +71,6 @@ public:
         const char* geometry_source = nullptr
     ) = 0;
 
-    virtual GPUMeshHandlePtr create_mesh(const Mesh3& mesh) = 0;
     virtual GPUMeshHandlePtr create_mesh(const tc_mesh* mesh) = 0;
 
     virtual GPUTextureHandlePtr create_texture(

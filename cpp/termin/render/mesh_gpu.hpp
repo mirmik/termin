@@ -14,9 +14,6 @@ extern "C" {
 
 namespace termin {
 
-// Forward declarations
-class Mesh3;
-
 /**
  * MeshGPU - GPU resource wrapper for mesh rendering.
  *
@@ -63,27 +60,9 @@ public:
      * Draw mesh, uploading/re-uploading if needed.
      *
      * @param graphics Graphics backend for GPU operations
-     * @param mesh Mesh3 geometry data
+     * @param mesh tc_mesh geometry data
      * @param version Current version of mesh data
      * @param context_key GL context key
-     */
-    void draw(
-        GraphicsBackend* graphics,
-        const Mesh3& mesh,
-        int version,
-        int64_t context_key
-    );
-
-    /**
-     * Draw mesh using RenderContext (convenience overload).
-     */
-    void draw(const RenderContext& ctx, const Mesh3& mesh, int version) {
-        draw(ctx.graphics, mesh, version, ctx.context_key);
-    }
-
-    /**
-     * Draw mesh from tc_mesh directly.
-     * Used for Python-based mesh types like VoxelMesh.
      */
     void draw(
         GraphicsBackend* graphics,

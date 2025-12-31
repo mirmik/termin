@@ -8,7 +8,7 @@
 #include "termin/render/handles.hpp"
 #include "termin/render/mesh_gpu.hpp"
 #include "termin/render/texture_gpu.hpp"
-#include "termin/mesh/custom_mesh.hpp"
+#include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/assets/texture_data.hpp"
 
 namespace nb = nanobind;
@@ -22,10 +22,7 @@ class Material;
  * MeshHandle - smart reference to mesh asset.
  *
  * Stores nb::object pointing to Python MeshAsset.
- * Provides access to:
- * - Mesh3 data (via asset.resource)
- * - GPUMeshHandle for rendering (via asset.gpu)
- * - Version for change tracking (via asset.version)
+ * MeshAsset contains TcMesh (GPU-ready mesh registered in tc_mesh registry).
  *
  * Usage:
  *   auto handle = MeshHandle::from_name("Cube");
@@ -35,21 +32,21 @@ class Material;
  */
 class MeshHandle {
 public:
-    // Direct mesh pointer (optional, for non-asset meshes)
-    CustomMesh* _direct = nullptr;
+    // Direct TcMesh (optional, for non-asset meshes)
+    TcMesh _direct;
 
     // Python asset object (MeshAsset or None)
     nb::object asset;
 
     MeshHandle() : asset(nb::none()) {}
 
-    explicit MeshHandle(nb::object asset_) : _direct(nullptr), asset(std::move(asset_)) {}
+    explicit MeshHandle(nb::object asset_) : asset(std::move(asset_)) {}
 
-    explicit MeshHandle(CustomMesh* direct) : _direct(direct), asset(nb::none()) {}
+    explicit MeshHandle(TcMesh direct) : _direct(std::move(direct)), asset(nb::none()) {}
 
-    // Create handle from direct CustomMesh pointer.
-    static MeshHandle from_direct(CustomMesh* mesh) {
-        return MeshHandle(mesh);
+    // Create handle from direct TcMesh.
+    static MeshHandle from_direct(TcMesh mesh) {
+        return MeshHandle(std::move(mesh));
     }
 
     /**
@@ -84,12 +81,12 @@ public:
 
     // Check if handle is valid (has direct mesh or asset).
     bool is_valid() const {
-        return _direct != nullptr || !asset.is_none();
+        return _direct.is_valid() || !asset.is_none();
     }
 
     // Check if this is a direct mesh (not from asset).
     bool is_direct() const {
-        return _direct != nullptr;
+        return _direct.is_valid();
     }
 
     // Get asset name (empty if direct).
@@ -115,17 +112,26 @@ public:
     }
 
     /**
-     * Get mesh data pointer (CustomMesh base class).
-     * Returns nullptr if asset is empty or resource is None.
+     * Get TcMesh (GPU-ready mesh).
+     * Returns invalid TcMesh if asset is empty or resource is None.
      */
-    CustomMesh* get() const {
-        if (_direct != nullptr) {
+    TcMesh get() const {
+        if (_direct.is_valid()) {
             return _direct;
         }
-        if (asset.is_none()) return nullptr;
+        if (asset.is_none()) return TcMesh();
         nb::object res = asset.attr("resource");
-        if (res.is_none()) return nullptr;
-        return nb::cast<CustomMesh*>(res);
+        if (res.is_none()) return TcMesh();
+        return nb::cast<TcMesh>(res);
+    }
+
+    /**
+     * Get raw tc_mesh pointer.
+     * Returns nullptr if mesh is invalid.
+     */
+    tc_mesh* raw() const {
+        TcMesh m = get();
+        return m.mesh;
     }
 
     /**

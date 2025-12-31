@@ -196,10 +196,6 @@ public:
         return std::make_unique<OpenGLShaderHandle>(vertex_source, fragment_source, geometry_source);
     }
 
-    GPUMeshHandlePtr create_mesh(const Mesh3& mesh) override {
-        return std::make_unique<OpenGLMeshHandle>(mesh);
-    }
-
     GPUMeshHandlePtr create_mesh(const tc_mesh* mesh) override {
         return std::make_unique<OpenGLTcMeshHandle>(mesh);
     }

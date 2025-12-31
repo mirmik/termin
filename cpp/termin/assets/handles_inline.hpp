@@ -120,7 +120,7 @@ inline MeshHandle MeshHandle::deserialize(const nb::dict& data) {
 }
 
 inline void MeshHandle::deserialize_from(const nos::trent& data) {
-    _direct = nullptr;
+    _direct = TcMesh();
 
     if (!data.is_dict()) {
         asset = nb::none();

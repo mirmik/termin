@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+import numpy as np
+
 from termin.geombase import Pose3
 from termin.geombase import GeneralPose3
-from termin.mesh.mesh import Mesh3
-from termin.mesh.skinned_mesh import SkinnedMesh3
 from termin.skeleton import Bone, SkeletonData, SkeletonInstance
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.mesh_handle import MeshHandle
@@ -22,34 +22,83 @@ if TYPE_CHECKING:
     from termin.visualization.core.glb_asset import GLBAsset
     from termin.visualization.core.scene import Scene
     from termin.loaders.glb_loader import GLBSceneData, GLBMeshData
+    from termin.mesh._mesh_native import TcMesh
 
 
-def _glb_mesh_to_mesh3(glb_mesh: "GLBMeshData") -> Mesh3 | SkinnedMesh3:
-    """Convert GLBMeshData to Mesh3 or SkinnedMesh3."""
-    vertices = glb_mesh.vertices
-    indices = glb_mesh.indices.reshape(-1, 3)
-    name = glb_mesh.name
+def _compute_vertex_normals(vertices: np.ndarray, indices: np.ndarray) -> np.ndarray:
+    """Compute per-vertex normals from vertices and triangle indices."""
+    normals = np.zeros_like(vertices, dtype=np.float32)
+    num_tris = len(indices) // 3
+    for t in range(num_tris):
+        i0, i1, i2 = indices[t * 3], indices[t * 3 + 1], indices[t * 3 + 2]
+        v0, v1, v2 = vertices[i0], vertices[i1], vertices[i2]
+        e1 = v1 - v0
+        e2 = v2 - v0
+        face_normal = np.cross(e1, e2)
+        normals[i0] += face_normal
+        normals[i1] += face_normal
+        normals[i2] += face_normal
+    # Normalize
+    lengths = np.linalg.norm(normals, axis=1, keepdims=True)
+    lengths = np.where(lengths < 1e-8, 1.0, lengths)
+    return normals / lengths
 
-    if glb_mesh.is_skinned:
-        mesh = SkinnedMesh3(
-            name=name,
-            vertices=vertices,
-            triangles=indices,
-            uvs=glb_mesh.uvs,
-            vertex_normals=glb_mesh.normals,
-            joint_indices=glb_mesh.joint_indices,
-            joint_weights=glb_mesh.joint_weights,
-        )
-        if glb_mesh.normals is None:
-            mesh.compute_vertex_normals()
+
+def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData") -> "TcMesh":
+    """Convert GLBMeshData to TcMesh directly (no intermediate Mesh3)."""
+    from termin.mesh._mesh_native import TcMesh, TcVertexLayout
+
+    vertices = glb_mesh.vertices.astype(np.float32)
+    indices = glb_mesh.indices.astype(np.uint32).ravel()
+    num_verts = len(vertices)
+
+    # Compute normals if not provided
+    if glb_mesh.normals is not None:
+        normals = glb_mesh.normals.astype(np.float32)
     else:
-        mesh = Mesh3(name=name, vertices=vertices, triangles=indices, uvs=glb_mesh.uvs)
-        if glb_mesh.normals is not None:
-            mesh.vertex_normals = glb_mesh.normals
-        else:
-            mesh.compute_vertex_normals()
+        normals = _compute_vertex_normals(vertices, indices)
 
-    return mesh
+    # UVs (default to zeros)
+    if glb_mesh.uvs is not None:
+        uvs = glb_mesh.uvs.astype(np.float32)
+    else:
+        uvs = np.zeros((num_verts, 2), dtype=np.float32)
+
+    is_skinned = glb_mesh.is_skinned
+
+    if is_skinned:
+        # Skinned layout: pos(3) + normal(3) + uv(2) + joints(4) + weights(4) = 16 floats = 64 bytes
+        layout = TcVertexLayout.skinned()
+        stride = 64
+
+        # Joint indices and weights
+        joint_indices = glb_mesh.joint_indices.astype(np.float32)  # stored as float for GPU
+        joint_weights = glb_mesh.joint_weights.astype(np.float32)
+
+        # Build interleaved buffer
+        buffer = np.zeros((num_verts, 16), dtype=np.float32)
+        buffer[:, 0:3] = vertices
+        buffer[:, 3:6] = normals
+        buffer[:, 6:8] = uvs
+        buffer[:, 8:12] = joint_indices
+        buffer[:, 12:16] = joint_weights
+    else:
+        # Standard layout: pos(3) + normal(3) + uv(2) = 8 floats = 32 bytes
+        layout = TcVertexLayout.pos_normal_uv()
+        stride = 32
+
+        # Build interleaved buffer
+        buffer = np.zeros((num_verts, 8), dtype=np.float32)
+        buffer[:, 0:3] = vertices
+        buffer[:, 3:6] = normals
+        buffer[:, 6:8] = uvs
+
+    # Flatten buffer for TcMesh
+    buffer_flat = buffer.ravel().astype(np.float32)
+
+    return TcMesh.from_interleaved(
+        buffer_flat, num_verts, indices, layout, glb_mesh.name
+    )
 
 
 class _PendingSkinnedMesh:
