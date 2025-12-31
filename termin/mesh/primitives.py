@@ -2,7 +2,7 @@
 
 import hashlib
 import numpy as np
-from .mesh import Mesh3
+from ._mesh_native import Mesh3
 
 
 def _primitive_uuid(name: str, *args) -> str:
