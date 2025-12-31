@@ -242,7 +242,21 @@ class ShadowPass(RenderFramePass):
 
                 # DEBUG: find problematic component
                 print(f"DEBUG: checking component {type(component).__name__} on entity {entity.name}", flush=True)
-                if not isinstance(component, Drawable):
+                # Bypass isinstance to debug which attribute causes segfault
+                print(f"  hasattr phase_marks...", flush=True)
+                has_pm = hasattr(component, "phase_marks")
+                print(f"  has_pm={has_pm}", flush=True)
+                if not has_pm:
+                    continue
+                print(f"  hasattr draw_geometry...", flush=True)
+                has_dg = hasattr(component, "draw_geometry")
+                print(f"  has_dg={has_dg}", flush=True)
+                if not has_dg:
+                    continue
+                print(f"  hasattr get_geometry_draws...", flush=True)
+                has_ggd = hasattr(component, "get_geometry_draws")
+                print(f"  has_ggd={has_ggd}", flush=True)
+                if not has_ggd:
                     continue
 
                 # Пропускаем объекты без метки "shadow"
