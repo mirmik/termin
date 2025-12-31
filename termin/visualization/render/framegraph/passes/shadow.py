@@ -245,8 +245,18 @@ class ShadowPass(RenderFramePass):
                 print(f"  component id={id(component)}, repr={repr(component)}", flush=True)
                 # Check material handle
                 if hasattr(component, "material"):
-                    mat = component.material
-                    print(f"  material={mat}, asset={mat.asset if hasattr(mat, 'asset') else 'N/A'}", flush=True)
+                    mat_handle = component.material
+                    print(f"  material_handle={mat_handle}, asset={mat_handle.asset if hasattr(mat_handle, 'asset') else 'N/A'}", flush=True)
+                    # Check _direct material
+                    if hasattr(mat_handle, '_direct'):
+                        direct = mat_handle._direct
+                        print(f"  _direct={direct}", flush=True)
+                        if direct is not None:
+                            print(f"    name={direct.name if hasattr(direct, 'name') else 'N/A'}", flush=True)
+                            if hasattr(direct, 'phases'):
+                                print(f"    phases count={len(direct.phases)}", flush=True)
+                                for i, p in enumerate(direct.phases):
+                                    print(f"      phase[{i}]: mark={p.phase_mark}, shader={p.shader}", flush=True)
                 # Bypass isinstance to debug which attribute causes segfault
                 print(f"  trying to get phase_marks directly...", flush=True)
                 try:
