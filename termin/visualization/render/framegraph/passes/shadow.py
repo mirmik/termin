@@ -248,9 +248,14 @@ class ShadowPass(RenderFramePass):
                     mat = component.material
                     print(f"  material={mat}, asset={mat.asset if hasattr(mat, 'asset') else 'N/A'}", flush=True)
                 # Bypass isinstance to debug which attribute causes segfault
-                print(f"  hasattr phase_marks...", flush=True)
-                has_pm = hasattr(component, "phase_marks")
-                print(f"  has_pm={has_pm}", flush=True)
+                print(f"  trying to get phase_marks directly...", flush=True)
+                try:
+                    pm = component.phase_marks
+                    print(f"  phase_marks={pm}", flush=True)
+                    has_pm = True
+                except Exception as e:
+                    print(f"  phase_marks EXCEPTION: {e}", flush=True)
+                    has_pm = False
                 if not has_pm:
                     continue
                 print(f"  hasattr draw_geometry...", flush=True)
