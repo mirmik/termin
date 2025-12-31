@@ -9,6 +9,8 @@
 #include "termin/mesh/custom_mesh.hpp"
 #include "termin/mesh/mesh3.hpp"
 #include "termin/mesh/skinned_mesh3.hpp"
+#include "termin/mesh/tc_mesh_handle.hpp"
+#include "termin/mesh/cpu_mesh3.hpp"
 
 namespace nb = nanobind;
 
@@ -740,7 +742,8 @@ void bind_mesh(nb::module_& m) {
         .def_static("pos_normal_uv_color", []() { return tc_vertex_layout_pos_normal_uv_color(); })
         .def_static("skinned", []() { return tc_vertex_layout_skinned(); });
 
-    nb::class_<tc_mesh>(m, "TcMesh")
+    // Raw tc_mesh struct binding (for internal use and backward compat)
+    nb::class_<tc_mesh>(m, "TcMeshData")
         .def_ro("vertex_count", &tc_mesh::vertex_count)
         .def_ro("index_count", &tc_mesh::index_count)
         .def_ro("version", &tc_mesh::version)
@@ -759,85 +762,46 @@ void bind_mesh(nb::module_& m) {
             return make_array_1d(m.indices, m.index_count);
         });
 
-    // TcMeshHandle - RAII wrapper for tc_mesh*
-    struct TcMeshHandle {
-        tc_mesh* mesh = nullptr;
-
-        TcMeshHandle() = default;
-        TcMeshHandle(tc_mesh* m) : mesh(m) {
-            if (mesh) tc_mesh_add_ref(mesh);
-        }
-        TcMeshHandle(const TcMeshHandle& other) : mesh(other.mesh) {
-            if (mesh) tc_mesh_add_ref(mesh);
-        }
-        TcMeshHandle(TcMeshHandle&& other) noexcept : mesh(other.mesh) {
-            other.mesh = nullptr;
-        }
-        TcMeshHandle& operator=(const TcMeshHandle& other) {
-            if (this != &other) {
-                if (mesh) tc_mesh_release(mesh);
-                mesh = other.mesh;
-                if (mesh) tc_mesh_add_ref(mesh);
-            }
-            return *this;
-        }
-        TcMeshHandle& operator=(TcMeshHandle&& other) noexcept {
-            if (this != &other) {
-                if (mesh) tc_mesh_release(mesh);
-                mesh = other.mesh;
-                other.mesh = nullptr;
-            }
-            return *this;
-        }
-        ~TcMeshHandle() {
-            if (mesh) {
-                tc_mesh_release(mesh);
-                mesh = nullptr;
-            }
-        }
-
-        bool is_valid() const { return mesh != nullptr; }
-        const char* uuid() const { return mesh ? mesh->uuid : ""; }
-        const char* name() const { return mesh && mesh->name ? mesh->name : ""; }
-        uint32_t version() const { return mesh ? mesh->version : 0; }
-        size_t vertex_count() const { return mesh ? mesh->vertex_count : 0; }
-        size_t index_count() const { return mesh ? mesh->index_count : 0; }
-        uint16_t stride() const { return mesh ? mesh->layout.stride : 0; }
-
-        void bump_version() {
-            if (mesh) mesh->version++;
-        }
-    };
-
-    nb::class_<TcMeshHandle>(m, "TcMeshHandle")
+    // TcMesh - GPU-ready mesh (uses TcMesh class from tc_mesh_handle.hpp)
+    // Also register as TcMeshHandle for backward compatibility
+    nb::class_<TcMesh>(m, "TcMesh")
         .def(nb::init<>())
-        .def_prop_ro("is_valid", &TcMeshHandle::is_valid)
-        .def_prop_ro("uuid", &TcMeshHandle::uuid)
-        .def_prop_ro("name", &TcMeshHandle::name)
-        .def_prop_ro("version", &TcMeshHandle::version)
-        .def_prop_ro("vertex_count", &TcMeshHandle::vertex_count)
-        .def_prop_ro("index_count", &TcMeshHandle::index_count)
-        .def_prop_ro("stride", &TcMeshHandle::stride)
-        .def_prop_ro("mesh", [](const TcMeshHandle& h) -> nb::object {
+        .def_prop_ro("is_valid", &TcMesh::is_valid)
+        .def_prop_ro("uuid", &TcMesh::uuid)
+        .def_prop_ro("name", &TcMesh::name)
+        .def_prop_ro("version", &TcMesh::version)
+        .def_prop_ro("vertex_count", &TcMesh::vertex_count)
+        .def_prop_ro("index_count", &TcMesh::index_count)
+        .def_prop_ro("triangle_count", &TcMesh::triangle_count)
+        .def_prop_ro("stride", &TcMesh::stride)
+        .def_prop_ro("mesh", [](const TcMesh& h) -> nb::object {
             if (!h.mesh) return nb::none();
             return nb::cast(h.mesh, nb::rv_policy::reference);
         })
-        .def("bump_version", &TcMeshHandle::bump_version)
-        .def("get_vertices_buffer", [](const TcMeshHandle& h) -> nb::object {
+        .def("bump_version", &TcMesh::bump_version)
+        .def("get_vertices_buffer", [](const TcMesh& h) -> nb::object {
             if (!h.mesh || !h.mesh->vertices || h.mesh->vertex_count == 0) return nb::none();
             size_t total_floats = (h.mesh->vertex_count * h.mesh->layout.stride) / sizeof(float);
             return make_array_1d((const float*)h.mesh->vertices, total_floats);
         })
-        .def("get_indices_buffer", [](const TcMeshHandle& h) -> nb::object {
+        .def("get_indices_buffer", [](const TcMesh& h) -> nb::object {
             if (!h.mesh || !h.mesh->indices || h.mesh->index_count == 0) return nb::none();
             return make_array_1d(h.mesh->indices, h.mesh->index_count);
         })
-        .def("__repr__", [](const TcMeshHandle& h) {
-            if (!h.mesh) return std::string("<TcMeshHandle invalid>");
-            return "<TcMeshHandle vertices=" + std::to_string(h.mesh->vertex_count) +
-                   " indices=" + std::to_string(h.mesh->index_count) +
+        .def_static("from_cpu_mesh3", [](const CpuMesh3& cpu_mesh, std::string name) {
+            return TcMesh::from_cpu_mesh3(cpu_mesh, name);
+        }, nb::arg("mesh"), nb::arg("name") = "")
+        .def_static("from_uuid", &TcMesh::from_uuid, nb::arg("uuid"))
+        .def_static("get_or_create", &TcMesh::get_or_create, nb::arg("uuid"))
+        .def("__repr__", [](const TcMesh& h) {
+            if (!h.mesh) return std::string("<TcMesh invalid>");
+            return "<TcMesh vertices=" + std::to_string(h.mesh->vertex_count) +
+                   " triangles=" + std::to_string(h.mesh->index_count / 3) +
                    " uuid=" + std::string(h.mesh->uuid) + ">";
         });
+
+    // Alias for backward compatibility
+    m.attr("TcMeshHandle") = m.attr("TcMesh");
 
     // Module-level functions
     m.def("tc_mesh_compute_uuid", [](nb::ndarray<float, nb::c_contig, nb::device::cpu> vertices,
@@ -849,20 +813,20 @@ void bind_mesh(nb::module_& m) {
     }, nb::arg("vertices"), nb::arg("indices"),
        "Compute UUID from vertex and index data (hash-based)");
 
-    m.def("tc_mesh_get", [](const std::string& uuid) -> std::optional<TcMeshHandle> {
+    m.def("tc_mesh_get", [](const std::string& uuid) -> std::optional<TcMesh> {
         tc_mesh* mesh = tc_mesh_get(uuid.c_str());
         if (!mesh) return std::nullopt;
-        return TcMeshHandle(mesh);
+        return TcMesh(mesh);
     }, nb::arg("uuid"),
        "Get existing mesh by UUID (returns None if not found)");
 
     m.def("tc_mesh_get_or_create", [](const std::string& uuid) {
         tc_mesh* mesh = tc_mesh_get_or_create(uuid.c_str());
-        return TcMeshHandle(mesh);
+        return TcMesh(mesh);
     }, nb::arg("uuid"),
        "Get existing mesh or create new one");
 
-    m.def("tc_mesh_set_data", [](TcMeshHandle& handle,
+    m.def("tc_mesh_set_data", [](TcMesh& handle,
                                   nb::ndarray<float, nb::c_contig, nb::device::cpu> vertices, size_t vertex_count,
                                   const tc_vertex_layout& layout,
                                   nb::ndarray<uint32_t, nb::c_contig, nb::device::cpu> indices,

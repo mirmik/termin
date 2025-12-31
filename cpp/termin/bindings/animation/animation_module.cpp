@@ -8,6 +8,7 @@
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../../../core_c/include/tc_kind.hpp"
+#include "tc_log.hpp"
 
 namespace nb = nanobind;
 using namespace termin;
@@ -306,10 +307,14 @@ void bind_animation_clip_handle(nb::module_& m) {
         }, nb::arg("asset"))
         .def_static("from_name", &AnimationClipHandle::from_name, nb::arg("name"))
         .def_static("from_asset", &AnimationClipHandle::from_asset, nb::arg("asset"))
+        .def_static("from_direct", &AnimationClipHandle::from_direct, nb::arg("clip"),
+            nb::rv_policy::reference)
         .def_static("from_uuid", &AnimationClipHandle::from_uuid, nb::arg("uuid"))
         .def_static("deserialize", &AnimationClipHandle::deserialize, nb::arg("data"))
+        .def_rw("_direct", &AnimationClipHandle::_direct)
         .def_rw("asset", &AnimationClipHandle::asset)
         .def_prop_ro("is_valid", &AnimationClipHandle::is_valid)
+        .def_prop_ro("is_direct", &AnimationClipHandle::is_direct)
         .def_prop_ro("name", &AnimationClipHandle::name)
         .def_prop_ro("clip", &AnimationClipHandle::clip, nb::rv_policy::reference)
         .def("get", &AnimationClipHandle::get, nb::rv_policy::reference)
@@ -410,7 +415,20 @@ void register_animation_kind_handlers() {
             if (nb::isinstance<AnimationClipHandle>(value)) {
                 return value;
             }
-            return value;
+            // Try AnimationClip*
+            if (nb::isinstance<AnimationClip>(value)) {
+                auto* clip = nb::cast<AnimationClip*>(value);
+                return nb::cast(AnimationClipHandle::from_direct(clip));
+            }
+            // Try AnimationClipAsset (has 'resource' attribute)
+            if (nb::hasattr(value, "resource")) {
+                return nb::cast(AnimationClipHandle::from_asset(value));
+            }
+            // Nothing worked
+            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
+            std::string type_name = nb::cast<std::string>(type_str);
+            tc::Log::error("animation_clip_handle convert failed: cannot convert %s to AnimationClipHandle", type_name.c_str());
+            return nb::cast(AnimationClipHandle());
         })
     );
 }

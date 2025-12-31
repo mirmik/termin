@@ -6,6 +6,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from termin._native import log
 from termin.assets.asset import Asset
 
 if TYPE_CHECKING:
@@ -149,8 +150,8 @@ class DataAsset(Asset, Generic[T]):
         try:
             content = self._read_file()
             return self._load_content(content)
-        except Exception as e:
-            print(f"[{self.__class__.__name__}] Failed to load from {self._source_path}: {e}")
+        except Exception:
+            log.error(f"[{self.__class__.__name__}] Failed to load from {self._source_path}", exc_info=True)
             return False
 
     def _read_file(self) -> bytes | str:
@@ -181,8 +182,8 @@ class DataAsset(Asset, Generic[T]):
                 if not self._has_uuid_in_spec and self._source_path:
                     self.save_spec_file()
                 return True
-        except Exception as e:
-            print(f"[{self.__class__.__name__}] Failed to parse content: {e}")
+        except Exception:
+            log.error(f"[{self.__class__.__name__}] Failed to parse content", exc_info=True)
         return False
 
     @abstractmethod
@@ -225,7 +226,7 @@ class DataAsset(Asset, Generic[T]):
         if self._loaded:
             return True
 
-        print(f"[LazyLoad] {self.__class__.__name__}: {self._name} [{self._uuid[:8]}] (from {self._parent_asset._name})")
+        log.debug(f"[LazyLoad] {self.__class__.__name__}: {self._name} [{self._uuid[:8]}] (from {self._parent_asset._name})")
 
         # Fallback: try to extract data (for subclasses that override this)
         return self._extract_from_parent()

@@ -135,10 +135,10 @@ set_target_properties(trent PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
 )
 
-# Mesh native module (Mesh3, SkinnedMesh3, MeshHandle) - separate module
-# Mesh native module (Mesh3, SkinnedMesh3, MeshHandle) - using nanobind
+# Mesh native module (Mesh3, SkinnedMesh3, MeshHandle, CpuMesh3) - using nanobind
 nanobind_add_module(_mesh_native
     termin/bindings/mesh/mesh_module.cpp
+    termin/bindings/mesh/cpu_mesh3_bindings.cpp
     termin/mesh_bindings.cpp
 )
 target_link_libraries(_mesh_native PRIVATE trent entity_lib)

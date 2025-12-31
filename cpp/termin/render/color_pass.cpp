@@ -1,4 +1,5 @@
 #include "color_pass.hpp"
+#include "tc_log.hpp"
 
 #include <cmath>
 
@@ -271,8 +272,7 @@ void ColorPass::maybe_blit_to_debugger(
             depth_capture_callback
         );
     } catch (const nb::python_error& e) {
-        // Log error but don't crash rendering
-        // In production, you might want proper logging
+        tc::Log::error(e, "ColorPass::blit_to_debugger_window");
     }
 }
 

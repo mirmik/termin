@@ -9,6 +9,7 @@
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../../../core_c/include/tc_kind.hpp"
+#include "tc_log.hpp"
 
 namespace nb = nanobind;
 
@@ -288,9 +289,13 @@ void bind_skeleton_handle(nb::module_& m) {
         }, nb::arg("asset"))
         .def_static("from_name", &termin::SkeletonHandle::from_name, nb::arg("name"))
         .def_static("from_asset", &termin::SkeletonHandle::from_asset, nb::arg("asset"))
+        .def_static("from_direct", &termin::SkeletonHandle::from_direct, nb::arg("skeleton"),
+            nb::rv_policy::reference)
         .def_static("deserialize", &termin::SkeletonHandle::deserialize, nb::arg("data"))
+        .def_rw("_direct", &termin::SkeletonHandle::_direct)
         .def_rw("asset", &termin::SkeletonHandle::asset)
         .def_prop_ro("is_valid", &termin::SkeletonHandle::is_valid)
+        .def_prop_ro("is_direct", &termin::SkeletonHandle::is_direct)
         .def_prop_ro("name", &termin::SkeletonHandle::name)
         .def("get", &termin::SkeletonHandle::get, nb::rv_policy::reference)
         .def("get_asset", [](const termin::SkeletonHandle& self) { return self.asset; })
@@ -325,27 +330,20 @@ void register_skeleton_kind() {
             if (nb::isinstance<termin::SkeletonHandle>(value)) {
                 return value;
             }
-            // Convert from SkeletonData* to SkeletonHandle
-            try {
+            // Try SkeletonData*
+            if (nb::isinstance<termin::SkeletonData>(value)) {
                 auto* skel_data = nb::cast<termin::SkeletonData*>(value);
-                if (skel_data != nullptr) {
-                    nb::object skel_asset_module = nb::module_::import_("termin.assets.skeleton_asset");
-                    nb::object SkeletonAsset = skel_asset_module.attr("SkeletonAsset");
-                    nb::object asset = SkeletonAsset.attr("from_skeleton_data")(value, nb::arg("name") = "skeleton");
-
-                    nb::object rm_module = nb::module_::import_("termin.assets.resources");
-                    nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
-                    rm.attr("register_skeleton")(nb::arg("name") = "skeleton", nb::arg("skeleton") = value);
-
-                    return nb::cast(termin::SkeletonHandle::from_asset(asset));
-                }
-            } catch (const nb::cast_error&) {}
-
-            // Try SkeletonAsset
-            try {
+                return nb::cast(termin::SkeletonHandle::from_direct(skel_data));
+            }
+            // Try SkeletonAsset (has 'resource' attribute)
+            if (nb::hasattr(value, "resource")) {
                 return nb::cast(termin::SkeletonHandle::from_asset(value));
-            } catch (const nb::python_error&) {}
-            return value;
+            }
+            // Nothing worked
+            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
+            std::string type_name = nb::cast<std::string>(type_str);
+            tc::Log::error("skeleton_handle convert failed: cannot convert %s to SkeletonHandle", type_name.c_str());
+            return nb::cast(termin::SkeletonHandle());
         })
     );
 }

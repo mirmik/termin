@@ -12,6 +12,7 @@
 #include "termin/inspect/inspect_registry.hpp"
 #include "termin/entity/entity_handle.hpp"
 #include "../../../core_c/include/tc_kind.hpp"
+#include "tc_log.hpp"
 
 namespace nb = nanobind;
 
@@ -30,13 +31,17 @@ void bind_assets(nb::module_& m) {
         .def(nb::init<nb::object>(), nb::arg("asset"))
         .def_static("from_name", &TextureHandle::from_name, nb::arg("name"))
         .def_static("from_asset", &TextureHandle::from_asset, nb::arg("asset"))
+        .def_static("from_direct", &TextureHandle::from_direct, nb::arg("texture_data"),
+            nb::rv_policy::reference)
         .def_static("from_file", &TextureHandle::from_file,
             nb::arg("path"), nb::arg("name") = "")
         .def_static("from_texture_data", &TextureHandle::from_texture_data,
             nb::arg("texture_data"), nb::arg("name") = "texture")
         .def_static("deserialize", &TextureHandle::deserialize, nb::arg("data"))
+        .def_rw("_direct", &TextureHandle::_direct)
         .def_rw("asset", &TextureHandle::asset)
         .def_prop_ro("is_valid", &TextureHandle::is_valid)
+        .def_prop_ro("is_direct", &TextureHandle::is_direct)
         .def_prop_ro("name", &TextureHandle::name)
         .def_prop_ro("version", &TextureHandle::version)
         .def_prop_ro("gpu", &TextureHandle::gpu, nb::rv_policy::reference)
@@ -115,7 +120,20 @@ void register_kind_handlers() {
             if (nb::isinstance<MaterialHandle>(value)) {
                 return value;
             }
-            return value;
+            // Try Material*
+            if (nb::isinstance<Material>(value)) {
+                auto* mat = nb::cast<Material*>(value);
+                return nb::cast(MaterialHandle::from_direct(mat));
+            }
+            // Try MaterialAsset (has 'resource' attribute)
+            if (nb::hasattr(value, "resource")) {
+                return nb::cast(MaterialHandle::from_asset(value));
+            }
+            // Nothing worked
+            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
+            std::string type_name = nb::cast<std::string>(type_str);
+            tc::Log::error("material_handle convert failed: cannot convert %s to MaterialHandle", type_name.c_str());
+            return nb::cast(MaterialHandle());
         })
     );
 
@@ -157,7 +175,9 @@ void register_kind_handlers() {
                 if (!handle.uuid.empty()) {
                     return nb::str(handle.uuid.c_str());
                 }
-            } catch (const nb::cast_error&) {}
+            } catch (const nb::cast_error& e) {
+                tc::Log::debug(e, "entity_handle serialize cast");
+            }
             return nb::none();
         }),
         // deserialize

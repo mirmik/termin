@@ -10,6 +10,7 @@
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../core_c/include/tc_kind.hpp"
+#include "tc_log.hpp"
 
 namespace nb = nanobind;
 using namespace termin::voxels;
@@ -554,7 +555,15 @@ NB_MODULE(_voxels_native, m) {
             if (nb::isinstance<VoxelGridHandle>(value)) {
                 return value;
             }
-            return value;
+            // Try VoxelGridAsset (has 'resource' attribute)
+            if (nb::hasattr(value, "resource")) {
+                return nb::cast(VoxelGridHandle::from_asset(value));
+            }
+            // Nothing worked
+            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
+            std::string type_name = nb::cast<std::string>(type_str);
+            tc::Log::error("voxel_grid_handle convert failed: cannot convert %s to VoxelGridHandle", type_name.c_str());
+            return nb::cast(VoxelGridHandle());
         })
     );
 

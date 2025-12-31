@@ -55,6 +55,8 @@ UFBX QUIRKS AND LIMITATIONS (discovered 2025-12):
 import numpy as np
 import ufbx
 
+from termin._native import log
+
 
 class FBXMeshData:
     def __init__(self, name, vertices, normals, uvs, indices, material_index):
@@ -282,8 +284,8 @@ def _parse_animations(scene, out):
     try:
         for anim_stack in scene.anim_stacks:
             _parse_single_animation(anim_stack, out)
-    except Exception as e:
-        print(f"[FBX] Warning: Failed to parse animations: {e}")
+    except Exception:
+        log.warning("[FBX] Failed to parse animations", exc_info=True)
 
 
 def _parse_single_animation(anim_stack, out):
@@ -296,8 +298,8 @@ def _parse_single_animation(anim_stack, out):
         duration = 0.0
         try:
             duration = anim_stack.time_end - anim_stack.time_begin
-        except Exception as e:
-            print(f"[FBX] Warning: Failed to get animation duration: {e}")
+        except Exception:
+            log.warning("[FBX] Failed to get animation duration", exc_info=True)
 
         if not anim_stack.layers:
             return
@@ -331,8 +333,8 @@ def _parse_single_animation(anim_stack, out):
                 FBXAnimationClip(name=name, duration=duration, tps=tps, channels=channels)
             )
 
-    except Exception as e:
-        print(f"[FBX] Warning: Failed to parse animation stack: {e}")
+    except Exception:
+        log.warning("[FBX] Failed to parse animation stack", exc_info=True)
 
 
 def _parse_anim_prop(anim_prop, node_channels):
@@ -370,8 +372,8 @@ def _parse_anim_prop(anim_prop, node_channels):
         elif 'scaling' in prop_name or 'lcl scaling' in prop_name:
             node_channels[node_name]['scale_keys'] = keys
 
-    except Exception as e:
-        print(f"[FBX] Warning: Failed to parse anim prop: {e}")
+    except Exception:
+        log.warning("[FBX] Failed to parse anim prop", exc_info=True)
 
 
 def _extract_keys_safe(anim_value):
@@ -411,8 +413,8 @@ def _extract_keys_safe(anim_value):
 
         return keys
 
-    except Exception as e:
-        print(f"[FBX] Warning: Failed to extract keyframes: {e}")
+    except Exception:
+        log.warning("[FBX] Failed to extract keyframes", exc_info=True)
         return []
 
 

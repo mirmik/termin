@@ -10,6 +10,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Optional, List
 
 import numpy as np
+
+from termin._native import log
+
 from PyQt6.QtWidgets import (
     QWidget,
     QHBoxLayout,
@@ -65,7 +68,7 @@ def to_qcolor(value: Any) -> QColor:
                 max(0.0, min(1.0, a)),
             )
     except Exception:
-        pass
+        log.debug(f"[field_widgets] array_to_qcolor failed for value type {type(value)}")
     return QColor(255, 255, 255)
 
 
@@ -98,6 +101,7 @@ class FieldWidget(QWidget):
                 return all(FieldWidget._values_equal(x, y) for x, y in zip(a, b))
             return a == b
         except Exception:
+            log.debug(f"[field_widgets] _values_equal failed comparing {type(a)} and {type(b)}")
             return False
 
 

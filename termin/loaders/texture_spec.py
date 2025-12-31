@@ -7,6 +7,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from termin._native import log
+
 
 @dataclass
 class TextureSpec:
@@ -39,6 +41,7 @@ class TextureSpec:
                 transpose=data.get("transpose", False),
             )
         except Exception:
+            log.warning(f"[TextureSpec] Failed to load spec from {spec_path}", exc_info=True)
             return cls()
 
     @classmethod
@@ -68,7 +71,7 @@ class TextureSpec:
                 with open(path, "r", encoding="utf-8") as f:
                     existing_data = json.load(f)
             except Exception:
-                pass
+                log.warning(f"[TextureSpec] Failed to read existing spec {path}", exc_info=True)
 
         # Update with our fields
         data = existing_data.copy()
@@ -94,4 +97,4 @@ class TextureSpec:
             try:
                 os.remove(old_spec)
             except Exception:
-                pass
+                log.warning(f"[TextureSpec] Failed to remove old spec {old_spec}", exc_info=True)

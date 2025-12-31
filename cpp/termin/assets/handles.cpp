@@ -3,6 +3,7 @@
 
 #include "handles.hpp"
 #include "termin/render/material.hpp"
+#include "tc_log.hpp"
 
 namespace termin {
 
@@ -33,7 +34,8 @@ Material* MaterialHandle::get_material() const {
         nb::object mat_module = nb::module_::import_("termin.visualization.core.material");
         nb::object error_mat = mat_module.attr("get_error_material")();
         return nb::cast<Material*>(error_mat);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "MaterialHandle::get_material fallback");
         return nullptr;
     }
 }

@@ -16,6 +16,8 @@
 #include <iostream>
 #include <cstdio>
 
+#include "tc_log.hpp"
+
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
@@ -678,12 +680,12 @@ NB_MODULE(_entity_native, m) {
                 // Create entity using standalone pool
                 tc_entity_pool* pool = get_standalone_pool();
                 if (!pool) {
-                    fprintf(stderr, "[ERROR] Entity::deserialize: standalone pool is null\n");
+                    tc::Log::error("Entity::deserialize: standalone pool is null");
                     return nb::none();
                 }
                 Entity ent = Entity::create(pool, name);
                 if (!ent.valid()) {
-                    fprintf(stderr, "[ERROR] Entity::deserialize: failed to create entity '%s'\n", name.c_str());
+                    tc::Log::error("Entity::deserialize: failed to create entity '%s'", name.c_str());
                     return nb::none();
                 }
 
@@ -783,7 +785,7 @@ NB_MODULE(_entity_native, m) {
 
                         // Check if component type is registered
                         if (!registry.has(type_name)) {
-                            fprintf(stderr, "[Warning] Unknown component type: %s (skipping)\n", type_name.c_str());
+                            tc::Log::warn("Unknown component type: %s (skipping)", type_name.c_str());
                             continue;
                         }
 
@@ -823,17 +825,17 @@ NB_MODULE(_entity_native, m) {
 
                             // Validate after each component add
                             if (!ent.validate_components()) {
-                                fprintf(stderr, "[ERROR] Component validation failed after adding %s\n", type_name.c_str());
+                                tc::Log::error("Component validation failed after adding %s", type_name.c_str());
                             }
                         } catch (const std::exception& e) {
-                            fprintf(stderr, "[Warning] Failed to deserialize component %s: %s\n", type_name.c_str(), e.what());
+                            tc::Log::warn(e, "Failed to deserialize component %s", type_name.c_str());
                         }
                     }
                 }
 
                 return nb::cast(ent);
             } catch (const std::exception& e) {
-                fprintf(stderr, "[ERROR] Entity::deserialize failed: %s\n", e.what());
+                tc::Log::error(e, "Entity::deserialize");
                 return nb::none();
             }
         }, nb::arg("data"), nb::arg("context") = nb::none());

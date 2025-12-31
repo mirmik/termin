@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from termin._native import log
 from termin.mesh.mesh import Mesh3
 from termin.assets.data_asset import DataAsset
 
@@ -123,7 +124,7 @@ class MeshAsset(DataAsset[Mesh3]):
         elif ext == ".obj":
             return self._parse_obj_content(content, spec)
         else:
-            print(f"[MeshAsset] Unsupported format: {ext}")
+            log.warn(f"[MeshAsset] Unsupported format: {ext}")
             return None
 
     def _parse_stl_content(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:

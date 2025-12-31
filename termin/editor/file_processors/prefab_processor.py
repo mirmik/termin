@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Set
 
+from termin._native import log
 from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
 
 
@@ -49,6 +50,6 @@ class PrefabPreLoader(FilePreLoader):
                 uuid=uuid,
             )
 
-        except Exception as e:
-            print(f"[PrefabPreLoader] Failed to read {path}: {e}")
+        except Exception:
+            log.error(f"[PrefabPreLoader] Failed to read {path}", exc_info=True)
             return None

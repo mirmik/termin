@@ -18,6 +18,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Dict, Set
 
+from termin._native import log
+
 if TYPE_CHECKING:
     from PyQt6.QtCore import QFileSystemWatcher, QTimer
     from termin.visualization.core.resources import ResourceManager
@@ -125,7 +127,7 @@ class FilePreLoader(ABC):
                 with open(meta_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception:
-                pass
+                log.warning(f"[ProjectFileWatcher] Failed to read meta file: {meta_path}", exc_info=True)
 
         # Fallback to .spec (old format, for migration)
         spec_path = path + ".spec"
@@ -134,7 +136,7 @@ class FilePreLoader(ABC):
                 with open(spec_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception:
-                pass
+                log.warning(f"[ProjectFileWatcher] Failed to read spec file: {spec_path}", exc_info=True)
 
         return None
 
@@ -165,10 +167,11 @@ class FilePreLoader(ABC):
                 try:
                     os.remove(old_spec_path)
                 except Exception:
-                    pass
+                    log.warning(f"[ProjectFileWatcher] Failed to remove old spec file: {old_spec_path}", exc_info=True)
 
             return True
         except Exception:
+            log.error(f"[ProjectFileWatcher] Failed to write meta file: {meta_path}", exc_info=True)
             return False
 
     @staticmethod
@@ -458,16 +461,16 @@ class ProjectFileWatcher:
                     resource_path = path[:-5]  # Remove ".meta" or ".spec"
                     try:
                         processor.on_spec_changed(path, resource_path)
-                    except Exception as e:
-                        print(f"[ProjectFileWatcher] Error processing meta {path}: {e}")
+                    except Exception:
+                        log.exception(f"[ProjectFileWatcher] Error processing meta {path}")
             return
 
         processor = self._processors.get(ext)
         if processor is not None:
             try:
                 processor.on_file_added(path)
-            except Exception as e:
-                print(f"[ProjectFileWatcher] Error processing {path}: {e}")
+            except Exception:
+                log.exception(f"[ProjectFileWatcher] Error processing {path}")
 
     def _should_watch_file(self, path: str) -> bool:
         """Check if file should be watched (resource or meta file)."""
@@ -540,16 +543,16 @@ class ProjectFileWatcher:
                     resource_path = path[:-5]  # Remove ".meta" or ".spec"
                     try:
                         processor.on_spec_changed(path, resource_path)
-                    except Exception as e:
-                        print(f"[ProjectFileWatcher] Error processing meta {path}: {e}")
+                    except Exception:
+                        log.exception(f"[ProjectFileWatcher] Error processing meta {path}")
             return
 
         processor = self._processors.get(ext)
         if processor is not None:
             try:
                 processor.on_file_changed(path)
-            except Exception as e:
-                print(f"[ProjectFileWatcher] Error reloading {path}: {e}")
+            except Exception:
+                log.exception(f"[ProjectFileWatcher] Error reloading {path}")
 
     # Statistics methods
 

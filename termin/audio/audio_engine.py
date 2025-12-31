@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import ctypes
 
+from termin._native import log
+
 if TYPE_CHECKING:
     pass
 
@@ -87,7 +89,7 @@ class AudioEngine:
             self._mixer = sdlmixer
             self._mixer_available = True
         except ImportError:
-            print("[AudioEngine] SDL_mixer not available. Audio disabled.")
+            log.info("[AudioEngine] SDL_mixer not available. Audio disabled.")
             self._mixer_available = False
             return False
 
@@ -95,7 +97,7 @@ class AudioEngine:
         import sdl2
         if sdl2.SDL_InitSubSystem(sdl2.SDL_INIT_AUDIO) != 0:
             error = sdl2.SDL_GetError()
-            print(f"[AudioEngine] Failed to init SDL audio: {error}")
+            log.error(f"[AudioEngine] Failed to init SDL audio: {error}")
             return False
 
         # Initialize SDL_mixer with format support
@@ -107,7 +109,7 @@ class AudioEngine:
         result = sdlmixer.Mix_Init(init_flags)
         if result == 0:
             # Mix_Init returns 0 on complete failure
-            print("[AudioEngine] Warning: No audio format support initialized")
+            log.warn("[AudioEngine] No audio format support initialized")
 
         # Open audio device
         self._format = sdlmixer.MIX_DEFAULT_FORMAT
@@ -118,7 +120,7 @@ class AudioEngine:
             self._chunk_size
         ) < 0:
             error = sdlmixer.Mix_GetError()
-            print(f"[AudioEngine] Failed to open audio: {error}")
+            log.error(f"[AudioEngine] Failed to open audio: {error}")
             sdlmixer.Mix_Quit()
             return False
 
@@ -126,7 +128,7 @@ class AudioEngine:
         sdlmixer.Mix_AllocateChannels(self._num_channels)
 
         self._initialized = True
-        print(f"[AudioEngine] Initialized: {self._frequency}Hz, {self._num_channels} channels")
+        log.info(f"[AudioEngine] Initialized: {self._frequency}Hz, {self._num_channels} channels")
         return True
 
     def shutdown(self) -> None:
@@ -142,7 +144,7 @@ class AudioEngine:
         sdl2.SDL_QuitSubSystem(sdl2.SDL_INIT_AUDIO)
 
         self._initialized = False
-        print("[AudioEngine] Shutdown complete")
+        log.info("[AudioEngine] Shutdown complete")
 
     def load_chunk(self, path: str) -> ctypes.c_void_p | None:
         """
@@ -161,7 +163,7 @@ class AudioEngine:
         chunk = self._mixer.Mix_LoadWAV(path.encode("utf-8"))
         if not chunk:
             error = self._mixer.Mix_GetError()
-            print(f"[AudioEngine] Failed to load '{path}': {error}")
+            log.error(f"[AudioEngine] Failed to load '{path}': {error}")
             return None
 
         return chunk

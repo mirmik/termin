@@ -236,8 +236,6 @@ void bind_inspect(nb::module_& m) {
         .def("deserialize_all", [](InspectRegistry& self, nb::object obj, nb::object data) {
             std::string full_type_name = nb::cast<std::string>(nb::str(nb::type_name(obj.type())));
             std::string type_name = get_short_type_name(full_type_name);
-            fprintf(stderr, "[DEBUG] deserialize_all: type_name=%s\n", type_name.c_str());
-            fflush(stderr);
             void* ptr = get_raw_pointer(obj);
             nb::dict py_data = nb::cast<nb::dict>(data);
             self.deserialize_component_fields_over_python(ptr, obj, type_name, py_data);

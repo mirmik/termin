@@ -35,12 +35,22 @@ class Material;
  */
 class MeshHandle {
 public:
+    // Direct mesh pointer (optional, for non-asset meshes)
+    CustomMesh* _direct = nullptr;
+
     // Python asset object (MeshAsset or None)
     nb::object asset;
 
     MeshHandle() : asset(nb::none()) {}
 
-    explicit MeshHandle(nb::object asset_) : asset(std::move(asset_)) {}
+    explicit MeshHandle(nb::object asset_) : _direct(nullptr), asset(std::move(asset_)) {}
+
+    explicit MeshHandle(CustomMesh* direct) : _direct(direct), asset(nb::none()) {}
+
+    // Create handle from direct CustomMesh pointer.
+    static MeshHandle from_direct(CustomMesh* mesh) {
+        return MeshHandle(mesh);
+    }
 
     /**
      * Create handle by name lookup in ResourceManager.
@@ -72,16 +82,17 @@ public:
         const std::string& name = "mesh"
     );
 
-    /**
-     * Check if handle is valid (has asset).
-     */
+    // Check if handle is valid (has direct mesh or asset).
     bool is_valid() const {
-        return !asset.is_none();
+        return _direct != nullptr || !asset.is_none();
     }
 
-    /**
-     * Get asset name.
-     */
+    // Check if this is a direct mesh (not from asset).
+    bool is_direct() const {
+        return _direct != nullptr;
+    }
+
+    // Get asset name (empty if direct).
     std::string name() const {
         if (asset.is_none()) return "";
         return nb::cast<std::string>(asset.attr("name"));
@@ -108,6 +119,9 @@ public:
      * Returns nullptr if asset is empty or resource is None.
      */
     CustomMesh* get() const {
+        if (_direct != nullptr) {
+            return _direct;
+        }
         if (asset.is_none()) return nullptr;
         nb::object res = asset.attr("resource");
         if (res.is_none()) return nullptr;
@@ -169,12 +183,22 @@ public:
  */
 class TextureHandle {
 public:
+    // Direct texture data pointer (optional, for non-asset textures)
+    TextureData* _direct = nullptr;
+
     // Python asset object (TextureAsset or None)
     nb::object asset;
 
     TextureHandle() : asset(nb::none()) {}
 
-    explicit TextureHandle(nb::object asset_) : asset(std::move(asset_)) {}
+    explicit TextureHandle(nb::object asset_) : _direct(nullptr), asset(std::move(asset_)) {}
+
+    explicit TextureHandle(TextureData* direct) : _direct(direct), asset(nb::none()) {}
+
+    // Create handle from direct TextureData pointer.
+    static TextureHandle from_direct(TextureData* texture_data) {
+        return TextureHandle(texture_data);
+    }
 
     /**
      * Create handle by name lookup in ResourceManager.
@@ -204,16 +228,17 @@ public:
         const std::string& name = "texture"
     );
 
-    /**
-     * Check if handle is valid (has asset).
-     */
+    // Check if handle is valid (has direct texture or asset).
     bool is_valid() const {
-        return !asset.is_none();
+        return _direct != nullptr || !asset.is_none();
     }
 
-    /**
-     * Get asset name.
-     */
+    // Check if this is a direct texture (not from asset).
+    bool is_direct() const {
+        return _direct != nullptr;
+    }
+
+    // Get asset name (empty if direct).
     std::string name() const {
         if (asset.is_none()) return "";
         return nb::cast<std::string>(asset.attr("name"));
@@ -232,6 +257,9 @@ public:
      * Returns nullptr if asset is empty or resource is None.
      */
     TextureData* get() const {
+        if (_direct != nullptr) {
+            return _direct;
+        }
         if (asset.is_none()) return nullptr;
         nb::object res = asset.attr("resource");
         if (res.is_none()) return nullptr;
@@ -413,30 +441,39 @@ class SkeletonData;
  */
 class SkeletonHandle {
 public:
+    // Direct skeleton pointer (optional, for non-asset skeletons)
+    SkeletonData* _direct = nullptr;
+
     // Python asset object (SkeletonAsset or None)
     nb::object asset;
 
     SkeletonHandle() : asset(nb::none()) {}
 
-    explicit SkeletonHandle(nb::object asset_) : asset(std::move(asset_)) {}
+    explicit SkeletonHandle(nb::object asset_) : _direct(nullptr), asset(std::move(asset_)) {}
 
-    /**
-     * Create handle by name lookup in ResourceManager.
-     */
+    explicit SkeletonHandle(SkeletonData* direct) : _direct(direct), asset(nb::none()) {}
+
+    // Create handle from direct SkeletonData pointer.
+    static SkeletonHandle from_direct(SkeletonData* skeleton) {
+        return SkeletonHandle(skeleton);
+    }
+
+    // Create handle by name lookup in ResourceManager.
     static SkeletonHandle from_name(const std::string& name);
 
-    /**
-     * Create handle from Python SkeletonAsset.
-     */
+    // Create handle from Python SkeletonAsset.
     static SkeletonHandle from_asset(nb::object asset) {
         return SkeletonHandle(std::move(asset));
     }
 
-    /**
-     * Check if handle is valid (has asset).
-     */
+    // Check if handle is valid (has direct skeleton or asset).
     bool is_valid() const {
-        return !asset.is_none();
+        return _direct != nullptr || !asset.is_none();
+    }
+
+    // Check if this is a direct skeleton (not from asset).
+    bool is_direct() const {
+        return _direct != nullptr;
     }
 
     /**
@@ -500,12 +537,22 @@ class AnimationClip;
  */
 class AnimationClipHandle {
 public:
+    // Direct animation clip pointer (optional, for non-asset clips)
+    animation::AnimationClip* _direct = nullptr;
+
     // Python asset object (AnimationClipAsset or None)
     nb::object asset;
 
     AnimationClipHandle() : asset(nb::none()) {}
 
-    explicit AnimationClipHandle(nb::object asset_) : asset(std::move(asset_)) {}
+    explicit AnimationClipHandle(nb::object asset_) : _direct(nullptr), asset(std::move(asset_)) {}
+
+    explicit AnimationClipHandle(animation::AnimationClip* direct) : _direct(direct), asset(nb::none()) {}
+
+    // Create handle from direct AnimationClip pointer.
+    static AnimationClipHandle from_direct(animation::AnimationClip* clip) {
+        return AnimationClipHandle(clip);
+    }
 
     /**
      * Create handle by name lookup in ResourceManager.
@@ -524,16 +571,17 @@ public:
      */
     static AnimationClipHandle from_uuid(const std::string& uuid);
 
-    /**
-     * Check if handle is valid (has asset).
-     */
+    // Check if handle is valid (has direct clip or asset).
     bool is_valid() const {
-        return !asset.is_none();
+        return _direct != nullptr || !asset.is_none();
     }
 
-    /**
-     * Get asset name.
-     */
+    // Check if this is a direct clip (not from asset).
+    bool is_direct() const {
+        return _direct != nullptr;
+    }
+
+    // Get asset name (empty if direct).
     std::string name() const {
         if (asset.is_none()) return "";
         return nb::cast<std::string>(asset.attr("name"));

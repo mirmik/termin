@@ -706,15 +706,7 @@ public:
     }
 
     void deserialize_fields_of_python_component_over_python(nb::object obj, const std::string& type_name, const nb::dict& data) {
-        fprintf(stderr, "[DEBUG] deserialize_py_comp: type=%s, fields_count=%zu\n",
-            type_name.c_str(), all_fields(type_name).size());
-        fflush(stderr);
-
         for (const auto& f : all_fields(type_name)) {
-            fprintf(stderr, "[DEBUG]   field: %s, kind=%s, backend=%d\n",
-                f.path.c_str(), f.kind.c_str(), (int)f.backend);
-            fflush(stderr);
-
             if (f.backend == TypeBackend::Cpp) {
                 tc_log_warn("deserialize %s.%s (kind=%s): C++ backend field in Python component",
                     type_name.c_str(), f.path.c_str(), f.kind.c_str());
@@ -724,18 +716,10 @@ public:
             if (f.non_serializable) continue;
 
             nb::str key(f.path.c_str());
-            if (!data.contains(key)) {
-                fprintf(stderr, "[DEBUG]   -> key not in data, skip\n");
-                fflush(stderr);
-                continue;
-            }
+            if (!data.contains(key)) continue;
 
             nb::object field_data = data[key];
-            if (field_data.is_none()) {
-                fprintf(stderr, "[DEBUG]   -> field_data is None, skip\n");
-                fflush(stderr);
-                continue;
-            }
+            if (field_data.is_none()) continue;
 
             if (!f.py_setter) {
                 tc_log_warn("deserialize %s.%s (kind=%s): no py_setter",
@@ -743,31 +727,14 @@ public:
                 continue;
             }
 
-            fprintf(stderr, "[DEBUG]   -> getting handler for kind=%s\n", f.kind.c_str());
-            fflush(stderr);
-
             nb::object val;
-
             auto* handler = get_kind_handler(f.kind);
-            fprintf(stderr, "[DEBUG]   -> handler=%p, has_python=%d\n",
-                (void*)handler, handler ? handler->has_python() : -1);
-            fflush(stderr);
-
             if (handler && handler->has_python()) {
-                fprintf(stderr, "[DEBUG]   -> calling deserialize\n");
-                fflush(stderr);
                 val = handler->python.deserialize(field_data);
-                fprintf(stderr, "[DEBUG]   -> deserialize done\n");
-                fflush(stderr);
             } else {
                 val = field_data;
             }
-
-            fprintf(stderr, "[DEBUG]   -> calling py_setter\n");
-            fflush(stderr);
             f.py_setter(obj.ptr(), val);
-            fprintf(stderr, "[DEBUG]   -> py_setter done\n");
-            fflush(stderr);
         }
     }
 

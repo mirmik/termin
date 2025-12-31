@@ -10,6 +10,8 @@ from typing import Tuple
 
 import numpy as np
 
+from termin._native import log
+
 
 @dataclass
 class MeshSpec:
@@ -49,6 +51,7 @@ class MeshSpec:
                 flip_uv_v=data.get("flip_uv_v", False),
             )
         except Exception:
+            log.warning(f"[MeshSpec] Failed to load spec from {spec_path}", exc_info=True)
             return cls()
 
     @classmethod
@@ -78,7 +81,7 @@ class MeshSpec:
                 with open(path, "r", encoding="utf-8") as f:
                     existing_data = json.load(f)
             except Exception:
-                pass
+                log.warning(f"[MeshSpec] Failed to read existing spec {path}", exc_info=True)
 
         # Update with our fields
         data = existing_data.copy()
@@ -106,7 +109,7 @@ class MeshSpec:
             try:
                 os.remove(old_spec)
             except Exception:
-                pass
+                log.warning(f"[MeshSpec] Failed to remove old spec {old_spec}", exc_info=True)
 
     def apply_to_vertices(self, vertices: np.ndarray) -> np.ndarray:
         """

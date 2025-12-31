@@ -1,6 +1,7 @@
 #pragma once
 
 #include "termin/voxels/voxel_grid.hpp"
+#include "tc_log.hpp"
 
 namespace termin {
 
@@ -13,7 +14,8 @@ inline VoxelGridHandle VoxelGridHandle::from_name(const std::string& name) {
             return VoxelGridHandle();
         }
         return VoxelGridHandle(asset);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "VoxelGridHandle::from_name('%s')", name.c_str());
         return VoxelGridHandle();
     }
 }
@@ -27,7 +29,8 @@ inline VoxelGridHandle VoxelGridHandle::from_uuid(const std::string& uuid) {
             return VoxelGridHandle();
         }
         return VoxelGridHandle(asset);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "VoxelGridHandle::from_uuid('%s')", uuid.c_str());
         return VoxelGridHandle();
     }
 }
@@ -49,7 +52,9 @@ inline VoxelGridHandle VoxelGridHandle::deserialize(const nb::dict& data) {
             if (!asset.is_none()) {
                 return VoxelGridHandle(asset);
             }
-        } catch (const nb::python_error&) {}
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "VoxelGridHandle::deserialize uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? nb::cast<std::string>(data["type"]) : "none";
@@ -67,7 +72,8 @@ inline VoxelGridHandle VoxelGridHandle::deserialize(const nb::dict& data) {
             std::string name = (last_dot != std::string::npos)
                 ? filename.substr(0, last_dot) : filename;
             return from_name(name);
-        } catch (const nb::python_error&) {
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "VoxelGridHandle::deserialize path lookup");
             return VoxelGridHandle();
         }
     }
@@ -91,7 +97,9 @@ inline void VoxelGridHandle::deserialize_from(const nos::trent& data) {
                 asset = found;
                 return;
             }
-        } catch (...) {}
+        } catch (const std::exception& e) {
+            tc::Log::warn(e, "VoxelGridHandle::deserialize_from uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? data["type"].as_string() : "none";

@@ -5,6 +5,8 @@
 #include "termin/assets/handles.hpp"
 #include "termin/inspect/inspect_registry.hpp"
 #include "../../../../core_c/include/tc_kind.hpp"
+#include "cpu_mesh3_bindings.hpp"
+#include "tc_log.hpp"
 
 namespace nb = nanobind;
 
@@ -18,6 +20,8 @@ void bind_mesh_handle(nb::module_& m) {
         }, nb::arg("asset"))
         .def_static("from_name", &termin::MeshHandle::from_name, nb::arg("name"))
         .def_static("from_asset", &termin::MeshHandle::from_asset, nb::arg("asset"))
+        .def_static("from_direct", &termin::MeshHandle::from_direct, nb::arg("mesh"),
+            nb::rv_policy::reference)
         .def_static("from_mesh3", &termin::MeshHandle::from_mesh3,
             nb::arg("mesh"), nb::arg("name") = "mesh", nb::arg("source_path") = "")
         .def_static("from_mesh", &termin::MeshHandle::from_mesh3,  // alias
@@ -25,8 +29,10 @@ void bind_mesh_handle(nb::module_& m) {
         .def_static("from_vertices_indices", &termin::MeshHandle::from_vertices_indices,
             nb::arg("vertices"), nb::arg("indices"), nb::arg("name") = "mesh")
         .def_static("deserialize", &termin::MeshHandle::deserialize, nb::arg("data"))
+        .def_rw("_direct", &termin::MeshHandle::_direct)
         .def_rw("asset", &termin::MeshHandle::asset)
         .def_prop_ro("is_valid", &termin::MeshHandle::is_valid)
+        .def_prop_ro("is_direct", &termin::MeshHandle::is_direct)
         .def_prop_ro("name", &termin::MeshHandle::name)
         .def_prop_ro("version", &termin::MeshHandle::version)
         .def_prop_ro("mesh", &termin::MeshHandle::mesh)
@@ -66,7 +72,20 @@ void register_mesh_kind() {
             if (nb::isinstance<termin::MeshHandle>(value)) {
                 return value;
             }
-            return value;
+            // Try CustomMesh* (base class for Mesh3, etc.)
+            if (nb::isinstance<termin::CustomMesh>(value)) {
+                auto* mesh = nb::cast<termin::CustomMesh*>(value);
+                return nb::cast(termin::MeshHandle::from_direct(mesh));
+            }
+            // Try MeshAsset (has 'resource' attribute)
+            if (nb::hasattr(value, "resource")) {
+                return nb::cast(termin::MeshHandle::from_asset(value));
+            }
+            // Nothing worked
+            nb::str type_str = nb::borrow<nb::str>(value.type().attr("__name__"));
+            std::string type_name = nb::cast<std::string>(type_str);
+            tc::Log::error("mesh_handle convert failed: cannot convert %s to MeshHandle", type_name.c_str());
+            return nb::cast(termin::MeshHandle());
         })
     );
 }
@@ -74,10 +93,13 @@ void register_mesh_kind() {
 } // anonymous namespace
 
 NB_MODULE(_mesh_native, m) {
-    m.doc() = "Native C++ mesh module (Mesh3, SkinnedMesh3, MeshHandle)";
+    m.doc() = "Native C++ mesh module (Mesh3, SkinnedMesh3, CpuMesh3, MeshHandle)";
 
-    // Bind Mesh3 and SkinnedMesh3
+    // Bind Mesh3 and SkinnedMesh3 (old, tc_mesh based)
     termin::bind_mesh(m);
+
+    // Bind CpuMesh3 (new, pure CPU mesh)
+    bind_cpu_mesh3(m);
 
     // Bind MeshHandle
     bind_mesh_handle(m);

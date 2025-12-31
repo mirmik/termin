@@ -1,6 +1,7 @@
 #include "skinned_mesh_renderer.hpp"
 #include "skeleton_controller.hpp"
 #include "termin/entity/entity.hpp"
+#include "tc_log.hpp"
 #include <iostream>
 #include <algorithm>
 
@@ -96,7 +97,7 @@ Material* SkinnedMeshRenderer::get_skinned_material() {
             return _skinned_material_cache;
         }
     } catch (const nb::python_error& e) {
-        // Failed to get skinned material, use base
+        tc::Log::warn(e, "SkinnedMeshRenderer::get_skinned_material");
         PyErr_Clear();
     }
 

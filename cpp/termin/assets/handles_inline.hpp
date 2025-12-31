@@ -10,6 +10,7 @@
 
 #include "termin/skeleton/skeleton_data.hpp"
 #include "termin/animation/animation_clip.hpp"
+#include "tc_log.hpp"
 
 namespace termin {
 
@@ -25,7 +26,7 @@ inline MeshHandle MeshHandle::from_name(const std::string& name) {
         }
         return MeshHandle(asset);
     } catch (const nb::python_error& e) {
-        fprintf(stderr, "[ERROR] MeshHandle::from_name('%s') failed: %s\n", name.c_str(), e.what());
+        tc::Log::error(e, "MeshHandle::from_name('%s')", name.c_str());
         return MeshHandle();
     }
 }
@@ -54,7 +55,7 @@ inline MeshHandle MeshHandle::from_mesh3(
         }
         return MeshHandle(asset);
     } catch (const nb::python_error& e) {
-        fprintf(stderr, "[ERROR] MeshHandle::from_mesh3('%s') failed: %s\n", name.c_str(), e.what());
+        tc::Log::error(e, "MeshHandle::from_mesh3('%s')", name.c_str());
         return MeshHandle();
     }
 }
@@ -74,7 +75,7 @@ inline MeshHandle MeshHandle::from_vertices_indices(
         );
         return from_mesh3(mesh, name);
     } catch (const nb::python_error& e) {
-        fprintf(stderr, "[ERROR] MeshHandle::from_vertices_indices failed: %s\n", e.what());
+        tc::Log::error(e, "MeshHandle::from_vertices_indices");
         return MeshHandle();
     }
 }
@@ -89,7 +90,9 @@ inline MeshHandle MeshHandle::deserialize(const nb::dict& data) {
             if (!handle.is_none()) {
                 return nb::cast<MeshHandle>(handle);
             }
-        } catch (const nb::python_error&) {}
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "MeshHandle::deserialize uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? nb::cast<std::string>(data["type"]) : "none";
@@ -107,7 +110,8 @@ inline MeshHandle MeshHandle::deserialize(const nb::dict& data) {
             std::string name = (last_dot != std::string::npos)
                 ? filename.substr(0, last_dot) : filename;
             return from_name(name);
-        } catch (const nb::python_error&) {
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "MeshHandle::deserialize path lookup");
             return MeshHandle();
         }
     }
@@ -116,6 +120,8 @@ inline MeshHandle MeshHandle::deserialize(const nb::dict& data) {
 }
 
 inline void MeshHandle::deserialize_from(const nos::trent& data) {
+    _direct = nullptr;
+
     if (!data.is_dict()) {
         asset = nb::none();
         return;
@@ -132,7 +138,9 @@ inline void MeshHandle::deserialize_from(const nos::trent& data) {
                 asset = nb::cast<MeshHandle>(handle).asset;
                 return;
             }
-        } catch (...) {}
+        } catch (const std::exception& e) {
+            tc::Log::warn(e, "MeshHandle::deserialize_from uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? data["type"].as_string() : "none";
@@ -165,7 +173,8 @@ inline TextureHandle TextureHandle::from_name(const std::string& name) {
             return TextureHandle();
         }
         return TextureHandle(asset);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "TextureHandle::from_name('%s')", name.c_str());
         return TextureHandle();
     }
 }
@@ -185,7 +194,8 @@ inline TextureHandle TextureHandle::from_file(
             asset = TextureAsset.attr("from_file")(path, nb::arg("name") = name);
         }
         return TextureHandle(asset);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "TextureHandle::from_file('%s')", path.c_str());
         return TextureHandle();
     }
 }
@@ -203,7 +213,8 @@ inline TextureHandle TextureHandle::from_texture_data(
             nb::arg("name") = name
         );
         return TextureHandle(asset);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "TextureHandle::from_texture_data('%s')", name.c_str());
         return TextureHandle();
     }
 }
@@ -218,7 +229,9 @@ inline TextureHandle TextureHandle::deserialize(const nb::dict& data) {
             if (!asset.is_none()) {
                 return TextureHandle(asset);
             }
-        } catch (const nb::python_error&) {}
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "TextureHandle::deserialize uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? nb::cast<std::string>(data["type"]) : "none";
@@ -236,7 +249,8 @@ inline TextureHandle TextureHandle::deserialize(const nb::dict& data) {
             std::string name = (last_dot != std::string::npos)
                 ? filename.substr(0, last_dot) : filename;
             return from_name(name);
-        } catch (const nb::python_error&) {
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "TextureHandle::deserialize path lookup");
             return TextureHandle();
         }
     }
@@ -245,6 +259,8 @@ inline TextureHandle TextureHandle::deserialize(const nb::dict& data) {
 }
 
 inline void TextureHandle::deserialize_from(const nos::trent& data) {
+    _direct = nullptr;
+
     if (!data.is_dict()) {
         asset = nb::none();
         return;
@@ -260,7 +276,9 @@ inline void TextureHandle::deserialize_from(const nos::trent& data) {
                 asset = found;
                 return;
             }
-        } catch (...) {}
+        } catch (const std::exception& e) {
+            tc::Log::warn(e, "TextureHandle::deserialize_from uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? data["type"].as_string() : "none";
@@ -304,7 +322,8 @@ inline MaterialHandle MaterialHandle::from_name(const std::string& name) {
             return MaterialHandle();
         }
         return MaterialHandle(asset);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "MaterialHandle::from_name('%s')", name.c_str());
         return MaterialHandle();
     }
 }
@@ -319,7 +338,9 @@ inline MaterialHandle MaterialHandle::deserialize(const nb::dict& data) {
             if (!asset.is_none()) {
                 return MaterialHandle(asset);
             }
-        } catch (const nb::python_error&) {}
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "MaterialHandle::deserialize uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? nb::cast<std::string>(data["type"]) : "none";
@@ -337,7 +358,8 @@ inline MaterialHandle MaterialHandle::deserialize(const nb::dict& data) {
             std::string name = (last_dot != std::string::npos)
                 ? filename.substr(0, last_dot) : filename;
             return from_name(name);
-        } catch (const nb::python_error&) {
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "MaterialHandle::deserialize path lookup");
             return MaterialHandle();
         }
     }
@@ -363,7 +385,9 @@ inline void MaterialHandle::deserialize_from(const nos::trent& data) {
                 asset = found;
                 return;
             }
-        } catch (...) {}
+        } catch (const std::exception& e) {
+            tc::Log::warn(e, "MaterialHandle::deserialize_from uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? data["type"].as_string() : "none";
@@ -396,12 +420,16 @@ inline SkeletonHandle SkeletonHandle::from_name(const std::string& name) {
             return SkeletonHandle();
         }
         return SkeletonHandle(asset);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "SkeletonHandle::from_name('%s')", name.c_str());
         return SkeletonHandle();
     }
 }
 
 inline SkeletonData* SkeletonHandle::get() const {
+    if (_direct != nullptr) {
+        return _direct;
+    }
     if (asset.is_none()) return nullptr;
     nb::object res = asset.attr("resource");
     if (res.is_none()) return nullptr;
@@ -418,7 +446,9 @@ inline SkeletonHandle SkeletonHandle::deserialize(const nb::dict& data) {
             if (!asset.is_none()) {
                 return SkeletonHandle(asset);
             }
-        } catch (const nb::python_error&) {}
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "SkeletonHandle::deserialize uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? nb::cast<std::string>(data["type"]) : "none";
@@ -436,7 +466,8 @@ inline SkeletonHandle SkeletonHandle::deserialize(const nb::dict& data) {
             std::string name = (last_dot != std::string::npos)
                 ? filename.substr(0, last_dot) : filename;
             return from_name(name);
-        } catch (const nb::python_error&) {
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "SkeletonHandle::deserialize path lookup");
             return SkeletonHandle();
         }
     }
@@ -445,6 +476,8 @@ inline SkeletonHandle SkeletonHandle::deserialize(const nb::dict& data) {
 }
 
 inline void SkeletonHandle::deserialize_from(const nos::trent& data) {
+    _direct = nullptr;
+
     if (!data.is_dict()) {
         asset = nb::none();
         return;
@@ -460,7 +493,9 @@ inline void SkeletonHandle::deserialize_from(const nos::trent& data) {
                 asset = found;
                 return;
             }
-        } catch (...) {}
+        } catch (const std::exception& e) {
+            tc::Log::warn(e, "SkeletonHandle::deserialize_from uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? data["type"].as_string() : "none";
@@ -490,7 +525,8 @@ inline TextureHandle get_white_texture_handle() {
         nb::object texture_handle_module = nb::module_::import_("termin.visualization.core.texture_handle");
         nb::object handle = texture_handle_module.attr("get_white_texture_handle")();
         return nb::cast<TextureHandle>(handle);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "get_white_texture_handle");
         return TextureHandle();
     }
 }
@@ -506,7 +542,8 @@ inline AnimationClipHandle AnimationClipHandle::from_name(const std::string& nam
             return AnimationClipHandle();
         }
         return AnimationClipHandle(asset);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "AnimationClipHandle::from_name('%s')", name.c_str());
         return AnimationClipHandle();
     }
 }
@@ -520,12 +557,16 @@ inline AnimationClipHandle AnimationClipHandle::from_uuid(const std::string& uui
             return AnimationClipHandle();
         }
         return AnimationClipHandle(asset);
-    } catch (const nb::python_error&) {
+    } catch (const nb::python_error& e) {
+        tc::Log::warn(e, "AnimationClipHandle::from_uuid('%s')", uuid.c_str());
         return AnimationClipHandle();
     }
 }
 
 inline animation::AnimationClip* AnimationClipHandle::get() const {
+    if (_direct != nullptr) {
+        return _direct;
+    }
     if (asset.is_none()) return nullptr;
     nb::object res = asset.attr("resource");
     if (res.is_none()) return nullptr;
@@ -542,7 +583,9 @@ inline AnimationClipHandle AnimationClipHandle::deserialize(const nb::dict& data
             if (!asset.is_none()) {
                 return AnimationClipHandle(asset);
             }
-        } catch (const nb::python_error&) {}
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "AnimationClipHandle::deserialize uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? nb::cast<std::string>(data["type"]) : "none";
@@ -560,7 +603,8 @@ inline AnimationClipHandle AnimationClipHandle::deserialize(const nb::dict& data
             std::string name = (last_dot != std::string::npos)
                 ? filename.substr(0, last_dot) : filename;
             return from_name(name);
-        } catch (const nb::python_error&) {
+        } catch (const nb::python_error& e) {
+            tc::Log::warn(e, "AnimationClipHandle::deserialize path lookup");
             return AnimationClipHandle();
         }
     }
@@ -569,6 +613,8 @@ inline AnimationClipHandle AnimationClipHandle::deserialize(const nb::dict& data
 }
 
 inline void AnimationClipHandle::deserialize_from(const nos::trent& data) {
+    _direct = nullptr;
+
     if (!data.is_dict()) {
         asset = nb::none();
         return;
@@ -584,7 +630,9 @@ inline void AnimationClipHandle::deserialize_from(const nos::trent& data) {
                 asset = found;
                 return;
             }
-        } catch (...) {}
+        } catch (const std::exception& e) {
+            tc::Log::warn(e, "AnimationClipHandle::deserialize_from uuid lookup");
+        }
     }
 
     std::string type = data.contains("type") ? data["type"].as_string() : "none";

@@ -5,7 +5,7 @@
 #include <unordered_map>
 
 #include "../../core_c/include/tc_component_python.h"
-#include "../../core_c/include/tc_log.h"
+#include "tc_log.hpp"
 #include "render/drawable.hpp"
 #include "render/render_context.hpp"
 #include "tc_component_python_bindings.hpp"
@@ -28,7 +28,7 @@ static void py_cb_start(void* py_self) {
             self.attr("start")();
         }
     } catch (const std::exception& e) {
-        // Log but don't crash
+        tc::Log::error(e, "PythonComponent::start");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -42,6 +42,7 @@ static void py_cb_update(void* py_self, float dt) {
             self.attr("update")(dt);
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::update");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -55,6 +56,7 @@ static void py_cb_fixed_update(void* py_self, float dt) {
             self.attr("fixed_update")(dt);
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::fixed_update");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -68,6 +70,7 @@ static void py_cb_on_destroy(void* py_self) {
             self.attr("on_destroy")();
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_destroy");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -81,6 +84,7 @@ static void py_cb_on_added_to_entity(void* py_self) {
             self.attr("on_added_to_entity")();
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_added_to_entity");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -94,6 +98,7 @@ static void py_cb_on_removed_from_entity(void* py_self) {
             self.attr("on_removed_from_entity")();
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_removed_from_entity");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -111,6 +116,7 @@ static void py_cb_on_added(void* py_self, void* scene) {
             self.attr("on_added")(py_scene);
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_added");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -124,6 +130,7 @@ static void py_cb_on_removed(void* py_self) {
             self.attr("on_removed")();
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_removed");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -137,6 +144,7 @@ static void py_cb_on_editor_start(void* py_self) {
             self.attr("on_editor_start")();
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_editor_start");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -159,6 +167,7 @@ static bool py_drawable_cb_has_phase(void* py_self, const char* phase_mark) {
             }
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "Drawable::has_phase");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -178,7 +187,7 @@ static void py_drawable_cb_draw_geometry(void* py_self, void* render_context, co
             self.attr("draw_geometry")(py_ctx, gid);
         }
     } catch (const std::exception& e) {
-        tc_log_warn("[Drawable] Python draw_geometry exception: %s", e.what());
+        tc::Log::warn(e, "Drawable::draw_geometry");
     }
     PyGILState_Release(gstate);
 }
@@ -219,6 +228,7 @@ static void* py_drawable_cb_get_geometry_draws(void* py_self, const char* phase_
             result = &cached;
         }
     } catch (const std::exception& e) {
+        tc::Log::error(e, "Drawable::get_geometry_draws");
         PyErr_Print();
     }
     PyGILState_Release(gstate);

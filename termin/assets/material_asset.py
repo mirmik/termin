@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Dict
 import numpy as np
 
 from termin.assets.data_asset import DataAsset
+from termin._native import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.material import Material
@@ -94,6 +95,7 @@ class MaterialAsset(DataAsset["Material"]):
                 if "uuid" not in data:
                     self.save_to_file()
             except Exception:
+                log.warning(f"[MaterialAsset] Failed to re-read material file for UUID check: {self._source_path}")
                 pass
 
     # --- Saving (materials save to their own file, not spec) ---
@@ -125,6 +127,7 @@ class MaterialAsset(DataAsset["Material"]):
             self.mark_just_saved()
             return True
         except Exception:
+            log.error(f"[MaterialAsset] Failed to save material to file: {save_path}", exc_info=True)
             return False
 
     def update_from(self, other: "MaterialAsset") -> None:

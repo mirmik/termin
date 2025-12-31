@@ -1,7 +1,7 @@
 #include "log_bindings.hpp"
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
-#include "../../core_c/include/tc_log.h"
+#include "tc_log.hpp"
 
 namespace nb = nanobind;
 
@@ -12,9 +12,9 @@ static void py_log_callback_wrapper(tc_log_level level, const char* message) {
         nb::gil_scoped_acquire acquire;
         try {
             g_py_callback(static_cast<int>(level), std::string(message));
-        } catch (const std::exception& e) {
-            // Don't recurse if callback fails
-            fprintf(stderr, "[LOG CALLBACK ERROR] %s\n", e.what());
+        } catch (const std::exception&) {
+            // Don't recurse if callback fails - silently drop
+            // Can't log here or we'd infinite loop
         }
     }
 }
@@ -58,6 +58,45 @@ void bind_log(nb::module_& m) {
     m.def("error", [](const std::string& msg) {
         tc_log_error("%s", msg.c_str());
     }, nb::arg("message"), "Log error message");
+
+    // Alias for consistency with Python's logging module
+    m.def("warning", [](const std::string& msg) {
+        tc_log_warn("%s", msg.c_str());
+    }, nb::arg("message"), "Log warning message (alias for warn)");
+
+    // Log error with exception traceback (like Python's logging.exception)
+    m.def("exception", [](const std::string& msg) {
+        // Get current exception info via Python's traceback module
+        nb::module_ traceback = nb::module_::import_("traceback");
+        nb::object format_exc = traceback.attr("format_exc");
+        std::string tb = nb::cast<std::string>(format_exc());
+
+        // Log message + traceback
+        tc_log_error("%s\n%s", msg.c_str(), tb.c_str());
+    }, nb::arg("message"), "Log error message with current exception traceback");
+
+    // Log with optional exc_info (like Python's logging)
+    m.def("error", [](const std::string& msg, bool exc_info) {
+        if (exc_info) {
+            nb::module_ traceback = nb::module_::import_("traceback");
+            nb::object format_exc = traceback.attr("format_exc");
+            std::string tb = nb::cast<std::string>(format_exc());
+            tc_log_error("%s\n%s", msg.c_str(), tb.c_str());
+        } else {
+            tc_log_error("%s", msg.c_str());
+        }
+    }, nb::arg("message"), nb::arg("exc_info"), "Log error message with optional traceback");
+
+    m.def("warning", [](const std::string& msg, bool exc_info) {
+        if (exc_info) {
+            nb::module_ traceback = nb::module_::import_("traceback");
+            nb::object format_exc = traceback.attr("format_exc");
+            std::string tb = nb::cast<std::string>(format_exc());
+            tc_log_warn("%s\n%s", msg.c_str(), tb.c_str());
+        } else {
+            tc_log_warn("%s", msg.c_str());
+        }
+    }, nb::arg("message"), nb::arg("exc_info"), "Log warning message with optional traceback");
 }
 
 } // namespace termin

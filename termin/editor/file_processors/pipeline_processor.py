@@ -6,6 +6,7 @@ import json
 import os
 from typing import Set
 
+from termin._native import log
 from termin.editor.project_file_watcher import FileTypeProcessor
 
 
@@ -44,8 +45,8 @@ class PipelineFileProcessor(FileTypeProcessor):
 
             self._notify_reloaded(name)
 
-        except Exception as e:
-            print(f"[PipelineProcessor] Failed to load {path}: {e}")
+        except Exception:
+            log.error(f"[PipelineProcessor] Failed to load {path}", exc_info=True)
 
     def on_file_changed(self, path: str) -> None:
         """Reload modified pipeline."""
@@ -70,8 +71,8 @@ class PipelineFileProcessor(FileTypeProcessor):
 
             self._notify_reloaded(name)
 
-        except Exception as e:
-            print(f"[PipelineProcessor] Failed to reload {name}: {e}")
+        except Exception:
+            log.error(f"[PipelineProcessor] Failed to reload {name}", exc_info=True)
 
     def on_file_removed(self, path: str) -> None:
         """Handle pipeline file deletion."""

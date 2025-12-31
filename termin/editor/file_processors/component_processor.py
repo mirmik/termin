@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Set
 
+from termin._native import log
 from termin.editor.project_file_watcher import FileTypeProcessor
 
 
@@ -37,8 +38,8 @@ class ComponentFileProcessor(FileTypeProcessor):
                 for name in loaded:
                     self._notify_reloaded(name)
 
-        except Exception as e:
-            print(f"[ComponentProcessor] Failed to load {path}: {e}")
+        except Exception:
+            log.error(f"[ComponentProcessor] Failed to load {path}", exc_info=True)
 
     def on_file_changed(self, path: str) -> None:
         """Reload components from modified Python file."""
@@ -62,8 +63,8 @@ class ComponentFileProcessor(FileTypeProcessor):
             for name in loaded:
                 self._notify_reloaded(name)
 
-        except Exception as e:
-            print(f"[ComponentProcessor] Failed to reload {path}: {e}")
+        except Exception:
+            log.error(f"[ComponentProcessor] Failed to reload {path}", exc_info=True)
 
     def on_file_removed(self, path: str) -> None:
         """Handle Python file deletion."""

@@ -33,6 +33,7 @@ from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
+from termin._native import log
 from termin.assets.data_asset import DataAsset
 
 if TYPE_CHECKING:
@@ -219,9 +220,9 @@ class PrefabAsset(DataAsset[dict]):
                 # Deserialize value if needed
                 deserialized = self._deserialize_property_value(path, value)
                 PropertyPath.set(entity, path, deserialized)
-            except (KeyError, AttributeError) as e:
+            except (KeyError, AttributeError):
                 # Path doesn't exist in instance (structural difference)
-                print(f"[PrefabAsset] Cannot apply {path}: {e}")
+                log.warning(f"[PrefabAsset] Cannot apply property path: {path}", exc_info=True)
 
     def _deserialize_property_value(self, path: str, value: Any) -> Any:
         """
@@ -282,7 +283,7 @@ class PrefabAsset(DataAsset[dict]):
                     self._data["uuid"] = self.uuid
                     self.save_to_file()
             except Exception:
-                pass
+                log.warning(f"[PrefabAsset] Failed to auto-save UUID to {self._source_path}", exc_info=True)
 
     # --- Saving ---
 
@@ -326,8 +327,8 @@ class PrefabAsset(DataAsset[dict]):
             self._source_path = Path(save_path)
             self.mark_just_saved()
             return True
-        except Exception as e:
-            print(f"[PrefabAsset] Failed to save: {e}")
+        except Exception:
+            log.error(f"[PrefabAsset] Failed to save to {save_path}", exc_info=True)
             return False
 
     # --- Factory Methods ---

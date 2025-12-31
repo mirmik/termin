@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
+from termin._native import log
+
 if TYPE_CHECKING:  # только для типов, чтобы не ловить циклы импортов
     from termin.visualization.core.material import Material
     from termin.assets.material_asset import MaterialAsset
@@ -499,7 +501,7 @@ class ResourceManager:
         elif result.resource_type == "ui":
             self._register_ui_file(name, result)
         else:
-            print(f"[ResourceManager] Unknown resource type: {result.resource_type}")
+            log.warn(f"[ResourceManager] Unknown resource type: {result.resource_type}")
 
     def reload_file(self, result: "PreLoadResult") -> None:
         """
@@ -534,7 +536,7 @@ class ResourceManager:
         elif result.resource_type == "ui":
             self._reload_ui_file(name, result)
         else:
-            print(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
+            log.warn(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
 
     def _register_material_file(self, name: str, result: "PreLoadResult") -> None:
         """Register material from PreLoadResult."""
