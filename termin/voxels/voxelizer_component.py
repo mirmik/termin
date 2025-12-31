@@ -289,25 +289,25 @@ class VoxelizerComponent(PythonComponent):
                 mesh_data = self._debug_mesh_handle.mesh
                 gpu = self._debug_mesh_handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.tc_mesh, self._debug_mesh_handle.version)
+                    gpu.draw(context, mesh_data.mesh, self._debug_mesh_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_CONTOURS:
             if self.show_debug_contours and self._debug_contours_handle is not None:
                 mesh_data = self._debug_contours_handle.mesh
                 gpu = self._debug_contours_handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.tc_mesh, self._debug_contours_handle.version)
+                    gpu.draw(context, mesh_data.mesh, self._debug_contours_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_MULTI_NORMAL:
             if self.show_multi_normal_voxels and self._debug_multi_normal_handle is not None:
                 mesh_data = self._debug_multi_normal_handle.mesh
                 gpu = self._debug_multi_normal_handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.tc_mesh, self._debug_multi_normal_handle.version)
+                    gpu.draw(context, mesh_data.mesh, self._debug_multi_normal_handle.version)
         if geometry_id == "" or geometry_id == self.GEOMETRY_BOUNDARY:
             if self.show_boundary_voxels and self._debug_boundary_handle is not None:
                 mesh_data = self._debug_boundary_handle.mesh
                 gpu = self._debug_boundary_handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.tc_mesh, self._debug_boundary_handle.version)
+                    gpu.draw(context, mesh_data.mesh, self._debug_boundary_handle.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""

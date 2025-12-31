@@ -153,7 +153,7 @@ class GizmoPass(RenderFramePass):
                 mesh_data = mesh_handle.mesh
                 gpu = mesh_handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(ctx_render, mesh_data.tc_mesh, mesh_handle.version)
+                    gpu.draw(ctx_render, mesh_data.mesh, mesh_handle.version)
             index += 1
 
         # возвращаем нормальное состояние

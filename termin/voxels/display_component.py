@@ -248,7 +248,7 @@ class VoxelDisplayComponent(PythonComponent):
         if self._voxel_mesh is None:
             return
 
-        tc_mesh = self._voxel_mesh.tc_mesh
+        tc_mesh = self._voxel_mesh.mesh
         if tc_mesh is None:
             return
 

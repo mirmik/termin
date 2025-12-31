@@ -424,7 +424,7 @@ class LineRenderer(PythonComponent):
                 mesh_data = handle.mesh
                 gpu = handle.gpu
                 if mesh_data is not None and gpu is not None:
-                    gpu.draw(context, mesh_data.tc_mesh, handle.version)
+                    gpu.draw(context, mesh_data.mesh, handle.version)
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """

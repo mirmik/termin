@@ -129,7 +129,7 @@ class MeshDrawable:
         if mesh is None:
             return
         version = asset.version if asset else 0
-        self._gpu.draw(context, mesh.tc_mesh, version)
+        self._gpu.draw(context, mesh.mesh, version)
 
     def delete(self):
         """Удаляет GPU ресурсы."""
