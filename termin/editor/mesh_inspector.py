@@ -81,21 +81,22 @@ class MeshInspector(QWidget):
         layout.addWidget(header)
 
         # Preview widget (if backend available)
-        if self._window_backend is not None and self._graphics is not None:
-            from termin.editor.mesh_preview_widget import MeshPreviewWidget
-
-            self._preview_widget = MeshPreviewWidget(
-                window_backend=self._window_backend,
-                graphics=self._graphics,
-                parent=self,
-            )
-            self._preview_widget.setMinimumHeight(180)
-            layout.addWidget(self._preview_widget)
-
-            # Start render timer
-            self._render_timer = QTimer(self)
-            self._render_timer.timeout.connect(self._on_render_timer)
-            self._render_timer.start(33)  # ~30 FPS
+        # TODO: disabled for debugging - causes std::bad_alloc
+        # if self._window_backend is not None and self._graphics is not None:
+        #     from termin.editor.mesh_preview_widget import MeshPreviewWidget
+        #
+        #     self._preview_widget = MeshPreviewWidget(
+        #         window_backend=self._window_backend,
+        #         graphics=self._graphics,
+        #         parent=self,
+        #     )
+        #     self._preview_widget.setMinimumHeight(180)
+        #     layout.addWidget(self._preview_widget)
+        #
+        #     # Start render timer
+        #     self._render_timer = QTimer(self)
+        #     self._render_timer.timeout.connect(self._on_render_timer)
+        #     self._render_timer.start(33)  # ~30 FPS
 
         # Info Form
         form = QFormLayout()
