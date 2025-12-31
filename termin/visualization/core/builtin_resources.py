@@ -250,6 +250,7 @@ def register_builtin_meshes(rm: "ResourceManager") -> List[str]:
     )
 
     registered = []
+    print("[DEBUG] register_builtin_meshes called")
 
     # Cube with correct UVs (texture on each face)
     if "Cube" not in rm._mesh_assets:
@@ -275,6 +276,7 @@ def register_builtin_meshes(rm: "ResourceManager") -> List[str]:
         rm.register_mesh_asset("Cylinder", cylinder, uuid=BUILTIN_UUIDS["Cylinder"])
         registered.append("Cylinder")
 
+    print(f"[DEBUG] register_builtin_meshes registered: {registered}")
     return registered
 
 
