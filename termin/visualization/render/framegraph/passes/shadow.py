@@ -240,6 +240,8 @@ class ShadowPass(RenderFramePass):
                 if not component.enabled:
                     continue
 
+                # DEBUG: find problematic component
+                print(f"DEBUG: checking component {type(component).__name__} on entity {entity.name}", flush=True)
                 if not isinstance(component, Drawable):
                     continue
 
