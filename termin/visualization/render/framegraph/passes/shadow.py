@@ -242,6 +242,7 @@ class ShadowPass(RenderFramePass):
 
                 # DEBUG: find problematic component
                 print(f"DEBUG: checking component {type(component).__name__} on entity {entity.name}", flush=True)
+                print(f"  component id={id(component)}, repr={repr(component)}", flush=True)
                 # Bypass isinstance to debug which attribute causes segfault
                 print(f"  hasattr phase_marks...", flush=True)
                 has_pm = hasattr(component, "phase_marks")
