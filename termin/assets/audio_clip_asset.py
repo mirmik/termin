@@ -26,6 +26,7 @@ import ctypes
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from termin._native import log
 from termin.assets.asset import Asset
 
 if TYPE_CHECKING:
@@ -116,7 +117,7 @@ class AudioClipAsset(Asset):
         self._loaded = True
         self._bump_version()
 
-        print(f"[AudioClipAsset] Loaded: {self._name}")
+        log.debug(f"[AudioClipAsset] Loaded: {self._name}")
         return True
 
     def unload(self) -> None:

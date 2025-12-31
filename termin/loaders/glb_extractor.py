@@ -8,6 +8,7 @@ from typing import List, Tuple
 
 import numpy as np
 
+from termin._native import log
 from termin.loaders.glb_loader import load_glb_file, GLBMeshData
 
 
@@ -88,7 +89,7 @@ def extract_glb(glb_path: Path, output_dir: Path = None) -> Tuple[Path, List[Pat
         obj_path = output_dir / f"{safe_name}.obj"
         save_mesh_as_obj(mesh, obj_path)
         created_files.append(obj_path)
-        print(f"[GLB Extract] Saved mesh: {obj_path.name}")
+        log.info(f"[GLB Extract] Saved mesh: {obj_path.name}")
 
     # Extract textures
     textures_dir = None
@@ -106,7 +107,7 @@ def extract_glb(glb_path: Path, output_dir: Path = None) -> Tuple[Path, List[Pat
         tex_path = textures_dir / f"{safe_name}{ext}"
         tex_path.write_bytes(tex.data)
         created_files.append(tex_path)
-        print(f"[GLB Extract] Saved texture: {tex_path.name} ({len(tex.data)} bytes)")
+        log.info(f"[GLB Extract] Saved texture: {tex_path.name} ({len(tex.data)} bytes)")
 
     # Save material info
     if scene_data.materials:
@@ -122,9 +123,9 @@ def extract_glb(glb_path: Path, output_dir: Path = None) -> Tuple[Path, List[Pat
             lines.append("")
         mat_info_path.write_text("\n".join(lines), encoding="utf-8")
         created_files.append(mat_info_path)
-        print(f"[GLB Extract] Saved materials info: {mat_info_path.name}")
+        log.info(f"[GLB Extract] Saved materials info: {mat_info_path.name}")
 
-    print(f"[GLB Extract] Extracted {len(scene_data.meshes)} meshes, {len(scene_data.textures)} textures to {output_dir}")
+    log.info(f"[GLB Extract] Extracted {len(scene_data.meshes)} meshes, {len(scene_data.textures)} textures to {output_dir}")
 
     # Extract animations
     anim_files = extract_animations(glb_path, output_dir, scene_data)
@@ -173,9 +174,9 @@ def extract_animations(
         anim_path = output_dir / f"{safe_name}.tanim"
         save_animation_clip(clip, anim_path)
         created_files.append(anim_path)
-        print(f"[GLB Extract] Saved animation: {anim_path.name} ({clip.duration:.2f}s, {len(clip.channels)} channels)")
+        log.info(f"[GLB Extract] Saved animation: {anim_path.name} ({clip.duration:.2f}s, {len(clip.channels)} channels)")
 
     if created_files:
-        print(f"[GLB Extract] Extracted {len(created_files)} animation(s)")
+        log.info(f"[GLB Extract] Extracted {len(created_files)} animation(s)")
 
     return created_files

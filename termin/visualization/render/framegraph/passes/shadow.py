@@ -16,6 +16,7 @@ from typing import Dict, List, TYPE_CHECKING
 
 import numpy as np
 
+from termin._native import log
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
@@ -392,7 +393,7 @@ class ShadowPass(RenderFramePass):
 
         if self._DEBUG_DRAW_COUNT:
             total_draws = len(draw_calls) * len(shadow_lights)
-            print(f"[ShadowPass] draw_calls: {len(draw_calls)}, lights: {len(shadow_lights)}, total: {total_draws}")
+            log.debug(f"[ShadowPass] draw_calls: {len(draw_calls)}, lights: {len(shadow_lights)}, total: {total_draws}")
 
         # Сбрасываем состояние
         graphics.apply_render_state(RenderState())

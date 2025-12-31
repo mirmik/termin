@@ -4,6 +4,8 @@ import numpy as np
 
 import os
 import sys
+
+from termin._native import log
 from termin.visualization.platform.backends.base import GraphicsBackend, GPUTextureHandle
 
 
@@ -49,8 +51,8 @@ def get_default_font(size: int = 14) -> "FontTextureAtlas | None":
         if font_path:
             try:
                 _default_font_atlas = FontTextureAtlas(font_path, size)
-            except Exception as e:
-                print(f"[Font] Failed to load system font: {e}")
+            except Exception:
+                log.warning("[Font] Failed to load system font", exc_info=True)
     return _default_font_atlas
 
 

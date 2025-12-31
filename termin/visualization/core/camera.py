@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 import numpy as np
 
+from termin._native import log
 from termin.geombase import Pose3
 
 from termin.editor.inspect_field import InspectField, inspect
@@ -439,8 +440,7 @@ class OrbitCameraController(CameraController):
         if self._prevent_moving:
             return
         if self.camera_component is None:
-            print(f"[OrbitCameraController.on_mouse_move] ERROR: camera_component is None!")
-            print(f"  self={self}, entity={self.entity}, _started={self._started}")
+            log.error(f"[OrbitCameraController.on_mouse_move] camera_component is None! self={self}, entity={self.entity}, _started={self._started}")
             return
         if not self.camera_component.has_viewport(event.viewport):
             return

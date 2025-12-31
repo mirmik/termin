@@ -24,6 +24,7 @@ from PyQt6.QtCore import Qt, QModelIndex, QDir, QFileInfo, QMimeData, QObject, Q
 from PyQt6.QtGui import QDrag
 from PyQt6.QtWidgets import QFileIconProvider
 
+from termin._native import log
 from termin.editor.settings import EditorSettings
 from termin.editor.drag_drop import EditorMimeTypes, create_asset_path_mime_data
 
@@ -69,9 +70,9 @@ def _sync_stdlib(project_root: Path) -> None:
             updated_count += 1
 
     if created:
-        print(f"[ProjectBrowser] stdlib deployed: {updated_count} file(s)")
+        log.info(f"[ProjectBrowser] stdlib deployed: {updated_count} file(s)")
     elif updated_count > 0:
-        print(f"[ProjectBrowser] stdlib synced: {updated_count} file(s) updated")
+        log.info(f"[ProjectBrowser] stdlib synced: {updated_count} file(s) updated")
 
 
 def _create_material_icon() -> QIcon:

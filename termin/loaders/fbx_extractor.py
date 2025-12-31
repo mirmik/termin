@@ -7,6 +7,7 @@ from typing import List, Tuple
 
 import numpy as np
 
+from termin._native import log
 from termin.loaders.fbx_loader import load_fbx_file, FBXMeshData
 
 
@@ -97,7 +98,7 @@ def extract_fbx(fbx_path: Path, output_dir: Path = None) -> Tuple[Path, List[Pat
         obj_path = output_dir / f"{safe_name}.obj"
         save_mesh_as_obj(mesh, obj_path)
         created_files.append(obj_path)
-        print(f"[FBX Extract] Saved mesh: {obj_path.name}")
+        log.info(f"[FBX Extract] Saved mesh: {obj_path.name}")
 
     # Extract embedded textures
     textures_dir = None
@@ -129,7 +130,7 @@ def extract_fbx(fbx_path: Path, output_dir: Path = None) -> Tuple[Path, List[Pat
 
         tex_path.write_bytes(tex.content)
         created_files.append(tex_path)
-        print(f"[FBX Extract] Saved texture: {tex_path.name} ({len(tex.content)} bytes)")
+        log.info(f"[FBX Extract] Saved texture: {tex_path.name} ({len(tex.content)} bytes)")
 
     # Save material info as reference
     if scene_data.materials:
@@ -145,10 +146,10 @@ def extract_fbx(fbx_path: Path, output_dir: Path = None) -> Tuple[Path, List[Pat
             lines.append("")
         mat_info_path.write_text("\n".join(lines), encoding="utf-8")
         created_files.append(mat_info_path)
-        print(f"[FBX Extract] Saved materials info: {mat_info_path.name}")
+        log.info(f"[FBX Extract] Saved materials info: {mat_info_path.name}")
 
     embedded_tex_count = sum(1 for t in scene_data.textures if t.content is not None)
-    print(f"[FBX Extract] Extracted {len(scene_data.meshes)} meshes, {embedded_tex_count} textures to {output_dir}")
+    log.info(f"[FBX Extract] Extracted {len(scene_data.meshes)} meshes, {embedded_tex_count} textures to {output_dir}")
 
     # Extract animations
     anim_files = extract_animations(fbx_path, output_dir, scene_data)
@@ -202,9 +203,9 @@ def extract_animations(
         anim_path = output_dir / f"{safe_name}.tanim"
         save_animation_clip(clip, anim_path)
         created_files.append(anim_path)
-        print(f"[FBX Extract] Saved animation: {anim_path.name} ({clip.duration:.2f}s, {len(clip.channels)} channels)")
+        log.info(f"[FBX Extract] Saved animation: {anim_path.name} ({clip.duration:.2f}s, {len(clip.channels)} channels)")
 
     if created_files:
-        print(f"[FBX Extract] Extracted {len(created_files)} animation(s)")
+        log.info(f"[FBX Extract] Extracted {len(created_files)} animation(s)")
 
     return created_files

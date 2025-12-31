@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal
 
+from termin._native import log
 from termin.editor.drag_drop import EditorMimeTypes, parse_entity_mime_data
 from termin.visualization.core.entity_handle import EntityHandle
 
@@ -136,11 +137,10 @@ class EntityListWidget(QWidget):
         - List[Entity] (C++ Entity pointers)
         - Mixed list
         """
-        # DEBUG
-        print(f"[EntityListWidget.set_value] items={items}, type={type(items)}")
+        log.debug(f"[EntityListWidget.set_value] items={items}, type={type(items)}")
         if items:
             for i, item in enumerate(items):
-                print(f"  [{i}] type={type(item)}, value={item}")
+                log.debug(f"  [{i}] type={type(item)}, value={item}")
 
         self._updating = True
         try:
@@ -155,10 +155,10 @@ class EntityListWidget(QWidget):
                         # It's an Entity object - wrap in EntityHandle
                         self._handles.append(EntityHandle.from_entity(item))
                     else:
-                        print(f"  [EntityListWidget] Skipping invalid item: {item}")
+                        log.debug(f"  [EntityListWidget] Skipping invalid item: {item}")
             self._rebuild_list()
             self._update_buttons()
-            print(f"[EntityListWidget.set_value] result: {len(self._handles)} handles")
+            log.debug(f"[EntityListWidget.set_value] result: {len(self._handles)} handles")
         finally:
             self._updating = False
 

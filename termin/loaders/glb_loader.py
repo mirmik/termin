@@ -13,6 +13,8 @@ from typing import List, Optional, Dict, Any
 
 import numpy as np
 
+from termin._native import log
+
 
 # ---------- DATA CLASSES ----------
 
@@ -674,7 +676,7 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
     if np.allclose(root_scale, [1.0, 1.0, 1.0]):
         return False
 
-    print(f"[normalize_glb_scale] Root scale: {root_scale}")
+    log.debug(f"[normalize_glb_scale] Root scale: {root_scale}")
 
     # Use uniform scale factor (assumes x == y == z)
     scale_factor = float(root_scale[0])

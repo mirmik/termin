@@ -2,6 +2,8 @@
 import os
 from pathlib import Path
 
+from termin._native import log
+
 from PyQt6 import uic
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QListView, QLabel, QMenu, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QPlainTextEdit
 from PyQt6.QtWidgets import QStatusBar, QToolBar, QPushButton, QSizePolicy
@@ -1595,7 +1597,7 @@ class EditorWindow(QMainWindow):
                 f"Standard library deployed to:\n{target_path}\n\n"
                 "GLSL files can now be used with #include directive.",
             )
-            print(f"[Editor] Standard library deployed to {target_path}")
+            log.info(f"[Editor] Standard library deployed to {target_path}")
         except Exception as e:
             QMessageBox.critical(
                 self,
@@ -1658,7 +1660,7 @@ class EditorWindow(QMainWindow):
                 "Migration Complete",
                 f"Successfully migrated {migrated} .spec files to .meta.",
             )
-            print(f"[Editor] Migrated {migrated} .spec files to .meta")
+            log.info(f"[Editor] Migrated {migrated} .spec files to .meta")
 
     # ----------- WorldPersistence колбэки -----------
 

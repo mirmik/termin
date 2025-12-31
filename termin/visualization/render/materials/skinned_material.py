@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from termin._native import log
 from termin.visualization.core.material import Material
 from termin.visualization.render.shader import ShaderProgram
 
@@ -227,14 +228,14 @@ class SkinnedMaterial(Material):
         from termin.visualization.render.texture import get_white_texture
 
         if self._DEBUG_INIT:
-            print(f"[SkinnedMaterial.__init__] Creating SkinnedMaterial with color={color}")
+            log.debug(f"[SkinnedMaterial.__init__] Creating SkinnedMaterial with color={color}")
 
         shader = skinned_shader()
         white_tex = get_white_texture()
         super().__init__(shader=shader, color=color, textures={"u_albedo_texture": white_tex})
 
         if self._DEBUG_INIT:
-            print(f"  shader={shader}")
-            print(f"  phases={len(self.phases)}")
+            log.debug(f"  shader={shader}")
+            log.debug(f"  phases={len(self.phases)}")
             for i, p in enumerate(self.phases):
-                print(f"  phase[{i}]: phase_mark={p.phase_mark!r}, shader={p.shader_programm}")
+                log.debug(f"  phase[{i}]: phase_mark={p.phase_mark!r}, shader={p.shader_programm}")

@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np
 
+from termin._native import log
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.animation_clip_handle import AnimationClipHandle
 from termin.editor.inspect_field import InspectField
@@ -59,13 +60,13 @@ class AnimationPlayer(PythonComponent):
     def _set_clip_handles(self, handles: List[AnimationClipHandle] | None) -> None:
         """Setter for clips InspectField."""
         if self._DEBUG_LIFECYCLE:
-            print(f"[AnimationPlayer._set_clip_handles] handles={len(handles) if handles else 0}")
+            log.debug(f"[AnimationPlayer._set_clip_handles] handles={len(handles) if handles else 0}")
             if handles:
                 for i, h in enumerate(handles):
                     asset = h.asset
                     asset_uuid = asset.uuid[:8] if asset and asset.uuid else 'None'
                     clip_name = h.clip.name if h.clip else 'None'
-                    print(f"  [{i}] asset_uuid={asset_uuid}..., clip={clip_name}")
+                    log.debug(f"  [{i}] asset_uuid={asset_uuid}..., clip={clip_name}")
         self._clip_handles = handles if handles else []
         self._rebuild_clips_cache()
 
@@ -85,13 +86,13 @@ class AnimationPlayer(PythonComponent):
             if clip is not None:
                 self.clips[clip.name] = clip
         if self._DEBUG_LIFECYCLE:
-            print(f"[AnimationPlayer._rebuild_clips_cache] clips={list(self.clips.keys())}")
+            log.debug(f"[AnimationPlayer._rebuild_clips_cache] clips={list(self.clips.keys())}")
 
     def start(self) -> None:
         """Called once before the first update. Find SkeletonController on entity."""
         if self._DEBUG_LIFECYCLE:
-            print(f"[AnimationPlayer.start] entity={self.entity.name if self.entity else 'None'}")
-            print(f"  _clip_handles={len(self._clip_handles)}, _current_clip_name={self._current_clip_name!r}, playing={self.playing}")
+            log.debug(f"[AnimationPlayer.start] entity={self.entity.name if self.entity else 'None'}")
+            log.debug(f"  _clip_handles={len(self._clip_handles)}, _current_clip_name={self._current_clip_name!r}, playing={self.playing}")
         super().start()
         self._acquire_skeleton()
         self._rebuild_clips_cache()
@@ -99,12 +100,12 @@ class AnimationPlayer(PythonComponent):
         if self._current_clip_name and self._current_clip_name in self.clips:
             self.current = self.clips[self._current_clip_name]
             if self._DEBUG_LIFECYCLE:
-                print(f"  Restored current clip: {self._current_clip_name}")
+                log.debug(f"  Restored current clip: {self._current_clip_name}")
         elif self._current_clip_name:
             if self._DEBUG_LIFECYCLE:
-                print(f"  WARNING: current clip '{self._current_clip_name}' not found in clips!")
+                log.debug(f"  WARNING: current clip '{self._current_clip_name}' not found in clips!")
         if self._DEBUG_LIFECYCLE:
-            print(f"  After start: current={self.current.name if self.current else 'None'}, playing={self.playing}, skeleton={self._target_skeleton is not None}")
+            log.debug(f"  After start: current={self.current.name if self.current else 'None'}, playing={self.playing}, skeleton={self._target_skeleton is not None}")
 
     def _acquire_skeleton(self) -> None:
         """Find SkeletonController on entity and get skeleton_instance."""
@@ -160,7 +161,7 @@ class AnimationPlayer(PythonComponent):
         if not (self.enabled and self.playing and self.current):
             if self._DEBUG_LIFECYCLE and not AnimationPlayer._debug_update_logged:
                 AnimationPlayer._debug_update_logged = True
-                print(f"[AnimationPlayer.update] SKIPPED: enabled={self.enabled}, playing={self.playing}, current={self.current is not None}")
+                log.debug(f"[AnimationPlayer.update] SKIPPED: enabled={self.enabled}, playing={self.playing}, current={self.current is not None}")
             return
 
         self.time += dt
@@ -169,11 +170,11 @@ class AnimationPlayer(PythonComponent):
 
         if self._DEBUG_UPDATE and AnimationPlayer._debug_frame_count < 3:
             AnimationPlayer._debug_frame_count += 1
-            print(f"[AnimationPlayer.update] clip={self.current.name!r}, duration={self.current.duration:.3f}s, time={self.time:.3f}")
-            print(f"  channels={len(sample)}, target_skeleton={self._target_skeleton is not None}, skeleton_id={id(self._target_skeleton) if self._target_skeleton else 0}")
+            log.debug(f"[AnimationPlayer.update] clip={self.current.name!r}, duration={self.current.duration:.3f}s, time={self.time:.3f}")
+            log.debug(f"  channels={len(sample)}, target_skeleton={self._target_skeleton is not None}, skeleton_id={id(self._target_skeleton) if self._target_skeleton else 0}")
             for name, data in list(sample.items())[:3]:
                 tr, rot, sc = data
-                print(f"  {name}: tr={tr}, rot={rot}")
+                log.debug(f"  {name}: tr={tr}, rot={rot}")
 
         # If we have a target skeleton, apply bone transforms
         if self._target_skeleton is not None:
@@ -210,9 +211,9 @@ class AnimationPlayer(PythonComponent):
             AnimationPlayer._debug_skeleton_frame += 1
             skeleton_bones = [b.name for b in self._target_skeleton.skeleton_data.bones[:5]]
             sample_channels = list(sample.keys())[:5]
-            print(f"[_update_skeleton] found {found_count}/{len(sample)} channels matching bones")
-            print(f"  skeleton bones[:5]: {skeleton_bones}")
-            print(f"  sample channels[:5]: {sample_channels}")
+            log.debug(f"[_update_skeleton] found {found_count}/{len(sample)} channels matching bones")
+            log.debug(f"  skeleton bones[:5]: {skeleton_bones}")
+            log.debug(f"  sample channels[:5]: {sample_channels}")
 
     def _update_entity(self, sample: Dict):
         """Update entity transform from animation sample (legacy mode)."""

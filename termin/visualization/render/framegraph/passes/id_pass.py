@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass
 from typing import List, Tuple, TYPE_CHECKING
 
+from termin._native import log
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 from termin.visualization.core.picking import id_to_rgb
@@ -227,4 +228,4 @@ class IdPass(RenderFramePass):
                 self._blit_to_debugger(graphics, fb)
 
         if self._DEBUG_DRAW_COUNT:
-            print(f"[IdPass] draw_calls: {len(draw_calls)}")
+            log.debug(f"[IdPass] draw_calls: {len(draw_calls)}")
