@@ -40,18 +40,12 @@ inline MeshHandle MeshHandle::from_mesh3(
         nb::object mesh_asset_module = nb::module_::import_("termin.visualization.core.mesh_asset");
         nb::object MeshAsset = mesh_asset_module.attr("MeshAsset");
 
+        // Use MeshAsset.from_mesh3() which creates TcMesh from Mesh3
         nb::object asset;
         if (source_path.empty()) {
-            asset = MeshAsset(
-                nb::arg("mesh_data") = mesh,
-                nb::arg("name") = name
-            );
+            asset = MeshAsset.attr("from_mesh3")(mesh, name);
         } else {
-            asset = MeshAsset(
-                nb::arg("mesh_data") = mesh,
-                nb::arg("name") = name,
-                nb::arg("source_path") = source_path
-            );
+            asset = MeshAsset.attr("from_mesh3")(mesh, name, source_path);
         }
         return MeshHandle(asset);
     } catch (const nb::python_error& e) {
