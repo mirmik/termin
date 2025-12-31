@@ -223,7 +223,7 @@ class FixedRotationJoint3D(Contribution):
         pose = self.body.pose()
         self.coords_of_joint = coords_of_joint.copy() if coords_of_joint is not None else pose.lin.copy()
         # фиксируем локальные координаты точки шарнира на теле
-        self.r_local = pose.inverse_transform_point(self.coords_of_joint)
+        self.r_local = np.asarray(pose.inverse_transform_point(self.coords_of_joint))
 
         super().__init__([body.acceleration_var, self.internal_force], assembler=assembler)
 
@@ -312,8 +312,8 @@ class RevoluteJoint3D(Contribution):
         poseB = self.bodyB.pose()
 
         # локальные координаты точки шарнира на каждом теле
-        self.rA_local = poseA.inverse_transform_point(cW)  # в СК A
-        self.rB_local = poseB.inverse_transform_point(cW)  # в СК B
+        self.rA_local = np.asarray(poseA.inverse_transform_point(cW))  # в СК A
+        self.rB_local = np.asarray(poseB.inverse_transform_point(cW))  # в СК B
 
         # кэш для rB, выраженного в СК A, и для R_AB
         self.R_AB = np.eye(3)

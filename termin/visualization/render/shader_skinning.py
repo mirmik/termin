@@ -275,9 +275,10 @@ def get_skinned_shader(shader: ShaderProgram) -> ShaderProgram:
     return result
 
 
-# Cache for skinned material variants using WeakKeyDictionary
-# When original material is GC'd, cache entry is automatically removed
-_skinned_material_cache: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+# Cache for skinned material variants keyed by material id
+# Cleared via clear_skinning_cache() when shaders are reloaded
+# Note: Cannot use WeakKeyDictionary because C++ Material objects don't support weak references
+_skinned_material_cache: dict[int, Material] = {}
 
 
 def get_skinned_material(material: Material) -> Material:
@@ -292,8 +293,9 @@ def get_skinned_material(material: Material) -> Material:
     Returns:
         Material with skinning support
     """
-    if material in _skinned_material_cache:
-        return _skinned_material_cache[material]
+    mat_id = id(material)
+    if mat_id in _skinned_material_cache:
+        return _skinned_material_cache[mat_id]
 
     # Create new material with skinned phases
     skinned_mat = Material()
@@ -315,7 +317,7 @@ def get_skinned_material(material: Material) -> Material:
         )
         skinned_mat.phases.append(skinned_phase)
 
-    _skinned_material_cache[material] = skinned_mat
+    _skinned_material_cache[mat_id] = skinned_mat
     return skinned_mat
 
 

@@ -66,13 +66,34 @@ void bind_pose3(nb::module_& m) {
         .def("__matmul__", [](const Pose3& a, const Pose3& b) { return a * b; })
         .def("inverse", &Pose3::inverse)
         .def("transform_point", nb::overload_cast<const Vec3&>(&Pose3::transform_point, nb::const_))
+        .def("transform_point", [](const Pose3& p, nb::object obj) {
+            return p.transform_point(py_to_vec3(obj));
+        })
         .def("transform_vector", nb::overload_cast<const Vec3&>(&Pose3::transform_vector, nb::const_))
+        .def("transform_vector", [](const Pose3& p, nb::object obj) {
+            return p.transform_vector(py_to_vec3(obj));
+        })
         .def("rotate_point", &Pose3::rotate_point)
+        .def("rotate_point", [](const Pose3& p, nb::object obj) {
+            return p.rotate_point(py_to_vec3(obj));
+        })
         .def("inverse_transform_point", nb::overload_cast<const Vec3&>(&Pose3::inverse_transform_point, nb::const_))
+        .def("inverse_transform_point", [](const Pose3& p, nb::object obj) {
+            return p.inverse_transform_point(py_to_vec3(obj));
+        })
         .def("inverse_transform_vector", nb::overload_cast<const Vec3&>(&Pose3::inverse_transform_vector, nb::const_))
+        .def("inverse_transform_vector", [](const Pose3& p, nb::object obj) {
+            return p.inverse_transform_vector(py_to_vec3(obj));
+        })
         // rotate_vector is an alias for transform_vector (for Pose3 without scale, they are the same)
         .def("rotate_vector", nb::overload_cast<const Vec3&>(&Pose3::transform_vector, nb::const_))
+        .def("rotate_vector", [](const Pose3& p, nb::object obj) {
+            return p.transform_vector(py_to_vec3(obj));
+        })
         .def("inverse_rotate_vector", nb::overload_cast<const Vec3&>(&Pose3::inverse_transform_vector, nb::const_))
+        .def("inverse_rotate_vector", [](const Pose3& p, nb::object obj) {
+            return p.inverse_transform_vector(py_to_vec3(obj));
+        })
         .def("normalized", &Pose3::normalized)
         .def("with_translation", nb::overload_cast<const Vec3&>(&Pose3::with_translation, nb::const_))
         .def("with_rotation", &Pose3::with_rotation)
@@ -86,6 +107,9 @@ void bind_pose3(nb::module_& m) {
         .def_static("identity", &Pose3::identity)
         .def_static("translation", nb::overload_cast<double, double, double>(&Pose3::translation))
         .def_static("rotation", nb::overload_cast<const Vec3&, double>(&Pose3::rotation))
+        .def_static("rotation", [](nb::object axis, double angle) {
+            return Pose3::rotation(py_to_vec3(axis), angle);
+        })
         .def_static("rotate_x", &Pose3::rotate_x)
         .def_static("rotate_y", &Pose3::rotate_y)
         .def_static("rotate_z", &Pose3::rotate_z)
