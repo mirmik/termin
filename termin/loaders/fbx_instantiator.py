@@ -64,6 +64,8 @@ def _extract_scale(matrix: np.ndarray) -> np.ndarray:
 
 def _fbx_mesh_to_tc_mesh(fbx_mesh: FBXMeshData) -> TcMesh:
     """Convert FBXMeshData to TcMesh."""
+    from termin.voxels.voxel_mesh import create_voxel_mesh
+
     vertices = fbx_mesh.vertices.astype(np.float32)
     indices = fbx_mesh.indices.reshape(-1, 3)
 
