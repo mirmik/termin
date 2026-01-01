@@ -32,65 +32,7 @@ from termin.lighting import LightType, LightShadowParams
 def build_scene(world):
     from termin.voxels.voxel_mesh import create_voxel_mesh
 
-    cube_mesh = CubeMesh()
-    cyl_mesh = CylinderMesh(radius=0.5, height=2.0)
-    cube_tc = create_voxel_mesh(
-        vertices=cube_mesh.vertices,
-        triangles=cube_mesh.triangles,
-        vertex_normals=cube_mesh.vertex_normals,
-        name="cube",
-    )
-    cyl_tc = create_voxel_mesh(
-        vertices=cyl_mesh.vertices,
-        triangles=cyl_mesh.triangles,
-        vertex_normals=cyl_mesh.vertex_normals,
-        name="cylinder",
-    )
-    red_material = Material(color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
-    blue_material = Material(color=np.array([0.3, 0.3, 0.8, 1.0], dtype=np.float32))
-    green_material = Material(color=np.array([0.3, 0.8, 0.3, 1.0], dtype=np.float32))
-
     scene = Scene()
-
-
-    entity_cyl = Entity(pose=Pose3.identity(), name="cylinder")
-    entity_cyl.add_component(MeshRenderer(cyl_tc, green_material))
-    entity_cyl.transform.relocate(Pose3(lin=np.array([-2.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
-    scene.add(entity_cyl)
-
-    entity = Entity(pose=Pose3.identity(), name="cube1")
-    entity.add_component(MeshRenderer(cube_tc, red_material))
-    scene.add(entity)
-
-    entity2 = Entity(pose=Pose3.identity(), name="cube2")
-    entity2.add_component(MeshRenderer(cube_tc, blue_material))
-    entity2.transform.relocate(Pose3(lin=np.array([3.0, 0.0, 0.0]), ang=np.array([0.0, 0.0, 0.0, 1.0])))
-    scene.add(entity2)
-
-    panel = Entity(pose=Pose3.identity(), name="cube2")
-    panel.add_component(MeshRenderer(cube_tc, blue_material))
-    panel.transform.relocate(GeneralPose3(
-        lin=np.array([0.0, 0.0, -3.0]),
-        ang=np.array([0.0, 0.0, 0.0, 1.0]),
-        scale=np.array([10.0, 10.0, 0.1])
-    ))
-    scene.add(panel)
->>>>>>> d799b06b70d8d2815a8edaf550387369cdc92b29
-
-
-    # Направленный источник света для теней (направление совпадает с ShadowPass)
-    light_entity = Entity(pose=Pose3.identity(), name="directional_light")
-    light_component = LightComponent(
-        light_type=LightType.DIRECTIONAL,
-        color=(1.0, 1.0, 1.0),
-        intensity=1.0,
-        shadows=LightShadowParams(enabled=True, map_resolution=2048),
-    )
-    light_entity.add_component(light_component)
-    # Направление света: [0.5, -1.0, 0.5] (совпадает с ShadowPass)
-    # Для directional light направление берётся из трансформа сущности
-    scene.add(light_entity)
-
     world.add_scene(scene)
 
     return scene
