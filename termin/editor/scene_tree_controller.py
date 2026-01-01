@@ -263,8 +263,12 @@ class SceneTreeController:
             i += 1
         name = f"{base}{i}"
 
-        ent = Entity(pose=Pose3.identity(), name=name)
-        cmd = AddEntityCommand(self._scene, ent, parent_transform=parent_transform)
+        # Create entity directly in scene's pool (no migration needed)
+        ent = self._scene.create_entity(name)
+        if parent_transform is not None:
+            ent.transform.set_parent(parent_transform)
+
+        cmd = AddEntityCommand(self._scene, ent, parent_transform=None)  # Already parented
         self._undo_handler(cmd, merge=False)
 
         self.add_entity(ent)

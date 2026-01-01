@@ -212,7 +212,8 @@ class AddEntityCommand(UndoCommand):
         if self._parent_transform is not None:
             self._entity.transform.set_parent(self._parent_transform)
 
-        self._scene.add(self._entity)
+        # scene.add() will migrate if needed, or just register components if already in pool
+        self._entity = self._scene.add(self._entity)
 
     def undo(self) -> None:
         self._scene.remove(self._entity)

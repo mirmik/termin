@@ -62,8 +62,6 @@ class Scene:
         self.uuid = uuid or ""
         self.runtime_id = 0
 
-        # Python-side entity list (for Python iteration)
-        self._entities: List[Entity] = []
         # Background color with alpha
         self._background_color = np.array(background_color, dtype=np.float32)
         self._input_components: List[InputComponent] = []
@@ -287,14 +285,15 @@ class Scene:
 
     @property
     def entities(self) -> List[Entity]:
-        """Get all entities in the scene."""
-        return self._entities
+        """Get all entities in the scene (from pool)."""
+        return self._tc_scene.get_all_entities()
 
     def create_entity(self, name: str = "") -> Entity:
         """Create a new entity directly in scene's pool.
 
-        This is the preferred way to create entities that will be added to
-        this scene - avoids migration overhead.
+        Creates entity in pool but does NOT register components or emit events.
+        Call add() after setup to complete registration, or use this for
+        entities that need no component registration.
 
         Args:
             name: Entity name (optional)
@@ -305,7 +304,7 @@ class Scene:
         return self._tc_scene.create_entity(name)
 
     def add_non_recurse(self, entity: Entity) -> Entity:
-        """Add entity to the scene, keeping the entities list sorted by priority.
+        """Add entity to the scene.
 
         Migrates entity to scene's pool if it's in a different pool.
         Old entity reference becomes invalid after migration.
@@ -319,21 +318,10 @@ class Scene:
         if not entity:
             raise RuntimeError("Failed to migrate entity to scene's pool")
 
-        # Insert sorted by priority (Python-side list)
-        idx = 0
-        for i, e in enumerate(self._entities):
-            if e.priority > entity.priority:
-                idx = i
-                break
-            idx = i + 1
-        self._entities.insert(idx, entity)
-
         # Register all components with C core scene
-        # This calls on_added via vtable for each component
         prev_scene = _current_scene
         _current_scene = self
         try:
-            # Register each component (triggers on_added via C vtable)
             for component in entity.components:
                 self.register_component(component)
 
@@ -362,16 +350,6 @@ class Scene:
         """Register a child entity that was already migrated with its parent."""
         global _current_scene
 
-        # Insert sorted by priority
-        idx = 0
-        for i, e in enumerate(self._entities):
-            if e.priority > entity.priority:
-                idx = i
-                break
-            idx = i + 1
-        self._entities.insert(idx, entity)
-
-        # Register components
         prev_scene = _current_scene
         _current_scene = self
         try:
@@ -387,11 +365,7 @@ class Scene:
             self._register_migrated_child(child)
 
     def remove(self, entity: Entity):
-        # Remove from Python list
-        if entity in self._entities:
-            self._entities.remove(entity)
-
-        # Remove from C core scene
+        # Remove from C core scene (frees entity in pool)
         self._tc_scene.remove_entity(entity)
 
         # Python-specific: emit Event and cleanup
@@ -715,13 +689,10 @@ class Scene:
         self._destroyed = True
 
         # Destroy all components in all entities
-        for entity in self._entities:
+        for entity in self.entities:
             for component in entity.components:
                 if hasattr(component, 'destroy'):
                     component.destroy()
-
-        # Clear entity list
-        self._entities.clear()
 
         # Clear input components and colliders
         self._input_components.clear()

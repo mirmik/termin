@@ -201,6 +201,21 @@ public:
         tc_scene_registry_set_name(_s, n.c_str());
     }
 
+    // Get all entities in scene's pool
+    std::vector<Entity> get_all_entities() const {
+        std::vector<Entity> result;
+        tc_entity_pool* pool = entity_pool();
+        if (!pool) return result;
+
+        tc_entity_pool_foreach(pool, [](tc_entity_pool* p, tc_entity_id id, void* user_data) -> bool {
+            auto* vec = static_cast<std::vector<Entity>*>(user_data);
+            vec->push_back(Entity(p, id));
+            return true;
+        }, &result);
+
+        return result;
+    }
+
     // Migrate entity to this scene's pool
     // Returns new Entity in scene's pool, old entity becomes invalid
     Entity migrate_entity(Entity& entity) {
@@ -268,6 +283,10 @@ void bind_tc_scene(nb::module_& m) {
         // Entity creation in pool
         .def("create_entity", &TcScene::create_entity, nb::arg("name") = "",
              "Create a new entity directly in scene's pool.")
+
+        // Get all entities
+        .def("get_all_entities", &TcScene::get_all_entities,
+             "Get all entities in scene's pool.")
 
         // Entity migration
         .def("migrate_entity", &TcScene::migrate_entity, nb::arg("entity"),
