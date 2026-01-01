@@ -105,6 +105,30 @@ tc_mesh* tc_mesh_get(const char* uuid) {
     return (tc_mesh*)tc_resource_map_get(g_meshes, uuid);
 }
 
+// Helper struct for name search
+typedef struct {
+    const char* name;
+    tc_mesh* result;
+} name_search_ctx;
+
+static bool name_search_callback(const tc_mesh* mesh, void* user_data) {
+    name_search_ctx* ctx = (name_search_ctx*)user_data;
+    if (mesh->name && strcmp(mesh->name, ctx->name) == 0) {
+        ctx->result = (tc_mesh*)mesh;
+        return false;  // Stop iteration
+    }
+    return true;  // Continue
+}
+
+tc_mesh* tc_mesh_get_by_name(const char* name) {
+    if (!g_meshes || !name) {
+        return NULL;
+    }
+    name_search_ctx ctx = { name, NULL };
+    tc_mesh_foreach(name_search_callback, &ctx);
+    return ctx.result;
+}
+
 tc_mesh* tc_mesh_get_or_create(const char* uuid) {
     // Auto-initialize if needed
     if (!g_meshes) {

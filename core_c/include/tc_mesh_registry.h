@@ -25,6 +25,9 @@ TC_API tc_mesh* tc_mesh_add(const char* uuid);
 // Get mesh by UUID, returns NULL if not found
 TC_API tc_mesh* tc_mesh_get(const char* uuid);
 
+// Get mesh by name, returns NULL if not found
+TC_API tc_mesh* tc_mesh_get_by_name(const char* name);
+
 // Get existing mesh or create new one if not found
 // If created, ref_count is 1. If existing, ref_count is incremented.
 // IMPORTANT: After creating a new mesh, set mesh->name for debugging!
