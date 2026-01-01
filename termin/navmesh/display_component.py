@@ -15,7 +15,6 @@ import numpy as np
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.material import Material
 from termin.mesh import TcMesh
-from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.navmesh_handle import NavMeshHandle
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.visualization.render.components.line_renderer import _build_line_ribbon
@@ -363,6 +362,7 @@ void main() {
 
         # Строим меш если есть треугольники
         if all_vertices:
+            from termin.voxels.voxel_mesh import create_voxel_mesh
             vertices = np.vstack(all_vertices).astype(np.float32)
             normals = np.vstack(all_normals).astype(np.float32)
             triangles = np.vstack(all_triangles).astype(np.int32)
@@ -425,6 +425,7 @@ void main() {
             return
 
         # Объединяем все ribbon'ы в один меш
+        from termin.voxels.voxel_mesh import create_voxel_mesh
         vertices = np.vstack(all_vertices).astype(np.float32)
         triangles = np.vstack(all_triangles).astype(np.int32)
 

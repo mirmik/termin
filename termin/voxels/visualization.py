@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Optional
 import numpy as np
 
 from termin.mesh import TcMesh
-from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.material import Material
 from termin.visualization.render.components import MeshRenderer
 
@@ -154,6 +153,7 @@ class VoxelVisualizer:
             triangles = triangles[:idx * TRIS_PER_CUBE]
             normals = normals[:idx * VERTS_PER_CUBE]
 
+        from termin.voxels.voxel_mesh import create_voxel_mesh
         self._mesh = create_voxel_mesh(
             vertices=vertices,
             triangles=triangles,
