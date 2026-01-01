@@ -12,7 +12,7 @@ from termin.mesh.mesh import CubeMesh
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.material import Material
-from termin.visualization.core.mesh_handle import MeshHandle
+from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.world import VisualizationWorld
 from termin.visualization.platform.backends import (
@@ -41,11 +41,16 @@ def build_physics_scene(world):
 
     # Meshes
     cube_mesh = CubeMesh()
-    cube_handle = MeshHandle.from_mesh3(cube_mesh, name="cube")
+    cube_tc = create_voxel_mesh(
+        vertices=cube_mesh.vertices,
+        triangles=cube_mesh.triangles,
+        vertex_normals=cube_mesh.vertex_normals,
+        name="cube",
+    )
 
     # Ground plane (visual only - physics uses world.ground_height)
     ground = Entity(pose=Pose3.identity(), name="ground")
-    ground.add_component(MeshRenderer(cube_handle, gray_material))
+    ground.add_component(MeshRenderer(cube_tc, gray_material))
     ground.transform.relocate(GeneralPose3(
         lin=np.array([0, 0, -0.05]),
         scale=np.array([10.0, 10.0, 0.1])
@@ -54,7 +59,7 @@ def build_physics_scene(world):
 
     # Falling cube 1
     cube1 = Entity(pose=Pose3.identity(), name="cube1")
-    cube1.add_component(MeshRenderer(cube_handle, red_material))
+    cube1.add_component(MeshRenderer(cube_tc, red_material))
     cube1.transform.relocate(Pose3.identity().with_translation(np.array([0.0, 0.0, 3.0])))
     cube1.add_component(RigidBodyComponent(mass=1.0, is_static=False))
     scene.add(cube1)
@@ -64,21 +69,21 @@ def build_physics_scene(world):
     angle = math.radians(30)
     quat = np.array([math.sin(angle/2), 0, 0, math.cos(angle/2)])
     cube2 = Entity(pose=Pose3.identity(), name="cube2")
-    cube2.add_component(MeshRenderer(cube_handle, blue_material))
+    cube2.add_component(MeshRenderer(cube_tc, blue_material))
     cube2.transform.relocate(Pose3(ang=quat, lin=np.array([2.0, 0.0, 4.0])))
     cube2.add_component(RigidBodyComponent(mass=1.0, is_static=False))
     scene.add(cube2)
 
     # Falling cube 3 (higher)
     cube3 = Entity(pose=Pose3.identity(), name="cube3")
-    cube3.add_component(MeshRenderer(cube_handle, green_material))
+    cube3.add_component(MeshRenderer(cube_tc, green_material))
     cube3.transform.relocate(Pose3.identity().with_translation(np.array([-2.0, 0.0, 5.0])))
     cube3.add_component(RigidBodyComponent(mass=1.0, is_static=False))
     scene.add(cube3)
 
     # Falling cube 4 (will land on cube1)
     cube4 = Entity(pose=Pose3.identity(), name="cube4")
-    cube4.add_component(MeshRenderer(cube_handle, yellow_material))
+    cube4.add_component(MeshRenderer(cube_tc, yellow_material))
     cube4.transform.relocate(Pose3.identity().with_translation(np.array([0.0, 0.0, 6.0])))
     cube4.add_component(RigidBodyComponent(mass=1.0, is_static=False))
     scene.add(cube4)

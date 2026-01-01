@@ -9,7 +9,7 @@ if TYPE_CHECKING:  # только для типов, чтобы не ловит�
     from termin.visualization.core.material import Material
     from termin.assets.material_asset import MaterialAsset
     from termin.assets.mesh_asset import MeshAsset
-    from termin.assets.mesh_handle import MeshHandle
+    from termin.mesh import TcMesh
     from termin.assets.texture_handle import TextureHandle
     from termin.mesh.mesh import Mesh3
     from termin.assets.glb_asset import GLBAsset
@@ -176,15 +176,24 @@ class ResourceManager:
         """Create AssetRegistry for meshes."""
         from termin.assets.asset_registry import AssetRegistry
         from termin.assets.mesh_asset import MeshAsset
-        from termin.assets.mesh_handle import MeshHandle
+        from termin.mesh import TcMesh
 
-        def data_from_asset(asset: MeshAsset) -> MeshHandle:
-            return MeshHandle.from_asset(asset)
+        def data_from_asset(asset: MeshAsset) -> TcMesh | None:
+            # Lazy load if not loaded
+            if asset.mesh_data is None:
+                asset.ensure_loaded()
+            return asset.mesh_data
 
-        def data_to_asset(handle: MeshHandle) -> MeshAsset | None:
-            return handle.get_asset()
+        def data_to_asset(mesh: TcMesh) -> MeshAsset | None:
+            if mesh is None or not mesh.is_valid:
+                return None
+            # Search through assets by TcMesh uuid
+            for asset in self._mesh_registry.assets.values():
+                if asset.mesh_data is not None and asset.mesh_data.uuid == mesh.uuid:
+                    return asset
+            return None
 
-        return AssetRegistry[MeshAsset, MeshHandle](
+        return AssetRegistry[MeshAsset, TcMesh](
             asset_class=MeshAsset,
             uuid_registry=self._assets_by_uuid,
             data_from_asset=data_from_asset,
@@ -1403,33 +1412,33 @@ class ResourceManager:
         """Регистрирует MeshAsset."""
         self._mesh_registry.register(name, asset, source_path, uuid)
 
-    def get_mesh(self, name: str) -> Optional["MeshHandle"]:
-        """Получить MeshHandle по имени."""
+    def get_mesh(self, name: str) -> Optional["TcMesh"]:
+        """Получить TcMesh по имени."""
         return self._mesh_registry.get(name)
 
     def list_mesh_names(self) -> list[str]:
         return self._mesh_registry.list_names()
 
-    def find_mesh_name(self, handle: "MeshHandle") -> Optional[str]:
-        """Найти имя меша по MeshHandle."""
-        if handle is None:
+    def find_mesh_name(self, mesh: "TcMesh") -> Optional[str]:
+        """Найти имя меша по TcMesh."""
+        if mesh is None:
             return None
-        name = self._mesh_registry.find_name(handle)
+        name = self._mesh_registry.find_name(mesh)
         if name:
             return name
-        # Fallback: try by name from handle
-        if handle.name and handle.name in self._mesh_assets:
-            return handle.name
+        # Fallback: try by TcMesh name
+        if mesh.is_valid and mesh.name and mesh.name in self._mesh_assets:
+            return mesh.name
         return None
 
-    def find_mesh_uuid(self, handle: "MeshHandle") -> Optional[str]:
-        """Найти UUID меша по MeshHandle."""
-        if handle is None:
+    def find_mesh_uuid(self, mesh: "TcMesh") -> Optional[str]:
+        """Найти UUID меша по TcMesh."""
+        if mesh is None:
             return None
-        return self._mesh_registry.find_uuid(handle)
+        return self._mesh_registry.find_uuid(mesh)
 
-    def get_mesh_by_uuid(self, uuid: str) -> Optional["MeshHandle"]:
-        """Получить MeshHandle по UUID."""
+    def get_mesh_by_uuid(self, uuid: str) -> Optional["TcMesh"]:
+        """Получить TcMesh по UUID."""
         return self._mesh_registry.get_by_uuid(uuid)
 
     def get_mesh_asset_by_uuid(self, uuid: str) -> Optional["MeshAsset"]:

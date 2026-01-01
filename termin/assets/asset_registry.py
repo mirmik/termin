@@ -17,7 +17,7 @@ from typing import (
 from termin.assets.asset import Asset
 
 AssetT = TypeVar("AssetT", bound=Asset)  # Asset type (MeshAsset, TextureAsset, etc.)
-DataT = TypeVar("DataT")  # Data/Handle type (MeshHandle, Material, VoxelGrid, etc.)
+DataT = TypeVar("DataT")  # Data/Handle type (TcMesh, Material, VoxelGrid, etc.)
 
 
 class AssetRegistry(Generic[AssetT, DataT]):
@@ -37,7 +37,7 @@ class AssetRegistry(Generic[AssetT, DataT]):
 
     Type parameters:
         AssetT: Asset class (e.g., MeshAsset, TextureAsset)
-        DataT: Data/Handle class returned by get() (e.g., MeshHandle, Material)
+        DataT: Data/Handle class returned by get() (e.g., TcMesh, Material)
     """
 
     def __init__(

@@ -275,9 +275,9 @@ class InspectorController:
         """Show MeshInspector and load mesh by name."""
         self._stack.setCurrentIndex(self.MESH_INSPECTOR_INDEX)
         if mesh_name is not None:
-            mesh = self._resource_manager.get_mesh(mesh_name)
-            if mesh is not None:
-                self._mesh_inspector.set_mesh(mesh, mesh_name)
+            mesh_asset = self._resource_manager.get_mesh_asset(mesh_name)
+            if mesh_asset is not None:
+                self._mesh_inspector.set_mesh(mesh_asset, mesh_name)
 
     def show_mesh_inspector_for_file(self, file_path: str) -> None:
         """Show MeshInspector and load mesh from file."""

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
     from termin.visualization.platform.backends.base import GraphicsBackend
     from termin.mesh.mesh import Mesh3
+    from termin.mesh import TcMesh
 
 
 class MeshPreviewWidget(QtWidgets.QWidget):
@@ -184,7 +185,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         self._ensure_initialized()
 
         from termin.visualization.core.entity import Entity
-        from termin.visualization.core.mesh_handle import MeshHandle
+        from termin.voxels.voxel_mesh import create_voxel_mesh
         from termin.visualization.core.material import Material
         from termin.visualization.render.components import MeshRenderer
         from termin.geombase import Pose3
@@ -198,15 +199,20 @@ class MeshPreviewWidget(QtWidgets.QWidget):
             self._mesh_loaded = False
             return
 
-        # Create mesh handle
-        mesh_handle = MeshHandle.from_mesh3(mesh3, name="preview_mesh")
+        # Create TcMesh from Mesh3
+        mesh_tc = create_voxel_mesh(
+            vertices=mesh3.vertices,
+            triangles=mesh3.triangles,
+            vertex_normals=mesh3.vertex_normals,
+            name="preview_mesh",
+        )
 
         # Create default material (gray)
         material = Material(color=np.array([0.7, 0.7, 0.7, 1.0], dtype=np.float32))
 
         # Create mesh entity
         self._mesh_entity = Entity(pose=Pose3.identity(), name="preview_mesh")
-        self._mesh_entity.add_component(MeshRenderer(mesh_handle, material))
+        self._mesh_entity.add_component(MeshRenderer(mesh_tc, material))
         self._scene.add(self._mesh_entity)
 
         # Auto-fit camera to mesh bounds

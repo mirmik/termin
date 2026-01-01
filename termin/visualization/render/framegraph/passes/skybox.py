@@ -15,7 +15,7 @@ class SkyBoxPass(RenderFramePass):
     Render-проход, рисующий skybox-куб.
 
     Pass ожидает, что сцена предоставляет методы:
-      - skybox_mesh() -> MeshHandle
+      - skybox_mesh() -> TcMesh
       - skybox_material() -> Material
 
     Проход выполняется с отключённой записью в depth-буфер, чтобы
@@ -166,11 +166,10 @@ class SkyBoxPass(RenderFramePass):
             phase="skybox",
         )
 
-        # Draw via MeshHandle's gpu
-        tc_mesh = mesh.get()
-        gpu = mesh.gpu
-        if tc_mesh is not None and tc_mesh.is_valid and gpu is not None:
-            gpu.draw(render_context, tc_mesh.mesh, mesh.version)
+        # Draw skybox mesh
+        if mesh.is_valid:
+            gpu = scene.skybox_gpu()
+            gpu.draw(render_context, mesh.mesh, mesh.version)
 
         # Возвращаем стандартные настройки глубины
         graphics.set_depth_func("less")

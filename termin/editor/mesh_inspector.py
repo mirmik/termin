@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
-    from termin.visualization.core.mesh_handle import MeshHandle
+    from termin.assets.mesh_asset import MeshAsset
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
     from termin.visualization.platform.backends.base import GraphicsBackend
 
@@ -56,7 +56,7 @@ class MeshInspector(QWidget):
     ):
         super().__init__(parent)
 
-        self._mesh_handle: Optional["MeshHandle"] = None
+        self._mesh_asset: Optional["MeshAsset"] = None
         self._mesh_name: str = ""
         self._file_path: str = ""
         self._on_spec_changed = on_spec_changed
@@ -203,22 +203,21 @@ class MeshInspector(QWidget):
         layout.addLayout(btn_layout)
         layout.addStretch()
 
-    def set_mesh(self, mesh_handle: Optional["MeshHandle"], name: str = "") -> None:
+    def set_mesh(self, mesh_asset: Optional["MeshAsset"], name: str = "") -> None:
         """Set mesh to inspect."""
-        self._mesh_handle = mesh_handle
+        self._mesh_asset = mesh_asset
         self._mesh_name = name
 
-        if mesh_handle is None:
+        if mesh_asset is None:
             self._clear()
             return
 
-        self._name_label.setText(name or mesh_handle.name or "-")
+        self._name_label.setText(name or mesh_asset.name or "-")
 
         # UUID from MeshAsset
-        asset = mesh_handle.get_asset()
-        self._uuid_label.setText(asset.uuid if asset else "—")
+        self._uuid_label.setText(mesh_asset.uuid if mesh_asset else "—")
 
-        mesh3 = mesh_handle.mesh
+        mesh3 = mesh_asset.mesh_data
         if mesh3 is None:
             self._clear()
             return
@@ -247,7 +246,7 @@ class MeshInspector(QWidget):
         self._update_bounds(mesh3)
 
         # File size and path
-        source_path = asset.source_path if asset else None
+        source_path = mesh_asset.source_path if mesh_asset else None
         if source_path and os.path.exists(source_path):
             size = os.path.getsize(source_path)
             self._file_size_label.setText(self._format_size(size))
@@ -304,7 +303,7 @@ class MeshInspector(QWidget):
         """Load and inspect mesh from file path."""
         from termin.loaders.mesh_spec import MeshSpec
         from termin.mesh.mesh import Mesh3
-        from termin.visualization.core.mesh_handle import MeshHandle
+        from termin.assets.mesh_asset import MeshAsset
 
         name = os.path.splitext(os.path.basename(file_path))[0]
         ext = os.path.splitext(file_path)[1].lower()
@@ -341,8 +340,8 @@ class MeshInspector(QWidget):
             if mesh_data.uvs is not None:
                 mesh3.uvs = mesh_data.uvs
 
-            mesh_handle = MeshHandle.from_mesh3(mesh3, name=name, source_path=file_path)
-            self.set_mesh(mesh_handle, name)
+            mesh_asset = MeshAsset(mesh_data=mesh3, name=name, source_path=file_path)
+            self.set_mesh(mesh_asset, name)
 
         except Exception as e:
             self._clear()
@@ -370,7 +369,7 @@ class MeshInspector(QWidget):
 
     def _clear(self) -> None:
         """Clear all fields."""
-        self._mesh_handle = None
+        self._mesh_asset = None
         self._mesh_name = ""
         self._file_path = ""
         self._current_mesh3 = None

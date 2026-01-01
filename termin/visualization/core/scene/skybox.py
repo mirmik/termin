@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
 if TYPE_CHECKING:
-    from termin.visualization.core.mesh_handle import MeshHandle
+    from termin.mesh import TcMesh
     from termin.visualization.core.material import Material
     from termin._native import log
+    from termin._native.render import MeshGPU
 
 
 class SkyboxManager:
@@ -23,20 +24,25 @@ class SkyboxManager:
     """
 
     def __init__(self):
-        self._skybox_mesh: "MeshHandle | None" = None
-        self._skybox_material: "Material | None" = None
+        self._skybox_mesh: Optional["TcMesh"] = None
+        self._skybox_gpu: Optional["MeshGPU"] = None
+        self._skybox_material: Optional["Material"] = None
         self.skybox_type: str = "gradient"
         self.skybox_color = np.array([0.5, 0.7, 0.9], dtype=np.float32)
         self.skybox_top_color = np.array([0.4, 0.6, 0.9], dtype=np.float32)
         self.skybox_bottom_color = np.array([0.6, 0.5, 0.4], dtype=np.float32)
 
-    def _ensure_skybox_mesh(self) -> "MeshHandle":
+    def _ensure_skybox_mesh(self) -> "TcMesh":
         """Lazily create skybox cube mesh."""
         if self._skybox_mesh is None:
-            from termin.visualization.core.mesh_handle import MeshHandle
+            from termin.voxels.voxel_mesh import create_voxel_mesh
             from termin.visualization.render.skybox import _skybox_cube
             vertices, triangles = _skybox_cube()
-            self._skybox_mesh = MeshHandle.from_vertices_indices(vertices, triangles, name="skybox_cube")
+            self._skybox_mesh = create_voxel_mesh(
+                vertices=vertices,
+                triangles=triangles,
+                name="skybox_cube",
+            )
         return self._skybox_mesh
 
     def _create_gradient_skybox_material(self) -> "Material":
@@ -66,13 +72,22 @@ class SkyboxManager:
         return material
 
     @property
-    def mesh(self) -> "MeshHandle":
+    def mesh(self) -> "TcMesh":
         """Get skybox cube mesh."""
         try:
             return self._ensure_skybox_mesh()
         except Exception as e:
+            from termin._native import log
             log.error(f"[SkyboxManager] Error ensuring skybox mesh: {e}")
             raise
+
+    @property
+    def gpu(self) -> "MeshGPU":
+        """Get or create MeshGPU for skybox."""
+        if self._skybox_gpu is None:
+            from termin._native.render import MeshGPU
+            self._skybox_gpu = MeshGPU()
+        return self._skybox_gpu
 
     @property
     def material(self) -> "Material | None":
@@ -120,4 +135,5 @@ class SkyboxManager:
     def destroy(self) -> None:
         """Release all resources."""
         self._skybox_mesh = None
+        self._skybox_gpu = None
         self._skybox_material = None

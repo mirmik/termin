@@ -13,7 +13,7 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.core.mesh_handle import MeshHandle
+from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.render.components import MeshRenderer, LineRenderer
 from termin.visualization.render.shader import ShaderProgram
 
@@ -102,11 +102,16 @@ def build_scene(world: VisualizationWorld, mesh: "Mesh") -> tuple[Scene, Perspec
 
     scene = Scene()
 
-    mesh_handle = MeshHandle.from_mesh3(mesh, name="mesh")
+    mesh_tc = create_voxel_mesh(
+        vertices=mesh.vertices,
+        triangles=mesh.triangles,
+        vertex_normals=mesh.vertex_normals if hasattr(mesh, 'vertex_normals') else None,
+        name="mesh",
+    )
     shader_prog = ShaderProgram(vert, frag)
     material = Material(shader=shader_prog, color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))
     entity = Entity(pose=Pose3.identity(), name="cube")
-    entity.add_component(MeshRenderer(mesh_handle, material))
+    entity.add_component(MeshRenderer(mesh_tc, material))
     
     scene.add(entity)
 
